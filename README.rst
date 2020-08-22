@@ -268,9 +268,9 @@ and avoid hardcoding things in most places. The result is that there isn't
 much customization that you should need to do; however, the following variable
 should probably be set differently: ::
 
-    (setq local-notes-dir (expand-file-name "~/notes")))
+    (setq local-notes-directory (expand-file-name "~/notes")))
 
-The ``local-notes-dir`` is the top level directory underwhich ``org-mode``,
+The ``local-notes-directory`` is the top level directory underwhich ``org-mode``,
 ``deft`` and ``roam`` directories are stored in this configuration.
 
 For any further customization, create or link files in the

@@ -1041,7 +1041,7 @@
 	      ("C-c o h p" . outline-previous-visable-heading)
 	      ("C-c C-p" . set-mark-command))
   :init
-  (setq org-directory (concat local-notes-dir "/org"))
+  (setq org-directory (concat local-notes-directory "/org"))
   (setq org-agenda-files (list org-directory))
 
   (defvar org-odt-data-dir "~/.emacs.d/org/etc")
@@ -1331,7 +1331,7 @@
 	      :map org-mode-map
 	      (("C-c n i" . org-roam-insert)))
   :config
-  (setq org-roam-directory (concat local-notes-dir "/roam"))
+  (setq org-roam-directory (concat local-notes-directory "/roam"))
   (setq org-roam-index-file "index.org"))
 
 (use-package blogging
@@ -1523,7 +1523,7 @@
 	 ("C-c x n" . tychoish-deft-create)
 	 ("C-c d d" . (lambda () (interactive) (find-file deft-directory))))
   :init
-  (setq deft-directory (concat local-notes-dir "/deft"))
+  (setq deft-directory (concat local-notes-directory "/deft"))
   (setq deft-directories '(deft-directory org-roam-directory))
 
   (defun deft-file-make-slug (s)

@@ -25,7 +25,7 @@
 (eval-when-compile
   (require 'use-package))
 
-(defvar local-notes-dir (expand-file-name "~/notes")
+(defvar local-notes-directory (expand-file-name "~/notes")
   "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
 
 (add-to-list 'load-path (concat user-emacs-directory "conf"))
