@@ -355,4 +355,5 @@ Participation
 -------------
 
 If you like this, and find it useful, you don't need to do anything! Just
-enjoy!
+enjoy! If you discover a bug, or have a feature request, please feel free to
+open an issue or submit a pull request!
