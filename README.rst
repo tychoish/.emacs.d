@@ -127,8 +127,15 @@ about it by, first moving your existing ``~/.emacs.d/`` out of the way: ::
 
    mv ~/.emacs.d/ ~/emacs.d.archive
 
-Then I'd fork this repository in Github, so you can make your own
-modifications, and clone it: ::
+Then clone the repository: ::
+
+   git clone --recurse-submodules git@github.com:tychoish/.emacs.d.git ~/.emacs.d/
+
+And that's it! the ``--recursive-submodules`` option clones an ``elpa``
+submodule, which it totally optional, but means that you won't have to
+download all of the packages on the first time.
+
+In more advanced setups, you can choose to break this apart: ::
 
    git clone git@github.com:tychoish/.emacs.d.git ~/.emacs.d/
 
@@ -142,7 +149,10 @@ any bugs you run into I'll probably be hitting as well: ::
 In the future you can just pull/merge from the upstream to get updates, and
 run ``git submodule update`` to update ``elpa``.
 
-Congrats, you should be good to go!
+Read the customization section for more information. It's possible to put your
+own config in the ``users`` subdirectory, but you might also want to fork this
+repository and make your own modifications, or have more control over how you
+track the mainline.
 
 Use
 ~~~
@@ -357,3 +367,21 @@ Participation
 If you like this, and find it useful, you don't need to do anything! Just
 enjoy! If you discover a bug, or have a feature request, please feel free to
 open an issue or submit a pull request!
+
+I'm not particularly sure what direction development will take, but I'm
+interested in the following areas:
+
+- Improving the way that console mode interacts with themes.
+
+- Increasing or maintaining the current level with regards to startup time.
+
+- Reducing or eliminating the ``conf/local-function.el`` file and building
+  feature-focused packages, potentially putting them in MELPA.
+
+- Migrate from the legacy``notify`` package to using ``alert`` more fully.
+
+- Continue to improve the experience with lsp-mode, to make it feel more
+  automatic.
+
+- Improve project (groups of related files) and projectile configuration,
+  which is presently lacking.
