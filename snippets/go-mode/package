@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: package
+# key: pack
+# contributor : @atotto
+# --
+// 
+package ${1:main}

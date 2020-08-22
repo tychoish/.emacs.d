@@ -1,0 +1,11 @@
+# name: hugo
+# --
+---
+title: $1
+tags: [$2]
+date: `(format-time-string "%Y-%m-%d")`
+author: tychoish
+markup: rst
+---
+
+$0

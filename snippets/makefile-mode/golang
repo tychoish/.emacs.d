@@ -1,0 +1,45 @@
+# -*- mode: snippet -*-
+# name: golang
+# key: golang
+# --
+github-org := $1
+########################################################################
+buildDir := build
+name := $(shell basename `pwd`)
+mainProgram := $(buildDir)/$(name)
+
+entryPoint := cmd/$(name)/$(name).go
+srcFiles := $(shell find . -name "*.go" -not -path "./$(buildDir)/*" -not -name "*_test.go" -not -path "*\#*")
+
+build:$(buildDir)/$(name)
+dist:$(buildDir)/$(name).dist.tar.gz
+
+run:$(mainProgram)
+	./$< 
+
+$(mainProgram):$(entryPoint) $(srcFiles)
+	go build -o $@ $<
+
+$(buildDir)/$(name).dist.tar.gz:lint test build
+	tar -czf $@ --exclude=build --exclude=.git --transform 's,^,$(name)/,' *
+	tar -tf $@
+
+test:
+	go test -v ./...
+clean:
+	rm $(mainProgram) $(buildDir)/$(name).dist.tar.gz
+lint:
+	@golangci-lint run
+
+setup: 
+	go mod init github.com/$(github-org)/$(name) || true
+	git init
+	mkdir -p $(buildDir)
+	mkdir -p cmd/$(name)
+	if [[ ! -f $(entryPoint) ]]; then echo "package main" > $(entryPoint); fi 
+	@cat $(entryPoint)
+	if [[ ! -f .gitignore ]]; then echo "build" > .gitignore && cat .gitignore; fi 
+	@cat .gitignore
+
+.PHONY:build clean test run lint setup
+$0

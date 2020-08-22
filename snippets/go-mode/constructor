@@ -1,0 +1,10 @@
+# -*- mode: snippet -*-
+# name: for constructor
+# key: new
+# contributor : @atotto
+# --
+// New$1 returns a new $1.
+func New$1() *$1 {
+	$2 := &$1{$0}
+	return $2
+}

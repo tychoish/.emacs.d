@@ -1,0 +1,26 @@
+\documentclass[man]{apa}
+% Packages required to support encoding
+\usepackage{ucs}
+\usepackage[utf8x]{inputenc}
+% Packages required by code
+\title{}
+\shorttitle{%header title$}
+\author{Sam Kleinman}
+\affiliation{Webster University}
+\rightheader{Running head: title}
+% Packages always used
+\usepackage{hyperref}
+\usepackage{xspace}
+%\usepackage{apacite}
+\usepackage{natbib}
+\bibliographystyle{apa-good}
+
+\begin{document}
+\maketitle 
+
+%body of paper goes here
+
+
+\newpage
+\bibliography{AC.references}
+\end{document}

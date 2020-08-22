@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: for switch case
+# key: case
+# contributor : @atotto
+# --
+case $1:
+	$0

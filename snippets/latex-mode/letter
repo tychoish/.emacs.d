@@ -1,0 +1,36 @@
+\documentclass[12pt]{letter}
+
+\signature{Sam Kleinman}
+\address{
+%Sender's Address use \\ for line breaks
+
+% Optional Package
+
+\usepackage{fullpage}
+
+% Packages required by code
+
+% Packages always used
+\usepackage{ucs}
+\usepackage[utf8x]{inputenc}
+\usepackage{hyperref}
+\usepackage{xspace}
+\usepackage[usenames,dvipsnames]{color}
+\hypersetup{colorlinks=true,urlcolor=blue}
+
+\begin{document} 
+\begin{letter}{
+%Address of recepiant
+	}
+
+\opening{
+%Specific Opening Here
+}
+
+%Body of the letter
+
+\closing{
+%Specific Closing
+}
+\end{letter}
+\end{document}

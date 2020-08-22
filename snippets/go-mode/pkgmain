@@ -1,0 +1,54 @@
+package main
+
+import (
+	"github.com/codegangsta/cli"
+	"github.com/tychoish/grip"
+)
+
+func main() {
+	app := cli.NewApp()
+	defer app.RunAndExitOnError()
+
+	app.Name = "${1:name}"
+app.Usage = "${2:usage}"
+	app.Version = "0.0.1-pre"
+
+	app.Commands = []cli.Command{}
+
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "level",
+			Value: "info",
+			Usage: "Specify lowest visable loglevel as string: 'emergency|alert|critical|error|warning|notice|info|debug'",
+		},
+		cli.BoolFlag{
+			Name:   "systemdLog",
+			Usage:  "log to systemd's journal if possible. defaults to false",
+			EnvVar: "GRIP_USE_JOURNALD",
+		},
+	}
+
+	app.Before = func(c *cli.Context) (err error) {
+		// grip is a systemd/standard logging wrapper.
+		grip.SetName(app.Name)
+
+		if c.Bool("systemdLog") == false {
+			// We're configing the logger to use
+			// standard (output) logging rather than
+			// systemd by default.
+			grip.UseNativeLogger()
+		} else {
+			grip.UseSystemdLogger()
+		}
+
+		grip.SetThreshold(c.String("level"))
+		if grip.ThresholdLevel().String() == "invalid" {
+			grip.SetThreshold("info")
+		}
+
+		if grip.ThresholdLevel().String() != "info" {
+			grip.Defaultf("set log threshold to: '%s'", grip.ThresholdLevel())
+		}
+		return
+	}
+}

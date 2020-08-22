@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: trun
+# key: trun
+# contributor : @tychoish
+# --
+t.Run("$1", func(t *testing.T) {
+	$0
+})

@@ -1,0 +1,15 @@
+# -*- coding: utf-8 -*-
+# name: timer class
+# contributor: tychoish
+# --
+import time
+class Timer():
+    def __init__(self, name=None):
+        if name is None:
+            self.name = 'task'
+        else:
+            self.name = name
+    def __enter__(self):
+        self.start = time.time()
+    def __exit__(self, *args):
+        print( 'time elapsed for {0} was: {1}'.format(self.name, str(time.time() - self.start)) )

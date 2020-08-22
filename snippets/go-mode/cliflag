@@ -1,0 +1,6 @@
+		cli.${1:type}Flag{
+			Name:  "${2:name}",
+			Value: ${3:value},
+			Usage: "${4:usage}",
+		},
+$0

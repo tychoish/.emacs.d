@@ -1,0 +1,5 @@
+#name : javascript code block
+#contributor: tychoish
+# --
+.. code-block:: javascript
+   $0

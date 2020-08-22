@@ -1,0 +1,6 @@
+# -*- coding: utf-8 -*-
+# name: wtime
+# contributor: tychoish
+# --
+with Timer($1):
+    $0

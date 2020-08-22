@@ -1,0 +1,3 @@
+#name : Issue Link
+# --
+:issue:\`${1:Link Text}\`$0

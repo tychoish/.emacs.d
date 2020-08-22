@@ -1,0 +1,5 @@
+#name : sh code block
+#contributor: tychoish
+# --
+.. code-block:: sh
+   $0

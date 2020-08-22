@@ -1,0 +1,7 @@
+#contributor  tycho garen <garen@tychoish.com>
+#name : tycho section
+# --
+<div class='section'>
+  <h1 id='research'>$1</h1>
+  <p>$0</p>
+</div>

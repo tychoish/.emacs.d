@@ -1,0 +1,9 @@
+		{
+			Name:    "${1:name}",
+			Aliases: []string{},
+			Usage:   "${2:usage}",
+			Flags:   []cli.Flag{},
+			Action: func(c *cli.Context) {
+				$0
+			},
+		},

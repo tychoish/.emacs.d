@@ -1,0 +1,9 @@
+# -*- coding: utf-8 -*-
+# name: init-logging
+# contributor: tychoish
+# --
+
+import logging
+import os.path
+
+logger = logging.getLogger(os.path.basename(__file__))

@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: test
+# key: testf
+# contributor : @atotto
+# --
+func(t *testing.T) {
+       $0
+}

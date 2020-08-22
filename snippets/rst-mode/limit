@@ -1,0 +1,7 @@
+#name: insert limit template
+# --
+.. _limit-$1:
+
+.. limit:: $2
+
+   $0

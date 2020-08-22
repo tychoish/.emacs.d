@@ -1,0 +1,18 @@
+# -*- mode: snippet -*-
+# name: testify suite
+# key: suite
+# contributor : @tychoish
+# --
+type $1Suite struct {
+	suite.Suite
+}
+
+func Test$1Suite(t *testing.T) {
+	suite.Run(t, new($1Suite))
+}
+
+func (s *$1Suite) SetupSuite() {}
+func (s *$1Suite) TearDownSuite() {}
+func (s *$1Suite) SetupTest() {}
+func (s *$1Suite) TearDownTest() {}
+func (s *$1Suite) Test() {}

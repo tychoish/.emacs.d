@@ -1,0 +1,14 @@
+# -*- mode: snippet -*-
+#name : agenda
+#key : agenda
+#contributor : sam kleinman
+# --
+* Inbox
+* Tasks
+* Notes
+* Loops
+** Daily
+** Weekly
+** Quarterly
+** Yearly
+* Journal

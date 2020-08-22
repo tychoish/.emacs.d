@@ -1,0 +1,8 @@
+#name : Image
+#contributor: tycho garen <garen@tychoish.com>
+# --
+
+.. image:: ${1:Image Path}
+   :alt: ${2:Alt Text}
+   :target: ${3:Link Target}
+$1

@@ -1,0 +1,12 @@
+#name : cyborg-institute wiki planet source
+#contributor: tychoish <garen@tychoish.com>
+# --
+
+[[!aggregate
+name="$1" 
+feedurl="$2"
+url="$3" 
+tag="$4"
+dir="planet"
+updateinterval="20"
+]]

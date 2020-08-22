@@ -1,0 +1,39 @@
+# -*- mode: snippet -*-
+# name: amboy-job
+# key: amboy-job
+# contributor : @tychoish
+# --
+
+type ${1:typeName}Job struct {
+	job.Base \`bson:"metadata" json:"metadata" yaml:"metadata"\`
+}
+
+const $1JobName = "${2:name}"
+
+func init() {
+	registry.AddJobType($1JobName, func() amboy.Job { return $1JobFactory() })
+}
+
+func $1JobFactory() *$1Job {
+	j := &$1Job{
+		Base: job.Base{
+			JobType: amboy.JobType{
+				Name:    $1JobName,
+				Version: 0,
+			},
+		},
+	}
+	j.SetDependency(dependency.NewAlways())
+	return j
+}
+
+func New%3Job(path string) amboy.Job {
+	j := $1JobFactory()
+	j.SetID(${3:id})
+	return j
+}
+
+func (j *$1Job) Run(ctx context.Context) {
+	defer j.MarkComplete()
+	$0
+}

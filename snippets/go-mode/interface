@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: interface
+# key: type
+# contributor : @atotto
+# --
+type $1 interface {
+	$0
+}

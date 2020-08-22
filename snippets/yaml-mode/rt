@@ -1,0 +1,9 @@
+# -*- mode: snippet -*-
+# contributor: Translated from TextMate Snippet
+# name: rt
+# --
+name: ":method:\`sh.${1:object}\`"
+file: /reference/method/sh.${2:name}
+description: "${3:description}"
+---
+$0
