@@ -1,0 +1,3 @@
+[submodule "elpa"]
+	path = elpa
+	url = https://github.com/tychoish/elpa
