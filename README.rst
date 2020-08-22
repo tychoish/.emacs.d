@@ -265,17 +265,23 @@ Customization
 The process of "making my config public and reusable" mostly centered on
 pulling all of the assumptions about the way I organize my files and paths,
 and avoid hardcoding things in most places. The result is that there isn't
-much customization that you should need to do.
+much customization that you should need to do; however, the following variable
+should probably be set differently: ::
 
-Create or link files in the ``~/.emacs.d/user/`` directory and they'll be
-loaded after my config finishes loading. These files should have matching file
-names and feature declarations, as in a ``(provide 'file)`` form at the bottom
-for ``file.el``. These files can use elisp that's provided elsewhere in the
-config, but you should rely on any specific initialization order for these
-files. The code that loads them also prints the load times so you can see if
-you're loosing too much time loading this code: having lots of files here can
-really impact your load time, one or two files is fine, but more could be a
-problem.
+    (setq local-notes-dir (expand-file-name "~/notes")))
+
+The ``local-notes-dir`` is the top level directory underwhich ``org-mode``,
+``deft`` and ``roam`` directories are stored in this configuration.
+
+For any further customization, create or link files in the
+``~/.emacs.d/user/`` directory and they'll be loaded after my config finishes
+loading. These files should have matching file names and feature declarations,
+as in a ``(provide 'file)`` form at the bottom for ``file.el``. These files
+can use elisp that's provided elsewhere in the config, but you should rely on
+any specific initialization order for these files. The code that loads them
+also prints the load times so you can see if you're loosing too much time
+loading this code: having lots of files here can really impact your load time,
+one or two files is fine, but more could be a problem.
 
 I keep work-specific configuration here (just to keep it separate from the
 rest of the configuration,) as well as configuration that's super specific to
