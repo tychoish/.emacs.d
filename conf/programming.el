@@ -300,11 +300,18 @@
 
 (use-package projectile
   :ensure t
-  :delight '(:eval (concat "p:" (projectile-project-name)))
+  :delight '(:eval (tychoish-projectile-modeline-string))
   :bind-keymap ("C-c p" . projectile-command-map)
   :commands (projectile-mode projectile-project-root)
   :defer 1
   :config
+
+  (defun tychoish-projectile-modeline-string ()
+    (let ((pname (projectile-project-name)))
+      (if (equal pname "-")
+	  ""
+	(concat "p:" pname))))
+
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep 1)
   (setq projectile-completion-system 'helm)
@@ -997,6 +1004,9 @@
     (let ((path (f-join quicklisp-path fn)))
       (when (f-exists-p path)
 	(load-file path))))
+
+  (diminish 'slime-autodoc-mode)
+  (diminish 'slime-mode "sl")
 
   (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "slime-helper.el")
