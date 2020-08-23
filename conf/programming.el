@@ -1862,11 +1862,9 @@
   (setq erc-timestamp-format "%H:%M ")
   (setq erc-track-enable-keybindings t)
   (setq erc-track-exclude-server-buffer t)
-  (setq erc-track-exclude-server-buffer t)
   (setq erc-track-faces-priority-list nil)
   (setq erc-track-priority-faces-only nil)
   (setq erc-track-use-faces nil)
-
   (setq erc-truncate-buffer-on-save t)
 
 
@@ -1892,6 +1890,7 @@
     (erc-track-switch-buffer 1)
     (erc-track-switch-buffer -1))
 
+
   (defadvice erc-track-find-face (around erc-track-find-face-promote-query activate)
     (if (erc-query-buffer-p)
 	(setq ad-return-value (intern "erc-current-nick-face"))
@@ -1913,7 +1912,7 @@
 	  (goto-char found)
 	(error "No previous URL button"))))
 
-  (defun kill-all-erc-buffers()
+  (defun kill-all-erc-buffers ()
     "Kill all erc buffers."
     (interactive)
     (save-excursion
@@ -1924,6 +1923,31 @@
 	    (setq count (1+ count))
 	    (kill-buffer buffer)))
 	(message "Killed %i erc buffer(s)." count ))))
+
+  (defvar tychoish-erc-disable-connection-status nil
+    "When t, disable setting 'mode-line-process' with the connection status")
+
+  (defun erc-custom-modeline (buffer)
+    (with-current-buffer buffer
+      (if tychoish-erc-disable-connection-status 
+	  (setq mode-line-process '())
+	(let ((process-status (cond ((and (erc-server-process-alive)
+					  (not erc-server-connected))
+                                     ":C")
+                                    ((erc-server-process-alive)
+                                     ":A")
+                                    (t
+                                     ":X"))))
+	  (setq mode-line-process (list process-status))))))
+
+  (advice-add 'erc-update-mode-line-buffer :after #'erc-custom-modeline)
+
+  (defun tychoish-erc-update-modelines ()
+    (interactive)
+    (dolist (buffer (buffer-list))
+      (set-buffer buffer)
+      (when (equal major-mode 'erc-mode)
+	(erc-custom-modeline buffer))))
 
   (defvar erc-channels-to-visit nil
     "Channels that have not yet been visited by erc-next-channel-buffer")
@@ -1959,7 +1983,6 @@
 	(call-interactively 'erc))))
 
   (setq erc-track-priority-faces-only (remove "&bitlbee" erc-channel-list))
-
   (erc-update-modules)
   (erc-add-scroll-to-bottom)
   (erc-timestamp-mode 1)
