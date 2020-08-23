@@ -114,6 +114,7 @@
       '("" mode-line-misc-info)))
 
   (tychoish-doom-modeline-setup)
+  (setq doom-modeline-buffer-file-name-style 'relative-to-project)
   (setq doom-modeline-height 1)
   (setq doom-modeline-bar-width 1)
   (setq doom-modeline-major-mode-color-icon t)
