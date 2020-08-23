@@ -206,6 +206,16 @@
   (setq helm-ff-search-library-in-sexp t)
   (setq helm-ff-file-name-history-use-recentf t))
 
+(use-package helm-make
+  :ensure t
+  :bind (("C-c h c" . helm-make-projectile))
+  :config
+  (setq helm-make-named-buffer t)
+  (setq helm-make-fuzzy-matching t)
+  (setq helm-make-cache-targets t)
+  (setq helm-make-do-save t)
+  (setq helm-make-sort-targets t))
+
 (use-package helm-swoop
   :ensure t
   :after (helm)
@@ -292,12 +302,14 @@
   :ensure t
   :delight '(:eval (concat "p:" (projectile-project-name)))
   :bind-keymap ("C-c p" . projectile-command-map)
-  :after (helm)
+  :commands (projectile-mode projectile-project-root)
+  :defer 1
   :config
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep 1)
   (setq projectile-completion-system 'helm)
-  (setq projectile-require-project-root 'prompt))
+  (setq projectile-require-project-root 'prompt)
+  (projectile-mode +1))
 
 (use-package helm-projectile
   :ensure t
@@ -780,6 +792,7 @@
   (add-hook 'c++-mode-hook (lambda () (setq show-trailing-whitespace t)))
   (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
   (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100)))
+
 
 (use-package js2-mode
   :ensure t
