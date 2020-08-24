@@ -154,6 +154,13 @@ own config in the ``users`` subdirectory, but you might also want to fork this
 repository and make your own modifications, or have more control over how you
 track the mainline.
 
+**If you're not running emacs 27.1**  the ``elpa`` checkout *might not
+work*. There's a branch in the repository named ``emacs28`` that should
+support the master branch of emacs, but you can omit the
+``--recursive-submodules`` option or remove the ``elpa`` directory entirely:
+Emacs will take *much* longer to start the first time as it downloads all of
+the third-party packages it depends on.
+
 Use
 ~~~
 
