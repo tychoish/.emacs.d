@@ -14,18 +14,11 @@
   (load-file custom-file))
 
 (when (eq system-type 'darwin)
-  (setenv "PATH" (concat "/usr/local/bin" ":" (getenv "PATH")))
   (setq ns-function-modifier 'hyper)
   (setq mac-command-modifier 'meta)
   (setq mac-option-modifier 'super)
-  (setq alert-default-style 'osx-notifier)
-  (setq path-to-ctags "/usr/local/bin/ctags")
   (setq ns-use-srgb-colorspace nil)
   (setq display-highres t))
-
-(when (eq system-type 'gnu/linux)
-  (setq path-to-ctags "/usr/bin/ctags")
-  (setq alert-default-style 'libnotify))
 
 (setq starttls-use-gnutls t)
 (setq gnutls-log-level 0)
@@ -62,23 +55,12 @@
 (setq vc-handled-backends nil)
 (setq find-file-visit-truename t)
 
-(setq browse-url-browser-function 'eww-browse-url)
-(setq browse-url-generic-program "chromium")
-
-(setq shr-color-visible-luminance-min 80)
-(setq shr-use-colors nil)
-(setq shr-use-fonts nil)
-
-(setq etags-table-search-up-depth 10)
-(setq inferior-lisp-program "sbcl")
-(setq ls-lisp-dirs-first t)
 (setq compilation-ask-about-save nil)
 (setq makefile-electric-keys t)
 (setq compilation-scroll-output t)
 
 (setq ansi-color-for-comint-mode t)
 (setq auto-revert-interval 5)
-(setq tags-add-tables nil)
 
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq kill-buffer-query-functions
@@ -99,7 +81,6 @@
 (setq ping-program-options '("-c" "4"))
 (setq next-line-add-newlines nil)
 (setq safe-local-variable-values '((encoding . utf-8)))
-(setq eww-search-prefix "https://www.google.com/search?q=")
 
 (setq warnings-to-ignore '())
 (setq byte-compile-warnings warnings-to-ignore)
@@ -108,7 +89,6 @@
 (setq jit-lock-defer-time nil)
 (setq jit-lock-defer-time 0.05)
 (setq jit-lock-stealth-load 200)
-(setq gc-cons-threshold 100000000)
 
 (setq backup-by-copying t)
 (setq auto-save-file-name-transforms `((".*" ,(concat user-emacs-directory "backups/") t)))
@@ -190,11 +170,6 @@
 (global-set-key (kbd "C-c C-=") (lambda() (interactive) (djcb-opacity-modify)))
 (global-set-key (kbd "C-c C-0") (lambda() (interactive) (modify-frame-parameters nil `((alpha . 100)))))
 
-(global-set-key (kbd "C-c w d") 'browse-url-generic)
-(global-set-key (kbd "C-c w e") 'browse-url)
-(global-set-key (kbd "C-c w f") 'browse-url-firefox)
-(global-set-key (kbd "C-c w c") 'browse-url-chromium)
-(global-set-key (kbd "C-c w g") 'eww-search-words)
 
 (global-set-key "(" 'tychoish-electric-pair)
 (global-set-key "[" 'tychoish-electric-pair)

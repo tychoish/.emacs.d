@@ -7,7 +7,14 @@
 
 ;;; Code:
 
-(add-to-list 'after-init-hook (lambda () (notify-send (format "started (%d) in %s" (emacs-pid) (emacs-init-time)))))
+(setq gc-cons-threshold 80000000000000)
+(add-to-list 'after-init-hook
+	     (lambda ()
+	       (setq gc-cons-threshold 800000)
+	       (let ((garbage-collection-messages t))
+		 (garbage-collect))
+	       (alert (format "started (%d) in %s" (emacs-pid) (emacs-init-time))
+		      :title (format "emacs-%s" tychoish-emacs-identifier))))
 
 (require 'package)
 (setq package-user-dir (concat user-emacs-directory "elpa"))
@@ -31,9 +38,9 @@
 (add-to-list 'load-path (concat user-emacs-directory "conf"))
 (add-to-list 'load-path (concat user-emacs-directory "ext"))
 
-(require 'local-functions)     ;; function library I've written/etc.
-(require 'settings)            ;; collection of local settings
-(require 'programming)         ;; all use-package declarations and configuration
+(use-package local-functions)     ;; function library I've written/etc.
+(use-package settings)            ;; collection of local settings
+(use-package programming)         ;; all use-package declarations and configuration
 
 (tychoish-setup-global-modes)
 (tychoish-setup-modeline)

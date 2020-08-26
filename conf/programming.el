@@ -21,11 +21,6 @@
 (use-package use-package-ensure-system-package
   :ensure t)
 
-(use-package notify
-  :commands (notify notify-send)
-  :config
-  (setq notify-method 'notify-via-libnotify))
-
 (use-package eldoc
   :diminish)
 
@@ -116,7 +111,9 @@
   (tychoish-doom-modeline-setup)
   (setq doom-modeline-buffer-file-name-style 'relative-to-project)
   (setq doom-modeline-height 1)
-  (setq doom-modeline-bar-width 1)
+  (setq doom-modeline-irc t)
+  (setq doom-modeline-irc-stylize 'identity)
+  (setq doom-modeline-bar-width 2)
   (setq doom-modeline-major-mode-color-icon t)
   (setq doom-modeline-major-mode-icon t)
   (setq doom-modeline-icon *tychoish-modeline-icon-state*)
@@ -145,6 +142,7 @@
 (use-package winum
   :ensure t
   :after (spaceline doom-modeline)
+  :bind (("C-x w n" . winum-select-window-by-number))
   :config
   (setq winum-auto-setup-mode-line nil)
   (setq winum-scope 'frame-local)
@@ -191,9 +189,10 @@
   (set-face-attribute 'helm-source-header nil :height 98 :family "Source Code Pro" :weight 'semibold)
   (helm-autoresize-mode 1)
 
+  (setq history-delete-duplicates t)
   (setq helm-M-x-fuzzy-match nil)
-  (setq helm-autoresize-max-height 50)
-  (setq helm-autoresize-min-height 25)
+  (setq helm-autoresize-max-height 40)
+  (setq helm-autoresize-min-height 20)
   (setq helm-autoresize-mode nil)
   (setq helm-c-adaptive-sorting t)
   (setq helm-c-adaptive-history-file (tychoish-get-config-file-path "helm-c-adaptive-history"))
@@ -239,6 +238,21 @@
   :bind (("C-c w o" . helm-eww))
   :after (helm)
   :ensure t)
+
+(use-package eww
+  :bind (("C-c w d" . browse-url-generic)
+	 ("C-c w e" . browse-url)
+	 ("C-c w f" . browse-url-firefox)
+	 ("C-c w c" . browse-url-chromium)
+	 ("C-c w g" . eww-search-words))
+  :init
+  (setq browse-url-browser-function 'eww-browse-url)
+  (setq browse-url-generic-program "chromium")
+  (setq shr-color-visible-luminance-min 80)
+  (setq shr-use-colors nil)
+  (setq shr-use-fonts nil)
+  :config
+  (setq eww-search-prefix "https://www.google.com/search?q="))
 
 (use-package ace-link
   :ensure t
@@ -311,7 +325,7 @@
     (let ((pname (projectile-project-name)))
       (if (equal pname "-")
 	  ""
-	(concat "p:" pname))))
+	(concat " p:" pname))))
 
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep 1)
@@ -835,8 +849,13 @@
 (use-package ctags-update
   :ensure t
   :bind (("C-c E" . ctags-update))
-  :config
+  :commands (turn-on-ctags-auto-update-mode)
+  :init
+  (setq tags-add-tables nil)
+  (setq etags-table-search-up-depth 10)
+  (setq path-to-ctags (executable-find "ctags"))
   (setq ctags-update-delay-seconds 300)
+  :config
   (add-hook 'c-mode-common-hook  'turn-on-ctags-auto-update-mode)
   (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
 
@@ -997,6 +1016,7 @@
   :commands (slime)
   :bind (("C-c h l" . hyperspec-lookup))
   :config
+  (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl")
   (setq quicklisp-path (expand-file-name "~/quicklisp"))
   (add-to-list 'load-path quicklisp-path)
@@ -1198,7 +1218,6 @@
   (add-hook 'org-mode-hook 'org-indent-mode)
   (add-hook 'org-mode-hook 'visual-line-mode)
 
-  (eval-after-load 'mu4e '(require 'org-mu4e))
   (org-load-modules-maybe t)
 
   (add-to-list 'org-speed-commands-user '("N" org-narrow-to-subtree))
@@ -1327,6 +1346,9 @@
   (setq org-use-fast-todo-selection t)
   (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**"))))
   (setq org-agenda-skip-scheduled-if-done t))
+
+(use-package org-mu4e
+  :after (org mu4e))
 
 (use-package ox-rst
   :ensure t
@@ -1752,7 +1774,33 @@
 (use-package alert
   :defer t
   :functions (alert)
-  :ensure t)
+  :ensure t
+  :config
+  (cond
+   ((eq system-type 'darwin)
+    (setq alert-default-style 'osx-notifier))
+   ((eq system-type 'gnu/linux)
+    (setq alert-default-style 'notifications))
+   ((executable-find "sardis")
+    (setq alert-default-style 'sardis))
+   ((executable-find "notify-send")
+    (setq alert-default-style 'libnotify))
+   (t (setq alert-default-style 'message)))
+  
+  (alert-define-style
+   'sardis
+   :title "sardis"
+   :notifier
+   (lambda (info)
+     (call-process "sardis" nil 0 nil 
+		   "--name" (plist-get info :title)
+		   "notify" "send"
+		   (plist-get info :message))))
+
+  (defun alert-sardis (message &optional &key title)
+    (let ((alert-default-style 'sardis)
+	  (m-title (or title (buffer-name (current-buffer)))))
+      (alert message :title m-title))))
 
 (use-package ercn
   :ensure t
@@ -1835,7 +1883,8 @@
   (make-variable-buffer-local 'erc-fill-column)
 
   (setq erc-ignore-list '("*@*facebook" "&bitlbee"))
-  (setq erc-track-exclude-types '("JOIN", "PART", "QUIT" "MODE" "353" "333"))
+  (setq erc-track-exclude-types '("JOIN" "NICK" "PART" "QUIT" "MODE"
+				    "324" "329" "332" "333" "353" "477"))
   (setq erc-hide-list '("MODE"))
 
   (setq erc-current-nick-highlight-type 'nick)
@@ -1930,15 +1979,15 @@
 
   (defun erc-custom-modeline (buffer)
     (with-current-buffer buffer
-      (if tychoish-erc-disable-connection-status 
+      (if tychoish-erc-disable-connection-status
 	  (setq mode-line-process '())
 	(let ((process-status (cond ((and (erc-server-process-alive)
 					  (not erc-server-connected))
-                                     ":C")
-                                    ((erc-server-process-alive)
-                                     ":A")
-                                    (t
-                                     ":X"))))
+				     ":C")
+				    ((erc-server-process-alive)
+				     ":A")
+				    (t
+				     ":X"))))
 	  (setq mode-line-process (list process-status))))))
 
   (advice-add 'erc-update-mode-line-buffer :after #'erc-custom-modeline)
@@ -1988,6 +2037,7 @@
   (erc-add-scroll-to-bottom)
   (erc-timestamp-mode 1)
   (erc-notifications-mode 0)
+  (erc-fill-mode 1)
   (erc-spelling-mode 1)
   (erc-track-mode 1))
 

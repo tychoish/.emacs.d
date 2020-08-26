@@ -316,6 +316,7 @@
   (global-page-break-lines-mode 1)
   (delete-selection-mode 1)
   (winner-mode 1)
+  (winum-mode 1)
   (show-paren-mode t)
   (transient-mark-mode 1)
   (column-number-mode t)
@@ -347,6 +348,7 @@
 		 (format "loading userf config [%s]" fn)
 		 (require (intern (string-remove-suffix ".el" fn))))))
 	    (directory-files dirname))) t))
+
 
 ;; macros
 (fset 'markdown-indent-code "     \C-a\C-n")
