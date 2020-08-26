@@ -323,9 +323,10 @@
   (electric-pair-mode 1)
 
   (when (daemonp)
-    (session-initialize)
-    (recentf-mode 1)
-    (desktop-save-mode 1)))
+    (let ((gc-cons-threshold 800000))
+      (session-initialize)
+      (recentf-mode 1)
+      (desktop-save-mode 1))))
 
 (defun gui-p ()
   (or (daemonp) (window-system)))
