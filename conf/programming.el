@@ -1779,12 +1779,12 @@
   (cond
    ((eq system-type 'darwin)
     (setq alert-default-style 'osx-notifier))
+   ((executable-find "notify-send")
+    (setq alert-default-style 'libnotify))
    ((eq system-type 'gnu/linux)
     (setq alert-default-style 'notifications))
    ((executable-find "sardis")
     (setq alert-default-style 'sardis))
-   ((executable-find "notify-send")
-    (setq alert-default-style 'libnotify))
    (t (setq alert-default-style 'message)))
   
   (alert-define-style
@@ -1812,7 +1812,7 @@
 
   (setq ercn-notify-rules '((current-nick . all)
 			    (query-buffer . all)
-			    (message . ("#evergreen-users" "#evergreen" "#server-evergreen" "#unclear"))))
+			    (message . ("#unclear"))))
 
   (defun do-erc-notify (nickname message)
     "Hook implementation of a notification."
@@ -1822,6 +1822,9 @@
 		      nick
 		    (concat nick " (" channel ")")))
 	   (msg (s-trim (s-collapse-whitespace message))))
+
+	   (when (search "bitlbee" (downcase channel))
+	     (return-from do-erc-notify))
 
       (alert message :title title)))
 
