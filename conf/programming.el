@@ -188,6 +188,7 @@
   :config
   (set-face-attribute 'helm-source-header nil :height 98 :family "Source Code Pro" :weight 'semibold)
   (helm-autoresize-mode 1)
+  (helm-ff-cache-mode 0)
 
   (setq history-delete-duplicates t)
   (setq helm-M-x-fuzzy-match nil)
@@ -202,9 +203,7 @@
   (setq helm-display-header-line nil)
   (setq helm-input-idle-delay 0)
   (setq helm-man-or-woman-function 'woman)
-  (setq helm-split-window-in-side-p t)
-  (setq helm-ff-search-library-in-sexp t)
-  (setq helm-ff-file-name-history-use-recentf t))
+  (setq helm-split-window-in-side-p t))
 
 (use-package helm-make
   :ensure t
@@ -305,7 +304,8 @@
   (set-face-attribute 'helm-rg-extra-arg-face nil :foreground " orange" :weight 'normal)
   (set-face-attribute 'helm-rg-file-match-face nil :foreground "dark gray" :underline t)
   (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray" :weight 'normal)
-  (set-face-attribute 'helm-rg-base-rg-cmd-face nil :foreground "dim gray" :weight 'normal))
+  (set-face-attribute 'helm-rg-base-rg-cmd-face nil :foreground "dim gray" :weight 'normal)
+  (set-face-attribute 'helm-rg-error-message nil :foreground "dark red" :background "nil" :weight 'normal))
 
 (use-package helm-c-yasnippet
   :ensure t
@@ -1786,13 +1786,13 @@
    ((executable-find "sardis")
     (setq alert-default-style 'sardis))
    (t (setq alert-default-style 'message)))
-  
+
   (alert-define-style
    'sardis
    :title "sardis"
    :notifier
    (lambda (info)
-     (call-process "sardis" nil 0 nil 
+     (call-process "sardis" nil 0 nil
 		   "--name" (plist-get info :title)
 		   "notify" "send"
 		   (plist-get info :message))))
@@ -1816,17 +1816,18 @@
 
   (defun do-erc-notify (nickname message)
     "Hook implementation of a notification."
-    (let* ((channel (buffer-name))
-	   (nick nickname)
-	   (title (if (string-match-p (concat "^" nickname) channel)
-		      nick
-		    (concat nick " (" channel ")")))
-	   (msg (s-trim (s-collapse-whitespace message))))
+    (catch 'early-return
+      (let* ((channel (buffer-name))
+	     (check (when (or (string-prefix-p "*irc-" channel)
+			      (string= "bot" nickname)
+			      (search "bitlbee" (downcase channel)))
+		      (throw 'early-return "skip notification noise")))
+	     (msg (s-trim (s-collapse-whitespace message)))
+	     (title (if (string-match-p (concat "^" nickname) channel)
+			nickname
+		      (concat nickname " (" channel ")"))))
 
-	   (when (search "bitlbee" (downcase channel))
-	     (return-from do-erc-notify))
-
-      (alert message :title title)))
+      (alert msg :title title))))
 
   (add-hook 'ercn-notify-hook 'do-erc-notify))
 
@@ -1919,7 +1920,9 @@
   (setq erc-track-priority-faces-only nil)
   (setq erc-track-use-faces nil)
   (setq erc-truncate-buffer-on-save t)
+  (setq erc-max-buffer-size (* 10 1000))
 
+  (add-hook 'erc-insert-post-hook 'erc-truncate-buffer)
 
   (setq erc-prompt (lambda ()
 		     (if erc-network
@@ -1928,13 +1931,13 @@
 
   (add-hook 'window-configuration-change-hook
 	    '(lambda ()
-	       (save-excursion
-		 (walk-windows
-		  (lambda (w)
-		    (let ((buffer (window-buffer w)))
-		      (set-buffer buffer)
-		      (when (eq major-mode 'erc-mode)
-			(setq erc-fill-column (- (window-width w) 2)))))))))
+	      (save-excursion
+		(walk-windows
+		 (lambda (w)
+		   (let ((buffer (window-buffer w)))
+		     (set-buffer buffer)
+		     (when (eq major-mode 'erc-mode)
+		       (setq erc-fill-column (- (window-width w) 2)))))))))
 
   (defun reset-erc-track-mode ()
     (interactive)
@@ -1942,7 +1945,6 @@
     (erc-modified-channels-update)
     (erc-track-switch-buffer 1)
     (erc-track-switch-buffer -1))
-
 
   (defadvice erc-track-find-face (around erc-track-find-face-promote-query activate)
     (if (erc-query-buffer-p)
@@ -2036,6 +2038,7 @@
 	(call-interactively 'erc))))
 
   (setq erc-track-priority-faces-only (remove "&bitlbee" erc-channel-list))
+  (global-emojify-mode 1)
   (erc-update-modules)
   (erc-add-scroll-to-bottom)
   (erc-timestamp-mode 1)

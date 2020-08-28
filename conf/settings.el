@@ -82,13 +82,14 @@
 (setq next-line-add-newlines nil)
 (setq safe-local-variable-values '((encoding . utf-8)))
 
+(setq undo-auto-current-boundary-timer t)
+;; (setq jit-lock-stealth-time nil)
+;; (setq jit-lock-defer-time nil)
+;; (setq jit-lock-defer-time 0.05)
+;; (setq jit-lock-stealth-load 200)
+
 (setq warnings-to-ignore '())
 (setq byte-compile-warnings warnings-to-ignore)
-
-(setq jit-lock-stealth-time nil)
-(setq jit-lock-defer-time nil)
-(setq jit-lock-defer-time 0.05)
-(setq jit-lock-stealth-load 200)
 
 (setq backup-by-copying t)
 (setq auto-save-file-name-transforms `((".*" ,(concat user-emacs-directory "backups/") t)))

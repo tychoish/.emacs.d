@@ -317,7 +317,7 @@
   (delete-selection-mode 1)
   (winner-mode 1)
   (winum-mode 1)
-  (show-paren-mode t)
+  ;(show-paren-mode t)
   (transient-mark-mode 1)
   (column-number-mode t)
   (electric-pair-mode 1)
