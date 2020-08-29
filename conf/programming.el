@@ -33,7 +33,13 @@
   :commands (delight))
 
 (use-package autorevert
-  :delight auto-revert-mode)
+  :delight auto-revert-mode
+  :init
+  (defalias 'rb 'revert-buffer)
+  (defalias 'revert 'revert-buffer)
+  :config
+  (setq auto-revert-verbose nil)
+  (setq auto-revert-interval 5))
 
 (use-package abbrev
   :diminish abbrev-mode
@@ -61,6 +67,10 @@
   (defalias 'qrr 'anzu-query-replace-regexp)
   (defalias 'qr 'anzu-query-replace)
   :init
+  (defalias 'srr 'string-replace-regexp)
+  (defalias 'sr 'string-replace)
+  (setq query-replace-highlight t)
+  (setq search-highlight t)
 
   (global-anzu-mode 1))
 
@@ -320,6 +330,8 @@
 (use-package projectile
   :ensure t
   :delight '(:eval (tychoish-projectile-modeline-string))
+  :bind (("C-c t c" . tychoish-compile-project)
+	 ("C-c C-t c" . compile))
   :bind-keymap ("C-c p" . projectile-command-map)
   :commands (projectile-mode projectile-project-root)
   :defer 1
@@ -827,6 +839,12 @@
   (add-hook 'c-mode-common-hook 'c-turn-on-eldoc-mode)
   (setq c-eldoc-buffer-regenerate-time 60))
 
+(use-package cc-mode
+  :mode (("\\.cc$'" . c++-mode)
+	 ("\\.cpp$'" . c++-mode)
+	 ("\\.cxx$'" . c++-mode)
+	 ("\\.h$'" . c++-mode)))
+
 (use-package cpputils-cmake
   :ensure t
   :after (cmake-mode c++-mode c-mode)
@@ -849,6 +867,12 @@
   (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
   (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100)))
 
+(use-package make-mode
+  :mode (("makefile" . makefile-mode)
+	 ("Makefile" . makefile-mode)
+	 ("\\.mk%" . makefile-mode))
+  :config
+  (setq makefile-electric-keys t))
 
 (use-package js2-mode
   :ensure t
@@ -1454,6 +1478,16 @@
 	 ("C-c t t e" . 'enable-theme)
 	 ("C-c t t l" . 'load-theme)))
 
+(use-package comint
+  :commands (comint-mode)
+  :bind (:map comint-mode-map
+	      ("M-n" . comint-next-input)
+	      ("M-p" . comint-previous-input)
+	      ([down] . comint-next-matching-input-from-input)
+	      ([up] . comint-previous-matching-input-from-input))
+  :config
+  (setq ansi-color-for-comint-mode t))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; email (mu4e) configuration
@@ -1469,6 +1503,18 @@
   (setq emojify-display-style 'image)
   (setq emojify-emoji-styles '(unicode))
   (setq emojify-point-entered-behaviour 'echo))
+
+(use-package message
+  :mode ((".*mutt.*" . message-mode)
+	 ("/mutt" . message-mode))
+  :init
+  (setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
+  (setq message-citation-line-function 'message-insert-formatted-citation-line)
+  (setq message-default-mail-headers "Cc: \nBcc: \n")
+  (setq message-from-style 'angles)
+  (setq message-interactive nil)
+  (setq message-kill-buffer-on-exit nil)
+  (setq message-send-mail-function 'message-send-mail-with-sendmail))
 
 (use-package mu4e
   :bind (("C-c m m" . mu4e)
@@ -1501,13 +1547,6 @@
 	  ("From"  "^From: *\\(.*\\)" 1)))
   (setq mail-signature t)
   (setq mail-specify-envelope-from t)
-  (setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
-  (setq message-citation-line-function 'message-insert-formatted-citation-line)
-  (setq message-default-mail-headers "Cc: \nBcc: \n")
-  (setq message-from-style 'angles)
-  (setq message-interactive nil)
-  (setq message-kill-buffer-on-exit nil)
-  (setq message-send-mail-function 'message-send-mail-with-sendmail)
   (setq mu4e-compose-complete-addresses t)
   (setq mu4e-compose-dont-reply-to-self t)
   (setq mu4e-compose-keep-self-cc nil)
@@ -2119,6 +2158,28 @@
 (use-package pkgbuild-mode
   :ensure t
   :mode ("/PKGBUILD$"))
+
+(use-package conf-mode
+  :mode (("\\.service$'" . conf-unix-mode)
+	 ("\\.timer$'" . conf-unix-mode)
+	 ("\\.target$'" . conf-unix-mode)
+	 ("\\.mount$'" . conf-unix-mode)
+	 ("\\.automount$'" . conf-unix-mode)
+	 ("\\.slice$'" . conf-unix-mode)
+	 ("\\.socket$'" . conf-unix-mode)
+	 ("\\.path$'" . conf-unix-mode)
+	 ("\\.conf$'" . conf-unix-mode)))
+
+(use-package sh-script
+  :mode (("\\.bash$'" . sh-mode)
+	 ("\\.sh$'" . sh-mode)
+	 ("\\.zsh$'" . sh-mode)
+	 ("\\.zshrc$'" . sh-mode)
+	 ("\\.bashrc$'" . sh-mode)
+	 ("\\.bash_profile$'" . sh-mode)))
+
+(use-package nxml-mode
+  :mode (("\\.xml$'". nxml-mode)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

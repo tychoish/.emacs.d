@@ -20,6 +20,7 @@ to change the value of this variable.")
 
 (setq backup-by-copying t)
 (setq make-backup-files t)
+(setq delete-old-versions t)
 
 (defun tychoish-set-backup-directory (path)
   "Set the backup directory to PATH and configure appropriately."

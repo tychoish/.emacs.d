@@ -33,6 +33,7 @@
 (put 'downcase-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
+(put 'list-timers 'disabled nil)
 
 (setq split-height-threshold 100)
 (setq display-time-mode nil)
@@ -45,7 +46,6 @@
 (setq show-paren-delay 0.25)
 
 (setq use-dialog-box nil)
-(setq auto-revert-verbose nil)
 (setq ring-bell-function (lambda () nil))
 
 (setq version-control t)
@@ -55,19 +55,12 @@
 (setq find-file-visit-truename t)
 
 (setq compilation-ask-about-save nil)
-(setq makefile-electric-keys t)
 (setq compilation-scroll-output t)
-
-(setq ansi-color-for-comint-mode t)
-(setq auto-revert-interval 5)
 
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq kill-buffer-query-functions
       (remq 'process-kill-buffer-query-function
 	    kill-buffer-query-functions))
-
-(setq query-replace-highlight t)
-(setq search-highlight t)
 
 (setq lpr-command "/usr/bin/lpr")
 (setq lpr-add-switches "-T ''")
@@ -76,18 +69,16 @@
 (setq indicate-empty-lines t)
 
 (setq tramp-default-method "ssh")
-(setq font-lock-support-mode 'jit-lock-mode)
 (setq ping-program-options '("-c" "4"))
 (setq next-line-add-newlines nil)
 (setq safe-local-variable-values '((encoding . utf-8)))
 (setq undo-auto-current-boundary-timer t)
 
+(setq font-lock-support-mode 'jit-lock-mode)
 (setq jit-lock-stealth-time nil)
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
-
-(setq delete-old-versions t)
 
 (setq warnings-to-ignore '())
 (add-to-list 'warnings-to-ignore '((free-vars) (nresolved) (callargs)
@@ -97,31 +88,7 @@
 
 (set-face-attribute 'header-line nil :background nil :weight 'bold)
 
-(add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
-(add-to-list 'auto-mode-alist '("/mutt" . message-mode))
-(add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.timer\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.target\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.mount\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.automount\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.slice\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.socket\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.bash$'" . sh-mode))
-(add-to-list 'auto-mode-alist '("zsh'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.sh$'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.zsh$'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.cc\\'" . c++-mode))
-(add-to-list 'auto-mode-alist '("\\.cpp\\'" . c++-mode))
-(add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-mode))
-(add-to-list 'auto-mode-alist '("\\.h\\'" . c++-mode))
-(add-to-list 'auto-mode-alist '("\\.xml" . xml-mode))
-(add-to-list 'auto-mode-alist '("makefile" . makefile-mode))
-(add-to-list 'auto-mode-alist '("\\.mk$" . makefile-mode))
-(add-to-list 'auto-mode-alist '("Makefile" . makefile-mode))
-
 (fset 'yes-or-no-p 'y-or-n-p)
-(put 'list-timers 'disabled nil)
 
 (global-set-key (kbd "M-j") 'windmove-down)
 (global-set-key (kbd "M-k") 'windmove-up)
@@ -163,8 +130,6 @@
 
 (global-set-key (kbd "C-c t w") 'tycho-toggle-hooks)
 (global-set-key (kbd "C-c t w") 'tycho-toggle-hooks)
-(global-set-key (kbd "C-c t c") 'tychoish-compile-project)
-(global-set-key (kbd "C-c C-t c") 'compile)
 (global-set-key (kbd "C-x <escape>") 'next-error)
 (global-set-key (kbd "C-c C-r") 'rename-buffer)
 (global-set-key (kbd "C-c C-w") 'whitespace-cleanup)
@@ -189,20 +154,8 @@
 
 (define-key isearch-mode-map (kbd "C-o") 'isearch-occur)
 
-(eval-after-load 'comint
-  '(progn
-     (define-key comint-mode-map (kbd "M-n") 'comint-next-input)
-     (define-key comint-mode-map (kbd "M-p") 'comint-previous-input)
-     (define-key comint-mode-map [down] 'comint-next-matching-input-from-input)
-     (define-key comint-mode-map [up] 'comint-previous-matching-input-from-input)))
-
-(defalias 'rb 'revert-buffer)
-(defalias 'revert 'revert-buffer)
-(defalias 'srr 'string-replace-regexp)
-(defalias 'sr 'string-replace)
 (defalias 'eb 'eval-buffer)
 (defalias 'dr 'delete-region)
-(defalias 'hlm 'hl-line-mode)
 (defalias 'dw 'delete-trailing-witespace)
 
 (provide 'settings)
