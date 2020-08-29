@@ -5,7 +5,6 @@
 				   (concat "solo:" (buffer-name)))))
 
 (setq server-use-tcp t)
-
 (setq bookmark-save-flag 1)
 (setq bookmark-default-file (tychoish-get-config-file-path "bookmarks"))
 
@@ -46,7 +45,6 @@
 (setq show-paren-delay 0.25)
 
 (setq use-dialog-box nil)
-(setq alert-log-messages nil)
 (setq auto-revert-verbose nil)
 (setq ring-bell-function (lambda () nil))
 
@@ -89,37 +87,13 @@
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
 
-(setq warnings-to-ignore '())
-(setq byte-compile-warnings warnings-to-ignore)
 (setq delete-old-versions t)
 
-(let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
-  (setq custom-theme-directory theme-directory)
-  (add-to-list 'custom-theme-load-path theme-directory)
-  (add-to-list 'load-path theme-directory))
-
-(defvar after-theme-change-hook nil
-  "Hook run after a color theme is loaded using `load-theme'.")
-
-(defadvice load-theme (after run-after-load-theme-hook activate)
-  "Run `after-load-theme-hook'."
-  (run-hooks 'after-theme-change-hook))
-
-(defadvice enable-theme (after run-after-load-theme-hook activate)
-  "Run `after-load-theme-hook'."
-  (run-hooks 'after-theme-change-hook))
-
-(defadvice disable-theme (after run-after-load-theme-hook activate)
-  "Run `after-load-theme-hook'."
-  (run-hooks 'after-theme-change-hook))
-
-;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
-(add-hook 'after-make-frame-functions #'on-frame-open)
-(add-hook 'window-setup-hook #'on-after-init)
-
+(setq warnings-to-ignore '())
 (add-to-list 'warnings-to-ignore '((free-vars) (nresolved) (callargs)
 				   (redefine) (obsolete) (noruntine)
 				   (cl-functions) (interactive-only)))
+(setq byte-compile-warnings warnings-to-ignore)
 
 (set-face-attribute 'header-line nil :background nil :weight 'bold)
 
@@ -158,14 +132,6 @@
 (global-set-key (kbd "M-K") (lambda () (interactive) (enlarge-window -1)))
 (global-set-key (kbd "M-H") (lambda () (interactive) (enlarge-window -1 t)))
 (global-set-key (kbd "M-L") (lambda () (interactive) (enlarge-window 1 t)))
-
-(global-set-key (kbd "C-c f =") 'text-scale-increase)
-(global-set-key (kbd "C-c f -") 'text-scale-decrease)
-(global-set-key (kbd "C-c f 0") (lambda () (interactive) (text-scale-set 0)))
-(global-set-key (kbd "C-c C--") (lambda() (interactive) (djcb-opacity-modify t)))
-(global-set-key (kbd "C-c C-=") (lambda() (interactive) (djcb-opacity-modify)))
-(global-set-key (kbd "C-c C-0") (lambda() (interactive) (modify-frame-parameters nil `((alpha . 100)))))
-
 
 (global-set-key "(" 'tychoish-electric-pair)
 (global-set-key "[" 'tychoish-electric-pair)
@@ -212,10 +178,6 @@
 (global-set-key (kbd "C-x C-u t") 'upcase-initials-region)
 (global-set-key (kbd "C-x C-u r") 'upcase-region)
 (global-set-key (kbd "C-x C-u w") 'upcase-word)
-
-(global-set-key (kbd "C-c t t d") 'disable-theme)
-(global-set-key (kbd "C-c t t l") 'load-theme)
-(global-set-key (kbd "C-c t t e") 'enable-theme)
 
 (global-set-key (kbd "C-x C-n") 'word-count)
 (global-set-key (kbd "C-x l") 'goto-line)

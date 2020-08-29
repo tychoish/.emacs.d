@@ -324,12 +324,42 @@
   :commands (projectile-mode projectile-project-root)
   :defer 1
   :config
-
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
       (if (equal pname "-")
 	  ""
 	(concat " p:" pname))))
+
+  (defun tychoish-compile-project ()
+    (interactive)
+    (let* ((project-directory (if (eq "" (projectile-project-root))
+				  (default-directory)
+				(projectile-project-root)))
+	   (project-name (if (eq "" (projectile-project-name))
+			     (file-name-nondirectory (s-chop-suffix "/" project-directory))
+			   (projectile-project-name)))
+	   (project-compile-buffer (concat "*" project-name "-build" "*")))
+
+      (if (get-buffer project-compile-buffer)
+	  (switch-to-buffer-other-window (get-buffer project-compile-buffer))
+	(progn
+	  (let ((default-directory project-directory))
+	    (compile "time make -k build"))
+	  (switch-to-buffer-other-window "*compilation*")
+	  (rename-buffer project-compile-buffer)))))
+
+  (defun tychoish-uniq-compile-buffer (compile-buffer-name &optional cmd)
+    (if (get-buffer compile-buffer-name)
+	(progn
+	  (switch-to-buffer-other-window (get-buffer compile-buffer-name))
+	  (recompile))
+      (progn
+	(if cmd
+	    (compile cmd)
+	  (compile))
+	(switch-to-buffer-other-window "*compilation*")
+	(rename-buffer compile-buffer-name)
+	nil)))
 
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep 1)
@@ -853,13 +883,20 @@
 (use-package ctags-update
   :ensure t
   :bind (("C-c E" . ctags-update))
-  :commands (turn-on-ctags-auto-update-mode)
+  :commands (turn-on-ctags-auto-update-mode create-tags)
   :init
   (setq tags-add-tables nil)
   (setq etags-table-search-up-depth 10)
   (setq path-to-ctags (executable-find "ctags"))
   (setq ctags-update-delay-seconds 300)
   :config
+  (defun create-tags (dir-name)
+    "Create tags file for the DIR-NAME directory."
+    (interactive "DDirectory: ")
+    (let ((cmd-str (format "%s -e -u -f %s/TAGS %s -R %s" path-to-ctags dir-name dir-name (directory-file-name dir-name))))
+      (message cmd-str)
+      (shell-command cmd-str)))
+
   (add-hook 'c-mode-common-hook  'turn-on-ctags-auto-update-mode)
   (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
 
@@ -1401,6 +1438,22 @@
 
 (use-package tychoish-backup)
 
+(use-package tychoish-theme
+  :commands (disable-all-themes
+	     tychoish-load-light-theme
+	     tychoish-load-dark-theme
+	     tychoish-font-setup)
+  :bind (("C-c f =" . text-scale-increase)
+	 ("C-c f -" . text-scale-decrease)
+	 ("C-c f 0" . text-scale-reset)
+	 ("C-c C-=" . opacity-increase)
+	 ("C-c C--" . opacity-decrease)
+	 ("C-c f C-0" . opacity-reset)
+	 ("C-c t t d" . 'disable-theme)
+	 ("C-c t t D" . 'disable-all-themes)
+	 ("C-c t t e" . 'enable-theme)
+	 ("C-c t t l" . 'load-theme)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; email (mu4e) configuration
@@ -1792,6 +1845,8 @@
    ((executable-find "sardis")
     (setq alert-default-style 'sardis))
    (t (setq alert-default-style 'message)))
+
+  (setq alert-log-messages t)
 
   (alert-define-style
    'sardis

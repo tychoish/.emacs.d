@@ -6,41 +6,6 @@
 
 ;;; Code:
 
-(defun create-tags (dir-name)
-  "Create tags file for the DIR-NAME directory."
-  (interactive "DDirectory: ")
-  (let ((cmd-str (format "%s -e -u -f %s/TAGS %s -R %s" path-to-ctags dir-name dir-name (directory-file-name dir-name))))
-    (message cmd-str)
-    (shell-command cmd-str)))
-
-(defun tychoish-compile-project ()
-  (interactive)
-  (let* ((project-directory (if (eq "" (magit-toplevel))
-				(default-directory)
-			      (magit-toplevel)))
-	 (project-name (file-name-nondirectory (s-chop-suffix "/" project-directory)))
-	 (project-compile-buffer (s-concat "*" project-name "-build" "*")))
-    (if (get-buffer project-compile-buffer)
-	(switch-to-buffer-other-window (get-buffer project-compile-buffer))
-      (progn
-	(let ((default-directory project-directory))
-	  (compile "time make -k build"))
-	(switch-to-buffer-other-window "*compilation*")
-	(rename-buffer project-compile-buffer)))))
-
-(defun tychoish-uniq-compile-buffer (compile-buffer-name &optional cmd)
-  (if (get-buffer compile-buffer-name)
-      (progn
-	(switch-to-buffer-other-window (get-buffer compile-buffer-name))
-	(recompile))
-    (progn
-      (if cmd
-	  (compile cmd)
-	(compile))
-      (switch-to-buffer-other-window "*compilation*")
-      (rename-buffer compile-buffer-name)
-      nil)))
-
 (defun font-lock-show-tabs ()
   "Return a font-lock style keyword for tab characters."
   '(("\t" 0 'trailing-whitespace prepend)))
@@ -93,6 +58,7 @@
 (defalias 'sshra 'ssh-reagent)
 
 (defvar *tychoish-save-hook-off* t)
+
 (defun tycho-toggle-hooks ()
   "Reset the before-save hook to preven cleaning up."
   (interactive)
@@ -186,15 +152,6 @@
 		   "^git grep " "git grep --color=auto " (ad-get-arg 0))))
   ad-do-it)
 
-(defun djcb-opacity-modify (&optional dec)
-  "modify the transparency of the emacs frame; if DEC is t,
-    decrease the transparency, otherwise increase it in 10%-steps"
-  (let* ((alpha-or-nil (frame-parameter nil 'alpha)) ; nil before setting
-	  (oldalpha (if alpha-or-nil alpha-or-nil 100))
-	  (newalpha (if dec (- oldalpha 2) (+ oldalpha 2))))
-    (when (and (>= newalpha frame-alpha-lower-limit) (<= newalpha 100))
-      (modify-frame-parameters nil (list (cons 'alpha newalpha))))))
-
 (defun word-count (&optional start end)
   "Prints number of lines, words and characters in region or whole buffer."
   (interactive)
@@ -218,48 +175,10 @@
    (t
     input)))
 
-(defun disable-all-themes ()
-  (interactive)
-  (mapc #'disable-theme custom-enabled-themes))
-
-(defvar *tychoish-current-font* nil)
-
-(defun tychoish-font-setup (name number)
-  (interactive "sName: \nNNumber:")
-  (let ((new-font-name (concat name "-" (number-to-string number))))
-    (set-face-attribute 'default nil :font new-font-name)
-    (add-to-list 'default-frame-alist (cons 'font new-font-name))
-    (unless (equal *tychoish-current-font* new-font-name)
-      (setq *tychoish-current-font* new-font-name))))
-
-(defun on-frame-open (frame)
-  ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
-  (unless (display-graphic-p frame)
-    (set-face-foreground 'default "unspecified-fg" frame)
-    (set-face-background 'default "unspecified-bg" frame)))
-
-(defun on-after-init ()
-  ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
-  (unless (display-graphic-p (selected-frame))
-    (set-face-foreground 'default "unspecified-fg" frame)
-    (set-face-background 'default "unspecified-bg" (selected-frame))))
-
 (defmacro with-timer (name &rest body)
   `(let ((time (current-time)))
      ,@body
      (message "%s: %.06fs" ,name (float-time (time-since time)))))
-
-(defun tychoish-load-dark-theme ()
-  (interactive)
-  (load-theme 'modus-vivendi t)
-  (add-to-list 'default-frame-alist '(alpha . 85))
-  (tychoish-doom-modeline-setup))
-
-(defun tychoish-load-light-theme ()
-  (interactive)
-  (load-theme 'modus-operandi t)
-  (add-to-list 'default-frame-alist '(alpha . 90))
-  (tychoish-doom-modeline-setup))
 
 (defun tychoish-legacy-mode-line ()
   (interactive)
@@ -315,7 +234,7 @@
   (global-page-break-lines-mode 1)
   (delete-selection-mode 1)
   (winner-mode 1)
-  (show-paren-mode 1)
+  (show-paren-mode t)
   (winum-mode 1)
   (transient-mark-mode 1)
   (column-number-mode t)
