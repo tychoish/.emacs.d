@@ -91,14 +91,7 @@
 
 (setq warnings-to-ignore '())
 (setq byte-compile-warnings warnings-to-ignore)
-
-(setq backup-by-copying t)
-(setq auto-save-file-name-transforms `((".*" ,(concat user-emacs-directory "backups/") t)))
 (setq delete-old-versions t)
-(setq history-length 100)
-(setq make-backup-files t)
-
-(add-to-list 'backup-directory-alist (cons "." (concat user-emacs-directory "backups/")))
 
 (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
   (setq custom-theme-directory theme-directory)

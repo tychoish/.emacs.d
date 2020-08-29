@@ -1,4 +1,4 @@
-;; blogging -- static blog posting automation
+;; tychoish-blogging -- static blog posting automation
 
 ;;; Commentary:
 
@@ -83,5 +83,5 @@ Does nothing if the current post is not in the drafts folder."
   (interactive)
   (find-file (expand-file-name tychoish-blog-path)))
 
-(provide 'blogging)
-;;; blogging.el ends here
+(provide 'tychoish-blogging)
+;;; tychoish-blogging.el ends here

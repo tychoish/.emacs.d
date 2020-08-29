@@ -189,6 +189,7 @@
   (set-face-attribute 'helm-source-header nil :height 98 :family "Source Code Pro" :weight 'semibold)
   (helm-autoresize-mode 1)
 
+  (setq history-length 100)
   (setq history-delete-duplicates t)
   (setq helm-ff-keep-cached-candidates "local")
   (setq helm-ff-refresh-cache-delay 300)
@@ -1383,7 +1384,7 @@
   (setq org-roam-directory (concat local-notes-directory "/roam"))
   (setq org-roam-index-file "index.org"))
 
-(use-package blogging
+(use-package tychoish-blogging
   :after (f)
   :commands (tychoish-blog-insert-date
 	     tychoish-blog-publish-post
@@ -1397,6 +1398,8 @@
 	 ("C-c t b d" . tychoish-blog-open-drafts-dired))
   :config
   (setq tychoish-blog-path (expand-file-name "~/projects/blog")))
+
+(use-package tychoish-backup)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
