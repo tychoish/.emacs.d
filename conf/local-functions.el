@@ -292,7 +292,6 @@
   (diminish 'org-indent-mode)
   (diminish 'org-capture-mode)
   (diminish 'abbrev-mode)
-  (diminish 'helm-ff-cache-mode)
   (diminish 'eldoc-mode)
   (diminish 'auto-revert-mode)
   (diminish 'refill-mode "rf")
@@ -316,8 +315,8 @@
   (global-page-break-lines-mode 1)
   (delete-selection-mode 1)
   (winner-mode 1)
+  (show-paren-mode 1)
   (winum-mode 1)
-  ;(show-paren-mode t)
   (transient-mark-mode 1)
   (column-number-mode t)
   (electric-pair-mode 1)
@@ -349,7 +348,6 @@
 		 (format "loading userf config [%s]" fn)
 		 (require (intern (string-remove-suffix ".el" fn))))))
 	    (directory-files dirname))) t))
-
 
 ;; macros
 (fset 'markdown-indent-code "     \C-a\C-n")

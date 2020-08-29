@@ -43,6 +43,7 @@
 (setq scroll-conservatively 25)
 (setq scroll-preserve-screen-position 1)
 (setq cursor-in-non-selected-windows nil)
+(setq show-paren-delay 0.25)
 
 (setq use-dialog-box nil)
 (setq alert-log-messages nil)
@@ -81,12 +82,12 @@
 (setq ping-program-options '("-c" "4"))
 (setq next-line-add-newlines nil)
 (setq safe-local-variable-values '((encoding . utf-8)))
-
 (setq undo-auto-current-boundary-timer t)
-;; (setq jit-lock-stealth-time nil)
-;; (setq jit-lock-defer-time nil)
-;; (setq jit-lock-defer-time 0.05)
-;; (setq jit-lock-stealth-load 200)
+
+(setq jit-lock-stealth-time nil)
+(setq jit-lock-defer-time 0.2)
+(setq jit-lock-stealth-nice 0.2)
+(setq jit-lock-stealth-load 100)
 
 (setq warnings-to-ignore '())
 (setq byte-compile-warnings warnings-to-ignore)
@@ -153,6 +154,7 @@
 (add-to-list 'auto-mode-alist '("Makefile" . makefile-mode))
 
 (fset 'yes-or-no-p 'y-or-n-p)
+(put 'list-timers 'disabled nil)
 
 (global-set-key (kbd "M-j") 'windmove-down)
 (global-set-key (kbd "M-k") 'windmove-up)

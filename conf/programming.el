@@ -188,9 +188,12 @@
   :config
   (set-face-attribute 'helm-source-header nil :height 98 :family "Source Code Pro" :weight 'semibold)
   (helm-autoresize-mode 1)
-  (helm-ff-cache-mode 0)
 
   (setq history-delete-duplicates t)
+  (setq helm-ff-keep-cached-candidates "local")
+  (setq helm-ff-refresh-cache-delay 300)
+  (setq helm-ff-cache-mode-max-idle-time 300)
+  (setq helm-ff-keep-cached-candidates nil)
   (setq helm-M-x-fuzzy-match nil)
   (setq helm-autoresize-max-height 40)
   (setq helm-autoresize-min-height 20)
