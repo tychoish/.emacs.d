@@ -5,7 +5,7 @@
 % Packages required by code
 \title{}
 \shorttitle{%header title$}
-\author{Sam Kleinman}
+\author{$1}
 \affiliation{Webster University}
 \rightheader{Running head: title}
 % Packages always used
@@ -19,7 +19,7 @@
 \maketitle 
 
 %body of paper goes here
-
+$0
 
 \newpage
 \bibliography{AC.references}

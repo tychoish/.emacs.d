@@ -1,6 +1,6 @@
 \documentclass[12pt]{letter}
 
-\signature{Sam Kleinman}
+\signature{$0}
 \address{
 %Sender's Address use \\ for line breaks
 
@@ -27,6 +27,7 @@
 %Specific Opening Here
 }
 
+$1
 %Body of the letter
 
 \closing{

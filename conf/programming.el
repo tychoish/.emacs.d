@@ -1958,7 +1958,6 @@
   (add-hook 'erc-mode-hook (lambda ()
 			     (visual-line-mode 1)
 			     (auto-fill-mode 0)))
-
   (add-hook 'erc-insert-pre-hook
 	    (lambda (s)
 	      (when (erc-foolish-content s)
