@@ -1,4 +1,4 @@
-;;; programming -- contains use-package forms for importing code
+;;; tychoish-core -- contains use-package forms for managing configuration.
 
 ;;; Commentary:
 
@@ -9,6 +9,7 @@
 ;; only loads when called directly or a mode is activated.
 
 ;;; Code:
+
 (use-package auto-package-update
   :ensure t
   :commands (auto-package-update-maybe auto-package-update-now)
@@ -22,7 +23,8 @@
   :ensure t)
 
 (use-package eldoc
-  :diminish)
+  :diminish
+  :commands (eldoc-mode))
 
 (use-package diminish
   :ensure t
@@ -33,7 +35,8 @@
   :commands (delight))
 
 (use-package autorevert
-  :delight auto-revert-mode
+  :diminish
+  :commands (auto-revert-mode)
   :init
   (defalias 'rb 'revert-buffer)
   (defalias 'revert 'revert-buffer)
@@ -42,7 +45,8 @@
   (setq auto-revert-interval 5))
 
 (use-package abbrev
-  :diminish abbrev-mode
+  :diminish
+  :after (tychoish-setuputils)
   :config
   (setq abbrev-file-name (tychoish-get-config-file-path "abbrev"))
   (setq save-abbrevs t)
@@ -74,39 +78,53 @@
 
   (global-anzu-mode 1))
 
-(use-package spaceline
-  :ensure t
-  :commands (tychoish-enable-mode-line tychoish-disable-modeline spaceline-compile)
-  :config
-  (defun tychoish-disable-mode-line ()
-    (interactive)
-    (spaceline-helm-mode -1)
-    (tychoish-legacy-mode-line)
-    (remove-hook 'after-theme-change-hook 'tychoish-enable-mode-line))
-
-  (defun tychoish-enable-mode-line ()
-    (interactive)
-
-    (spaceline-define-segment daemon
-      tychoish-emacs-identifier)
-    (spaceline-define-segment word-count
-      "Count of words in the buffer"
-      (format "%s" (count-words (point-min) (point-max))))
-
-    (spaceline-emacs-theme 'daemon 'word-count)
-
-    (spaceline-toggle-which-function-off)
-    (spaceline-toggle-buffer-size-off)
-    (spaceline-toggle-word-count-on)
-    (spaceline-toggle-daemon-on)
-    (spaceline-helm-mode 1)
-    (add-hook 'after-theme-change-hook 'tychoish-enable-mode-line)))
-
 (use-package doom-modeline
   :ensure t
-  :commands (doom-modeline-mode)
+  :commands (doom-modeline-mode
+	     tychoish-legacy-mode-line
+	     tychoish-setup-modeline)
   :bind (("C-c t i" . toggle-modeline-icons))
+  :init
+  (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
+  (setq find-file-visit-truename t)
+  (setq size-indication-mode t)
+  (setq display-time-mode nil)
   :config
+  (defun tychoish-legacy-mode-line ()
+    (interactive)
+    (setq-default mode-line-format
+		  (list
+		   mode-line-mule-info
+		   mode-line-client
+		   mode-line-modified
+		   mode-line-remote
+		   mode-line-frame-identification
+		   "<"
+		   tychoish-emacs-identifier
+		   ">:"
+		   mode-line-buffer-identification
+		   " "
+		   mode-line-position
+		   '(vc-mode vc-mode)
+		   "%M"
+		   global-mode-string
+		   ""
+		   mode-line-modes)))
+
+  (defun tychoish-setup-modeline ()
+    (interactive)
+    (tychoish-legacy-mode-line)
+    (doom-modeline-mode 1)
+    (tychoish-doom-modeline-setup)
+
+    (delight 'emacs-lisp-mode "elisp")
+    (delight 'fundamental-mode "fund")
+    (delight 'auto-fill-mode "afm")
+    (diminish 'overwrite-mode "om")
+    (diminish 'refill-mode "rf")
+    (diminish 'auto-fill-mode "afm")
+    (diminish 'visual-line-mode "wr"))
+
   (defvar *tychoish-modeline-icon-state* nil)
 
   (defun toggle-modeline-icons ()
@@ -151,7 +169,8 @@
 
 (use-package winum
   :ensure t
-  :after (spaceline doom-modeline)
+  :after (doom-modeline)
+  :commands (winum-select-window-by-number winum-mode)
   :bind (("C-x w n" . winum-select-window-by-number))
   :config
   (setq winum-auto-setup-mode-line nil)
@@ -327,20 +346,14 @@
   :init
   (setq helm-yas-space-match-any-greedy t))
 
-(use-package projectile
-  :ensure t
-  :delight '(:eval (tychoish-projectile-modeline-string))
+(use-package compile
+  :functions (tychoish-uniq-compile-buffer)
+  :commands (tychoish-compile-project)
   :bind (("C-c t c" . tychoish-compile-project)
 	 ("C-c C-t c" . compile))
-  :bind-keymap ("C-c p" . projectile-command-map)
-  :commands (projectile-mode projectile-project-root)
-  :defer 1
   :config
-  (defun tychoish-projectile-modeline-string ()
-    (let ((pname (projectile-project-name)))
-      (if (equal pname "-")
-	  ""
-	(concat " p:" pname))))
+  (setq compilation-ask-about-save nil)
+  (setq compilation-scroll-output t)
 
   (defun tychoish-compile-project ()
     (interactive)
@@ -371,7 +384,20 @@
 	  (compile))
 	(switch-to-buffer-other-window "*compilation*")
 	(rename-buffer compile-buffer-name)
-	nil)))
+	nil))))
+
+(use-package projectile
+  :ensure t
+  :delight '(:eval (tychoish-projectile-modeline-string))
+  :bind-keymap ("C-c p" . projectile-command-map)
+  :commands (projectile-mode projectile-project-root)
+  :defer 1
+  :config
+  (defun tychoish-projectile-modeline-string ()
+    (let ((pname (projectile-project-name)))
+      (if (equal pname "-")
+	  ""
+	(concat " p:" pname))))
 
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep 1)
@@ -381,7 +407,7 @@
 
 (use-package helm-projectile
   :ensure t
-  :after (projectile)
+  :after (projectile helm)
   :bind (("M-p" . helm-projectile)
 	 ("C-c g s" . helm-projectile-grep))
   :config
@@ -419,6 +445,7 @@
 (use-package page-break-lines
   :ensure t
   :diminish page-break-lines-mode
+  :defer 2
   :commands (global-page-break-lines-mode)
   :config
   (setq page-break-lines-modes '(emacs-lisp-mode
@@ -431,7 +458,8 @@
 				 cc-mode
 				 eww-mode
 				 go-mode
-				 special-mode)))
+				 special-mode))
+  (global-page-break-lines-mode 1))
 
 (use-package writeroom-mode
   :ensure t
@@ -473,8 +501,10 @@
   (setq session-save-print-spec '(t nil 40000)))
 
 (use-package winner
-  :defer t
-  :commands (winner-mode))
+  :defer 2
+  :commands (winner-mode)
+  :init
+  (winner-mode 1))
 
 (use-package desktop
   :commands (desktop-save-mode desktop-read tychoish-save-desktop)
@@ -554,7 +584,12 @@
   :bind (("C-x g s" . magit-status)
 	 ("C-x g b" . magit-branch-manager)
 	 ("C-x g o b" . magit-blame))
-  :config (setq magit-auto-revert-mode nil))
+  :init
+  (setq version-control t)
+  (setq vc-follow-symlinks t)
+  (setq vc-handled-backends nil)
+  :config
+  (setq magit-auto-revert-mode nil))
 
 (use-package magithub
   :ensure t
@@ -615,11 +650,8 @@
 	 ("C-d" . company-show-doc-buffer)
 	 ("M-." . company-show-location))
   :init
-  (add-hook 'c-mode-common-hook 'company-mode)
-  (add-hook 'sgml-mode-hook 'company-mode)
-  (add-hook 'emacs-lisp-mode-hook 'company-mode)
+  (add-hook 'prog-mode-hook 'company-mode)
   (add-hook 'text-mode-hook 'company-mode)
-  (add-hook 'lisp-mode-hook 'company-mode)
   :config
   (eval-after-load 'c-mode
     '(define-key c-mode-map (kbd "[tab]") 'company-complete))
@@ -877,6 +909,7 @@
 (use-package js2-mode
   :ensure t
   :mode ("\\.js$" "\\.json$")
+  :after (tychoish-editing)
   :init
   (font-lock-add-keywords 'javascript-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'javascript-mode (font-lock-width-keyword 100))
@@ -908,6 +941,7 @@
   :ensure t
   :bind (("C-c E" . ctags-update))
   :commands (turn-on-ctags-auto-update-mode create-tags)
+  :diminish
   :init
   (setq tags-add-tables nil)
   (setq etags-table-search-up-depth 10)
@@ -938,6 +972,7 @@
   :ensure t
   :delight "py"
   :mode ("\\.py\\'" "\\.py3\\'" "SConstruct" "SConscript")
+  :after (tychoish-editing)
   :bind (:map python-mode-map
 	      ("M-<right>" . balle-python-shift-right)
 	      ("M-<left>" . balle-python-shift-left)
@@ -1094,6 +1129,9 @@
   (diminish 'slime-autodoc-mode)
   (diminish 'slime-mode "sl")
 
+  (delight 'lisp-mode "lisp")
+  (delight 'lisp-interaction-mode "li")
+
   (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "slime-helper.el")
   (load-quicklisp-file "log4slime-setup.el")
@@ -1227,6 +1265,8 @@
 					    "* TODO %?\n%i" :prepend t))))
   :config
   (diminish 'org-indent-mode)
+  (diminish 'org-capture-mode)
+
   (delight 'org-agenda-mode "agenda")
 
   (defadvice org-capture-finalize
@@ -1430,7 +1470,6 @@
   (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
   (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
 
-
 (use-package org-roam
   :ensure t
   :bind (:map org-roam-mode-map
@@ -1444,6 +1483,62 @@
   :config
   (setq org-roam-directory (concat local-notes-directory "/roam"))
   (setq org-roam-index-file "index.org"))
+
+(use-package tychoish-setuputils
+  :commands (tychoish-setup-global-modes
+	     tychoish-setup-user-local-config
+	     tychoish-setup-font
+	     tychoish-get-config-file-prefix
+	     tychoish-get-config-file-path)
+  :functions (gui-p default-string with-timer)
+  :init
+  (setq server-use-tcp t)
+  (setq starttls-use-gnutls t)
+  (setq gnutls-log-level 0)
+
+  (setq safe-local-variable-values '((encoding . utf-8)))
+  (setq warnings-to-ignore '())
+  (add-to-list 'warnings-to-ignore '((free-vars) (nresolved) (callargs)
+				     (redefine) (obsolete) (noruntine)
+				     (cl-functions) (interactive-only)))
+  (setq byte-compile-warnings warnings-to-ignore)
+
+  (setq backup-by-copying t)
+  (setq make-backup-files t)
+  (setq delete-old-versions t)
+
+  (fset 'yes-or-no-p 'y-or-n-p)
+  (put 'dired-find-alternate-file 'disabled nil)
+  (put 'list-timers 'disabled nil)
+
+  (setq confirm-kill-processes nil)
+  (setq confirm-nonexistent-file-or-buffer nil)
+  (setq kill-buffer-query-functions
+	(remq 'process-kill-buffer-query-function
+	      kill-buffer-query-functions))
+
+  (defalias 'eb 'eval-buffer)
+  (global-set-key (kbd "C-c C-r") 'rename-buffer)
+  :config
+  (tychoish-set-backup-directory tychoish-backup-directory)
+
+  (defvar tychoish-emacs-identifier (default-string "solo" (daemonp)))
+
+  (setq frame-title-format '(:eval (if (stringp (daemonp))
+				       (format "%s:%s" (daemonp) (buffer-name))
+				     (concat "solo:" (buffer-name)))))
+  (setq bookmark-save-flag 1)
+  (setq bookmark-default-file (tychoish-get-config-file-path "bookmarks")))
+
+(use-package cus-edit
+  :defer 1
+  :after (tychoish-setuputils)
+  :init
+  (setq custom-file (tychoish-get-config-file-path "custom.el"))
+  :config
+  (when (and custom-file (file-exists-p custom-file))
+    (let ((inhibit-message t))
+      (load (expand-file-name custom-file) t t t))))
 
 (use-package tychoish-blogging
   :after (f)
@@ -1460,13 +1555,10 @@
   :config
   (setq tychoish-blog-path (expand-file-name "~/projects/blog")))
 
-(use-package tychoish-backup)
-
 (use-package tychoish-theme
   :commands (disable-all-themes
 	     tychoish-load-light-theme
-	     tychoish-load-dark-theme
-	     tychoish-font-setup)
+	     tychoish-load-dark-theme)
   :bind (("C-c f =" . text-scale-increase)
 	 ("C-c f -" . text-scale-decrease)
 	 ("C-c f 0" . text-scale-reset)
@@ -1476,7 +1568,126 @@
 	 ("C-c t t d" . 'disable-theme)
 	 ("C-c t t D" . 'disable-all-themes)
 	 ("C-c t t e" . 'enable-theme)
-	 ("C-c t t l" . 'load-theme)))
+	 ("C-c t t l" . 'load-theme))
+  :init
+  (setq inhibit-startup-echo-area-message (user-login-name))
+  (setq inhibit-startup-message t)
+  (setq initial-major-mode 'fundamental-mode)
+  (setq initial-scratch-message nil)
+  (setq fringe-mode 'half-width)
+  (setq split-height-threshold 100)
+
+  (when (eq system-type 'darwin)
+    (setq ns-use-srgb-colorspace nil)
+    (setq display-highres t))
+
+  (setq use-dialog-box nil)
+  (setq ring-bell-function (lambda () nil))
+
+  (setq scroll-conservatively 25)
+  (setq scroll-preserve-screen-position 1)
+  (setq cursor-in-non-selected-windows nil)
+  (setq indicate-empty-lines t)
+
+  (setq font-lock-support-mode 'jit-lock-mode)
+  (setq jit-lock-stealth-time nil)
+  (setq jit-lock-defer-time 0.2)
+  (setq jit-lock-stealth-nice 0.2)
+  (setq jit-lock-stealth-load 100)
+
+  (set-default 'truncate-lines t)
+  (set-face-attribute 'header-line nil :background nil :weight 'bold)
+
+  :config
+  (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
+    (setq custom-theme-directory theme-directory)
+    (add-to-list 'custom-theme-load-path theme-directory)
+    (add-to-list 'load-path theme-directory)))
+
+(use-package tychoish-editing
+  :commands (markdown-indent-code
+	     rst-indent-code
+	     uniquify-region-lines
+	     uniquify-buffer-lines
+	     font-lock-show-tabs
+	     font-lock-width-keyword)
+  :bind (("M-<up>" . move-text-up)
+	 ("M-<down>" . move-text-down)
+	 ("C-c t w" . tycho-toggle-hooks)
+	 ("C-x C-n" . word-count)
+	 ("C-w" . kill-region)
+	 ("(" . tychoish-electric-pair)
+	 ("[" . tychoish-electric-pair)
+	 ("{" . tychoish-electric-pair)
+	 ("<" . tychoish-electric-pair)
+	 ("\"" . tychoish-electric-pair)
+	 ("*" . tychoish-electric-pair)
+	 ("_" . tychoish-electric-pair)
+	 ("RET" . electrify-return-if-match))
+  :init
+  (setq show-paren-delay 0.25)
+  (setq indent-tabs-mode nil)
+
+  (defalias 'dr 'delete-region)
+  (defalias 'dw 'delete-trailing-witespace)
+
+  (setq next-line-add-newlines nil)
+  (setq undo-auto-current-boundary-timer t)
+
+  (when (eq system-type 'darwin)
+    (setq ns-function-modifier 'hyper)
+    (setq mac-command-modifier 'meta)
+    (setq mac-option-modifier 'super))
+
+  (global-set-key (kbd "s-x") 'clipboard-kill-region) ;;cut
+  (global-set-key (kbd "s-c") 'clipboard-kill-ring-save) ;;copy
+  (global-set-key (kbd "s-v") 'clipboard-yank) ;;paste
+  (global-set-key (kbd "C-z") 'undo)
+
+  (global-unset-key (kbd "C-x C-u"))
+  (global-set-key (kbd "C-x C-u t") 'upcase-initials-region)
+  (global-set-key (kbd "C-x C-u r") 'upcase-region)
+  (global-set-key (kbd "C-x C-u w") 'upcase-word)
+
+  (global-set-key (kbd "C-x l") 'goto-line)
+  (global-set-key (kbd "C-c C-f") 'set-fill-column)
+  (global-set-key (kbd "C-c C-p") 'set-mark-command)
+  (global-set-key (kbd "C-c c") 'comment-region)
+  (global-set-key (kbd "C-c i") 'indent-region)
+  (global-set-key (kbd "C-c s w") 'ispell-word)
+  (global-set-key (kbd "C-h") 'backward-kill-word)
+  (global-set-key (kbd "C-x C-x") 'exchange-dot-and-mark)
+  (global-set-key (kbd "M-<SPC>") 'set-mark-command)
+  (global-set-key (kbd "M-C-q") 'fill-region))
+
+(use-package tychoish-grep
+  :bind (("C-c g g" . git-grep)
+	 ("C-c g r" . git-grep-repo))
+  :init
+  (global-set-key (kbd "C-c g f") 'find-grep)
+  (global-set-key (kbd "C-c C-o") 'occur)
+  (define-key isearch-mode-map (kbd "C-o") 'isearch-occur))
+
+(use-package whitespace
+  :bind (("C-c C-w" . whitespace-cleanup)))
+
+(use-package tramp
+  :init
+  (setq tramp-default-method "ssh")
+
+  (defun ssh-reagent ()
+    (interactive)
+    (let* ((sshdir (car (directory-files "/tmp" nil "ssh-*")))
+	   (agent (car (directory-files (concat "/tmp/" sshdir) nil "agent.*"))))
+      (setenv "SSH_AUTH_SOCK" (concat "/tmp/" sshdir "/" agent)))
+    (message "Attached to SSH Session"))
+
+  (defalias 'sshra 'ssh-reagent))
+
+(use-package lpr
+  :commands (lpr-region lpr-buffer)
+  :config
+  (setq lpr-add-switches "-T ''"))
 
 (use-package comint
   :commands (comint-mode)
@@ -1488,6 +1699,19 @@
   :config
   (setq ansi-color-for-comint-mode t))
 
+(use-package windmove
+  :bind ((("M-j" . windmove-down)
+	  ("M-k" . windmove-up)
+	  ("M-h" . windmove-left)
+	  ("M-l" . windmove-right)))
+  :init
+  (windmove-default-keybindings)
+
+  (global-set-key (kbd "M-J") (lambda () (interactive) (enlarge-window 1)))
+  (global-set-key (kbd "M-K") (lambda () (interactive) (enlarge-window -1)))
+  (global-set-key (kbd "M-H") (lambda () (interactive) (enlarge-window -1 t)))
+  (global-set-key (kbd "M-L") (lambda () (interactive) (enlarge-window 1 t))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; email (mu4e) configuration
@@ -1498,6 +1722,7 @@
   :ensure t
   :commands (global-emojify-mode)
   :diminish emojify-mode
+  :after (tychoish-editing)
   :demand t
   :config
   (setq emojify-display-style 'image)
@@ -2306,5 +2531,5 @@
   (which-key-setup-minibuffer)
   (which-key-mode 1))
 
-(provide 'programming)
+(provide 'tychoish-core)
 ;;; programming.el ends here

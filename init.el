@@ -11,10 +11,12 @@
 (add-to-list 'after-init-hook
 	     (lambda ()
 	       (setq gc-cons-threshold 800000)
-	       (let ((garbage-collection-messages t))
-		 (garbage-collect))
-	       (alert (format "started (%d) in %s" (emacs-pid) (emacs-init-time))
-		      :title (format "emacs-%s" tychoish-emacs-identifier))))
+	       (let ((garbage-collection-messages t)) (garbage-collect))
+	       (unless (or (daemonp)
+			   (> 1 (time-to-seconds (time-subtract after-init-time before-init-time))))
+		 (let ((msg (format "started (%d) in %s" (emacs-pid) (emacs-init-time))))
+		   (message (concat "emacs: " msg))
+		   (alert msg :title (format "emacs-%s" tychoish-emacs-identifier))))))
 
 (require 'package)
 (setq package-user-dir (concat user-emacs-directory "elpa"))
@@ -35,16 +37,14 @@
 (defvar local-notes-directory (expand-file-name "~/notes")
   "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
 
-(add-to-list 'load-path (concat user-emacs-directory "conf"))
-(add-to-list 'load-path (concat user-emacs-directory "ext"))
+(add-to-list 'load-path (concat user-emacs-directory "lisp"))
 
-(use-package local-functions)     ;; function library I've written/etc.
-(use-package settings)            ;; collection of local settings
-(use-package programming)         ;; all use-package declarations and configuration
-
-(tychoish-setup-global-modes)
-(tychoish-setup-modeline)
-(tychoish-setup-user-local-config)
+;; all use-package declarations and configuration
+(use-package tychoish-core
+  :config
+  (tychoish-setup-global-modes)
+  (tychoish-setup-modeline)
+  (tychoish-setup-user-local-config))
 
 (provide 'init)
 ;;; init.el ends here

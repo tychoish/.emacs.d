@@ -8,11 +8,6 @@
 
 ;;; Code:
 
-(let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
-  (setq custom-theme-directory theme-directory)
-  (add-to-list 'custom-theme-load-path theme-directory)
-  (add-to-list 'load-path theme-directory))
-
 (defvar after-theme-change-hook nil
   "Hook run after a color theme is loaded using `load-theme'.")
 
@@ -84,16 +79,6 @@
 (defun opacity-reset ()
   (interactive)
   (modify-frame-parameters nil `((alpha . 100))))
-
-(defvar *tychoish-current-font* nil)
-
-(defun tychoish-font-setup (name number)
-  (interactive "sName: \nNNumber:")
-  (let ((new-font-name (concat name "-" (number-to-string number))))
-    (set-face-attribute 'default nil :font new-font-name)
-    (add-to-list 'default-frame-alist (cons 'font new-font-name))
-    (unless (equal *tychoish-current-font* new-font-name)
-      (setq *tychoish-current-font* new-font-name))))
 
 (provide 'tychoish-theme)
 ;;; tychoish-theme.el ends here

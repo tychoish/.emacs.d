@@ -223,8 +223,7 @@ Keybindings
 ```````````
 
 Most of the keybindings are defined in package specific configuration in
-``conf/programming.el``, but there are also many general ones defined in
-``conf/settings.el``. In daemon/GUI-mode, the `which-key
+``lisp/tychoish-coreprogramming.el``. In daemon/GUI-mode, the `which-key
 <https://github.com/justbur/emacs-which-key>`_ makes these discoverable. I
 often use helm menus to find hints about keybindings. Some broad themes:
 
@@ -323,23 +322,23 @@ configuration:
     (when (gui-p)
      (let ((sys (system-name)))
        (cond
-	((equal "deleuze" sys) (tychoish-font-setup "Source Code Pro" 11))
-	((equal "derrida" sys) (tychoish-font-setup "Source Code Pro" 10))
-	((equal "bakhtin" sys) (tychoish-font-setup "Source Code Pro" 10)))))
+	((equal "deleuze" sys) (tychoish-setup-font "Source Code Pro" 11))
+	((equal "derrida" sys) (tychoish-setup-font "Source Code Pro" 10))
+	((equal "bakhtin" sys) (tychoish-setup-font "Source Code Pro" 10)))))
 
   I use different font sizes on my laptop ``deleuze`` but at the very least,
   if you do nothing else I'd use one of the following forms somewhere: ::
 
     (when (gui-p)
-      (tychoish-font-setup "Source Code Pro" 10))
+      (tychoish-setup-font "Source Code Pro" 10))
 
     (when (gui-p)
-      (tychoish-font-setup "Inconsolata-g" 11))
+      (tychoish-setup-font "Inconsolata-g" 11))
 
     (when (gui-p)
-      (tychoish-font-setup "Consolas" 11))
+      (tychoish-setup-font "Consolas" 11))
 
-  ``tychoish-font-setup`` also works interactively.
+  ``tychoish-setup-font`` also works interactively.
 
 - For using ``mu4e`` to manage email, in a multi-account setup, I have a few
   functions that I define here for changing my originating email address/mu
@@ -382,13 +381,5 @@ interested in the following areas:
 
 - Increasing or maintaining the current level with regards to startup time.
 
-- Reducing or eliminating the ``conf/local-function.el`` file and building
-  feature-focused packages, potentially putting them in MELPA.
-
-- Migrate from the legacy``notify`` package to using ``alert`` more fully.
-
 - Continue to improve the experience with lsp-mode, to make it feel more
   automatic.
-
-- Improve project (groups of related files) and projectile configuration,
-  which is presently lacking.
