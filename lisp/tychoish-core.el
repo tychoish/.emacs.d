@@ -20,6 +20,7 @@
   (auto-package-update-maybe))
 
 (use-package use-package-ensure-system-package
+  :after (use-package)
   :ensure t)
 
 (use-package eldoc
@@ -45,11 +46,12 @@
   (setq auto-revert-interval 5))
 
 (use-package abbrev
-  :diminish
   :after (tychoish-setuputils)
+  :commands (abbrev-mode expand-abbrev)
+  :diminish
   :config
-  (setq abbrev-file-name (tychoish-get-config-file-path "abbrev"))
   (setq save-abbrevs t)
+  (setq abbrev-file-name (tychoish-get-config-file-path "abbrev"))
   (if (file-exists-p abbrev-file-name)
       (quietly-read-abbrev-file)))
 
@@ -156,15 +158,17 @@
   (add-to-list 'mode-line-misc-info (format "[%s]" tychoish-emacs-identifier)))
 
 (use-package doom-themes
-  :ensure t)
+  :ensure t
+  :defer t)
+
+(use-package base16-theme
+  :ensure t
+  :defer t)
 
 (use-package modus-operandi-theme
   :ensure t)
 
 (use-package modus-vivendi-theme
-  :ensure t)
-
-(use-package base16-theme
   :ensure t)
 
 (use-package winum
@@ -1532,7 +1536,6 @@
   (setq bookmark-default-file (tychoish-get-config-file-path "bookmarks")))
 
 (use-package cus-edit
-  :defer 1
   :after (tychoish-setuputils)
   :init
   (setq custom-file (tychoish-get-config-file-path "custom.el"))
@@ -1673,6 +1676,7 @@
   :bind (("C-c C-w" . whitespace-cleanup)))
 
 (use-package tramp
+  :commands (sshra ssh-reagent)
   :init
   (setq tramp-default-method "ssh")
 
@@ -1962,7 +1966,6 @@
   :config
   (google-this-mode 1))
 
-
 (use-package tex
   :defer t
   :ensure auctex
@@ -2096,8 +2099,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (use-package alert
-  :defer t
   :functions (alert)
+  :commands (alert alert-sardis)
   :ensure t
   :config
   (cond
