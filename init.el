@@ -12,11 +12,9 @@
 	     (lambda ()
 	       (setq gc-cons-threshold 800000)
 	       (let ((garbage-collection-messages t)) (garbage-collect))
-	       (when (or (daemonp)
-			   (< 1 (time-to-seconds (time-subtract after-init-time before-init-time))))
 		 (let ((msg (format "started (%d) in %s" (emacs-pid) (emacs-init-time))))
 		   (message (concat "emacs: " msg))
-		   (alert msg :title (format "emacs-%s" tychoish-emacs-identifier))))))
+		   (alert msg :title (format "emacs-%s" tychoish-emacs-identifier)))))
 
 (require 'package)
 (setq package-user-dir (concat user-emacs-directory "elpa"))

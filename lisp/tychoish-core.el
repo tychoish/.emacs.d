@@ -35,12 +35,12 @@
   :commands (delight))
 
 (use-package autorevert
-  :diminish
   :commands (auto-revert-mode)
   :init
   (defalias 'rb 'revert-buffer)
   (defalias 'revert 'revert-buffer)
   :config
+  (diminish 'auto-revert-mode)
   (setq auto-revert-verbose nil)
   (setq auto-revert-interval 5))
 
@@ -318,10 +318,10 @@
     (ripgrep-regexp regexp default-directory))
   (defun tychoish-rg-repo (regexp)
     (interactive (list (read-from-minibuffer "ripgrep for: " (thing-at-point 'symbol))))
-    (ripgrep-regexp regexp (magit-toplevel)))
+    (ripgrep-regexp regexp (projectile-prooject-root)))
   (defun tychoish-find-merges ()
     (interactive)
-    (ripgrep-regexp "^(=======$|<<<<<<<|>>>>>>>)" (magit-toplevel))))
+    (ripgrep-regexp "^(=======$|<<<<<<<|>>>>>>>)" (projectile-project-root))))
 
 (use-package helm-rg
   :ensure t
@@ -840,9 +840,9 @@
   :after (cmake-mode)
   :init
   (defun tychoish-cmake-project-p ()
-    (let* ((project-directory (if (eq "" (magit-toplevel))
+    (let* ((project-directory (if (eq "" (projectile-project-root))
 				  (default-directory)
-				(magit-toplevel)))
+				(projectile-project-root)))
 	   (f-exists? (f-join project-directory "CMakeLists.txt")))))
 
   (add-hook 'c-mode-common-hook  'tychoish-cmake-project-p)
@@ -942,19 +942,19 @@
   :bind (("C-c E" . ctags-update))
   :commands (turn-on-ctags-auto-update-mode create-tags)
   :diminish
-  :init
+  :config
   (setq tags-add-tables nil)
   (setq etags-table-search-up-depth 10)
   (setq path-to-ctags (executable-find "ctags"))
   (setq ctags-update-delay-seconds 300)
-  :config
+
   (defun create-tags (dir-name)
     "Create tags file for the DIR-NAME directory."
     (interactive "DDirectory: ")
     (let ((cmd-str (format "%s -e -u -f %s/TAGS %s -R %s" path-to-ctags dir-name dir-name (directory-file-name dir-name))))
       (message cmd-str)
       (shell-command cmd-str)))
-
+  (diminish 'ctags-auto-update-mode)
   (add-hook 'c-mode-common-hook  'turn-on-ctags-auto-update-mode)
   (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
 
@@ -1122,20 +1122,21 @@
   (add-to-list 'load-path quicklisp-path)
 
   (defun load-quicklisp-file (fn)
-    (let ((path (f-join quicklisp-path fn)))
-      (when (f-exists-p path)
-	(load-file path))))
-
-  (diminish 'slime-autodoc-mode)
-  (diminish 'slime-mode "sl")
-
-  (delight 'lisp-mode "lisp")
-  (delight 'lisp-interaction-mode "li")
+    (let ((path (f-join quicklisp-path fn))
+	  (inhibit-message t))
+      (with-slow-op-timer (format "loading: %s" path) .5
+        (when (f-exists-p path)
+   	  (load (expand-file-name path) t t t)))))
 
   (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "slime-helper.el")
   (load-quicklisp-file "log4slime-setup.el")
-  (slime-setup '(slime-fancy slime-company)))
+  (slime-setup '(slime-fancy slime-company))
+
+  (delight 'lisp-mode "lisp")
+  (delight 'lisp-interaction-mode "li")
+  (diminish 'slime-autodoc-mode)
+  (diminish 'slime-mode "sl"))
 
 (use-package slime-company
   :ensure t
@@ -1272,13 +1273,13 @@
   (defadvice org-capture-finalize
       (after delete-capture-frame activate)
     "Advise capture-finalize to close the frame"
-    (if (equal "capture" (frame-parameter nil 'name))
-	(delete-frame)))
+    (when (equal "capture" (frame-parameter nil 'name))
+      (delete-frame)))
 
   (defadvice org-capture-destroy
       (after delete-capture-frame activate)
     "Advise capture-destroy to close the frame"
-    (if (equal "capture" (frame-parameter nil 'name))
+    (when (equal "capture" (frame-parameter nil 'name))
 	(delete-frame)))
 
   (defun make-capture-frame (&optional keys show-menu)
@@ -1490,7 +1491,7 @@
 	     tychoish-setup-font
 	     tychoish-get-config-file-prefix
 	     tychoish-get-config-file-path)
-  :functions (gui-p default-string with-timer)
+  :functions (gui-p default-string with-timer with-slow-op-timer)
   :init
   (setq server-use-tcp t)
   (setq starttls-use-gnutls t)
@@ -2524,12 +2525,10 @@
   :ensure t
   :diminish which-key-mode
   :commands (which-key-mode)
-  :if (or (daemonp) (window-system))
   :config
   (setq which-key-idle-delay 1.75)
   (setq which-key-idle-secondary-delay 0.5)
-  (which-key-setup-minibuffer)
-  (which-key-mode 1))
+  (which-key-setup-minibuffer))
 
 (provide 'tychoish-core)
 ;;; programming.el ends here

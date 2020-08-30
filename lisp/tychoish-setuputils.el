@@ -60,7 +60,8 @@ to change the value of this variable.")
     (message "%s: %.06fs" name duration)))
 
 (defun gui-p ()
-  (or (daemonp) (window-system)))
+  (when (or (daemonp) (window-system))
+    t))
 
 (defun default-string (default input)
   "return the default value if the string is empty or nil"
@@ -84,6 +85,9 @@ to change the value of this variable.")
   (transient-mark-mode 1)
   (column-number-mode t)
   (electric-pair-mode 1)
+
+  (when (gui-p)
+    (which-key-mode 1))
 
   (when (daemonp)
     (let ((gc-cons-threshold 800000))
