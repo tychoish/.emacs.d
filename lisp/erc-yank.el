@@ -41,11 +41,9 @@
 ;;       :init
 ;;       (bind-key "C-y" 'erc-yank erc-mode-map)))
 ;;
-;; This module requires gist.el, from: https://github.com/defunkt/gist.el
+;; This module requires https://github.com/defunkt/gist
 
 ;;; Code:
-
-(require 'gist)
 
 (defgroup erc-yank nil
   "Automagically create a Gist if pasting more than 5 lines"
@@ -74,32 +72,28 @@
                                    ((eq arg '-) -2)
                                    (t (1- arg)))))
          (lines (length (split-string kill-text "\n"))))
-    (if (and (> lines erc-yank-flood-limit)
-             (or (not erc-yank-query-before-gisting)
-                 (let ((query
-                        (format (concat "Text to yank is %d lines;"
-                                        " create a Gist instead? ") lines)))
-                   (if erc-yank-display-text-on-prompt
-                       (save-window-excursion
-                         (with-current-buffer (get-buffer-create "*Yank*")
-                           (delete-region (point-min) (point-max))
-                           (insert kill-text)
-                           (goto-char (point-min))
-                           (display-buffer (current-buffer))
-                           (fit-window-to-buffer
-                            (get-buffer-window (current-buffer)))
-                           (unwind-protect
-                               (y-or-n-p query)
-                             (kill-buffer (current-buffer)))))
-                     (y-or-n-p query)))))
-        (let ((buf (current-buffer)))
-          (with-temp-buffer
-            (insert kill-text)
-            (gist-region (point-min) (point-max) nil
-                         `(lambda (gist)
-                            (with-current-buffer ,buf
-                              (insert (oref gist :html-url)))))))
-      (yank arg))))
+    (when (and (> lines erc-yank-flood-limit)
+               (or (not erc-yank-query-before-gisting)
+                   (let ((query
+                          (format (concat "Text to yank is %d lines;"
+                                          " create a Gist instead? ") lines)))
+                     (if erc-yank-display-text-on-prompt
+                         (save-window-excursion
+                           (with-current-buffer (get-buffer-create "*Yank*")
+                             (delete-region (point-min) (point-max))
+                             (insert kill-text)
+                             (goto-char (point-min))
+                             (display-buffer (current-buffer))
+                             (fit-window-to-buffer
+                              (get-buffer-window (current-buffer)))
+                             (unwind-protect
+                                 (y-or-n-p query)
+                               (kill-buffer (current-buffer)))))
+                       (y-or-n-p query)))))
+      (with-temp-buffer
+        (call-process "gist" nil t nil "-P")
+        (kill-ring-save (point-min) (1- (point-max)))))
+    (yank arg)))
 
 (provide 'erc-yank)
 

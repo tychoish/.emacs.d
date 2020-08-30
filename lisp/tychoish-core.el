@@ -752,7 +752,11 @@
   (setq flycheck-go-vet-print-functions t))
 
 (use-package flycheck-aspell
-  :after (flycheck))
+  :after (flycheck)
+  :config
+  (flycheck-aspell-define-checker "cpp"
+    "C++" ("--add-filter" "url" "--add-filter" "ccpp")
+    (c++-mode)))
 
 (use-package flycheck-golangci-lint
   :ensure t

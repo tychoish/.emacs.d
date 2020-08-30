@@ -33,7 +33,7 @@
 ;; [Version 1.0, 04-Sep-1999] Initial release.
 
 ;;; Code:
-
+;;;###autoload
 (defun revbufs ()
   (interactive)
   (let ((conflicts  '())
@@ -42,55 +42,45 @@
         (report-buf (get-buffer-create "*revbufs*")))
 
     ;; Process the buffers.
-    (mapcar (function
-             (lambda (buf)
-	       (let ((file-name (buffer-file-name buf)))
-                 (cond
-                  ;; If buf is the report buf, ignore it.
-                  ((eq buf report-buf) nil)
-                  ;; If buf is not a file buf, ignore it.
-                  ((not file-name) nil)
-                  ;; If buf file doesn't exist, buf is an orphan.
-                  ((not (file-exists-p file-name))
-		   (progn	
-		     (save-excursion
-		       (set-buffer buf)
-		       (kill-buffer-if-not-modified buf))
-                     (if (buffer-modified-p buf)
-			 (setq orphans (nconc orphans (list buf))))))
-                  ;; If file modified since buf visit, buf is either a conflict
-                  ;; (if it's modified) or we should revert it.
-                  ((not (verify-visited-file-modtime buf))
-                   (if (buffer-modified-p buf)
-                       (setq conflicts (nconc conflicts (list buf)))
-                     (save-excursion
-                       (set-buffer buf)
-                       (revert-buffer t t))
-                     (setq reverts (nconc reverts (list buf)))))))))
-            (copy-sequence (buffer-list)))
+    (mapc (function
+           (lambda (buf)
+             (let ((file-name (buffer-file-name buf)))
+               (cond
+                ;; If buf is the report buf, ignore it.
+                ((eq buf report-buf) nil)
+                ;; If buf is not a file buf, ignore it.
+                ((not file-name) nil)
+                ;; If buf file doesn't exist, buf is an orphan.
+                ((not (file-exists-p file-name))
+                 (setq orphans (nconc orphans (list buf))))
+                ;; If file modified since buf visit, buf is either a conflict
+                ;; (if it's modified) or we should revert it.
+                ((not (verify-visited-file-modtime buf))
+                 (if (buffer-modified-p buf)
+                     (setq conflicts (nconc conflicts (list buf)))
+                   (with-current-buffer buf
+                     (revert-buffer t t))
+                   (setq reverts (nconc reverts (list buf)))))))))
+          (copy-sequence (buffer-list)))
 
     ;; Prepare the report buffer.
-    (save-excursion
-      (set-buffer report-buf)
-      (setq buffer-read-only nil
-            truncate-lines   t)
-      (delete-region (point-min) (point-max))
-      (insert (revbufs-format-list conflicts "CONFLICTS")
-              (revbufs-format-list orphans   "ORPHANS")
-              (revbufs-format-list reverts   "REVERTS"))
-      (goto-char (point-min))
-      (setq buffer-read-only t))
-    (bury-buffer report-buf)
+    (with-current-buffer report-buf
+      (let ((buffer-read-only nil))
+        (delete-region (point-min) (point-max))
+        (insert (revbufs-format-list conflicts "[ CONFLICTS ]")
+                (revbufs-format-list orphans   "[ ORPHANS ]")
+                (revbufs-format-list reverts   "[ REVERTS ]")))
+      (revbufs-mode))
 
     ;; Print message in echo area.
     (if (or conflicts orphans)
         (progn
-          (display-buffer report-buf)
+          (pop-to-buffer report-buf)
           (message
 	   (concat
 	    (format "Reverted %s with"
 		    (revbufs-quantity (length reverts) "buffer"))
-	    (if conflicts 
+	    (if conflicts
 		(format " %s%s"
 			(revbufs-quantity (length conflicts) "conflict")
 			(if orphans " and" "")))
@@ -101,16 +91,53 @@
           (message "Reverted %s." (revbufs-quantity (length reverts) "buffer"))
         (message "No buffers need reverting.")))))
 
+(defvar revbufs-marked '()
+  "List of marked buffers in the *revbufs* buffer")
+
+(define-derived-mode revbufs-mode text-mode "revbufs"
+  "Major mode for the `revbufs' reversion report."
+  (setq buffer-read-only t))
+
+(defun revbufs-buffer-at-point ()
+  (plist-get (text-properties-at (point)) 'revbufs-buffer))
+
+(defun revbufs-find-other-window (&optional event)
+  (interactive)
+  (let ((buffer (revbufs-buffer-at-point)))
+    (if buffer
+        (pop-to-buffer buffer)
+      (message "Must be on top of a *revbufs* line"))))
+
+(defun revbufs-kill-buffer-at-point (&optional event)
+  (interactive)
+  (let ((buffer (revbufs-buffer-at-point))
+        (buffer-read-only nil))
+    (cond (buffer
+           (kill-buffer buffer)
+           (kill-whole-line))
+          (t
+           (message "Must be on top of a *revbufs* line")))))
+
 (defun revbufs-format-list (list label)
   (if list
       (concat label
-              (format " (%s):\n" (length list))
-              (mapconcat 
+              (format ":\n")
+              (mapconcat
                (function
                 (lambda (buf)
-                  (format "  %-20s %s\n"
-                          (buffer-name buf)
-                          (buffer-file-name buf))))
+                  (propertize
+                   (format "  %s %s %s\n"
+                           (propertize (buffer-name buf)
+                                       'mouse-face 'highlight
+                                       'help-echo "mouse-1, RET: find buffer in other window"
+                                       'keymap (let ((map (make-sparse-keymap)))
+                                                 (define-key map (kbd "RET") 'revbufs-find-other-window)
+                                                 (define-key map (kbd "C-k") 'revbufs-kill-buffer-at-point)
+                                                 (define-key map [mouse-1] 'revbufs-find-other-window)
+                                                 map))
+                           (make-string (- 60 (length (buffer-name buf))) ? )
+                           (buffer-file-name buf))
+                   'revbufs-buffer buf)))
                list
                ""))
     ""))
@@ -119,5 +146,4 @@
   (format "%d %s%s" num what (if (= num 1) "" "s")))
 
 (provide 'revbufs)
-
 ;; revbufs.el ends here
