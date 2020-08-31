@@ -46,7 +46,7 @@
   (setq auto-revert-interval 5))
 
 (use-package abbrev
-  :after (tychoish-setuputils)
+  :after (tychoish-bootstrap)
   :commands (abbrev-mode expand-abbrev)
   :diminish
   :config
@@ -185,7 +185,7 @@
 
 (use-package helm
   :ensure t
-  :after (tychoish-setuputils)
+  :after (tychoish-bootstrap)
   :bind (("C-c M-s" . helm-multi-swoop)
 	 ("C-x M-s" . helm-multi-swoop-all)
 	 ("C-c o s" . helm-multi-swoop-org)
@@ -307,7 +307,7 @@
 	 ("C-c a p" . helm-do-ag-project-root)
 	 ("C-c a s" . helm-do-ag)
 	 ("C-c h s" . helm-do-ag)))
- 
+
 (use-package ripgrep
   :ensure t
   :commands (projectile-ripgrep ripgrep-regexp)
@@ -489,7 +489,7 @@
   :ensure t
   :commands (session-initialize)
   :bind (("C-c t ;" . session-toggle-permanent-flag))
-  :after (tychoish-setuputils)
+  :after (tychoish-bootstrap)
   :config
   (setq session-save-file (tychoish-get-config-file-path "session"))
 
@@ -512,7 +512,7 @@
 
 (use-package desktop
   :commands (desktop-save-mode desktop-read tychoish-save-desktop)
-  :after (tychoish-setuputils)
+  :after (tychoish-bootstrap)
   :config
   (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop-file"))
   (setq desktop-base-lock-name (tychoish-get-config-file-prefix "desktop-lock"))
@@ -577,7 +577,7 @@
 
 (use-package recentf
   :commands (recentf-mode)
-  :after (tychoish-setuputils)
+  :after (tychoish-bootstrap)
   :config
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
@@ -1119,10 +1119,9 @@
   :config
   (define-key compilation-mode-map (kbd "C") 'compile))
 
-
 (use-package slime
   :ensure t
-  :after (f tychoish-setuputils)
+  :after (f tychoish-bootstrap)
   :commands (slime)
   :bind (("C-c h l" . hyperspec-lookup))
   :config
@@ -1134,14 +1133,14 @@
   (defun load-quicklisp-file (fn)
     (let ((path (f-join quicklisp-path fn))
 	  (inhibit-message t))
-      (with-slow-op-timer (format "loading: %s" path) .5
-        (when (f-exists-p path)
-   	  (load (expand-file-name path) t t t)))))
+	(when (f-exists-p path)
+	  (with-slow-op-timer (format "loading: %s" path) .5
+	    (load (expand-file-name path) t t t)))))
 
   (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "slime-helper.el")
   (load-quicklisp-file "log4slime-setup.el")
-  
+
   (setq slime-contribs '(slime-scratch slime-editing-commans slime-fancy slime-company))
 
   (delight 'lisp-mode "lisp")
@@ -1502,12 +1501,23 @@
   (setq org-roam-directory (concat local-notes-directory "/roam"))
   (setq org-roam-index-file "index.org"))
 
-(use-package tychoish-setuputils
+(use-package tychoish-bootstrap
   :commands (tychoish-setup-global-modes
 	     tychoish-setup-user-local-config
 	     tychoish-setup-font
 	     tychoish-get-config-file-prefix
 	     tychoish-get-config-file-path)
+  :bind (("C-c f =" . text-scale-increase)
+	 ("C-c f -" . text-scale-decrease)
+	 ("C-c f 0" . text-scale-reset)
+	 ("C-c C-=" . opacity-increase)
+	 ("C-c C--" . opacity-decrease)
+	 ("C-c f C-0" . opacity-reset)
+	 ("C-c t t d" . disable-theme)
+	 ("C-c t t D" . disable-all-themes)
+	 ("C-c t t e" . enable-theme)
+	 ("C-c t t l" . load-theme)
+	 ("C-c C-r" . rename-buffer))
   :functions (gui-p default-string with-timer with-slow-op-timer)
   :init
   (setq server-use-tcp t)
@@ -1536,57 +1546,7 @@
 	      kill-buffer-query-functions))
 
   (defalias 'eb 'eval-buffer)
-  (global-set-key (kbd "C-c C-r") 'rename-buffer)
-  :config
-  (tychoish-set-backup-directory tychoish-backup-directory)
 
-  (defvar tychoish-emacs-identifier (default-string "solo" (daemonp)))
-
-  (setq frame-title-format '(:eval (if (stringp (daemonp))
-				       (format "%s:%s" (daemonp) (buffer-name))
-				     (concat "solo:" (buffer-name)))))
-  (setq bookmark-save-flag 1)
-  (setq bookmark-default-file (tychoish-get-config-file-path "bookmarks")))
-
-(use-package cus-edit
-  :after (tychoish-setuputils)
-  :init
-  (setq custom-file (tychoish-get-config-file-path "custom.el"))
-  :config
-  (when (and custom-file (file-exists-p custom-file))
-    (let ((inhibit-message t))
-      (load (expand-file-name custom-file) t t t))))
-
-(use-package tychoish-blogging
-  :after (f)
-  :commands (tychoish-blog-insert-date
-	     tychoish-blog-publish-post
-	     tychoish-blog-create-post
-	     tychoish-blog-push
-	     tychoish-blog-open-drafts-dired)
-  :bind (("C-c t b m" . tychoish-blog-insert-date)
-	 ("C-c t b p" . tychoish-blog-publish-post)
-	 ("C-c t b n" . tychoish-blog-create-post)
-	 ("C-c t b C-p" . tychoish-blog-push)
-	 ("C-c t b d" . tychoish-blog-open-drafts-dired))
-  :config
-  (setq tychoish-blog-path (expand-file-name "~/projects/blog")))
-
-(use-package tychoish-theme
-  :commands (disable-all-themes
-	     tychoish-load-dark-theme
-	     tychoish-load-light-theme)
-  :bind (("C-c f =" . text-scale-increase)
-	 ("C-c f -" . text-scale-decrease)
-	 ("C-c f 0" . text-scale-reset)
-	 ("C-c C-=" . opacity-increase)
-	 ("C-c C--" . opacity-decrease)
-	 ("C-c f C-0" . opacity-reset)
-	 ("C-c t t d" . 'disable-theme)
-	 ("C-c t t D" . 'disable-all-themes)
-	 ("C-c t t e" . 'enable-theme)
-	 ("C-c t t l" . 'load-theme))
-  :init
   (setq inhibit-startup-echo-area-message (user-login-name))
   (setq inhibit-startup-message t)
   (setq initial-major-mode 'fundamental-mode)
@@ -1618,7 +1578,41 @@
   (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
     (setq custom-theme-directory theme-directory)
     (add-to-list 'custom-theme-load-path theme-directory)
-    (add-to-list 'load-path theme-directory)))
+    (add-to-list 'load-path theme-directory))
+  :config
+  (tychoish-set-backup-directory tychoish-backup-directory)
+
+  (defvar tychoish-emacs-identifier (default-string "solo" (daemonp)))
+
+  (setq frame-title-format '(:eval (if (stringp (daemonp))
+				       (format "%s:%s" (daemonp) (buffer-name))
+				     (concat "solo:" (buffer-name)))))
+  (setq bookmark-save-flag 1)
+  (setq bookmark-default-file (tychoish-get-config-file-path "bookmarks")))
+
+(use-package cus-edit
+  :after (tychoish-bootstrap)
+  :init
+  (setq custom-file (tychoish-get-config-file-path "custom.el"))
+  :config
+  (when (and custom-file (file-exists-p custom-file))
+    (let ((inhibit-message t))
+      (load (expand-file-name custom-file) t t t))))
+
+(use-package tychoish-blogging
+  :after (f)
+  :commands (tychoish-blog-insert-date
+	     tychoish-blog-publish-post
+	     tychoish-blog-create-post
+	     tychoish-blog-push
+	     tychoish-blog-open-drafts-dired)
+  :bind (("C-c t b m" . tychoish-blog-insert-date)
+	 ("C-c t b p" . tychoish-blog-publish-post)
+	 ("C-c t b n" . tychoish-blog-create-post)
+	 ("C-c t b C-p" . tychoish-blog-push)
+	 ("C-c t b d" . tychoish-blog-open-drafts-dired))
+  :config
+  (setq tychoish-blog-path (expand-file-name "~/projects/blog")))
 
 (use-package tychoish-editing
   :commands (markdown-indent-code
