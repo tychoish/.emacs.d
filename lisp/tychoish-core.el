@@ -1119,6 +1119,7 @@
   :config
   (define-key compilation-mode-map (kbd "C") 'compile))
 
+
 (use-package slime
   :ensure t
   :after (f tychoish-setuputils)
@@ -1140,7 +1141,8 @@
   (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "slime-helper.el")
   (load-quicklisp-file "log4slime-setup.el")
-  (slime-setup '(slime-fancy slime-company))
+  
+  (setq slime-contribs '(slime-scratch slime-editing-commans slime-fancy slime-company))
 
   (delight 'lisp-mode "lisp")
   (delight 'lisp-interaction-mode "li")
