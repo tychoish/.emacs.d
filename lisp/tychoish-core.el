@@ -166,10 +166,12 @@
   :defer t)
 
 (use-package modus-operandi-theme
-  :ensure t)
+  :ensure t
+  :defer t)
 
 (use-package modus-vivendi-theme
-  :ensure t)
+  :ensure t
+  :defer t)
 
 (use-package winum
   :ensure t
@@ -183,6 +185,7 @@
 
 (use-package helm
   :ensure t
+  :after (tychoish-setuputils)
   :bind (("C-c M-s" . helm-multi-swoop)
 	 ("C-x M-s" . helm-multi-swoop-all)
 	 ("C-c o s" . helm-multi-swoop-org)
@@ -254,7 +257,6 @@
 
 (use-package helm-swoop
   :ensure t
-  :after (helm)
   :bind (("M-m" . helm-swoop)
 	 ("M-s" . helm-swoop)
 	 ("M-M" . helm-swoop-back-to-last-point))
@@ -266,14 +268,12 @@
 
 (use-package helm-ls-git
   :ensure t
-  :after (helm)
   :bind (("C-c o g" . helm-ls-git-ls)
 	 ("C-c o b" . helm-browse-project)))
 
 (use-package helm-eww
-  :bind (("C-c w o" . helm-eww))
-  :after (helm)
-  :ensure t)
+  :ensure t
+  :bind (("C-c w o" . helm-eww)))
 
 (use-package eww
   :bind (("C-c w d" . browse-url-generic)
@@ -299,7 +299,6 @@
 
 (use-package helm-ag
   :ensure t
-  :after (helm)
   :ensure-system-package ((ag . the_silver_searcher))
   :bind (("C-c a S" . helm-ag)
 	 ("C-c a B" . helm-ag-buffers)
@@ -308,7 +307,7 @@
 	 ("C-c a p" . helm-do-ag-project-root)
 	 ("C-c a s" . helm-do-ag)
 	 ("C-c h s" . helm-do-ag)))
-
+ 
 (use-package ripgrep
   :ensure t
   :commands (projectile-ripgrep ripgrep-regexp)
@@ -490,6 +489,7 @@
   :ensure t
   :commands (session-initialize)
   :bind (("C-c t ;" . session-toggle-permanent-flag))
+  :after (tychoish-setuputils)
   :config
   (setq session-save-file (tychoish-get-config-file-path "session"))
 
@@ -512,6 +512,7 @@
 
 (use-package desktop
   :commands (desktop-save-mode desktop-read tychoish-save-desktop)
+  :after (tychoish-setuputils)
   :config
   (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop-file"))
   (setq desktop-base-lock-name (tychoish-get-config-file-prefix "desktop-lock"))
@@ -576,6 +577,7 @@
 
 (use-package recentf
   :commands (recentf-mode)
+  :after (tychoish-setuputils)
   :config
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
@@ -1119,8 +1121,7 @@
 
 (use-package slime
   :ensure t
-  :delight "slime"
-  :after (f)
+  :after (f tychoish-setuputils)
   :commands (slime)
   :bind (("C-c h l" . hyperspec-lookup))
   :config
@@ -1153,6 +1154,12 @@
 
 (use-package common-lisp-snippets
   :after (slime))
+
+(use-package helm-slime
+  :ensure t
+  :after (slime helm)
+  :config
+  (global-helm-slime-mode 1))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1565,8 +1572,8 @@
 
 (use-package tychoish-theme
   :commands (disable-all-themes
-	     tychoish-load-light-theme
-	     tychoish-load-dark-theme)
+	     tychoish-load-dark-theme
+	     tychoish-load-light-theme)
   :bind (("C-c f =" . text-scale-increase)
 	 ("C-c f -" . text-scale-decrease)
 	 ("C-c f 0" . text-scale-reset)
@@ -1606,7 +1613,6 @@
   (set-default 'truncate-lines t)
   (set-face-attribute 'header-line nil :background nil :weight 'bold)
 
-  :config
   (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
     (setq custom-theme-directory theme-directory)
     (add-to-list 'custom-theme-load-path theme-directory)

@@ -23,7 +23,7 @@ External
 - ``revbufs`` reverts all buffers in an intelligent way, and I've not found a
   reasonable replacement, and I use it all of the time. 
   
-- ``helm-slime``, ``erc-yank``, and ``flycheck-aspell`` all do what you'd
+- ``erc-yank`` and ``flycheck-aspell`` all do what you'd
   expect and I don't use them much, but they're not in MELPA.
 
 Internal

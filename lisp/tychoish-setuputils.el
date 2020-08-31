@@ -1,11 +1,11 @@
-;;; tychoish-setuputils.el --- utilities used during setup 
+;;; tychoish-setuputils.el --- utilities used during setup
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
 ;; Version: 1.0-pre
 ;; Package-Requires: ()
 ;; Homepage: https://github.com/tychoish/.eamcs.d
-;; Keywords: setup init
+;; Keywords: emacs startup dotemacs config
 
 ;; This file is not part of GNU Emacs
 
@@ -24,7 +24,12 @@
 
 ;;; Commentary:
 
-;; commentary
+;; This package holds the functions I want to call directly during
+;; start up, as well as functions useful for building configuration
+;; that don't make sense to define elsewhere.  As this file needs to
+;; load during startup my goal is to keep it as short as possible, and
+;; acknowledging that the collection of functionality might need to be
+;; slightly more eclectic than many other packages.
 
 ;;; Code:
 
@@ -46,25 +51,29 @@ to change the value of this variable.")
   (chmod tychoish-backup-directory #o700))
 
 (defmacro with-timer (name &rest body)
+  "Report on NAME and the time taken to execute BODY."
   `(let ((time (current-time)))
      ,@body
      (message "%s: %.06fs" ,name (float-time (time-since time)))))
 
 (defmacro with-slow-op-timer (name threshold &rest body)
+  "Send a message the BODY operation of NAME takes longer to execute than the THRESHOLD."
   `(let ((time (current-time)))
      ,@body
      (tychoish--threshold-logger ,threshold (time-to-seconds (time-since time)) ,name)))
 
 (defun tychoish--threshold-logger (threshold duration name)
+  "Send a message with the DURATION and NAME when the duration is over the THRESHOLD."
   (when (>  duration threshold)
     (message "%s: %.06fs" name duration)))
 
 (defun gui-p ()
+  "Return t when the current session is or may be a GUI session."
   (when (or (daemonp) (window-system))
     t))
 
 (defun default-string (default input)
-  "return the default value if the string is empty or nil"
+  "Return the DEFAULT value if the INPUT is empty or nil."
   (cond
    ((string-equal default input)
     default)
@@ -76,6 +85,7 @@ to change the value of this variable.")
     input)))
 
 (defun tychoish-setup-global-modes ()
+  "Set up useful global modes, for use at the end of the setup process."
   (fringe-mode -1)
   (scroll-bar-mode -1)
   (menu-bar-mode -1)
@@ -95,20 +105,20 @@ to change the value of this variable.")
       (recentf-mode 1)
       (desktop-save-mode 1))))
 
-(defvar *tychoish-current-font* nil)
-
 (defun tychoish-setup-font (name number)
-  (interactive "sName: \nNNumber:")
+  (interactive "sName: \nNSize: ")
   (let ((new-font-name (concat name "-" (number-to-string number))))
     (set-face-attribute 'default nil :font new-font-name)
-    (add-to-list 'default-frame-alist (cons 'font new-font-name))
-    (unless (equal *tychoish-current-font* new-font-name)
-      (setq *tychoish-current-font* new-font-name))))
+    (add-to-list 'default-frame-alist (cons 'font new-font-name))))
 
 (defun tychoish-get-config-file-prefix (name)
+  "Build a config file basename, for NAME.
+This combines the host name and the dameon name."
   (format "%s-%s-%s" (system-name) (default-string "generic" (daemonp)) name))
 
 (defun tychoish-get-config-file-path (name)
+  "Return an absolute path for NAME in the configuration directory.
+The is unique to the system and daemon instance."
   (concat (expand-file-name user-emacs-directory) (tychoish-get-config-file-prefix name)))
 
 (defun tychoish-setup-user-local-config ()
@@ -123,8 +133,9 @@ to change the value of this variable.")
 		 (require (intern (string-remove-suffix ".el" fn))))))
 	    (directory-files dirname))) t))
 
-(defun display-startup-echo-area-message () nil)
+(defun display-startup-echo-area-message ()
+  "Called during setup, intentially a noop, which omit the message."
+  nil)
 
 (provide 'tychoish-setuputils)
-
 ;;; tychoish-setuputils.el ends here

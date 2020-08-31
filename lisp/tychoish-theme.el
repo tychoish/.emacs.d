@@ -43,18 +43,6 @@
 (add-hook 'after-make-frame-functions #'on-frame-open)
 (add-hook 'window-setup-hook #'on-after-init)
 
-(defun tychoish-load-dark-theme ()
-  (interactive)
-  (load-theme 'modus-vivendi t)
-  (add-to-list 'default-frame-alist '(alpha . 85))
-  (tychoish-doom-modeline-setup))
-
-(defun tychoish-load-light-theme ()
-  (interactive)
-  (load-theme 'modus-operandi t)
-  (add-to-list 'default-frame-alist '(alpha . 90))
-  (tychoish-doom-modeline-setup))
-
 (defun text-scale-reset ()
   (interactive)
   (text-scale-set 0))
@@ -79,6 +67,18 @@
 (defun opacity-reset ()
   (interactive)
   (modify-frame-parameters nil `((alpha . 100))))
+
+(defun tychoish-load-light-theme ()
+  (interactive)
+  (load-theme 'modus-operandi t)
+  (add-to-list 'default-frame-alist '(alpha . 90))
+  (tychoish-doom-modeline-setup))
+
+(defun tychoish-load-dark-theme ()
+  (interactive)
+  (load-theme 'modus-vivendi t)
+  (add-to-list 'default-frame-alist '(alpha . 85))
+  (tychoish-doom-modeline-setup))
 
 (provide 'tychoish-theme)
 ;;; tychoish-theme.el ends here
