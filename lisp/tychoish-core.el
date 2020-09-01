@@ -675,6 +675,7 @@
 			   company-files
 			   company-etags
 			   company-elisp
+			   company-emoji
 			   company-clang
 			   company-irony-c-headers
 			   company-irony
@@ -713,6 +714,10 @@
   :config
   (setq company-quickhelp-idle-delay 0.1)
   (company-quickhelp-mode 1))
+
+(use-package company-emoji
+  :ensure t
+  :after company)
 
 (use-package irony
   :ensure t
@@ -1738,6 +1743,7 @@
   :config
   (setq emojify-display-style 'image)
   (setq emojify-emoji-styles '(unicode))
+  (setq emojify-company-tooltips-p t)
   (setq emojify-point-entered-behaviour 'echo))
 
 (use-package message
