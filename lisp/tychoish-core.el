@@ -48,6 +48,7 @@
 (use-package abbrev
   :after (tychoish-bootstrap)
   :commands (abbrev-mode expand-abbrev)
+  :hook ((text-mode prog-mode) . abbrev-mode)
   :diminish
   :config
   (setq save-abbrevs t)
@@ -66,19 +67,19 @@
 (use-package anzu
   :ensure t
   :diminish
-  :commands (anzu-query-replace anzu-query-replace-regexp)
+  :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
+  :hook ((text-mode prog-mode isearch-mode) . anzu-mode)
   :bind (("C-c q r" . anzu-query-replace)
 	 ("C-c q x" . anzu-query-replace-regexp))
-  :config
-  (defalias 'qrr 'anzu-query-replace-regexp)
-  (defalias 'qr 'anzu-query-replace)
   :init
   (defalias 'srr 'string-replace-regexp)
   (defalias 'sr 'string-replace)
   (setq query-replace-highlight t)
   (setq search-highlight t)
-
-  (global-anzu-mode 1))
+  :config
+  (defalias 'qrr 'anzu-query-replace-regexp)
+  (defalias 'qr 'anzu-query-replace)
+  (global-anzu-mode +1))
 
 (use-package doom-modeline
   :ensure t
@@ -115,9 +116,10 @@
 
   (defun tychoish-setup-modeline ()
     (interactive)
-    (tychoish-legacy-mode-line)
+    (doom-modeline-def-segment misc-info
+      '("" mode-line-misc-info))
+
     (doom-modeline-mode 1)
-    (tychoish-doom-modeline-setup)
 
     (delight 'emacs-lisp-mode "elisp")
     (delight 'fundamental-mode "fund")
@@ -134,16 +136,18 @@
     (setq doom-modeline-icon (not *tychoish-modeline-icon-state*))
     (setq *tychoish-modeline-icon-state* doom-modeline-icon))
 
-  (defun tychoish-doom-modeline-setup ()
-    (doom-modeline-def-segment misc-info
-      '("" mode-line-misc-info)))
+  (defun my-doom-modeline--font-height ()
+    "Calculate the actual char height of the mode-line."
+    (/ (frame-char-height) 4))
 
-  (tychoish-doom-modeline-setup)
+  (advice-add #'doom-modeline--font-height :override #'my-doom-modeline--font-height)
+
   (setq doom-modeline-buffer-file-name-style 'relative-to-project)
   (setq doom-modeline-height 1)
   (setq doom-modeline-irc t)
   (setq doom-modeline-irc-stylize 'identity)
-  (setq doom-modeline-bar-width 2)
+  (setq doom-modeline-height 0)
+  (setq doom-modeline-bar-width 1)
   (setq doom-modeline-major-mode-color-icon t)
   (setq doom-modeline-major-mode-icon t)
   (setq doom-modeline-icon *tychoish-modeline-icon-state*)
@@ -222,7 +226,7 @@
 	 ("TAB" . helm-execute-persistent-action)
 	 ("C-j" . helm-select-action))
   :config
-  (set-face-attribute 'helm-source-header nil :height 98 :family "Source Code Pro" :weight 'semibold)
+  (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold)
   (helm-autoresize-mode 1)
 
   (setq history-length 100)
@@ -448,21 +452,18 @@
 (use-package page-break-lines
   :ensure t
   :diminish page-break-lines-mode
-  :defer 2
+  :hook ((text-mode prog-mode) . page-break-lines-mode)
   :commands (global-page-break-lines-mode)
   :config
   (setq page-break-lines-modes '(emacs-lisp-mode
 				 lisp-mode
 				 scheme-mode
-				 compilation-mode
 				 help-mode
-				 fundamental-mode
 				 c-mode
 				 cc-mode
 				 eww-mode
 				 go-mode
-				 special-mode))
-  (global-page-break-lines-mode 1))
+				 special-mode)))
 
 (use-package writeroom-mode
   :ensure t
@@ -701,12 +702,6 @@
   :ensure t
   :commands (company-jedi)
   :after (company python-mode))
-
-(use-package company-statistics
-  :ensure t
-  :after company
-  :config
-  (company-statistics-mode))
 
 (use-package company-quickhelp
   :ensure t
@@ -1146,7 +1141,7 @@
   (load-quicklisp-file "slime-helper.el")
   (load-quicklisp-file "log4slime-setup.el")
 
-  (setq slime-contribs '(slime-scratch slime-editing-commans slime-fancy slime-company))
+  (setq slime-contribs '(slime-scratch slime-editing-commands slime-fancy slime-company))
 
   (delight 'lisp-mode "lisp")
   (delight 'lisp-interaction-mode "li")
@@ -1597,6 +1592,7 @@
 
 (use-package cus-edit
   :after (tychoish-bootstrap)
+  :defer 1
   :init
   (setq custom-file (tychoish-get-config-file-path "custom.el"))
   :config
@@ -1653,6 +1649,10 @@
     (setq ns-function-modifier 'hyper)
     (setq mac-command-modifier 'meta)
     (setq mac-option-modifier 'super))
+
+  (when (eq system-type 'gnu/linux)
+    (setq x-alt-keysym 'meta)
+    (setq x-super-keysym 'super))
 
   (global-set-key (kbd "s-x") 'clipboard-kill-region) ;;cut
   (global-set-key (kbd "s-c") 'clipboard-kill-ring-save) ;;copy
@@ -2540,6 +2540,7 @@
   :ensure t
   :diminish which-key-mode
   :commands (which-key-mode)
+  :defer 2
   :config
   (setq which-key-idle-delay 1.75)
   (setq which-key-idle-secondary-delay 0.5)

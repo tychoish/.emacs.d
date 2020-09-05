@@ -86,9 +86,14 @@ to change the value of this variable.")
 
 (defun tychoish-setup-global-modes ()
   "Set up useful global modes, for use at the end of the setup process."
-  (fringe-mode -1)
+
+  (unless (daemonp)
+    (menu-bar-mode -1))
+
+  ;; setting the list before calling the function reduce the total time
+  (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (scroll-bar-mode -1)
-  (menu-bar-mode -1)
+
   (tool-bar-mode -1)
   (delete-selection-mode 1)
   (show-paren-mode t)
@@ -100,6 +105,7 @@ to change the value of this variable.")
     (which-key-mode 1))
 
   (when (daemonp)
+    (add-to-list 'default-frame-alist '(menu-bar-lines . 0))
     (let ((gc-cons-threshold 800000))
       (session-initialize)
       (recentf-mode 1)
@@ -168,21 +174,21 @@ to change the value of this variable.")
 (defun tychoish-load-light-theme ()
   (interactive)
   (disable-all-themes)
-  (load-theme 'modus-operandi t)
-  (add-to-list 'default-frame-alist '(alpha . 90))
-  (tychoish-doom-modeline-setup))
+  (when (load-theme 'modus-operandi t t)
+    (enable-theme 'modus-operandi))
+  (add-to-list 'default-frame-alist '(alpha . 90)))
 
 (defun tychoish-load-dark-theme ()
   (interactive)
   (disable-all-themes)
-  (load-theme 'modus-vivendi t)
-  (add-to-list 'default-frame-alist '(alpha . 85))
-  (tychoish-doom-modeline-setup))
+  (when (load-theme 'modus-vivendi t t)
+    (enable-theme 'modus-vivendi))
+  (add-to-list 'default-frame-alist '(alpha . 85)))
 
 (defun tychoish-setup-font (name number)
   (interactive "sName: \nNSize: ")
   (let ((new-font-name (concat name "-" (number-to-string number))))
-    (set-face-attribute 'default nil :font new-font-name)
+    (face-remap-add-relative new-font-name)
     (add-to-list 'default-frame-alist (cons 'font new-font-name))))
 
 (defun tychoish-get-config-file-prefix (name)

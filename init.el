@@ -44,6 +44,5 @@
   (tychoish-setup-modeline)
   (tychoish-setup-user-local-config))
 
-
 (provide 'init)
 ;;; init.el ends here
