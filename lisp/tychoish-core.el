@@ -46,7 +46,7 @@
   (setq auto-revert-interval 5))
 
 (use-package abbrev
-  :after (tychoish-bootstrap)
+  :after (tychoish-bootstrap company-mode)
   :commands (abbrev-mode expand-abbrev)
   :hook ((text-mode prog-mode) . abbrev-mode)
   :diminish
@@ -2539,8 +2539,8 @@
 (use-package which-key
   :ensure t
   :diminish which-key-mode
+  :after (helm)
   :commands (which-key-mode)
-  :defer 2
   :config
   (setq which-key-idle-delay 1.75)
   (setq which-key-idle-secondary-delay 0.5)

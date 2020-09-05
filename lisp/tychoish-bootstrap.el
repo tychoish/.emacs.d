@@ -138,9 +138,7 @@ to change the value of this variable.")
 
 (defun on-after-init ()
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
-  (unless (display-graphic-p (selected-frame))
-    (set-face-foreground 'default "unspecified-fg" frame)
-    (set-face-background 'default "unspecified-bg" (selected-frame))))
+  (on-frame-open (selected-frame)))
 
 ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
 (add-hook 'after-make-frame-functions #'on-frame-open)
