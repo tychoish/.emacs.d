@@ -470,7 +470,7 @@
   :commands (writeroom-mode))
 
 (use-package revbufs
-  ;; this is a local package that isn't in (m)elpa
+  :ensure t
   :commands (revbufs)
   :bind (("C-c C-g" . revbufs)))
 
@@ -755,6 +755,7 @@
 
 (use-package flycheck-aspell
   :after (flycheck)
+  :ensure t
   :config
   (flycheck-aspell-define-checker "cpp"
     "C++" ("--add-filter" "url" "--add-filter" "ccpp")
