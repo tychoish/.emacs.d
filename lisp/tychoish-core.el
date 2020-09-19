@@ -325,7 +325,7 @@
     (ripgrep-regexp regexp default-directory))
   (defun tychoish-rg-repo (regexp)
     (interactive (list (read-from-minibuffer "ripgrep for: " (thing-at-point 'symbol))))
-    (ripgrep-regexp regexp (projectile-prooject-root)))
+    (ripgrep-regexp regexp (projectile-project-root)))
   (defun tychoish-find-merges ()
     (interactive)
     (ripgrep-regexp "^(=======$|<<<<<<<|>>>>>>>)" (projectile-project-root))))
@@ -1127,8 +1127,8 @@
   :bind (("C-c h l" . hyperspec-lookup))
   :config
   (setq ls-lisp-dirs-first t)
-  (setq inferior-lisp-program "sbcl")
   (setq quicklisp-path (expand-file-name "~/quicklisp"))
+  (setq inferior-lisp-program "sbcl")
   (add-to-list 'load-path quicklisp-path)
 
   (defun load-quicklisp-file (fn)
@@ -1138,8 +1138,8 @@
 	  (with-slow-op-timer (format "loading: %s" path) .5
 	    (load (expand-file-name path) t t t)))))
 
-  (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "slime-helper.el")
+  (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "log4slime-setup.el")
 
   (setq slime-contribs '(slime-scratch slime-editing-commands slime-fancy slime-company))
@@ -1676,7 +1676,7 @@
   (global-set-key (kbd "M-<SPC>") 'set-mark-command)
   (global-set-key (kbd "M-C-q") 'fill-region))
 
-(use-package tychoish-grep
+(use-package git-grep
   :bind (("C-c g g" . git-grep)
 	 ("C-c g r" . git-grep-repo))
   :init
