@@ -19,12 +19,8 @@ Overview
 
 External
 ~~~~~~~~
-
-- ``revbufs`` reverts all buffers in an intelligent way, and I've not found a
-  reasonable replacement, and I use it all of the time. 
   
-- ``erc-yank`` and ``flycheck-aspell`` all do what you'd
-  expect and I don't use them much, but they're not in MELPA.
+- ``erc-yank`` which is pending to be added to MELPA.
 
 Internal
 ~~~~~~~~
@@ -35,15 +31,11 @@ configuration and functionality.
 - ``core`` holds all ``use-package`` forms that handle the entire
   configuration.
   
-- ``setuputils`` defines functions used during the initial setup of the
+- ``bootstrap`` defines functions used during the initial setup of the
   configuration.
-
-- ``theme`` provides tools for managing and configuring themes.
 
 - ``editing`` collects configuration and several minor operations related to
   text editing and manipulation.
-
-- ``grep`` provides find-grep like functionality using ``git grep``.
 
 - ``blogging`` are a collection of functions and helpers that I use for
   editing and producing my blog. I believe I got them from `metajack

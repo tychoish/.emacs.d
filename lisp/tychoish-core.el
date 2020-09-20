@@ -1677,6 +1677,7 @@
   (global-set-key (kbd "M-C-q") 'fill-region))
 
 (use-package git-grep
+  :ensure t
   :bind (("C-c g g" . git-grep)
 	 ("C-c g r" . git-grep-repo))
   :init
