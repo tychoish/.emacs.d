@@ -202,12 +202,14 @@
 	 ("C-c h l" . helm-locate)
 	 ("C-c h i" . helm-imenu)
 	 ("C-c h t" . helm-top)
+	 ("C-c h r" . helm-recentf)
 	 ("C-c h w" . helm-google-suggest)
 	 ("C-c h s" . helm-swoop)
 
 	 ("M-p" . helm-browse-project)
 	 ("M-." . helm-etags-select)
 	 ("C-x r h" . helm-register)
+	 ("C-x h" . helm-mini)
 
 	 ;; helm alternatives for common standard operations
 	 ("C-x C-f" . helm-find-files)
