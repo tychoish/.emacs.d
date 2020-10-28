@@ -397,11 +397,13 @@
 
 (use-package projectile
   :ensure t
+  :after (f)
   :delight '(:eval (tychoish-projectile-modeline-string))
   :bind-keymap ("C-c p" . projectile-command-map)
   :commands (projectile-mode projectile-project-root)
   :defer 1
   :config
+  (setq projectile-known-projects-file (f-join user-emacs-directory (tychoish-get-config-file-prefix "projectile-bookmarks")))
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
       (if (equal pname "-")
@@ -2178,7 +2180,6 @@
 
 (use-package znc
   :ensure t
-  :after (erc)
   :commands (znc-all)
   :bind (("C-c e a" . znc-all)))
 
@@ -2441,20 +2442,22 @@
   :diminish (lsp-mode . "lsp")
   :bind (:map lsp-mode-map
 	 ("C-c C-d" . lsp-describe-thing-at-point))
-  :hook ((python-mode . #'lsp-deferred)
-	 (js-mode . #'lsp-deferred)
-	 (js2-mode . #'lsp-deferred)
-	 (dockerfile-mode . #'lsp-deferred)
-	 (sh-mode . #'lsp-deferred)
-	 (typescript-mode . #'lsp-deferred)
-	 (go-mode . #'lsp-deferred))
+  :hook ((python-mode . lsp-deferred)
+	 (js-mode . lsp-deferred)
+	 (js2-mode . lsp-deferred)
+	 (dockerfile-mode . lsp-deferred)
+	 (sh-mode . lsp-deferred)
+	 (typescript-mode . lsp-deferred)
+	 (go-mode . lsp-deferred))
   :init
   (setq lsp-auto-guess-root t       ; Detect project root
 	lsp-log-io nil
 	lsp-enable-indentation t
 	lsp-enable-imenu t
 	lsp-keymap-prefix "C-c l"
-	lsp-file-watch-threshold 2000
+	lsp-enable-file-watchers t
+
+	lsp-file-watch-threshold 5000
 	lsp-prefer-flymake nil)      ; Use lsp-ui and flycheck
 
   (defun lsp-on-save-operation ()

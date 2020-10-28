@@ -102,7 +102,8 @@ to change the value of this variable.")
   (electric-pair-mode 1)
 
   (when (gui-p)
-    (which-key-mode 1))
+    (which-key-mode 1)
+    (diminish 'which-key-mode))
 
   (when (daemonp)
     (add-to-list 'default-frame-alist '(menu-bar-lines . 0))
