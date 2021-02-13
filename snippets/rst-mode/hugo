@@ -3,6 +3,7 @@
 ---
 title: $1
 tags: [$2]
+categories: [$3]
 date: `(format-time-string "%Y-%m-%d")`
 author: tychoish
 markup: rst

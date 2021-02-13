@@ -600,7 +600,9 @@
   (setq vc-follow-symlinks t)
   (setq vc-handled-backends nil)
   :config
-  (setq magit-auto-revert-mode nil))
+  (setq magit-auto-revert-mode nil)
+  (add-to-list 'magit-status-sections-hook 'magit-insert-modules t)
+  (setq magit-module-sections-nested nil))
 
 (use-package magithub
   :ensure t
@@ -1526,6 +1528,9 @@
   :functions (gui-p default-string with-timer with-slow-op-timer)
   :init
   (setq server-use-tcp t)
+  ;; (setq server-host "127.0.0.1")
+  ;; (setq server-port 2286)
+
   (setq starttls-use-gnutls t)
   (setq gnutls-log-level 0)
 
