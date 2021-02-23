@@ -515,6 +515,10 @@
   :init
   (winner-mode 1))
 
+(use-package emacs-everywhere
+  :ensure t
+  :commands (emacs-everywhere))
+
 (use-package desktop
   :commands (desktop-save-mode desktop-read tychoish-save-desktop)
   :after (tychoish-bootstrap)
@@ -719,6 +723,19 @@
 (use-package company-emoji
   :ensure t
   :after company)
+
+(use-package company-wordfreq
+  :ensure t
+  :after company
+  :init
+  (defun setup-local-word-complete ()
+    (setq-local company-backends '(company-wordfreq))
+    (setq-local company-idle-delay 0.15)
+    (setq-local company-echo-delay 0.15)
+    (setq-local company-transformers nil))
+
+  (add-hook 'markdown-mode-hook 'setup-local-word-complete)
+  (add-hook 'rst-mode-hook 'setup-local-word-complete))
 
 (use-package irony
   :ensure t
@@ -1486,6 +1503,13 @@
   :config
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
+(use-package ox-leanpub
+  :ensure t
+  :after (org)
+  :config
+  (require 'ox-leanpub-markua)
+  (org-leanpub-book-setup-menu-markua))
+
 (use-package helm-org
   :ensure t
   :bind (("C-c h o c" . helm-org-capture-templates)
@@ -1710,6 +1734,17 @@
     (message "Attached to SSH Session"))
 
   (defalias 'sshra 'ssh-reagent))
+
+(use-package docker-tramp
+  :after tramp
+  :ensure t)
+
+(use-package docker
+  :ensure t
+  :commands (docker)
+  :bind ("C-c C-d" . docker))
+
+(use-package docker)
 
 (use-package lpr
   :commands (lpr-region lpr-buffer)
@@ -2189,7 +2224,7 @@
   :bind (("C-c e a" . znc-all)))
 
 (use-package erc-yank
-  :pin manual
+  :ensure t
   :after (erc)
   :bind (:map erc-mode-map
 	 ("C-y" . erc-yank)))
