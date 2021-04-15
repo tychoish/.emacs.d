@@ -123,9 +123,10 @@
 
     (delight 'emacs-lisp-mode "elisp")
     (delight 'fundamental-mode "fund")
-    (delight 'auto-fill-mode "afm")
+    (diminish 'auto-fill-mode "afm")
     (diminish 'overwrite-mode "om")
     (diminish 'refill-mode "rf")
+    (diminish 'org-indent-mode)
     (diminish 'auto-fill-mode "afm")
     (diminish 'visual-line-mode "wr"))
 
@@ -169,13 +170,11 @@
   :ensure t
   :defer t)
 
-(use-package modus-operandi-theme
+(use-package modus-themes
   :ensure t
-  :defer t)
-
-(use-package modus-vivendi-theme
-  :ensure t
-  :defer t)
+  :defer t
+  :init
+  (setq modus-themes-diffs 'deuteranopia))
 
 (use-package winum
   :ensure t
@@ -735,7 +734,9 @@
     (setq-local company-transformers nil))
 
   (add-hook 'markdown-mode-hook 'setup-local-word-complete)
-  (add-hook 'rst-mode-hook 'setup-local-word-complete))
+  (add-hook 'rst-mode-hook 'setup-local-word-complete)
+  ;; (add-hook 'message-mode-hook 'setup-local-word-complete)
+  (add-hook 'org-mode-hook 'setup-local-word-complete))
 
 (use-package irony
   :ensure t
@@ -783,6 +784,25 @@
   (flycheck-aspell-define-checker "cpp"
     "C++" ("--add-filter" "url" "--add-filter" "ccpp")
     (c++-mode)))
+
+(use-package flycheck-grammarly
+  :ensure t
+  :after (flycheck)
+  :config
+  (setq flycheck-grammarly-check-time 0.5))
+
+(use-package flycheck-vale
+  :ensure t
+  :after (flycheck)
+  ;; vale is the aur package "vale-bin" but maybe its more portable to
+  ;; try and use "go get" or "go install".
+  :ensure-system-package vale
+  :init
+  (add-hook 'org-mode-hook 'flycheck-mode)
+  (add-hook 'rst-mode-hook 'flycheck-mode)
+  (add-hook 'markdown-mode-hook 'flycheck-mode)
+  :config
+  (flycheck-vale-setup))
 
 (use-package flycheck-golangci-lint
   :ensure t
@@ -1305,9 +1325,6 @@
 					    entry (file+headline ,org-filename "Tasks")
 					    "* TODO %?\n%i" :prepend t))))
   :config
-  (diminish 'org-indent-mode)
-  (diminish 'org-capture-mode)
-
   (delight 'org-agenda-mode "agenda")
 
   (defadvice org-capture-finalize
@@ -1352,7 +1369,8 @@
 	(delete-frame)))
 
   (delight 'org-agenda)
-  (diminish 'org-indent)
+  (diminish 'org-indent-mode)
+  (diminish 'org-capture-mode)
 
   (add-hook 'org-ctrl-c-ctrl-c-hook 'org-set-weekday-of-timestamp)
   (add-hook 'org-agenda-mode-hook 'revbufs)
@@ -1361,7 +1379,7 @@
   (add-hook 'org-shiftdown-final-hook 'windmove-down)
   (add-hook 'org-shiftright-final-hook 'windmove-right)
   (add-hook 'org-mode-hook 'flyspell-mode)
-  (add-hook 'org-mode-hook 'org-indent-mode)
+  (add-hook 'org-mode-hook (lambda () (org-indent-mode) (diminish 'org-indent-mode)))
   (add-hook 'org-mode-hook 'visual-line-mode)
 
   (org-load-modules-maybe t)
@@ -1374,6 +1392,7 @@
   (setq org-archive-location (concat org-directory "/archive.org::datetree/"))
   (setq org-default-notes-file (concat org-directory "/organizer.org"))
   (setq org-annotate-file-storage-file (concat org-directory "/annotations.org"))
+  (setq org-agenda-files (cl-remove-duplicates (append org-agenda-files user-org-directories)))
 
   (setq org-modules '(org-velocity
 		      org-notify
@@ -1647,7 +1666,7 @@
 	 ("C-c t b C-p" . tychoish-blog-push)
 	 ("C-c t b d" . tychoish-blog-open-drafts-dired))
   :config
-  (setq tychoish-blog-path (expand-file-name "~/projects/blog")))
+  (setq tychoish-blog-path (expand-file-name "~/src/blog")))
 
 (use-package tychoish-editing
   :commands (markdown-indent-code
@@ -1897,15 +1916,16 @@
     (setq mail-host-address (s-replace-regexp ".*@" "" address))
     (setq message-sendmail-extra-arguments `("-a" ,address))
     (setq message-auto-save-directory (f-join mu4e-maildir "drafts"))
-    (message (format "mail: configured address [%s]" address))
-    (tychoish-change-email-body user-full-name address))
+    (tychoish-change-email-body user-full-name address)
+    (message (format "mail: configured address [%s]" address)))
 
   (defun tychoish-change-email-body (name address)
     "change an email address on an extant mail buffer"
-    (beginning-of-buffer)
-    (let ((new-from (concat "From: " name " <" address ">")))
-      (while (re-search-forward "^From:.*$" nil t 1)
-	(replace-match new-from nil nil))))
+    (when (equal major-mode 'mu4e-compose-mode)
+      (beginning-of-buffer)
+      (let ((new-from (concat "From: " name " <" address ">")))
+	(while (re-search-forward "^From:.*$" nil t 1)
+	  (replace-match new-from nil nil)))))
 
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
   (defun mu4e~draft-insert-mail-header-separator ()
@@ -2199,7 +2219,7 @@
 
   (setq ercn-notify-rules '((current-nick . all)
 			    (query-buffer . all)
-			    (message . ("#unclear"))))
+			    (message . ("#unclear" "#general"))))
 
   (defun do-erc-notify (nickname message)
     "Hook implementation of a notification."
@@ -2274,7 +2294,7 @@
   (setq erc-ignore-list '("*@*facebook" "&bitlbee"))
   (setq erc-track-exclude-types '("JOIN" "NICK" "PART" "QUIT" "MODE"
 				    "324" "329" "332" "333" "353" "477"))
-  (setq erc-hide-list '("MODE"))
+  (setq erc-hide-list '("MODE" "JOIN" "PART"))
 
   (setq erc-current-nick-highlight-type 'nick)
   (setq erc-insert-timestamp-function 'erc-insert-timestamp-left)
@@ -2496,8 +2516,9 @@
 	lsp-enable-imenu t
 	lsp-keymap-prefix "C-c l"
 	lsp-enable-file-watchers t
-
+	lsp-headerline-breadcrumb-enable nil
 	lsp-file-watch-threshold 5000
+	lsp-clients-python-library-directories '("/usr/local/" "/usr/")
 	lsp-prefer-flymake nil)      ; Use lsp-ui and flycheck
 
   (defun lsp-on-save-operation ()
@@ -2505,11 +2526,6 @@
 	      (bound-p 'lsp-deferred))
       (lsp-organize-imports)
       (lsp-format-buffer))))
-
-(use-package lsp-clients
-  :ensure nil
-  :after (lsp-mode)
-  :init (setq lsp-clients-python-library-directories '("/usr/local/" "/usr/")))
 
 (use-package lsp-ui
   :ensure t

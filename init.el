@@ -35,6 +35,9 @@
 (defvar local-notes-directory (expand-file-name "~/notes")
   "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
 
+(defvar user-org-directories nil
+  "Defines additional directories where org files might exist.")
+
 (add-to-list 'load-path (concat user-emacs-directory "lisp"))
 
 ;; all use-package declarations and configuration
