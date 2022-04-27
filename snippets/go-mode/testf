@@ -3,6 +3,6 @@
 # key: testf
 # contributor : @atotto
 # --
-func(t *testing.T) {
+func $1(t *testing.T) {
        $0
 }

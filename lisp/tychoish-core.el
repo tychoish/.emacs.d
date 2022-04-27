@@ -302,6 +302,17 @@
   :config
   (ace-link-setup-default))
 
+(use-package helm-projectile
+  :ensure t
+  :after (projectile helm)
+  :bind (("M-p" . helm-projectile)
+	 ("C-c s a" . helm-projectile-ag)
+	 ("C-c s r" . helm-projectile-rg)
+	 ("C-c s g" . helm-projectile-grep))
+  :config
+  (setq projectile-indexing-method 'git)
+  (helm-projectile-on))
+
 (use-package helm-ag
   :ensure t
   :ensure-system-package ((ag . the_silver_searcher))
@@ -310,8 +321,15 @@
 	 ("C-c a P" . helm-ag-project-root)
 	 ("C-c a b" . helm-do-ag-buffers)
 	 ("C-c a p" . helm-do-ag-project-root)
-	 ("C-c a s" . helm-do-ag)
-	 ("C-c h s" . helm-do-ag)))
+	 ("C-c a s" . helm-do-ag)))
+
+(use-package helm-rg
+  :ensure t
+  :ensure-system-package ((rg . ripgrep))
+  :bind (("C-c r s" . helm-rg)
+	 ("C-c r p" . helm-projectile-rg))
+  :config
+  (set-face-attribute 'helm-rg-error-message nil :foreground nil :background nil :weight 'normal))
 
 (use-package ripgrep
   :ensure t
@@ -331,22 +349,6 @@
     (interactive)
     (ripgrep-regexp "^(=======$|<<<<<<<|>>>>>>>)" (projectile-project-root))))
 
-(use-package helm-rg
-  :ensure t
-  :ensure-system-package ((rg . ripgrep))
-  :bind (("C-c r s" . helm-rg)
-	 ("C-c r p" . helm-projectile-rg))
-  :config
-  (set-face-attribute 'helm-rg-active-arg-face nil :foreground "dim gray")
-  (set-face-attribute 'helm-rg-title-face nil :foreground "dark blue" :background nil)
-  (set-face-attribute 'helm-rg-colon-separator-ripgrep-output-face nil :foreground "dim gray")
-  (set-face-attribute 'helm-rg-directory-cmd-face nil :foreground "dark blue" :background nil :weight 'normal)
-  (set-face-attribute 'helm-rg-directory-header-face nil :foreground "dark blue" :background nil)
-  (set-face-attribute 'helm-rg-extra-arg-face nil :foreground " orange" :weight 'normal)
-  (set-face-attribute 'helm-rg-file-match-face nil :foreground "dark gray" :underline t)
-  (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray" :weight 'normal)
-  (set-face-attribute 'helm-rg-base-rg-cmd-face nil :foreground "dim gray" :weight 'normal)
-  (set-face-attribute 'helm-rg-error-message nil :foreground "dark red" :background "nil" :weight 'normal))
 
 (use-package helm-c-yasnippet
   :ensure t
@@ -356,28 +358,59 @@
 
 (use-package compile
   :functions (tychoish-uniq-compile-buffer)
-  :commands (tychoish-compile-project)
-  :bind (("C-c t c" . tychoish-compile-project)
+  :commands (tychoish-compile-project-build
+	     tychoish-compile-project-golang-lint
+	     tychoish-compile-project-super-lint
+	     tychoish-compile-project-build-tests)
+  :bind (("C-c t c" . tychoish-compile-project-build)
+	 ("C-c t l" . tychoish-compile-project-golang-lint)
 	 ("C-c C-t c" . compile))
   :config
   (setq compilation-ask-about-save nil)
   (setq compilation-scroll-output t)
 
-  (defun tychoish-compile-project ()
+  (defun tychoish-compile-project-build ()
     (interactive)
+    (tychoish-compile-project "build" "time make -k build"))
+
+  (defun tychoish-compile-project-build-tests ()
+    (interactive)
+    (tychoish-compile-project "build-test" "go test ./... -run=NOOP"))
+
+  (defun tychoish-compile-project-golang-lint ()
+    (interactive)
+    (tychoish-compile-project "lint" "golangci-lint run"))
+
+  (defun tychoish-compile-project-super-lint ()
+    (interactive)
+    (let* ((project-directory (if (eq "" (projectile-project-root))
+				  (default-directory)
+				(projectile-project-root)))
+	   (options (list "VALIDATE_YAML=true"
+			  "VALIDATE_OPENAPI=true"
+			  "VALIDATE_MD=true"
+			  "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
+			  "VALIDATE_ALL_CODEBASE=true"
+			  "LINTER_RULES_PATH=."
+			  "RUN_LOCAL=true"))
+	   (optstr (format "-e %s" (s-join " -e " options)))
+	   (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
+      (tychoish-compile-project "super-lint" command-string)))
+
+  (defun tychoish-compile-project (name cmd)
     (let* ((project-directory (if (eq "" (projectile-project-root))
 				  (default-directory)
 				(projectile-project-root)))
 	   (project-name (if (eq "" (projectile-project-name))
 			     (file-name-nondirectory (s-chop-suffix "/" project-directory))
 			   (projectile-project-name)))
-	   (project-compile-buffer (concat "*" project-name "-build" "*")))
+	   (project-compile-buffer (concat "*" project-name "-" name "*")))
 
       (if (get-buffer project-compile-buffer)
 	  (switch-to-buffer-other-window (get-buffer project-compile-buffer))
 	(progn
 	  (let ((default-directory project-directory))
-	    (compile "time make -k build"))
+	    (compile cmd))
 	  (switch-to-buffer-other-window "*compilation*")
 	  (rename-buffer project-compile-buffer)))))
 
@@ -414,14 +447,6 @@
   (setq projectile-completion-system 'helm)
   (setq projectile-require-project-root 'prompt)
   (projectile-mode +1))
-
-(use-package helm-projectile
-  :ensure t
-  :after (projectile helm)
-  :bind (("M-p" . helm-projectile)
-	 ("C-c g s" . helm-projectile-grep))
-  :config
-  (helm-projectile-on))
 
 (use-package go-projectile
   :ensure t
@@ -522,8 +547,10 @@
   :commands (desktop-save-mode desktop-read tychoish-save-desktop)
   :after (tychoish-bootstrap)
   :config
+  (setq desktop-load-locked-desktop t)
+  (setq desktop-dirname user-emacs-directory)
   (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop-file"))
-  (setq desktop-base-lock-name (tychoish-get-config-file-prefix "desktop-lock"))
+  (setq desktop-base-lock-name (convert-standard-filename (tychoish-get-config-file-prefix (format "desktop-lock-%d" (emacs-pid)))))
 
   ;; use session-save to save the desktop manually
   (defun tychoish-save-desktop ()
@@ -830,7 +857,7 @@
 	 ("\\.go\\'" . go-mode))
   :config
   (unless (getenv "GOPATH")
-    (setenv "GOPATH" (expand-file-name "~/goprojects")))
+    (setenv "GOPATH" (expand-file-name "~/go")))
 
   (setq local-go-bin (concat (getenv "GOPATH") "/bin"))
   (setq exec-path (cons local-go-bin exec-path))
@@ -846,6 +873,7 @@
   (setq gofmt-command "goimports")
   (add-hook 'before-save-hook 'gofmt-before-save)
   (add-hook 'go-mode-hook 'flycheck-mode)
+
   (if (not (string-match "go" compile-command))
       (set (make-local-variable 'compile-command)
 	   "go build -v && go test -v && go vet")))
@@ -934,7 +962,7 @@
 (use-package cpputils-cmake
   :ensure t
   :after (cmake-mode c++-mode c-mode)
-  :bind (("C-c C-c C-g" . (lambda ()(interactive) (gud-gdb (concat "gdb --fullname " (cppcm-get-exe-path-current-buffer))))))
+  ;; :bind (("C-c C-c C-g" . (lambda ()(interactive) (gud-gdb (concat "gdb --fullname " (cppcm-get-exe-path-current-buffer))))))
   :config
   (add-hook 'c-mode-common-hook
 	    (lambda ()
@@ -1627,6 +1655,7 @@
 
   (set-default 'truncate-lines t)
   (set-face-attribute 'header-line nil :background nil :weight 'bold)
+  (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
 
   (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
     (setq custom-theme-directory theme-directory)
@@ -1707,6 +1736,11 @@
     (setq x-alt-keysym 'meta)
     (setq x-super-keysym 'super))
 
+  (setq select-enable-primary t)
+  (setq select-enable-clipboard t)
+
+  (global-set-key (kbd "<mouse-2>") 'clipboard-yank)
+
   (global-set-key (kbd "s-x") 'clipboard-kill-region) ;;cut
   (global-set-key (kbd "s-c") 'clipboard-kill-ring-save) ;;copy
   (global-set-key (kbd "s-v") 'clipboard-yank) ;;paste
@@ -1722,7 +1756,7 @@
   (global-set-key (kbd "C-c C-p") 'set-mark-command)
   (global-set-key (kbd "C-c c") 'comment-region)
   (global-set-key (kbd "C-c i") 'indent-region)
-  (global-set-key (kbd "C-c s w") 'ispell-word)
+  (global-set-key (kbd "C-c s w") 'flyspell-auto-correct-previous-word)
   (global-set-key (kbd "C-h") 'backward-kill-word)
   (global-set-key (kbd "C-x C-x") 'exchange-dot-and-mark)
   (global-set-key (kbd "M-<SPC>") 'set-mark-command)
@@ -2335,7 +2369,7 @@
 		       (concat "[" (car erc-default-recipients) "]"))))
 
   (add-hook 'window-configuration-change-hook
-	    '(lambda ()
+	    (lambda ()
 	      (save-excursion
 		(walk-windows
 		 (lambda (w)
@@ -2458,7 +2492,13 @@
 
 (use-package erc-tweet
   :ensure t
-  :after (erc))
+  :after (erc)
+  :config
+  (erc-update-modules))
+
+(use-package twittering-mode
+  :ensure t
+)
 
 (use-package pkgbuild-mode
   :ensure t
@@ -2605,7 +2645,7 @@
   :after (helm)
   :commands (which-key-mode)
   :config
-  (setq which-key-idle-delay 1.75)
+  (setq which-key-idle-delay .8)
   (setq which-key-idle-secondary-delay 0.5)
   (which-key-setup-minibuffer))
 
