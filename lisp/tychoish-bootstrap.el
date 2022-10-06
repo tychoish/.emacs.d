@@ -110,7 +110,8 @@ to change the value of this variable.")
     (let ((gc-cons-threshold 800000))
       (session-initialize)
       (recentf-mode 1)
-      (desktop-save-mode 1))))
+      (desktop-save-mode 1)
+      (desktop-read))))
 
 (defvar after-theme-change-hook nil
   "Hook run after a color theme is loaded using `load-theme'.")
@@ -205,9 +206,9 @@ The is unique to the system and daemon instance."
   (let ((dirname (concat (expand-file-name user-emacs-directory) "user")))
     (when (file-accessible-directory-p dirname)
       (add-to-list 'load-path dirname)
-
       (mapc (lambda (fn)
-	      (when (string-match-p "\\.el$" fn)
+	      (when (and (string-match-p "\\.el$" fn)
+			 (not (string-match-p "^flycheck_.*\\.el$" fn)))
 		(with-slow-op-timer (format "loading user config [%s]" fn) 0.10
 		 (require (intern (string-remove-suffix ".el" fn))))))
 	    (directory-files dirname))) t))

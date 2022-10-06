@@ -327,7 +327,7 @@
   :ensure t
   :ensure-system-package ((rg . ripgrep))
   :bind (("C-c r s" . helm-rg)
-	 ("C-c r p" . helm-projectile-rg))
+	 ("C-c r r" . helm-projectile-rg))
   :config
   (set-face-attribute 'helm-rg-error-message nil :foreground nil :background nil :weight 'normal))
 
@@ -336,7 +336,7 @@
   :commands (projectile-ripgrep ripgrep-regexp)
   :ensure-system-package ((rg . ripgrep))
   :bind (("C-c r g" . tychoish-rg)
-	 ("C-c r r" . tychoish-rg-repo)
+	 ("C-c r p" . tychoish-rg-repo)
 	 ("C-c r m" . tychoish-find-merges))
   :config
   (defun tychoish-rg (regexp)
@@ -379,7 +379,7 @@
 
   (defun tychoish-compile-project-golang-lint ()
     (interactive)
-    (tychoish-compile-project "lint" "golangci-lint run"))
+    (tychoish-compile-project "lint" "golangci-lint run --allow-parallel-runners"))
 
   (defun tychoish-compile-project-super-lint ()
     (interactive)
@@ -435,6 +435,7 @@
   :commands (projectile-mode projectile-project-root)
   :defer 1
   :config
+  (setq projectile-indexing-method 'alien)
   (setq projectile-known-projects-file (f-join user-emacs-directory (tychoish-get-config-file-prefix "projectile-bookmarks")))
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
@@ -531,6 +532,8 @@
 	(session-save-session t)))
 
   (add-hook 'after-save-hook 'tychoish-save-desktop)
+  (add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
+
   (setq session-save-print-spec '(t nil 40000)))
 
 (use-package winner
@@ -557,8 +560,9 @@
     "Save an emacs session... sometimes"
     (interactive)
 
-    (if (> 50 (random 100))
-	(desktop-save desktop-dirname)))
+    (when (> 50 (random 100))
+	(desktop-save desktop-dirname)
+	(desktop-read)))
 
   (add-hook 'after-save-hook 'tychoish-save-desktop)
   (setq ad-redefinition-action 'accept)
@@ -623,7 +627,7 @@
   :ensure t
   :commands (magit-toplevel)
   :bind (("C-x g s" . magit-status)
-	 ("C-x g b" . magit-branch-manager)
+	 ("C-x g b" . magit-branch)
 	 ("C-x g o b" . magit-blame))
   :init
   (setq version-control t)
@@ -903,6 +907,75 @@
   :bind (("C-c h g" .'helm-go-package))
   :config
   (substitute-key-definition 'go-import-add 'helm-go-package go-mode-map))
+
+(use-package rust-mode
+  :ensure t
+  :mode "\\.rs$'"
+  :config
+  (setq rust-format-on-save t)
+  (add-hook 'rust-mode-hook (lambda () (prettify-symbols-mode)))
+  (add-hook 'rust-mode-hook #'lsp))
+
+(use-package racer
+  :ensure t
+  :after (rust-mode)
+  :init
+  (setq racer-rust-src-path
+  	(concat (string-trim
+  		 (shell-command-to-string "rustc --print sysroot"))
+  		"/lib/rustlib/src/rust/library"))
+  (setenv "RUST_SRC_PATH" racer-rust-src-path)
+  :config
+  (setq company-tooltip-align-annotations t)
+  (define-key rust-mode-map (kbd "TAB") #'company-indent-or-complete-common)
+
+  (add-hook 'rust-mode-hook #'racer-mode)
+  (add-hook 'racer-mode-hook #'eldoc-mode))
+
+(use-package cargo
+  :ensure t
+  :after (rust-mode)
+  :config
+  (add-hook 'rust-mode-hook 'cargo-minor-mode))
+
+(use-package rustic
+  :ensure t
+  ;; :after (rust-mode)
+  ;; :mode "\\.rs$'"
+  :bind (:map rustic-mode-map
+	      ("M-j" . lsp-ui-imenu)
+	      ("M-?" . lsp-find-references)
+	      ("C-c C-c l" . flycheck-list-errors)
+	      ("C-c C-c a" . lsp-execute-code-action)
+	      ("C-c C-c r" . lsp-rename)
+	      ("C-c C-c q" . lsp-workspace-restart)
+	      ("C-c C-c Q" . lsp-workspace-shutdown)
+	      ("C-c C-c s" . lsp-rust-analyzer-status))
+  :config
+  ;; uncomment for less flashiness
+  ;; (setq lsp-eldoc-hook nil)
+  ;; (setq lsp-enable-symbol-highlighting nil)
+  ;; (setq lsp-signature-auto-activate nil)
+
+  (defun rk/rustic-mode-hook ()
+    ;; so that run C-c C-c C-r works without having to confirm, but don't try to
+    ;; save rust buffers that are not file visiting. Once
+    ;; https://github.com/brotzeit/rustic/issues/253 has been resolved this should
+    ;; no longer be necessary.
+    (when buffer-file-name
+      (setq-local buffer-save-without-query t)))
+
+  ;; comment to disable rustfmt on save
+  (setq rustic-format-on-save t)
+  (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
+
+(use-package toml-mode
+  :ensure t
+  :mode "\\.toml$'")
+
+(use-package rust-playground
+  :ensure t
+  :commands (rust-playground rust-playground-run-command))
 
 (use-package protobuf-mode
   :ensure t
@@ -1244,7 +1317,7 @@
   :mode (("\\.org$" . org-mode))
   :delight "org"
   :commands (tychoish-add-org-capture-template org-save-all-org-buffers)
-  :ensure org-plus-contrib
+  :ensure org-contrib
   :bind (("C-c o a" . org-agenda)
 	 ("C-c o l s" . org-store-link)
 	 ("C-c o l i" . org-insert-link)
@@ -1411,9 +1484,6 @@
   (add-hook 'org-mode-hook 'visual-line-mode)
 
   (org-load-modules-maybe t)
-
-  (add-to-list 'org-speed-commands-user '("N" org-narrow-to-subtree))
-  (add-to-list 'org-speed-commands-user '("W" widen))
 
   (setq org-agenda-include-all-todo t)
   (setq auto-mode-alist (cons '("\\.org$" . org-mode) auto-mode-alist))
@@ -1590,6 +1660,8 @@
 	 ("C-c f 0" . text-scale-reset)
 	 ("C-c C-=" . opacity-increase)
 	 ("C-c C--" . opacity-decrease)
+	 ("C-x h" . help)
+	 ("C-x C-h" . help)
 	 ("C-c f C-0" . opacity-reset)
 	 ("C-c t t d" . disable-theme)
 	 ("C-c t t D" . disable-all-themes)
@@ -1604,6 +1676,7 @@
 
   (setq starttls-use-gnutls t)
   (setq gnutls-log-level 0)
+  (setq native-comp-deferred-compilation t)
 
   (setq safe-local-variable-values '((encoding . utf-8)))
   (setq warnings-to-ignore '())
@@ -1656,6 +1729,7 @@
   (set-default 'truncate-lines t)
   (set-face-attribute 'header-line nil :background nil :weight 'bold)
   (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
+  (set-fontset-font t 'emoji '("Noto Color Emoji" . "iso10646-1") nil 'prepend)
 
   (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
     (setq custom-theme-directory theme-directory)
@@ -1756,7 +1830,7 @@
   (global-set-key (kbd "C-c C-p") 'set-mark-command)
   (global-set-key (kbd "C-c c") 'comment-region)
   (global-set-key (kbd "C-c i") 'indent-region)
-  (global-set-key (kbd "C-c s w") 'flyspell-auto-correct-previous-word)
+  (global-set-key (kbd "C-c ;") 'flyspell-auto-correct-previous-word)
   (global-set-key (kbd "C-h") 'backward-kill-word)
   (global-set-key (kbd "C-x C-x") 'exchange-dot-and-mark)
   (global-set-key (kbd "M-<SPC>") 'set-mark-command)
@@ -1869,6 +1943,7 @@
 	 ("#" . mu4e-mark-resolve-deferred-marks)
 	 (";" . mu4e-mark-resolve-deferred-marks))
   :commands (mu4e-mail-view-actions
+	     mu4e
 	     mu4e-compose-new
 	     mu4e-update-mail-and-index
 	     mu4e-headers-jump-to-maildir
@@ -1934,10 +2009,9 @@
 
   :config
   (defun tychoish-set-up-email (maildir name address)
-    (let* ((mudir (f-join maildir ".mu")))
-      (setq message-directory maildir)
-      (setq mu4e-maildir maildir)
-      (setq mu4e-mu-home mudir))
+    (setq message-directory maildir)
+    (setq mu4e-maildir maildir)
+    (setq mu4e-mu-home (f-join maildir ".mu"))
 
     (setq mu4e-bookmarks nil)
     (tychoish-add-standard-mail-bookmarks)
@@ -2561,11 +2635,25 @@
 	lsp-clients-python-library-directories '("/usr/local/" "/usr/")
 	lsp-prefer-flymake nil)      ; Use lsp-ui and flycheck
 
-  (defun lsp-on-save-operation ()
-    (when (or (boundp 'lsp-mode)
-	      (bound-p 'lsp-deferred))
-      (lsp-organize-imports)
-      (lsp-format-buffer))))
+    (defun lsp-on-save-operation ()
+      (when (or (boundp 'lsp-mode)
+		(bound-p 'lsp-deferred))
+	(lsp-organize-imports)
+	(lsp-format-buffer)))
+
+  :custom
+  ;; what to use when checking on-save. "check" is default, I prefer clippy
+  (lsp-rust-analyzer-cargo-watch-command "clippy")
+  (lsp-eldoc-render-all t)
+  (lsp-idle-delay 0.6)
+  ;; enable / disable the hints as you prefer:
+  (lsp-rust-analyzer-server-display-inlay-hints t)
+  (lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
+  (lsp-rust-analyzer-display-chaining-hints t)
+  (lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
+  (lsp-rust-analyzer-display-closure-return-type-hints t)
+  (lsp-rust-analyzer-display-parameter-hints nil)
+  (lsp-rust-analyzer-display-reborrow-hints nil))
 
 (use-package lsp-ui
   :ensure t
@@ -2625,7 +2713,24 @@
 	      ("M-<f5>" . dap-hydra))
   :hook ((dap-mode . dap-ui-mode)
 	 (dap-session-created . (lambda (&_rest) (dap-hydra)))
-	 (dap-terminated . (lambda (&_rest) (dap-hydra/nil)))))
+	 (dap-terminated . (lambda (&_rest) (dap-hydra/nil))))
+  :config
+  (dap-ui-mode)
+  (dap-ui-controls-mode 1)
+
+  (require 'dap-lldb)
+  (require 'dap-gdb-lldb)
+  (dap-gdb-lldb-setup)
+  (dap-register-debug-template
+   "Rust::LLDB Run Configuration"
+   (list :type "lldb"
+	 :request "launch"
+	 :name "LLDB::Run"
+	 :gdbpath "rust-lldb"
+	 :target nil
+	 :cwd nil))
+
+)
 
 (use-package lsp-treemacs
   :after (lsp-mode treemacs)
