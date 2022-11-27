@@ -11,12 +11,13 @@
 
 (let ((file-name-handler-alist nil))
   (add-to-list 'after-init-hook
-	       (lambda ()
-		 (setq gc-cons-threshold 800000)
-		 (let ((garbage-collection-messages t)) (garbage-collect))
-		 (let ((msg (format "started (%d) in %s" (emacs-pid) (emacs-init-time))))
-		   (message (concat "emacs: " msg))
-		   (when (daemonp) (alert msg :title (format "emacs-%s" tychoish-emacs-identifier))))))
+  	       (lambda ()
+  		 (setq max-specpdl-size 13000)
+  		 (setq gc-cons-threshold 800000)
+  		 (let ((garbage-collection-messages t)) (garbage-collect))
+  		 (let ((msg (format "started (%d) in %s" (emacs-pid) (emacs-init-time))))
+  		   (message (concat "emacs: " msg))
+  		   (when (daemonp) (alert msg :title (format "emacs-%s" tychoish-emacs-identifier))))))
 
   (require 'package)
   (setq package-user-dir (concat user-emacs-directory "elpa"))
@@ -47,7 +48,8 @@
     :config
     (tychoish-setup-global-modes)
     (tychoish-setup-modeline)
-    (tychoish-setup-user-local-config)))
+    (tychoish-setup-user-local-config)
+    ))
 
 (provide 'init)
 ;;; init.el ends here

@@ -329,7 +329,15 @@
   :bind (("C-c r s" . helm-rg)
 	 ("C-c r r" . helm-projectile-rg))
   :config
-  (set-face-attribute 'helm-rg-error-message nil :foreground nil :background nil :weight 'normal))
+  (set-face-attribute 'helm-rg-error-message nil :foreground "pink4" :background nil :weight 'normal)
+  (set-face-attribute 'helm-rg-active-arg-face nil :foreground "olive drab")
+  (set-face-attribute 'helm-rg-base-rg-cmd-face nil :foreground "dim gray")
+  (set-face-attribute 'helm-rg-directory-cmd-face nil :foreground "brown")
+  (set-face-attribute 'helm-rg-directory-header-face nil :foreground nil :weight 'extra-bold)
+  (set-face-attribute 'helm-rg-extra-arg-face nil :foreground "yellow4")
+  (set-face-attribute 'helm-rg-file-match-face nil :foreground "#088")
+  (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray")
+  (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold))
 
 (use-package ripgrep
   :ensure t
@@ -916,32 +924,32 @@
   (add-hook 'rust-mode-hook (lambda () (prettify-symbols-mode)))
   (add-hook 'rust-mode-hook #'lsp))
 
-(use-package racer
-  :ensure t
-  :after (rust-mode)
-  :init
-  (setq racer-rust-src-path
-  	(concat (string-trim
-  		 (shell-command-to-string "rustc --print sysroot"))
-  		"/lib/rustlib/src/rust/library"))
-  (setenv "RUST_SRC_PATH" racer-rust-src-path)
-  :config
-  (setq company-tooltip-align-annotations t)
-  (define-key rust-mode-map (kbd "TAB") #'company-indent-or-complete-common)
-
-  (add-hook 'rust-mode-hook #'racer-mode)
-  (add-hook 'racer-mode-hook #'eldoc-mode))
-
 (use-package cargo
   :ensure t
   :after (rust-mode)
   :config
   (add-hook 'rust-mode-hook 'cargo-minor-mode))
 
+;; (use-package racer
+;;   :ensure t
+;;   :after (rust-mode)
+;;   :init
+;;   (setq racer-rust-src-path
+;;        (concat (string-trim
+;;                 (shell-command-to-string "rustc --print sysroot"))
+;;                "/lib/rustlib/src/rust/library"))
+;;   (setenv "RUST_SRC_PATH" racer-rust-src-path)
+;;   :config
+;;   (setq company-tooltip-align-annotations t)
+;;   (define-key rust-mode-map (kbd "TAB") #'company-indent-or-complete-common)
+
+;;   (add-hook 'rust-mode-hook #'racer-mode)
+;;   (add-hook 'racer-mode-hook #'eldoc-mode))
+
 (use-package rustic
   :ensure t
   ;; :after (rust-mode)
-  ;; :mode "\\.rs$'"
+  :mode "\\.rs$'"
   :bind (:map rustic-mode-map
 	      ("M-j" . lsp-ui-imenu)
 	      ("M-?" . lsp-find-references)
@@ -956,6 +964,7 @@
   ;; (setq lsp-eldoc-hook nil)
   ;; (setq lsp-enable-symbol-highlighting nil)
   ;; (setq lsp-signature-auto-activate nil)
+  (setq lsp-signature-render-documentation nil)
 
   (defun rk/rustic-mode-hook ()
     ;; so that run C-c C-c C-r works without having to confirm, but don't try to
@@ -965,6 +974,7 @@
     (when buffer-file-name
       (setq-local buffer-save-without-query t)))
 
+  (seq lsp-rust-all-features t)
   ;; comment to disable rustfmt on save
   (setq rustic-format-on-save t)
   (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
@@ -1850,7 +1860,7 @@
 
 (use-package tramp
   :commands (sshra ssh-reagent)
-  :init
+  :config
   (setq tramp-default-method "ssh")
 
   (defun ssh-reagent ()
@@ -1870,8 +1880,6 @@
   :ensure t
   :commands (docker)
   :bind ("C-c C-d" . docker))
-
-(use-package docker)
 
 (use-package lpr
   :commands (lpr-region lpr-buffer)
@@ -2619,12 +2627,14 @@
   :hook ((python-mode . lsp-deferred)
 	 (js-mode . lsp-deferred)
 	 (js2-mode . lsp-deferred)
+	 (rustic-mode . lsp-deferred)
+	 (rust-mode . lsp-deferred)
 	 (dockerfile-mode . lsp-deferred)
 	 (sh-mode . lsp-deferred)
 	 (typescript-mode . lsp-deferred)
 	 (go-mode . lsp-deferred))
   :init
-  (setq lsp-auto-guess-root t       ; Detect project root
+  (setq lsp-auto-guess-root t       ; detect project root
 	lsp-log-io nil
 	lsp-enable-indentation t
 	lsp-enable-imenu t
@@ -2643,7 +2653,7 @@
 
   :custom
   ;; what to use when checking on-save. "check" is default, I prefer clippy
-  (lsp-rust-analyzer-cargo-watch-command "clippy")
+  (lsp-rust-analyzer-cargo-watch-command "check")
   (lsp-eldoc-render-all t)
   (lsp-idle-delay 0.6)
   ;; enable / disable the hints as you prefer:
@@ -2742,7 +2752,9 @@
 (use-package treemacs
   :ensure t
   :commands (treemacs)
-  :after (lsp-mode))
+  :after (lsp-mode)
+  :init
+  (setq treemacs-no-load-time-warnings t))
 
 (use-package which-key
   :ensure t

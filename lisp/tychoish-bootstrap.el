@@ -217,5 +217,20 @@ The is unique to the system and daemon instance."
   "Called during setup, intentially a noop, which omit the message."
   nil)
 
+(defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup")
+(defun emacs-repository-get-version (&optional dir ext)  "Noop definition of function to speed up startup" "")
+
+(defun ad:suppress-message (f &rest arg)
+  (with-timer "suppresed"
+  (if my-suppress-message-p
+      (let ((inhibit-message t)
+            (message-log-max nil))
+        (apply f arg))
+    (apply f arg))))
+
+(advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
+(advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
+
+
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
