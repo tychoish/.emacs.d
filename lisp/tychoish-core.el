@@ -66,20 +66,17 @@
 
 (use-package anzu
   :ensure t
-  :diminish
   :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
-  :hook ((text-mode prog-mode isearch-mode) . anzu-mode)
+  :hook ((isearch-mode) . anzu-mode)
   :bind (("C-c q r" . anzu-query-replace)
 	 ("C-c q x" . anzu-query-replace-regexp))
-  :init
-  (defalias 'srr 'string-replace-regexp)
-  (defalias 'sr 'string-replace)
+  :config
   (setq query-replace-highlight t)
   (setq search-highlight t)
-  :config
+  (defalias 'srr 'string-replace-regexp)
+  (defalias 'sr 'string-replace)
   (defalias 'qrr 'anzu-query-replace-regexp)
-  (defalias 'qr 'anzu-query-replace)
-  (global-anzu-mode +1))
+  (defalias 'qr 'anzu-query-replace))
 
 (use-package doom-modeline
   :ensure t
@@ -108,7 +105,7 @@
 		   mode-line-buffer-identification
 		   " "
 		   mode-line-position
-		   '(vc-mode vc-mode)
+		   ;; '(vc-mode vc-mode)
 		   "%M"
 		   global-mode-string
 		   ""
@@ -161,6 +158,10 @@
   (setq doom-modeline-github nil)
   (setq doom-modeline-lsp t)
   (add-to-list 'mode-line-misc-info (format "[%s]" tychoish-emacs-identifier)))
+
+(use-package esup
+  :ensure t
+  :defer t)
 
 (use-package doom-themes
   :ensure t
@@ -545,10 +546,9 @@
   (setq session-save-print-spec '(t nil 40000)))
 
 (use-package winner
-  :defer 2
-  :commands (winner-mode)
-  :init
-  (winner-mode 1))
+  :ensure t
+  :commands (winner-mode winner-undo winner-redo)
+  :hook ((fundamental-mode) . winner-mode))
 
 (use-package emacs-everywhere
   :ensure t
@@ -634,13 +634,14 @@
 (use-package magit
   :ensure t
   :commands (magit-toplevel)
-  :bind (("C-x g s" . magit-status)
-	 ("C-x g b" . magit-branch)
-	 ("C-x g o b" . magit-blame))
+  :bind (("C-c m g s" . magit-status)
+	 ("C-c m g f" . magit-branch)
+	 ("C-c m g b" . magit-blame))
   :init
   (setq version-control t)
   (setq vc-follow-symlinks t)
   (setq vc-handled-backends nil)
+
   :config
   (setq magit-auto-revert-mode nil)
   (add-to-list 'magit-status-sections-hook 'magit-insert-modules t)
@@ -1900,14 +1901,13 @@
   :bind ((("M-j" . windmove-down)
 	  ("M-k" . windmove-up)
 	  ("M-h" . windmove-left)
-	  ("M-l" . windmove-right)))
-  :init
-  (windmove-default-keybindings)
-
-  (global-set-key (kbd "M-J") (lambda () (interactive) (enlarge-window 1)))
-  (global-set-key (kbd "M-K") (lambda () (interactive) (enlarge-window -1)))
-  (global-set-key (kbd "M-H") (lambda () (interactive) (enlarge-window -1 t)))
-  (global-set-key (kbd "M-L") (lambda () (interactive) (enlarge-window 1 t))))
+	  ("M-l" . windmove-right)
+	  ("M-J" . (lambda () (interactive) (enlarge-window 1)))
+	  ("M-K" . (lambda () (interactive) (enlarge-window -1)))
+	  ("M-h" . (lambda () (interactive) (enlarge-window 1 t)))
+	  ("M-l" . (lambda () (interactive) (enlarge-window -1 t)))))
+  :config
+  (windmove-default-keybindings))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2571,16 +2571,6 @@
 (use-package erc-hl-nicks
   :ensure t
   :after (erc))
-
-(use-package erc-tweet
-  :ensure t
-  :after (erc)
-  :config
-  (erc-update-modules))
-
-(use-package twittering-mode
-  :ensure t
-)
 
 (use-package pkgbuild-mode
   :ensure t

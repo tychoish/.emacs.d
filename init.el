@@ -7,9 +7,8 @@
 
 ;;; Code:
 
-(setq gc-cons-threshold 80000000000000)
-
-(let ((file-name-handler-alist nil))
+(let ((file-name-handler-alist nil)
+      (gc-cons-threshold 80000000000000))
   (add-to-list 'after-init-hook
   	       (lambda ()
   		 (setq max-specpdl-size 13000)
@@ -30,9 +29,6 @@
   (unless (package-installed-p 'use-package)
     (package-refresh-contents)
     (package-install 'use-package))
-
-  (eval-when-compile
-    (require 'use-package))
 
   (defvar local-notes-directory (expand-file-name "~/notes")
     "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
