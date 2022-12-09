@@ -105,6 +105,9 @@ to change the value of this variable.")
     (which-key-mode 1)
     (diminish 'which-key-mode))
 
+  (unless (gui-p)
+    (xterm-mouse-mode 1))
+
   (when (daemonp)
     (add-to-list 'default-frame-alist '(menu-bar-lines . 0))
     (let ((gc-cons-threshold 800000))
@@ -213,20 +216,25 @@ The is unique to the system and daemon instance."
 		 (require (intern (string-remove-suffix ".el" fn))))))
 	    (directory-files dirname))) t))
 
-(defun display-startup-echo-area-message ()
-  "Called during setup, intentially a noop, which omit the message."
-  nil)
-
-(defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup")
+(defun display-startup-echo-area-message ()  "Called during setup, intentially a noop, which omit the message."  nil)
+(defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup" "")
 (defun emacs-repository-get-version (&optional dir ext)  "Noop definition of function to speed up startup" "")
 
+(defvar my-suppress-message-p t)
 (defun ad:suppress-message (f &rest arg)
-  (with-timer "suppresed"
   (if my-suppress-message-p
       (let ((inhibit-message t)
             (message-log-max nil))
         (apply f arg))
-    (apply f arg))))
+    (apply f arg)))
+
+(defvar tychoish-xterm-mouse-state nil)
+(defun xterm-mouse-mode-toggle ()
+  (interactive)
+  (if tychoish-xterm-mouse-state
+      (xterm-mouse-mode -1)
+    (xterm-mouse-mode 1))
+  (setq tychoish-xterm-mouse-state (not tychoish-xterm-mouse-state)))
 
 (advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
 (advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
@@ -234,3 +242,4 @@ The is unique to the system and daemon instance."
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
+

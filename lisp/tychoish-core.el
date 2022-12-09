@@ -11,19 +11,20 @@
 ;;; Code:
 
 (use-package auto-package-update
-  :ensure t
   :commands (auto-package-update-maybe auto-package-update-now)
-  :init
+  :ensure t
   :config
   (setq auto-package-update-hide-results t
 	auto-package-update-interval 9001)
   (auto-package-update-maybe))
 
 (use-package use-package-ensure-system-package
-  :after (use-package)
-  :ensure t)
+  :ensure t
+  :after (use-package))
 
 (use-package eldoc
+  :defer t
+  :ensure t
   :diminish
   :commands (eldoc-mode))
 
@@ -37,6 +38,7 @@
 
 (use-package autorevert
   :commands (auto-revert-mode)
+  :ensure t
   :init
   (defalias 'rb 'revert-buffer)
   (defalias 'revert 'revert-buffer)
@@ -161,15 +163,7 @@
 
 (use-package esup
   :ensure t
-  :defer t)
-
-(use-package doom-themes
-  :ensure t
-  :defer t)
-
-(use-package base16-theme
-  :ensure t
-  :defer t)
+  :commands (esup))
 
 (use-package modus-themes
   :ensure t
@@ -272,16 +266,12 @@
   (setq helm-swoop-split-with-multiple-windows t)
   (setq helm-swoop-split-direction 'split-window-vertically))
 
-(use-package helm-ls-git
-  :ensure t
-  :bind (("C-c o g" . helm-ls-git-ls)
-	 ("C-c o b" . helm-browse-project)))
-
 (use-package helm-eww
   :ensure t
   :bind (("C-c w o" . helm-eww)))
 
 (use-package eww
+  :ensure t
   :bind (("C-c w d" . browse-url-generic)
 	 ("C-c w e" . browse-url)
 	 ("C-c w f" . browse-url-firefox)
@@ -326,9 +316,9 @@
 
 (use-package helm-rg
   :ensure t
-  :ensure-system-package ((rg . ripgrep))
   :bind (("C-c r s" . helm-rg)
 	 ("C-c r r" . helm-projectile-rg))
+  :ensure-system-package ((rg . ripgrep))
   :config
   (set-face-attribute 'helm-rg-error-message nil :foreground "pink4" :background nil :weight 'normal)
   (set-face-attribute 'helm-rg-active-arg-face nil :foreground "olive drab")
@@ -343,7 +333,6 @@
 (use-package ripgrep
   :ensure t
   :commands (projectile-ripgrep ripgrep-regexp)
-  :ensure-system-package ((rg . ripgrep))
   :bind (("C-c r g" . tychoish-rg)
 	 ("C-c r p" . tychoish-rg-repo)
 	 ("C-c r m" . tychoish-find-merges))
@@ -462,10 +451,6 @@
   :ensure t
   :after (go-mode projectile))
 
-(use-package helm-dash
-  :ensure t
-  :commands (helm-dash helm-dash-at-point helm-dash-install-docset helm-dash-activate-docset))
-
 (use-package helm-company
   :ensure t
   :after (helm company)
@@ -550,11 +535,8 @@
   :commands (winner-mode winner-undo winner-redo)
   :hook ((fundamental-mode) . winner-mode))
 
-(use-package emacs-everywhere
-  :ensure t
-  :commands (emacs-everywhere))
-
 (use-package desktop
+  :ensure t
   :commands (desktop-save-mode desktop-read tychoish-save-desktop)
   :after (tychoish-bootstrap)
   :config
@@ -623,6 +605,7 @@
   (add-to-list 'desktop-modes-not-to-save 'fundamental-mode))
 
 (use-package recentf
+  :ensure t
   :commands (recentf-mode)
   :after (tychoish-bootstrap)
   :config
@@ -685,14 +668,14 @@
 
 
 (use-package helm-c-yasnippet
-  :after yasnippet
   :ensure t
+  :after yasnippet
   :bind (("C-c s y" . 'helm-yas-complete)
 	 ("C-c C-y" . 'helm-yas-complete)))
 
 (use-package yasnippet-snippets
-  :after yasnippet
-  :ensure t)
+  :ensure t
+  :after yasnippet)
 
 (use-package company
   :ensure t
@@ -791,7 +774,7 @@
 
 (use-package irony-eldoc
   :ensure t
-  :after irony
+  :after (irony eldoc)
   :config
   (add-hook 'irony-mode-hook 'irony-eldoc))
 
@@ -818,8 +801,8 @@
   (setq flycheck-go-vet-print-functions t))
 
 (use-package flycheck-aspell
-  :after (flycheck)
   :ensure t
+  :after (flycheck)
   :config
   (flycheck-aspell-define-checker "cpp"
     "C++" ("--add-filter" "url" "--add-filter" "ccpp")
@@ -834,9 +817,9 @@
 (use-package flycheck-vale
   :ensure t
   :after (flycheck)
+  :ensure-system-package vale
   ;; vale is the aur package "vale-bin" but maybe its more portable to
   ;; try and use "go get" or "go install".
-  :ensure-system-package vale
   :init
   (add-hook 'org-mode-hook 'flycheck-mode)
   (add-hook 'rst-mode-hook 'flycheck-mode)
@@ -853,8 +836,8 @@
   (setq flycheck-golangci-lint-tests t))
 
 (use-package flycheck-irony
-  :after (flycheck irony)
   :ensure t
+  :after (flycheck irony)
   :commands (flycheck-irony-setup)
   :init (add-hook 'flycheck-mode-hook #'flycheck-irony-setup)
   :config
@@ -931,25 +914,9 @@
   :config
   (add-hook 'rust-mode-hook 'cargo-minor-mode))
 
-;; (use-package racer
-;;   :ensure t
-;;   :after (rust-mode)
-;;   :init
-;;   (setq racer-rust-src-path
-;;        (concat (string-trim
-;;                 (shell-command-to-string "rustc --print sysroot"))
-;;                "/lib/rustlib/src/rust/library"))
-;;   (setenv "RUST_SRC_PATH" racer-rust-src-path)
-;;   :config
-;;   (setq company-tooltip-align-annotations t)
-;;   (define-key rust-mode-map (kbd "TAB") #'company-indent-or-complete-common)
-
-;;   (add-hook 'rust-mode-hook #'racer-mode)
-;;   (add-hook 'racer-mode-hook #'eldoc-mode))
-
 (use-package rustic
   :ensure t
-  ;; :after (rust-mode)
+  :after (rust-mode)
   :mode "\\.rs$'"
   :bind (:map rustic-mode-map
 	      ("M-j" . lsp-ui-imenu)
@@ -1038,6 +1005,7 @@
   (setq c-eldoc-buffer-regenerate-time 60))
 
 (use-package cc-mode
+  :ensure t
   :mode (("\\.cc$'" . c++-mode)
 	 ("\\.cpp$'" . c++-mode)
 	 ("\\.cxx$'" . c++-mode)
@@ -1059,13 +1027,15 @@
   :ensure t
   :after (c++-mode)
   :commands (modern-c++-font-lock-mode)
+  :hook ((c++mode . modern-c++-font-lock-mode))
   :init
-  (add-hook 'c++-mode-hook #'modern-c++-font-lock-mode)
   (add-hook 'c++-mode-hook (lambda () (setq show-trailing-whitespace t)))
+  :config
   (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
   (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100)))
 
 (use-package make-mode
+  :ensure t
   :mode (("makefile" . makefile-mode)
 	 ("Makefile" . makefile-mode)
 	 ("\\.mk%" . makefile-mode))
@@ -1264,6 +1234,7 @@
   :mode "\\.ninja\\'")
 
 (use-package compile
+  :ensure t
   :commands (compile)
   :init
   (defun colorize-compilation-buffer ()
@@ -1310,6 +1281,7 @@
   :commands (slime-company))
 
 (use-package common-lisp-snippets
+  :ensure t
   :after (slime))
 
 (use-package helm-slime
@@ -1325,10 +1297,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (use-package org
+  :ensure t
   :mode (("\\.org$" . org-mode))
   :delight "org"
-  :commands (tychoish-add-org-capture-template org-save-all-org-buffers)
   :ensure org-contrib
+  :commands (tychoish-add-org-capture-template org-save-all-org-buffers)
   :bind (("C-c o a" . org-agenda)
 	 ("C-c o l s" . org-store-link)
 	 ("C-c o l i" . org-insert-link)
@@ -1621,8 +1594,9 @@
   (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**"))))
   (setq org-agenda-skip-scheduled-if-done t))
 
-(use-package org-mu4e
-  :after (org mu4e))
+;; (use-package org-mu4e
+:ensure t
+;;   :after (org mu4e))
 
 (use-package ox-rst
   :ensure t
@@ -1637,28 +1611,6 @@
   :config
   (require 'ox-leanpub-markua)
   (org-leanpub-book-setup-menu-markua))
-
-(use-package helm-org
-  :ensure t
-  :bind (("C-c h o c" . helm-org-capture-templates)
-	 ("C-c h o s" . helm-org-agenda-file-headings))
-  :config
-  (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
-  (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
-
-(use-package org-roam
-  :ensure t
-  :bind (:map org-roam-mode-map
-	      (("C-c n l" . org-roam)
-	       ("C-c n f" . org-roam-find-file)
-	       ("C-c n j" . org-roam-jump-to-index)
-	       ("C-c n b" . org-roam-switch-to-buffer)
-	       ("C-c n g" . org-roam-graph))
-	      :map org-mode-map
-	      (("C-c n i" . org-roam-insert)))
-  :config
-  (setq org-roam-directory (concat local-notes-directory "/roam"))
-  (setq org-roam-index-file "index.org"))
 
 (use-package tychoish-bootstrap
   :commands (tychoish-setup-global-modes
@@ -1675,6 +1627,7 @@
 	 ("C-x C-h" . help)
 	 ("C-c f C-0" . opacity-reset)
 	 ("C-c t t d" . disable-theme)
+	 ("C-c t t x" . xterm-mouse-mode-toggle)
 	 ("C-c t t D" . disable-all-themes)
 	 ("C-c t t e" . enable-theme)
 	 ("C-c t t l" . load-theme)
@@ -1857,9 +1810,11 @@
   (define-key isearch-mode-map (kbd "C-o") 'isearch-occur))
 
 (use-package whitespace
+  :ensure t
   :bind (("C-c C-w" . whitespace-cleanup)))
 
 (use-package tramp
+  :ensure t
   :commands (sshra ssh-reagent)
   :config
   (setq tramp-default-method "ssh")
@@ -1874,8 +1829,8 @@
   (defalias 'sshra 'ssh-reagent))
 
 (use-package docker-tramp
-  :after tramp
-  :ensure t)
+  :ensure t
+  :after (docker tramp))
 
 (use-package docker
   :ensure t
@@ -1883,6 +1838,7 @@
   :bind ("C-c C-d" . docker))
 
 (use-package lpr
+  :ensure t
   :commands (lpr-region lpr-buffer)
   :config
   (setq lpr-add-switches "-T ''"))
@@ -1898,6 +1854,7 @@
   (setq ansi-color-for-comint-mode t))
 
 (use-package windmove
+  :ensure t
   :bind ((("M-j" . windmove-down)
 	  ("M-k" . windmove-up)
 	  ("M-h" . windmove-left)
@@ -2065,9 +2022,9 @@
 	    (insert "\n" sepa)))))))
 
 (use-package messages-are-flowing
-  :after (mu4e)
   :ensure t
-  :init
+  :after (mu4e)
+  :config
   (defun messages-are-flowing-use-and-mark-hard-newlines ()
     (interactive)
     (use-hard-newlines 1 'always)
@@ -2092,7 +2049,6 @@
 	 ("C-c d d" . (lambda () (interactive) (find-file deft-directory))))
   :init
   (setq deft-directory (concat local-notes-directory "/deft"))
-  (setq deft-directories '(deft-directory org-roam-directory))
 
   (defun deft-file-make-slug (s)
     "Turn a string into a slug."
@@ -2162,7 +2118,6 @@
 
 (use-package tex
   :defer t
-  :ensure auctex
   :config
   (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
   (setq TeX-auto-save t)
@@ -2293,9 +2248,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (use-package alert
+  :ensure t
   :functions (alert)
   :commands (alert alert-sardis)
-  :ensure t
   :config
   (cond
    ((eq system-type 'darwin)
@@ -2391,11 +2346,9 @@
 		      completion
 		      autojoin
 		      irccontrols
-		      tweet
 		      list
 		      match
 		      menu
-		      tweet
 		      move-to-prompt
 		      netsplit
 		      networks
@@ -2577,6 +2530,7 @@
   :mode ("/PKGBUILD$"))
 
 (use-package conf-mode
+  :ensure t
   :mode (("\\.service$'" . conf-unix-mode)
 	 ("\\.timer$'" . conf-unix-mode)
 	 ("\\.target$'" . conf-unix-mode)
@@ -2588,6 +2542,7 @@
 	 ("\\.conf$'" . conf-unix-mode)))
 
 (use-package sh-script
+  :ensure t
   :mode (("\\.bash$'" . sh-mode)
 	 ("\\.sh$'" . sh-mode)
 	 ("\\.zsh$'" . sh-mode)
@@ -2607,10 +2562,12 @@
 (use-package helm-lsp
   :ensure t
   :after (lsp-mode)
+  :ensure t
   :commands (helm-lsp-workspace-symbol)
   :init (define-key lsp-mode-map [remap xref-find-apropos] #'helm-lsp-workspace-symbol))
 
 (use-package lsp-mode
+  :ensure t
   :diminish (lsp-mode . "lsp")
   :bind (:map lsp-mode-map
 	 ("C-c C-d" . lsp-describe-thing-at-point))
@@ -2704,6 +2661,7 @@
 
 ;; debugger
 (use-package dap-mode
+  :ensure t
   :disabled t
   :diminish dap-mode
   :after (lsp-mode)
@@ -2711,6 +2669,7 @@
   :bind (:map lsp-mode-map
 	      ("<f5>" . dap-debug)
 	      ("M-<f5>" . dap-hydra))
+   
   :hook ((dap-mode . dap-ui-mode)
 	 (dap-session-created . (lambda (&_rest) (dap-hydra)))
 	 (dap-terminated . (lambda (&_rest) (dap-hydra/nil))))
@@ -2728,13 +2687,11 @@
 	 :name "LLDB::Run"
 	 :gdbpath "rust-lldb"
 	 :target nil
-	 :cwd nil))
-
-)
+	 :cwd nil)))
 
 (use-package lsp-treemacs
-  :after (lsp-mode treemacs)
   :ensure t
+  :after (lsp-mode treemacs)
   :commands lsp-treemacs-errors-list
   :bind (:map lsp-mode-map
 	      ("M-9" . lsp-treemacs-errors-list)))
@@ -2743,7 +2700,7 @@
   :ensure t
   :commands (treemacs)
   :after (lsp-mode)
-  :init
+  :config
   (setq treemacs-no-load-time-warnings t))
 
 (use-package which-key

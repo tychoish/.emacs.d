@@ -30,6 +30,9 @@
     (package-refresh-contents)
     (package-install 'use-package))
 
+  (eval-when-compile
+    (require 'use-package))
+
   (defvar local-notes-directory (expand-file-name "~/notes")
     "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
 
