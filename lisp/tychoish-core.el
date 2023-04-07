@@ -169,7 +169,10 @@
   :ensure t
   :defer t
   :init
-  (setq modus-themes-diffs 'deuteranopia))
+;  (setq modus-themes-diffs 'deuteranopia)
+  (setq modus-themes-common-palette-overrides
+	'((border-mode-line-active bg-mode-line-active)
+          (border-mode-line-inactive bg-mode-line-inactive))))
 
 (use-package winum
   :ensure t
@@ -208,6 +211,7 @@
 	 ;; helm alternatives for common standard operations
 	 ("C-x C-f" . helm-find-files)
 	 ("C-x d" . helm-find-files)
+	 ("C-x C-b" . helm-mini)
 	 ("C-x b" . helm-buffers-list)
 	 ("C-x C-d" . helm-find-files)
 	 ("C-x f" . helm-for-files)
@@ -379,6 +383,10 @@
     (interactive)
     (tychoish-compile-project "lint" "golangci-lint run --allow-parallel-runners"))
 
+  (defun tychoish-compile-gotests ()
+    (interactive)
+    (tychoish-compile-project "go-test" "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"))
+
   (defun tychoish-compile-project-super-lint ()
     (interactive)
     (let* ((project-directory (if (eq "" (projectile-project-root))
@@ -403,7 +411,6 @@
 			     (file-name-nondirectory (s-chop-suffix "/" project-directory))
 			   (projectile-project-name)))
 	   (project-compile-buffer (concat "*" project-name "-" name "*")))
-
       (if (get-buffer project-compile-buffer)
 	  (switch-to-buffer-other-window (get-buffer project-compile-buffer))
 	(progn
@@ -432,8 +439,10 @@
   :bind-keymap ("C-c p" . projectile-command-map)
   :commands (projectile-mode projectile-project-root)
   :defer 1
+  :init
   :config
-  (setq projectile-indexing-method 'alien)
+  (defun projectile-set-indexing-method () (interactive) 
+	 (setq projectile-indexing-method 'alien))
   (setq projectile-known-projects-file (f-join user-emacs-directory (tychoish-get-config-file-prefix "projectile-bookmarks")))
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
@@ -591,8 +600,10 @@
   (setq desktop-restore-frames nil)
   (setq desktop-buffers-not-to-save
 	(concat "\\("
-		"^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS"
-		"\\|\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
+		"^/usr/lib/go/.*\\|"
+		"^/home.+go/pkg/mod\\|"
+		"^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
+		"\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
 		"\\)$"))
 
   (add-to-list 'desktop-globals-to-save 'register-alist)
@@ -847,7 +858,7 @@
   :ensure t
   :delight "go"
   :bind (:map go-mode-map
-	      ("M-." . godef-jump))
+	      ("C-c M-." . godef-jump))
   :mode (("\\.go$" . go-mode)
 	 ("\\.go" . go-mode)
 	 ("\\.go\\'" . go-mode))
@@ -905,6 +916,7 @@
   :mode "\\.rs$'"
   :config
   (setq rust-format-on-save t)
+  (setq rust-f)
   (add-hook 'rust-mode-hook (lambda () (prettify-symbols-mode)))
   (add-hook 'rust-mode-hook #'lsp))
 
@@ -912,6 +924,7 @@
   :ensure t
   :after (rust-mode)
   :config
+  (setq cargo-process--command-fmt "fmt --all")
   (add-hook 'rust-mode-hook 'cargo-minor-mode))
 
 (use-package rustic
@@ -930,8 +943,8 @@
   :config
   ;; uncomment for less flashiness
   ;; (setq lsp-eldoc-hook nil)
-  ;; (setq lsp-enable-symbol-highlighting nil)
-  ;; (setq lsp-signature-auto-activate nil)
+  (setq lsp-enable-symbol-highlighting nil)
+  (setq lsp-signature-auto-activate nil)
   (setq lsp-signature-render-documentation nil)
 
   (defun rk/rustic-mode-hook ()
@@ -1627,7 +1640,7 @@
 	 ("C-x C-h" . help)
 	 ("C-c f C-0" . opacity-reset)
 	 ("C-c t t d" . disable-theme)
-	 ("C-c t t x" . xterm-mouse-mode-toggle)
+	 ("<f5>" . xterm-mouse-mode-toggle)
 	 ("C-c t t D" . disable-all-themes)
 	 ("C-c t t e" . enable-theme)
 	 ("C-c t t l" . load-theme)
@@ -2570,7 +2583,8 @@
   :ensure t
   :diminish (lsp-mode . "lsp")
   :bind (:map lsp-mode-map
-	 ("C-c C-d" . lsp-describe-thing-at-point))
+	 ("C-c C-d" . lsp-describe-thing-at-point)
+	 ("M-." . lsp-find-definition))
   :hook ((python-mode . lsp-deferred)
 	 (js-mode . lsp-deferred)
 	 (js2-mode . lsp-deferred)
@@ -2598,19 +2612,18 @@
 	(lsp-organize-imports)
 	(lsp-format-buffer)))
 
-  :custom
   ;; what to use when checking on-save. "check" is default, I prefer clippy
-  (lsp-rust-analyzer-cargo-watch-command "check")
-  (lsp-eldoc-render-all t)
-  (lsp-idle-delay 0.6)
+  (setq lsp-rust-analyzer-cargo-watch-command "check")
+  (setq lsp-eldoc-render-all t)
+  (setq lsp-idle-delay 0.6)
   ;; enable / disable the hints as you prefer:
-  (lsp-rust-analyzer-server-display-inlay-hints t)
-  (lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
-  (lsp-rust-analyzer-display-chaining-hints t)
-  (lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
-  (lsp-rust-analyzer-display-closure-return-type-hints t)
-  (lsp-rust-analyzer-display-parameter-hints nil)
-  (lsp-rust-analyzer-display-reborrow-hints nil))
+  (setq lsp-rust-analyzer-server-display-inlay-hints nil)
+  (setq lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
+  (setq lsp-rust-analyzer-display-chaining-hints nil)
+  (setq lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
+  (setq lsp-rust-analyzer-display-closure-return-type-hints nil)
+  (setq lsp-rust-analyzer-display-parameter-hints nil)
+  (setq lsp-rust-analyzer-display-reborrow-hints nil))
 
 (use-package lsp-ui
   :ensure t
