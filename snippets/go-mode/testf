@@ -1,8 +1,8 @@
 # -*- mode: snippet -*-
-# name: test
+# name: testf
 # key: testf
 # contributor : @atotto
 # --
-func $1(t *testing.T) {
-       $0
+func Test$1(t *testing.T) {
+	$0
 }

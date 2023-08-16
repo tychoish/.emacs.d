@@ -1,0 +1,22 @@
+# -*- mode: snippet -*-
+# name: tychoish print debugger
+# key: printdebug
+# contributor : @tychoish
+# --
+var count = &atomic.Int64{}
+
+func tychoish(args ...any) {
+	var calling string
+	var padding string
+	pc, _, _, _ := runtime.Caller(1)
+	fnname := runtime.FuncForPC(pc).Name()
+	parts := strings.Split(fnname, ".")
+	idx := len(parts) - 1
+	if parts[idx] == "func1" {
+		idx--
+	}
+	calling = parts[idx]
+	padding = strings.Repeat(" ", int(math.Max(0, float64(24-len(calling)))))
+
+	fmt.Println(time.Now().UnixMicro(), fmt.Sprintf(" %03d ", count.Add(1)), calling, padding, args)
+}

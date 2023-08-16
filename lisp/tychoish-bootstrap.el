@@ -179,20 +179,21 @@ to change the value of this variable.")
   (disable-all-themes)
   (when (load-theme 'modus-operandi t t)
     (enable-theme 'modus-operandi))
-  (add-to-list 'default-frame-alist '(alpha . 90)))
+  (add-to-list 'default-frame-alist '(alpha . 100)))
 
 (defun tychoish-load-dark-theme ()
   (interactive)
   (disable-all-themes)
   (when (load-theme 'modus-vivendi t t)
     (enable-theme 'modus-vivendi))
-  (add-to-list 'default-frame-alist '(alpha . 85)))
+  (add-to-list 'default-frame-alist '(alpha . 95)))
 
 (defun tychoish-setup-font (name number)
   (interactive "sName: \nNSize: ")
   (let ((new-font-name (concat name "-" (number-to-string number))))
     (face-remap-add-relative new-font-name)
     (add-to-list 'default-frame-alist (cons 'font new-font-name))))
+(setq default-frame-alist nil)
 
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
@@ -215,6 +216,21 @@ The is unique to the system and daemon instance."
 		(with-slow-op-timer (format "loading user config [%s]" fn) 0.10
 		 (require (intern (string-remove-suffix ".el" fn))))))
 	    (directory-files dirname))) t))
+
+(defalias 'kill-buffers-matching-name 'kill-matching-buffers)
+
+(defun kill-buffers-matching-path (regexp &optional internal-too no-ask)
+  "Kill buffers whose name matches the specified REGEXP.
+Ignores buffers whose name starts with a space, unless optional
+prefix argument INTERNAL-TOO is non-nil.  Asks before killing
+each buffer, unless NO-ASK is non-nil."
+  (interactive "sKill buffers visiting a path matching this regular expression: \nP")
+  (dolist (buffer (buffer-list))
+    (let ((name (buffer-file-name buffer)))
+      (when (and name (not (string-equal name ""))
+                 (or internal-too (/= (aref name 0) ?\s))
+                 (string-match regexp name))
+        (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)))))
 
 (defun display-startup-echo-area-message ()  "Called during setup, intentially a noop, which omit the message."  nil)
 (defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup" "")

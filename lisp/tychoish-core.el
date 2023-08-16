@@ -60,7 +60,7 @@
 
 (use-package f
   :ensure t
-  :commands (f-exists? f-join f-glob))
+  :commands (f-exists? f-join f-glob f-expand))
 
 (use-package dash
   :ensure t
@@ -143,7 +143,6 @@
   (advice-add #'doom-modeline--font-height :override #'my-doom-modeline--font-height)
 
   (setq doom-modeline-buffer-file-name-style 'relative-to-project)
-  (setq doom-modeline-height 1)
   (setq doom-modeline-irc t)
   (setq doom-modeline-irc-stylize 'identity)
   (setq doom-modeline-height 0)
@@ -169,10 +168,14 @@
   :ensure t
   :defer t
   :init
-;  (setq modus-themes-diffs 'deuteranopia)
+  (setq modus-themes-diffs 'deuteranopia)
   (setq modus-themes-common-palette-overrides
 	'((border-mode-line-active bg-mode-line-active)
-          (border-mode-line-inactive bg-mode-line-inactive))))
+	  (border-mode-line-inactive bg-mode-line-inactive))))
+
+(use-package modus-themes-exporter
+  :after modus-themes
+  :commands (modus-themes-exporter-export))
 
 (use-package winum
   :ensure t
@@ -340,6 +343,8 @@
   :bind (("C-c r g" . tychoish-rg)
 	 ("C-c r p" . tychoish-rg-repo)
 	 ("C-c r m" . tychoish-find-merges))
+  :init
+  (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   :config
   (defun tychoish-rg (regexp)
     (interactive (list (read-from-minibuffer "ripgrep for: " (thing-at-point 'symbol))))
@@ -351,7 +356,6 @@
     (interactive)
     (ripgrep-regexp "^(=======$|<<<<<<<|>>>>>>>)" (projectile-project-root))))
 
-
 (use-package helm-c-yasnippet
   :ensure t
   :after (yasnippet helm)
@@ -360,7 +364,8 @@
 
 (use-package compile
   :functions (tychoish-uniq-compile-buffer)
-  :commands (tychoish-compile-project-build
+  :commands (compile
+	     tychoish-compile-project-build
 	     tychoish-compile-project-golang-lint
 	     tychoish-compile-project-super-lint
 	     tychoish-compile-project-build-tests)
@@ -370,6 +375,15 @@
   :config
   (setq compilation-ask-about-save nil)
   (setq compilation-scroll-output t)
+
+  (defun colorize-compilation-buffer ()
+    (toggle-read-only)
+    (ansi-color-apply-on-region compilation-filter-start (point))
+    (toggle-read-only))
+
+  (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
+
+  (define-key compilation-mode-map (kbd "C") 'compile)
 
   (defun tychoish-compile-project-build ()
     (interactive)
@@ -441,7 +455,7 @@
   :defer 1
   :init
   :config
-  (defun projectile-set-indexing-method () (interactive) 
+  (defun projectile-set-indexing-method () (interactive)
 	 (setq projectile-indexing-method 'alien))
   (setq projectile-known-projects-file (f-join user-emacs-directory (tychoish-get-config-file-prefix "projectile-bookmarks")))
   (defun tychoish-projectile-modeline-string ()
@@ -868,7 +882,7 @@
 
   (setq local-go-bin (concat (getenv "GOPATH") "/bin"))
   (setq exec-path (cons local-go-bin exec-path))
-  (setenv "PATH" (format "%s:%s" local-go-bin (getenv "PATH")))
+  (setenv "PATH" (format "%s:%s" (getenv "PATH") local-go-bin ))
   (setenv "GO111MODULE" "auto")
   (add-to-list 'exec-path local-go-bin)
 
@@ -1120,7 +1134,7 @@
 (use-package python-mode
   :ensure t
   :delight "py"
-  :mode ("\\.py\\'" "\\.py3\\'" "SConstruct" "SConscript")
+  :mode ("\\.py\\'" "\\.py3\\'" "SConstruct" "SConscript" "Tiltfile")
   :after (tychoish-editing)
   :bind (:map python-mode-map
 	      ("M-<right>" . balle-python-shift-right)
@@ -1245,19 +1259,6 @@
 (use-package ninja-mode
   :ensure t
   :mode "\\.ninja\\'")
-
-(use-package compile
-  :ensure t
-  :commands (compile)
-  :init
-  (defun colorize-compilation-buffer ()
-    (toggle-read-only)
-    (ansi-color-apply-on-region compilation-filter-start (point))
-    (toggle-read-only))
-
-  (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
-  :config
-  (define-key compilation-mode-map (kbd "C") 'compile))
 
 (use-package slime
   :ensure t
@@ -1801,6 +1802,7 @@
   (global-set-key (kbd "C-x C-u t") 'upcase-initials-region)
   (global-set-key (kbd "C-x C-u r") 'upcase-region)
   (global-set-key (kbd "C-x C-u w") 'upcase-word)
+  (global-set-key (kbd "C-c d k") 'delete-region)
 
   (global-set-key (kbd "C-x l") 'goto-line)
   (global-set-key (kbd "C-c C-f") 'set-fill-column)
@@ -2317,7 +2319,6 @@
 	     (title (if (string-match-p (concat "^" nickname) channel)
 			nickname
 		      (concat nickname " (" channel ")"))))
-
       (alert msg :title title))))
 
   (add-hook 'ercn-notify-hook 'do-erc-notify))
@@ -2538,6 +2539,43 @@
   :ensure t
   :after (erc))
 
+(use-package telega
+  :ensure t
+  :defer t
+  :commands (telega)
+  :init
+  (define-key global-map (kbd "C-c v") telega-prefix-map)
+  (define-key global-map (kbd "C-c v v") 'telega)
+  :config
+  (set-fontset-font t 'unicode "Symbola" nil 'append)
+
+  (require 'telega-mnz)
+  (require 'telega-alert)
+  (telega-alert-mode 1)
+  
+  (setq telega-use-images t)
+  (setq telega-chat-fill-column 72)
+  (setq telega-chat-input-markups '("markdown2" "org" nil))
+  (setq telega-server-libs-prefix "/usr/local/include/td")
+  (setq telega-completing-read-function 'helm--completing-read-default)
+  (setq telega-use-tracking-for '(or unmuted mention))
+
+  (define-key telega-prefix-map (kbd "f") telega-chatbuf-fastnav-map)
+  (define-key telega-prefix-map (kbd "F") 'telega-buffer-file-send)
+  (define-key telega-prefix-map (kbd "r") 'telega-root-fastnav-map)
+
+  (add-hook 'telega-load-hook 'telega-mode-line-mode)
+  (add-hook 'telega-chat-mode-hook 'visual-line-mode)
+  (add-hook 'telega-load-hook 'global-telega-mnz-mode))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; System Configuration
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (use-package pkgbuild-mode
   :ensure t
   :mode ("/PKGBUILD$"))
@@ -2682,7 +2720,7 @@
   :bind (:map lsp-mode-map
 	      ("<f5>" . dap-debug)
 	      ("M-<f5>" . dap-hydra))
-   
+
   :hook ((dap-mode . dap-ui-mode)
 	 (dap-session-created . (lambda (&_rest) (dap-hydra)))
 	 (dap-terminated . (lambda (&_rest) (dap-hydra/nil))))

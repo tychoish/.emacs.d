@@ -52,3 +52,4 @@
 
 (provide 'init)
 ;;; init.el ends here
+(put 'magit-diff-edit-hunk-commit 'disabled nil)
