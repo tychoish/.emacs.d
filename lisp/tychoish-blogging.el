@@ -47,8 +47,9 @@
   "Turn a string, S, into a slug for a blog post filename."
   (replace-regexp-in-string
    " " "-" (downcase
-	    (replace-regexp-in-string
-	     "[^A-Za-z0-9 ]" "" s))))
+	    (string-clean-whitespace
+	     (replace-regexp-in-string
+	      "[^A-Za-z0-9 ]" "" s)))))
 
 (defun tychoish-blog-push ()
   "Run 'make push' in a compile buffer for the project."
@@ -71,11 +72,29 @@
 	(find-file draft-fn)
       (progn
 	(find-file draft-fn)
-	(insert title)
+	(yas-expand-snippet
+	 (yas-lookup-snippet "hugo" 'rst-mode t) nil nil
+	 (list '(post title)))
 	(end-of-buffer)
 	(whitespace-cleanup)
 	(insert "\n")))
     (message "working on post: %s" draft-fn)))
+
+(defun tychoish-create-note-file (title)
+  "Create a new file for a post of with the specified TITLE."
+  (interactive "sName: ")
+  (let* ((slug (make-filename-slug title))
+	 (datetime (format-time-string "%Y-%02m-%02d"))
+	 (draft-fn (f-join tychoish-project-note-file (concat datetime "." slug ".md"))))
+    (if (file-exists-p draft-fn)
+	(find-file draft-fn)
+      (progn
+	(find-file draft-fn)
+	(insert (concat "# " title))
+	(end-of-buffer)
+	(whitespace-cleanup)
+	(insert "\n")))
+    (message "new post: %s" draft-fn)))
 
 (defun tychoish-blog-publish-post ()
   "Move the blog post in the current buffer to the publication location.

@@ -120,13 +120,16 @@
 
     (doom-modeline-mode 1)
 
-    (delight 'emacs-lisp-mode "elisp")
+    (delight 'emacs-lisp-mode "el")
     (delight 'fundamental-mode "fund")
-    (diminish 'auto-fill-mode "afm")
+
+    (diminish 'helm-mode)
+    (diminish 'abbrev-mode)
+    (diminish 'org-indent-mode)
+
+    (diminish 'auto-fill-function "afm")
     (diminish 'overwrite-mode "om")
     (diminish 'refill-mode "rf")
-    (diminish 'org-indent-mode)
-    (diminish 'auto-fill-mode "afm")
     (diminish 'visual-line-mode "wr"))
 
   (defvar *tychoish-modeline-icon-state* nil)
@@ -190,6 +193,7 @@
 (use-package helm
   :ensure t
   :after (tychoish-bootstrap)
+  :commands (helm-mode)
   :bind (("C-c M-s" . helm-multi-swoop)
 	 ("C-x M-s" . helm-multi-swoop-all)
 	 ("C-c o s" . helm-multi-swoop-org)
@@ -205,23 +209,33 @@
 	 ("C-c h r" . helm-recentf)
 	 ("C-c h w" . helm-google-suggest)
 	 ("C-c h s" . helm-swoop)
+	 ("C-c h o" . helm-occur)
+	 ("C-c h p" . helm-browse-project)
 
-	 ("M-p" . helm-browse-project)
+	 ;; defined elsewhere:
+	 ;; ("C-c h c" . helm-company)
+	 ;; ("C-c h b" . helm-make-projectile)
+	 ;; ("C-c h g" .'helm-go-package)
+	 ;; ("C-c h c" . helm-company)
+	 ;; ("C-c h f" . 'helm-flycheck)
+
+	 ;; helm-native developer operations
 	 ("M-." . helm-etags-select)
 	 ("C-x r h" . helm-register)
-	 ("C-x h" . helm-mini)
+	 ("M-y" . helm-show-kill-ring)
 
 	 ;; helm alternatives for common standard operations
 	 ("C-x C-f" . helm-find-files)
-	 ("C-x d" . helm-find-files)
-	 ("C-x C-b" . helm-mini)
-	 ("C-x b" . helm-buffers-list)
-	 ("C-x C-d" . helm-find-files)
 	 ("C-x f" . helm-for-files)
-	 ("M-x" . helm-M-x)
-	 ("M-y" . helm-show-kill-ring)
+	 ("C-x C-d" . helm-browse-project)
+	 ("C-x d" . helm-browse-project)
 
-	 ;; I've had these keybindings as alternates for M-x forever...
+	 ;; change buffers; mini is
+	 ("C-x b" . helm-mini)
+	 ("C-x C-b" . helm-mini)
+
+	 ;; command interface
+	 ("M-x" . helm-M-x)
 	 ("C-x m" . helm-M-x)
 	 ("C-x C-m" . helm-M-x)
 
@@ -232,29 +246,48 @@
   (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold)
   (helm-autoresize-mode 1)
 
-  (setq history-length 100)
   (setq history-delete-duplicates t)
-  (setq helm-ff-keep-cached-candidates "local")
-  (setq helm-ff-refresh-cache-delay 300)
-  (setq helm-ff-cache-mode-max-idle-time 300)
-  (setq helm-ff-keep-cached-candidates nil)
-  (setq helm-M-x-fuzzy-match nil)
+  (setq history-length 100)
+
   (setq helm-autoresize-max-height 40)
   (setq helm-autoresize-min-height 20)
   (setq helm-autoresize-mode nil)
-  (setq helm-c-adaptive-sorting t)
   (setq helm-c-adaptive-history-file (tychoish-get-config-file-path "helm-c-adaptive-history"))
+  (setq helm-c-adaptive-sorting t)
   (setq helm-c-source-kill-ring '())
   (setq helm-candidate-number-limit 100)
   (setq helm-case-fold-search t)
   (setq helm-display-header-line nil)
+  (setq helm-ff-cache-mode-max-idle-time 300)
+  (setq helm-ff-keep-cached-candidates "local")
+  (setq helm-ff-keep-cached-candidates nil)
+  (setq helm-ff-refresh-cache-delay 300)
+  (setq helm-grep-ag-command "rg --color=always --colors 'match:fg:black' --colors 'match:bg:yellow' --smart-case --no-heading --line-number %s %s %s")
+  (setq helm-grep-ag-pipe-cmd-switches '("--colors 'match:fg:black'" "--colors 'match:bg:yellow'"))
   (setq helm-input-idle-delay 0)
   (setq helm-man-or-woman-function 'woman)
+  (setq helm-mode-fuzzy-match nil)
   (setq helm-split-window-in-side-p t))
+
+(use-package helm-company
+  :ensure t
+  :after (helm company)
+  :bind (("C-c h c" . helm-company))
+  :commands (helm-company)
+  :init
+  (define-key company-mode-map (kbd "C-,") 'helm-company)
+  (define-key company-active-map (kbd "C-,") 'helm-company))
+
+(use-package helm-flycheck
+  :ensure t
+  :after (helm flycheck)
+  :commands (helm-flycheck)
+  :bind (("C-c f d" . helm-flycheck)
+	 ("C-c h f" . 'helm-flycheck)))
 
 (use-package helm-make
   :ensure t
-  :bind (("C-c h c" . helm-make-projectile))
+  :bind (("C-c h b" . helm-make-projectile))
   :config
   (setq helm-make-named-buffer t)
   (setq helm-make-fuzzy-matching t)
@@ -277,29 +310,6 @@
   :ensure t
   :bind (("C-c w o" . helm-eww)))
 
-(use-package eww
-  :ensure t
-  :bind (("C-c w d" . browse-url-generic)
-	 ("C-c w e" . browse-url)
-	 ("C-c w f" . browse-url-firefox)
-	 ("C-c w c" . browse-url-chromium)
-	 ("C-c w g" . eww-search-words))
-  :init
-  (setq browse-url-browser-function 'eww-browse-url)
-  (setq browse-url-generic-program "chromium")
-  (setq shr-color-visible-luminance-min 80)
-  (setq shr-use-colors nil)
-  (setq shr-use-fonts nil)
-  :config
-  (setq eww-search-prefix "https://www.google.com/search?q="))
-
-(use-package ace-link
-  :ensure t
-  :commands (ace-link)
-  :bind (("C-c t f" . ace-link))
-  :config
-  (ace-link-setup-default))
-
 (use-package helm-projectile
   :ensure t
   :after (projectile helm)
@@ -320,6 +330,13 @@
 	 ("C-c a b" . helm-do-ag-buffers)
 	 ("C-c a p" . helm-do-ag-project-root)
 	 ("C-c a s" . helm-do-ag)))
+
+
+(use-package helm-c-yasnippet
+  :ensure t
+  :after (yasnippet helm)
+  :init
+  (setq helm-yas-space-match-any-greedy t))
 
 (use-package helm-rg
   :ensure t
@@ -356,11 +373,28 @@
     (interactive)
     (ripgrep-regexp "^(=======$|<<<<<<<|>>>>>>>)" (projectile-project-root))))
 
-(use-package helm-c-yasnippet
+(use-package eww
   :ensure t
-  :after (yasnippet helm)
+  :bind (("C-c w d" . browse-url-generic)
+	 ("C-c w e" . browse-url)
+	 ("C-c w f" . browse-url-firefox)
+	 ("C-c w c" . browse-url-chromium)
+	 ("C-c w g" . eww-search-words))
   :init
-  (setq helm-yas-space-match-any-greedy t))
+  (setq browse-url-browser-function 'eww-browse-url)
+  (setq browse-url-generic-program "chromium")
+  (setq shr-color-visible-luminance-min 80)
+  (setq shr-use-colors nil)
+  (setq shr-use-fonts nil)
+  :config
+  (setq eww-search-prefix "https://www.google.com/search?q="))
+
+(use-package ace-link
+  :ensure t
+  :commands (ace-link)
+  :bind (("C-c t f" . ace-link))
+  :config
+  (ace-link-setup-default))
 
 (use-package compile
   :functions (tychoish-uniq-compile-buffer)
@@ -373,13 +407,18 @@
 	 ("C-c t l" . tychoish-compile-project-golang-lint)
 	 ("C-c C-t c" . compile))
   :config
+  (defun compile-add-error-syntax (name regexp file line &optional col level)
+    "Register new compilation error syntax."
+    (add-to-list 'compilation-error-regexp-alist-alist (list name regexp file line col level))
+    (add-to-list 'compilation-error-regexp-alist name))
+
+  (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
+
   (setq compilation-ask-about-save nil)
   (setq compilation-scroll-output t)
 
   (defun colorize-compilation-buffer ()
-    (toggle-read-only)
-    (ansi-color-apply-on-region compilation-filter-start (point))
-    (toggle-read-only))
+    (ansi-color-apply-on-region compilation-filter-start (point)))
 
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
 
@@ -473,20 +512,6 @@
 (use-package go-projectile
   :ensure t
   :after (go-mode projectile))
-
-(use-package helm-company
-  :ensure t
-  :after (helm company)
-  :bind (("C-c C-," . helm-company))
-  :commands (helm-company)
-  :init
-  (define-key company-mode-map (kbd "C-,") 'helm-company)
-  (define-key company-active-map (kbd "C-,") 'helm-company))
-
-(use-package helm-flycheck
-  :ensure t
-  :after (helm flycheck)
-  :config (define-key flycheck-mode-map (kbd "C-c f h") 'helm-flycheck))
 
 (use-package wgrep
   :ensure t
@@ -614,11 +639,16 @@
   (setq desktop-restore-frames nil)
   (setq desktop-buffers-not-to-save
 	(concat "\\("
-		"^/usr/lib/go/.*\\|"
-		"^/home.+go/pkg/mod\\|"
 		"^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
 		"\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
 		"\\)$"))
+
+  (setq desktop-files-not-to-save
+	(concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
+		"^/usr/lib/go/.*\\|"
+		"^/usr/lib/rustlib/.*\\|"
+		"^/home.+go/pkg/mod\\|"
+		"^/home.+\\.cargo"))
 
   (add-to-list 'desktop-globals-to-save 'register-alist)
   (add-to-list 'desktop-globals-to-save 'file-name-history)
@@ -783,7 +813,7 @@
 
   (add-hook 'markdown-mode-hook 'setup-local-word-complete)
   (add-hook 'rst-mode-hook 'setup-local-word-complete)
-  ;; (add-hook 'message-mode-hook 'setup-local-word-complete)
+  ;(add-hook 'message-mode-hook 'setup-local-word-complete)
   (add-hook 'org-mode-hook 'setup-local-word-complete))
 
 (use-package irony
@@ -821,9 +851,7 @@
   (setq flycheck-idle-change-delay 3)
   (setq flycheck-idle-buffer-switch-delay 2)
   (setq flycheck-checker-error-threshold nil)
-  (setq flycheck-flake8-maximum-line-length 100)
-  (setq flycheck-go-vet-shadow t)
-  (setq flycheck-go-vet-print-functions t))
+  (setq flycheck-flake8-maximum-line-length 100))
 
 (use-package flycheck-aspell
   :ensure t
@@ -854,10 +882,15 @@
 
 (use-package flycheck-golangci-lint
   :ensure t
-  :hook (go-mode . flycheck-golangci-lint-setup)
   :after (go-mode flycheck)
+  :commands (flycheck-golangci-lint-setup)
+  :init
   :config
-  (setq flycheck-golangci-lint-fast nil)
+  (setq flycheck-go-vet-shadow t)
+  (setq flycheck-go-build-install-deps t)
+  (setq flycheck-go-vet-print-functions t)
+
+  (setq flycheck-golangci-lint-fast t)
   (setq flycheck-golangci-lint-tests t))
 
 (use-package flycheck-irony
@@ -925,25 +958,17 @@
   :config
   (substitute-key-definition 'go-import-add 'helm-go-package go-mode-map))
 
-(use-package rust-mode
-  :ensure t
-  :mode "\\.rs$'"
-  :config
-  (setq rust-format-on-save t)
-  (setq rust-f)
-  (add-hook 'rust-mode-hook (lambda () (prettify-symbols-mode)))
-  (add-hook 'rust-mode-hook #'lsp))
-
 (use-package cargo
   :ensure t
-  :after (rust-mode)
+  :after (rustic)
   :config
   (setq cargo-process--command-fmt "fmt --all")
   (add-hook 'rust-mode-hook 'cargo-minor-mode))
 
 (use-package rustic
   :ensure t
-  :after (rust-mode)
+  :after lsp lsp-mode
+  :delight "rs"
   :mode "\\.rs$'"
   :bind (:map rustic-mode-map
 	      ("M-j" . lsp-ui-imenu)
@@ -957,6 +982,7 @@
   :config
   ;; uncomment for less flashiness
   ;; (setq lsp-eldoc-hook nil)
+
   (setq lsp-enable-symbol-highlighting nil)
   (setq lsp-signature-auto-activate nil)
   (setq lsp-signature-render-documentation nil)
@@ -969,7 +995,7 @@
     (when buffer-file-name
       (setq-local buffer-save-without-query t)))
 
-  (seq lsp-rust-all-features t)
+  (setq lsp-rust-all-features t)
   ;; comment to disable rustfmt on save
   (setq rustic-format-on-save t)
   (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
@@ -1069,6 +1095,12 @@
   :config
   (setq makefile-electric-keys t))
 
+(use-package just-mode
+  :ensure t
+  :mode (("justfile" . just-mode)
+	 ("justfile" . just-mode)
+	 ("\\.just%" . just-mode)))
+
 (use-package js2-mode
   :ensure t
   :mode ("\\.js$" "\\.json$")
@@ -1117,6 +1149,7 @@
     (let ((cmd-str (format "%s -e -u -f %s/TAGS %s -R %s" path-to-ctags dir-name dir-name (directory-file-name dir-name))))
       (message cmd-str)
       (shell-command cmd-str)))
+
   (diminish 'ctags-auto-update-mode)
   (add-hook 'c-mode-common-hook  'turn-on-ctags-auto-update-mode)
   (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
@@ -1208,6 +1241,18 @@
   (venv-initialize-interactive-shells)
   (venv-initialize-eshell))
 
+(use-package eshell
+  :commands (eshell)
+  :after (helm)
+  :init
+  (add-hook 'eshell-mode-hook
+	    (lambda ()
+	      (eshell-cmpl-initialize)
+	      (define-key eshell-mode-map (kbd "M-p") 'helm-eshell-history)
+	      (define-key eshell-mode-map [remap eshell-pcomplete] 'helm-esh-pcomplete)
+	      (define-key eshell-mode-map (kbd "M-s f") 'helm-eshell-prompts-all)
+	      (define-key eshell-mode-map (kbd "M-r") 'helm-eshell-history))))
+
 (use-package web-mode
   :ensure t
   :mode (("\\.html$" . web-mode)
@@ -1264,7 +1309,7 @@
   :ensure t
   :after (f tychoish-bootstrap)
   :commands (slime)
-  :bind (("C-c h l" . hyperspec-lookup))
+  :bind (("C-c d c" . hyperspec-lookup))
   :config
   (setq ls-lisp-dirs-first t)
   (setq quicklisp-path (expand-file-name "~/quicklisp"))
@@ -1319,8 +1364,9 @@
   :bind (("C-c o a" . org-agenda)
 	 ("C-c o l s" . org-store-link)
 	 ("C-c o l i" . org-insert-link)
-	 ("C-c o j" . org-capture)
+	 ("C-c o j" . helm-org-capture-templates)
 	 ("C-c o c" . org-capture)
+	 ("C-c o h a" . helm-org-agenda-files-headings)
 	 ("C-c o k l" . org-capture-goto-last-stored)
 	 ("C-c o k t" . org-capture-goto-target)
 	 ("C-c o k w" . org-capture-refile)
@@ -1332,11 +1378,18 @@
 	      ("C-c o l a o" . org-agenda-open-link)
 	      ("C-c o t" . org-set-tags-command)
 	      ("C-c o p" . org-insert-property-drawer)
-	      ("C-c o d" . org-date)
-	      ("C-c o s" . org-archive-subtree)
+	      ("C-c o d d" . org-date)
+	      ("C-c o d n" . tychoish-org-date-now)
+	      ("C-c o a s" . org-archive-to-archive-sibling)
+	      ("C-c o a e" . org-cycle-forced-archive)
+	      ("C-c o a d" . tychoish-org-mark-done-and-archive)
+	      ("C-c o a f" . org-archive-subtree)
 	      ("C-c o f" . org-archive-set-tag)
 	      ("C-c o n" . org-narrow-to-subtree)
 	      ("C-c o b t" . org-ctags-create-tags)
+	      ("C-c o h c" . helm-capture-templates)
+	      ("C-c o h p" . helm-org-parent-headings)
+	      ("C-c o h b" . helm-org-in-buffer-headings)
 	      ("M-TAB" . org-cycle)
 	      ("C-c o r c" . org-bibtex-create)
 	      ("C-c o r r" . org-bibtex-create-in-current-entry)
@@ -1345,22 +1398,34 @@
 	      ("C-c o r v a" . org-bibtex-check-all)
 	      ("C-c o r s" . org-bibtex-search)
 	      ("C-c o r e" . org-bibtex)
-	      ("C-c o h p" . outline-previous-visable-heading)
-	      ("C-c C-p" . set-mark-command))
+	      ("C-c C-p" . set-mark-command)
+	      ("C-c C-;" . flyspell-correct-wrapper)
+	      ("C-c ;" . flyspell-correct-wrapper))
   :init
   (setq org-directory (concat local-notes-directory "/org"))
   (setq org-agenda-files (list org-directory))
+  (setq org-log-into-drawer t)
+  (defun tychoish-org-date-now ()
+    (interactive)
+    (format-time-string "<%Y-%02m-%02d %02H:%02M:%02S %Z>" (time-stamp)))
 
   (defvar org-odt-data-dir "~/.emacs.d/org/etc")
+
+  (defun tychoish-org-mark-done-and-archive ()
+    "mark done and move to completed archive sibling"
+    (interactive)
+    (org-todo 'done)
+    (let ((org-archive-sibling-heading "Completed"))
+      (org-archive-to-archive-sibling)))
 
   (defun org-set-weekday-of-timestamp ()
     "Check if cursor is within a timestamp and compute weekday from numeric date"
     (interactive)
     (when (org-at-timestamp-p t)
       (org-timestamp-change 0 'year)
-      (message "Weekday of timestamp has been adjusted.")
       t))
   (setq org-capture-templates '())
+
   (defun tychoish-add-org-capture-template (prefix-key name)
     "Defines a set of capture mode templates for adding notes and tasks to a file."
     (let ((org-filename (concat org-directory "/" (downcase name) ".org")))
@@ -1368,61 +1433,108 @@
       (when prefix-key
 	(add-to-list 'org-capture-templates `(,prefix-key ,name)))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "r") "routines"))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rd") "Daily Routine"
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "r") ,(concat name " routines")))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "rd") ,(concat name " daily routine")
 					    entry (file+olp ,org-filename "Loops" "Daily")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+1d\")>\n%?" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rw") "Weekly Routine"
+					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+1d\") +1d>\n%?"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "rw") ,(concat name " weekly routine")
 					    entry (file+olp ,org-filename "Loops" "Weekly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+1w\")>\n%?" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rm") "Monthly Routine"
+					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+1w\") +1w>\n%?"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "rm") ,(concat name " monthly routine")
 					    entry (file+olp ,org-filename "Loops" "Weekly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+4w\")>\n%?" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rq") "Quarterly Routine"
+					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+4w\") +4w>\n%?"
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "rq") ,(concat name " quarterly routine")
 					    entry (file+olp ,org-filename "Loops" "Quarterly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+12w\")>\n%?" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "ry") "Yearly Routine"
+					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+12w\") +12w>\n%?"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "ry") ,(concat name " yearly routine")
 					    entry (file+olp ,org-filename "Loops" "Yearly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+52w\")>\n%?" :prepend t))
+					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+52w\") +52w>\n%?"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
 
       ;; journal, for date related content
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "l") "date journal"
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "l") ,(concat name " journal")
 					    entry (file+datetree ,org-filename "Journal")
-					    "* %t\n%?" :prepend t))
+					    "* <%<%Y-%m-%d %H:%M:%S %Z>>\n%?"
+					    :prepend nil
+					    :kill-buffer t
+					    :empty-lines-after 1))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") "notes"))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "nn") "basic notes"
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "nn") ,(concat name " basic notes")
 					    entry (file+headline ,org-filename "Inbox")
-					    "* %?" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "nl") "notes (org-link)"
+					    "* %?"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "nl") ,(concat name " notes (org-link)")
 					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%a" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "nk") "notes (kill buffer)"
+					    "* %?\n%a"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "nk") ,(concat name " notes (kill buffer)")
 					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%c" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "nx") "notes (xbuffer)"
+					    "* %?\n%c"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "nx") ,(concat name " notes (xbuffer)")
 					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%x" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "ns") "notes (selection)"
+					    "* %?\n%x"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "ns") ,(concat name " notes (selection)")
 					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%i" :prepend t))
+					    "* %?\n%i"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") "tasks"))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "tt") "basic tasks"
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "tt") ,(concat name " basic tasks")
 					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "tl") "tasks (org-link)"
+					    "* TODO %?"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "tl") ,(concat name " tasks (org-link)")
 					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%a" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "tk") "tasks (kill buffer)"
+					    "* TODO %?\n%a"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "tk") ,(concat name " tasks (kill buffer)")
 					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%c" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "tx") "tasks (xbuffer)"
+					    "* TODO %?\n%c"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "tx") ,(concat name " tasks (xbuffer)")
 					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%x" :prepend t))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "ts") "tasks (selection)"
+					    "* TODO %?\n%x"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "ts") ,(concat name " tasks (selection)")
 					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%i" :prepend t))))
+					    "* TODO %?\n%i"
+					    :prepend t
+					    :kill-buffer t
+					    :empty-lines-after 1))))
   :config
   (delight 'org-agenda-mode "agenda")
 
@@ -1485,7 +1597,7 @@
 
   (setq org-agenda-include-all-todo t)
   (setq auto-mode-alist (cons '("\\.org$" . org-mode) auto-mode-alist))
-  (setq org-archive-location (concat org-directory "/archive.org::datetree/"))
+  (setq org-archive-location (concat org-directory "/archive/%s::datetree/"))
   (setq org-default-notes-file (concat org-directory "/organizer.org"))
   (setq org-annotate-file-storage-file (concat org-directory "/annotations.org"))
   (setq org-agenda-files (cl-remove-duplicates (append org-agenda-files user-org-directories)))
@@ -1501,16 +1613,15 @@
 		      org-info))
 
   (setq org-agenda-custom-commands
-	'(("b" "Backlog" tags-todo "+backlog|+inbox|TODO=BLOCKED")
-	  ("g" "Groomed" tags-todo "-backlog|+groomed")
+	'(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")
 	  ("c" "Super view"
-	   ((agenda "" ((org-agenda-overriding-header "")
+	   ((agenda "" ((org-agenda-overriding-header "Schedule:")
 			(org-super-agenda-groups
 			 '((:name "Today"
 				  :time-grid t
 				  :date today
 				  :order 1)))))
-	    (alltodo "" ((org-agenda-overriding-header "")
+	    (alltodo "" ((org-agenda-overriding-header "Tasks:")
 			 (org-super-agenda-groups
 			  '((:log t)
 			    (:name "To refile"
@@ -1528,9 +1639,8 @@
 				   :order 7)
 			    (:discard (:not (:todo "TODO")))))))))))
 
-  (setq org-todo-keywords '((sequence "TODO(t)" "|" "DONE(d)")
-			    (sequence "BLOCKED(s)" "BACKLOG(p)" "|" "GONEAWAY(g)" "TRASH(c)")
-			    (sequence "INPROGRESS(w)" "|" "INCOMPLETE(i)")))
+  (setq org-todo-keywords '((sequence "TODO(t)" "|" "DONE(d!)")
+			    (sequence "BLOCKED(s)" "BACKLOG(p)" "INPROGRESS(w)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
 
   (setq org-todo-keyword-faces '(("TODO" . org-warning)
 				 ("INPROGRESS" . "orange")
@@ -1542,7 +1652,6 @@
   (setq org-tag-alist '((:startgroup . nil)
 			  ("inbox" . ?i)
 			  ("backlog" . ?b)
-			  ("groomed" . ?g)
 			(:endgroup . nil)
 			(:startgroup . nil)
 			  ("@desk" . ?d)
@@ -1591,11 +1700,12 @@
   (setq org-footnote-section nil)
   (setq org-goto-interface 'outline-path-completion)
   (setq org-hide-leading-stars t)
-  (setq org-outline-path-complete-in-steps t)
+  (setq org-outline-path-complete-in-steps nil)
   (setq org-provide-todo-statistics t)
   (setq org-refile-allow-creating-parent-nodes 'confirm)
   (setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
   (setq org-refile-use-outline-path 'file)
+  (setq org-completion-use-ido nil)
   (setq org-replace-disputed-keys t)
   (setq org-return-follows-link t)
   (setq org-reverse-note-order t)
@@ -1609,8 +1719,30 @@
   (setq org-agenda-skip-scheduled-if-done t))
 
 ;; (use-package org-mu4e
-:ensure t
+;; :ensure t
 ;;   :after (org mu4e))
+
+(use-package helm-org
+  :ensure t
+  :commands (helm-org-capture-templates
+	     helm-org-in-buffer-heddings
+	     helm-org-agenda-files-headings)
+  :init
+  (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
+  (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
+
+(use-package toc-org
+  :ensure t
+  :after (org)
+  :commands (toc-org-insert-toc)
+  :config
+  (defun tychoish--add-toc-org-op () (save-excursion (toc-org-insert-toc)))
+  (defun tychoish--add-toc-org-hook () (add-hook 'write-contents-functions 'tychoish--add-toc-org-op nil t))
+  (add-hook 'org-mode-hook 'tychoish--add-toc-org-hook))
+
+(use-package ox-gist
+  :ensure t
+  :after (org))
 
 (use-package ox-rst
   :ensure t
@@ -1705,7 +1837,7 @@
   (setq jit-lock-stealth-load 100)
 
   (set-default 'truncate-lines t)
-  (set-face-attribute 'header-line nil :background nil :weight 'bold)
+  ;; (set-face-attribute 'header-line nil :background nil :weight 'bold)
   (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
   (set-fontset-font t 'emoji '("Noto Color Emoji" . "iso10646-1") nil 'prepend)
 
@@ -1738,12 +1870,13 @@
   :after (f)
   :commands (tychoish-blog-insert-date
 	     tychoish-blog-publish-post
-	     tychoish-blog-create-post
+	     tychoish-create-blog-post-file
 	     tychoish-blog-push
+	     tychoish-create-note-file
 	     tychoish-blog-open-drafts-dired)
   :bind (("C-c t b m" . tychoish-blog-insert-date)
 	 ("C-c t b p" . tychoish-blog-publish-post)
-	 ("C-c t b n" . tychoish-blog-create-post)
+	 ("C-c t b n" . tychoish-create-blog-post-file)
 	 ("C-c t b C-p" . tychoish-blog-push)
 	 ("C-c t b d" . tychoish-blog-open-drafts-dired))
   :config
@@ -1809,7 +1942,8 @@
   (global-set-key (kbd "C-c C-p") 'set-mark-command)
   (global-set-key (kbd "C-c c") 'comment-region)
   (global-set-key (kbd "C-c i") 'indent-region)
-  (global-set-key (kbd "C-c ;") 'flyspell-auto-correct-previous-word)
+  (global-set-key (kbd "C-c ;") 'flyspell-correct-wrapper)
+  (global-set-key (kbd "C-c C-;") 'flyspell-correct-wrapper)
   (global-set-key (kbd "C-h") 'backward-kill-word)
   (global-set-key (kbd "C-x C-x") 'exchange-dot-and-mark)
   (global-set-key (kbd "M-<SPC>") 'set-mark-command)
@@ -1843,10 +1977,6 @@
 
   (defalias 'sshra 'ssh-reagent))
 
-(use-package docker-tramp
-  :ensure t
-  :after (docker tramp))
-
 (use-package docker
   :ensure t
   :commands (docker)
@@ -1870,14 +2000,14 @@
 
 (use-package windmove
   :ensure t
-  :bind ((("M-j" . windmove-down)
+  :bind (("M-j" . windmove-down)
 	  ("M-k" . windmove-up)
 	  ("M-h" . windmove-left)
 	  ("M-l" . windmove-right)
 	  ("M-J" . (lambda () (interactive) (enlarge-window 1)))
 	  ("M-K" . (lambda () (interactive) (enlarge-window -1)))
 	  ("M-h" . (lambda () (interactive) (enlarge-window 1 t)))
-	  ("M-l" . (lambda () (interactive) (enlarge-window -1 t)))))
+	  ("M-l" . (lambda () (interactive) (enlarge-window -1 t))))
   :config
   (windmove-default-keybindings))
 
@@ -1906,8 +2036,7 @@
   (setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
   (setq message-citation-line-function 'message-insert-formatted-citation-line)
   (setq message-default-mail-headers "Cc: \nBcc: \n")
-  (setq message-from-style 'angles)
-  (setq message-interactive nil)
+  (setq message-interactive t)
   (setq message-kill-buffer-on-exit nil)
   (setq message-send-mail-function 'message-send-mail-with-sendmail))
 
@@ -1930,62 +2059,70 @@
 	     mu4e-headers-search-bookmark
 	     tychoish-set-up-email)
   :init
-  (setq mc-gpg-user-id (getenv "GPG_KEY_ID"))
-  (setq mu4e-reply-to-address user-mail-address)
-  (setq mu4e-headers-results-limit 1000)
-  (setq completion-ignore-case t)
-  (setq compose-mail-user-agent-warnings nil)
   (setq mail-header-separator "--------------------------")
   (setq mail-imenu-generic-expression
 	'(("Subject"  "^Subject: *\\(.*\\)" 1)
 	  ("Cc"     "^C[Cc]: *\\(.*\\)" 1)
 	  ("To"     "^To: *\\(.*\\)" 1)
 	  ("From"  "^From: *\\(.*\\)" 1)))
+
+
+  (setq completion-ignore-case t)
+  (setq compose-mail-user-agent-warnings nil)
   (setq mail-signature t)
   (setq mail-specify-envelope-from t)
+  (setq mail-user-agent 'mu4e-user-agent)
+  (setq mc-gpg-user-id (getenv "GPG_KEY_ID"))
+  (setq mml2015-sign-with-sender t)
   (setq mu4e-compose-complete-addresses t)
+  (setq mu4e-compose-complete-only-after "2015-01-01")
   (setq mu4e-compose-dont-reply-to-self t)
+  (setq mu4e-compose-format-flowed nil)
   (setq mu4e-compose-keep-self-cc nil)
   (setq mu4e-compose-signature t)
-  (setq mu4e-compose-format-flowed t)
-  (setq mu4e-compose-complete-only-after "2015-01-01")
-  (setq mu4e-maildir-shortcuts nil)
-  (setq mu4e~maildir-list nil)
-  (setq mu4e-headers-include-related nil)
   (setq mu4e-drafts-folder "/drafts")
+  (setq mu4e-headers-include-related nil)
+  (setq mu4e-headers-results-limit 1000)
+  (setq mu4e-maildir-shortcuts nil)
+  (setq mu4e-reply-to-address user-mail-address)
   (setq mu4e-sent-folder "/sent")
   (setq mu4e-trash-folder "/trash")
+  (setq mu4e-user-agent-string nil)
+  (setq mu4e-view-show-images t)
+  (setq mu4e~maildir-list nil)
   (setq sendmail-program "msmtp")
   (setq smtpmail-queue-mail nil)
-  (setq mu4e-view-show-images t)
-  (setq mml2015-sign-with-sender t)
-  (setq mail-user-agent 'mu4e-user-agent)
-  (setq mu4e-user-agent-string nil)
 
-  (add-hook 'mu4e-compose-mode-hook
-	    (lambda ()
-	      "My settings for message composition."
-	      (flush-lines "^\\(> \n\\)*> -- \n\\(\n?> .*\\)*") ;;; Kills quoted sigs.
-	      (not-modified) ;;; We haven't changed the buffer, haven't we? *g*
-	      (message-goto-body) ;;; Jumps to the beginning of the mail text
-	      (setq make-backup-files nil) ;;; No backups necessary.
-	      (setq fill-column 70)
-	      (visual-fill-column-mode 1)
-	      (flyspell-mode 1)))
+  (defun tychoish-mu4e-compose-mode-hook-op ()
+    "My settings for message composition."
+    (flush-lines "^\\(> \n\\)*> -- \n\\(\n?> .*\\)*") ;;; Kills quoted sigs.
+    (not-modified) ;;; We haven't changed the buffer, haven't we? *g*
+    (message-goto-body) ;;; Jumps to the beginning of the mail text
+    (setq make-backup-files nil) ;;; No backups necessary.
+    (use-hard-newlines 1 'always)
+    (auto-fill-mode 1)
+    (visual-line-mode 0)
+    (visual-fill-column-mode 0)
+    (setq message-fill-column 66)
+    (setq set-fill-column 66)
+    (flyspell-mode 1))
+
+  (add-hook 'mu4e-compose-mode-hook 'tychoish-mu4e-compose-mode-hook-op)
 
   (defun tychoish-add-standard-mail-bookmarks ()
     "add a standard/generic list of bookmarks"
     (add-to-list 'mu4e-bookmarks '("mime:image/*" "Messages with images" ?p))
     (add-to-list 'mu4e-bookmarks '("date:today..now" "Today's messages" ?t))
     (add-to-list 'mu4e-bookmarks '("date:7d..now" "This Week's messages" ?w))
-    (add-to-list 'mu4e-bookmarks '("m:/inbox AND flag:seen" "Inbox (seen)" ?s))
     (add-to-list 'mu4e-bookmarks '("m:/inbox" "Inbox (all)" ?i))
-    (add-to-list 'mu4e-bookmarks '("m:/rss.*" "RSS Read" ?R))
     (add-to-list 'mu4e-bookmarks '("m:/rss.*  AND flag:unread" "RSS Unread" ?r))
     (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)" "all unread message" ?a))
     (add-to-list 'mu4e-bookmarks '("flag:unread AND NOT flag:trashed AND NOT m:/rss.*" "Unread messages (no RSS)" ?u))
     (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (m:/rss.* OR m:/sent OR flag:trashed OR m:/trash)"
-				   "to read/process queue" ?q)))
+				   "to read/process queue" ?q))
+    (add-to-list 'mu4e-bookmarks '("(m:/inbox OR m:/prof) AND flag:unread" "unread primary queues to file"?f))
+    (add-to-list 'mu4e-bookmarks '("(NOT m:/inbox AND NOT m:/prof) AND flag:unread" "all sorted email" ?s)))
+
 
   :config
   (defun tychoish-set-up-email (maildir name address)
@@ -1998,7 +2135,7 @@
 
     (setq user-mail-address address)
     (setq user-full-name name)
-    (setq mu4e-reply-to-address address)
+    (setq mu4e-compose-reply-to-address address)
     (setq smtpmail-queue-dir (f-join maildir "queue/cur"))
     (setq message-signature-file (f-join maildir "tools" "signatures" address))
     (setq mail-host-address (s-replace-regexp ".*@" "" address))
@@ -2010,7 +2147,7 @@
   (defun tychoish-change-email-body (name address)
     "change an email address on an extant mail buffer"
     (when (equal major-mode 'mu4e-compose-mode)
-      (beginning-of-buffer)
+      (goto-char (point-min))
       (let ((new-from (concat "From: " name " <" address ">")))
 	(while (re-search-forward "^From:.*$" nil t 1)
 	  (replace-match new-from nil nil)))))
@@ -2035,18 +2172,6 @@
 	  (progn  ;; no empty line? then prepend one
 	    (goto-char (point-max))
 	    (insert "\n" sepa)))))))
-
-(use-package messages-are-flowing
-  :ensure t
-  :after (mu4e)
-  :config
-  (defun messages-are-flowing-use-and-mark-hard-newlines ()
-    (interactive)
-    (use-hard-newlines 1 'always)
-    (add-hook 'after-change-functions 'messages-are-flowing--mark-hard-newlines nil t))
-
-  (setq messages-are-flowing-newline-marker "◀")
-  (add-hook 'message-mode-hook 'messages-are-flowing-use-and-mark-hard-newlines))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2179,7 +2304,8 @@
 (use-package flyspell-correct-helm
   :ensure t
   :after (flyspell)
-  :bind ("C-;" . flyspell-correct-wrapper)
+  :bind
+  ("C-;" . flyspell-correct-wrapper)
   :config
   (setq flyspell-correct-interface #'flyspell-correct-helm))
 
@@ -2306,7 +2432,6 @@
   (setq ercn-notify-rules '((current-nick . all)
 			    (query-buffer . all)
 			    (message . ("#unclear" "#general"))))
-
   (defun do-erc-notify (nickname message)
     "Hook implementation of a notification."
     (catch 'early-return
@@ -2541,24 +2666,37 @@
 
 (use-package telega
   :ensure t
-  :defer t
   :commands (telega)
-  :init
-  (define-key global-map (kbd "C-c v") telega-prefix-map)
-  (define-key global-map (kbd "C-c v v") 'telega)
+  :bind-keymap (("C-c v" . telega-prefix-map))
+  :bind (
+	 :map telega-prefix-map
+	 ("v" . telega))
   :config
   (set-fontset-font t 'unicode "Symbola" nil 'append)
+
+  (defun cypher/telega-chat-mode ()
+  (set (make-local-variable 'company-backends)
+       (append (list telega-emoji-company-backend
+		     'telega-company-emoji
+		     'telega-company-markdown-precode
+		     'telega-company-username
+		   'telega-company-hashtag);;
+	     (when (telega-chat-bot-p telega-chatbuf--chat);;
+	       '(telega-company-botcmd))));;
+  (company-mode 1))
+
 
   (require 'telega-mnz)
   (require 'telega-alert)
   (telega-alert-mode 1)
-  
+
   (setq telega-use-images t)
   (setq telega-chat-fill-column 72)
-  (setq telega-chat-input-markups '("markdown2" "org" nil))
+  (setq telega-chat-input-markups '("markdown2"))
   (setq telega-server-libs-prefix "/usr/local/include/td")
   (setq telega-completing-read-function 'helm--completing-read-default)
   (setq telega-use-tracking-for '(or unmuted mention))
+  (setq telega-markdown2-backquotes-as-precode t)
 
   (define-key telega-prefix-map (kbd "f") telega-chatbuf-fastnav-map)
   (define-key telega-prefix-map (kbd "F") 'telega-buffer-file-send)
@@ -2566,9 +2704,12 @@
 
   (add-hook 'telega-load-hook 'telega-mode-line-mode)
   (add-hook 'telega-chat-mode-hook 'visual-line-mode)
+  (add-hook 'telega-chat-mode-hook 'cypher/telega-chat-mode)
   (add-hook 'telega-load-hook 'global-telega-mnz-mode))
 
-
+(use-package tracking
+  :ensure t
+  :after (telega erc))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2655,11 +2796,11 @@
   (setq lsp-eldoc-render-all t)
   (setq lsp-idle-delay 0.6)
   ;; enable / disable the hints as you prefer:
-  (setq lsp-rust-analyzer-server-display-inlay-hints nil)
+  (setq lsp-rust-analyzer-server-display-inlay-hints t)
   (setq lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
-  (setq lsp-rust-analyzer-display-chaining-hints nil)
-  (setq lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
-  (setq lsp-rust-analyzer-display-closure-return-type-hints nil)
+  (setq lsp-rust-analyzer-display-chaining-hints t)
+  (setq lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names t)
+  (setq lsp-rust-analyzer-display-closure-return-type-hints t)
   (setq lsp-rust-analyzer-display-parameter-hints nil)
   (setq lsp-rust-analyzer-display-reborrow-hints nil))
 
@@ -2671,26 +2812,26 @@
 	      ([remap xref-find-definitions] . lsp-ui-peek-find-definitions)
 	      ([remap xref-find-references] . lsp-ui-peek-find-references)
 	      ("C-c u" . lsp-ui-imenu))
-  :init (setq lsp-ui-doc-enable t
-	      lsp-ui-doc-use-webkit nil
+  :init (setq lsp-ui-doc-enable nil
+	      lsp-ui-doc-use-webkit t
 	      lsp-ui-doc-header nil
 	      lsp-ui-doc-delay 0.2
 	      lsp-ui-doc-include-signature t
 	      lsp-ui-doc-alignment 'at-point
 	      lsp-ui-doc-use-childframe nil
 	      lsp-ui-doc-border (face-foreground 'default)
-	      lsp-ui-peek-enable t
+	      lsp-ui-peek-enable nil
 	      lsp-ui-peek-show-directory t
-	      lsp-ui-sideline-delay 10
+	      lsp-ui-sideline-delay 10                      ;; seconds
 	      lsp-ui-sideline-update-mode 'point
-	      lsp-ui-sideline-enable t
+	      lsp-ui-sideline-enable nil
 	      lsp-ui-sideline-show-code-actions t
 	      lsp-ui-sideline-show-hover t
 	      lsp-ui-sideline-ignore-duplicate t
 	      lsp-gopls-use-placeholders nil)
   :config
   (setq lsp-completion-provider :capf)
-  (setq lsp-idle-delay 0.500)
+  (setq lsp-idle-delay 1)
   (setq lsp-print-performance t)
 
   (add-to-list 'lsp-ui-doc-frame-parameters '(right-fringe . 8))

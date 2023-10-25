@@ -1,7 +1,7 @@
 # name: hugo
 # --
 ---
-title: $1
+title: ${1:name}
 tags: [$2]
 categories: [$3]
 date: `(format-time-string "%Y-%m-%d")`

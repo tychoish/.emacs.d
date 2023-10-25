@@ -112,6 +112,7 @@ to change the value of this variable.")
     (add-to-list 'default-frame-alist '(menu-bar-lines . 0))
     (let ((gc-cons-threshold 800000))
       (session-initialize)
+      (helm-mode 1)
       (recentf-mode 1)
       (desktop-save-mode 1)
       (desktop-read))))
@@ -254,7 +255,6 @@ each buffer, unless NO-ASK is non-nil."
 
 (advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
 (advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
-
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
