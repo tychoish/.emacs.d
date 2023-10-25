@@ -1361,7 +1361,7 @@
   :delight "org"
   :ensure org-contrib
   :commands (tychoish-add-org-capture-template org-save-all-org-buffers)
-  :bind (("C-c o a" . org-agenda)
+  :bind (("C-c o t a" . org-agenda)
 	 ("C-c o l s" . org-store-link)
 	 ("C-c o l i" . org-insert-link)
 	 ("C-c o j" . helm-org-capture-templates)
