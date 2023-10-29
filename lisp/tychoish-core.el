@@ -703,6 +703,7 @@
   (setq vc-handled-backends nil)
 
   :config
+  (put 'magit-diff-edit-hunk-commit 'disabled nil)
   (setq magit-auto-revert-mode nil)
   (add-to-list 'magit-status-sections-hook 'magit-insert-modules t)
   (setq magit-module-sections-nested nil))

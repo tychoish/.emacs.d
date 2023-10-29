@@ -46,9 +46,7 @@
     :config
     (tychoish-setup-global-modes)
     (tychoish-setup-modeline)
-    (tychoish-setup-user-local-config)
-    ))
+    (tychoish-setup-user-local-config)))
 
 (provide 'init)
 ;;; init.el ends here
-(put 'magit-diff-edit-hunk-commit 'disabled nil)
