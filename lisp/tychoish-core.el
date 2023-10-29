@@ -219,7 +219,6 @@
 	 ;; most interesting helm menus are under one prefix
 	 ("C-c h a" . helm-apropos)
 	 ("C-c h d" . helm-info)
-	 ("C-c h h" . helm-mini)
 	 ("C-c h i" . helm-imenu)
 	 ("C-c h k" . helm-regist)
 	 ("C-c h l" . helm-locate)
@@ -234,10 +233,12 @@
 	 ("C-c h w" . helm-buffers-list)
 	 ("C-c h y" . helm-show-kill-ring)
 
-	 ;; defined elsewhere:
+	 ;; defined elsewhered :
 	 ;; ("C-c h c" . helm-company)
 	 ;; ("C-c h b" . helm-make-projectile)
+	 ;; ("C-c h n" . helm-make-projectile)
 	 ;; ("C-c h f" . 'helm-flycheck)
+	 ;; ("C-c h e" . 'helm-flyspell-correct)
 
 	 ;; helm-native developer operations
 	 ("C-x r h" . helm-register)
@@ -265,7 +266,7 @@
   (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold :background 'unspecified)
   (helm-autoresize-mode 1)
   (helm-mode 1)
-  
+
   (setq history-delete-duplicates t)
   (setq history-length 100)
 
@@ -308,7 +309,8 @@
 
 (use-package helm-make
   :ensure t
-  :bind (("C-c h b" . helm-make-projectile))
+  :bind (("C-c h b" . helm-make-projectile)
+	 ("C-c h n" . helm-make))
   :config
   (setq helm-make-named-buffer t)
   (setq helm-make-fuzzy-matching t)
@@ -409,13 +411,6 @@
   (setq shr-use-fonts nil)
   :config
   (setq eww-search-prefix "https://www.google.com/search?q="))
-
-(use-package ace-link
-  :ensure t
-  :commands (ace-link)
-  :bind (("C-c t f" . ace-link))
-  :config
-  (ace-link-setup-default))
 
 (use-package compile
   :functions (tychoish-uniq-compile-buffer)
@@ -529,10 +524,6 @@
   (setq projectile-completion-system 'helm)
   (setq projectile-require-project-root 'prompt)
   (projectile-mode +1))
-
-(use-package go-projectile
-  :ensure t
-  :after (go-mode projectile))
 
 (use-package wgrep
   :ensure t
@@ -744,7 +735,7 @@
   :config
   (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
   (setq yas-prompt-functions '(helm-yas-complete yas-dropdown-prompt yas-ido-prompt))
-  
+
   (diminish 'yas-minor-mode "ys")
   (add-hook 'org-mode-hook (lambda ()
 			     (make-variable-buffer-local 'yas-trigger-key)
@@ -795,38 +786,10 @@
 			   company-etags
 			   company-elisp
 			   company-emoji
-			   company-clang
-			   company-irony-c-headers
-			   company-irony
-			   company-jedi
 			   company-cmake
 			   company-yasnippet))
 
   (global-company-mode))
-
-(use-package company-irony
-  :ensure t
-  :after (company irony)
-  :commands (company-irony)
-  :config
-  (add-hook 'irony-mode-hook 'company-irony-setup-begin-commands))
-
-(use-package company-irony-c-headers
-  :ensure t
-  :commands (company-irony-c-headers)
-  :after company-irony)
-
-(use-package company-jedi
-  :ensure t
-  :commands (company-jedi)
-  :after (company python-mode))
-
-(use-package company-quickhelp
-  :ensure t
-  :after company
-  :config
-  (setq company-quickhelp-idle-delay 0.1)
-  (company-quickhelp-mode 1))
 
 (use-package company-emoji
   :ensure t
@@ -846,23 +809,6 @@
   (add-hook 'rst-mode-hook 'setup-local-word-complete)
   ;(add-hook 'message-mode-hook 'setup-local-word-complete)
   (add-hook 'org-mode-hook 'setup-local-word-complete))
-
-(use-package irony
-  :ensure t
-  :commands (irony-mode)
-  :bind (:map irony-mode-map
-	 ([remap completion-at-point] . irony-completion-at-point-async)
-	 ([remap complete-symbol] . 'irony-completion-at-point-async))
-  :init
-  (add-hook 'c-mode-common-hook 'irony-mode)
-  :config
-  (add-hook 'irony-mode-hook 'irony-cdb-autosetup-compile-options))
-
-(use-package irony-eldoc
-  :ensure t
-  :after (irony eldoc)
-  :config
-  (add-hook 'irony-mode-hook 'irony-eldoc))
 
 (use-package flycheck
   :ensure t
@@ -932,14 +878,6 @@
   (setq flycheck-golangci-lint-fast t)
   (setq flycheck-golangci-lint-tests t))
 
-(use-package flycheck-irony
-  :ensure t
-  :after (flycheck irony)
-  :commands (flycheck-irony-setup)
-  :init (add-hook 'flycheck-mode-hook #'flycheck-irony-setup)
-  :config
-  (flycheck-irony-setup))
-
 (use-package flycheck-rust
   :ensure t
   :after (flycheck rustic)
@@ -979,30 +917,11 @@
       (set (make-local-variable 'compile-command)
 	   "go build -v && go test -v && go vet")))
 
-(use-package go-guru
-  :ensure t
-  :after go-mode
-  :config
-  (add-hook 'go-mode-hook #'go-guru-hl-identifier-mode))
-
 (use-package go-eldoc
   :ensure t
   :after go-mode
   :config
   (add-hook 'go-mode-hook 'go-eldoc-setup))
-
-(use-package go-complete
-  :ensure t
-  :after (go-mode company)
-  :ensure-system-package ((gocode . "go install github.com/mdempsky/gocode"))
-  :config
-  (add-hook 'completion-at-point-functions 'go-complete-at-point))
-
-(use-package helm-go-package
-  :ensure t
-  :bind (("C-c h g" .'helm-go-package))
-  :config
-  (substitute-key-definition 'go-import-add 'helm-go-package go-mode-map))
 
 (use-package cargo
   :ensure t
@@ -1083,13 +1002,6 @@
   :config
   (setq clang-format-style "Google"))
 
-(use-package c-eldoc
-  :ensure t
-  :commands (c-turn-on-eldoc-mode)
-  :init
-  (add-hook 'c-mode-common-hook 'c-turn-on-eldoc-mode)
-  (setq c-eldoc-buffer-regenerate-time 60))
-
 (use-package cpputils-cmake
   :ensure t
   :after (c++-mode c-mode)
@@ -1101,17 +1013,6 @@
 		  (cppcm-reload-all)
 		)))
   (add-hook 'c90-mode-hook (lambda () (cppcm-reload-all))))
-
-(use-package modern-cpp-font-lock
-  :ensure t
-  :after (c++-mode)
-  :commands (modern-c++-font-lock-mode)
-  :hook ((c++mode . modern-c++-font-lock-mode))
-  :init
-  (add-hook 'c++-mode-hook (lambda () (setq show-trailing-whitespace t)))
-  :config
-  (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100)))
 
 (use-package make-mode
   :ensure t
@@ -1214,21 +1115,6 @@
   (font-lock-add-keywords 'python-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-mode (font-lock-width-keyword 100)))
 
-(use-package flycheck-pyflakes
-  :ensure t
-  :after (python-mode)
-  :config
-  (add-hook 'python-mode-hook 'flycheck-mode)
-  (add-to-list 'flycheck-disabled-checkers 'python-flake8)
-  (add-to-list 'flycheck-disabled-checkers 'python-pylint))
-
-(use-package py-autopep8
-  :ensure t
-  :after (python-mode)
-  :config
-  (add-hook 'python-mode-hook 'py-autopep8-enable-on-save)
-  (setq py-autopep8-options '("--max-line-length=100")))
-
 (use-package virtualenvwrapper
   :ensure t
   :after (python-mode)
@@ -1274,14 +1160,6 @@
   :ensure t
   :mode "\\.jinja\\'")
 
-(use-package yaml-mode
-  :ensure t
-  :mode (("\\.yaml\\'" . yaml-mode)
-	 ("\\.yml\\'" . yaml-mode)
-	 ("\\.yaml$" . yaml-mode)
-	 ("\\.yml$" . yaml-mode))
-  :init
-  (add-hook 'yaml-mode-hook 'flyspell-mode))
 
 (use-package ninja-mode
   :ensure t
@@ -1320,10 +1198,6 @@
   :ensure t
   :after (slime)
   :commands (slime-company))
-
-(use-package common-lisp-snippets
-  :ensure t
-  :after (slime))
 
 (use-package helm-slime
   :ensure t
@@ -1381,9 +1255,7 @@
 	      ("C-c o r v a" . org-bibtex-check-all)
 	      ("C-c o r s" . org-bibtex-search)
 	      ("C-c o r e" . org-bibtex)
-	      ("C-c C-p" . set-mark-command)
-	      ("C-c C-;" . flyspell-correct-wrapper)
-	      ("C-c ;" . flyspell-correct-wrapper))
+	      ("C-c C-p" . set-mark-command))
   :init
   (setq org-directory (concat local-notes-directory "/org"))
   (setq org-agenda-files (list org-directory))
@@ -1719,10 +1591,11 @@
   :ensure t
   :after org
   :commands (toc-org-insert-toc)
+  :autoload (tychoish--add-toc-org-hook)
+  :hook ((tychoish--add-toc-org-hook) . org-mode)
   :config
   (defun tychoish--add-toc-org-op () (save-excursion (toc-org-insert-toc)))
-  (defun tychoish--add-toc-org-hook () (add-hook 'write-contents-functions 'tychoish--add-toc-org-op nil t))
-  (add-hook 'org-mode-hook 'tychoish--add-toc-org-hook))
+  (defun tychoish--add-toc-org-hook () (add-hook 'write-contents-functions 'tychoish--add-toc-org-op nil t)))
 
 (use-package ox-gist
   :ensure t
@@ -1941,9 +1814,7 @@
   (global-set-key (kbd "C-c C-p") 'set-mark-command)
   (global-set-key (kbd "C-c c") 'comment-region)
   (global-set-key (kbd "C-c i") 'indent-region)
-  (global-set-key (kbd "C-c ;") 'flyspell-correct-wrapper)
-  (global-set-key (kbd "C-c C-;") 'flyspell-correct-wrapper)
-  (global-set-key (kbd "C-h") 'backward-kill-word)
+
   (global-set-key (kbd "C-x C-x") 'exchange-dot-and-mark)
   (global-set-key (kbd "M-<SPC>") 'set-mark-command)
   (global-set-key (kbd "M-C-q") 'fill-region))
@@ -2244,10 +2115,6 @@ q
     (let ((case-fold-search t))
       ad-do-it)))
 
-(use-package pocket-reader
-  :ensure t
-  :commands (pocket-reader pocket-reader-add-link))
-
 (use-package google-this
   :ensure t
   :diminish google-this-mode
@@ -2300,12 +2167,15 @@ q
 	  ("fn"   "^\\[\\^\\(.*\\)\\]" 1)
 	  )))
 
+(use-package helm-flyspell
+  :ensure t
+  :bind (("M-$" . helm-flyspell-correct)
+	 ("C-c h e" . helm-flyspell-correct)))
+
 (use-package flyspell-correct-helm
   :ensure t
   :after (flyspell)
-  :bind
-  ("C-;" . flyspell-correct-wrapper)
-  :config
+  :init
   (setq flyspell-correct-interface #'flyspell-correct-helm))
 
 (use-package flyspell
@@ -2316,6 +2186,8 @@ q
   :init
   (add-hook 'prog-mode-hook 'flyspell-prog-mode)
   (add-hook 'text-mode-hook 'flyspell-mode)
+  :bind (("C-;" . flyspell-correct-wrapper)
+	 ("C-c C-;" . flyspell-correct-wrapper))
   :config
   (defalias 'fsb 'flyspell-buffer)
   (defalias 'fs 'flyspell-mode)
@@ -2451,12 +2323,6 @@ q
   :ensure t
   :commands (znc-all)
   :bind (("C-c e a" . znc-all)))
-
-(use-package erc-yank
-  :ensure t
-  :after (erc)
-  :bind (:map erc-mode-map
-	 ("C-y" . erc-yank)))
 
 (use-package erc
   :ensure t
@@ -2787,22 +2653,18 @@ q
   (setq go-ts-mode-hook 'go-mode-hook)
   (setq rust-ts-mode-hook 'rust-mode-hook)
   (setq toml-ts-mode-hook 'toml-mode-hook)
-  (setq dockerfile-ts-mode-hook 'dockerfile-mode-hook)
   (setq cmake-ts-mode-hook 'cmake-mode-hook)
   (setq c++-ts-mode-hook 'c++-mode-hook)
   (setq cmake-ts-mode-hook 'c-mode-hook)
   (setq json-ts-mode-hook 'json-mode-hook)
   (setq js-ts-mode 'js2-mode-hook)
   (setq python-ts-mode-hook 'python-mode-hook)
-  (setq yaml-ts-mode-hook 'yaml-mode-hook)
 
   (setq major-mode-remap-alist
-	'((yaml-mode . yaml-ts-mode)
-	  (bash-mode . bash-ts-mode)
+	'((bash-mode . bash-ts-mode)
 	  (js2-mode . js-ts-mode)
 	  (typescript-mode . typescript-ts-mode)
 	  (go-mode . go-ts-mode)
-	  (dockerfile-mode . dockerfile-ts-mode)
 	  (rust-mode . rust-ts-mode)
 	  (json-mode . json-ts-mode)
 	  (c-mode . c-ts-mode)
@@ -2812,7 +2674,7 @@ q
 	  (yaml-mode . yaml-ts-mode)
 	  (css-mode . css-ts-mode)
 	  (python-mode . python-ts-mode)))
-  
+
   (add-to-list 'auto-mode-alist '("\\.sh\\'" . bash-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.bashrc\\'" . bash-ts-mode))
@@ -2822,6 +2684,8 @@ q
   (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.css\\'" . css-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.yaml\\'" . yaml-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-ts-mode))
 
   (add-to-list 'auto-mode-alist '("\\.cpp\\'" . c++-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.cc\\'" . c++-ts-mode))
@@ -2833,6 +2697,11 @@ q
   (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
   (add-to-list 'auto-mode-alist '("CMakeLists.txt" . cmake-ts-mode))
 
+  (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c-ts-mode (font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c++-ts-mode (font-lock-width-keyword 100))
+  (add-hook 'c++-mode-hook (lambda () (setq show-trailing-whitespace t)))
   :config
   (setq treesit-language-source-alist
    '((bash "https://github.com/tree-sitter/tree-sitter-bash")
@@ -2863,8 +2732,8 @@ q
     (interactive)
     (async-start
      `(lambda ()
-  	,(async-inject-variables "treesit-language-source-alist")
-  	(mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
+	,(async-inject-variables "treesit-language-source-alist")
+	(mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
      (lambda (result)
        (message "rebuilding treesit grammars %s" result)))))
 
