@@ -68,6 +68,7 @@
 
 (use-package anzu
   :ensure t
+  :diminish
   :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :hook ((isearch-mode) . anzu-mode)
   :bind (("C-c q r" . anzu-query-replace)
@@ -123,7 +124,6 @@
     (delight 'emacs-lisp-mode "el")
     (delight 'fundamental-mode "fund")
 
-    (diminish 'helm-mode)
     (diminish 'abbrev-mode)
     (diminish 'org-indent-mode)
 
@@ -160,7 +160,6 @@
   (setq doom-modeline-buffer-encoding nil)
   (setq doom-modeline-env-version t)
   (setq doom-modeline-github nil)
-  (setq doom-modeline-lsp t)
   (add-to-list 'mode-line-misc-info (format "[%s]" tychoish-emacs-identifier)))
 
 (use-package esup
@@ -190,33 +189,42 @@
   (setq winum-scope 'frame-local)
   (winum-mode 1))
 
+(use-package which-key
+  :ensure t
+  :diminish which-key-mode
+  :after (helm)
+  :commands (which-key-mode)
+  :config
+  (setq which-key-idle-delay .4)
+  (setq which-key-idle-secondary-delay 0.2)
+  (which-key-setup-minibuffer))
+
 (use-package helm
   :ensure t
   :after (tychoish-bootstrap)
+  :diminish
   :commands (helm-mode)
   :bind (("C-c M-s" . helm-multi-swoop)
 	 ("C-x M-s" . helm-multi-swoop-all)
 	 ("C-c o s" . helm-multi-swoop-org)
 
 	 ;; most interesting helm menus are under one prefix
-	 ("C-c h h" . helm-mini)
-	 ("C-c h i" . helm-info)
-	 ("C-c h m" . helm-man-woman)
 	 ("C-c h a" . helm-apropos)
-	 ("C-c h l" . helm-locate)
+	 ("C-c h d" . helm-info)
+	 ("C-c h h" . helm-mini)
 	 ("C-c h i" . helm-imenu)
-	 ("C-c h t" . helm-top)
-	 ("C-c h r" . helm-recentf)
-	 ("C-c h w" . helm-google-suggest)
-	 ("C-c h s" . helm-swoop)
+	 ("C-c h l" . helm-locate)
+	 ("C-c h m" . helm-man-woman)
 	 ("C-c h o" . helm-occur)
 	 ("C-c h p" . helm-browse-project)
+	 ("C-c h r" . helm-recentf)
+	 ("C-c h s" . helm-swoop)
+	 ("C-c h t" . helm-top)
+	 ("C-c h w" . helm-google-suggest)
 
 	 ;; defined elsewhere:
 	 ;; ("C-c h c" . helm-company)
 	 ;; ("C-c h b" . helm-make-projectile)
-	 ;; ("C-c h g" .'helm-go-package)
-	 ;; ("C-c h c" . helm-company)
 	 ;; ("C-c h f" . 'helm-flycheck)
 
 	 ;; helm-native developer operations
@@ -243,12 +251,14 @@
 	 ("TAB" . helm-execute-persistent-action)
 	 ("C-j" . helm-select-action))
   :config
-  (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold)
+  (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold :background 'unspecified)
   (helm-autoresize-mode 1)
-
+  (helm-mode 1)
+  
   (setq history-delete-duplicates t)
   (setq history-length 100)
 
+  (setq helm-M-x-fuzzy-match t)
   (setq helm-autoresize-max-height 40)
   (setq helm-autoresize-min-height 20)
   (setq helm-autoresize-mode nil)
@@ -378,11 +388,11 @@
   :bind (("C-c w d" . browse-url-generic)
 	 ("C-c w e" . browse-url)
 	 ("C-c w f" . browse-url-firefox)
-	 ("C-c w c" . browse-url-chromium)
+	 ("C-c w c" . browse-url-chrome)
 	 ("C-c w g" . eww-search-words))
   :init
   (setq browse-url-browser-function 'eww-browse-url)
-  (setq browse-url-generic-program "chromium")
+  (setq browse-url-generic-program "chrom")
   (setq shr-color-visible-luminance-min 80)
   (setq shr-use-colors nil)
   (setq shr-use-fonts nil)
@@ -661,12 +671,13 @@
 
 (use-package recentf
   :ensure t
-  :commands (recentf-mode)
-  :after (tychoish-bootstrap)
+  :commands (recentf-mode recentf-open)
+  :after (helm)
+  :bind (("C-c h r" . helm-recentf))
   :config
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
-  (setq recentf-max-menu-items 50)
+  (setq recentf-max-menu-items 100)
   (setq recentf-save-file (tychoish-get-config-file-path "recentf")))
 
 (use-package magit
@@ -711,10 +722,9 @@
   :hook ((text-mode prog-mode) . yas-minor-mode)
   :config
   (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
-  (setq yas-prompt-functions '(helm-yas-complete  yas-dropdown-prompt yas-ido-prompt))
-
+  (setq yas-prompt-functions '(helm-yas-complete yas-dropdown-prompt yas-ido-prompt))
+  
   (diminish 'yas-minor-mode "ys")
-
   (add-hook 'org-mode-hook (lambda ()
 			     (make-variable-buffer-local 'yas-trigger-key)
 			     (setq yas-trigger-key [tab])
@@ -857,9 +867,18 @@
   :ensure t
   :after (flycheck)
   :config
-  (flycheck-aspell-define-checker "cpp"
-    "C++" ("--add-filter" "url" "--add-filter" "ccpp")
-    (c++-mode)))
+  (flycheck-aspell-define-checker "org"
+    "Org" ("--add-filter" "url")
+    (org-mode))
+  (flycheck-aspell-define-checker "rst"
+    "reStructuredText" ("--add-filter" "url")
+    (rst-mode))
+
+  (add-to-list 'flycheck-checkers 'org-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'rst-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'markdown-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'c-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'mail-aspell-dynamic))
 
 (use-package flycheck-grammarly
   :ensure t
@@ -889,7 +908,6 @@
   (setq flycheck-go-vet-shadow t)
   (setq flycheck-go-build-install-deps t)
   (setq flycheck-go-vet-print-functions t)
-
   (setq flycheck-golangci-lint-fast t)
   (setq flycheck-golangci-lint-tests t))
 
@@ -900,6 +918,12 @@
   :init (add-hook 'flycheck-mode-hook #'flycheck-irony-setup)
   :config
   (flycheck-irony-setup))
+
+(use-package flycheck-rust
+  :ensure t
+  :after (flycheck rustic)
+  :config
+  (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
 
 (use-package go-mode
   :ensure t
@@ -953,7 +977,6 @@
 
 (use-package helm-go-package
   :ensure t
-  :after (go-mode helm)
   :bind (("C-c h g" .'helm-go-package))
   :config
   (substitute-key-definition 'go-import-add 'helm-go-package go-mode-map))
@@ -967,25 +990,13 @@
 
 (use-package rustic
   :ensure t
-  :after lsp lsp-mode
   :delight "rs"
   :mode "\\.rs$'"
-  :bind (:map rustic-mode-map
-	      ("M-j" . lsp-ui-imenu)
-	      ("M-?" . lsp-find-references)
-	      ("C-c C-c l" . flycheck-list-errors)
-	      ("C-c C-c a" . lsp-execute-code-action)
-	      ("C-c C-c r" . lsp-rename)
-	      ("C-c C-c q" . lsp-workspace-restart)
-	      ("C-c C-c Q" . lsp-workspace-shutdown)
-	      ("C-c C-c s" . lsp-rust-analyzer-status))
   :config
   ;; uncomment for less flashiness
   ;; (setq lsp-eldoc-hook nil)
-
-  (setq lsp-enable-symbol-highlighting nil)
-  (setq lsp-signature-auto-activate nil)
-  (setq lsp-signature-render-documentation nil)
+  (setq rust-format-on-save t)
+  (setq rustic-lsp-client 'eglot)
 
   (defun rk/rustic-mode-hook ()
     ;; so that run C-c C-c C-r works without having to confirm, but don't try to
@@ -995,10 +1006,16 @@
     (when buffer-file-name
       (setq-local buffer-save-without-query t)))
 
-  (setq lsp-rust-all-features t)
   ;; comment to disable rustfmt on save
   (setq rustic-format-on-save t)
   (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
+
+(use-package rust-mode
+  :ensure t
+  :defer t)
+
+(use-package rust-compile
+  :after (rustic))
 
 (use-package toml-mode
   :ensure t
@@ -1361,7 +1378,8 @@
   :delight "org"
   :ensure org-contrib
   :commands (tychoish-add-org-capture-template org-save-all-org-buffers)
-  :bind (("C-c o t a" . org-agenda)
+  :bind (("C-c o a" . org-agenda)
+	 ("C-c o t a" . org-agenda)
 	 ("C-c o l s" . org-store-link)
 	 ("C-c o l i" . org-insert-link)
 	 ("C-c o j" . helm-org-capture-templates)
@@ -1380,6 +1398,7 @@
 	      ("C-c o p" . org-insert-property-drawer)
 	      ("C-c o d d" . org-date)
 	      ("C-c o d n" . tychoish-org-date-now)
+	      ("C-c o a a" . org-agenda)
 	      ("C-c o a s" . org-archive-to-archive-sibling)
 	      ("C-c o a e" . org-cycle-forced-archive)
 	      ("C-c o a d" . tychoish-org-mark-done-and-archive)
@@ -1391,6 +1410,7 @@
 	      ("C-c o h p" . helm-org-parent-headings)
 	      ("C-c o h b" . helm-org-in-buffer-headings)
 	      ("M-TAB" . org-cycle)
+	      ("C-M-TAB" . org-cycle-force-archived)
 	      ("C-c o r c" . org-bibtex-create)
 	      ("C-c o r r" . org-bibtex-create-in-current-entry)
 	      ("C-c o r k" . org-bibtex-export-to-kill-ring)
@@ -1724,10 +1744,11 @@
 
 (use-package helm-org
   :ensure t
+  :after (org helm)
   :commands (helm-org-capture-templates
 	     helm-org-in-buffer-heddings
 	     helm-org-agenda-files-headings)
-  :init
+  :config
   (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
   (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
 
@@ -1742,7 +1763,18 @@
 
 (use-package ox-gist
   :ensure t
-  :after (org))
+  :after (org)
+  :commands (org-gist-export-private-gist org-gist-export-to-public-gist)
+  :bind (:map org-mode-map
+	 ("C-c o e g p" . org-gist-export-to-private-gist)
+	 ("C-c o e g g" . org-gist-export-to-public-gist))
+  :config
+  (defun org-gist-export-private-gist ()
+    (interactive)
+    (org-gist-export-to-gist))
+  (defun org-gist-export-public-gist ()
+    (interactive)
+    (org-gist-export-to-gist 'public)))
 
 (use-package ox-rst
   :ensure t
@@ -2680,11 +2712,10 @@
 		     'telega-company-emoji
 		     'telega-company-markdown-precode
 		     'telega-company-username
-		   'telega-company-hashtag);;
+		     'telega-company-hashtag);;
 	     (when (telega-chat-bot-p telega-chatbuf--chat);;
 	       '(telega-company-botcmd))));;
   (company-mode 1))
-
 
   (require 'telega-mnz)
   (require 'telega-alert)
@@ -2693,7 +2724,7 @@
   (setq telega-use-images t)
   (setq telega-chat-fill-column 72)
   (setq telega-chat-input-markups '("markdown2"))
-  (setq telega-server-libs-prefix "/usr/local/include/td")
+  (setq telega-server-libs-prefix "/usr/lib")
   (setq telega-completing-read-function 'helm--completing-read-default)
   (setq telega-use-tracking-for '(or unmuted mention))
   (setq telega-markdown2-backquotes-as-precode t)
@@ -2704,6 +2735,7 @@
 
   (add-hook 'telega-load-hook 'telega-mode-line-mode)
   (add-hook 'telega-chat-mode-hook 'visual-line-mode)
+  (add-hook 'telega-chat-mode-hook 'flyspell-mode)
   (add-hook 'telega-chat-mode-hook 'cypher/telega-chat-mode)
   (add-hook 'telega-load-hook 'global-telega-mnz-mode))
 
@@ -2751,159 +2783,33 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(use-package helm-lsp
-  :ensure t
-  :after (lsp-mode)
-  :ensure t
-  :commands (helm-lsp-workspace-symbol)
-  :init (define-key lsp-mode-map [remap xref-find-apropos] #'helm-lsp-workspace-symbol))
+(use-package elgot
+  :ensure nil
+  :commands (eglot eglot-ensure)
+  :hook ((python-mode go-mode rust-mode shell-mode js2-mode typescript-mode) . eglot-ensure)
+  :bind (("C-c l l s" . eglot)
+	 ("C-c l l r" . eglot-reconnect)
+	 ("C-c l l k" . eglot-shutdown)
+	 ("C-c l l l" . eglot-list-connections)
+	 :map eglot-mode-map
+	      ("C-c l r" . eglot-rename)
+	      ("C-c l f" . eglot-format)
+	      ("C-c l m" . imenu)
+	      ("C-c l a" . eglot-code-actions)))
 
-(use-package lsp-mode
+(use-package helm-xref
   :ensure t
-  :diminish (lsp-mode . "lsp")
-  :bind (:map lsp-mode-map
-	 ("C-c C-d" . lsp-describe-thing-at-point)
-	 ("M-." . lsp-find-definition))
-  :hook ((python-mode . lsp-deferred)
-	 (js-mode . lsp-deferred)
-	 (js2-mode . lsp-deferred)
-	 (rustic-mode . lsp-deferred)
-	 (rust-mode . lsp-deferred)
-	 (dockerfile-mode . lsp-deferred)
-	 (sh-mode . lsp-deferred)
-	 (typescript-mode . lsp-deferred)
-	 (go-mode . lsp-deferred))
-  :init
-  (setq lsp-auto-guess-root t       ; detect project root
-	lsp-log-io nil
-	lsp-enable-indentation t
-	lsp-enable-imenu t
-	lsp-keymap-prefix "C-c l"
-	lsp-enable-file-watchers t
-	lsp-headerline-breadcrumb-enable nil
-	lsp-file-watch-threshold 5000
-	lsp-clients-python-library-directories '("/usr/local/" "/usr/")
-	lsp-prefer-flymake nil)      ; Use lsp-ui and flycheck
+  :bind (("C-c l c" . xref-find-references)
+	 ("C-c l d" . xref-find-definitions)
+	 ("C-c l p" . xref-go-back)
+	 ("C-c l n" . xref-go-forward)
+	 ("C-c l o" . xref-find-definitions-other-window)))
 
-    (defun lsp-on-save-operation ()
-      (when (or (boundp 'lsp-mode)
-		(bound-p 'lsp-deferred))
-	(lsp-organize-imports)
-	(lsp-format-buffer)))
-
-  ;; what to use when checking on-save. "check" is default, I prefer clippy
-  (setq lsp-rust-analyzer-cargo-watch-command "check")
-  (setq lsp-eldoc-render-all t)
-  (setq lsp-idle-delay 0.6)
-  ;; enable / disable the hints as you prefer:
-  (setq lsp-rust-analyzer-server-display-inlay-hints t)
-  (setq lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
-  (setq lsp-rust-analyzer-display-chaining-hints t)
-  (setq lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names t)
-  (setq lsp-rust-analyzer-display-closure-return-type-hints t)
-  (setq lsp-rust-analyzer-display-parameter-hints nil)
-  (setq lsp-rust-analyzer-display-reborrow-hints nil))
-
-(use-package lsp-ui
+(use-package flycheck-eglot
   :ensure t
-  :after (lsp-mode)
-  :commands lsp-ui-doc-hide
-  :bind (:map lsp-ui-mode-map
-	      ([remap xref-find-definitions] . lsp-ui-peek-find-definitions)
-	      ([remap xref-find-references] . lsp-ui-peek-find-references)
-	      ("C-c u" . lsp-ui-imenu))
-  :init (setq lsp-ui-doc-enable nil
-	      lsp-ui-doc-use-webkit t
-	      lsp-ui-doc-header nil
-	      lsp-ui-doc-delay 0.2
-	      lsp-ui-doc-include-signature t
-	      lsp-ui-doc-alignment 'at-point
-	      lsp-ui-doc-use-childframe nil
-	      lsp-ui-doc-border (face-foreground 'default)
-	      lsp-ui-peek-enable nil
-	      lsp-ui-peek-show-directory t
-	      lsp-ui-sideline-delay 10                      ;; seconds
-	      lsp-ui-sideline-update-mode 'point
-	      lsp-ui-sideline-enable nil
-	      lsp-ui-sideline-show-code-actions t
-	      lsp-ui-sideline-show-hover t
-	      lsp-ui-sideline-ignore-duplicate t
-	      lsp-gopls-use-placeholders nil)
+  :after (flycheck eglot)
   :config
-  (setq lsp-completion-provider :capf)
-  (setq lsp-idle-delay 1)
-  (setq lsp-print-performance t)
-
-  (add-to-list 'lsp-ui-doc-frame-parameters '(right-fringe . 8))
-
-  ;; `C-g'to close doc
-  (advice-add #'keyboard-quit :before #'lsp-ui-doc-hide)
-
-  ;; Reset `lsp-ui-doc-background' after loading theme
-  (add-hook 'after-load-theme-hook
-	    (lambda ()
-	      (setq lsp-ui-doc-border (face-foreground 'default))
-	      (set-face-background 'lsp-ui-doc-background
-				   (face-background 'tooltip))))
-
-  ;; WORKAROUND Hide mode-line of the lsp-ui-imenu buffer
-  ;; @see https://github.com/emacs-lsp/lsp-ui/issues/243
-  (defadvice lsp-ui-imenu (after hide-lsp-ui-imenu-mode-line activate)
-    (setq mode-line-format nil)))
-
-;; debugger
-(use-package dap-mode
-  :ensure t
-  :disabled t
-  :diminish dap-mode
-  :after (lsp-mode)
-  :functions dap-hydra/nil
-  :bind (:map lsp-mode-map
-	      ("<f5>" . dap-debug)
-	      ("M-<f5>" . dap-hydra))
-
-  :hook ((dap-mode . dap-ui-mode)
-	 (dap-session-created . (lambda (&_rest) (dap-hydra)))
-	 (dap-terminated . (lambda (&_rest) (dap-hydra/nil))))
-  :config
-  (dap-ui-mode)
-  (dap-ui-controls-mode 1)
-
-  (require 'dap-lldb)
-  (require 'dap-gdb-lldb)
-  (dap-gdb-lldb-setup)
-  (dap-register-debug-template
-   "Rust::LLDB Run Configuration"
-   (list :type "lldb"
-	 :request "launch"
-	 :name "LLDB::Run"
-	 :gdbpath "rust-lldb"
-	 :target nil
-	 :cwd nil)))
-
-(use-package lsp-treemacs
-  :ensure t
-  :after (lsp-mode treemacs)
-  :commands lsp-treemacs-errors-list
-  :bind (:map lsp-mode-map
-	      ("M-9" . lsp-treemacs-errors-list)))
-
-(use-package treemacs
-  :ensure t
-  :commands (treemacs)
-  :after (lsp-mode)
-  :config
-  (setq treemacs-no-load-time-warnings t))
-
-(use-package which-key
-  :ensure t
-  :diminish which-key-mode
-  :after (helm)
-  :commands (which-key-mode)
-  :config
-  (setq which-key-idle-delay .8)
-  (setq which-key-idle-secondary-delay 0.5)
-  (which-key-setup-minibuffer))
+  (global-flycheck-eglot-mode 1))
 
 (provide 'tychoish-core)
 ;;; programming.el ends here
