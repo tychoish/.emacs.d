@@ -10,6 +10,14 @@
 
 ;;; Code:
 
+(use-package async
+  :ensure t
+  :commands (async-start async-start-process)
+  :after (dired)
+  :config
+  (async-bytecomp-package-mode t)
+  (dired-async-mode 1))
+
 (use-package auto-package-update
   :commands (auto-package-update-maybe auto-package-update-now)
   :ensure t
@@ -213,14 +221,18 @@
 	 ("C-c h d" . helm-info)
 	 ("C-c h h" . helm-mini)
 	 ("C-c h i" . helm-imenu)
+	 ("C-c h k" . helm-regist)
 	 ("C-c h l" . helm-locate)
 	 ("C-c h m" . helm-man-woman)
 	 ("C-c h o" . helm-occur)
 	 ("C-c h p" . helm-browse-project)
 	 ("C-c h r" . helm-recentf)
+	 ("C-c h r" . helm-top)
 	 ("C-c h s" . helm-swoop)
-	 ("C-c h t" . helm-top)
-	 ("C-c h w" . helm-google-suggest)
+	 ("C-c h t" . helm-etags-select)
+	 ("C-c h g" . helm-google-suggest)
+	 ("C-c h w" . helm-buffers-list)
+	 ("C-c h y" . helm-show-kill-ring)
 
 	 ;; defined elsewhere:
 	 ;; ("C-c h c" . helm-company)
@@ -228,7 +240,6 @@
 	 ;; ("C-c h f" . 'helm-flycheck)
 
 	 ;; helm-native developer operations
-	 ("M-." . helm-etags-select)
 	 ("C-x r h" . helm-register)
 	 ("M-y" . helm-show-kill-ring)
 
@@ -683,9 +694,9 @@
 (use-package magit
   :ensure t
   :commands (magit-toplevel)
-  :bind (("C-c m g s" . magit-status)
-	 ("C-c m g f" . magit-branch)
-	 ("C-c m g b" . magit-blame))
+  :bind (("C-x g s" . magit-status)
+	 ("C-x g f" . magit-branch)
+	 ("C-x g b" . magit-blame))
   :init
   (setq version-control t)
   (setq vc-follow-symlinks t)
@@ -696,9 +707,18 @@
   (add-to-list 'magit-status-sections-hook 'magit-insert-modules t)
   (setq magit-module-sections-nested nil))
 
-(use-package magithub
+(use-package forge
   :ensure t
-  :after magit)
+  :after (magit magithub)
+  :defer t)
+
+(use-package vc
+  :defer t
+  :init
+  ;; Disable VC entirely
+  (setq vc-handled-backends ())
+  ;; Don't ask me again
+  (setq vc-follow-symlinks t))
 
 (use-package gist
   :ensure t
@@ -934,6 +954,7 @@
 	 ("\\.go" . go-mode)
 	 ("\\.go\\'" . go-mode))
   :config
+
   (unless (getenv "GOPATH")
     (setenv "GOPATH" (expand-file-name "~/go")))
 
@@ -950,6 +971,7 @@
 
   (setq gofmt-command "goimports")
   (add-hook 'before-save-hook 'gofmt-before-save)
+  (add-hook 'before-save-hook 'eglot-format-buffer)
   (add-hook 'go-mode-hook 'flycheck-mode)
 
   (if (not (string-match "go" compile-command))
@@ -1029,18 +1051,9 @@
   :ensure t
   :mode "\\.proto$'")
 
-(use-package dockerfile-mode
-  :ensure t
-  :delight "dckr"
-  :mode "Dockerfile")
-
-(use-package cmake-mode
-  :ensure t
-  :mode "CMakeLists.txt")
-
 (use-package cmake-project
   :ensure t
-  :after (cmake-mode)
+  :after (cmake-ts-mode f c-mode)
   :init
   (defun tychoish-cmake-project-p ()
     (let* ((project-directory (if (eq "" (projectile-project-root))
@@ -1060,7 +1073,9 @@
   (defun clang-format-before-save ()
     (interactive)
     (when (or (eq major-mode 'c++-mode)
-	      (eq major-mode 'c-mode))
+	      (eq major-mode 'c-mode)
+	      (eq major-mode 'c-ts-mode)
+	      (eq major-mode 'c++-ts-mode))
       (clang-format-buffer)))
 
   (add-hook 'before-save-hook 'clang-format-before-save)
@@ -1074,16 +1089,9 @@
   (add-hook 'c-mode-common-hook 'c-turn-on-eldoc-mode)
   (setq c-eldoc-buffer-regenerate-time 60))
 
-(use-package cc-mode
-  :ensure t
-  :mode (("\\.cc$'" . c++-mode)
-	 ("\\.cpp$'" . c++-mode)
-	 ("\\.cxx$'" . c++-mode)
-	 ("\\.h$'" . c++-mode)))
-
 (use-package cpputils-cmake
   :ensure t
-  :after (cmake-mode c++-mode c-mode)
+  :after (c++-mode c-mode)
   ;; :bind (("C-c C-c C-g" . (lambda ()(interactive) (gud-gdb (concat "gdb --fullname " (cppcm-get-exe-path-current-buffer))))))
   :config
   (add-hook 'c-mode-common-hook
@@ -1117,37 +1125,6 @@
   :mode (("justfile" . just-mode)
 	 ("justfile" . just-mode)
 	 ("\\.just%" . just-mode)))
-
-(use-package js2-mode
-  :ensure t
-  :mode ("\\.js$" "\\.json$")
-  :after (tychoish-editing)
-  :init
-  (font-lock-add-keywords 'javascript-mode (font-lock-show-tabs))
-  (font-lock-add-keywords 'javascript-mode (font-lock-width-keyword 100))
-  :config
-  (add-hook 'js2-mode-hook #'js2-imenu-extras-mode))
-
-(use-package js2-refactor
-  :ensure t
-  :after (js2-mode)
-  :config
-  (add-hook 'js2-mode-hook #'js2-refactor-mode)
-  (js2r-add-keybindings-with-prefix "C-c C-r")
-  (define-key js2-mode-map (kbd "C-k") #'js2r-kill))
-
-(use-package typescript-mode
-  :ensure t
-  :commands (typescript-mode)
-  :mode ("\\.tsx?\\'" "\\.ts?\\'"))
-
-(use-package xref-js2
-  :ensure t
-  :after (js2-mode js2-refactor)
-  :init
-  (define-key js-mode-map (kbd "M-.") nil)
-  :config
-  (add-hook 'js2-mode-hook (lambda () (add-hook 'xref-backend-functions #'xref-js2-xref-backend nil t))))
 
 (use-package ctags-update
   :ensure t
@@ -1292,18 +1269,6 @@
   (setq web-mode-enable-css-colorization t)
   (add-hook 'web-mode-hook 'electric-pair-mode))
 
-(use-package json-mode
-  :ensure t
-  :mode "\\.json\\'")
-
-(use-package json-reformat
-  :ensure t
-  :after (json-mode))
-
-(use-package json-snatcher
-  :ensure t
-  :after (json-mode))
-
 (use-package jinja2-mode
   :ensure t
   :mode "\\.jinja\\'")
@@ -1313,7 +1278,6 @@
   :mode (("\\.yaml\\'" . yaml-mode)
 	 ("\\.yml\\'" . yaml-mode)
 	 ("\\.yaml$" . yaml-mode)
-	 ("\\.lock$" . yaml-mode)
 	 ("\\.yml$" . yaml-mode))
   :init
   (add-hook 'yaml-mode-hook 'flyspell-mode))
@@ -1340,7 +1304,7 @@
 	  (with-slow-op-timer (format "loading: %s" path) .5
 	    (load (expand-file-name path) t t t)))))
 
-  (load-quicklisp-file "slime-helper.el")
+  (load-quicklisp-file "slimes-helper.el")
   (load-quicklisp-file "clhs-use-local.el")
   (load-quicklisp-file "log4slime-setup.el")
 
@@ -1396,14 +1360,12 @@
 	      ("C-c o l a o" . org-agenda-open-link)
 	      ("C-c o t" . org-set-tags-command)
 	      ("C-c o p" . org-insert-property-drawer)
-	      ("C-c o d d" . org-date)
 	      ("C-c o d n" . tychoish-org-date-now)
 	      ("C-c o a a" . org-agenda)
 	      ("C-c o a s" . org-archive-to-archive-sibling)
-	      ("C-c o a e" . org-cycle-forced-archive)
+	      ("C-c o a e" . org-cycle-force-archived)
 	      ("C-c o a d" . tychoish-org-mark-done-and-archive)
-	      ("C-c o a f" . org-archive-subtree)
-	      ("C-c o f" . org-archive-set-tag)
+	      ("C-c o a f" . org-archive-set-tag)
 	      ("C-c o n" . org-narrow-to-subtree)
 	      ("C-c o b t" . org-ctags-create-tags)
 	      ("C-c o h c" . helm-capture-templates)
@@ -1754,7 +1716,7 @@
 
 (use-package toc-org
   :ensure t
-  :after (org)
+  :after org
   :commands (toc-org-insert-toc)
   :config
   (defun tychoish--add-toc-org-op () (save-excursion (toc-org-insert-toc)))
@@ -1763,7 +1725,7 @@
 
 (use-package ox-gist
   :ensure t
-  :after (org)
+  :after ox
   :commands (org-gist-export-private-gist org-gist-export-to-public-gist)
   :bind (:map org-mode-map
 	 ("C-c o e g p" . org-gist-export-to-private-gist)
@@ -1778,17 +1740,21 @@
 
 (use-package ox-rst
   :ensure t
-  :after (org)
+  :after ox
   :commands (org-rst-export-to-rst org-rst-export-as-rst)
   :config
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
 (use-package ox-leanpub
   :ensure t
-  :after (org)
+  :after ox
   :config
   (require 'ox-leanpub-markua)
   (org-leanpub-book-setup-menu-markua))
+
+(use-package ox-hugo
+  :ensure t
+  :after ox)
 
 (use-package tychoish-bootstrap
   :commands (tychoish-setup-global-modes
@@ -2270,7 +2236,7 @@
   (setq lexical-illusions nil)
   (setq weasl-words t)
   (setq passive-voice t)
-
+q
   ;; Make sure keywords are case-insensitive
   (defadvice search-for-keyword (around sacha activate)
     "Match in a case-insensitive way."
@@ -2767,11 +2733,8 @@
 
 (use-package sh-script
   :ensure t
-  :mode (("\\.bash$'" . sh-mode)
-	 ("\\.sh$'" . sh-mode)
-	 ("\\.zsh$'" . sh-mode)
+  :mode (("\\.zsh$'" . sh-mode)
 	 ("\\.zshrc$'" . sh-mode)
-	 ("\\.bashrc$'" . sh-mode)
 	 ("\\.bash_profile$'" . sh-mode)))
 
 (use-package nxml-mode
@@ -2786,7 +2749,12 @@
 (use-package elgot
   :ensure nil
   :commands (eglot eglot-ensure)
-  :hook ((python-mode go-mode rust-mode shell-mode js2-mode typescript-mode) . eglot-ensure)
+  :hook ((python-mode python-ts-mode
+	  go-mode go-ts-mode
+	  rust-mode rust-ts-mode
+	  shell-mode bash-ts-mode
+	  js2-mode javascript-ts-mode
+	  typescript-mode typescript-ts-mode) . eglot-ensure)
   :bind (("C-c l l s" . eglot)
 	 ("C-c l l r" . eglot-reconnect)
 	 ("C-c l l k" . eglot-shutdown)
@@ -2799,7 +2767,8 @@
 
 (use-package helm-xref
   :ensure t
-  :bind (("C-c l c" . xref-find-references)
+  :bind (("M-." . xref-find-definitions)
+	 ("C-c l c" . xref-find-references)
 	 ("C-c l d" . xref-find-definitions)
 	 ("C-c l p" . xref-go-back)
 	 ("C-c l n" . xref-go-forward)
@@ -2810,6 +2779,93 @@
   :after (flycheck eglot)
   :config
   (global-flycheck-eglot-mode 1))
+
+(use-package treesit-mode
+  :ensure nil
+  :init
+  (setq go-ts-mode-hook 'go-mode-hook)
+  (setq rust-ts-mode-hook 'rust-mode-hook)
+  (setq toml-ts-mode-hook 'toml-mode-hook)
+  (setq dockerfile-ts-mode-hook 'dockerfile-mode-hook)
+  (setq cmake-ts-mode-hook 'cmake-mode-hook)
+  (setq c++-ts-mode-hook 'c++-mode-hook)
+  (setq cmake-ts-mode-hook 'c-mode-hook)
+  (setq json-ts-mode-hook 'json-mode-hook)
+  (setq js-ts-mode 'js2-mode-hook)
+  (setq python-ts-mode-hook 'python-mode-hook)
+  (setq yaml-ts-mode-hook 'yaml-mode-hook)
+
+  (setq major-mode-remap-alist
+	'((yaml-mode . yaml-ts-mode)
+	  (bash-mode . bash-ts-mode)
+	  (js2-mode . js-ts-mode)
+	  (typescript-mode . typescript-ts-mode)
+	  (go-mode . go-ts-mode)
+	  (dockerfile-mode . dockerfile-ts-mode)
+	  (rust-mode . rust-ts-mode)
+	  (json-mode . json-ts-mode)
+	  (c-mode . c-ts-mode)
+	  (c++-mode . c++-ts-mode)
+	  (c-or-c++-mode . c-or-c++-ts-mode)
+	  (toml-mode . toml-ts-mode)
+	  (yaml-mode . yaml-ts-mode)
+	  (css-mode . css-ts-mode)
+	  (python-mode . python-ts-mode)))
+  
+  (add-to-list 'auto-mode-alist '("\\.sh\\'" . bash-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.bashrc\\'" . bash-ts-mode))
+
+  (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.js\\'" . js-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.css\\'" . css-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
+
+  (add-to-list 'auto-mode-alist '("\\.cpp\\'" . c++-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.cc\\'" . c++-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.h\\'" . c-or-c++-ts-mode))
+
+  (add-to-list 'auto-mode-alist '("Cargo.lock" . toml-ts-mode))
+  (add-to-list 'auto-mode-alist '("go.mod" . go-mod-ts-mode))
+  (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
+  (add-to-list 'auto-mode-alist '("CMakeLists.txt" . cmake-ts-mode))
+
+  :config
+  (setq treesit-language-source-alist
+   '((bash "https://github.com/tree-sitter/tree-sitter-bash")
+     (cmake "https://github.com/uyha/tree-sitter-cmake")
+     (c "https://github.com/tree-sitter/tree-sitter-c")
+     (css "https://github.com/tree-sitter/tree-sitter-css")
+     (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
+     (elisp "https://github.com/Wilfred/tree-sitter-elisp")
+     (go "https://github.com/tree-sitter/tree-sitter-go")
+     (html "https://github.com/tree-sitter/tree-sitter-html")
+     (java "https://github.com/tree-sitter/tree-sitter-java")
+     (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
+     (json "https://github.com/tree-sitter/tree-sitter-json")
+     (make "https://github.com/alemuller/tree-sitter-make")
+     (markdown "https://github.com/ikatyang/tree-sitter-markdown")
+     (python "https://github.com/tree-sitter/tree-sitter-python")
+     (regex "https://github.com/tree-sitter/tree-sitter-regex")
+     (ruby "https://github.com/tree-sitter/tree-sitter-ruby")
+     (rust "https://github.com/tree-sitter/tree-sitter-rust")
+     (scala "https://github.com/tree-sitter/tree-sitter-scala")
+     (toml "https://github.com/tree-sitter/tree-sitter-toml")
+     (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
+     (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
+     (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")
+     (yaml "https://github.com/ikatyang/tree-sitter-yaml")))
+
+  (defun tychoish-background-rebuild-treesit-bindings ()
+    (interactive)
+    (async-start
+     `(lambda ()
+  	,(async-inject-variables "treesit-language-source-alist")
+  	(mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
+     (lambda (result)
+       (message "rebuilding treesit grammars %s" result)))))
 
 (provide 'tychoish-core)
 ;;; programming.el ends here
