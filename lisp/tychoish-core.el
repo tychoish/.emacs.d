@@ -903,10 +903,6 @@
 (use-package rust-compile
   :after (rustic))
 
-(use-package toml-mode
-  :ensure t
-  :mode "\\.toml$'")
-
 (use-package rust-playground
   :ensure t
   :commands (rust-playground rust-playground-run-command))
@@ -2601,7 +2597,7 @@ q
 	 ("C-c l l r" . eglot-reconnect)
 	 ("C-c l l k" . eglot-shutdown)
 	 ("C-c l l l" . eglot-list-connections)
-	 :map eglot-mode
+	 :map eglot-mode-map
 	      ("C-c l r" . eglot-rename)
 	      ("C-c l f" . eglot-format)
 	      ("C-c l m" . helm-imenu)
@@ -2640,7 +2636,6 @@ q
   :ensure nil
   :init
   (setq rust-ts-mode-hook 'rust-mode-hook)
-  (setq toml-ts-mode-hook 'toml-mode-hook)
   (setq cmake-ts-mode-hook 'cmake-mode-hook)
   (setq c++-ts-mode-hook 'c++-mode-hook)
   (setq cmake-ts-mode-hook 'c-mode-hook)
@@ -2657,7 +2652,6 @@ q
 	  (c-mode . c-ts-mode)
 	  (c++-mode . c++-ts-mode)
 	  (c-or-c++-mode . c-or-c++-ts-mode)
-	  (toml-mode . toml-ts-mode)
 	  (yaml-mode . yaml-ts-mode)
 	  (css-mode . css-ts-mode)
 	  (python-mode . python-ts-mode)))
@@ -2671,6 +2665,7 @@ q
   (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.css\\'" . css-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.toml\\'" . toml-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.yaml\\'" . yaml-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-ts-mode))
 
