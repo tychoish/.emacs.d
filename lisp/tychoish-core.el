@@ -872,7 +872,7 @@
   :after (rustic)
   :config
   (setq cargo-process--command-fmt "fmt --all")
-  (add-hook 'rust-mode-hook 'cargo-minor-mode))
+  (add-hook 'rust-ts-mode-hook 'cargo-minor-mode))
 
 (use-package rustic
   :ensure t
@@ -895,10 +895,6 @@
   ;; comment to disable rustfmt on save
   (setq rustic-format-on-save t)
   (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
-
-(use-package rust-mode
-  :ensure t
-  :defer t)
 
 (use-package rust-compile
   :after (rustic))
@@ -2046,7 +2042,7 @@
   (setq lexical-illusions nil)
   (setq weasl-words t)
   (setq passive-voice t)
-q
+
   ;; Make sure keywords are case-insensitive
   (defadvice search-for-keyword (around sacha activate)
     "Match in a case-insensitive way."
@@ -2062,8 +2058,10 @@ q
 
 (use-package tex
   :defer t
+  :ensure auctex
   :config
   (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
+
   (setq TeX-auto-save t)
   (setq TeX-parse-self t)
   (setq TeX-PDF-mode t)
@@ -2588,11 +2586,12 @@ q
 (use-package elgot
   :ensure nil
   :commands (eglot eglot-ensure)
-  :hook ((python-ts-mode go-ts-mode
-	  rust-mode rust-ts-mode
-	  shell-mode bash-ts-mode
-	  js2-mode javascript-ts-mode
-	  typescript-mode typescript-ts-mode) . eglot-ensure)
+  :hook ((python-ts-mode
+	  go-ts-mode
+	  rust-ts-mode
+	  js-ts-mode
+	  typescript-ts-mode
+	  bash-ts-mode sh-mode) . eglot-ensure)
   :bind (("C-c l l s" . eglot)
 	 ("C-c l l r" . eglot-reconnect)
 	 ("C-c l l k" . eglot-shutdown)
@@ -2603,6 +2602,8 @@ q
 	      ("C-c l m" . helm-imenu)
 	      ("C-c l a" . eglot-code-actions))
   :config
+  (setq eglot-ignored-server-capabilities '(:inlayHintProvider))
+
   (defun eglot-organize-imports ()
     (interactive)
     (eglot-code-actions nil nil "source.organizeImports" t))
@@ -2635,24 +2636,16 @@ q
 (use-package treesit
   :ensure nil
   :init
-  (setq rust-ts-mode-hook 'rust-mode-hook)
-  (setq cmake-ts-mode-hook 'cmake-mode-hook)
   (setq c++-ts-mode-hook 'c++-mode-hook)
-  (setq cmake-ts-mode-hook 'c-mode-hook)
-  (setq json-ts-mode-hook 'json-mode-hook)
-  (setq js-ts-mode 'js2-mode-hook)
+  (setq c-ts-mode-hook 'c-mode-hook)
+  (setq js-ts-mode-hook 'js-mode-hook)
 
   (setq major-mode-remap-alist
-	'((bash-mode . bash-ts-mode)
-	  (js2-mode . js-ts-mode)
-	  (typescript-mode . typescript-ts-mode)
-	  (go-mode . go-ts-mode)
-	  (rust-mode . rust-ts-mode)
-	  (json-mode . json-ts-mode)
+	'((js-mode . js-ts-mode)
+	  (js-json-mode . json-ts-mode)
 	  (c-mode . c-ts-mode)
 	  (c++-mode . c++-ts-mode)
 	  (c-or-c++-mode . c-or-c++-ts-mode)
-	  (yaml-mode . yaml-ts-mode)
 	  (css-mode . css-ts-mode)
 	  (python-mode . python-ts-mode)))
 
@@ -2673,6 +2666,11 @@ q
   (add-to-list 'auto-mode-alist '("\\.cc\\'" . c++-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.h\\'" . c-or-c++-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.java\\'" . java-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.scala\\'" . scala-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.sc\\'" . scala-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.kt\\'" . kotlin-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.kts\\'" . kotlin-ts-mode))
 
   (add-to-list 'auto-mode-alist '("go.mod" . go-mod-ts-mode))
   (add-to-list 'auto-mode-alist '("Cargo.lock" . toml-ts-mode))
@@ -2698,6 +2696,7 @@ q
      (java "https://github.com/tree-sitter/tree-sitter-java")
      (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
      (json "https://github.com/tree-sitter/tree-sitter-json")
+     (kotlin "https://github.com/fwcd/tree-sitter-kotlin")
      (make "https://github.com/alemuller/tree-sitter-make")
      (markdown "https://github.com/ikatyang/tree-sitter-markdown")
      (python "https://github.com/tree-sitter/tree-sitter-python")
