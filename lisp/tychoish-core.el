@@ -18,6 +18,11 @@
   (async-bytecomp-package-mode t)
   (dired-async-mode 1))
 
+(use-package dired
+  :ensure nil
+  :init
+  (define-key dired-mode-map (kbd "r") 'wdired-change-to-wdired-mode))
+
 (use-package auto-package-update
   :commands (auto-package-update-maybe auto-package-update-now)
   :ensure t
@@ -528,7 +533,7 @@
 (use-package wgrep
   :ensure t
   :bind (:map grep-mode-map
-	 ("C-x C-q" . wgrep-change-to-wgrep-mode))
+	 ("r" . wgrep-change-to-wgrep-mode))
   :config
   (setq wgrep-enable-key "r"))
 
@@ -542,14 +547,18 @@
 				 lisp-mode
 				 scheme-mode
 				 help-mode
+				 c-ts-mode
 				 c-mode
 				 cc-mode
+				 cc-ts-mode
 				 eww-mode
-				 go-mode
+				 go-ts-mode
 				 special-mode)))
 
 (use-package writeroom-mode
   :ensure t
+  :alias (wrm)
+  :bind (("C-c t i" . writeroom-mode))
   :commands (writeroom-mode))
 
 (use-package revbufs
@@ -782,12 +791,13 @@
   (setq company-backends '(company-capf
 			   company-keywords
 			   company-semantic
-			   company-files
-			   company-etags
-			   company-elisp
 			   company-emoji
-			   company-cmake
-			   company-yasnippet))
+			   company-yasnippet
+			   company-etags
+			   company-wordfreq
+			   company-elisp
+			   company-files
+			   company-cmake))
 
   (global-company-mode))
 
@@ -798,25 +808,13 @@
 (use-package company-wordfreq
   :ensure t
   :after company
-  :init
-  (defun setup-local-word-complete ()
-    (setq-local company-backends '(company-wordfreq))
-    (setq-local company-idle-delay 0.15)
-    (setq-local company-echo-delay 0.15)
-    (setq-local company-transformers nil))
-
-  (add-hook 'markdown-mode-hook 'setup-local-word-complete)
-  (add-hook 'rst-mode-hook 'setup-local-word-complete)
-  ;(add-hook 'message-mode-hook 'setup-local-word-complete)
-  (add-hook 'org-mode-hook 'setup-local-word-complete))
+  :autoload company-wordfreq)
 
 (use-package flycheck
   :ensure t
   :diminish (flycheck-mode . "fc")
   :bind (("C-c f f" . flycheck-mode))
   :init
-  (add-hook 'c-mode-common-hook 'flycheck-mode)
-  (add-hook 'emacs-lisp-mode-hook 'flycheck-mode)
   (add-hook 'c++-mode-hook (lambda () (setq flycheck-gcc-language-standard "c++11")))
   :config
   ;; the order of the following 3 operations is important.
@@ -830,45 +828,9 @@
   (setq flycheck-checker-error-threshold nil)
   (setq flycheck-flake8-maximum-line-length 100))
 
-(use-package flycheck-aspell
-  :ensure t
-  :after (flycheck)
-  :config
-  (flycheck-aspell-define-checker "org"
-    "Org" ("--add-filter" "url")
-    (org-mode))
-  (flycheck-aspell-define-checker "rst"
-    "reStructuredText" ("--add-filter" "url")
-    (rst-mode))
-
-  (add-to-list 'flycheck-checkers 'org-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'rst-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'markdown-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'c-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'mail-aspell-dynamic))
-
-(use-package flycheck-grammarly
-  :ensure t
-  :after (flycheck)
-  :config
-  (setq flycheck-grammarly-check-time 0.5))
-
-(use-package flycheck-vale
-  :ensure t
-  :after (flycheck)
-  :ensure-system-package vale
-  ;; vale is the aur package "vale-bin" but maybe its more portable to
-  ;; try and use "go get" or "go install".
-  :init
-  (add-hook 'org-mode-hook 'flycheck-mode)
-  (add-hook 'rst-mode-hook 'flycheck-mode)
-  (add-hook 'markdown-mode-hook 'flycheck-mode)
-  :config
-  (flycheck-vale-setup))
-
 (use-package flycheck-golangci-lint
   :ensure t
-  :after (go-mode flycheck)
+  :after (go-ts-mode flycheck)
   :commands (flycheck-golangci-lint-setup)
   :init
   :config
@@ -884,44 +846,27 @@
   :config
   (add-hook 'flycheck-mode-hook #'flycheck-rust-setup))
 
-(use-package go-mode
-  :ensure t
+(use-package go-ts-mode
+  :ensure nil
   :delight "go"
-  :bind (:map go-mode-map
-	      ("C-c M-." . godef-jump))
-  :mode (("\\.go$" . go-mode)
-	 ("\\.go" . go-mode)
-	 ("\\.go\\'" . go-mode))
-  :config
-
+  :mode (("\\.go$" . go-ts-mode)
+	 ("\\.go" . go-ts-mode)
+	 ("\\.go\\'" . go-ts-mode))
+  :init
   (unless (getenv "GOPATH")
     (setenv "GOPATH" (expand-file-name "~/go")))
 
   (setq local-go-bin (concat (getenv "GOPATH") "/bin"))
   (setq exec-path (cons local-go-bin exec-path))
   (setenv "PATH" (format "%s:%s" (getenv "PATH") local-go-bin ))
-  (setenv "GO111MODULE" "auto")
   (add-to-list 'exec-path local-go-bin)
 
-  (add-hook 'go-mode-hook (lambda ()
-			    (flyspell-prog-mode)
-			    (setq-local comment-auto-fill-only-comments t)
-			    (auto-fill-mode 1)))
-
-  (setq gofmt-command "goimports")
-  (add-hook 'before-save-hook 'gofmt-before-save)
-  (add-hook 'before-save-hook 'eglot-format-buffer)
-  (add-hook 'go-mode-hook 'flycheck-mode)
-
-  (if (not (string-match "go" compile-command))
-      (set (make-local-variable 'compile-command)
-	   "go build -v && go test -v && go vet")))
-
-(use-package go-eldoc
-  :ensure t
-  :after go-mode
   :config
-  (add-hook 'go-mode-hook 'go-eldoc-setup))
+  (add-hook 'go-ts-mode-hook 'flycheck-mode)
+  (add-hook 'go-ts-mode-hook
+	    (lambda ()
+	      (setq-local comment-auto-fill-only-comments t)
+	      (auto-fill-mode 1))))
 
 (use-package cargo
   :ensure t
@@ -1060,12 +1005,11 @@
 	 ("\\.pxd\\'" . cython-mode)
 	 ("\\.pxi\\'" . cython-mode)))
 
-(use-package python-mode
-  :ensure t
+(use-package python-ts-mode
+  :ensure nil
   :delight "py"
-  :mode ("\\.py\\'" "\\.py3\\'" "SConstruct" "SConscript" "Tiltfile")
   :after (tychoish-editing)
-  :bind (:map python-mode-map
+  :bind (:map python-ts-mode-map
 	      ("M-<right>" . balle-python-shift-right)
 	      ("M-<left>" . balle-python-shift-left)
 	      ([remap completion-at-point] . company-complete)
@@ -1100,10 +1044,9 @@
       (python-indent-shift-right start end))
     (setq deactivate-mark nil))
   :config
-  (add-hook 'python-mode-hook (lambda ()
-				(flyspell-prog-mode)
-				(define-key python-mode-map "'" 'tychoish-electric-pair)
-				(set-fill-column 95)))
+  (add-hook 'python-ts-mode-hook (lambda ()
+				(define-key python-ts-mode-map "'" 'tychoish-electric-pair)
+				(set-fill-column 100)))
 
   (setq python-indent-offset 4)
 
@@ -1112,12 +1055,12 @@
   (if (eq system-type 'gnu/linux)
       (setq py-python-command "/usr/bin/python2"))
 
-  (font-lock-add-keywords 'python-mode (font-lock-show-tabs))
-  (font-lock-add-keywords 'python-mode (font-lock-width-keyword 100)))
+  (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
+  (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
 (use-package virtualenvwrapper
   :ensure t
-  :after (python-mode)
+  :after (python-ts-mode)
   :config
   (venv-initialize-interactive-shells)
   (venv-initialize-eshell))
@@ -1444,7 +1387,6 @@
   (add-hook 'org-shiftleft-final-hook 'windmove-left)
   (add-hook 'org-shiftdown-final-hook 'windmove-down)
   (add-hook 'org-shiftright-final-hook 'windmove-right)
-  (add-hook 'org-mode-hook 'flyspell-mode)
   (add-hook 'org-mode-hook (lambda () (org-indent-mode) (diminish 'org-indent-mode)))
   (add-hook 'org-mode-hook 'visual-line-mode)
 
@@ -1514,7 +1456,6 @@
 			  ("@work" . ?w)
 			(:endgroup . nil)))
 
-  (add-hook 'org-mode-hook 'flyspell-mode)
   (setq org-CUA-compatible t)
   (setq org-agenda-block-separator nil)
   (setq org-agenda-columns-add-appointments-to-effort-sum t)
@@ -2132,10 +2073,8 @@ q
   (setq TeX-master nil)
   (setq auto-mode-alist (cons '("\\.tex" . latex-mode) auto-mode-alist))
   (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
-  (add-hook 'LaTeX-mode-hook 'flyspell-mode)
   (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
   (add-hook 'LaTeX-mode-hook 'visual-line-mode)
-  (add-hook 'latex-mode-hook 'flyspell-mode)
   (add-hook 'latex-mode-hook 'turn-on-auto-fill))
 
 (use-package markdown-mode
@@ -2151,7 +2090,6 @@ q
       (setq markdown-command "/usr/local/bin/mmd --nosmart")
     (setq markdown-command "/usr/bin/markdown"))
 
-  (add-hook 'markdown-mode-hook 'flyspell-mode)
   (add-hook 'markdown-mode-hook 'turn-on-auto-fill)
   (add-hook 'markdown-mode-hook (lambda () (setq imenu-generic-expression markdown-imenu-generic-expression)))
 
@@ -2244,6 +2182,43 @@ q
 	      (define-key rst-mode-map "<" 'tychoish-electric-pair)
 	      (define-key rst-mode-map (kbd "C-c C-t h") 'rst-adjust)
 	      (local-unset-key (kbd "C-c C-s")))))
+
+(use-package flycheck-aspell
+  :ensure t
+  :after (flycheck)
+  :config
+  (flycheck-aspell-define-checker "org"
+    "Org" ("--add-filter" "url")
+    (org-mode))
+  (flycheck-aspell-define-checker "rst"
+    "reStructuredText" ("--add-filter" "url")
+    (rst-mode))
+
+  (add-to-list 'flycheck-checkers 'org-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'rst-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'markdown-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'c-aspell-dynamic)
+  (add-to-list 'flycheck-checkers 'mail-aspell-dynamic))
+
+(use-package flycheck-grammarly
+  :ensure t
+  :after (flycheck)
+  :config
+  (setq flycheck-grammarly-check-time 0.5))
+
+(use-package flycheck-vale
+  :ensure t
+  :after (flycheck)
+  :ensure-system-package vale
+  ;; vale is the aur package "vale-bin" but maybe its more portable to
+  ;; try and use "go get" or "go install".
+  :init
+  (add-hook 'org-mode-hook 'flycheck-mode)
+  (add-hook 'rst-mode-hook 'flycheck-mode)
+  (add-hook 'markdown-mode-hook 'flycheck-mode)
+  :config
+  (flycheck-vale-setup))
+
 
 (use-package wc-mode
   :ensure t
@@ -2616,8 +2591,7 @@ q
 (use-package elgot
   :ensure nil
   :commands (eglot eglot-ensure)
-  :hook ((python-mode python-ts-mode
-	  go-mode go-ts-mode
+  :hook ((python-ts-mode go-ts-mode
 	  rust-mode rust-ts-mode
 	  shell-mode bash-ts-mode
 	  js2-mode javascript-ts-mode
@@ -2626,11 +2600,25 @@ q
 	 ("C-c l l r" . eglot-reconnect)
 	 ("C-c l l k" . eglot-shutdown)
 	 ("C-c l l l" . eglot-list-connections)
-	 :map eglot-mode-map
+	 :map eglot-mode
 	      ("C-c l r" . eglot-rename)
 	      ("C-c l f" . eglot-format)
-	      ("C-c l m" . imenu)
-	      ("C-c l a" . eglot-code-actions)))
+	      ("C-c l m" . helm-imenu)
+	      ("C-c l a" . eglot-code-actions))
+  :config
+  (defun eglot-organize-imports ()
+    (interactive)
+    (eglot-code-actions nil nil "source.organizeImports" t))
+
+  (add-hook 'before-save-hook 'eglot-organize-imports)
+  (add-hook 'before-save-hook 'eglot-format-buffer)
+
+  (setq-default eglot-workspace-configuration
+		'((:pylsp . (:configurationSources ["flake8"]
+			     :plugins (:pycodestyle (:enabled nil)
+				       :black (:enabled t)
+				       :mccabe (:enabled nil)
+				       :flake8 (:enabled t)))))))
 
 (use-package helm-xref
   :ensure t
@@ -2650,7 +2638,6 @@ q
 (use-package treesit-mode
   :ensure nil
   :init
-  (setq go-ts-mode-hook 'go-mode-hook)
   (setq rust-ts-mode-hook 'rust-mode-hook)
   (setq toml-ts-mode-hook 'toml-mode-hook)
   (setq cmake-ts-mode-hook 'cmake-mode-hook)
@@ -2658,7 +2645,6 @@ q
   (setq cmake-ts-mode-hook 'c-mode-hook)
   (setq json-ts-mode-hook 'json-mode-hook)
   (setq js-ts-mode 'js2-mode-hook)
-  (setq python-ts-mode-hook 'python-mode-hook)
 
   (setq major-mode-remap-alist
 	'((bash-mode . bash-ts-mode)
@@ -2692,8 +2678,9 @@ q
   (add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.h\\'" . c-or-c++-ts-mode))
 
-  (add-to-list 'auto-mode-alist '("Cargo.lock" . toml-ts-mode))
   (add-to-list 'auto-mode-alist '("go.mod" . go-mod-ts-mode))
+  (add-to-list 'auto-mode-alist '("Cargo.lock" . toml-ts-mode))
+
   (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
   (add-to-list 'auto-mode-alist '("CMakeLists.txt" . cmake-ts-mode))
 
