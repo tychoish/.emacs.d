@@ -20,7 +20,7 @@
 
 (use-package dired
   :ensure nil
-  :init
+  :config
   (define-key dired-mode-map (kbd "r") 'wdired-change-to-wdired-mode))
 
 (use-package auto-package-update
@@ -557,7 +557,6 @@
 
 (use-package writeroom-mode
   :ensure t
-  :alias (wrm)
   :bind (("C-c t i" . writeroom-mode))
   :commands (writeroom-mode))
 
@@ -1667,7 +1666,7 @@
 				       (format "%s:%s" (daemonp) (buffer-name))
 				     (concat "solo:" (buffer-name)))))
   (setq bookmark-save-flag 1)
-  (setq bookmark-default-file (tychoish-get-config-file-path "bookmarks")))
+  (setq qbookmark-default-file (tychoish-get-config-file-path "bookmarks")))
 
 (use-package cus-edit
   :after (tychoish-bootstrap)
@@ -1756,9 +1755,10 @@
   (global-set-key (kbd "C-c c") 'comment-region)
   (global-set-key (kbd "C-c i") 'indent-region)
 
-  (global-set-key (kbd "C-x C-x") 'exchange-dot-and-mark)
   (global-set-key (kbd "M-<SPC>") 'set-mark-command)
-  (global-set-key (kbd "M-C-q") 'fill-region))
+  (global-set-key (kbd "C-h") 'backward-kill-word)
+  (global-set-key (kbd "C-x C-x") 'exchange-point-and-mark)
+  (global-set-key (kbd "M-<SPC>") 'set-mark-command))
 
 (use-package git-grep
   :ensure t
@@ -1877,14 +1877,6 @@
 	  ("To"     "^To: *\\(.*\\)" 1)
 	  ("From"  "^From: *\\(.*\\)" 1)))
 
-
-  (setq completion-ignore-case t)
-  (setq compose-mail-user-agent-warnings nil)
-  (setq mail-signature t)
-  (setq mail-specify-envelope-from t)
-  (setq mail-user-agent 'mu4e-user-agent)
-  (setq mc-gpg-user-id (getenv "GPG_KEY_ID"))
-  (setq mml2015-sign-with-sender t)
   (setq mu4e-compose-complete-addresses t)
   (setq mu4e-compose-complete-only-after "2015-01-01")
   (setq mu4e-compose-dont-reply-to-self t)
@@ -1901,6 +1893,14 @@
   (setq mu4e-user-agent-string nil)
   (setq mu4e-view-show-images t)
   (setq mu4e~maildir-list nil)
+
+  (setq completion-ignore-case t)
+  (setq compose-mail-user-agent-warnings nil)
+  (setq mail-signature t)
+  (setq mail-specify-envelope-from t)
+  (setq mail-user-agent 'mu4e-user-agent)
+  (setq mc-gpg-user-id (getenv "GPG_KEY_ID"))
+  (setq mml-secure-openpgp-sign-with-sender t)
   (setq sendmail-program "msmtp")
   (setq smtpmail-queue-mail nil)
 
@@ -1964,6 +1964,7 @@
 	  (replace-match new-from nil nil)))))
 
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
+
   (defun mu4e~draft-insert-mail-header-separator ()
     ;; we set this here explicitly, since (as it has happened) a wrong
     ;; value for this (such as "") breaks address completion and other things
@@ -2635,7 +2636,7 @@ q
   :config
   (global-flycheck-eglot-mode 1))
 
-(use-package treesit-mode
+(use-package treesit
   :ensure nil
   :init
   (setq rust-ts-mode-hook 'rust-mode-hook)
