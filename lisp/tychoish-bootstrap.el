@@ -93,6 +93,7 @@ to change the value of this variable.")
   ;; setting the list before calling the function reduce the total time
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (scroll-bar-mode -1)
+  (indent-tabs-mode -1)
 
   (tool-bar-mode -1)
   (delete-selection-mode 1)
@@ -227,9 +228,9 @@ each buffer, unless NO-ASK is non-nil."
   (dolist (buffer (buffer-list))
     (let ((name (buffer-file-name buffer)))
       (when (and name (not (string-equal name ""))
-                 (or internal-too (/= (aref name 0) ?\s))
-                 (string-match regexp name))
-        (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)))))
+		 (or internal-too (/= (aref name 0) ?\s))
+		 (string-match regexp name))
+	(funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)))))
 
 (defun display-startup-echo-area-message ()  "Called during setup, intentially a noop, which omit the message."  nil)
 (defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup" "")
@@ -239,8 +240,8 @@ each buffer, unless NO-ASK is non-nil."
 (defun ad:suppress-message (f &rest arg)
   (if my-suppress-message-p
       (let ((inhibit-message t)
-            (message-log-max nil))
-        (apply f arg))
+	    (message-log-max nil))
+	(apply f arg))
     (apply f arg)))
 
 (defvar tychoish-xterm-mouse-state nil)
@@ -256,4 +257,3 @@ each buffer, unless NO-ASK is non-nil."
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
-
