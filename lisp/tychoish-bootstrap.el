@@ -102,6 +102,8 @@ to change the value of this variable.")
   (column-number-mode t)
   (electric-pair-mode 1)
 
+  (global-auto-revert-mode 1)
+
   (when (gui-p)
     (which-key-mode 1)
     (diminish 'which-key-mode))

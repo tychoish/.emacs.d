@@ -306,13 +306,13 @@ configuration:
 
 - Setup my org capture templates, using a function defined elsewhere: ::
 
-    ;; (tychoish-add-org-capture-template <prefix-key> "file-name")
+    ;; (tychoish-org-add-file-capture-templates <prefix-key> "file-name")
     ;; using the empty key creates a shortcuts in a file at the top level
     ;; (templates starting with n, t, r, j )
-    (tychoish-add-org-capture-template "m" "meta")
-    (tychoish-add-org-capture-template "w" "writing")
-    (tychoish-add-org-capture-template "b" "blog")
-    (tychoish-add-org-capture-template "" "organizer")
+    (tychoish-org-add-file-capture-templates "m" "meta")
+    (tychoish-org-add-file-capture-templates "w" "writing")
+    (tychoish-org-add-file-capture-templates "b" "blog")
+    (tychoish-org-add-file-capture-templates "" "organizer")
 
   This modifies data in a list, so calling this function in the reverse
   priority is ideal.

@@ -58,7 +58,8 @@
   :config
   (diminish 'auto-revert-mode)
   (setq auto-revert-verbose nil)
-  (setq auto-revert-interval 5))
+  (setq auto-revert-avoid-polling t)
+  (setq auto-revert-interval 60))
 
 (use-package abbrev
   :after (tychoish-bootstrap company-mode)
@@ -345,19 +346,7 @@
 	 ("C-c s r" . helm-projectile-rg)
 	 ("C-c s g" . helm-projectile-grep))
   :config
-  (setq projectile-indexing-method 'git)
   (helm-projectile-on))
-
-(use-package helm-ag
-  :ensure t
-  :ensure-system-package ((ag . the_silver_searcher))
-  :bind (("C-c a S" . helm-ag)
-	 ("C-c a B" . helm-ag-buffers)
-	 ("C-c a P" . helm-ag-project-root)
-	 ("C-c a b" . helm-do-ag-buffers)
-	 ("C-c a p" . helm-do-ag-project-root)
-	 ("C-c a s" . helm-do-ag)))
-
 
 (use-package helm-c-yasnippet
   :ensure t
@@ -512,11 +501,9 @@
   :bind-keymap ("C-c p" . projectile-command-map)
   :commands (projectile-mode projectile-project-root)
   :defer 1
-  :init
   :config
-  (defun projectile-set-indexing-method () (interactive)
-	 (setq projectile-indexing-method 'alien))
   (setq projectile-known-projects-file (f-join user-emacs-directory (tychoish-get-config-file-prefix "projectile-bookmarks")))
+
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
       (if (equal pname "-")
@@ -792,6 +779,7 @@ nil. Also returns nil if pid is nil."
 			   company-semantic
 			   company-emoji
 			   company-yasnippet
+
 			   company-etags
 			   company-wordfreq
 			   company-elisp
@@ -1143,7 +1131,7 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :mode (("\\.org$" . org-mode))
   :delight "org"
-  :commands (tychoish-add-org-capture-template org-save-all-org-buffers)
+  :commands (tychoish-org-add-file-capture-templates org-save-all-org-buffers)
   :bind (("C-c o a" . org-agenda)
 	 ("C-c o t a" . org-agenda)
 	 ("C-c o l s" . org-store-link)
@@ -1154,8 +1142,7 @@ nil. Also returns nil if pid is nil."
 	 ("C-c o k l" . org-capture-goto-last-stored)
 	 ("C-c o k t" . org-capture-goto-target)
 	 ("C-c o k w" . org-capture-refile)
-	 ("C-c o l a" . org-annotate-file)
-	 ("C-c o f o" . (lambda () (interactive) (find-file (concat org-directory "/organizer.org")))))
+	 ("C-c o l a" . org-annotate-file))
   :init
   (add-hook 'org-mode-hook 'tychoish--add-toc-org-hook)
   (add-hook 'org-mode-hook 'flycheck-mode)
@@ -1183,61 +1170,71 @@ nil. Also returns nil if pid is nil."
       (org-timestamp-change 0 'year)
       t))
 
-  (setq org-capture-templates '())
+  (defun tychoish-org-reset-capture-templates ()
+    (interactive)
+    (setq org-capture-templates '(("n" "notes")
+				  ("j" "journal")
+				  ("t" "tasks")
+				  ("r" "routines"))))
 
-  (defun tychoish-add-org-capture-template (prefix-key name)
+  (defun tychoish-org--add-routines (prefix-key name orgfile-path)
+    (add-to-list 'org-capture-templates `(,(concat "r" prefix-key) ,name))
+    (dolist (ival-pair '(("1d" . "Daily")
+			 ("1w" . "Weekly")
+			 ("4w" . "Monthly")
+			 ("12w" . "Quarterly")
+			 ("21w" . "Half Yearly")
+			 ("52w" . "Yearly")))
+      (let* ((interval (car ival-pair))
+	     (heading (cdr ival-pair))
+	     (interval-prefix (downcase (substring heading 0 1)))
+	     (lower-heading (downcase heading))
+	     (menu-name (concat name lower-heading "routine"))
+	     (template (concat "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")))
+      (dolist (prefix (list (concat prefix-key "r" interval-prefix) (concat "r" prefix-key interval-prefix)))
+	(add-to-list 'org-capture-templates `(,prefix ,(concat name " " lower-heading " routine")
+					      entry (file+olp ,orgfile-path "Loops" heading)
+					      ,template
+					      :prepend t
+					      :kill-buffer t
+					      :empty-lines-after 1))))))
+
+  (defun tychoish-org-add-file-capture-templates (name &rest args)
     "Defines a set of capture mode templates for adding notes and tasks to a file."
-    (let ((org-filename (concat org-directory "/" (downcase name) ".org")))
+    (let ((org-filename (concat org-directory "/" (make-filename-slug name) ".org"))
+	  (prefix-key (or (plist-get args :prefix) ""))
+	  (should-add-routines (plist-get args :routines)))
+
+      (when (s-contains-p prefix-key "tjnr")
+	(error "prefix key '%s' contains well-known prefix" prefix-key))
 
       (when prefix-key
 	(add-to-list 'org-capture-templates `(,prefix-key ,name)))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "r") ,(concat name " routines")))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rd") ,(concat name " daily routine")
-					    entry (file+olp ,org-filename "Loops" "Daily")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+1d\") ++1d>\n%?"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rw") ,(concat name " weekly routine")
-					    entry (file+olp ,org-filename "Loops" "Weekly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+1w\") ++1w>\n%?"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rm") ,(concat name " monthly routine")
-					    entry (file+olp ,org-filename "Loops" "Weekly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+4w\") ++4w>\n%?"
-					    :kill-buffer t
-					    :empty-lines-after 1))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "rq") ,(concat name " quarterly routine")
-					    entry (file+olp ,org-filename "Loops" "Quarterly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+12w\") ++12w>\n%?"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "ry") ,(concat name " yearly routine")
-					    entry (file+olp ,org-filename "Loops" "Yearly")
-					    "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"+52w\") ++52w>\n%?"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
+      (when should-add-routines
+	(tychoish-org--add-routines prefix-key name org-filename))
+
+      (add-to-list 'org-capture-templates `(,prefix-key ,name))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "j") ,(concat name " journal")))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
 
       ;; journal, for date related content
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "l") ,(concat name " journal")
-					    entry (file+datetree ,org-filename "Journal")
-					    "* <%<%Y-%m-%d %H:%M>>\n%?"
-					    :prepend nil
-					    :kill-buffer t
-					    :empty-lines-after 1))
+      (dolist (prefix (list (concat prefix-key "j") (concat "j" prefix-key)))
+	(add-to-list 'org-capture-templates `(,prefix ,(concat name " journal")
+					      entry (file+datetree ,org-filename "Journal")
+					      "* <%<%Y-%m-%d %H:%M>>\n%?"
+					      :prepend nil
+					      :kill-buffer t
+					      :empty-lines-after 1)))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "nn") ,(concat name " basic notes")
-					    entry (file+headline ,org-filename "Inbox")
-					    "* %?"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
+      (dolist (prefix (list (concat "n" prefix-key) (concat prefix-key "nn")))
+	(add-to-list 'org-capture-templates `(,prefix ,(concat name " basic notes")
+						     entry (file+headline ,org-filename "Inbox")
+						     "* %?"
+						     :prepend t
+						     :kill-buffer t
+						     :empty-lines-after  1)))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "nl") ,(concat name " notes (org-link)")
 					    entry (file+headline ,org-filename "Inbox")
 					    "* %?\n%a"
@@ -1250,26 +1247,14 @@ nil. Also returns nil if pid is nil."
 					    :prepend t
 					    :kill-buffer t
 					    :empty-lines-after 1))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "nx") ,(concat name " notes (xbuffer)")
-					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%x"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "ns") ,(concat name " notes (selection)")
-					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%i"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "tt") ,(concat name " basic tasks")
-					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 0))
+      (dolist (prefix (list (concat "t" prefix-key) (concat prefix-key "tt")))
+	(add-to-list 'org-capture-templates `(,prefix ,(concat name " basic tasks")
+					      entry (file+headline ,org-filename "Tasks")
+					      "* TODO %?"
+					      :prepend t
+					      :kill-buffer t
+					      :empty-lines-after 0)))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "tl") ,(concat name " tasks (org-link)")
 					    entry (file+headline ,org-filename "Tasks")
 					    "* TODO %?\n%a"
@@ -1281,20 +1266,10 @@ nil. Also returns nil if pid is nil."
 					    "* TODO %?\n%c"
 					    :prepend t
 					    :kill-buffer t
-					    :empty-lines-after 0))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "tx") ,(concat name " tasks (xbuffer)")
-					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%x"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 0))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "ts") ,(concat name " tasks (selection)")
-					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%i"
-					    :prepend t
-					    :kill-buffer t
 					    :empty-lines-after 0))))
+
   :config
+  (tychoish-org-reset-capture-templates)
   (define-key org-mode-map (kbd "C-c o w") 'org-refile)
   (define-key org-mode-map (kbd "C-c o l o") 'org-open-link-from-string)
   (define-key org-mode-map (kbd "C-c o l a o") 'org-agenda-open-link)
@@ -1651,7 +1626,8 @@ nil. Also returns nil if pid is nil."
 	     tychoish-create-blog-post-file
 	     tychoish-blog-push
 	     tychoish-create-note-file
-	     tychoish-blog-open-drafts-dired)
+	     tychoish-blog-open-drafts-dired
+	     make-filename-slug)
   :bind (("C-c t b m" . tychoish-blog-insert-date)
 	 ("C-c t b p" . tychoish-blog-publish-post)
 	 ("C-c t b n" . tychoish-create-blog-post-file)
