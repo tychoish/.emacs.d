@@ -183,7 +183,7 @@
   :ensure t
   :defer t
   :init
-  (setq modus-themes-diffs 'deuteranopia)
+  (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
 	'((border-mode-line-active bg-mode-line-active)
 	  (border-mode-line-inactive bg-mode-line-inactive))))
@@ -217,10 +217,7 @@
   :after (tychoish-bootstrap)
   :diminish
   :commands (helm-mode)
-  :bind (("C-c M-s" . helm-multi-swoop)
-	 ("C-x M-s" . helm-multi-swoop-all)
-	 ("C-c o s" . helm-multi-swoop-org)
-
+  :bind (
 	 ;; most interesting helm menus are under one prefix
 	 ("C-c h a" . helm-apropos)
 	 ("C-c h d" . helm-info)
@@ -232,7 +229,6 @@
 	 ("C-c h p" . helm-browse-project)
 	 ("C-c h r" . helm-recentf)
 	 ("C-c h r" . helm-top)
-	 ("C-c h s" . helm-swoop)
 	 ("C-c h t" . helm-etags-select)
 	 ("C-c h g" . helm-google-suggest)
 	 ("C-c h w" . helm-buffers-list)
@@ -242,8 +238,9 @@
 	 ;; ("C-c h c" . helm-company)
 	 ;; ("C-c h b" . helm-make-projectile)
 	 ;; ("C-c h n" . helm-make-projectile)
-	 ;; ("C-c h f" . 'helm-flycheck)
-	 ;; ("C-c h e" . 'helm-flyspell-correct)
+	 ;; ("C-c h f" . helm-flycheck)
+	 ;; ("C-c h e" . helm-flyspell-correct)
+	 ;; ("C-c h s" . helm-swoop)
 
 	 ;; helm-native developer operations
 	 ("C-x r h" . helm-register)
@@ -273,16 +270,17 @@
   (helm-mode 1)
 
   (setq history-delete-duplicates t)
-  (setq history-length 100)
+  (setq history-length 250)
 
   (setq helm-M-x-fuzzy-match t)
+  (setq helm-move-to-line-cycle-in-source nil)
   (setq helm-autoresize-max-height 40)
   (setq helm-autoresize-min-height 20)
   (setq helm-autoresize-mode nil)
   (setq helm-c-adaptive-history-file (tychoish-get-config-file-path "helm-c-adaptive-history"))
   (setq helm-c-adaptive-sorting t)
   (setq helm-c-source-kill-ring '())
-  (setq helm-candidate-number-limit 100)
+  (setq helm-candidate-number-limit 250)
   (setq helm-case-fold-search t)
   (setq helm-display-header-line nil)
   (setq helm-ff-cache-mode-max-idle-time 300)
@@ -293,7 +291,6 @@
   (setq helm-grep-ag-pipe-cmd-switches '("--colors 'match:fg:black'" "--colors 'match:bg:yellow'"))
   (setq helm-input-idle-delay 0)
   (setq helm-man-or-woman-function 'woman)
-  (setq helm-mode-fuzzy-match nil)
   (setq helm-split-window-in-side-p t))
 
 (use-package helm-company
@@ -326,6 +323,10 @@
 (use-package helm-swoop
   :ensure t
   :bind (("M-m" . helm-swoop)
+	 ("C-c M-s" . helm-multi-swoop)
+	 ("C-x M-s" . helm-multi-swoop-all)
+	 ("C-c o s" . helm-multi-swoop-org)
+	 ("C-c h s" . helm-swoop)
 	 ("M-s" . helm-swoop)
 	 ("M-M" . helm-swoop-back-to-last-point))
   :init
@@ -1131,7 +1132,8 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :mode (("\\.org$" . org-mode))
   :delight "org"
-  :commands (tychoish-org-add-file-capture-templates org-save-all-org-buffers)
+  :commands (tychoish-org-add-file-capture-templates
+	     org-save-all-org-buffers)
   :bind (("C-c o a" . org-agenda)
 	 ("C-c o t a" . org-agenda)
 	 ("C-c o l s" . org-store-link)
@@ -1199,6 +1201,8 @@ nil. Also returns nil if pid is nil."
 					      :kill-buffer t
 					      :empty-lines-after 1))))))
 
+  :config
+  (tychoish-org-reset-capture-templates)
   (defun tychoish-org-add-file-capture-templates (name &rest args)
     "Defines a set of capture mode templates for adding notes and tasks to a file."
     (let ((org-filename (concat org-directory "/" (make-filename-slug name) ".org"))
@@ -1206,7 +1210,7 @@ nil. Also returns nil if pid is nil."
 	  (should-add-routines (plist-get args :routines)))
 
       (when (s-contains-p prefix-key "tjnr")
-	(error "prefix key '%s' contains well-known prefix" prefix-key))
+	(error "org-capture prefix key '%s' for '%s' contains well-known prefix" prefix-key org-filename))
 
       (when prefix-key
 	(add-to-list 'org-capture-templates `(,prefix-key ,name)))
@@ -1215,9 +1219,6 @@ nil. Also returns nil if pid is nil."
 	(tychoish-org--add-routines prefix-key name org-filename))
 
       (add-to-list 'org-capture-templates `(,prefix-key ,name))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "j") ,(concat name " journal")))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
 
       ;; journal, for date related content
       (dolist (prefix (list (concat prefix-key "j") (concat "j" prefix-key)))
@@ -1228,6 +1229,7 @@ nil. Also returns nil if pid is nil."
 					      :kill-buffer t
 					      :empty-lines-after 1)))
 
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
       (dolist (prefix (list (concat "n" prefix-key) (concat prefix-key "nn")))
 	(add-to-list 'org-capture-templates `(,prefix ,(concat name " basic notes")
 						     entry (file+headline ,org-filename "Inbox")
@@ -1248,6 +1250,7 @@ nil. Also returns nil if pid is nil."
 					    :kill-buffer t
 					    :empty-lines-after 1))
 
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
       (dolist (prefix (list (concat "t" prefix-key) (concat prefix-key "tt")))
 	(add-to-list 'org-capture-templates `(,prefix ,(concat name " basic tasks")
 					      entry (file+headline ,org-filename "Tasks")
@@ -1267,9 +1270,6 @@ nil. Also returns nil if pid is nil."
 					    :prepend t
 					    :kill-buffer t
 					    :empty-lines-after 0))))
-
-  :config
-  (tychoish-org-reset-capture-templates)
   (define-key org-mode-map (kbd "C-c o w") 'org-refile)
   (define-key org-mode-map (kbd "C-c o l o") 'org-open-link-from-string)
   (define-key org-mode-map (kbd "C-c o l a o") 'org-agenda-open-link)
@@ -1623,14 +1623,14 @@ nil. Also returns nil if pid is nil."
   :after (f)
   :commands (tychoish-blog-insert-date
 	     tychoish-blog-publish-post
-	     tychoish-create-blog-post-file
+	     tychoish-blog-create-post
 	     tychoish-blog-push
 	     tychoish-create-note-file
 	     tychoish-blog-open-drafts-dired
 	     make-filename-slug)
   :bind (("C-c t b m" . tychoish-blog-insert-date)
 	 ("C-c t b p" . tychoish-blog-publish-post)
-	 ("C-c t b n" . tychoish-create-blog-post-file)
+	 ("C-c t b n" . tychoish-blog-create-post)
 	 ("C-c t b C-p" . tychoish-blog-push)
 	 ("C-c t b d" . tychoish-blog-open-drafts-dired))
   :config

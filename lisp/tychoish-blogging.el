@@ -73,8 +73,7 @@
       (progn
 	(find-file draft-fn)
 	(yas-expand-snippet
-	 (yas-lookup-snippet "hugo" 'rst-mode t) nil nil
-	 (list '(post title)))
+	 (yas-lookup-snippet "hugo" 'rst-mode t) nil nil)
 	(end-of-buffer)
 	(whitespace-cleanup)
 	(insert "\n")))
