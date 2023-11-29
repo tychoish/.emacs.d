@@ -221,6 +221,10 @@ The is unique to the system and daemon instance."
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 
+(defun force-kill-buffers-matching-path (regexp)
+  (interactive "sKill buffers visiting a path matching this regular expression: \nP")
+  (kill-buffers-matching-path regexp t t))
+
 (defun kill-buffers-matching-path (regexp &optional internal-too no-ask)
   "Kill buffers whose name matches the specified REGEXP.
 Ignores buffers whose name starts with a space, unless optional

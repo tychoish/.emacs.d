@@ -28,7 +28,7 @@
   :ensure t
   :config
   (setq auto-package-update-hide-results t
-	auto-package-update-interval 9001)
+        auto-package-update-interval 9001)
   (auto-package-update-maybe))
 
 (use-package use-package-ensure-system-package
@@ -39,7 +39,18 @@
   :defer t
   :ensure t
   :diminish
-  :commands (eldoc-mode))
+  :commands (eldoc-mode kill-eldoc-and-help-buffers)
+  :bind (("C-c d e" . eldoc-doc-buffer)
+         ("C-c d q" . kill-eldoc-and-help-buffers))
+  :config
+  (defun kill-eldoc-and-help-buffers ()
+    "Kills all eldoc and help buffers"
+    (interactive)
+    (kill-matching-buffers "\*Help\\*\\|*eldoc.*\\*" nil t))
+
+  (defun jump-to-elisp-help ()
+    (interactive)
+   (apropos-docum (symbol-name (intern-soft (thing-at-point 'symbol))))))
 
 (use-package diminish
   :ensure t
@@ -76,6 +87,10 @@
   :ensure t
   :commands (f-exists? f-join f-glob f-expand))
 
+(use-package s
+  :ensure t
+  :commands (s-contains?))
+
 (use-package dash
   :ensure t
   :commands (--remove))
@@ -86,7 +101,7 @@
   :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :hook ((isearch-mode) . anzu-mode)
   :bind (("C-c q r" . anzu-query-replace)
-	 ("C-c q x" . anzu-query-replace-regexp))
+         ("C-c q x" . anzu-query-replace-regexp))
   :config
   (setq query-replace-highlight t)
   (setq search-highlight t)
@@ -98,8 +113,8 @@
 (use-package doom-modeline
   :ensure t
   :commands (doom-modeline-mode
-	     tychoish-legacy-mode-line
-	     tychoish-setup-modeline)
+             tychoish-legacy-mode-line
+             tychoish-setup-modeline)
   :bind (("C-c t i" . toggle-modeline-icons))
   :init
   (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
@@ -110,23 +125,23 @@
   (defun tychoish-legacy-mode-line ()
     (interactive)
     (setq-default mode-line-format
-		  (list
-		   mode-line-mule-info
-		   mode-line-client
-		   mode-line-modified
-		   mode-line-remote
-		   mode-line-frame-identification
-		   "<"
-		   tychoish-emacs-identifier
-		   ">:"
-		   mode-line-buffer-identification
-		   " "
-		   mode-line-position
-		   ;; '(vc-mode vc-mode)
-		   "%M"
-		   global-mode-string
-		   ""
-		   mode-line-modes)))
+                  (list
+                   mode-line-mule-info
+                   mode-line-client
+                   mode-line-modified
+                   mode-line-remote
+                   mode-line-frame-identification
+                   "<"
+                   tychoish-emacs-identifier
+                   ">:"
+                   mode-line-buffer-identification
+                   " "
+                   mode-line-position
+                   ;; '(vc-mode vc-mode)
+                   "%M"
+                   global-mode-string
+                   ""
+                   mode-line-modes)))
 
   (defun tychoish-setup-modeline ()
     (interactive)
@@ -185,8 +200,8 @@
   :init
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
-	'((border-mode-line-active bg-mode-line-active)
-	  (border-mode-line-inactive bg-mode-line-inactive))))
+        '((border-mode-line-active bg-mode-line-active)
+          (border-mode-line-inactive bg-mode-line-inactive))))
 
 ;; (use-package modus-themes-exporter
 ;;   :after modus-themes
@@ -218,52 +233,52 @@
   :diminish
   :commands (helm-mode)
   :bind (
-	 ;; most interesting helm menus are under one prefix
-	 ("C-c h a" . helm-apropos)
-	 ("C-c h d" . helm-info)
-	 ("C-c h i" . helm-imenu)
-	 ("C-c h k" . helm-regist)
-	 ("C-c h l" . helm-locate)
-	 ("C-c h m" . helm-man-woman)
-	 ("C-c h o" . helm-occur)
-	 ("C-c h p" . helm-browse-project)
-	 ("C-c h r" . helm-recentf)
-	 ("C-c h r" . helm-top)
-	 ("C-c h t" . helm-etags-select)
-	 ("C-c h g" . helm-google-suggest)
-	 ("C-c h w" . helm-buffers-list)
-	 ("C-c h y" . helm-show-kill-ring)
+         ;; most interesting helm menus are under one prefix
+         ("C-c h a" . helm-apropos)
+         ("C-c h d" . helm-info)
+         ("C-c h i" . helm-imenu)
+         ("C-c h k" . helm-regist)
+         ("C-c h l" . helm-locate)
+         ("C-c h m" . helm-man-woman)
+         ("C-c h o" . helm-occur)
+         ("C-c h p" . helm-browse-project)
+         ("C-c h r" . helm-recentf)
+         ("C-c h r" . helm-top)
+         ("C-c h t" . helm-etags-select)
+         ("C-c h g" . helm-google-suggest)
+         ("C-c h w" . helm-buffers-list)
+         ("C-c h y" . helm-show-kill-ring)
 
-	 ;; defined elsewhered :
-	 ;; ("C-c h c" . helm-company)
-	 ;; ("C-c h b" . helm-make-projectile)
-	 ;; ("C-c h n" . helm-make-projectile)
-	 ;; ("C-c h f" . helm-flycheck)
-	 ;; ("C-c h e" . helm-flyspell-correct)
-	 ;; ("C-c h s" . helm-swoop)
+         ;; defined elsewhered :
+         ;; ("C-c h c" . helm-company)
+         ;; ("C-c h b" . helm-make-projectile)
+         ;; ("C-c h n" . helm-make-projectile)
+         ;; ("C-c h f" . helm-flycheck)
+         ;; ("C-c h e" . helm-flyspell-correct)
+         ;; ("C-c h s" . helm-swoop)
 
-	 ;; helm-native developer operations
-	 ("C-x r h" . helm-register)
-	 ("M-y" . helm-show-kill-ring)
+         ;; helm-native developer operations
+         ("C-x r h" . helm-register)
+         ("M-y" . helm-show-kill-ring)
 
-	 ;; helm alternatives for common standard operations
-	 ("C-x C-f" . helm-find-files)
-	 ("C-x f" . helm-for-files)
-	 ("C-x C-d" . helm-browse-project)
-	 ("C-x d" . helm-browse-project)
+         ;; helm alternatives for common standard operations
+         ("C-x C-f" . helm-find-files)
+         ("C-x f" . helm-for-files)
+         ("C-x C-d" . helm-browse-project)
+         ("C-x d" . helm-browse-project)
 
-	 ;; change buffers; mini is
-	 ("C-x b" . helm-mini)
-	 ("C-x C-b" . helm-mini)
+         ;; change buffers; mini is
+         ("C-x b" . helm-mini)
+         ("C-x C-b" . helm-mini)
 
-	 ;; command interface
-	 ("M-x" . helm-M-x)
-	 ("C-x m" . helm-M-x)
-	 ("C-x C-m" . helm-M-x)
+         ;; command interface
+         ("M-x" . helm-M-x)
+         ("C-x m" . helm-M-x)
+         ("C-x C-m" . helm-M-x)
 
-	 :map helm-map
-	 ("TAB" . helm-execute-persistent-action)
-	 ("C-j" . helm-select-action))
+         :map helm-map
+         ("TAB" . helm-execute-persistent-action)
+         ("C-j" . helm-select-action))
   :config
   (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold :background 'unspecified)
   (helm-autoresize-mode 1)
@@ -307,12 +322,12 @@
   :after (helm flycheck)
   :commands (helm-flycheck)
   :bind (("C-c f d" . helm-flycheck)
-	 ("C-c h f" . 'helm-flycheck)))
+         ("C-c h f" . 'helm-flycheck)))
 
 (use-package helm-make
   :ensure t
   :bind (("C-c h b" . helm-make-projectile)
-	 ("C-c h n" . helm-make))
+         ("C-c h n" . helm-make))
   :config
   (setq helm-make-named-buffer t)
   (setq helm-make-fuzzy-matching t)
@@ -323,12 +338,12 @@
 (use-package helm-swoop
   :ensure t
   :bind (("M-m" . helm-swoop)
-	 ("C-c M-s" . helm-multi-swoop)
-	 ("C-x M-s" . helm-multi-swoop-all)
-	 ("C-c o s" . helm-multi-swoop-org)
-	 ("C-c h s" . helm-swoop)
-	 ("M-s" . helm-swoop)
-	 ("M-M" . helm-swoop-back-to-last-point))
+         ("C-c M-s" . helm-multi-swoop)
+         ("C-x M-s" . helm-multi-swoop-all)
+         ("C-c o s" . helm-multi-swoop-org)
+         ("C-c h s" . helm-swoop)
+         ("M-s" . helm-swoop)
+         ("M-M" . helm-swoop-back-to-last-point))
   :init
   (bind-key "M-m" 'helm-swoop-from-isearch isearch-mode-map)
   :config
@@ -343,9 +358,9 @@
   :ensure t
   :after (projectile helm)
   :bind (("M-p" . helm-projectile)
-	 ("C-c s a" . helm-projectile-ag)
-	 ("C-c s r" . helm-projectile-rg)
-	 ("C-c s g" . helm-projectile-grep))
+         ("C-c s a" . helm-projectile-ag)
+         ("C-c s r" . helm-projectile-rg)
+         ("C-c s g" . helm-projectile-grep))
   :config
   (helm-projectile-on))
 
@@ -358,7 +373,7 @@
 (use-package helm-rg
   :ensure t
   :bind (("C-c r s" . helm-rg)
-	 ("C-c r r" . helm-projectile-rg))
+         ("C-c r r" . helm-projectile-rg))
   :ensure-system-package ((rg . ripgrep))
   :config
   (set-face-attribute 'helm-rg-error-message nil :foreground "pink4" :background nil :weight 'normal)
@@ -375,8 +390,8 @@
   :ensure t
   :commands (projectile-ripgrep ripgrep-regexp)
   :bind (("C-c r g" . tychoish-rg)
-	 ("C-c r p" . tychoish-rg-repo)
-	 ("C-c r m" . tychoish-find-merges))
+         ("C-c r p" . tychoish-rg-repo)
+         ("C-c r m" . tychoish-find-merges))
   :init
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   :config
@@ -393,10 +408,10 @@
 (use-package eww
   :ensure t
   :bind (("C-c w d" . browse-url-generic)
-	 ("C-c w e" . browse-url)
-	 ("C-c w f" . browse-url-firefox)
-	 ("C-c w c" . browse-url-chrome)
-	 ("C-c w g" . eww-search-words))
+         ("C-c w e" . browse-url)
+         ("C-c w f" . browse-url-firefox)
+         ("C-c w c" . browse-url-chrome)
+         ("C-c w g" . eww-search-words))
   :init
   (setq browse-url-browser-function 'eww-browse-url)
   (setq browse-url-generic-program "chrom")
@@ -409,13 +424,13 @@
 (use-package compile
   :functions (tychoish-uniq-compile-buffer)
   :commands (compile
-	     tychoish-compile-project-build
-	     tychoish-compile-project-golang-lint
-	     tychoish-compile-project-super-lint
-	     tychoish-compile-project-build-tests)
+             tychoish-compile-project-build
+             tychoish-compile-project-golang-lint
+             tychoish-compile-project-super-lint
+             tychoish-compile-project-build-tests)
   :bind (("C-c t c" . tychoish-compile-project-build)
-	 ("C-c t l" . tychoish-compile-project-golang-lint)
-	 ("C-c C-t c" . compile))
+         ("C-c t l" . tychoish-compile-project-golang-lint)
+         ("C-c C-t c" . compile))
   :config
   (defun compile-add-error-syntax (name regexp file line &optional col level)
     "Register new compilation error syntax."
@@ -453,47 +468,47 @@
   (defun tychoish-compile-project-super-lint ()
     (interactive)
     (let* ((project-directory (if (eq "" (projectile-project-root))
-				  (default-directory)
-				(projectile-project-root)))
-	   (options (list "VALIDATE_YAML=true"
-			  "VALIDATE_OPENAPI=true"
-			  "VALIDATE_MD=true"
-			  "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
-			  "VALIDATE_ALL_CODEBASE=true"
-			  "LINTER_RULES_PATH=."
-			  "RUN_LOCAL=true"))
-	   (optstr (format "-e %s" (s-join " -e " options)))
-	   (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
+                                  (default-directory)
+                                (projectile-project-root)))
+           (options (list "VALIDATE_YAML=true"
+                          "VALIDATE_OPENAPI=true"
+                          "VALIDATE_MD=true"
+                          "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
+                          "VALIDATE_ALL_CODEBASE=true"
+                          "LINTER_RULES_PATH=."
+                          "RUN_LOCAL=true"))
+           (optstr (format "-e %s" (s-join " -e " options)))
+           (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
       (tychoish-compile-project "super-lint" command-string)))
 
   (defun tychoish-compile-project (name cmd)
     (let* ((project-directory (if (eq "" (projectile-project-root))
-				  (default-directory)
-				(projectile-project-root)))
-	   (project-name (if (eq "" (projectile-project-name))
-			     (file-name-nondirectory (s-chop-suffix "/" project-directory))
-			   (projectile-project-name)))
-	   (project-compile-buffer (concat "*" project-name "-" name "*")))
+                                  (default-directory)
+                                (projectile-project-root)))
+           (project-name (if (eq "" (projectile-project-name))
+                             (file-name-nondirectory (s-chop-suffix "/" project-directory))
+                           (projectile-project-name)))
+           (project-compile-buffer (concat "*" project-name "-" name "*")))
       (if (get-buffer project-compile-buffer)
-	  (switch-to-buffer-other-window (get-buffer project-compile-buffer))
-	(progn
-	  (let ((default-directory project-directory))
-	    (compile cmd))
-	  (switch-to-buffer-other-window "*compilation*")
-	  (rename-buffer project-compile-buffer)))))
+          (switch-to-buffer-other-window (get-buffer project-compile-buffer))
+        (progn
+          (let ((default-directory project-directory))
+            (compile cmd))
+          (switch-to-buffer-other-window "*compilation*")
+          (rename-buffer project-compile-buffer)))))
 
   (defun tychoish-uniq-compile-buffer (compile-buffer-name &optional cmd)
     (if (get-buffer compile-buffer-name)
-	(progn
-	  (switch-to-buffer-other-window (get-buffer compile-buffer-name))
-	  (recompile))
+        (progn
+          (switch-to-buffer-other-window (get-buffer compile-buffer-name))
+          (recompile))
       (progn
-	(if cmd
-	    (compile cmd)
-	  (compile))
-	(switch-to-buffer-other-window "*compilation*")
-	(rename-buffer compile-buffer-name)
-	nil))))
+        (if cmd
+            (compile cmd)
+          (compile))
+        (switch-to-buffer-other-window "*compilation*")
+        (rename-buffer compile-buffer-name)
+        nil))))
 
 (use-package projectile
   :ensure t
@@ -508,8 +523,8 @@
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
       (if (equal pname "-")
-	  ""
-	(concat " p:" pname))))
+          ""
+        (concat " p:" pname))))
 
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep 1)
@@ -520,7 +535,7 @@
 (use-package wgrep
   :ensure t
   :bind (:map grep-mode-map
-	 ("r" . wgrep-change-to-wgrep-mode))
+         ("r" . wgrep-change-to-wgrep-mode))
   :config
   (setq wgrep-enable-key "r"))
 
@@ -531,16 +546,16 @@
   :commands (global-page-break-lines-mode)
   :config
   (setq page-break-lines-modes '(emacs-lisp-mode
-				 lisp-mode
-				 scheme-mode
-				 help-mode
-				 c-ts-mode
-				 c-mode
-				 cc-mode
-				 cc-ts-mode
-				 eww-mode
-				 go-ts-mode
-				 special-mode)))
+                                 lisp-mode
+                                 scheme-mode
+                                 help-mode
+                                 c-ts-mode
+                                 c-mode
+                                 cc-mode
+                                 cc-ts-mode
+                                 eww-mode
+                                 go-ts-mode
+                                 special-mode)))
 
 (use-package writeroom-mode
   :ensure t
@@ -578,7 +593,7 @@
     (interactive)
 
     (if (> 30 (random 100))
-	(session-save-session t)))
+        (session-save-session t)))
 
   (add-hook 'after-save-hook 'tychoish-save-desktop)
   (add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
@@ -606,8 +621,8 @@
     (interactive)
 
     (when (> 50 (random 100))
-	(desktop-save desktop-dirname)
-	(desktop-read)))
+        (desktop-save desktop-dirname)
+        (desktop-read)))
 
   (add-hook 'after-save-hook 'tychoish-save-desktop)
   (setq ad-redefinition-action 'accept)
@@ -616,12 +631,12 @@
 nil. Also returns nil if pid is nil."
     (when pid
       (let* ((cmdline-file (concat "/proc/" (int-to-string pid) "/cmdline")))
-	(when (file-exists-p cmdline-file)
-	  (with-temp-buffer
-	    (insert-file-contents-literally cmdline-file)
-	    (goto-char (point-min))
-	    (search-forward "emacs" nil t)
-	    pid)))))
+        (when (file-exists-p cmdline-file)
+          (with-temp-buffer
+            (insert-file-contents-literally cmdline-file)
+            (goto-char (point-min))
+            (search-forward "emacs" nil t)
+            pid)))))
 
   (defadvice desktop-owner (after pry-from-cold-dead-hands activate)
     "Don't allow dead emacsen to own the desktop file."
@@ -630,7 +645,7 @@ nil. Also returns nil if pid is nil."
 
   (defadvice desktop-save (around stfu compile activate)
     (cl-flet ((yes-or-no-p (&rest args) t)
-	      (y-or-n-p (&rest args) t))
+              (y-or-n-p (&rest args) t))
       ad-do-it))
 
   ;; use session-restore to restore the desktop manually
@@ -638,7 +653,7 @@ nil. Also returns nil if pid is nil."
     "Restore a saved emacs session."
     (interactive)
     (if (file-exists-p (concat desktop-dirname "/" desktop-base-file-name))
-	(desktop-read)
+        (desktop-read)
       (message "No desktop found.")))
 
   (setq desktop-path (list user-emacs-directory))
@@ -646,17 +661,17 @@ nil. Also returns nil if pid is nil."
   (setq desktop-dirname user-emacs-directory)
   (setq desktop-restore-frames nil)
   (setq desktop-buffers-not-to-save
-	(concat "\\("
-		"^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
-		"\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
-		"\\)$"))
+        (concat "\\("
+                "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
+                "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
+                "\\)$"))
 
   (setq desktop-files-not-to-save
-	(concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
-		"^/usr/lib/go/.*\\|"
-		"^/usr/lib/rustlib/.*\\|"
-		"^/home.+go/pkg/mod\\|"
-		"^/home.+\\.cargo"))
+        (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
+                "^/usr/lib/go/.*\\|"
+                "^/usr/lib/rustlib/.*\\|"
+                "^/home.+go/pkg/mod\\|"
+                "^/home.+\\.cargo"))
 
   (add-to-list 'desktop-globals-to-save 'register-alist)
   (add-to-list 'desktop-globals-to-save 'file-name-history)
@@ -682,8 +697,8 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :commands (magit-toplevel)
   :bind (("C-x g s" . magit-status)
-	 ("C-x g f" . magit-branch)
-	 ("C-x g b" . magit-blame))
+         ("C-x g f" . magit-branch)
+         ("C-x g b" . magit-blame))
   :init
   (setq version-control t)
   (setq vc-follow-symlinks t)
@@ -715,9 +730,9 @@ nil. Also returns nil if pid is nil."
 (use-package github-review
   :ensure t
   :commands (github-review-start
-	     github-review-forge-pr-at-point
-	     github-review-approve
-	     github-review-reject))
+             github-review-forge-pr-at-point
+             github-review-approve
+             github-review-reject))
 
 (use-package forge
   :ensure t
@@ -734,9 +749,9 @@ nil. Also returns nil if pid is nil."
 
   (diminish 'yas-minor-mode "ys")
   (add-hook 'org-mode-hook (lambda ()
-			     (make-local-variable 'yas-trigger-key)
-			     (setq yas-trigger-key [tab])
-			     (define-key yas-keymap [tab] 'yas-next-field)))
+                             (make-local-variable 'yas-trigger-key)
+                             (setq yas-trigger-key [tab])
+                             (define-key yas-keymap [tab] 'yas-next-field)))
   (yas-reload-all))
 
 
@@ -744,7 +759,7 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :after yasnippet
   :bind (("C-c s y" . 'helm-yas-complete)
-	 ("C-c C-y" . 'helm-yas-complete)))
+         ("C-c C-y" . 'helm-yas-complete)))
 
 (use-package yasnippet-snippets
   :ensure t
@@ -754,13 +769,13 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :delight
   :bind (("C-c ." . company-complete)
-	 ("C-c C-." . company-complete)
-	 ("C-c s s" . company-yasnippet)
-	 :map company-active-map
-	 ("C-n" . company-select-next)
-	 ("C-p" . company-select-previous)
-	 ("C-d" . company-show-doc-buffer)
-	 ("M-." . company-show-location))
+         ("C-c C-." . company-complete)
+         ("C-c s s" . company-yasnippet)
+         :map company-active-map
+         ("C-n" . company-select-next)
+         ("C-p" . company-select-previous)
+         ("C-d" . company-show-doc-buffer)
+         ("M-." . company-show-location))
   :init
   (add-hook 'prog-mode-hook 'company-mode)
   (add-hook 'text-mode-hook 'company-mode)
@@ -776,16 +791,16 @@ nil. Also returns nil if pid is nil."
   (setq company-ispell-dictionary (expand-file-name "~/.aspell.en.pws"))
 
   (setq company-backends '(company-capf
-			   company-keywords
-			   company-semantic
-			   company-emoji
-			   company-yasnippet
+                           company-keywords
+                           company-semantic
+                           company-emoji
+                           company-yasnippet
 
-			   company-etags
-			   company-wordfreq
-			   company-elisp
-			   company-files
-			   company-cmake))
+                           company-etags
+                           company-wordfreq
+                           company-elisp
+                           company-files
+                           company-cmake))
 
   (global-company-mode))
 
@@ -832,8 +847,8 @@ nil. Also returns nil if pid is nil."
   :ensure nil
   :delight "go"
   :mode (("\\.go$" . go-ts-mode)
-	 ("\\.go" . go-ts-mode)
-	 ("\\.go\\'" . go-ts-mode))
+         ("\\.go" . go-ts-mode)
+         ("\\.go\\'" . go-ts-mode))
   :init
   (unless (getenv "GOPATH")
     (setenv "GOPATH" (expand-file-name "~/go")))
@@ -846,9 +861,9 @@ nil. Also returns nil if pid is nil."
   :config
   (add-hook 'go-ts-mode-hook 'flycheck-mode)
   (add-hook 'go-ts-mode-hook
-	    (lambda ()
-	      (setq-local comment-auto-fill-only-comments t)
-	      (auto-fill-mode 1))))
+            (lambda ()
+              (setq-local comment-auto-fill-only-comments t)
+              (auto-fill-mode 1))))
 
 (use-package cargo
   :ensure t
@@ -896,9 +911,9 @@ nil. Also returns nil if pid is nil."
   :init
   (defun tychoish-cmake-project-p ()
     (let* ((project-directory (if (eq "" (projectile-project-root))
-				  (default-directory)
-				(projectile-project-root))))
-	   (f-exists? (f-join project-directory "CMakeLists.txt"))))
+                                  (default-directory)
+                                (projectile-project-root))))
+           (f-exists? (f-join project-directory "CMakeLists.txt"))))
 
   (add-hook 'c-mode-common-hook  'tychoish-cmake-project-p)
   :config)
@@ -912,9 +927,9 @@ nil. Also returns nil if pid is nil."
   (defun clang-format-before-save ()
     (interactive)
     (when (or (eq major-mode 'c++-mode)
-	      (eq major-mode 'c-mode)
-	      (eq major-mode 'c-ts-mode)
-	      (eq major-mode 'c++-ts-mode))
+              (eq major-mode 'c-mode)
+              (eq major-mode 'c-ts-mode)
+              (eq major-mode 'c++-ts-mode))
       (clang-format-buffer)))
 
   (add-hook 'before-save-hook 'clang-format-before-save)
@@ -927,25 +942,25 @@ nil. Also returns nil if pid is nil."
   ;; :bind (("C-c C-c C-g" . (lambda ()(interactive) (gud-gdb (concat "gdb --fullname " (cppcm-get-exe-path-current-buffer))))))
   :config
   (add-hook 'c-mode-common-hook
-	    (lambda ()
-	      (if (derived-mode-p 'c-mode 'c++-mode)
-		  (cppcm-reload-all)
-		)))
+            (lambda ()
+              (if (derived-mode-p 'c-mode 'c++-mode)
+                  (cppcm-reload-all)
+                )))
   (add-hook 'c90-mode-hook (lambda () (cppcm-reload-all))))
 
 (use-package make-mode
   :ensure t
   :mode (("makefile" . makefile-mode)
-	 ("Makefile" . makefile-mode)
-	 ("\\.mk%" . makefile-mode))
+         ("Makefile" . makefile-mode)
+         ("\\.mk%" . makefile-mode))
   :config
   (setq makefile-electric-keys t))
 
 (use-package just-mode
   :ensure t
   :mode (("justfile" . just-mode)
-	 ("justfile" . just-mode)
-	 ("\\.just%" . just-mode)))
+         ("justfile" . just-mode)
+         ("\\.just%" . just-mode)))
 
 (use-package ctags-update
   :ensure t
@@ -976,21 +991,21 @@ nil. Also returns nil if pid is nil."
 (use-package cython-mode
   :ensure t
   :mode (("\\.pyx\\'" . cython-mode)
-	 ("\\.pxd\\'" . cython-mode)
-	 ("\\.pxi\\'" . cython-mode)))
+         ("\\.pxd\\'" . cython-mode)
+         ("\\.pxi\\'" . cython-mode)))
 
 (use-package python-ts-mode
   :ensure nil
   :delight "py"
   :after (tychoish-editing)
   :bind (:map python-ts-mode-map
-	      ("M-<right>" . balle-python-shift-right)
-	      ("M-<left>" . balle-python-shift-left)
-	      ([remap completion-at-point] . company-complete)
-	      ([tab] . company-complete)
-	      ("C-m" . py-newline-and-indent)
-	      ("C-c C-." . company-complete)
-	      ("C-c ." . company-complete))
+              ("M-<right>" . balle-python-shift-right)
+              ("M-<left>" . balle-python-shift-left)
+              ([remap completion-at-point] . company-complete)
+              ([tab] . company-complete)
+              ("C-m" . py-newline-and-indent)
+              ("C-c C-." . company-complete)
+              ("C-c ." . company-complete))
   :init
   (setq ad-redefinition-action 'accept)
 
@@ -998,11 +1013,11 @@ nil. Also returns nil if pid is nil."
     (interactive)
     (let (start end bds)
       (if (and transient-mark-mode
-	       mark-active)
-	  (setq start (region-beginning) end (region-end))
-	(progn
-	  (setq bds (bounds-of-thing-at-point 'line))
-	  (setq start (car bds) end (cdr bds))))
+               mark-active)
+          (setq start (region-beginning) end (region-end))
+        (progn
+          (setq bds (bounds-of-thing-at-point 'line))
+          (setq start (car bds) end (cdr bds))))
       (python-indent-shift-left start end))
     (setq deactivate-mark nil))
 
@@ -1010,17 +1025,17 @@ nil. Also returns nil if pid is nil."
     (interactive)
     (let (start end bds)
       (if (and transient-mark-mode
-	       mark-active)
-	  (setq start (region-beginning) end (region-end))
-	(progn
-	  (setq bds (bounds-of-thing-at-point 'line))
-	  (setq start (car bds) end (cdr bds))))
+               mark-active)
+          (setq start (region-beginning) end (region-end))
+        (progn
+          (setq bds (bounds-of-thing-at-point 'line))
+          (setq start (car bds) end (cdr bds))))
       (python-indent-shift-right start end))
     (setq deactivate-mark nil))
   :config
   (add-hook 'python-ts-mode-hook (lambda ()
-				(define-key python-ts-mode-map "'" 'tychoish-electric-pair)
-				(set-fill-column 100)))
+                                (define-key python-ts-mode-map "'" 'tychoish-electric-pair)
+                                (set-fill-column 100)))
 
   (setq python-indent-offset 4)
 
@@ -1044,25 +1059,25 @@ nil. Also returns nil if pid is nil."
   :after (helm)
   :init
   (add-hook 'eshell-mode-hook
-	    (lambda ()
-	      (eshell-cmpl-initialize)
-	      (define-key eshell-mode-map (kbd "M-p") 'helm-eshell-history)
-	      (define-key eshell-mode-map [remap eshell-pcomplete] 'helm-esh-pcomplete)
-	      (define-key eshell-mode-map (kbd "M-s f") 'helm-eshell-prompts-all)
-	      (define-key eshell-mode-map (kbd "M-r") 'helm-eshell-history))))
+            (lambda ()
+              (eshell-cmpl-initialize)
+              (define-key eshell-mode-map (kbd "M-p") 'helm-eshell-history)
+              (define-key eshell-mode-map [remap eshell-pcomplete] 'helm-esh-pcomplete)
+              (define-key eshell-mode-map (kbd "M-s f") 'helm-eshell-prompts-all)
+              (define-key eshell-mode-map (kbd "M-r") 'helm-eshell-history))))
 
 (use-package web-mode
   :ensure t
   :mode (("\\.html$" . web-mode)
-	 ("\\.htm\\'". web-mode)
-	 ("\\.html\\'". web-mode)
-	 ("\\.as[cp]x\\'" . web-mode)
-	 ("\\.djhtml\\'" . web-mode)
-	 ("\\.erb" . web-mode)
-	 ("\\.jsp\\'" . web-mode)
-	 ("\\.mustache\\'" . web-mode)
-	 ("\\.phtml\\'" . web-mode)
-	 ("\\.tpl\\.php\\'" . web-mode))
+         ("\\.htm\\'". web-mode)
+         ("\\.html\\'". web-mode)
+         ("\\.as[cp]x\\'" . web-mode)
+         ("\\.djhtml\\'" . web-mode)
+         ("\\.erb" . web-mode)
+         ("\\.jsp\\'" . web-mode)
+         ("\\.mustache\\'" . web-mode)
+         ("\\.phtml\\'" . web-mode)
+         ("\\.tpl\\.php\\'" . web-mode))
   :init
   (setq web-mode-markup-indent-offset 2)
   (setq web-mode-code-indent-offset 2)
@@ -1095,10 +1110,10 @@ nil. Also returns nil if pid is nil."
 
   (defun load-quicklisp-file (fn)
     (let ((path (f-join quicklisp-path fn))
-	  (inhibit-message t))
-	(when (f-exists-p path)
-	  (with-slow-op-timer (format "loading: %s" path) .5
-	    (load (expand-file-name path) t t t)))))
+          (inhibit-message t))
+        (when (f-exists-p path)
+          (with-slow-op-timer (format "loading: %s" path) .5
+            (load (expand-file-name path) t t t)))))
 
   (load-quicklisp-file "slimes-helper.el")
   (load-quicklisp-file "clhs-use-local.el")
@@ -1131,20 +1146,21 @@ nil. Also returns nil if pid is nil."
 (use-package org
   :ensure t
   :mode (("\\.org$" . org-mode))
+  :after (s)
   :delight "org"
   :commands (tychoish-org-add-file-capture-templates
-	     org-save-all-org-buffers)
+             org-save-all-org-buffers)
   :bind (("C-c o a" . org-agenda)
-	 ("C-c o t a" . org-agenda)
-	 ("C-c o l s" . org-store-link)
-	 ("C-c o l i" . org-insert-link)
-	 ("C-c o j" . helm-org-capture-templates)
-	 ("C-c o c" . org-capture)
-	 ("C-c o h a" . helm-org-agenda-files-headings)
-	 ("C-c o k l" . org-capture-goto-last-stored)
-	 ("C-c o k t" . org-capture-goto-target)
-	 ("C-c o k w" . org-capture-refile)
-	 ("C-c o l a" . org-annotate-file))
+         ("C-c o t a" . org-agenda)
+         ("C-c o l s" . org-store-link)
+         ("C-c o l i" . org-insert-link)
+         ("C-c o j" . helm-org-capture-templates)
+         ("C-c o c" . org-capture)
+         ("C-c o h a" . helm-org-agenda-files-headings)
+         ("C-c o k l" . org-capture-goto-last-stored)
+         ("C-c o k t" . org-capture-goto-target)
+         ("C-c o k w" . org-capture-refile)
+         ("C-c o l a" . org-annotate-file))
   :init
   (add-hook 'org-mode-hook 'tychoish--add-toc-org-hook)
   (add-hook 'org-mode-hook 'flycheck-mode)
@@ -1175,101 +1191,101 @@ nil. Also returns nil if pid is nil."
   (defun tychoish-org-reset-capture-templates ()
     (interactive)
     (setq org-capture-templates '(("n" "notes")
-				  ("j" "journal")
-				  ("t" "tasks")
-				  ("r" "routines"))))
+                                  ("j" "journal")
+                                  ("t" "tasks")
+                                  ("r" "routines"))))
 
   (defun tychoish-org--add-routines (prefix-key name orgfile-path)
     (add-to-list 'org-capture-templates `(,(concat "r" prefix-key) ,name))
     (dolist (ival-pair '(("1d" . "Daily")
-			 ("1w" . "Weekly")
-			 ("4w" . "Monthly")
-			 ("12w" . "Quarterly")
-			 ("21w" . "Half Yearly")
-			 ("52w" . "Yearly")))
+                         ("1w" . "Weekly")
+                         ("4w" . "Monthly")
+                         ("12w" . "Quarterly")
+                         ("21w" . "Half Yearly")
+                         ("52w" . "Yearly")))
       (let* ((interval (car ival-pair))
-	     (heading (cdr ival-pair))
-	     (interval-prefix (downcase (substring heading 0 1)))
-	     (lower-heading (downcase heading))
-	     (menu-name (concat name lower-heading "routine"))
-	     (template (concat "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")))
+             (heading (cdr ival-pair))
+             (interval-prefix (downcase (substring heading 0 1)))
+             (lower-heading (downcase heading))
+             (menu-name (concat name lower-heading "routine"))
+             (template (concat "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")))
       (dolist (prefix (list (concat prefix-key "r" interval-prefix) (concat "r" prefix-key interval-prefix)))
-	(add-to-list 'org-capture-templates `(,prefix ,(concat name " " lower-heading " routine")
-					      entry (file+olp ,orgfile-path "Loops" heading)
-					      ,template
-					      :prepend t
-					      :kill-buffer t
-					      :empty-lines-after 1))))))
+        (add-to-list 'org-capture-templates `(,prefix ,(concat name " " lower-heading " routine")
+                                              entry (file+olp ,orgfile-path "Loops" heading)
+                                              ,template
+                                              :prepend t
+                                              :kill-buffer t
+                                              :empty-lines-after 1))))))
 
   :config
   (tychoish-org-reset-capture-templates)
   (defun tychoish-org-add-file-capture-templates (name &rest args)
     "Defines a set of capture mode templates for adding notes and tasks to a file."
     (let ((org-filename (concat org-directory "/" (make-filename-slug name) ".org"))
-	  (prefix-key (or (plist-get args :prefix) ""))
-	  (should-add-routines (plist-get args :routines)))
+          (prefix-key (or (plist-get args :prefix) ""))
+          (should-add-routines (plist-get args :routines)))
 
-      (when (s-contains-p prefix-key "tjnr")
-	(error "org-capture prefix key '%s' for '%s' contains well-known prefix" prefix-key org-filename))
+      (when (s-contains? prefix-key "tjnr")
+        (error "org-capture prefix key '%s' for '%s' contains well-known prefix" prefix-key org-filename))
 
       (when prefix-key
-	(add-to-list 'org-capture-templates `(,prefix-key ,name)))
+        (add-to-list 'org-capture-templates `(,prefix-key ,name)))
 
       (when should-add-routines
-	(tychoish-org--add-routines prefix-key name org-filename))
+        (tychoish-org--add-routines prefix-key name org-filename))
 
       (add-to-list 'org-capture-templates `(,prefix-key ,name))
 
       ;; journal, for date related content
       (dolist (prefix (list (concat prefix-key "j") (concat "j" prefix-key)))
-	(add-to-list 'org-capture-templates `(,prefix ,(concat name " journal")
-					      entry (file+datetree ,org-filename "Journal")
-					      "* <%<%Y-%m-%d %H:%M>>\n%?"
-					      :prepend nil
-					      :kill-buffer t
-					      :empty-lines-after 1)))
+        (add-to-list 'org-capture-templates `(,prefix ,(concat name " journal")
+                                              entry (file+datetree ,org-filename "Journal")
+                                              "* <%<%Y-%m-%d %H:%M>>\n%?"
+                                              :prepend nil
+                                              :kill-buffer t
+                                              :empty-lines-after 1)))
 
       (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
       (dolist (prefix (list (concat "n" prefix-key) (concat prefix-key "nn")))
-	(add-to-list 'org-capture-templates `(,prefix ,(concat name " basic notes")
-						     entry (file+headline ,org-filename "Inbox")
-						     "* %?"
-						     :prepend t
-						     :kill-buffer t
-						     :empty-lines-after  1)))
+        (add-to-list 'org-capture-templates `(,prefix ,(concat name " basic notes")
+                                                     entry (file+headline ,org-filename "Inbox")
+                                                     "* %?"
+                                                     :prepend t
+                                                     :kill-buffer t
+                                                     :empty-lines-after  1)))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "nl") ,(concat name " notes (org-link)")
-					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%a"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
+                                            entry (file+headline ,org-filename "Inbox")
+                                            "* %?\n%a"
+                                            :prepend t
+                                            :kill-buffer t
+                                            :empty-lines-after 1))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "nk") ,(concat name " notes (kill buffer)")
-					    entry (file+headline ,org-filename "Inbox")
-					    "* %?\n%c"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 1))
+                                            entry (file+headline ,org-filename "Inbox")
+                                            "* %?\n%c"
+                                            :prepend t
+                                            :kill-buffer t
+                                            :empty-lines-after 1))
 
       (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
       (dolist (prefix (list (concat "t" prefix-key) (concat prefix-key "tt")))
-	(add-to-list 'org-capture-templates `(,prefix ,(concat name " basic tasks")
-					      entry (file+headline ,org-filename "Tasks")
-					      "* TODO %?"
-					      :prepend t
-					      :kill-buffer t
-					      :empty-lines-after 0)))
+        (add-to-list 'org-capture-templates `(,prefix ,(concat name " basic tasks")
+                                              entry (file+headline ,org-filename "Tasks")
+                                              "* TODO %?"
+                                              :prepend t
+                                              :kill-buffer t
+                                              :empty-lines-after 0)))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "tl") ,(concat name " tasks (org-link)")
-					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%a"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 0))
+                                            entry (file+headline ,org-filename "Tasks")
+                                            "* TODO %?\n%a"
+                                            :prepend t
+                                            :kill-buffer t
+                                            :empty-lines-after 0))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "tk") ,(concat name " tasks (kill buffer)")
-					    entry (file+headline ,org-filename "Tasks")
-					    "* TODO %?\n%c"
-					    :prepend t
-					    :kill-buffer t
-					    :empty-lines-after 0))))
+                                            entry (file+headline ,org-filename "Tasks")
+                                            "* TODO %?\n%c"
+                                            :prepend t
+                                            :kill-buffer t
+                                            :empty-lines-after 0))))
   (define-key org-mode-map (kbd "C-c o w") 'org-refile)
   (define-key org-mode-map (kbd "C-c o l o") 'org-open-link-from-string)
   (define-key org-mode-map (kbd "C-c o l a o") 'org-agenda-open-link)
@@ -1309,14 +1325,14 @@ nil. Also returns nil if pid is nil."
       (after delete-capture-frame activate)
     "Advise capture-destroy to close the frame"
     (when (equal "capture" (frame-parameter nil 'name))
-	(delete-frame)))
+        (delete-frame)))
 
   (defun make-capture-frame (&optional keys show-menu)
     "Create a new frame and run org-capture."
     (interactive)
     (make-frame '((name . "capture")
-		  (width . 120)
-		  (height . 15)))
+                  (width . 120)
+                  (height . 15)))
     (select-frame-by-name "capture")
     (setq word-wrap 1)
     (setq truncate-lines nil)
@@ -1338,7 +1354,7 @@ nil. Also returns nil if pid is nil."
   (defadvice org-capture-finalize (after delete-capture-frame activate)
     "Advise capture-finalize to close the frame if it is the capture frame"
     (if (equal "capture" (frame-parameter nil 'name))
-	(delete-frame)))
+        (delete-frame)))
 
   (delight 'org-agenda)
   (diminish 'org-capture-mode)
@@ -1358,61 +1374,61 @@ nil. Also returns nil if pid is nil."
 
   (org-load-modules-maybe t)
   (setq org-modules '(org-velocity
-		      org-notify
-		      org-depend
-		      org-man
-		      org-annotate-file
-		      org-datetree
-		      org-habit
-		      org-ctags
-		      org-info))
+                      org-notify
+                      org-depend
+                      org-man
+                      org-annotate-file
+                      org-datetree
+                      org-habit
+                      org-ctags
+                      org-info))
 
   (setq org-agenda-custom-commands
-	'(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")
-	  ("c" "Super view"
-	   ((agenda "" ((org-agenda-overriding-header "Schedule:")
-			(org-super-agenda-groups
-			 '((:name "Today"
-				  :time-grid t
-				  :date today
-				  :order 1)))))
-	    (alltodo "" ((org-agenda-overriding-header "Tasks:")
-			 (org-super-agenda-groups
-			  '((:log t)
-			    (:name "To refile"
-				   :file-path (concat tychoish-org-fn-main "/refile"))
-			    (:name "Today's tasks"
-				   :file-path "journal/")
-			    (:name "Due Today"
-				   :deadline today
-				   :order 2)
-			    (:name "Scheduled Soon"
-				   :scheduled future
-				   :order 8)
-			    (:name "Overdue"
-				   :deadline past
-				   :order 7)
-			    (:discard (:not (:todo "TODO")))))))))))
+        '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")
+          ("c" "Super view"
+           ((agenda "" ((org-agenda-overriding-header "Schedule:")
+                        (org-super-agenda-groups
+                         '((:name "Today"
+                                  :time-grid t
+                                  :date today
+                                  :order 1)))))
+            (alltodo "" ((org-agenda-overriding-header "Tasks:")
+                         (org-super-agenda-groups
+                          '((:log t)
+                            (:name "To refile"
+                                   :file-path (concat tychoish-org-fn-main "/refile"))
+                            (:name "Today's tasks"
+                                   :file-path "journal/")
+                            (:name "Due Today"
+                                   :deadline today
+                                   :order 2)
+                            (:name "Scheduled Soon"
+                                   :scheduled future
+                                   :order 8)
+                            (:name "Overdue"
+                                   :deadline past
+                                   :order 7)
+                            (:discard (:not (:todo "TODO")))))))))))
 
   (setq org-todo-keywords '((sequence "TODO(t)" "|" "DONE(d!)")
-			    (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
+                            (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
 
   (setq org-todo-keyword-faces '(("TODO" . org-warning)
-				 ("INPROGRESS" . "orange")
-				 ("INCOMPLETE" . "orange")
-				 ("SCHEDULED" . "green")
-				 ("BACKLOG" . (:foreground "orange" :weight bold))
-				 ("PROJECT" . (:foreground "blue" :weight bold))))
+                                 ("INPROGRESS" . "orange")
+                                 ("INCOMPLETE" . "orange")
+                                 ("SCHEDULED" . "green")
+                                 ("BACKLOG" . (:foreground "orange" :weight bold))
+                                 ("PROJECT" . (:foreground "blue" :weight bold))))
 
   (setq org-tag-alist '((:startgroup . nil)
-			  ("inbox" . ?i)
-			  ("backlog" . ?b)
-			(:endgroup . nil)
-			(:startgroup . nil)
-			  ("@desk" . ?d)
-			  ("@personal" . ?p)
-			  ("@work" . ?w)
-			(:endgroup . nil)))
+                          ("inbox" . ?i)
+                          ("backlog" . ?b)
+                        (:endgroup . nil)
+                        (:startgroup . nil)
+                          ("@desk" . ?d)
+                          ("@personal" . ?p)
+                          ("@work" . ?w)
+                        (:endgroup . nil)))
 
   (setq org-CUA-compatible t)
   (setq org-replace-disputed-keys t)
@@ -1459,8 +1475,8 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :after (org helm)
   :commands (helm-org-capture-templates
-	     helm-org-in-buffer-heddings
-	     helm-org-agenda-files-headings)
+             helm-org-in-buffer-heddings
+             helm-org-agenda-files-headings)
   :config
   (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
   (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
@@ -1483,8 +1499,8 @@ nil. Also returns nil if pid is nil."
   :after ox
   :commands (org-gist-export-private-gist org-gist-export-to-public-gist)
   :bind (:map org-mode-map
-	 ("C-c o e g p" . org-gist-export-to-private-gist)
-	 ("C-c o e g g" . org-gist-export-to-public-gist))
+         ("C-c o e g p" . org-gist-export-to-private-gist)
+         ("C-c o e g g" . org-gist-export-to-public-gist))
   :config
   (defun org-gist-export-private-gist ()
     (interactive)
@@ -1513,24 +1529,24 @@ nil. Also returns nil if pid is nil."
 
 (use-package tychoish-bootstrap
   :commands (tychoish-setup-global-modes
-	     tychoish-setup-user-local-config
-	     tychoish-setup-font
-	     tychoish-get-config-file-prefix
-	     tychoish-get-config-file-path)
+             tychoish-setup-user-local-config
+             tychoish-setup-font
+             tychoish-get-config-file-prefix
+             tychoish-get-config-file-path)
   :bind (("C-c f =" . text-scale-increase)
-	 ("C-c f -" . text-scale-decrease)
-	 ("C-c f 0" . text-scale-reset)
-	 ("C-c C-=" . opacity-increase)
-	 ("C-c C--" . opacity-decrease)
-	 ("C-x h" . help)
-	 ("C-x C-h" . help)
-	 ("C-c f C-0" . opacity-reset)
-	 ("C-c t t d" . disable-theme)
-	 ("<f5>" . xterm-mouse-mode-toggle)
-	 ("C-c t t D" . disable-all-themes)
-	 ("C-c t t e" . enable-theme)
-	 ("C-c t t l" . load-theme)
-	 ("C-c C-r" . rename-buffer))
+         ("C-c f -" . text-scale-decrease)
+         ("C-c f 0" . text-scale-reset)
+         ("C-c C-=" . opacity-increase)
+         ("C-c C--" . opacity-decrease)
+         ("C-x h" . help)
+         ("C-x C-h" . help)
+         ("C-c f C-0" . opacity-reset)
+         ("C-c t t d" . disable-theme)
+         ("<f5>" . xterm-mouse-mode-toggle)
+         ("C-c t t D" . disable-all-themes)
+         ("C-c t t e" . enable-theme)
+         ("C-c t t l" . load-theme)
+         ("C-c C-r" . rename-buffer))
   :functions (gui-p default-string with-timer with-slow-op-timer)
   :init
   (setq server-use-tcp t)
@@ -1544,8 +1560,8 @@ nil. Also returns nil if pid is nil."
   (setq safe-local-variable-values '((encoding . utf-8)))
   (setq warnings-to-ignore '())
   (add-to-list 'warnings-to-ignore '((free-vars) (nresolved) (callargs)
-				     (redefine) (obsolete) (noruntine)
-				     (cl-functions) (interactive-only)))
+                                     (redefine) (obsolete) (noruntine)
+                                     (cl-functions) (interactive-only)))
   (setq byte-compile-warnings warnings-to-ignore)
 
   (setq backup-by-copying t)
@@ -1558,9 +1574,7 @@ nil. Also returns nil if pid is nil."
 
   (setq confirm-kill-processes nil)
   (setq confirm-nonexistent-file-or-buffer nil)
-  (setq kill-buffer-query-functions
-	(remq 'process-kill-buffer-query-function
-	      kill-buffer-query-functions))
+  (setq kill-buffer-query-functions nil)
 
   (defalias 'eb 'eval-buffer)
 
@@ -1604,8 +1618,8 @@ nil. Also returns nil if pid is nil."
   (defvar tychoish-emacs-identifier (default-string "solo" (daemonp)))
 
   (setq frame-title-format '(:eval (if (stringp (daemonp))
-				       (format "%s:%s" (daemonp) (buffer-name))
-				     (concat "solo:" (buffer-name)))))
+                                       (format "%s:%s" (daemonp) (buffer-name))
+                                     (concat "solo:" (buffer-name)))))
   (setq bookmark-save-flag 1)
   (setq qbookmark-default-file (tychoish-get-config-file-path "bookmarks")))
 
@@ -1622,40 +1636,40 @@ nil. Also returns nil if pid is nil."
 (use-package tychoish-blogging
   :after (f)
   :commands (tychoish-blog-insert-date
-	     tychoish-blog-publish-post
-	     tychoish-blog-create-post
-	     tychoish-blog-push
-	     tychoish-create-note-file
-	     tychoish-blog-open-drafts-dired
-	     make-filename-slug)
+             tychoish-blog-publish-post
+             tychoish-blog-create-post
+             tychoish-blog-push
+             tychoish-create-note-file
+             tychoish-blog-open-drafts-dired
+             make-filename-slug)
   :bind (("C-c t b m" . tychoish-blog-insert-date)
-	 ("C-c t b p" . tychoish-blog-publish-post)
-	 ("C-c t b n" . tychoish-blog-create-post)
-	 ("C-c t b C-p" . tychoish-blog-push)
-	 ("C-c t b d" . tychoish-blog-open-drafts-dired))
+         ("C-c t b p" . tychoish-blog-publish-post)
+         ("C-c t b n" . tychoish-blog-create-post)
+         ("C-c t b C-p" . tychoish-blog-push)
+         ("C-c t b d" . tychoish-blog-open-drafts-dired))
   :config
   (setq tychoish-blog-path (expand-file-name "~/src/blog")))
 
 (use-package tychoish-editing
   :commands (markdown-indent-code
-	     rst-indent-code
-	     uniquify-region-lines
-	     uniquify-buffer-lines
-	     font-lock-show-tabs
-	     font-lock-width-keyword)
+             rst-indent-code
+             uniquify-region-lines
+             uniquify-buffer-lines
+             font-lock-show-tabs
+             font-lock-width-keyword)
   :bind (("M-<up>" . move-text-up)
-	 ("M-<down>" . move-text-down)
-	 ("C-c t w" . tycho-toggle-hooks)
-	 ("C-x C-n" . word-count)
-	 ("C-w" . kill-region)
-	 ("(" . tychoish-electric-pair)
-	 ("[" . tychoish-electric-pair)
-	 ("{" . tychoish-electric-pair)
-	 ("<" . tychoish-electric-pair)
-	 ("\"" . tychoish-electric-pair)
-	 ("*" . tychoish-electric-pair)
-	 ("_" . tychoish-electric-pair)
-	 ("RET" . electrify-return-if-match))
+         ("M-<down>" . move-text-down)
+         ("C-c t w" . tycho-toggle-hooks)
+         ("C-x C-n" . word-count)
+         ("C-w" . kill-region)
+         ("(" . tychoish-electric-pair)
+         ("[" . tychoish-electric-pair)
+         ("{" . tychoish-electric-pair)
+         ("<" . tychoish-electric-pair)
+         ("\"" . tychoish-electric-pair)
+         ("*" . tychoish-electric-pair)
+         ("_" . tychoish-electric-pair)
+         ("RET" . electrify-return-if-match))
   :init
   (setq show-paren-delay 0.25)
   (setq indent-tabs-mode nil)
@@ -1705,7 +1719,7 @@ nil. Also returns nil if pid is nil."
 (use-package git-grep
   :ensure t
   :bind (("C-c g g" . git-grep)
-	 ("C-c g r" . git-grep-repo))
+         ("C-c g r" . git-grep-repo))
   :init
   (global-set-key (kbd "C-c g f") 'find-grep)
   (global-set-key (kbd "C-c C-o") 'occur)
@@ -1713,7 +1727,10 @@ nil. Also returns nil if pid is nil."
 
 (use-package whitespace
   :ensure t
-  :bind (("C-c C-w" . whitespace-cleanup)))
+  :bind (("C-c C-w" . whitespace-cleanup))
+  :config
+  (setq whitespace-style '(face trailing tabs spaces lines newline missing-newline-at-eof
+                           empty space-mark tab-mark newline-mark)))
 
 (use-package tramp
   :ensure t
@@ -1724,7 +1741,7 @@ nil. Also returns nil if pid is nil."
   (defun ssh-reagent ()
     (interactive)
     (let* ((sshdir (car (directory-files "/tmp" nil "ssh-*")))
-	   (agent (car (directory-files (concat "/tmp/" sshdir) nil "agent.*"))))
+           (agent (car (directory-files (concat "/tmp/" sshdir) nil "agent.*"))))
       (setenv "SSH_AUTH_SOCK" (concat "/tmp/" sshdir "/" agent)))
     (message "Attached to SSH Session"))
 
@@ -1744,23 +1761,23 @@ nil. Also returns nil if pid is nil."
 (use-package comint
   :commands (comint-mode)
   :bind (:map comint-mode-map
-	      ("M-n" . comint-next-input)
-	      ("M-p" . comint-previous-input)
-	      ([down] . comint-next-matching-input-from-input)
-	      ([up] . comint-previous-matching-input-from-input))
+              ("M-n" . comint-next-input)
+              ("M-p" . comint-previous-input)
+              ([down] . comint-next-matching-input-from-input)
+              ([up] . comint-previous-matching-input-from-input))
   :config
   (setq ansi-color-for-comint-mode t))
 
 (use-package windmove
   :ensure t
   :bind (("M-j" . windmove-down)
-	  ("M-k" . windmove-up)
-	  ("M-h" . windmove-left)
-	  ("M-l" . windmove-right)
-	  ("M-J" . (lambda () (interactive) (enlarge-window 1)))
-	  ("M-K" . (lambda () (interactive) (enlarge-window -1)))
-	  ("M-h" . (lambda () (interactive) (enlarge-window 1 t)))
-	  ("M-l" . (lambda () (interactive) (enlarge-window -1 t))))
+          ("M-k" . windmove-up)
+          ("M-h" . windmove-left)
+          ("M-l" . windmove-right)
+          ("M-J" . (lambda () (interactive) (enlarge-window 1)))
+          ("M-K" . (lambda () (interactive) (enlarge-window -1)))
+          ("M-h" . (lambda () (interactive) (enlarge-window 1 t)))
+          ("M-l" . (lambda () (interactive) (enlarge-window -1 t))))
   :config
   (windmove-default-keybindings))
 
@@ -1784,7 +1801,7 @@ nil. Also returns nil if pid is nil."
 
 (use-package message
   :mode ((".*mutt.*" . message-mode)
-	 ("/mutt" . message-mode))
+         ("/mutt" . message-mode))
   :init
   (setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
   (setq message-citation-line-function 'message-insert-formatted-citation-line)
@@ -1795,29 +1812,29 @@ nil. Also returns nil if pid is nil."
 
 (use-package mu4e
   :bind (("C-c m m" . mu4e)
-	 ("C-c m d" . mu4e~headers-jump-to-maildir)
-	 ("C-c m b" . mu4e-headers-search-bookmark)
-	 ("C-c m c" . mu4e-compose-new)
-	 :map mu4e-headers-mode-map
-	 ("r" . mu4e-headers-mark-for-read)
-	 ("o" . mu4e-headers-mark-for-unread)
-	 ("*" . mu4e-headers-mark-for-something)
-	 ("#" . mu4e-mark-resolve-deferred-marks)
-	 (";" . mu4e-mark-resolve-deferred-marks))
+         ("C-c m d" . mu4e~headers-jump-to-maildir)
+         ("C-c m b" . mu4e-headers-search-bookmark)
+         ("C-c m c" . mu4e-compose-new)
+         :map mu4e-headers-mode-map
+         ("r" . mu4e-headers-mark-for-read)
+         ("o" . mu4e-headers-mark-for-unread)
+         ("*" . mu4e-headers-mark-for-something)
+         ("#" . mu4e-mark-resolve-deferred-marks)
+         (";" . mu4e-mark-resolve-deferred-marks))
   :commands (mu4e-mail-view-actions
-	     mu4e
-	     mu4e-compose-new
-	     mu4e-update-mail-and-index
-	     mu4e-headers-jump-to-maildir
-	     mu4e-headers-search-bookmark
-	     tychoish-set-up-email)
+             mu4e
+             mu4e-compose-new
+             mu4e-update-mail-and-index
+             mu4e-headers-jump-to-maildir
+             mu4e-headers-search-bookmark
+             tychoish-set-up-email)
   :init
   (setq mail-header-separator "--------------------------")
   (setq mail-imenu-generic-expression
-	'(("Subject"  "^Subject: *\\(.*\\)" 1)
-	  ("Cc"     "^C[Cc]: *\\(.*\\)" 1)
-	  ("To"     "^To: *\\(.*\\)" 1)
-	  ("From"  "^From: *\\(.*\\)" 1)))
+        '(("Subject"  "^Subject: *\\(.*\\)" 1)
+          ("Cc"     "^C[Cc]: *\\(.*\\)" 1)
+          ("To"     "^To: *\\(.*\\)" 1)
+          ("From"  "^From: *\\(.*\\)" 1)))
 
   (setq mu4e-compose-complete-addresses t)
   (setq mu4e-compose-complete-only-after "2015-01-01")
@@ -1872,7 +1889,7 @@ nil. Also returns nil if pid is nil."
     (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)" "all unread message" ?a))
     (add-to-list 'mu4e-bookmarks '("flag:unread AND NOT flag:trashed AND NOT m:/rss.*" "Unread messages (no RSS)" ?u))
     (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (m:/rss.* OR m:/sent OR flag:trashed OR m:/trash)"
-				   "to read/process queue" ?q))
+                                   "to read/process queue" ?q))
     (add-to-list 'mu4e-bookmarks '("(m:/inbox OR m:/prof) AND flag:unread" "unread primary queues to file"?f))
     (add-to-list 'mu4e-bookmarks '("(NOT m:/inbox AND NOT m:/prof) AND flag:unread" "all sorted email" ?s)))
 
@@ -1902,8 +1919,8 @@ nil. Also returns nil if pid is nil."
     (when (equal major-mode 'mu4e-compose-mode)
       (goto-char (point-min))
       (let ((new-from (concat "From: " name " <" address ">")))
-	(while (re-search-forward "^From:.*$" nil t 1)
-	  (replace-match new-from nil nil)))))
+        (while (re-search-forward "^From:.*$" nil t 1)
+          (replace-match new-from nil nil)))))
 
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
 
@@ -1911,21 +1928,21 @@ nil. Also returns nil if pid is nil."
     ;; we set this here explicitly, since (as it has happened) a wrong
     ;; value for this (such as "") breaks address completion and other things
     (set (make-local-variable 'mail-header-separator)
-	 (purecopy "--------------------------"))
+         (purecopy "--------------------------"))
     (put 'mail-header-separator 'permanent-local t)
     (save-excursion
       (let ((sepa (propertize mail-header-separator
-			      'intangible t
-			      'read-only "Can't touch this"
-			      'rear-nonsticky t
-			      'font-lock-face 'mu4e-system-face)))
-	(goto-char (point-min))
-	;; search for the first empty line
-	(if (search-forward-regexp "^$" nil t)
-	    (replace-match (concat sepa))
-	  (progn  ;; no empty line? then prepend one
-	    (goto-char (point-max))
-	    (insert "\n" sepa)))))))
+                              'intangible t
+                              'read-only "Can't touch this"
+                              'rear-nonsticky t
+                              'font-lock-face 'mu4e-system-face)))
+        (goto-char (point-min))
+        ;; search for the first empty line
+        (if (search-forward-regexp "^$" nil t)
+            (replace-match (concat sepa))
+          (progn  ;; no empty line? then prepend one
+            (goto-char (point-max))
+            (insert "\n" sepa)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1936,11 +1953,11 @@ nil. Also returns nil if pid is nil."
 (use-package deft
   :ensure t
   :bind (("C-c C-d" . deft)
-	 ("C-c d o" . deft)
-	 ("C-c x d" . deft)
-	 ("C-c d n" . tychoish-deft-create)
-	 ("C-c x n" . tychoish-deft-create)
-	 ("C-c d d" . (lambda () (interactive) (find-file deft-directory))))
+         ("C-c d o" . deft)
+         ("C-c x d" . deft)
+         ("C-c d n" . tychoish-deft-create)
+         ("C-c x n" . tychoish-deft-create)
+         ("C-c d d" . (lambda () (interactive) (find-file deft-directory))))
   :init
   (setq deft-directory (concat local-notes-directory "/deft"))
 
@@ -1948,20 +1965,20 @@ nil. Also returns nil if pid is nil."
     "Turn a string into a slug."
     (replace-regexp-in-string
      " " "-" (downcase
-	      (replace-regexp-in-string
-	       "[^A-Za-z0-9 ]" "" s))))
+              (replace-regexp-in-string
+               "[^A-Za-z0-9 ]" "" s))))
 
   (defun tychoish-deft-create (title)
     "Create a new deft entry."
     (interactive "sBwO Title: ")
     (let ((draft-file (concat deft-directory
-			      (deft-file-make-slug title)
-			      "."
-			      deft-extension)))
+                              (deft-file-make-slug title)
+                              "."
+                              deft-extension)))
       (if (file-exists-p draft-file)
-	  (find-file draft-file)
-	(find-file draft-file)
-	(insert (title)))))
+          (find-file draft-file)
+        (find-file draft-file)
+        (insert (title)))))
   :config
   (setq deft-extension "txt")
   (setq deft-text-mode 'markdown-mode)
@@ -1975,19 +1992,19 @@ nil. Also returns nil if pid is nil."
   :commands (artbollocks-mode)
   :config
   (setq weasel-words-regex
-	(concat "\\b" (regexp-opt
-		       '("one of the"
-			 "very"
-			 "sort of"
-			 "a lot"
-			 "probably"
-			 "maybe"
-			 "perhaps"
-			 "I think"
-			 "really"
-			 "nice"
-			 "utilize"
-			 "leverage") t) "\\b"))
+        (concat "\\b" (regexp-opt
+                       '("one of the"
+                         "very"
+                         "sort of"
+                         "a lot"
+                         "probably"
+                         "maybe"
+                         "perhaps"
+                         "I think"
+                         "really"
+                         "nice"
+                         "utilize"
+                         "leverage") t) "\\b"))
 
   (setq lexical-illusions nil)
   (setq weasl-words t)
@@ -2040,21 +2057,21 @@ nil. Also returns nil if pid is nil."
   (add-hook 'markdown-mode-hook (lambda () (setq imenu-generic-expression markdown-imenu-generic-expression)))
 
   (setq markdown-imenu-generic-expression
-	'(("title"  "^\\(.*\\)[\n]=+$" 1)
-	  ("h2-"    "^\\(.*\\)[\n]-+$" 1)
-	  ("h1"   "^# \\(.*\\)$" 1)
-	  ("h2"   "^## \\(.*\\)$" 1)
-	  ("h3"   "^### \\(.*\\)$" 1)
-	  ("h4"   "^#### \\(.*\\)$" 1)
-	  ("h5"   "^##### \\(.*\\)$" 1)
-	  ("h6"   "^###### \\(.*\\)$" 1)
-	  ("fn"   "^\\[\\^\\(.*\\)\\]" 1)
-	  )))
+        '(("title"  "^\\(.*\\)[\n]=+$" 1)
+          ("h2-"    "^\\(.*\\)[\n]-+$" 1)
+          ("h1"   "^# \\(.*\\)$" 1)
+          ("h2"   "^## \\(.*\\)$" 1)
+          ("h3"   "^### \\(.*\\)$" 1)
+          ("h4"   "^#### \\(.*\\)$" 1)
+          ("h5"   "^##### \\(.*\\)$" 1)
+          ("h6"   "^###### \\(.*\\)$" 1)
+          ("fn"   "^\\[\\^\\(.*\\)\\]" 1)
+          )))
 
 (use-package helm-flyspell
   :ensure t
   :bind (("M-$" . helm-flyspell-correct)
-	 ("C-c h e" . helm-flyspell-correct)))
+         ("C-c h e" . helm-flyspell-correct)))
 
 (use-package flyspell-correct-helm
   :ensure t
@@ -2071,8 +2088,8 @@ nil. Also returns nil if pid is nil."
   (add-hook 'prog-mode-hook 'flyspell-prog-mode)
   (add-hook 'text-mode-hook 'flyspell-mode)
   :bind (("M-;" . flyspell-correct-wrapper)
-	 ("C-c C-;" . flyspell-correct-wrapper)
-	 ("C-c ;" . flyspell-correct-wrapper))
+         ("C-c C-;" . flyspell-correct-wrapper)
+         ("C-c ;" . flyspell-correct-wrapper))
   :config
   (defalias 'fsb 'flyspell-buffer)
   (defalias 'fs 'flyspell-mode)
@@ -2108,28 +2125,28 @@ nil. Also returns nil if pid is nil."
   :init
   (add-hook 'rst-mode-hook 'flycheck-mode)
   (add-hook 'rst-mode-hook
-	    (lambda ()
-	      (turn-on-auto-fill)
-	      (setq fill-column 78)
-	      (setq rst-level-face-max 0)
-	      (set-face-background 'rst-level-1 nil)
-	      (set-face-background 'rst-level-2 nil)
-	      (set-face-background 'rst-level-3 nil)
-	      (set-face-background 'rst-level-4 nil)
-	      (set-face-background 'rst-level-5 nil)
-	      (set-face-background 'rst-level-6 nil)
+            (lambda ()
+              (turn-on-auto-fill)
+              (setq fill-column 78)
+              (setq rst-level-face-max 0)
+              (set-face-background 'rst-level-1 nil)
+              (set-face-background 'rst-level-2 nil)
+              (set-face-background 'rst-level-3 nil)
+              (set-face-background 'rst-level-4 nil)
+              (set-face-background 'rst-level-5 nil)
+              (set-face-background 'rst-level-6 nil)
 
-	      (local-set-key (kbd "C-M-h") 'backward-kill-word)
-	      (define-key rst-mode-map "\"" 'tychoish-electric-pair)
-	      (define-key rst-mode-map "\'" 'tychoish-electric-pair)
-	      (define-key rst-mode-map "\*" 'tychoish-electric-pair)
-	      (define-key rst-mode-map "\_" 'tychoish-electric-pair)
-	      (define-key rst-mode-map "(" 'tychoish-electric-pair)
-	      (define-key rst-mode-map "[" 'tychoish-electric-pair)
-	      (define-key rst-mode-map "{" 'tychoish-electric-pair)
-	      (define-key rst-mode-map "<" 'tychoish-electric-pair)
-	      (define-key rst-mode-map (kbd "C-c C-t h") 'rst-adjust)
-	      (local-unset-key (kbd "C-c C-s")))))
+              (local-set-key (kbd "C-M-h") 'backward-kill-word)
+              (define-key rst-mode-map "\"" 'tychoish-electric-pair)
+              (define-key rst-mode-map "\'" 'tychoish-electric-pair)
+              (define-key rst-mode-map "\*" 'tychoish-electric-pair)
+              (define-key rst-mode-map "\_" 'tychoish-electric-pair)
+              (define-key rst-mode-map "(" 'tychoish-electric-pair)
+              (define-key rst-mode-map "[" 'tychoish-electric-pair)
+              (define-key rst-mode-map "{" 'tychoish-electric-pair)
+              (define-key rst-mode-map "<" 'tychoish-electric-pair)
+              (define-key rst-mode-map (kbd "C-c C-t h") 'rst-adjust)
+              (local-unset-key (kbd "C-c C-s")))))
 
 (use-package flycheck-aspell
   :ensure t
@@ -2181,24 +2198,24 @@ nil. Also returns nil if pid is nil."
   :after (erc alert)
   :config
   (setq ercn-suppress-rules '((system . all)
-			      (fool . all)
-			      (dangerous-host . all)))
+                              (fool . all)
+                              (dangerous-host . all)))
 
   (setq ercn-notify-rules '((current-nick . all)
-			    (query-buffer . all)
-			    (message . ("#unclear" "#general"))))
+                            (query-buffer . all)
+                            (message . ("#unclear" "#general"))))
   (defun do-erc-notify (nickname message)
     "Hook implementation of a notification."
     (catch 'early-return
       (let* ((channel (buffer-name))
-	     (check (when (or (string-prefix-p "*irc-" channel)
-			      (string= "bot" nickname)
-			      (search "bitlbee" (downcase channel)))
-		      (throw 'early-return "skip notification noise")))
-	     (msg (s-trim (s-collapse-whitespace message)))
-	     (title (if (string-match-p (concat "^" nickname) channel)
-			nickname
-		      (concat nickname " (" channel ")"))))
+             (check (when (or (string-prefix-p "*irc-" channel)
+                              (string= "bot" nickname)
+                              (search "bitlbee" (downcase channel)))
+                      (throw 'early-return "skip notification noise")))
+             (msg (s-trim (s-collapse-whitespace message)))
+             (title (if (string-match-p (concat "^" nickname) channel)
+                        nickname
+                      (concat nickname " (" channel ")"))))
       (alert msg :title title))))
 
   (add-hook 'ercn-notify-hook 'do-erc-notify))
@@ -2212,46 +2229,46 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :commands (erc)
   :bind (("C-c e r" . reset-erc-track-mode)
-	 ("C-c e n" . tychoish-next-erc-buffer)
-	 ("C-c <SPC>" . erc-next-channel-buffer)
-	 ("C-c C-<SPC>" . erc-next-channel-buffer)
-	 ("C-c e k" . kill-all-erc-buffers)
-	 ("C-c e b" . ido-erc-buffer)
-	 ([backtab] . erc-button-url-previous)
-	 ("C-c C-d" . erc-truncate-buffer))
+         ("C-c e n" . tychoish-next-erc-buffer)
+         ("C-c <SPC>" . erc-next-channel-buffer)
+         ("C-c C-<SPC>" . erc-next-channel-buffer)
+         ("C-c e k" . kill-all-erc-buffers)
+         ("C-c e b" . ido-erc-buffer)
+         ([backtab] . erc-button-url-previous)
+         ("C-c C-d" . erc-truncate-buffer))
   :config
   (add-hook 'erc-mode-hook (lambda ()
-			     (make-local-variable 'erc-fill-column)
-			     (visual-line-mode 1)
-			     (auto-fill-mode 0)))
+                             (make-local-variable 'erc-fill-column)
+                             (visual-line-mode 1)
+                             (auto-fill-mode 0)))
 
   (add-hook 'erc-insert-pre-hook
-	    (lambda (s)
-	      (when (erc-foolish-content s)
-		(setq erc-insert-this nil))))
+            (lambda (s)
+              (when (erc-foolish-content s)
+                (setq erc-insert-this nil))))
 
   (defvar erc-foolish-content '("No such nick/channel"))
 
   (setq erc-modules '(stamp
-		      completion
-		      autojoin
-		      irccontrols
-		      list
-		      match
-		      menu
-		      move-to-prompt
-		      netsplit
-		      networks
-		      noncommands
-		      readonly
-		      ring
-		      spelling
-		      track))
+                      completion
+                      autojoin
+                      irccontrols
+                      list
+                      match
+                      menu
+                      move-to-prompt
+                      netsplit
+                      networks
+                      noncommands
+                      readonly
+                      ring
+                      spelling
+                      track))
 
 
   (setq erc-ignore-list '("*@*facebook" "&bitlbee"))
   (setq erc-track-exclude-types '("JOIN" "NICK" "PART" "QUIT" "MODE"
-				    "324" "329" "332" "333" "353" "477"))
+                                    "324" "329" "332" "333" "353" "477"))
   (setq erc-hide-list '("MODE" "JOIN" "PART"))
 
   (setq erc-current-nick-highlight-type 'nick)
@@ -2287,19 +2304,19 @@ nil. Also returns nil if pid is nil."
   (add-hook 'erc-insert-post-hook 'erc-truncate-buffer)
 
   (setq erc-prompt (lambda ()
-		     (if erc-network
-			 (concat "[" (symbol-name erc-network) "]")
-		       (concat "[" (car erc-default-recipients) "]"))))
+                     (if erc-network
+                         (concat "[" (symbol-name erc-network) "]")
+                       (concat "[" (car erc-default-recipients) "]"))))
 
   (add-hook 'window-configuration-change-hook
-	    (lambda ()
-	      (save-excursion
-		(walk-windows
-		 (lambda (w)
-		   (let ((buffer (window-buffer w)))
-		     (set-buffer buffer)
-		     (when (eq major-mode 'erc-mode)
-		       (setq erc-fill-column (- (window-width w) 2)))))))))
+            (lambda ()
+              (save-excursion
+                (walk-windows
+                 (lambda (w)
+                   (let ((buffer (window-buffer w)))
+                     (set-buffer buffer)
+                     (when (eq major-mode 'erc-mode)
+                       (setq erc-fill-column (- (window-width w) 2)))))))))
 
   (defun reset-erc-track-mode ()
     (interactive)
@@ -2310,7 +2327,7 @@ nil. Also returns nil if pid is nil."
 
   (defadvice erc-track-find-face (around erc-track-find-face-promote-query activate)
     (if (erc-query-buffer-p)
-	(setq ad-return-value (intern "erc-current-nick-face"))
+        (setq ad-return-value (intern "erc-current-nick-face"))
       ad-do-it))
 
   (defun erc-foolish-content (msg)
@@ -2321,25 +2338,25 @@ nil. Also returns nil if pid is nil."
     "Go to the previous URL button in this buffer."
     (interactive)
     (let* ((point (point))
-	   (found (catch 'found
-		    (while (setq point (previous-single-property-change point 'erc-callback))
-		      (when (eq (get-tbext-property point 'erc-callback) 'browse-url)
-			(throw 'found point))))))
+           (found (catch 'found
+                    (while (setq point (previous-single-property-change point 'erc-callback))
+                      (when (eq (get-tbext-property point 'erc-callback) 'browse-url)
+                        (throw 'found point))))))
       (if found
-	  (goto-char found)
-	(error "No previous URL button"))))
+          (goto-char found)
+        (error "No previous URL button"))))
 
   (defun kill-all-erc-buffers ()
     "Kill all erc buffers."
     (interactive)
     (save-excursion
       (let((count 0))
-	(dolist(buffer (buffer-list))
-	  (set-buffer buffer)
-	  (when (equal major-mode 'erc-mode)
-	    (setq count (1+ count))
-	    (kill-buffer buffer)))
-	(message "Killed %i erc buffer(s)." count ))))
+        (dolist(buffer (buffer-list))
+          (set-buffer buffer)
+          (when (equal major-mode 'erc-mode)
+            (setq count (1+ count))
+            (kill-buffer buffer)))
+        (message "Killed %i erc buffer(s)." count ))))
 
   (defvar tychoish-erc-disable-connection-status nil
     "When t, disable setting =mode-line-process= with the connection status")
@@ -2347,15 +2364,15 @@ nil. Also returns nil if pid is nil."
   (defun erc-custom-modeline (buffer)
     (with-current-buffer buffer
       (if tychoish-erc-disable-connection-status
-	  (setq mode-line-process '())
-	(let ((process-status (cond ((and (erc-server-process-alive)
-					  (not erc-server-connected))
-				     ":C")
-				    ((erc-server-process-alive)
-				     ":A")
-				    (t
-				     ":X"))))
-	  (setq mode-line-process (list process-status))))))
+          (setq mode-line-process '())
+        (let ((process-status (cond ((and (erc-server-process-alive)
+                                          (not erc-server-connected))
+                                     ":C")
+                                    ((erc-server-process-alive)
+                                     ":A")
+                                    (t
+                                     ":X"))))
+          (setq mode-line-process (list process-status))))))
 
   (advice-add 'erc-update-mode-line-buffer :after #'erc-custom-modeline)
 
@@ -2364,7 +2381,7 @@ nil. Also returns nil if pid is nil."
     (dolist (buffer (buffer-list))
       (set-buffer buffer)
       (when (equal major-mode 'erc-mode)
-	(erc-custom-modeline buffer))))
+        (erc-custom-modeline buffer))))
 
   (defvar erc-channels-to-visit nil
     "Channels that have not yet been visited by erc-next-channel-buffer")
@@ -2373,20 +2390,20 @@ nil. Also returns nil if pid is nil."
     (interactive)
     (when (null erc-channels-to-visit)
       (setq erc-channels-to-visit
-	    (remove (current-buffer) (erc-channel-list nil))))
+            (remove (current-buffer) (erc-channel-list nil))))
     (let ((target (pop erc-channels-to-visit)))
       (if target
-	  (switch-to-buffer target))))
+          (switch-to-buffer target))))
 
   (defun tychoish-next-erc-buffer ()
     "Switch to an IRC buffer, or run `erc-select'.
     When called repeatedly, cycle through the buffers."
     (interactive)
     (let ((buffers (and (fboundp 'erc-buffer-list)
-			(erc-buffer-list))))
+                        (erc-buffer-list))))
       (when (eq (current-buffer) (car buffers))
-	(bury-buffer)
-	(setq buffers (cdr buffers)))))
+        (bury-buffer)
+        (setq buffers (cdr buffers)))))
 
   (defun ido-erc-buffer nil
     "Switch to ERC buffer using IDO to choose which one, or start ERC
@@ -2394,11 +2411,11 @@ if not already started."
     (interactive)
     (let (final-list (list ))
       (dolist (buf (buffer-list) final-list)
-	(if (equal 'erc-mode (with-current-buffer buf major-mode))
-	    (setq final-list (append (list (buffer-name buf)) final-list))))
+        (if (equal 'erc-mode (with-current-buffer buf major-mode))
+            (setq final-list (append (list (buffer-name buf)) final-list))))
       (if final-list
-	  (switch-to-buffer (ido-completing-read "Buffer: " final-list))
-	(call-interactively 'erc))))
+          (switch-to-buffer (ido-completing-read "Buffer: " final-list))
+        (call-interactively 'erc))))
 
   (setq erc-track-priority-faces-only (remove "&bitlbee" erc-channel-list))
   (global-emojify-mode 1)
@@ -2435,57 +2452,57 @@ if not already started."
     (interactive)
     (setq telega-debug (not telega-debug))
     (if telega-debug
-	(message "telega-debug mode enabled")
+        (message "telega-debug mode enabled")
       (message "telega-debug mode disabled")))
 
   (defun telega--chat-observable-p (msg)
     (let ((chat (telega-msg-chat msg)))
       (with-telega-chatbuf chat
-	  (and (telega-chatbuf--msg-observable-p msg)
-	       (not (telega-chatbuf--history-state-get :newer-freezed))))))
+          (and (telega-chatbuf--msg-observable-p msg)
+               (not (telega-chatbuf--history-state-get :newer-freezed))))))
 
   (defun telega-notifications-msg-notify-p (msg)
     "tychoish's custom override for notificationable"
     (let* ((chat (telega-msg-chat msg))
-	   (title (plist-get chat :title)))
+           (title (plist-get chat :title)))
       (cond
        ;; chat window is open and viable: skip notify
        ((telega--chat-observable-p msg)
-	(progn (telega-debug "NOTIFY-CHECK: observed chat [%s], skip notify" title) nil))
+        (progn (telega-debug "NOTIFY-CHECK: observed chat [%s], skip notify" title) nil))
 
        ;; if it's muted: skip notify
        ((telega-chat-muted-p chat)
-	(progn (telega-debug "NOTIFY-CHECK: muted chat [%s], skip notify" title) nil))
+        (progn (telega-debug "NOTIFY-CHECK: muted chat [%s], skip notify" title) nil))
 
        ;; overly clear, but for groupchats where I am not a member: skip notify
        ;; after: https://github.com/zevlg/ytelega.el/issues/224
        ((telega-chat-match-p chat '(and (type basicgroup supergroup channel) (not me-is-member)))
-	(progn (telega-debug "NOTIFY-CHECK: group chat where I am not a member [%s], skip notify" title) nil))
+        (progn (telega-debug "NOTIFY-CHECK: group chat where I am not a member [%s], skip notify" title) nil))
 
        ;; message I sent (from another device): skip notify
        ((telega-msg-match-p msg '(sender me))
-	(progn (telega-debug "NOTIFY-CHECK: message I sent [%s], skip notify" title) nil))
+        (progn (telega-debug "NOTIFY-CHECK: message I sent [%s], skip notify" title) nil))
 
        ;; message that is a mention but notification of mentions are
        ;; disabled: skip notify
        ((and
-	 (plist-get msg :contains_unread_mention)
-	 (telega-chat-notification-setting chat :disable_mention_notifications))
-	(progn (telega-debug "NOTIFY-CHECK: contains a mention [%s], notify" title) nil))
+         (plist-get msg :contains_unread_mention)
+         (telega-chat-notification-setting chat :disable_mention_notifications))
+        (progn (telega-debug "NOTIFY-CHECK: contains a mention [%s], notify" title) nil))
 
        ;; notify for messages in chats that are directly sent to me, including bots
        ((telega-chat-match-p chat '(or (type private secret bot)))
-	(progn (telega-debug "NOTIFY-CHECK: is DM or BOT [%s], can notify" title) t))
+        (progn (telega-debug "NOTIFY-CHECK: is DM or BOT [%s], can notify" title) t))
 
        ;; for things that are a group, and I am a member, notify
        ((telega-chat-match-p chat 'me-is-member)
-	(progn (telega-debug "NOTIFY-CHECK: member of a group [%s], can notify" title) t))
+        (progn (telega-debug "NOTIFY-CHECK: member of a group [%s], can notify" title) t))
 
        ;; nothing has matched, this is probably "cases we haven't
        ;; explicitly called out above, probably a skip, but should be
        ;; explict:" notify for now
        (t
-	(progn (message (format "TELEGA-NOTIFY: unexpected message [%s], notifying anyway" title)) t)))))
+        (progn (message (format "TELEGA-NOTIFY: unexpected message [%s], notifying anyway" title)) t)))))
 
   (setq telega-use-images t)
   (setq telega-chat-fill-column 72)
@@ -2522,20 +2539,20 @@ if not already started."
 (use-package conf-mode
   :ensure t
   :mode (("\\.service$'" . conf-unix-mode)
-	 ("\\.timer$'" . conf-unix-mode)
-	 ("\\.target$'" . conf-unix-mode)
-	 ("\\.mount$'" . conf-unix-mode)
-	 ("\\.automount$'" . conf-unix-mode)
-	 ("\\.slice$'" . conf-unix-mode)
-	 ("\\.socket$'" . conf-unix-mode)
-	 ("\\.path$'" . conf-unix-mode)
-	 ("\\.conf$'" . conf-unix-mode)))
+         ("\\.timer$'" . conf-unix-mode)
+         ("\\.target$'" . conf-unix-mode)
+         ("\\.mount$'" . conf-unix-mode)
+         ("\\.automount$'" . conf-unix-mode)
+         ("\\.slice$'" . conf-unix-mode)
+         ("\\.socket$'" . conf-unix-mode)
+         ("\\.path$'" . conf-unix-mode)
+         ("\\.conf$'" . conf-unix-mode)))
 
 (use-package sh-script
   :ensure t
   :mode (("\\.zsh$'" . sh-mode)
-	 ("\\.zshrc$'" . sh-mode)
-	 ("\\.bash_profile$'" . sh-mode)))
+         ("\\.zshrc$'" . sh-mode)
+         ("\\.bash_profile$'" . sh-mode)))
 
 (use-package nxml-mode
   :mode (("\\.xml$'". nxml-mode)))
@@ -2550,21 +2567,22 @@ if not already started."
   :ensure nil
   :commands (eglot eglot-ensure)
   :hook ((python-ts-mode
-	  go-ts-mode
-	  rust-ts-mode
-	  js-ts-mode
-	  typescript-ts-mode
-	  bash-ts-mode sh-mode) . eglot-ensure)
+          go-ts-mode
+          rust-ts-mode
+          js-ts-mode
+          typescript-ts-mode
+          bash-ts-mode sh-mode) . eglot-ensure)
   :bind (("C-c l l s" . eglot)
-	 ("C-c l l r" . eglot-reconnect)
-	 ("C-c l l k" . eglot-shutdown)
-	 ("C-c l l l" . eglot-list-connections)
-	 ("C-c l r" . eglot-rename)
-	 ("C-c l f" . eglot-format)
-	 ("C-c l m" . helm-imenu)
-	 ("C-c l a" . eglot-code-actions))
+         ("C-c l l r" . eglot-reconnect)
+         ("C-c l l k" . eglot-shutdown)
+         ("C-c l l l" . eglot-list-connections)
+         ("C-c l r" . eglot-rename)
+         ("C-c l f" . eglot-format)
+         ("C-c l m" . helm-imenu)
+         ("C-c l a" . eglot-code-actions))
   :config
   (setq eglot-ignored-server-capabilities '(:inlayHintProvider))
+  (setq eglot-autoshutdown t)
 
   (defun eglot-organize-imports ()
     (interactive)
@@ -2574,25 +2592,27 @@ if not already started."
   (add-hook 'before-save-hook 'eglot-format-buffer)
 
   (setq-default eglot-workspace-configuration
-		'((:pylsp . (:configurationSources ["flake8"]
-			     :plugins (:pycodestyle (:enabled nil)
-				       :black (:enabled t)
-				       :mccabe (:enabled nil)
-				       :flake8 (:enabled t)))))))
+                '((:pylsp . (:configurationSources ["flake8"]
+                             :plugins (:pycodestyle (:enabled nil)
+                                       :black (:enabled t)
+                                       :mccabe (:enabled nil)
+                                       :flake8 (:enabled t)))))))
 
 (use-package helm-xref
   :ensure t
   :bind (("M-." . xref-find-definitions)
-	 ("C-c l c" . xref-find-references)
-	 ("C-c l d" . xref-find-definitions)
-	 ("C-c l p" . xref-go-back)
-	 ("C-c l n" . xref-go-forward)
-	 ("C-c l o" . xref-find-definitions-other-window)))
+         ("C-c l c" . xref-find-references)
+         ("C-c l d" . xref-find-definitions)
+         ("C-c l p" . xref-go-back)
+         ("C-c l n" . xref-go-forward)
+         ("C-c l o" . xref-find-definitions-other-window)))
 
 (use-package flycheck-eglot
   :ensure t
   :after (flycheck eglot)
   :config
+  (setq flycheck-eglot-exclusive nil)
+  (setq flycheck-eglot-enable-diagnostic-tags)
   (global-flycheck-eglot-mode 1))
 
 (use-package treesit
@@ -2603,13 +2623,13 @@ if not already started."
   (setq js-ts-mode-hook 'js-mode-hook)
 
   (setq major-mode-remap-alist
-	'((js-mode . js-ts-mode)
-	  (js-json-mode . json-ts-mode)
-	  (c-mode . c-ts-mode)
-	  (c++-mode . c++-ts-mode)
-	  (c-or-c++-mode . c-or-c++-ts-mode)
-	  (css-mode . css-ts-mode)
-	  (python-mode . python-ts-mode)))
+        '((js-mode . js-ts-mode)
+          (js-json-mode . json-ts-mode)
+          (c-mode . c-ts-mode)
+          (c++-mode . c++-ts-mode)
+          (c-or-c++-mode . c-or-c++-ts-mode)
+          (css-mode . css-ts-mode)
+          (python-mode . python-ts-mode)))
 
   (add-to-list 'auto-mode-alist '("\\.sh\\'" . bash-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
@@ -2633,6 +2653,7 @@ if not already started."
   (add-to-list 'auto-mode-alist '("\\.sc\\'" . scala-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.kt\\'" . kotlin-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.kts\\'" . kotlin-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.kdl\\'" . kdl-ts-mode))
 
   (add-to-list 'auto-mode-alist '("go.mod" . go-mod-ts-mode))
   (add-to-list 'auto-mode-alist '("Cargo.lock" . toml-ts-mode))
@@ -2667,6 +2688,7 @@ if not already started."
      (rust "https://github.com/tree-sitter/tree-sitter-rust")
      (scala "https://github.com/tree-sitter/tree-sitter-scala")
      (toml "https://github.com/tree-sitter/tree-sitter-toml")
+     (kdl "https://github.com/amaanq/tree-sitter-kdl")
      (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
      (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
      (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")
@@ -2676,8 +2698,8 @@ if not already started."
     (interactive)
     (async-start
      `(lambda ()
-	,(async-inject-variables "treesit-language-source-alist")
-	(mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
+        ,(async-inject-variables "treesit-language-source-alist")
+        (mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
      (lambda (result)
        (message "rebuilding treesit grammars %s" result)))))
 
