@@ -889,7 +889,7 @@ nil. Also returns nil if pid is nil."
     ;; no longer be necessary.
     (when buffer-file-name
       (setq-local buffer-save-without-query t)))
-
+  
   ;; comment to disable rustfmt on save
   (setq rustic-format-on-save t)
   (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
@@ -2190,7 +2190,6 @@ nil. Also returns nil if pid is nil."
    ((eq system-type 'gnu/linux)
     (setq alert-default-style 'notifications))
    (t (setq alert-default-style 'message)))
-
   (message (format "%s alerts configured" alert-default-style)))
 
 (use-package ercn
@@ -2592,11 +2591,13 @@ if not already started."
   (add-hook 'before-save-hook 'eglot-format-buffer)
 
   (setq-default eglot-workspace-configuration
-                '((:pylsp . (:configurationSources ["flake8"]
+                '((:pylsp (:configurationSources ["flake8"]
                              :plugins (:pycodestyle (:enabled nil)
                                        :black (:enabled t)
                                        :mccabe (:enabled nil)
-                                       :flake8 (:enabled t)))))))
+                                       :flake8 (:enabled t))))
+		  (:rust-analyzer (:server (:extraEnv ("CARGO_TARGET_DIR" . "target/analyzer")))
+				  (:check (:extraArgs ["--target-dir=target/analyzer"]))))))
 
 (use-package helm-xref
   :ensure t
@@ -2612,7 +2613,7 @@ if not already started."
   :after (flycheck eglot)
   :config
   (setq flycheck-eglot-exclusive nil)
-  (setq flycheck-eglot-enable-diagnostic-tags)
+  (setq flycheck-eglot-enable-diagnostic-tags t)
   (global-flycheck-eglot-mode 1))
 
 (use-package treesit

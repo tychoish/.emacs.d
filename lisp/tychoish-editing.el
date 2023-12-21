@@ -1,4 +1,4 @@
-;;; tychoish-editing.el --- tools for editing 
+;;; tychoish-editing.el --- tools for editing
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -24,7 +24,7 @@
 
 ;;; Commentary:
 
-;; these are a collection of text editing functions 
+;; these are a collection of text editing functions
 
 ;;; Code:
 
@@ -74,7 +74,7 @@
   (interactive "P")
   (let ((case-fold-search nil))
     (if (looking-at electrify-return-match)
-	(save-excursion (newline-and-indent)))
+        (save-excursion (newline-and-indent)))
     (newline arg)
     (indent-according-to-mode)))
 
@@ -82,8 +82,8 @@
   "Prints number of lines, words and characters in region or whole buffer."
   (interactive)
   (let ((n 0)
-	(start (if mark-active (region-beginning) (point-min)))
-	(end (if mark-active (region-end) (point-max))))
+        (start (if mark-active (region-beginning) (point-min)))
+        (end (if mark-active (region-end) (point-max))))
     (save-excursion
       (goto-char start)
       (while (< (point) end) (if (forward-word 1) (setq n (1+ n)))))
@@ -113,15 +113,15 @@
   (interactive
     (if mark-active (list (region-beginning) (region-end))
       (list (line-beginning-position)
-	(line-beginning-position 2)))))
+        (line-beginning-position 2)))))
 
 (defun move-text-internal (arg)
   (cond
    ((and mark-active transient-mark-mode)
     (if (> (point) (mark))
-	(exchange-point-and-mark))
+        (exchange-point-and-mark))
     (let ((column (current-column))
-	  (text (delete-and-extract-region (point) (mark))))
+          (text (delete-and-extract-region (point) (mark))))
       (forward-line arg)
       (move-to-column column t)
       (set-mark (point))
@@ -132,10 +132,10 @@
     (let ((column (current-column)))
       (beginning-of-line)
       (when (or (> arg 0) (not (bobp)))
-	(forward-line)
-	(when (or (< arg 0) (not (eobp)))
-	  (transpose-lines arg))
-	(forward-line -1))
+        (forward-line)
+        (when (or (< arg 0) (not (eobp)))
+          (transpose-lines arg))
+        (forward-line -1))
       (move-to-column column t)))))
 
 (defun move-text-down (arg)

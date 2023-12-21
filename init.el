@@ -7,8 +7,10 @@
 
 ;;; Code:
 
+;; init-without-gc
 (let ((file-name-handler-alist nil)
       (gc-cons-threshold 80000000000000))
+  ;; reset gc after init is complete
   (add-to-list 'after-init-hook
                (lambda ()
                  (setq max-specpdl-size 13000)
@@ -17,10 +19,11 @@
                  (let ((msg (format "started (%d) in %s" (emacs-pid) (emacs-init-time))))
                    (message (concat "emacs: " msg))
                    (daemonp) (alert msg :title (format "emacs-%s" tychoish-emacs-identifier))))
-                 (when (string-match "NATIVE_COMP" system-configuration-features)
-                   (setq native-comp-deferred-compilation t)
-                   (setq native-compile-prune-cache t))))
+               (when (string-match "NATIVE_COMP" system-configuration-features)
+                 (setq native-comp-deferred-compilation t)
+                 (setq native-compile-prune-cache t)))
 
+;; start: init-without-gc
   (require 'package)
   (setq package-user-dir (concat user-emacs-directory "elpa"))
   (setq package-enable-at-startup nil)
@@ -50,7 +53,8 @@
     (tychoish-setup-global-modes)
     (tychoish-setup-modeline)
     (tychoish-setup-user-local-config))
-)
+;; end: init-without-gc
+  )
 
 (provide 'init)
 ;;; init.el ends here

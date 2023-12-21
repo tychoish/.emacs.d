@@ -159,8 +159,8 @@ to change the value of this variable.")
   "Modify the transparency of the emacs frame; if DEC is t,
     decrease the transparency, otherwise increase it in 10%-steps"
   (let* ((alpha-or-nil (frame-parameter nil 'alpha)) ; nil before setting
-	  (oldalpha (if alpha-or-nil alpha-or-nil 100))
-	  (newalpha (if dec (- oldalpha 2) (+ oldalpha 2))))
+          (oldalpha (if alpha-or-nil alpha-or-nil 100))
+          (newalpha (if dec (- oldalpha 2) (+ oldalpha 2))))
     (when (and (>= newalpha frame-alpha-lower-limit) (<= newalpha 100))
       (modify-frame-parameters nil (list (cons 'alpha newalpha))))))
 
@@ -213,11 +213,11 @@ The is unique to the system and daemon instance."
     (when (file-accessible-directory-p dirname)
       (add-to-list 'load-path dirname)
       (mapc (lambda (fn)
-	      (when (and (string-match-p "\\.el$" fn)
-			 (not (string-match-p "^flycheck_.*\\.el$" fn)))
-		(with-slow-op-timer (format "loading user config [%s]" fn) 0.10
-		 (require (intern (string-remove-suffix ".el" fn))))))
-	    (directory-files dirname))) t))
+              (when (and (string-match-p "\\.el$" fn)
+                         (not (string-match-p "^flycheck_.*\\.el$" fn)))
+                (with-slow-op-timer (format "loading user config [%s]" fn) 0.10
+                 (require (intern (string-remove-suffix ".el" fn))))))
+            (directory-files dirname))) t))
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 
@@ -234,9 +234,9 @@ each buffer, unless NO-ASK is non-nil."
   (dolist (buffer (buffer-list))
     (let ((name (buffer-file-name buffer)))
       (when (and name (not (string-equal name ""))
-		 (or internal-too (/= (aref name 0) ?\s))
-		 (string-match regexp name))
-	(funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)))))
+                 (or internal-too (/= (aref name 0) ?\s))
+                 (string-match regexp name))
+        (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)))))
 
 (defun display-startup-echo-area-message ()  "Called during setup, intentially a noop, which omit the message."  nil)
 (defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup" "")
@@ -246,8 +246,8 @@ each buffer, unless NO-ASK is non-nil."
 (defun ad:suppress-message (f &rest arg)
   (if my-suppress-message-p
       (let ((inhibit-message t)
-	    (message-log-max nil))
-	(apply f arg))
+            (message-log-max nil))
+        (apply f arg))
     (apply f arg)))
 
 (defvar tychoish-xterm-mouse-state nil)
