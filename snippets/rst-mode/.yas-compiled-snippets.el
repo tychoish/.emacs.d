@@ -13,7 +13,6 @@
 		       ("limit" ".. _limit-$1:\n\n.. limit:: $2\n\n   $0\n" "insert limit template" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/limit" nil nil)
 		       ("issue" ":issue:\\`${1:Link Text}\\`$0\n" "Issue Link" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/issue" nil nil)
 		       ("img" ".. image:: ${1:Image Path}\n   :alt: ${2:Alt Text}\n   :target: ${3:Link Target}\n$1\n" "Image" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/img" nil nil)
-		       ("hugo" "---\ntitle: $1\ntags: [$2]\ncategories: [$3]\ndate: `(format-time-string \"%Y-%m-%d\")`\nauthor: tychoish\nmarkup: rst\n---\n\n$0\n" "hugo" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/hugo" nil nil)
 		       ("h4" "${1:Header 4}\n${1:$(make-string (string-width yas-text) ?\\`)}\n$0\n" "Header 4 (`) (Doc Baker Specific)" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/h4" nil nil)
 		       ("h3" "${1:Header 3}\n${1:$(make-string (string-width yas-text) ?\\~)}\n$0\n" "Header 3 (~) (Doc Baker Specific)" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/h3" nil nil)
 		       ("h2" "${1:Header 2}\n${1:$(make-string (string-width yas-text) ?\\-)}\n$0\n" "Header 2 (-)" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/h2" nil nil)
@@ -34,4 +33,4 @@
 		       ("*" "*${1:Text}* $0\n" "Emphasis" nil nil nil "/home/tychoish/.emacs.d/snippets/rst-mode/*" nil nil)))
 
 
-;;; Do not edit! File generated at Sun Jul  9 00:25:26 2023
+;;; Do not edit! File generated at Mon Dec 30 15:17:58 2024

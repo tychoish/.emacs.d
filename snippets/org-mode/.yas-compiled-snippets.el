@@ -11,6 +11,7 @@
 		       ("set" "#+setupfile: $0" "setup" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/setup" nil nil)
 		       (">quote" "#+begin_quote\n$0\n#+end_quote" "quote" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/quote" nil nil)
 		       ("py" "#+begin_src python\n$0\n#+end_src" "python" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/python" nil nil)
+		       ("tracker" "* Inbox                                                               :inbox:\n* Tasks\n* Notes\n* Loops\n** Daily\n** Weekly\n** Quarterly\n** Yearly\n* Journal\n" "sasha chua's project tracking file" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/project-tracking" nil nil)
 		       (">op" "#+options: h:${1:1} num:${2:t||nil} toc:${3:t||nil}$0" "options" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/options" nil nil)
 		       (">li" "[[${1:link}][${2:description}]]\n" "link" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/link" nil nil)
 		       (">lan" "#+language: ${1:en}" "language" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/language" nil nil)
@@ -33,8 +34,7 @@
 		       (">da" "#+date: ${1:year}:${2:month}:${3:day}" "date" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/date" nil nil)
 		       (">c" "#+begin_center\n$0\n#+end_center" "center" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/center" nil nil)
 		       (">au" "#+author: $0" "author" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/author" nil nil)
-		       ("agenda" "* Inbox\n* Tasks\n* Notes\n* Loops\n** Daily\n** Weekly\n** Quarterly\n** Yearly\n* Journal\n" "agenda" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/agenda" nil nil)
 		       (">afn" "[fn:: ${1:note}] $0\n" "footnote" nil nil nil "/home/tychoish/.emacs.d/snippets/org-mode/afn" nil nil)))
 
 
-;;; Do not edit! File generated at Sun Jul  9 00:25:26 2023
+;;; Do not edit! File generated at Mon Dec 30 15:17:58 2024

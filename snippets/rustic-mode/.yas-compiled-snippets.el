@@ -47,4 +47,4 @@
 		       ("as" "assert!(${1:truth});" "assert" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/assert" nil nil)))
 
 
-;;; Do not edit! File generated at Sun Jul  9 00:25:26 2023
+;;; Do not edit! File generated at Mon Dec 30 15:17:58 2024

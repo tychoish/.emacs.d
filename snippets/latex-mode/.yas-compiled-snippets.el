@@ -6,4 +6,4 @@
 		       ("apa" "\\documentclass[man]{apa}\n% Packages required to support encoding\n\\usepackage{ucs}\n\\usepackage[utf8x]{inputenc}\n% Packages required by code\n\\title{}\n\\shorttitle{%header title$}\n\\author{$1}\n\\affiliation{Webster University}\n\\rightheader{Running head: title}\n% Packages always used\n\\usepackage{hyperref}\n\\usepackage{xspace}\n%\\usepackage{apacite}\n\\usepackage{natbib}\n\\bibliographystyle{apa-good}\n\n\\begin{document}\n\\maketitle \n\n%body of paper goes here\n$0\n\n\\newpage\n\\bibliography{AC.references}\n\\end{document}\n" "apa" nil nil nil "/home/tychoish/.emacs.d/snippets/latex-mode/apa" nil nil)))
 
 
-;;; Do not edit! File generated at Sun Jul  9 00:25:25 2023
+;;; Do not edit! File generated at Mon Dec 30 15:17:58 2024

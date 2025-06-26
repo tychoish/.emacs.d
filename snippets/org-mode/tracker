@@ -1,0 +1,16 @@
+# -*- mode: snippet -*-
+# name: sasha chua inspired project tracking file
+# key: project
+# contributor: sam kleinman
+# --
+#+TITLE:prime.tychoish.projects
+#+CATEGORY: ${1:category}
+* Inbox
+* Tasks
+* Notes
+* Loops
+** Daily
+** Weekly
+** Quarterly
+** Yearly
+* Journal

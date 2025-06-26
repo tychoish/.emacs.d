@@ -1,0 +1,12 @@
+# name: hugo
+# --
+---
+title: "${1:title}"
+tags: ["${2:}"]
+categories: ["${3:software}"]
+date: `(format-time-string "%Y-%m-%d")`
+author: tychoish
+markup: rst
+---
+
+$0

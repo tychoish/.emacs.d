@@ -5,4 +5,4 @@
 		     '(("alias" "alias ${1:alias-name}='${0:alias-value}'\n" "alias ...=\"...\"" nil nil nil "/home/tychoish/.emacs.d/snippets/sh-mode/alias" nil nil)))
 
 
-;;; Do not edit! File generated at Sun Jul  9 00:25:26 2023
+;;; Do not edit! File generated at Mon Dec 30 15:17:58 2024

@@ -6,4 +6,4 @@
 		       ("key" "${1:key}: ${2:value}$0" "key: value" nil nil nil "/home/tychoish/.emacs.d/snippets/yaml-mode/key" nil nil)))
 
 
-;;; Do not edit! File generated at Sun Jul  9 00:25:26 2023
+;;; Do not edit! File generated at Mon Dec 30 15:17:59 2024
