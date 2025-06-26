@@ -10,7 +10,8 @@
 ;; init-without-gc
 (let ((file-name-handler-alist nil)
       (gc-cons-threshold 80000000000000))
-  ;; reset gc after init is complete
+
+;; reset gc after init is complete
   (add-to-list 'after-init-hook
                (lambda ()
                  (setq max-specpdl-size 13000)
@@ -28,10 +29,15 @@
   (setq package-user-dir (concat user-emacs-directory "elpa"))
   (setq package-enable-at-startup nil)
 
-  (package-initialize)
   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+  (add-to-list 'package-archives '( "jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/") t)
+  (setq package-archive-priorities '(("melpa"    . 2)
+				     ("gnu"    . 1)
+				     ("nongnu"    . 1)
+                                     ("jcs-elpa" . 0)))
 
   (unless (package-installed-p 'use-package)
+    (package-initialize)
     (package-refresh-contents)
     (package-install 'use-package))
 
@@ -44,6 +50,9 @@
   (defvar user-org-directories nil
     "Defines additional directories where org files might exist.")
 
+  (defvar tychoish-disable-external-notifications nil
+    "disable external notification support.")
+
   (add-to-list 'load-path (concat user-emacs-directory "lisp"))
   (add-to-list 'load-path "/usr/share/emacs/site-lisp/mu4e/")
 
@@ -52,10 +61,7 @@
     :config
     (tychoish-setup-global-modes)
     (tychoish-setup-modeline)
-    (tychoish-setup-user-local-config))
-;; end: init-without-gc
-  )
+    (tychoish-setup-user-local-config)))
 
 (provide 'init)
 ;;; init.el ends here
-(put 'magit-diff-edit-hunk-commit 'disabled nil)

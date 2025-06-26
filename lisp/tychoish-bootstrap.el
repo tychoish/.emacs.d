@@ -242,12 +242,9 @@ each buffer, unless NO-ASK is non-nil."
 (defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup" "")
 (defun emacs-repository-get-version (&optional dir ext)  "Noop definition of function to speed up startup" "")
 
-(defvar my-suppress-message-p t)
 (defun ad:suppress-message (f &rest arg)
-  (if my-suppress-message-p
-      (let ((inhibit-message t)
-            (message-log-max nil))
-        (apply f arg))
+  (let ((inhibit-message t)
+        (message-log-max nil))
     (apply f arg)))
 
 (defvar tychoish-xterm-mouse-state nil)
@@ -257,6 +254,35 @@ each buffer, unless NO-ASK is non-nil."
       (xterm-mouse-mode -1)
     (xterm-mouse-mode 1))
   (setq tychoish-xterm-mouse-state (not tychoish-xterm-mouse-state)))
+
+(defun tychoish-system-name ()
+  (interactive)
+  (message (s-join " " (list "system:" (system-name)))))
+
+(defun turn-on-soft-wrap ()
+  (interactive)
+
+  (auto-fill-mode -1)
+  (visual-fill-column-mode 1)
+  (visual-line-mode 1))
+
+(defalias 'turn-on-hard-wrap 'turn-off-soft-wrap)
+(defalias 'turn-off-hard-wrap 'turn-on-soft-wrap)
+(defalias 'toggle-soft-wrap 'toggle-wrapping-mode)
+(defalias 'toggle-hard-wrapp 'toggle-wrapping-mode)
+
+(defun turn-off-soft-wrap ()
+  (interactive)
+
+  (visual-fill-column-mode -1)
+  (visual-line-mode -1)
+  (auto-fill-mode 1))
+
+(defun toggle-wrapping-mode ()
+  (interactive)
+  (if auto-fill-function
+      (turn-on-soft-wrap)
+    (turn-on-hard-wrap)))
 
 (advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
 (advice-add 'emacs-repository-version-git :around #'ad:suppress-message)

@@ -38,6 +38,9 @@
 (defvar tychoish-blog-path (expand-file-name "~/blog")
   "Path to the blog's project directory.")
 
+(defvar tychoish-blog-extension ".md"
+  "File extension for the blog files.")
+
 (defun tychoish-blog-insert-date ()
   "Insert date string."
   (interactive)
@@ -67,16 +70,14 @@
   "Create a new file for a post of with the specified TITLE."
   (interactive "sPost Title: ")
   (let* ((slug (make-filename-slug title))
-         (draft-fn (f-join tychoish-blog-path (concat slug ".rst"))))
+         (draft-fn (f-join tychoish-blog-path (concat slug tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
       (progn
+	(kill-new title)
         (find-file draft-fn)
         (yas-expand-snippet
-         (yas-lookup-snippet "hugo" 'rst-mode t) nil nil)
-        (end-of-buffer)
-        (whitespace-cleanup)
-        (insert "\n")))
+         (yas-lookup-snippet "hugo"))))
     (message "working on post: %s" draft-fn)))
 
 (defun tychoish-create-note-file (title)
@@ -93,7 +94,7 @@
         (end-of-buffer)
         (whitespace-cleanup)
         (insert "\n")))
-    (message "new post: %s" draft-fn)))
+    (message "new note: %s" draft-fn)))
 
 (defun tychoish-blog-publish-post ()
   "Move the blog post in the current buffer to the publication location.

@@ -201,7 +201,8 @@
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
         '((border-mode-line-active bg-mode-line-active)
-          (border-mode-line-inactive bg-mode-line-inactive))))
+          (border-mode-line-inactive bg-mode-line-inactive)
+	  (message-separator bg-main))))
 
 ;; (use-package modus-themes-exporter
 ;;   :after modus-themes
@@ -235,24 +236,24 @@
   :bind (
          ;; most interesting helm menus are under one prefix
          ("C-c h a" . helm-apropos)
+         ("C-c h b" . helm-buffers-list)
          ("C-c h d" . helm-info)
          ("C-c h i" . helm-imenu)
-         ("C-c h k" . helm-regist)
+         ("C-c h j" . helm-etags-select)
+         ("C-c h k" . helm-register)
          ("C-c h l" . helm-locate)
          ("C-c h m" . helm-man-woman)
          ("C-c h o" . helm-occur)
          ("C-c h p" . helm-browse-project)
          ("C-c h r" . helm-recentf)
-         ("C-c h r" . helm-top)
-         ("C-c h t" . helm-etags-select)
+         ("C-c h t" . helm-top)
          ("C-c h g" . helm-google-suggest)
          ("C-c h w" . helm-buffers-list)
          ("C-c h y" . helm-show-kill-ring)
 
          ;; defined elsewhered :
          ;; ("C-c h c" . helm-company)
-         ;; ("C-c h b" . helm-make-projectile)
-         ;; ("C-c h n" . helm-make-projectile)
+         ;; ("C-c h m" . helm-make)
          ;; ("C-c h f" . helm-flycheck)
          ;; ("C-c h e" . helm-flyspell-correct)
          ;; ("C-c h s" . helm-swoop)
@@ -289,6 +290,7 @@
 
   (setq helm-M-x-fuzzy-match t)
   (setq helm-move-to-line-cycle-in-source nil)
+  (setq helm-buffers-fuzzy-matching t)
   (setq helm-autoresize-max-height 40)
   (setq helm-autoresize-min-height 20)
   (setq helm-autoresize-mode nil)
@@ -326,8 +328,7 @@
 
 (use-package helm-make
   :ensure t
-  :bind (("C-c h b" . helm-make-projectile)
-         ("C-c h n" . helm-make))
+  :bind (("C-c h m" . helm-make))
   :config
   (setq helm-make-named-buffer t)
   (setq helm-make-fuzzy-matching t)
@@ -352,13 +353,13 @@
 
 (use-package helm-eww
   :ensure t
-  :bind (("C-c w o" . helm-eww)))
+  :bind (("C-c w o" . helm-eww)
+	 ("C-c w h" . helm-eww-buffers)))
 
 (use-package helm-projectile
   :ensure t
   :after (projectile helm)
   :bind (("M-p" . helm-projectile)
-         ("C-c s a" . helm-projectile-ag)
          ("C-c s r" . helm-projectile-rg)
          ("C-c s g" . helm-projectile-grep))
   :config
@@ -554,7 +555,8 @@
                                  cc-mode
                                  cc-ts-mode
                                  eww-mode
-                                 go-ts-mode
+				 go-ts-mode
+				 go-mode
                                  special-mode)))
 
 (use-package writeroom-mode
@@ -579,6 +581,11 @@
   (setq shell-pop-autocd-to-working-dir t)
   (setq shell-pop-cleanup-buffer-at-process-exit t))
 
+(use-package winner
+  :ensure t
+  :commands (winner-mode winner-undo winner-redo)
+  :hook ((fundamental-mode) . winner-mode))
+
 (use-package session
   :ensure t
   :commands (session-initialize)
@@ -592,74 +599,27 @@
     "Save an emacs session... sometimes"
     (interactive)
 
-    (if (> 30 (random 100))
+    (if (> 40 (random 100))
         (session-save-session t)))
 
-  (add-hook 'after-save-hook 'tychoish-save-desktop)
-  (add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
-
+  (add-hook 'after-save-hook 'tychoish-save-session)
   (setq session-save-print-spec '(t nil 40000)))
-
-(use-package winner
-  :ensure t
-  :commands (winner-mode winner-undo winner-redo)
-  :hook ((fundamental-mode) . winner-mode))
 
 (use-package desktop
   :ensure t
-  :commands (desktop-save-mode desktop-read tychoish-save-desktop)
+  :commands (desktop-save-mode desktop-read desktop-save)
   :after (tychoish-bootstrap)
   :config
+  (setq desktop-enable t)
   (setq desktop-load-locked-desktop t)
+  (setq desktop-restore-frames nil)
   (setq desktop-dirname user-emacs-directory)
   (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop-file"))
   (setq desktop-base-lock-name (convert-standard-filename (tychoish-get-config-file-prefix (format "desktop-lock-%d" (emacs-pid)))))
 
-  ;; use session-save to save the desktop manually
-  (defun tychoish-save-desktop ()
-    "Save an emacs session... sometimes"
-    (interactive)
-
-    (when (> 50 (random 100))
-        (desktop-save desktop-dirname)
-        (desktop-read)))
-
-  (add-hook 'after-save-hook 'tychoish-save-desktop)
-  (setq ad-redefinition-action 'accept)
-  (defun emacs-process-p (pid)
-    "If pid is the process ID of an emacs process, return t, else
-nil. Also returns nil if pid is nil."
-    (when pid
-      (let* ((cmdline-file (concat "/proc/" (int-to-string pid) "/cmdline")))
-        (when (file-exists-p cmdline-file)
-          (with-temp-buffer
-            (insert-file-contents-literally cmdline-file)
-            (goto-char (point-min))
-            (search-forward "emacs" nil t)
-            pid)))))
-
-  (defadvice desktop-owner (after pry-from-cold-dead-hands activate)
-    "Don't allow dead emacsen to own the desktop file."
-    (when (not (emacs-process-p ad-return-value))
-      (setq ad-return-value nil)))
-
-  (defadvice desktop-save (around stfu compile activate)
-    (cl-flet ((yes-or-no-p (&rest args) t)
-              (y-or-n-p (&rest args) t))
-      ad-do-it))
-
-  ;; use session-restore to restore the desktop manually
-  (defun session-restore ()
-    "Restore a saved emacs session."
-    (interactive)
-    (if (file-exists-p (concat desktop-dirname "/" desktop-base-file-name))
-        (desktop-read)
-      (message "No desktop found.")))
+  (add-hook 'after-save-hook (lambda () (when (> 40 (random 100)) (desktop-save desktop-dirname))))
 
   (setq desktop-path (list user-emacs-directory))
-  (setq desktop-enable t)
-  (setq desktop-dirname user-emacs-directory)
-  (setq desktop-restore-frames nil)
   (setq desktop-buffers-not-to-save
         (concat "\\("
                 "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
@@ -734,10 +694,6 @@ nil. Also returns nil if pid is nil."
              github-review-approve
              github-review-reject))
 
-(use-package forge
-  :ensure t
-  :after (magit))
-
 (use-package yasnippet
   :ensure t
   :diminish "ys"
@@ -768,10 +724,19 @@ nil. Also returns nil if pid is nil."
 (use-package company
   :ensure t
   :delight
-  :bind (("C-c ." . company-complete)
-         ("C-c C-." . company-complete)
-         ("C-c s s" . company-yasnippet)
+  :after (yas eglot)
+  :bind (("C-c . ." . company-complete)
+         ("C-c . c" . company-complete)
+         ("C-c . s n" . company-yasnippet)
+         ("C-c . s p" . company-ispell)
+         ("C-c . e" . company-emojis)
+         ("C-c . f" . company-files)
+	 ("C-c . o" . company-other-backend)
+	 ("C-c . n" . company-other-backend)
+	 ("<tag>" . company-)
          :map company-active-map
+	 ("<tab>" . company-complete-common-or-cycle)
+ 	 ("<backtab>" . (lambda () (interactive) (company-complete-common-or-cycle -1)))
          ("C-n" . company-select-next)
          ("C-p" . company-select-previous)
          ("C-d" . company-show-doc-buffer)
@@ -790,23 +755,16 @@ nil. Also returns nil if pid is nil."
   (setq company-echo-delay 0)
   (setq company-ispell-dictionary (expand-file-name "~/.aspell.en.pws"))
 
-  (setq company-backends '(company-capf
-                           company-keywords
-                           company-semantic
-                           company-emoji
-                           company-yasnippet
+  (setq company-backends '((company-capf company-dabbrev company-dabbrev-code company-abbrev company-files company-ispell company-wordfreq company-emoji company-yasnippet)
+			   (company-keywords company-elisp company-solidity company-clang company-css company-cmake)))
 
-                           company-etags
-                           company-wordfreq
-                           company-elisp
-                           company-files
-                           company-cmake))
-
-  (global-company-mode))
+  (global-company-mode 1))
 
 (use-package company-emoji
   :ensure t
-  :after company)
+  :after company
+  :config
+  (company-emoji-init))
 
 (use-package company-wordfreq
   :ensure t
@@ -826,6 +784,7 @@ nil. Also returns nil if pid is nil."
   (define-key flycheck-mode-map flycheck-keymap-prefix flycheck-command-map)
 
   (setq flycheck-check-syntax-automatically '(save new-line idle-change idle-buffer-switch))
+  (setq flycheck-indication-mode nil)
   (setq flycheck-idle-change-delay 1)
   (setq flycheck-idle-buffer-switch-delay 1)
   (setq flycheck-checker-error-threshold nil)
@@ -834,7 +793,7 @@ nil. Also returns nil if pid is nil."
 
 (use-package flycheck-golangci-lint
   :ensure t
-  :after (go-ts-mode flycheck)
+  :after (go-mode flycheck)
   :config
   (setq flycheck-go-vet-shadow t)
   (setq flycheck-go-build-install-deps t)
@@ -843,12 +802,12 @@ nil. Also returns nil if pid is nil."
   (setq flycheck-golangci-lint-tests t)
   (flycheck-golangci-lint-setup))
 
-(use-package go-ts-mode
+(use-package go-mode
   :ensure nil
   :delight "go"
-  :mode (("\\.go$" . go-ts-mode)
-         ("\\.go" . go-ts-mode)
-         ("\\.go\\'" . go-ts-mode))
+  :mode (("\\.go$" . go-mode)
+         ("\\.go" . go-mode)
+         ("\\.go\\'" . go-mode))
   :init
   (unless (getenv "GOPATH")
     (setenv "GOPATH" (expand-file-name "~/go")))
@@ -857,45 +816,61 @@ nil. Also returns nil if pid is nil."
   (setq exec-path (cons local-go-bin exec-path))
   (setenv "PATH" (format "%s:%s" (getenv "PATH") local-go-bin ))
   (add-to-list 'exec-path local-go-bin)
+  (add-hook 'before-save-hook 'gofmt-before-save)
 
   :config
-  (add-hook 'go-ts-mode-hook 'flycheck-mode)
-  (add-hook 'go-ts-mode-hook
+  (add-hook 'go-mode-hook 'flycheck-mode)
+  (add-hook 'go-mode-hook
             (lambda ()
               (setq-local comment-auto-fill-only-comments t)
               (auto-fill-mode 1))))
+
+(use-package rust-mode
+  :ensure t
+  :init 
+  (setq rust-mode-treesitter-derive t))
+
+(use-package rustic
+  :ensure t
+  :delight "rs"
+  :after (rust-mode)
+  :mode (("\\.rs$" . rustic-mode)
+         ("\\.rs" . rustic-mode)
+         ("\\.rs\\'" . rustic-mode))
+  :commands (rust-resolve-fmt-path)
+  :init
+  (add-hook 'rustic-mode-hook  'eglot-ensure)
+  (add-hook 'rustic-mode-hook 'rustic-mode-auto-save-hook)
+  (setq rustic-format-trigger 'on-save)
+  (setq rustic-lsp-client 'eglot)
+
+  (when (executable-find "rustup")
+    (setq rustic-rustfmt-args "+nightly")
+    (setq rustic-analyzer-command '("rustup" "run" "stable" "rust-analyzer")))
+
+  (add-hook 'eglot--managed-mode-hook (lambda () (flymake-mode -1)))
+
+  (defun rustic-mode-auto-save-hook ()
+    "Enable auto-saving in rustic-mode buffers."
+    (when buffer-file-name
+      (setq-local compilation-ask-about-save nil)))
+
+  (add-hook 'rustic-mode-hook (lambda () (flycheck-set-indication-mode 'left-fringe)))
+
+  (setq rustic-use-rust-save-some-buffers t)
+
+  :config
+  (setq rustic-clippy-arguments "--all --all-features -- --deny warnings"))
 
 (use-package cargo
   :ensure t
   :after (rustic)
   :config
-  (setq cargo-process--command-fmt "fmt --all")
-  (add-hook 'rust-ts-mode-hook 'cargo-minor-mode))
-
-(use-package rustic
-  :ensure t
-  :delight "rs"
-  :mode "\\.rs$'"
-  :config
-  ;; uncomment for less flashiness
-  ;; (setq lsp-eldoc-hook nil)
-  (setq rust-format-on-save t)
-  (setq rustic-lsp-client 'eglot)
-
-  (defun rk/rustic-mode-hook ()
-    ;; so that run C-c C-c C-r works without having to confirm, but don't try to
-    ;; save rust buffers that are not file visiting. Once
-    ;; https://github.com/brotzeit/rustic/issues/253 has been resolved this should
-    ;; no longer be necessary.
-    (when buffer-file-name
-      (setq-local buffer-save-without-query t)))
-  
-  ;; comment to disable rustfmt on save
-  (setq rustic-format-on-save t)
-  (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
+  (setq cargo-process--command-fmt "+nightly fmt --all")
+  (add-hook 'rustic-mode-hook 'cargo-minor-mode))
 
 (use-package rust-compile
-  :after (rustic))
+  :after (rustic-mode))
 
 (use-package rust-playground
   :ensure t
@@ -1008,6 +983,7 @@ nil. Also returns nil if pid is nil."
               ("C-c ." . company-complete))
   :init
   (setq ad-redefinition-action 'accept)
+  (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
 
   (defun balle-python-shift-left ()
     (interactive)
@@ -1148,7 +1124,7 @@ nil. Also returns nil if pid is nil."
   :mode (("\\.org$" . org-mode))
   :after (s)
   :delight "org"
-  :commands (tychoish-org-add-file-capture-templates
+  :commands (tychoish-org-add-project-file-capture-templates
              org-save-all-org-buffers)
   :bind (("C-c o a" . org-agenda)
          ("C-c o t a" . org-agenda)
@@ -1162,12 +1138,12 @@ nil. Also returns nil if pid is nil."
          ("C-c o k w" . org-capture-refile)
          ("C-c o l a" . org-annotate-file))
   :init
-  (add-hook 'org-mode-hook 'tychoish--add-toc-org-hook)
-  (add-hook 'org-mode-hook 'flycheck-mode)
-  (add-hook 'org-mode-hook 'auto-fill-mode)
+  (delight 'org-agenda-mode "agenda")
+  (diminish 'org-capture-mode)
 
   (setq org-directory (concat local-notes-directory "/org"))
   (setq org-agenda-files (list org-directory))
+
   (defun tychoish-org-date-now ()
     (interactive)
     (format-time-string "<%Y-%02m-%02d %02H:%02M:%02S %Z>" (time-stamp)))
@@ -1188,15 +1164,133 @@ nil. Also returns nil if pid is nil."
       (org-timestamp-change 0 'year)
       t))
 
-  (defun tychoish-org-reset-capture-templates ()
+  (defun tychoish-org-setup-standard-capture-templates ()
     (interactive)
-    (setq org-capture-templates '(("n" "notes")
-                                  ("j" "journal")
-                                  ("t" "tasks")
-                                  ("r" "routines"))))
+    "Defines a set of capture templates for a records.org, journal.org, and planner.org"
+    ;;
+    ;; loops/routines
+    ;;
+    (add-to-list 'org-capture-templates
+		 '("rd" "daily loop (prime)" entry (file+olp "planner.org" "Loops" "Daily")
+                   "* TODO %^{Title}\nSCHEDULED: <%<%Y-%m-%d %H:%M +1d>>\n%?\n%i"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("rw" "weekly loop (prime)" entry (file+headline "planner.org" "Loops" "Weekly")
+                   "* TODO %^{Title}\nSCHEDULED: <%<%Y-%m-%d +1w>\n%?\n%i"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("rm" "monthly loop (prime)" entry (file+headline "planner.org" "Loops" "Monthly")
+                   "* TODO %^{Title}\nSCHEDULED: <%<%Y-%m-%d +1m>\n%?\n%i"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("rq" "quarterly loop (prime)" entry (file+headline "planner.org" "Loops" "Quarterly")
+                   "* TODO %^{Title}\nSCHEDULED: <%<%Y-%m-%d +1q>\n%?\n%i"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("ry" "yearly loop (prime)" entry (file+headline "planner.org" "Loops" "Yearly")
+                   "* TODO %^{Title}\nSCHEDULED: <%<%Y-%m-%d +1y>\n%?\n%i"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+
+    ;;
+    ;; notes
+    ;;
+    (add-to-list 'org-capture-templates
+		 '("nx" "notes (prime; X buffer)" entry (file+headline "records.org" "Inbox")
+                   "* %^{Title}\n%x\n%?"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("nk" "notes (prime; kill buffer)" entry (file+headline "records.org" "Inbox")
+                   "* %^{Title}\n%^C\n%?"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("nl" "notes (prime; org-link)" entry (file+headline "records.org" "Inbox")
+                   "* %^{Title}\n%A\n%?"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("nn" "notes (prime; selection)" entry (file+headline "records.org" "Inbox")
+                   "* %^{Title}\n%?\n%i"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+
+    ;;
+    ;; journal
+    ;;
+    (add-to-list 'org-capture-templates
+		 '("jx" "journal (prime; X11 buffer)" entry (file+olp+datetree "journal.org")
+		   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%x\n\n%?"
+                   :prepend nil
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("jk" "journal (prime; kill buffer)" entry (file+olp+datetree "journal.org")
+		   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%^C\n\n%?"
+                   :prepend nil
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("jl" "journal (prime; org-link)" entry (file+olp+datetree "journal.org")
+		   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%A\n\n%?"
+                   :prepend nil
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("jj" "journal (prime; selection)" entry (file+olp+datetree "journal.org")
+		   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%?\n%i"
+                   :prepend nil
+                   :kill-buffer t
+                   :empty-lines-after 1))
+
+    ;;
+    ;; tasks
+    ;;
+    (add-to-list 'org-capture-templates
+		 '("tx" "tasks (prime; X buffer)" entry (file+headline "planner.org" "Tasks")
+                   "* TODO %^{Task}\n%x\n%?"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("tk" "tasks (prime; kill buffer)" entry (file+headline "planner.org" "Tasks")
+                   "* TODO %^{Task}\n%^C\n%?"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("tl" "tasks (prime; org-link)" entry (file+headline "planner.org" "Tasks")
+                   "* TODO %^{Task}\n%A\n%?"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+		 '("tt" "tasks (prime; selection)" entry (file+headline "planner.org" "Tasks")
+                   "* TODO %^{Task}\n%?\n%i"
+                   :prepend t
+                   :kill-buffer t
+                   :empty-lines-after 1))
+
+    (message "registered standard tychoish org-capture templates"))
 
   (defun tychoish-org--add-routines (prefix-key name orgfile-path)
     (add-to-list 'org-capture-templates `(,(concat "r" prefix-key) ,name))
+    (add-to-list 'org-capture-templates `(,(concat prefix-key "r") "loops"))
+
     (dolist (ival-pair '(("1d" . "Daily")
                          ("1w" . "Weekly")
                          ("4w" . "Monthly")
@@ -1209,83 +1303,128 @@ nil. Also returns nil if pid is nil."
              (lower-heading (downcase heading))
              (menu-name (concat name lower-heading "routine"))
              (template (concat "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")))
-      (dolist (prefix (list (concat prefix-key "r" interval-prefix) (concat "r" prefix-key interval-prefix)))
-        (add-to-list 'org-capture-templates `(,prefix ,(concat name " " lower-heading " routine")
-                                              entry (file+olp ,orgfile-path "Loops" heading)
+
+      (dolist (prefix (list (concat prefix-key "r" interval-prefix)
+			    (concat "r" prefix-key interval-prefix)))
+        (add-to-list 'org-capture-templates `(,prefix ,(concat name " " lower-heading " routine") entry (file+olp ,orgfile-path "Loops" ,heading)
                                               ,template
                                               :prepend t
                                               :kill-buffer t
                                               :empty-lines-after 1))))))
 
-  :config
-  (tychoish-org-reset-capture-templates)
-  (defun tychoish-org-add-file-capture-templates (name &rest args)
+  (defun tychoish-org-add-project-file-capture-templates (name &rest args)
     "Defines a set of capture mode templates for adding notes and tasks to a file."
-    (let ((org-filename (concat org-directory "/" (make-filename-slug name) ".org"))
-          (prefix-key (or (plist-get args :prefix) ""))
-          (should-add-routines (plist-get args :routines)))
+    (interactive)
 
-      (when (s-contains? prefix-key "tjnr")
+    (let ((org-filename (concat org-directory "/" (make-filename-slug name) ".org"))
+          (prefix-key (or (plist-get args :prefix) "")))
+
+      (when (s-contains? prefix-key "jntr")
         (error "org-capture prefix key '%s' for '%s' contains well-known prefix" prefix-key org-filename))
+      (when (s-contains? prefix-key "xlk")
+        (error "org-capture prefix key '%s' for '%s' contains sub-template key" prefix-key org-filename))
+      (when (s-contains? prefix-key "cs")
+        (error "org-capture prefix key '%s' for '%s' contains, which is a reserved key" prefix-key org-filename))
 
       (when prefix-key
-        (add-to-list 'org-capture-templates `(,prefix-key ,name)))
-
-      (when should-add-routines
-        (tychoish-org--add-routines prefix-key name org-filename))
-
-      (add-to-list 'org-capture-templates `(,prefix-key ,name))
+        (add-to-list 'org-capture-templates `(,prefix-key ,name))
+	(tychoish-org--add-routines prefix-key name org-filename))
 
       ;; journal, for date related content
-      (dolist (prefix (list (concat prefix-key "j") (concat "j" prefix-key)))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "j") ,(concat name " journal")))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
+
+      (dolist (prefix (list (concat prefix-key "jj")
+			    (concat "j" prefix-key)))
         (add-to-list 'org-capture-templates `(,prefix ,(concat name " journal")
                                               entry (file+datetree ,org-filename "Journal")
-                                              "* <%<%Y-%m-%d %H:%M>>\n%?"
+                                              "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%?"
                                               :prepend nil
                                               :kill-buffer t
                                               :empty-lines-after 1)))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "n") ,(concat name " notes")))
-      (dolist (prefix (list (concat "n" prefix-key) (concat prefix-key "nn")))
-        (add-to-list 'org-capture-templates `(,prefix ,(concat name " basic notes")
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "jl") ,(concat name " journal (org-link)")
+						    entry (file+datetree ,org-filename "Journal")
+						    "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%a\n%?"
+						    :prepend nil
+						    :kill-buffer t
+						    :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "jx") ,(concat name " journal (kill-buffer)")
+						    entry (file+datetree ,org-filename "Journal")
+						    "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%x\n%?"
+						    :prepend nil
+						    :kill-buffer t
+						    :empty-lines-after 1))
+
+      (dolist (prefix (list (concat prefix-key "nn")
+			    (concat "n" prefix-key)))
+        (add-to-list 'org-capture-templates `(,prefix ,(concat name " notes")
                                                      entry (file+headline ,org-filename "Inbox")
-                                                     "* %?"
+                                                     "* %^{Title}\n%?\n%i"
                                                      :prepend t
                                                      :kill-buffer t
-                                                     :empty-lines-after  1)))
+                                                     :empty-lines-after 1)))
+
       (add-to-list 'org-capture-templates `(,(concat prefix-key "nl") ,(concat name " notes (org-link)")
                                             entry (file+headline ,org-filename "Inbox")
-                                            "* %?\n%a"
+                                            "* %^{Title}\n%?\n%a"
+                                            :prepend t
+                                            :kill-buffer t
+                                            :empty-lines-after 1))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "nx") ,(concat name " notes (X buffer)")
+                                            entry (file+headline ,org-filename "Inbox")
+                                            "* %^{Title}\n%?\n%x"
                                             :prepend t
                                             :kill-buffer t
                                             :empty-lines-after 1))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "nk") ,(concat name " notes (kill buffer)")
                                             entry (file+headline ,org-filename "Inbox")
-                                            "* %?\n%c"
+                                            "* %^{Title}\n%?\n%c"
                                             :prepend t
                                             :kill-buffer t
                                             :empty-lines-after 1))
 
-      (add-to-list 'org-capture-templates `(,(concat prefix-key "t") ,(concat name " tasks")))
-      (dolist (prefix (list (concat "t" prefix-key) (concat prefix-key "tt")))
+      (dolist (prefix (list (concat "t" prefix-key)
+			    (concat prefix-key "tt")))
         (add-to-list 'org-capture-templates `(,prefix ,(concat name " basic tasks")
                                               entry (file+headline ,org-filename "Tasks")
-                                              "* TODO %?"
+                                              "* TODO %^{Task}\n%i\n%?"
                                               :prepend t
                                               :kill-buffer t
                                               :empty-lines-after 0)))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "tl") ,(concat name " tasks (org-link)")
                                             entry (file+headline ,org-filename "Tasks")
-                                            "* TODO %?\n%a"
+                                            "* TODO %^{Task}\n%a\n%?"
+                                            :prepend t
+                                            :kill-buffer t
+                                            :empty-lines-after 0))
+      (add-to-list 'org-capture-templates `(,(concat prefix-key "tl") ,(concat name " tasks (X buffer)")
+                                            entry (file+headline ,org-filename "Tasks")
+                                            "* TODO %^{Task}\n%x\n%?"
                                             :prepend t
                                             :kill-buffer t
                                             :empty-lines-after 0))
       (add-to-list 'org-capture-templates `(,(concat prefix-key "tk") ,(concat name " tasks (kill buffer)")
                                             entry (file+headline ,org-filename "Tasks")
-                                            "* TODO %?\n%c"
+                                            "* TODO %^{Task}\n%c\n%?"
                                             :prepend t
                                             :kill-buffer t
-                                            :empty-lines-after 0))))
+                                            :empty-lines-after 0))
+      (message (concat "registered org-capture templates for " org-filename))))
+
+  (defun tychoish-org-reset-capture-templates ()
+    (interactive)
+    (setq org-capture-templates '(("t" "tasks")
+                                  ("j" "journal")
+				  ("n" "notes")
+                                  ("r" "routines")))
+    (message "reset all org-capture templates"))
+  :config
+  (tychoish-org-reset-capture-templates)
+  (tychoish-org-add-project-file-capture-templates "singing" :prefix "h")
+  (tychoish-org-setup-standard-capture-templates)
+
   (define-key org-mode-map (kbd "C-c o w") 'org-refile)
   (define-key org-mode-map (kbd "C-c o l o") 'org-open-link-from-string)
   (define-key org-mode-map (kbd "C-c o l a o") 'org-agenda-open-link)
@@ -1313,64 +1452,26 @@ nil. Also returns nil if pid is nil."
   (define-key org-mode-map (kbd "C-c o r e") 'org-bibtex)
   (define-key org-mode-map (kbd "C-c C-p") 'set-mark-command)
 
-  (delight 'org-agenda-mode "agenda")
-
-  (defadvice org-capture-finalize
-      (after delete-capture-frame activate)
-    "Advise capture-finalize to close the frame"
-    (when (equal "capture" (frame-parameter nil 'name))
-      (delete-frame)))
-
-  (defadvice org-capture-destroy
-      (after delete-capture-frame activate)
-    "Advise capture-destroy to close the frame"
-    (when (equal "capture" (frame-parameter nil 'name))
-        (delete-frame)))
-
-  (defun make-capture-frame (&optional keys show-menu)
-    "Create a new frame and run org-capture."
-    (interactive)
-    (make-frame '((name . "capture")
-                  (width . 120)
-                  (height . 15)))
-    (select-frame-by-name "capture")
-    (setq word-wrap 1)
-    (setq truncate-lines nil)
-    ;; Using the second argument to org-capture, we bypass interactive selection
-    ;; and use an existing template, unless you pass t rather than a template trigger
-    (cond
-     ((stringp keys)
-      (org-capture nil keys))
-     ((or show-menu (not keys))
-      (org-capture))
-     (t
-      (org-capture nil "tt"))))
-
   (defun org-agenda-files-reload ()
     "reloads all agenda files"
     (interactive)
     (setq org-agenda-files (--remove (s-matches? "archive.org$" it) (f-glob "*.org" org-directory))))
 
-  (defadvice org-capture-finalize (after delete-capture-frame activate)
-    "Advise capture-finalize to close the frame if it is the capture frame"
-    (if (equal "capture" (frame-parameter nil 'name))
-        (delete-frame)))
-
-  (delight 'org-agenda)
-  (diminish 'org-capture-mode)
 
   (add-hook 'org-ctrl-c-ctrl-c-hook 'org-set-weekday-of-timestamp)
-  (add-hook 'org-agenda-mode-hook 'revbufs)
+  (add-hook 'org-agenda-mode-hook (lambda ()
+				    (if (get-buffer "*revbufs*")
+					(with-current-buffer "*revbufs*" (revbufs) (bury-buffer "*revbufs*"))
+				      (revbufs))))
+
   (add-hook 'org-shiftup-final-hook 'windmove-up)
   (add-hook 'org-shiftleft-final-hook 'windmove-left)
   (add-hook 'org-shiftdown-final-hook 'windmove-down)
   (add-hook 'org-shiftright-final-hook 'windmove-right)
 
-  (setq auto-mode-alist (cons '("\\.org$" . org-mode) auto-mode-alist))
-  (setq org-archive-location (concat org-directory "/archive/%s::datetree/"))
-  (setq org-default-notes-file (concat org-directory "/organizer.org"))
-  (setq org-annotate-file-storage-file (concat org-directory "/annotations.org"))
-  (setq org-agenda-files (cl-remove-duplicates (append org-agenda-files user-org-directories)))
+  (add-hook 'org-mode-hook 'tychoish--add-toc-org-hook)
+  (add-hook 'org-mode-hook 'flycheck-mode)
+  (add-hook 'org-mode-hook 'auto-fill-mode)
 
   (org-load-modules-maybe t)
   (setq org-modules '(org-velocity
@@ -1378,14 +1479,16 @@ nil. Also returns nil if pid is nil."
                       org-depend
                       org-man
                       org-annotate-file
+		      org-capture
                       org-datetree
                       org-habit
                       org-ctags
                       org-info))
 
+  (setq org-agenda-include-diary nil)
   (setq org-agenda-custom-commands
         '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")
-          ("c" "Super view"
+          ("c" "SuperView"
            ((agenda "" ((org-agenda-overriding-header "Schedule:")
                         (org-super-agenda-groups
                          '((:name "Today"
@@ -1411,7 +1514,7 @@ nil. Also returns nil if pid is nil."
                             (:discard (:not (:todo "TODO")))))))))))
 
   (setq org-todo-keywords '((sequence "TODO(t)" "|" "DONE(d!)")
-                            (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
+                            (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
 
   (setq org-todo-keyword-faces '(("TODO" . org-warning)
                                  ("INPROGRESS" . "orange")
@@ -1431,18 +1534,25 @@ nil. Also returns nil if pid is nil."
                         (:endgroup . nil)))
 
   (setq org-CUA-compatible t)
-  (setq org-replace-disputed-keys t)
   (setq org-agenda-block-separator nil)
   (setq org-agenda-columns-add-appointments-to-effort-sum t)
   (setq org-agenda-compact-blocks t)
   (setq org-agenda-default-appointment-duration 60)
+  (setq org-agenda-files (cl-remove-duplicates (append org-agenda-files user-org-directories)))
   (setq org-agenda-inhibit-startup nil)
   (setq org-agenda-mouse-1-follows-link t)
-  (setq org-agenda-skip-deadline-if-done t)
+  (setq org-agenda-use-time-grid t)
+  (setq org-agenda-skip-deadline-if-done nil)
+  (setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
   (setq org-agenda-skip-scheduled-if-done t)
-  (setq org-agenda-skip-scheduled-if-deadline-is-shown t)
   (setq org-agenda-skip-unavailable-files t)
+  (setq org-agenda-skip-timestamp-if-done t)
+  (setq org-agenda-todo-ignore-deadlines t)
+  (setq org-agenda-todo-ignore-scheduled t)
   (setq org-agenda-start-on-weekday nil)
+  (setq org-annotate-file-storage-file (concat org-directory "/records.org"))
+  (setq org-archive-location (concat org-directory "/archive/%s::datetree/"))
+  (setq org-default-notes-file (concat org-directory "/records.org"))
   (setq org-enforce-todo-checkbox-dependencies t)
   (setq org-enforce-todo-dependencies t)
   (setq org-fast-tag-selection-include-todo t)
@@ -1450,12 +1560,13 @@ nil. Also returns nil if pid is nil."
   (setq org-footnote-auto-label nil)
   (setq org-footnote-define-inline nil)
   (setq org-footnote-section nil)
+  (setq org-log-into-drawer t)
   (setq org-outline-path-complete-in-steps nil)
   (setq org-provide-todo-statistics t)
   (setq org-refile-allow-creating-parent-nodes 'confirm)
   (setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
-  (setq org-log-into-drawer t)
   (setq org-refile-use-outline-path 'file)
+  (setq org-replace-disputed-keys t)
   (setq org-return-follows-link t)
   (setq org-reverse-note-order t)
   (setq org-startup-folded "content")
@@ -1464,12 +1575,7 @@ nil. Also returns nil if pid is nil."
   (setq org-track-ordered-property-with-tag t)
   (setq org-use-fast-tag-selection t)
   (setq org-use-fast-todo-selection t)
-  (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**"))))
-  (setq org-agenda-skip-scheduled-if-done t))
-
-;; (use-package org-mu4e
-;; :ensure t
-;;   :after (org mu4e))
+  (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**")))))
 
 (use-package helm-org
   :ensure t
@@ -1752,6 +1858,14 @@ nil. Also returns nil if pid is nil."
   :commands (docker)
   :bind ("C-c C-d" . docker))
 
+(use-package terraform-mode
+  :ensure t
+  :delight "tf"
+  :mode ("\\.tf" "\\.tfvars" "\\.tfvars.example")
+  :config
+  (setq terraform-format-on-save t)
+  (setq terraform-indent-level 2))
+
 (use-package lpr
   :ensure t
   :commands (lpr-region lpr-buffer)
@@ -1805,19 +1919,29 @@ nil. Also returns nil if pid is nil."
   :init
   (setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
   (setq message-citation-line-function 'message-insert-formatted-citation-line)
-  (setq message-default-mail-headers "Cc: \nBcc: \n")
+  (setq message-default-mail-headers nil)
   (setq message-interactive t)
   (setq message-kill-buffer-on-exit nil)
-  (setq message-send-mail-function 'message-send-mail-with-sendmail))
+  (setq message-send-mail-function 'message-send-mail-with-sendmail)
+  (setq message-forward-as-mime nil)
+  :config
+  (add-to-list 'mm-discouraged-alternatives "text/html")
+  (add-to-list 'mm-discouraged-alternatives "text/richtext"))
 
 (use-package mu4e
   :bind (("C-c m m" . mu4e)
          ("C-c m d" . mu4e~headers-jump-to-maildir)
          ("C-c m b" . mu4e-headers-search-bookmark)
          ("C-c m c" . mu4e-compose-new)
+	 :map mu4e-compose-minor-mode-map
+	 ("R" . bjm/mu4e-compose-reply-wide-or-not-please-ask)
+         ("r" . mu4e-headers-mark-for-read)
          :map mu4e-headers-mode-map
+	 ("R" . bjm/mu4e-compose-reply-wide-or-not-please-ask)
+	 ("C-r" . bjm/mu4e-compose-reply-wide-or-not-please-ask)
          ("r" . mu4e-headers-mark-for-read)
          ("o" . mu4e-headers-mark-for-unread)
+         ("u" . mu4e-headers-mark-for-unread)
          ("*" . mu4e-headers-mark-for-something)
          ("#" . mu4e-mark-resolve-deferred-marks)
          (";" . mu4e-mark-resolve-deferred-marks))
@@ -1827,19 +1951,19 @@ nil. Also returns nil if pid is nil."
              mu4e-update-mail-and-index
              mu4e-headers-jump-to-maildir
              mu4e-headers-search-bookmark
+	     tychoish-add-standard-mail-booksmarks
              tychoish-set-up-email)
   :init
-  (setq mail-header-separator "--------------------------")
   (setq mail-imenu-generic-expression
         '(("Subject"  "^Subject: *\\(.*\\)" 1)
           ("Cc"     "^C[Cc]: *\\(.*\\)" 1)
+          ("Bcc"     "^B[Cc]: *\\(.*\\)" 1)
           ("To"     "^To: *\\(.*\\)" 1)
           ("From"  "^From: *\\(.*\\)" 1)))
 
   (setq mu4e-compose-complete-addresses t)
   (setq mu4e-compose-complete-only-after "2015-01-01")
   (setq mu4e-compose-dont-reply-to-self t)
-  (setq mu4e-compose-format-flowed nil)
   (setq mu4e-compose-keep-self-cc nil)
   (setq mu4e-compose-signature t)
   (setq mu4e-drafts-folder "/drafts")
@@ -1860,47 +1984,55 @@ nil. Also returns nil if pid is nil."
   (setq mail-user-agent 'mu4e-user-agent)
   (setq mc-gpg-user-id (getenv "GPG_KEY_ID"))
   (setq mml-secure-openpgp-sign-with-sender t)
+
   (setq sendmail-program "msmtp")
   (setq smtpmail-queue-mail nil)
 
-  (defun tychoish-mu4e-compose-mode-hook-op ()
-    "My settings for message composition."
-    (flush-lines "^\\(> \n\\)*> -- \n\\(\n?> .*\\)*") ;;; Kills quoted sigs.
-    (set-buffer-modified-p nil) ;;; We haven't changed the buffer, haven't we? *g*
-    (message-goto-body) ;;; Jumps to the beginning of the mail text
-    (setq make-backup-files nil) ;;; No backups necessary.
-    (use-hard-newlines 1 'always)
-    (auto-fill-mode 1)
-    (visual-line-mode 0)
-    (visual-fill-column-mode 0)
-    (setq-local message-fill-column 66)
-    (setq-local set-fill-column 66)
-    (flyspell-mode 1))
-
-  (add-hook 'mu4e-compose-mode-hook 'tychoish-mu4e-compose-mode-hook-op)
+  (add-hook 'message-mode-hook (lambda ()
+				 (setq-local use-hard-newlines t)
+				 (setq-local fill-column 80)
+				 (setq-local message-fill-column 80)
+				 (setq-local make-backup-files nil)
+				 (setq-local message-cite-style message-cite-style-gmail)
+				 ;; (local-set-key (kbd "M-q") 'ignore)
+				 (set-face-attribute 'message-separator nil :background (modus-themes-color 'bg-main))
+				 (turn-off-hard-wrap)))
 
   (defun tychoish-add-standard-mail-bookmarks ()
     "add a standard/generic list of bookmarks"
+    (setq mu4e-bookmarks nil)
     (add-to-list 'mu4e-bookmarks '("mime:image/*" "Messages with images" ?p))
     (add-to-list 'mu4e-bookmarks '("date:today..now" "Today's messages" ?t))
     (add-to-list 'mu4e-bookmarks '("date:7d..now" "This Week's messages" ?w))
-    (add-to-list 'mu4e-bookmarks '("m:/inbox" "Inbox (all)" ?i))
-    (add-to-list 'mu4e-bookmarks '("m:/rss.*  AND flag:unread" "RSS Unread" ?r))
+    (add-to-list 'mu4e-bookmarks '("m:/inbox OR m:/prof" "Inbox (all)" ?i))
     (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)" "all unread message" ?a))
-    (add-to-list 'mu4e-bookmarks '("flag:unread AND NOT flag:trashed AND NOT m:/rss.*" "Unread messages (no RSS)" ?u))
-    (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (m:/rss.* OR m:/sent OR flag:trashed OR m:/trash)"
+    (add-to-list 'mu4e-bookmarks '("flag:unread AND NOT flag:trashed" "Unread messages (no RSS)" ?u))
+    (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
                                    "to read/process queue" ?q))
-    (add-to-list 'mu4e-bookmarks '("(m:/inbox OR m:/prof) AND flag:unread" "unread primary queues to file"?f))
+    (add-to-list 'mu4e-bookmarks '("m:/inbox OR m:/prof" "unread primary queues to file"?f))
     (add-to-list 'mu4e-bookmarks '("(NOT m:/inbox AND NOT m:/prof) AND flag:unread" "all sorted email" ?s)))
 
-
   :config
+  ;; count number of recipients
+  (defun bjm/mu4e-number-recipients ()
+    "Return number of recipients in To and Cc fields"
+    (interactive)
+    (let ((msg (mu4e-message-at-point)))
+      (+ (length (mu4e-message-field msg :to))
+         (length (mu4e-message-field msg :cc)))))
+
+  ;; ask if there is more than one recipient
+  (defun bjm/mu4e-compose-reply-wide-or-not-please-ask ()
+    (interactive)
+    (let ((num-rec (bjm/mu4e-number-recipients)))
+      (if (> num-rec 1)
+          (mu4e-compose-reply (yes-or-no-p "Reply to all?"))
+        (mu4e-compose-reply))))
+
   (defun tychoish-set-up-email (maildir name address)
     (setq message-directory maildir)
     (setq mu4e-maildir maildir)
     (setq mu4e-mu-home (f-join maildir ".mu"))
-
-    (setq mu4e-bookmarks nil)
     (tychoish-add-standard-mail-bookmarks)
 
     (setq user-mail-address address)
@@ -1924,25 +2056,9 @@ nil. Also returns nil if pid is nil."
 
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
 
-  (defun mu4e~draft-insert-mail-header-separator ()
-    ;; we set this here explicitly, since (as it has happened) a wrong
-    ;; value for this (such as "") breaks address completion and other things
-    (set (make-local-variable 'mail-header-separator)
-         (purecopy "--------------------------"))
-    (put 'mail-header-separator 'permanent-local t)
-    (save-excursion
-      (let ((sepa (propertize mail-header-separator
-                              'intangible t
-                              'read-only "Can't touch this"
-                              'rear-nonsticky t
-                              'font-lock-face 'mu4e-system-face)))
-        (goto-char (point-min))
-        ;; search for the first empty line
-        (if (search-forward-regexp "^$" nil t)
-            (replace-match (concat sepa))
-          (progn  ;; no empty line? then prepend one
-            (goto-char (point-max))
-            (insert "\n" sepa)))))))
+  (setq mail-header-separator "--------------------------")
+  (setq mu4e--header-separator (propertize "--------------------------" 'read-only t 'intangible t)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1952,11 +2068,8 @@ nil. Also returns nil if pid is nil."
 
 (use-package deft
   :ensure t
-  :bind (("C-c C-d" . deft)
-         ("C-c d o" . deft)
-         ("C-c x d" . deft)
+  :bind (("C-c d o" . deft)
          ("C-c d n" . tychoish-deft-create)
-         ("C-c x n" . tychoish-deft-create)
          ("C-c d d" . (lambda () (interactive) (find-file deft-directory))))
   :init
   (setq deft-directory (concat local-notes-directory "/deft"))
@@ -1970,7 +2083,7 @@ nil. Also returns nil if pid is nil."
 
   (defun tychoish-deft-create (title)
     "Create a new deft entry."
-    (interactive "sBwO Title: ")
+    (interactive "sNote Title: ")
     (let ((draft-file (concat deft-directory
                               (deft-file-make-slug title)
                               "."
@@ -1985,7 +2098,6 @@ nil. Also returns nil if pid is nil."
   (setq deft-use-filename-as-title t)
   (setq deft-auto-save-interval 0)
   (setq deft-auto-save-interval nil))
-
 
 (use-package artbollocks-mode
   :ensure t
@@ -2008,13 +2120,7 @@ nil. Also returns nil if pid is nil."
 
   (setq lexical-illusions nil)
   (setq weasl-words t)
-  (setq passive-voice t)
-
-  ;; Make sure keywords are case-insensitive
-  (defadvice search-for-keyword (around sacha activate)
-    "Match in a case-insensitive way."
-    (let ((case-fold-search t))
-      ad-do-it)))
+  (setq passive-voice t))
 
 (use-package google-this
   :ensure t
@@ -2042,6 +2148,7 @@ nil. Also returns nil if pid is nil."
 (use-package markdown-mode
   :ensure t
   :delight "mdwn"
+  :after (flycheck flycheck-vale)
   :mode ("\\.mdwn" "\\.md" "\\.markdown")
   :init
   (setq auto-mode-alist (cons '("\\.mdwn" . markdown-mode) auto-mode-alist))
@@ -2119,6 +2226,14 @@ nil. Also returns nil if pid is nil."
   :ensure t
   :mode ("\\.script" "\\.sp"))
 
+(use-package graphviz-dot-mode
+  :ensure t
+  :mode ("\\.gv" "\\.dot")
+  :commands (graphviz graphviz-dot-mode)
+  :config
+  (add-hook 'graphviz-dot-mode-hook 'company-mode)
+  (setq graphviz-dot-indent-width 4))
+
 (use-package rst-mode
   :delight "rst"
   :mode ("\\.rst" "\\.txt")
@@ -2143,7 +2258,8 @@ nil. Also returns nil if pid is nil."
               (define-key rst-mode-map "\_" 'tychoish-electric-pair)
               (define-key rst-mode-map "(" 'tychoish-electric-pair)
               (define-key rst-mode-map "[" 'tychoish-electric-pair)
-              (define-key rst-mode-map "{" 'tychoish-electric-pair)
+
+               (define-key rst-mode-map "{" 'tychoish-electric-pair)
               (define-key rst-mode-map "<" 'tychoish-electric-pair)
               (define-key rst-mode-map (kbd "C-c C-t h") 'rst-adjust)
               (local-unset-key (kbd "C-c C-s")))))
@@ -2161,14 +2277,30 @@ nil. Also returns nil if pid is nil."
   (add-to-list 'flycheck-checkers 'c-aspell-dynamic)
   (add-to-list 'flycheck-checkers 'mail-aspell-dynamic))
 
+(use-package flycheck-grammarly
+  :ensure t
+  :after (flycheck flycheck-aspell)
+  :config
+  (setq flycheck-grammarly-check-time 0.8)  ;; default
+  (flycheck-grammarly-setup)
+  (flycheck-add-next-checker 'markdown-aspell-dynamic 'grammarly)
+  (flycheck-add-next-checker 'mail-aspell-dynamic 'grammarly))
+
+
+
 (use-package flycheck-vale
   :ensure t
   :after (flycheck)
-  :ensure-system-package vale
   ;; vale is the aur package "vale-bin" but maybe its more portable to
   ;; try and use "go get" or "go install".
+  :ensure-system-package vale
   :config
-  (flycheck-vale-setup))
+  (flycheck-vale-toggle-enabled)
+
+  (flycheck-add-next-checker 'mail-aspell-dynamic 'vale)
+  (flycheck-add-next-checker 'markdown-aspell-dynamic 'vale)
+  (flycheck-add-next-checker 'rst-aspell-dynamic 'vale))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2324,11 +2456,6 @@ nil. Also returns nil if pid is nil."
     (erc-track-switch-buffer 1)
     (erc-track-switch-buffer -1))
 
-  (defadvice erc-track-find-face (around erc-track-find-face-promote-query activate)
-    (if (erc-query-buffer-p)
-        (setq ad-return-value (intern "erc-current-nick-face"))
-      ad-do-it))
-
   (defun erc-foolish-content (msg)
     "Check whether MSG is foolish."
     (erc-list-match erc-foolish-content msg))
@@ -2444,6 +2571,11 @@ if not already started."
   (telega-mode-line-mode 1)
   (global-telega-mnz-mode 1)
   (diminish 'telega-mnz-mode)
+  (diminish 'telega-chat-auto-fill-mode "afm")
+
+  (setq telega-root-view-grouping-folders nil)
+  (setq telega-filter-custom-show-folders nil)
+  (setq telega-folder-icons-alist nil)
 
   (setq telega-debug nil)
 
@@ -2508,7 +2640,7 @@ if not already started."
   (setq telega-root-fill-column 72)
   (setq telega-chat-button-width 24)
   (setq telega-chat-input-markups '("markdown2"))
-  (setq telega-server-libs-prefix "/usr/lib")
+  (setq telega-server-libs-prefix "/usr")
   (setq telega-completing-read-function 'helm--completing-read-default)
   (setq telega-use-tracking-for '(or unmuted mention))
   (setq telega-markdown2-backquotes-as-precode t)
@@ -2556,6 +2688,27 @@ if not already started."
 (use-package nxml-mode
   :mode (("\\.xml$'". nxml-mode)))
 
+(use-package solidity-mode
+  :ensure t
+  :config
+  (setq solidity-comment-style 'slash))
+
+(use-package solidity-flycheck
+  :ensure t
+  :after (solidity-mode)
+  :config
+  (setq solidity-flycheck-solc-checker-active t))
+
+(use-package company-solidity
+  :ensure t
+  :after (company-mode solidity-mode)
+  :init
+  (add-hook 'solidity-mode-hook
+	(lambda ()
+	(set (make-local-variable 'company-backends)
+		(append '((company-solidity company-capf company-dabbrev-code))
+			company-backends)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; language server protocol code
@@ -2566,8 +2719,9 @@ if not already started."
   :ensure nil
   :commands (eglot eglot-ensure)
   :hook ((python-ts-mode
-          go-ts-mode
-          rust-ts-mode
+          go-mode
+	  rust-ts-mode
+	  go-ts-mode
           js-ts-mode
           typescript-ts-mode
           bash-ts-mode sh-mode) . eglot-ensure)
@@ -2575,29 +2729,49 @@ if not already started."
          ("C-c l l r" . eglot-reconnect)
          ("C-c l l k" . eglot-shutdown)
          ("C-c l l l" . eglot-list-connections)
+         ("C-c l l g" . eglot-forget-pending-continuations)
+	 :map eglot-mode-map
          ("C-c l r" . eglot-rename)
          ("C-c l f" . eglot-format)
-         ("C-c l m" . helm-imenu)
-         ("C-c l a" . eglot-code-actions))
+         ("C-c l a" . eglot-code-actions)
+         ("C-c l o" . eglot-code-action-orgamize-imports)
+         ("C-c l i" . eglot-code-action-inline)
+         ("C-c l e" . eglot-code-action-extract)
+         ("C-c l w" . eglot-code-action-rewrite)
+         ("C-c l q" . eglot-code-action-quickfix)
+         ("C-c l c" . eglot-call-type-hierarchy)
+         ("C-c l t" . eglot-show-type-hierarchy)
+         ("C-c l m" . helm-imenu))
   :config
   (setq eglot-ignored-server-capabilities '(:inlayHintProvider))
   (setq eglot-autoshutdown t)
+  (setq eglot-extend-to-xref t)
+
+  (setq-default eglot-workspace-configuration
+		'((:pylsp (:plugins (:black (:enabled t))
+				    (:flake8 (:enabled t))
+				    (:rope (:enabled t))
+				    (:jedi_completion (:enabled: t))
+				    (:pycodestyle (:enabled nil))
+				    (:mccabe (:enabled nil))
+				    (:autopep8 (:enabled nil))
+				    (:pyflakes (:enabled nil))
+				    (:pycodestyle (:enabled nil))))
+		  (:rust-analyzer (:server (:extraEnv ("RUSTUP_TOOLCHAIN" . "nightly")))
+				  (:rust (:analyzerTargetDir t))
+				  (:cargo (:buildScripts (:enable t))
+					  (:features "all"))
+				  (:procMacro (:enable nil :attributes (:enable t)))
+   			          (:check (:workspace t)))))
 
   (defun eglot-organize-imports ()
     (interactive)
     (eglot-code-actions nil nil "source.organizeImports" t))
 
-  (add-hook 'before-save-hook 'eglot-organize-imports)
-  (add-hook 'before-save-hook 'eglot-format-buffer)
-
-  (setq-default eglot-workspace-configuration
-                '((:pylsp (:configurationSources ["flake8"]
-                             :plugins (:pycodestyle (:enabled nil)
-                                       :black (:enabled t)
-                                       :mccabe (:enabled nil)
-                                       :flake8 (:enabled t))))
-		  (:rust-analyzer (:server (:extraEnv ("CARGO_TARGET_DIR" . "target/analyzer")))
-				  (:check (:extraArgs ["--target-dir=target/analyzer"]))))))
+  (eglot-code-action-inline)
+  (add-hook 'eglot-managed-mode-hook (lambda () (flymake-mode -1)))
+  (add-hook 'before-save-hook 'eglot-code-organize-imports)
+  (add-hook 'before-save-hook 'eglot-format-buffer))
 
 (use-package helm-xref
   :ensure t
@@ -2614,7 +2788,7 @@ if not already started."
   :config
   (setq flycheck-eglot-exclusive nil)
   (setq flycheck-eglot-enable-diagnostic-tags t)
-  (global-flycheck-eglot-mode 1))
+  (global-flycheck-eglot-mode t))
 
 (use-package treesit
   :ensure nil
@@ -2626,6 +2800,7 @@ if not already started."
   (setq major-mode-remap-alist
         '((js-mode . js-ts-mode)
           (js-json-mode . json-ts-mode)
+          (c-mode . c-ts-mode)
           (c-mode . c-ts-mode)
           (c++-mode . c++-ts-mode)
           (c-or-c++-mode . c-or-c++-ts-mode)
@@ -2640,6 +2815,7 @@ if not already started."
   (add-to-list 'auto-mode-alist '("\\.js\\'" . js-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.css\\'" . css-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\.sol\\'" . solidity-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.toml\\'" . toml-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.yaml\\'" . yaml-ts-mode))
@@ -2656,7 +2832,7 @@ if not already started."
   (add-to-list 'auto-mode-alist '("\\.kts\\'" . kotlin-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.kdl\\'" . kdl-ts-mode))
 
-  (add-to-list 'auto-mode-alist '("go.mod" . go-mod-ts-mode))
+  ;; (add-to-list 'auto-mode-alist '("go.mod" . go-mod-ts-mode))
   (add-to-list 'auto-mode-alist '("Cargo.lock" . toml-ts-mode))
 
   (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
@@ -2690,6 +2866,7 @@ if not already started."
      (scala "https://github.com/tree-sitter/tree-sitter-scala")
      (toml "https://github.com/tree-sitter/tree-sitter-toml")
      (kdl "https://github.com/amaanq/tree-sitter-kdl")
+     (solidity "https://github.com/JoranHonig/tree-sitter-solidity")
      (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
      (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
      (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")
@@ -2702,10 +2879,76 @@ if not already started."
         ,(async-inject-variables "treesit-language-source-alist")
         (mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
      (lambda (result)
-       (message "rebuilding treesit grammars %s" result)))))
+       (message "rebuilt treesit grammars for %s" result)))))
 
-;; Local Variables:
-;; byte-compile-warnings: (not free-vars unresolved)
-;; End:
+(use-package google-gemini
+  :defer t
+  :ensure nil
+  :commands (google-gemini-chat-prompt
+	     google-gemini-content-prompt
+	     google-gemini-count-tokens-prompt
+	     google-gemini-list-models
+	     google-gemini-model-info))
+
+(use-package gptel
+  :ensure t
+  :diminish
+  :commands (gptel tychoish-switch-gptel-copilot tychoish-switch-gptel-gemini)
+  :after (magit)
+  :bind (("C-c r a g" . gptel)
+	 ("C-c r a r" . gptel-rewrite))
+  :init
+  (defun tychoish--gptel-switch-model (model backend-fn &rest backend-args)
+    (setq gptel-model model)
+    (setq gptel-backend (apply backend-fn backend-args)))
+
+  (defun tychoish-switch-gptel-gemini ()
+    (interactive)
+    (tychoish--gptel-switch-model 'gemini-2.5-pro-exp-03-25 'gptel-make-gemini "gemini" :key google-gemini-key :stream t))
+
+  (defun tychoish-switch-gptel-copilot ()
+    (interactive)
+    (tychoish--gptel-switch-model 'gpt-4o 'gptel-make-gh-copilot "copilot"))
+  :config
+  (tychoish-switch-gptel-gemini))
+
+(use-package gptel-aibo
+  :ensure t
+  :after (gptel flycheck)
+  :commands (gptel-aibo-summon gptel-aibo)
+  :bind (("C-c r a w" . gptel-aibo-summon)))
+
+(use-package copilot-chat
+  :ensure t
+  :commands (copilot-chat copilot-chat-transient)
+  :bind (("C-c r c m" . copilot-chat-transient)
+         ("C-c r c t" . copilot-chat))
+  :init
+  (setq copilot-chat-frontend 'markdown)
+  (setq copilot-chat-follow t)
+  (setq copilot-chat-markdown-prompt "##"))
+
+(use-package copilot
+  :ensure t
+  :commands (copilot-login copilot-complete copilot-mode copilot-clear-overlay)
+  :bind (("C-c r c s" . copilot-complete)
+         ("C-c r c g" . copilot-clear-overlay)
+         :map copilot-completion-map
+         ("C-c a" . copilot-acept-completion)
+         ("C-c l" . copilot-acept-completion-by-line)
+         ("C-c w" . copilot-acept-completion-by-word)
+         ("C-c n" . copilot-next-completion)
+         ("C-c p" . copilot-previous-completion)
+         ("C-c C-i" . copilot-insert-completion))
+  :config
+  (add-to-list 'copilot-major-mode-alist '("rustic-mode" . "rust"))
+  (add-to-list 'copilot-major-mode-alist '("go-ts-mode" . "go"))
+  (add-to-list 'copilot-major-mode-alist '("c-ts-mode" . "c"))
+  (add-to-list 'copilot-major-mode-alist '("c++-ts-mode" . "cpp"))
+  (add-to-list 'copilot-major-mode-alist '("python-ts-mode" . "python"))
+  (add-to-list 'copilot-major-mode-alist '("yaml-ts-mode" . "yaml"))
+  (add-to-list 'copilot-major-mode-alist '("bash-ts-mode" . "shellscript"))
+  (add-to-list 'copilot-major-mode-alist '("go-mode" . "go")))
+
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here
