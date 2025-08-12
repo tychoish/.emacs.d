@@ -48,11 +48,10 @@
 
 (defun make-filename-slug (s)
   "Turn a string, S, into a slug for a blog post filename."
-  (replace-regexp-in-string
-   " " "-" (downcase
-            (string-clean-whitespace
-             (replace-regexp-in-string
-              "[^A-Za-z0-9 ]" "" s)))))
+  (downcase
+   (string-clean-whitespace
+    (replace-regexp-in-string
+     "[^A-Za-z0-9 ]" "-" s))))
 
 (defun tychoish-blog-push ()
   "Run 'make push' in a compile buffer for the project."
@@ -105,7 +104,7 @@ Does nothing if the current post is not in the drafts folder."
            (published-file-name (f-join publish-directory (file-name-nondirectory original-file-name)))
            (current-point (point)))
       (cond
-       ((not (equal (file-name-extension original-file-name t) ".rst"))
+       ((not (equal (file-name-extension original-file-name t) tychoish-blog-extension))
         (message "post %s has incorrect extension" original-file-name))
        ((buffer-modified-p)
         (message "file %s is modified. please save before publishing" original-file-name))
