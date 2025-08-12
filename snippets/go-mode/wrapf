@@ -1,0 +1,1 @@
+ers.Wrapf(err, "${1:template}", ${2:arguments})

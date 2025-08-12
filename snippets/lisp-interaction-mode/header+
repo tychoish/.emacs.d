@@ -1,23 +1,23 @@
-#name : A elisp file header
+#name : An Emacs Lisp File Header, With Customize Information
 # --
 ;;; ${1:filename}.el --- ${2:Simple description}
 
 ;; Filename: $1.el
 ;; Description: $2
-;; Author: ${3:`user-full-name`} <${4:`user-mail-address`}>
-;; Maintainer: ${5:`user-full-name`} <${6:`user-mail-address`}>
-;; Copyright (C) ${7:`(format-time-string "%Y")`}, $3, all rights reserved.
-;; Created: ${8:`(format-time-string "%Y-%m-%d %T")`}
-;; Version: ${9:0.1}
-;; Last-Updated: ${10:`(format-time-string "%Y-%m-%d %T")`}
-;;           By: $5
-;; URL: $11
-;; Keywords: $12
-;; Compatibility: ${13:`(substring (emacs-version) 0 (string-match " (" (emacs-version))))`}
+;; Author: `user-full-name` <`user-mail-address`>
+;; Maintainer: `user-full-name` <`user-mail-address`>
+;; Copyright (C) `(format-time-string "%Y")`, `user-full-name`, all rights reserved.
+;; Created: `(format-time-string "%Y-%m-%d %T")`
+;; Version: 0.1
+;; Last-Updated: `(format-time-string "%Y-%m-%d %T")`
+;;           By: `user-full-name`
+;; URL: http://www.emacswiki.org/emacs/download/$1.el
+;; Keywords: $3
+;; Compatibility: `(substring (emacs-version) 0 (string-match " (" (emacs-version))))`
 ;;
 ;; Features that might be required by this library:
 ;;
-;; $14
+;; $4
 ;;
 
 ;;; This file is NOT part of GNU Emacs
@@ -42,39 +42,47 @@
 ;;; Commentary: 
 ;; 
 ;; $2
-;; $15
+;; $5
 
 ;;; Installation:
 ;;
-;; Put $1.el to your load-path.
+;; Put `$1.el' to your load-path.
 ;; The load-path is usually ~/elisp/.
 ;; It's set in your ~/.emacs like this:
-;; (setq load-path (append (list (expand-file "~/elisp")) load-path))
+;; (add-to-list 'load-path (expand-file-name "~/elisp"))
 ;;
 ;; And the following to your ~/.emacs startup file.
 ;;
 ;; (require '$1)
 ;;
-;; ${16:No need more.}
+;; ${6:No need more.}
+
+;;; Customize:
+;;
+;; $7
+;;
+;; All of the above can customize by:
+;;      M-x customize-group RET $1 RET
+;;
 
 ;;; Change log:
 ;;	
-;; ${17:`(format-time-string "%Y/%m/%d")`}
+;; `(format-time-string "%Y/%m/%d")`
 ;;      * First released.
 ;; 
 
 ;;; Acknowledgements:
 ;;
-;; $18
+;; $8
 ;;
 
 ;;; TODO
 ;;
-;; $19
+;; $9
 ;;
 
 ;;; Require
-$20
+$10
 
 ;;; Code:
 

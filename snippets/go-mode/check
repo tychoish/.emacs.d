@@ -1,8 +1,0 @@
-# -*- mode: snippet -*-
-# name: check
-# key: check
-# contributor : tychoish
-# --
-func (${1:target}) Test${2:name}(c *C) {
-        $0
-}

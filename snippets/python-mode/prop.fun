@@ -1,6 +1,5 @@
 # contributor: Mads D. Kristensen <madsdk@gmail.com>
 # name: prop
-# desc: property with fget/fset/fdel
 # expand-env: ((yas/indent-line 'fixed) (yas/wrap-around-region 'nil))
 # --
 def ${1:foo}():

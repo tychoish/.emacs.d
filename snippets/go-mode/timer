@@ -1,8 +1,9 @@
 timer := time.NewTimer($1)
 defer timer.Stop()
+
 select {
 case <-ctx.Done():
-     return
+	return
 case <-timer.C:
-     $0
+	$0
 }

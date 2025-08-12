@@ -1,23 +1,23 @@
-#name : A elisp file header, no customize information.
+#name : An Emacs Lisp File Header, Without Customize
 # --
 ;;; ${1:filename}.el --- ${2:Simple description}
 
 ;; Filename: $1.el
 ;; Description: $2
-;; Author: `user-full-name` <`user-mail-address`>
-;; Maintainer: `user-full-name` <`user-mail-address`>
-;; Copyright (C) `(format-time-string "%Y")`, `user-full-name`, all rights reserved.
-;; Created: `(format-time-string "%Y-%m-%d %T")`
-;; Version: 0.1
-;; Last-Updated: `(format-time-string "%Y-%m-%d %T")`
-;;           By: `user-full-name`
-;; URL: $3
-;; Keywords: $4
-;; Compatibility: `(substring (emacs-version) 0 (string-match " (" (emacs-version))))`
+;; Author: ${3:`user-full-name`} <${4:`user-mail-address`}>
+;; Maintainer: ${5:`user-full-name`} <${6:`user-mail-address`}>
+;; Copyright (C) ${7:`(format-time-string "%Y")`}, $3, all rights reserved.
+;; Created: ${8:`(format-time-string "%Y-%m-%d %T")`}
+;; Version: ${9:0.1}
+;; Last-Updated: ${10:`(format-time-string "%Y-%m-%d %T")`}
+;;           By: $5
+;; URL: $11
+;; Keywords: $12
+;; Compatibility: ${13:`(substring (emacs-version) 0 (string-match " (" (emacs-version))))`}
 ;;
 ;; Features that might be required by this library:
 ;;
-;; $5
+;; $14
 ;;
 
 ;;; This file is NOT part of GNU Emacs
@@ -42,39 +42,39 @@
 ;;; Commentary: 
 ;; 
 ;; $2
-;; $6
+;; $15
 
 ;;; Installation:
 ;;
 ;; Put $1.el to your load-path.
 ;; The load-path is usually ~/elisp/.
 ;; It's set in your ~/.emacs like this:
-;; (add-to-list 'load-path (expand-file-name "~/elisp"))
+;; (setq load-path (append (list (expand-file "~/elisp")) load-path))
 ;;
 ;; And the following to your ~/.emacs startup file.
 ;;
 ;; (require '$1)
 ;;
-;; ${7:No need more.}
+;; ${16:No need more.}
 
 ;;; Change log:
 ;;	
-;; `(format-time-string "%Y/%m/%d")`
+;; ${17:`(format-time-string "%Y/%m/%d")`}
 ;;      * First released.
 ;; 
 
 ;;; Acknowledgements:
 ;;
-;; $8
+;; $18
 ;;
 
 ;;; TODO
 ;;
-;; $9
+;; $19
 ;;
 
 ;;; Require
-$10
+$20
 
 ;;; Code:
 

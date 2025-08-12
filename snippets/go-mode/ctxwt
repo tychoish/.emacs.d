@@ -1,0 +1,4 @@
+ctx, cancel := context.WithTimeout(context.Background(), $1)
+defer cancel()
+
+$0

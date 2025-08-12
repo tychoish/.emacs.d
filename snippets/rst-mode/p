@@ -1,4 +1,0 @@
-#name : Inline Literals
-#contributor: tycho garen <garen@tychoish.com>
-# --
-\``${1:Code}\`` $0

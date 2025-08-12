@@ -1,0 +1,4 @@
+func(ctx context.Context) error {
+	$0
+	return nil
+}

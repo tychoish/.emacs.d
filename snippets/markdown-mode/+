@@ -1,4 +1,4 @@
-#name : Unordered List
+#name : "Unordered List Plus"
 #contributor: Peng Deng <dengpeng@gmail.com>
 # --
 + ${1:Text}

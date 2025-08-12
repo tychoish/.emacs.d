@@ -1,5 +1,5 @@
 # -*- mode: snippet -*-
-# name: ifunc
+# name: lambda
 # --
 func ($1) $2 {
 	$0
