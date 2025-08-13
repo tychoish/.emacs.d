@@ -1910,7 +1910,7 @@
           (mu4e-compose-reply (yes-or-no-p "Reply to all?"))
         (mu4e-compose-reply))))
   :config
-  (setqmail-imenu-generic-expression
+  (setq mail-imenu-generic-expression
         '(("Subject"  "^Subject: *\\(.*\\)" 1)
           ("Cc"     "^C[Cc]: *\\(.*\\)" 1)
           ("Bcc"     "^B[Cc]: *\\(.*\\)" 1)
