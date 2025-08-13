@@ -1,50 +1,196 @@
-;;; Compiled snippets and support files for `rustic-mode'
+;;; "Compiled" snippets and support files for `rustic-mode'  -*- lexical-binding:t -*-
 ;;; Snippet definitions:
 ;;;
 (yas-define-snippets 'rustic-mode
-		     '(("un" "unsafe {\n  $0\n}" "unsafe" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/unsafe" nil nil)
-		       ("type" "type ${1:Name} = ${2:ExistingType};" "type" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/type" nil nil)
-		       ("trait" "trait ${1:Name} {\n    fn ${2:method}(&mut self) -> ${3:Result};\n}" "trait" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/trait" nil nil)
-		       ("todo" "todo!(\"$0\")" "todo" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/todo" nil nil)
-		       ("test" "#[test]\nfn it_works() {\n    assert_eq!(2 + 2, 4);\n}\n\n" "test" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/test" nil nil)
-		       ("structu" "struct ${0:Nil};" "unit struct" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/struct_unit" nil nil)
-		       ("structt" "struct Pair(${1:i32, f32});" "tuple struct" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/struct_tuple" nil nil)
-		       ("struct" "struct ${1:Name} {\n    ${2:member}: ${3:type},\n}" "struct" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/struct" nil nil)
-		       ("pr" "println!(\"{}\", $1);" "println-with-arg" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/println-with-arg" nil nil)
-		       ("p" "println!(\"$1\");" "eprintln" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/println" nil nil)
-		       ("log" "println!(\"{:#?}\", ${1:value});" "println!(\"{:#?}\", value);" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/print-debug" nil nil)
-		       ("newfn" "pub fn new() -> Self {\n    $0\n}\n" "new-fn" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/new-fn" nil nil)
-		       ("mod-test" "#[cfg(test)]\nmod tests {\n    #[test]\n    fn it_works() {\n        assert_eq!(2 + 2, 4);\n    }\n}" "mod-test" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/mod-tests" nil nil)
-		       ("mfn" "fn ${1:name}(&mut self)${3: -> Result} {\n   $0\n}" "method" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/method" nil nil)
-		       ("measure-time" "use std::time::{Duration, Instant};\nlet start = Instant::now();\n// ...\nlet duration = start.elapsed();\nprintln!(\"Time elapsed: {:?}\", duration);" "measure-time" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/measure-time" nil nil)
-		       ("match" "match ${1:expression} {\n      ${2:matched} => ${3:stuff},\n}" "match expression { ... }" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/match" nil nil)
-		       ("main" "fn main() {\n   $0\n}" "main" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/main" nil nil)
-		       ("macro-debug" "#![feature(log_syntax)]\n#![feature(trace_macros)]\n// log_syntax!($x);\n// trace_macros!(true); code; trace_macros!(false);\n// https://doc.rust-lang.org/reference/macros-by-example.html" "macro-debug" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/macro-debug" nil nil)
-		       ("macro" "macro_rules! ${1:name} {\n    ( $arg:ident ) => { $0 }\n}" "macro" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/macro" nil nil)
-		       ("letres" "let $3 = match ${1:what} {\n    Err(_) => ${2:return},\n    Ok(${3:matched}) => $3,\n};\n" "let-match-result" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/let-match-result" nil nil)
-		       ("letopt" "let $3 = match ${1:what} {\n    None => ${2:return},\n    Some(${3:matched}) => $3,\n};\n" "let-match-option" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/let-match-option" nil nil)
-		       ("impl_from" "impl From<${1:from}> for ${2:For} {\n    fn from(${3:arg}: $1) -> Self {\n        $2 {$0}\n    }\n}" "impl_from" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/impl_from" nil nil)
-		       ("implf" "impl ${1:Trait} for ${2:Type} {\n     $0\n}\n" "impl for" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/impl_for" nil nil)
-		       ("impl-iter" "impl Iterator for ${1:X} {\n    type Item = ${2:Y};\n\n    fn next(&mut self) -> Option<$2> {\n        Some(${3:next})\n    }\n}" "impl-iter" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/impl-iter" nil nil)
-		       ("impldisplay" "impl std::fmt::Display for ${1:Name} {\n    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {\n        write!(f, \"$0\")\n    }\n}\n" "impl-display-for" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/impl-display-for" nil nil)
-		       ("impldebug" "impl std::fmt::Debug for ${1:NAme} {\n    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {\n        write!(f, \"Foo\")$0\n    }\n}" "impl-debug-for" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/impl-debug-for" nil nil)
-		       ("impl-add" "impl std::ops::Add for ${1:Type} {\n    type Output = Self;\n\n    fn add(self, rhs: Self) -> Self::Output {\n        Self { $0 }\n    }\n}" "impl-add" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/impl-add" nil nil)
-		       ("impl" "impl ${1:Name} {\n    fn ${2:method}(${3:&self}) $4 {\n        $0\n    }\n}" "impl" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/impl" nil nil)
-		       ("ifl" "if let ${2:match} = ${1:value} {\n    $0\n}" "if let" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/iflet" nil nil)
-		       ("for" "for ${2:var} in ${1:expression} {\n    ${0:code}\n}\n" "for" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/for" nil nil)
-		       ("fnr" "fn ${1:name}() -> ${2:return} {\n   $0\n}" "fn return" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/fnr" nil nil)
-		       ("fn" "fn ${1:name}() {\n   $0\n}" "fn" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/fn" nil nil)
-		       ("fmt" "format!(\"$0\")" "fmt" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/fmt" nil nil)
-		       ("epr" "println!(\"{}\", $1);" "eprintln-with-arg" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/eprintln-with-arg" nil nil)
-		       ("ep" "eprintln!(\"$1\");" "println" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/eprintln" nil nil)
-		       ("enum" "enum ${1:Name} {\n    ${2:Variant}(${3:data}),\n}" "enum" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/enum" nil nil)
-		       ("drop" "impl Drop for ${1:type} {\n    fn drop(&mut self) {\n        $0\n    }\n}" "drop-trait" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/drop-trait" nil nil)
-		       ("debug" "#[derive(Debug)]" "derive-debug" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/derive_debug" nil nil)
-		       ("derivecommon" "#[derive(Debug, Clone, Copy)]" "derive-debug-clone-copy" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/derive-debug-clone-copy" nil nil)
-		       ("derive" "#[derive($0)]" "derive" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/derive" nil nil)
-		       ("d" "dbg!($0)" "dbg" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/dbg" nil nil)
-		       ("ase" "assert_eq!(${1:a}, ${2:b});" "assert_eq" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/assert_eq" nil nil)
-		       ("as" "assert!(${1:truth});" "assert" nil nil nil "/home/tychoish/.emacs.d/snippets/rustic-mode/assert" nil nil)))
+		     '(("un" "unsafe {\n  $0\n}" "unsafe" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/unsafe"
+			nil nil)
+		       ("type" "type ${1:Name} = ${2:ExistingType};"
+			"type" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/type"
+			nil nil)
+		       ("trait"
+			"trait ${1:Name} {\n    fn ${2:method}(&mut self) -> ${3:Result};\n}"
+			"trait" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/trait"
+			nil nil)
+		       ("todo" "todo!(\"$0\")" "todo" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/todo"
+			nil nil)
+		       ("test"
+			"#[test]\nfn it_works() {\n    assert_eq!(2 + 2, 4);\n}\n\n"
+			"test" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/test"
+			nil nil)
+		       ("structu" "struct ${0:Nil};" "unit struct" nil
+			nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/struct_unit"
+			nil nil)
+		       ("structt" "struct Pair(${1:i32, f32});"
+			"tuple struct" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/struct_tuple"
+			nil nil)
+		       ("struct"
+			"struct ${1:Name} {\n    ${2:member}: ${3:type},\n}"
+			"struct" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/struct"
+			nil nil)
+		       ("pr" "println!(\"{}\", $1);"
+			"println-with-arg" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/println-with-arg"
+			nil nil)
+		       ("p" "println!(\"$1\");" "eprintln" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/println"
+			nil nil)
+		       ("log" "println!(\"{:#?}\", ${1:value});"
+			"println!(\"{:#?}\", value);" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/print-debug"
+			nil nil)
+		       ("newfn" "pub fn new() -> Self {\n    $0\n}\n"
+			"new-fn" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/new-fn"
+			nil nil)
+		       ("mod-test"
+			"#[cfg(test)]\nmod tests {\n    #[test]\n    fn it_works() {\n        assert_eq!(2 + 2, 4);\n    }\n}"
+			"mod-test" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/mod-tests"
+			nil nil)
+		       ("mfn"
+			"fn ${1:name}(&mut self)${3: -> Result} {\n   $0\n}"
+			"method" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/method"
+			nil nil)
+		       ("measure-time"
+			"use std::time::{Duration, Instant};\nlet start = Instant::now();\n// ...\nlet duration = start.elapsed();\nprintln!(\"Time elapsed: {:?}\", duration);"
+			"measure-time" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/measure-time"
+			nil nil)
+		       ("match"
+			"match ${1:expression} {\n      ${2:matched} => ${3:stuff},\n}"
+			"match expression { ... }" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/match"
+			nil nil)
+		       ("main" "fn main() {\n   $0\n}" "main" nil nil
+			nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/main"
+			nil nil)
+		       ("macro-debug"
+			"#![feature(log_syntax)]\n#![feature(trace_macros)]\n// log_syntax!($x);\n// trace_macros!(true); code; trace_macros!(false);\n// https://doc.rust-lang.org/reference/macros-by-example.html"
+			"macro-debug" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/macro-debug"
+			nil nil)
+		       ("macro"
+			"macro_rules! ${1:name} {\n    ( $arg:ident ) => { $0 }\n}"
+			"macro" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/macro"
+			nil nil)
+		       ("letres"
+			"let $3 = match ${1:what} {\n    Err(_) => ${2:return},\n    Ok(${3:matched}) => $3,\n};\n"
+			"let-match-result" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/let-match-result"
+			nil nil)
+		       ("letopt"
+			"let $3 = match ${1:what} {\n    None => ${2:return},\n    Some(${3:matched}) => $3,\n};\n"
+			"let-match-option" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/let-match-option"
+			nil nil)
+		       ("impl_from"
+			"impl From<${1:from}> for ${2:For} {\n    fn from(${3:arg}: $1) -> Self {\n        $2 {$0}\n    }\n}"
+			"impl_from" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/impl_from"
+			nil nil)
+		       ("implf"
+			"impl ${1:Trait} for ${2:Type} {\n     $0\n}\n"
+			"impl for" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/impl_for"
+			nil nil)
+		       ("impl-iter"
+			"impl Iterator for ${1:X} {\n    type Item = ${2:Y};\n\n    fn next(&mut self) -> Option<$2> {\n        Some(${3:next})\n    }\n}"
+			"impl-iter" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/impl-iter"
+			nil nil)
+		       ("impldisplay"
+			"impl std::fmt::Display for ${1:Name} {\n    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {\n        write!(f, \"$0\")\n    }\n}\n"
+			"impl-display-for" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/impl-display-for"
+			nil nil)
+		       ("impldebug"
+			"impl std::fmt::Debug for ${1:NAme} {\n    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {\n        write!(f, \"Foo\")$0\n    }\n}"
+			"impl-debug-for" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/impl-debug-for"
+			nil nil)
+		       ("impl-add"
+			"impl std::ops::Add for ${1:Type} {\n    type Output = Self;\n\n    fn add(self, rhs: Self) -> Self::Output {\n        Self { $0 }\n    }\n}"
+			"impl-add" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/impl-add"
+			nil nil)
+		       ("impl"
+			"impl ${1:Name} {\n    fn ${2:method}(${3:&self}) $4 {\n        $0\n    }\n}"
+			"impl" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/impl"
+			nil nil)
+		       ("ifl"
+			"if let ${2:match} = ${1:value} {\n    $0\n}"
+			"if let" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/iflet"
+			nil nil)
+		       ("for"
+			"for ${2:var} in ${1:expression} {\n    ${0:code}\n}\n"
+			"for" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/for"
+			nil nil)
+		       ("fnr"
+			"fn ${1:name}() -> ${2:return} {\n   $0\n}"
+			"fn return" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/fnr"
+			nil nil)
+		       ("fn" "fn ${1:name}() {\n   $0\n}" "fn" nil nil
+			nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/fn"
+			nil nil)
+		       ("fmt" "format!(\"$0\")" "fmt" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/fmt"
+			nil nil)
+		       ("epr" "println!(\"{}\", $1);"
+			"eprintln-with-arg" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/eprintln-with-arg"
+			nil nil)
+		       ("ep" "eprintln!(\"$1\");" "println" nil nil
+			nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/eprintln"
+			nil nil)
+		       ("enum"
+			"enum ${1:Name} {\n    ${2:Variant}(${3:data}),\n}"
+			"enum" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/enum"
+			nil nil)
+		       ("drop"
+			"impl Drop for ${1:type} {\n    fn drop(&mut self) {\n        $0\n    }\n}"
+			"drop-trait" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/drop-trait"
+			nil nil)
+		       ("debug" "#[derive(Debug)]" "derive-debug" nil
+			nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/derive_debug"
+			nil nil)
+		       ("derivecommon" "#[derive(Debug, Clone, Copy)]"
+			"derive-debug-clone-copy" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/derive-debug-clone-copy"
+			nil nil)
+		       ("derive" "#[derive($0)]" "derive" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/derive"
+			nil nil)
+		       ("d" "dbg!($0)" "dbg" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/dbg"
+			nil nil)
+		       ("ase" "assert_eq!(${1:a}, ${2:b});"
+			"assert_eq" nil nil nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/assert_eq"
+			nil nil)
+		       ("as" "assert!(${1:truth});" "assert" nil nil
+			nil
+			"/home/tychoish/.emacs.d/snippets/rustic-mode/assert"
+			nil nil)))
 
 
-;;; Do not edit! File generated at Mon Dec 30 15:17:58 2024
+;;; Do not edit! File generated at Fri Aug  1 09:43:17 2025

@@ -44,6 +44,9 @@ helm-appropos replacement."
                    (t (push `(,name 'variable ,symb) symbs))))))
     symbs))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (defun string-with-non-whitespace-content-p (value)
   "Return t when `VALUE' is a string with non-whitespace content and nil otherwise."
   (and (stringp value)
@@ -53,6 +56,11 @@ helm-appropos replacement."
   (and (stringp value)
        (unless (string-empty-p (setq value (string-trim value))) value)
        value))
+
+(defmacro -add-if-empty (op list-val)
+  `(if ,list-val
+       ,list-val
+     (list ,op)))
 
 (defun consult-tycho--clean-options-for-selection (input)
   "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
@@ -72,30 +80,46 @@ helm-appropos replacement."
       ;; with the prefix argument, ask the user
       (when current-prefix-arg
 	(consult-tycho--get-seed-for-operation
-	 (format "%s<init:%s>" prompt prompt-annotation) initial))
+	 (format "%s<init:%s>: " "TEST" "xxx") (trimmed-string-or-nil "")))
       ;; otherwise, provide the empty string...
       ""))
 
 (defun consult-tycho--get-seed-for-operation (prompt initial)
   "Generate a list of contextual seeds if `INITIAL' is unspecified with the provided `PROMPT'."
-  (or initial
-      (consult-tycho--select-context-for-operation prompt)))
+  (or initial (consult-tycho--select-context-for-operation prompt)))
 
 (defun consult-tycho--select-context-for-operation (prompt)
   "Pick string to use as context in a follow up operation using PROMPT."
-  (let ((this-command this-command))
-    (consult--read
-     (->> (list
-           (s-trim (buffer-substring (region-beginning) (region-end)))
-           (s-trim (thing-at-point 'line))
-           (thing-at-point 'sentence)
-           (thing-at-point 'filename)
-           (thing-at-point 'word)
-           (thing-at-point 'symbol))
-          (-filter (lambda (elem) (and elem (stringp elem))))
-          (-map #'string-trim)
-          (-filter #'string-with-non-whitespace-content-p))
-     :prompt (format "%s: " prompt))))
+  (let* ((current-selection (s-trim (buffer-substring (region-beginning) (region-end))))
+         (this-command this-command)
+         (selections (->> (list (when (and (not current-prefix-arg)
+                                           (<= 2 (length current-selection)))
+                                  current-selection))
+                          (-concat
+                           (cond ((derived-mode-p 'text-mode)
+                                  (list (thing-at-point 'word)
+                                        (thing-at-point 'email)
+                                        (thing-at-point 'url)
+                                        (thing-at-point 'sentence)))
+                                 ((derived-mode-p 'prog-mode)
+                                  (list (thing-at-point 'symbol)
+                                        (thing-at-point 'word)
+                                        (thing-at-point 'sexp)
+                                        (thing-at-point 'defun)))
+                                 (t '())))
+                          (-keep #'trimmed-string-or-nil)
+                          (-add-if-empty (thing-at-point 'line))
+                          (-filter (lambda (elem) (> 32 (length elem))))
+                          (-sort #'string-greaterp)
+                          (-distinct))))
+
+    (or (when (length= selections 1) (nth 0 selections))
+        (when (length> selections 1)
+          (consult--read selections
+           :sort nil
+           :command this-command
+           :require-match nil
+           :prompt (format "%s: " prompt))))))
 
 (defun get-parent-dirs (start stop)
   "Generate list of intermediate paths between `START' and `STOP'."
@@ -154,7 +178,7 @@ entry of `org-capture-templates'."
                  (user-error "Must call from an Org buffer.")
           (let ((consult--read-config
                  `((,this-command
-                    :prompt "Capture target: "
+                    :prompt "org-apture target: "
                     :preview-key "M-."))))
             (set-buffer
              (save-window-excursion
@@ -190,7 +214,7 @@ DIR and INITIAL integrate with the consult-grep API."
   (interactive "P")
   (let ((dir-base (f-base default-directory)))
     (consult-tycho--incremental-grep
-     (format "rg<pwd:%s>" dir-base)
+     (format "rg<pwd:%s>: " dir-base)
      (consult--ripgrep-make-builder (list (expand-file-name default-directory)))
      (consult-tycho--resolve-initial-grep "rg" (f-base default-directory) initial))))
 
@@ -222,17 +246,22 @@ DIR and INITIAL integrate with the consult-grep API."
   "Select a capture template interactively."
   (interactive)
   (let* ((templ (cl-loop for template in org-capture-templates
-                         collect (cons (nth 1 template) (nth 0 template))))
+                         when (> (length template) 2)
+                           collect (cons (nth 1 template) (nth 0 template))))
+         (_ (message "OPTIONS: %s" templ))
+         (_ (message "SOURCE: %s" org-capture-templates))
          (capture-template
           (consult--read templ
-                         :prompt "org-capture-templates >"
-                         :require-match t
+                         :prompt "org-capture-templates=>: "
+                         :require-match nil
                          :group (consult--type-group templ)
                          :narrow (consult--type-narrow templ)
 			 :annotate (lambda (selection) (format " --> [%s]" (cdr (assoc selection templ))))
                          :lookup (lambda (selection candidates &rest _) (cdr (assoc selection candidates)))
                          :category 'org-capture
                          :history '(:input consult-org--capture-history))))
+    (unless (string-with-non-whitespace-content-p capture-template)
+      (user-error "must select a valid templae %s (%s)" capture-template (type-of capture-template)))
     (org-capture nil capture-template)))
 
 ;;;###autoload

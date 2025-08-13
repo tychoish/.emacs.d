@@ -33,6 +33,8 @@
 
 ;;; Code:
 
+(setq default-frame-alist nil)
+
 (defun tychoish/bootstrap-after-init-hook-fn ()
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(menu-bar-lines . nil))
@@ -105,21 +107,19 @@
 		    (setq ,value ,(cdr def))))
 	       ops))))
 
+(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (local nil))
+  (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
+    `(progn
+       (defun ,cleanup ()
+         (,function)
+         (remove-hook ',hook ',cleanup)
+         (unintern ',cleanup))
+       (add-hook ',hook ',cleanup nil ,local)
+       #',cleanup)))
+
 (defun set-tab-width (num-spaces)
   (interactive "nTab width: ")
   (setq-local tab-width num-spaces))
-
-(defmacro with-timer (name &rest body)
-  "Report on NAME and the time taken to execute BODY."
-  `(let ((time (current-time)))
-     ,@body
-     (message "%s: %.06fs" ,name (float-time (time-since time)))))
-
-(defmacro with-slow-op-timer (name threshold &rest body)
-  "Send a message the BODY operation of NAME takes longer to execute than the THRESHOLD."
-  `(let ((time (current-time)))
-     ,@body
-     (tychoish--threshold-logger ,threshold (time-to-seconds (time-since time)) ,name)))
 
 (defun tychoish--threshold-logger (threshold duration name)
   "Send a message with the DURATION and NAME when the duration is over the THRESHOLD."
@@ -142,27 +142,6 @@
     default)
    (t
     input)))
-
-(defun tychoish-legacy-mode-line ()
-  (interactive)
-  (setq-default mode-line-format
-                (list
-                 mode-line-mule-info
-                 mode-line-client
-                 mode-line-modified
-                 mode-line-remote
-                 mode-line-frame-identification
-                 "<"
-                 tychoish-emacs-identifier
-                 ">:"
-                 mode-line-buffer-identification
-                 " "
-                 mode-line-position
-                 ;; '(vc-mode vc-mode)
-                 "%M"
-                 global-mode-string
-                 ""
-                 mode-line-modes)))
 
 (defun disable-all-themes ()
   (interactive)
@@ -226,8 +205,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
     (face-remap-add-relative new-font-name)
     (add-to-list 'default-frame-alist (cons 'font new-font-name))))
 
-(setq default-frame-alist nil)
-
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
@@ -238,7 +215,7 @@ This combines the host name and the dameon name."
 The is unique to the system and daemon instance."
   (concat (expand-file-name user-emacs-directory) (tychoish-get-config-file-prefix name)))
 
-(defun tychoish-setup-user-local-config ()
+(defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
   (let ((dirname (concat (expand-file-name user-emacs-directory) "user")))
     (when (file-accessible-directory-p dirname)
@@ -246,8 +223,7 @@ The is unique to the system and daemon instance."
       (mapc (lambda (fn)
               (when (and (string-match-p "\\.el$" fn)
                          (not (string-match-p "^flycheck_.*\\.el$" fn)))
-                (with-slow-op-timer (format "loading user config [%s]" fn) 0.10
-                 (require (intern (string-remove-suffix ".el" fn))))))
+                 (require (intern (string-remove-suffix ".el" fn)))))
             (directory-files dirname))) t))
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
@@ -415,6 +391,39 @@ Returns the number of buffers killed."
       (list (line-beginning-position)
         (line-beginning-position 2)))))
 
+(defvar clean-kill-ring-filters '(string-blank-p))
+(defvar clean-kill-ring-prevent-duplicates t)
+
+(defun clean-kill-ring-filter-catch-p (string)
+  "T if STRING satisfies at least one of `clean-kill-ring-filters'."
+  (let ((caught nil)
+        (s (substring-no-properties string)))
+    (catch 'loop
+      (dolist (filter clean-kill-ring-filters)
+        (when (funcall filter s)
+          (setq caught t)
+          (throw 'loop t))))
+    caught))
+
+(defun clean-kill-ring-clean (&optional remove-dups)
+  "Remove `kill-ring' members that satisfy one of`clean-kill-ring-filters'.
+
+If REMOVE-DUPS or `clean-kill-ring-prevent-duplicates' is non-nil, or if called
+interactively then remove duplicate items from the `kill-ring'."
+  ;; from: https://github.com/NicholasBHubbard/clean-kill-ring.el/blob/main/clean-kill-ring.el
+  (interactive (list t))
+  (let ((new-kill-ring nil)
+        (this-kill-ring-member nil)
+        (i (1- (length kill-ring))))
+    (while (>= i 0)
+      (setq this-kill-ring-member (nth i kill-ring))
+      (unless (clean-kill-ring-filter-catch-p this-kill-ring-member)
+        (push this-kill-ring-member new-kill-ring))
+      (setq i (1- i)))
+    (if (or remove-dups clean-kill-ring-prevent-duplicates)
+        (setq kill-ring (delete-dups new-kill-ring))
+      (setq kill-ring new-kill-ring))))
+
 (defun move-text-internal (arg)
   (cond
    ((and mark-active transient-mark-mode)
@@ -447,6 +456,24 @@ Returns the number of buffers killed."
   "Move region (transient-mark-mode active) or current line arg lines up."
   (interactive "*p")
   (move-text-internal (- arg)))
+
+(defmacro with-silence (&rest body)
+  "Report on NAME and the time taken to execute BODY."
+  `(let ((inhibit-message t)
+         (message-log-max nil))
+     (null ,@body)))
+
+(defmacro without-messages (&rest body)
+  "Report on NAME and the time taken to execute BODY."
+  `(let ((inhibit-message t))
+     (null ,@body)))
+
+
+(defmacro with-temp-keymap (map &rest body)
+  "Create a temporary MAP and return it after evaluating it in the BODY."
+  `(let ((,map (make-sparse-keymap)))
+     ,@body
+     map))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
