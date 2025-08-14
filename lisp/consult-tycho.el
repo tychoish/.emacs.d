@@ -245,6 +245,8 @@ DIR and INITIAL integrate with the consult-grep API."
 (defun consult-org-capture ()
   "Select a capture template interactively."
   (interactive)
+  ;; TODO remove this hack so that things are loaded in time
+  (require 'tychoish-org)
   (let* ((templ (cl-loop for template in org-capture-templates
                          when (> (length template) 2)
                            collect (cons (nth 1 template) (nth 0 template))))

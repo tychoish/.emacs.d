@@ -119,12 +119,15 @@
   (setq jit-lock-stealth-nice 0.2)
   (setq jit-lock-stealth-load 100)
   (setq truncate-lines t)
-  :config
   (setq use-dialog-box nil)
+  (setq indent-tabs-mode nil) ; (setq tab-width 4)
+  (setq tab-always-indent t)
+  (setq cursor-in-non-selected-windows nil)
+  (setq comment-auto-fill-only-comments t)
+
   (setq split-height-threshold 100)
   (setq scroll-conservatively 25)
   (setq scroll-preserve-screen-position t)
-  (setq cursor-in-non-selected-windows nil)
   (setq indicate-empty-lines t)
   (setq use-short-answers t) ;; (fset 'yes-or-no-p 'y-or-n-p)
   (setq confirm-kill-processes nil)
@@ -140,18 +143,14 @@
   (setq read-buffer-completion-ignore-case t)
   (setq read-extended-command-predicate #'command-completion-default-include-p)
   (setq read-file-name-completion-ignore-case t)
-  (setq tab-always-indent t)
   (setq text-mode-ispell-word-completion nil)
-
-  (setq indent-tabs-mode nil)
-; (tab-width 4)
-  (setq comment-auto-fill-only-comments t)
 
   (setq next-line-add-newlines nil)
   (setq undo-auto-current-boundary-timer t)
 
   (setq select-enable-primary nil)
   (setq select-enable-clipboard nil)
+  :config
   ;; (put 'list-timers 'disabled nil)
 
   ;; (setq server-host "127.0.0.1")
@@ -652,11 +651,7 @@
     (interactive)
 
     (when (> 40 (random 100))
-        (session-save-session t)
-        (when (and (featurep 'company)
-                   (featurep 'company-statistics)
-                   (not corfu-mode))
-          (company-statistics--maybe-save))))
+        (session-save-session t))
   :config
   (setq session-save-file-coding-system 'utf-8-emacs)
   (setq session-save-print-spec '(t nil 40000))
@@ -668,6 +663,8 @@
 	 (emacs-startup . tychoish/desktop-read-init))
   :commands (desktop-save-mode desktop-read desktop-save-in-desktop-dir)
   :init
+  (setq desktop-dirname user-emacs-directory)
+
   (defun tychoish-save-desktop ()
     "Save desktop... sometimes"
     (interactive)
@@ -676,9 +673,11 @@
       (desktop-save-in-desktop-dir)))
 
   (defun tychoish/desktop-read-init ()
-    (let ((gc-cons-threshold 800000)
-	  (inhibit-message t))
-      (desktop-read)))
+    (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
+    (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
+      (let ((gc-cons-threshold 800000)
+	    (inhibit-message t))
+        (desktop-read))))
 
   (add-hygenic-one-shot-hook
    :name "desktop-setup"
@@ -687,7 +686,6 @@
   :config
   (setq desktop-load-locked-desktop t)
   (setq desktop-restore-frames t)
-  (setq desktop-dirname user-emacs-directory)
   (setq desktop-restore-eager t)
   (setq desktop-path `(,user-emacs-directory))
 
@@ -703,8 +701,9 @@
                 "^/usr/lib/rustlib/.*\\|"
                 "^/home.+go/pkg/mod\\|"
                 "^/home.+\\.cargo"))
-  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop-file"))
-  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-lock-%d" (emacs-pid))))
+  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
+  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
+  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
 
   (add-to-list 'desktop-globals-to-save 'register-alist)
   (add-to-list 'desktop-globals-to-save 'file-name-history)
@@ -712,7 +711,6 @@
   (add-to-list 'desktop-modes-not-to-save 'Info-mode)
   (add-to-list 'desktop-modes-not-to-save 'org-mode)
   (add-to-list 'desktop-modes-not-to-save 'eww-mode)
-  (add-to-list 'desktop-modes-not-to-save 'company-posframe-mode)
   (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
   (add-to-list 'desktop-modes-not-to-save 'fundamental-mode))
 
@@ -1093,13 +1091,6 @@
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
 
-  (with-eval-after-load 'company-solidity
-    (defun cape-corp-solidity ()
-      (cape-company-to-capf #'company-solidity))
-
-    (defun tychoish/capf-solidity ()
-      (cape-wrap-super #'cape-corp-solidity #'cape-keyword #'cape-dabbrev))
-
   (defun tychoish/soliditiy-capf-setup ()
     (setq-local completion-at-point-functions
                 (list #'tychoish/capf-solidity
@@ -1158,7 +1149,7 @@
 ;;   :diminish "abb"
 ;;   :config
 ;;   (setq save-abbrevs t)
-;;   (setq abbrev-file-name (tychoish-get-config-file-path "abbrev"))
+;;   (setq abbrev-file-name (tychoish-get-config-file-path "abbrev.el"))
 ;;   (if (file-exists-p abbrev-file-name)
 ;;       (quietly-read-abbrev-file)))
 
@@ -1387,7 +1378,7 @@
   :hook (completion-list-mode . consult-preview-at-point-mode)
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
-  :commands (consult-find consult-rg consult-git-grep consult-grep)
+  :commands (consult-find consult-git-grep consult-grep)
   :custom
   (register-preview-delay 0.05)
 
@@ -1432,7 +1423,7 @@
   (consult-customize consult-find
    :require-match nil
    :initial "./")
-  (consult-customize consult-ripgrep consult-git-grep consult-grep consult-rg
+  (consult-customize consult-ripgrep consult-git-grep consult-grep 
    :require-match nil
    :keymap
    (with-temp-keymap map
@@ -1488,6 +1479,7 @@
 	 ("r" . consult-rg)
 	 :map tychoish/ecclectic-rg-map
          ("t" . consult-rg-for-thing)
+         ("r" . consult-rg)
          ("s" . consult-rg-pwd)
 	 ("p" . consult-rg)
 	 :map tychoish/ecclectic-grep-map ;; "C-c g"
@@ -1589,7 +1581,7 @@
   (helm-man-or-woman-function 'woman)
   (helm-split-window-in-side-p t)
   :config
-  (setq helm-c-adaptive-history-file (tychoish-get-config-file-path "helm-c-adaptive-history"))
+  (setq helm-c-adaptive-history-file (tychoish-get-config-file-path "helm-c-adaptive-history.el"))
   (setq helm-c-adaptive-sorting t)
   (helm-autoresize-mode 1)
   (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold :background 'unspecified))

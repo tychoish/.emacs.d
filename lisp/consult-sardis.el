@@ -3,9 +3,12 @@
 (defun tychoish/compile--post-hook-collection (selection buffer-name started-at)
   (let* ((end-at (current-time))
          (duration (float-time (time-subtract end-at started-at)))
-         (msg (format "completed %s in %.06fs" selection duration)))
-    ;; (if (> duration 300)
-    ;; (shell-command (concat "sardis notify send '" msg "'") "*sardis-logs*" "*sardis-logs*"))
+         (msg (format "completed %s in %.06fs" selection duration))
+	 (proc (get-buffer-process buffer-name)))
+    ;; (unless (eql 0 (proc (process-exit-status proc)))
+    ;; todo failure	)
+    (if (> duration 300)
+	(shell-command (concat "sardis notify send '" msg "'") "*sardis-logs*" "*sardis-logs*"))
     (alert
      :title selection
      :buffer (get-buffer buffer-name))

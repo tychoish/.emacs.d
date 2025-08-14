@@ -82,9 +82,14 @@
 (use-package company-statistics
   :ensure t
   :after (company)
-  :hook (company-mode . company-statistics-mode)
+  :hook ((company-mode . company-statistics-mode)
+	 (after-save . tychoish/save-company-statistics))
   :functions (company-statistics--maybe-save)
   :config
+  (defun tychoish/save-company-statistics ()
+    (unless corfu-mode)
+    (company-statistics--maybe-save))
+
   (setq company-statistics-file (tychoish-get-config-file-path "company-statistics.el"))
   (setq company-statistics-size 1024)
   (setq company-statistics-auto-save t)
@@ -125,6 +130,8 @@
   (defvar tychoish/use-company-posframe-when-possible nil)
   (defvar tychoish--company-quickhelp-was-enabled nil)
   (setq company-posframe-quickhelp-delay company-quickhelp-delay)
+
+  (add-to-list 'desktop-modes-not-to-save 'company-posframe-mode)
 
   (add-hook 'company-completion-started-hook 'tychoish/company-posframe-terminal-switch)
   (add-hook 'company-completion-started-hook 'tychoish/company-quickhelp-terminal-switch)
@@ -222,6 +229,15 @@ the current frame."
   :after (company solidity-mode)
   :hook (solidity-mode . tychoish/company-solidity-backend)
   :init
+  (with-eval-after-load 'solidity
+    (with-eval-after-load 'cape
+      (defun tychoish/capf-solidity ()
+	(cape-wrap-super #'cape-corp-solidity #'cape-keyword #'cape-dabbrev))
+      (defun cape-corp-solidity ()
+	(cape-company-to-capf #'company-solidity))))
+
+
+
   (defun tychoish/company-solidity-backend ()
     (setq-local company-backends '((company-solidity company-capf company-dabbrev-code
 				       :with company-yasnippet)))))
