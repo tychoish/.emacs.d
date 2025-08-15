@@ -665,13 +665,6 @@
   :init
   (setq desktop-dirname user-emacs-directory)
 
-  (defun tychoish-save-desktop ()
-    "Save desktop... sometimes"
-    (interactive)
-
-    (when (> 40 (random 100))
-      (desktop-save-in-desktop-dir)))
-
   (defun tychoish/desktop-read-init ()
     (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
     (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
@@ -679,10 +672,12 @@
 	    (inhibit-message t))
         (desktop-read))))
 
-  (add-hygenic-one-shot-hook
-   :name "desktop-setup"
-   :hook server-after-make-frame-hook
-   :function tychoish/desktop-read-init)
+  (defun tychoish-save-desktop ()
+    "Save desktop... sometimes"
+    (interactive)
+
+    (when (> 40 (random 100))
+      (desktop-save-in-desktop-dir)))
   :config
   (setq desktop-load-locked-desktop t)
   (setq desktop-restore-frames t)
@@ -2280,7 +2275,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package rst
   :delight "rst"
-  :hook (rst-mode . tychoish/set-up-rst-mode)
   :mode ("\\.rst" "\\.txt")
   :bind (:map rst-mode-map
 	 ("C-c C-t h" . rst-adjust))
@@ -2297,7 +2291,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (set-face-background 'rst-level-5 nil)
     (set-face-background 'rst-level-6 nil)
     (define-key rst-mode-map (kbd "C-c C-t h") 'rst-adjust)
-    (local-unset-key (kbd "C-c C-s"))))
+    (local-unset-key (kbd "C-c C-s")))
+  (add-hook 'rst-mode-hook 'tychoish/set-up-rst-mode))
 
 (use-package flyspell
   :ensure t

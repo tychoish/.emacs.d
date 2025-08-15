@@ -45,6 +45,7 @@
   (tool-bar-mode -1)
 
   (indent-tabs-mode -1)
+  (column-number-mode 1)
   (delete-selection-mode 1)
   (transient-mark-mode 1)
   (xterm-mouse-mode 1))
@@ -107,15 +108,26 @@
 		    (setq ,value ,(cdr def))))
 	       ops))))
 
+(cl-defmacro add-hygenic-one-shot-hook-variadic (&key name hook function (local nil))
+  (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
+    `(progn
+       (add-hook ',hook ',cleanup nil ,local)
+       (defun ,cleanup (&opional _ignored)
+         (funcall ,function)
+         (remove-hook ',hook ',cleanup)
+         (unintern ',cleanup))
+       #',cleanup)))
+
 (cl-defmacro add-hygenic-one-shot-hook (&key name hook function (local nil))
   (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
     `(progn
+       (add-hook ',hook ',cleanup nil ,local)
        (defun ,cleanup ()
-         (,function)
+         (funcall ,function)
          (remove-hook ',hook ',cleanup)
          (unintern ',cleanup))
-       (add-hook ',hook ',cleanup nil ,local)
        #',cleanup)))
+
 
 (defun set-tab-width (num-spaces)
   (interactive "nTab width: ")

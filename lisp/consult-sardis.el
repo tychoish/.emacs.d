@@ -1,33 +1,49 @@
 ;;; consult-sardis.el --- sards cmdr consult helpers -*- lexical-binding: t -*-
 
+(defun --quiet-log-when (cond msg &rest args)
+  (when cond (apply #'--quiet-log (cons msg args))))
+
+(defun --quiet-log (msg &rest args)
+  (let ((inhibit-message t))
+    (apply #'message msg args)))
+
 (defun tychoish/compile--post-hook-collection (selection buffer-name started-at)
   (let* ((end-at (current-time))
-         (duration (float-time (time-subtract end-at started-at)))
-         (msg (format "completed %s in %.06fs" selection duration))
-	 (proc (get-buffer-process buffer-name)))
-    ;; (unless (eql 0 (proc (process-exit-status proc)))
-    ;; todo failure	)
-    (if (> duration 300)
-	(shell-command (concat "sardis notify send '" msg "'") "*sardis-logs*" "*sardis-logs*"))
+	 (duration (time-subtract end-at started-at))
+	 (msg (format "completed %s in %.06fs" selection (float-time duration))))
+
+    (when (> (float-time duration) 300)
+      (async-start-process "sardis-notify"
+         "sardis"
+	 (lambda (out) (--quiet-log-when out "notify process completed [%s] for %s" out selection))
+	 "notify" "send" msg))
+
     (alert
+     msg
      :title selection
      :buffer (get-buffer buffer-name))
-    (when (buffer-live-p buffer-name)
-      (with-current-buffer buffer-name
-        (insert (format "\n--- %s completed in %.06fs at %s\n" selection duration
-                        (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))))))
 
-(defmacro tychoish/compile-post-hook-function (operation &rest args)
-  `(apply #',operation ,args))
+    (with-current-buffer (get-buffer buffer-name)
+      (save-excursion
+	(setq buffer-read-only nil)
+	(beginning-of-buffer)
+	(replace-regexp "\\(^Compilation.*\n$\\|\n{2,}\\)" "")
+	(end-of-buffer)
+	(compilation-insert-annotation
+	 (format "--- %s completed in %.06fs at %s\n\n"
+		 selection (float-time duration)
+		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
+	 (setq buffer-read-only t)))))
 
 (defun consult-sardis--select-cmd ()
-  (consult--read
-   (sardis-commands (lit-string (shell-command-to-string "sardis cmd") "\n" t))
-   :prompt "sards.cmds=>: "
-   :group (consult--type-group sardis-commands)
-   :narrow (consult--type-narrow sardis-commands)
-   :require-match nil
-   :category 'tychoish/sardis-cmds)))
+  (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd") "\n" t))   )
+    (consult--read
+     sardis-commands
+     :prompt "sards.cmds=>: "
+     :group (consult--type-group sardis-commands)
+     :narrow (consult--type-narrow sardis-commands)
+     :require-match nil
+     :category 'tychoish/sardis-cmds)))
 
 ;;;###autoload
 (defun consult-sardis-run ()
@@ -36,31 +52,36 @@
   (let* ((selection (consult-sardis--select-cmd))
          ;; setup the environment
          (start-at (current-time))
-         (compile-command (concat "sardis cmd " selection))
-         (compilation-ask-about-save nil)
-         (compilation-arguments nil)
-         (compilation-read-command (lambda (_ignored) compile-command))
          (task-id (format "sardis-cmd-%s" selection))
-         (op-buffer-name (concat "*" task-id "*"))
-         (compilation-buffer-name-function (lambda (&optional args) op-buffer-name))
-         (post-hook (tychoish/compile-post-hook-function selection op-buffer-name start-at))
+         (op-buffer-name (concat "*" task-id "*")))
 
-    (add-hygenic-one-shot-hook
-     :name task-id
-     :hook compilation-finish-functions
-     :function post-hook
-     :local t)
+    (setq compilation-finish-functions nil)
 
-    (let ((buf (get-buffer op-buffer-name)))
-      (when buf
-        (with-current-buffer buf
-          (save-excursion
-            (setq-local buffer-read-only nil)
-            (end-of-buffer)
-            (insert (format "\n--- [%s] -- %s\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at)))
-            (setq-local buffer-read-only t)))))
+    (with-current-buffer (get-buffer-create op-buffer-name)
+      (add-hygenic-one-shot-hook-variadic
+       :name task-id
+       :hook compilation-finish-functions
+       :function (lambda ()
+		  (tychoish/compile--post-hook-collection
+		  selection op-buffer-name start-at))
+       :local nil)
 
-    (compilation-start compile-command nil nil nil t)))
+      (save-excursion
+        (end-of-buffer)
+        (setq buffer-read-only nil)
 
+	(if (zerop (buffer-size))
+	    (compilation-insert-annotation (format "# %s\n\n" selection))
+	  (compilation-insert-annotation "\n"))
+
+        (compilation-insert-annotation
+	 (format "--- [%s] -- %s --\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at)))
+	(setq buffer-read-only t)))
+
+    (compilation-start
+     (concat "sardis cmd " selection)
+     nil
+     (lambda (&optional _) op-buffer-name)
+     nil t)))
 
 (provide 'consult-sardis)
