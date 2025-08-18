@@ -46,22 +46,6 @@ helm-appropos replacement."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
-(defun string-with-non-whitespace-content-p (value)
-  "Return t when `VALUE' is a string with non-whitespace content and nil otherwise."
-  (and (stringp value)
-       (not (string-empty-p (string-trim value)))))
-
-(defun trimmed-string-or-nil (value)
-  (and (stringp value)
-       (unless (string-empty-p (setq value (string-trim value))) value)
-       value))
-
-(defmacro -add-if-empty (op list-val)
-  `(if ,list-val
-       ,list-val
-     (list ,op)))
-
 (defun consult-tycho--clean-options-for-selection (input)
   "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
   (->> input

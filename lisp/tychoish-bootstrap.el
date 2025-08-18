@@ -1,4 +1,4 @@
-;;; tychoish-bootstrap.el --- Utilities used during emacssetup
+;;; tychoish-bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -50,6 +50,14 @@
   (transient-mark-mode 1)
   (xterm-mouse-mode 1))
 
+(defun tychoish/resolve-instance-id ()
+  (let ((daemon (daemonp)))
+    (or (when (eq daemon t) "primary")
+        daemon
+        cli/instance-id
+        tychoish/emacs-instance-id
+        "solo")))
+
 (defun tychoish/setup-auto-save ()
   (let ((path (tychoish-get-config-file-path "backup/")))
     (setq auto-save-file-name-transforms `((".*" ,path t)))
@@ -57,7 +65,6 @@
 
     (unless (file-exists-p path)
       (make-directory path))
-
     (chmod path #o700)))
 
 (defun tychoish/setup-show-whitespace ()
@@ -128,6 +135,10 @@
          (unintern ',cleanup))
        #',cleanup)))
 
+(defmacro -add-if-empty (op list-val)
+  `(if ,list-val
+       ,list-val
+     (list ,op)))
 
 (defun set-tab-width (num-spaces)
   (interactive "nTab width: ")
@@ -142,6 +153,16 @@
   "Return t when the current session is or may be a GUI session."
   (when (or (daemonp) (window-system))
     t))
+
+(defun trimmed-string-or-nil (value)
+  (and (stringp value)
+       (unless (string-empty-p (setq value (string-trim value))) value)
+       value))
+
+(defun string-with-non-whitespace-content-p (value)
+  "Return t when `VALUE' is a string with non-whitespace content and nil otherwise."
+  (and (stringp value)
+       (not (string-empty-p (string-trim value)))))
 
 (defun default-string (default input)
   "Return the DEFAULT value if the INPUT is empty or nil."
@@ -220,12 +241,16 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
-  (format "%s-%s-%s" (system-name) (default-string "generic" (daemonp)) name))
+  (s-join "-" (list
+	       (system-name)
+	       (or tychoish/emacs-instance-id
+		   (tychoish/resolve-instance-id))
+	       name)))
 
 (defun tychoish-get-config-file-path (name)
   "Return an absolute path for NAME in the configuration directory.
 The is unique to the system and daemon instance."
-  (concat (expand-file-name user-emacs-directory) (tychoish-get-config-file-prefix name)))
+  (f-join (expand-file-name user-emacs-directory) (tychoish-get-config-file-prefix name)))
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
@@ -288,13 +313,22 @@ Returns the number of buffers killed."
 (defun emacs-repository-version-git (dir)  "Noop definition of function to speed up startup" "")
 (defun emacs-repository-get-version (&optional dir ext)  "Noop definition of function to speed up startup" "")
 
+(advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
+(advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
+(advice-add 'set-fill-column :around #'ad:set-fill-column-locally)
+
 (defun ad:suppress-message (f &rest arg)
   (let ((inhibit-message t)
         (message-log-max nil))
     (apply f arg)))
 
-(advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
-(advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
+(defun ad:set-fill-column-local (f &rest arg)
+  (let ((had-default (default-boundp 'fill-column))
+	(previous-default (default-value 'fill-column))
+	(new-value (apply f arg)))
+    (when had-default
+      (setq-default fill-column previous-default))
+    (setq-local fill-column new-value)))
 
 (defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
     "Hacky fix to resolve issue with native comp."
@@ -479,7 +513,6 @@ interactively then remove duplicate items from the `kill-ring'."
   "Report on NAME and the time taken to execute BODY."
   `(let ((inhibit-message t))
      (null ,@body)))
-
 
 (defmacro with-temp-keymap (map &rest body)
   "Create a temporary MAP and return it after evaluating it in the BODY."

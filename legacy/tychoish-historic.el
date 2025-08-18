@@ -8,7 +8,7 @@
                  mode-line-remote
                  mode-line-frame-identification
                  "<"
-                 tychoish-emacs-identifier
+                 tychoish/emacs-instance-id
                  ">:"
                  mode-line-buffer-identification
                  " "
