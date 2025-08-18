@@ -1,5 +1,4 @@
 ;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t; -*-
-
 ;;; Commentary:
 
 ;; Provides my collection of use-package forms and related
@@ -189,7 +188,6 @@
 	     tychoish/resolve-instance-id
              tychoish-setup-font
              tychoish-get-config-file-prefix
-             tychoish-get-config-file-path
 	     tychoish/set-tab-width
              add-hygenic-one-shot-hook
              create-toggle-functions
@@ -200,7 +198,10 @@
 	     uniquify-region-lines
              uniquify-buffer-lines
              font-lock-show-tabs
-             font-lock-width-keyword))
+             font-lock-width-keyword)
+  :config
+  (when (eq system-type 'darwin)
+    (add-hook 'after-make-frame-functions #'contextual-menubar)))
 
 (use-package auto-package-update
   :ensure t
@@ -216,6 +217,9 @@
 (use-package async
   :ensure t
   :defer t
+  :delight
+  (async-bytecomp-package-mode "")
+  (dired-async-mode "")
   :hook ((after-init . tychoish/async-mode-setup))
   :commands (async-start
 	     async-start-process
@@ -250,6 +254,7 @@
           (border-mode-line-inactive bg-mode-line-inactive)
           (message-separator bg-main))))
 
+
 ;; (use-package modus-themes-exporter
 ;;   :after modus-themes
 ;;   :commands (modus-themes-exporter-export))
@@ -264,6 +269,7 @@
 
 (use-package nerd-icons-dired
   :ensure t
+  :delight (nerd-icons-dired-mode "")
   :hook (dired-mode . nerd-icons-dired-mode))
 
 (use-package doom-modeline
@@ -451,7 +457,7 @@
   (setq projectile-use-git-grep t)
   (setq projectile-completion-system 'auto)
   (setq projectile-require-project-root nil)
-  (setq projectile-known-projects-file (tychoish-get-config-file-path "projectile-bookmarks.el")))
+  (setq projectile-known-projects-file (tychoish/conf-state-path "projectile-bookmarks.el")))
 
 (use-package project
   :after (:any go-ts-mode go-mode c++-mode c-mode c++-ts-mode c-ts-mode)
@@ -649,22 +655,34 @@
   :config
   (setq session-save-file-coding-system 'utf-8-emacs)
   (setq session-save-print-spec '(t nil 40000))
-  (setq session-save-file (tychoish-get-config-file-path "session.el")))
+  (setq session-save-file (tychoish/conf-state-path "session.el")))
 
 (use-package desktop
   :ensure t
   :hook ((after-save . tychoish-save-desktop))
   :commands (desktop-save-mode desktop-read desktop-save-in-desktop-dir)
   :init
-  (setq desktop-dirname user-emacs-directory)
-  (add-hook 'emacs-startup-hook 'tychoish/desktop-read-init)
+  (setq desktop-dirname (f-join user-emacs-directory "state"))
+
+  (defvar desktop-initialized-in-hook nil)
+
+  (if (daemonp)
+      (add-hook 'server-after-make-frame 'tychoish/desktop-read-init)
+    (add-hook 'after-make-frame-functions 'tychoish/desktop-read-init))
 
   (defun tychoish/desktop-read-init ()
-    (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
-    (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
-      (let ((gc-cons-threshold 800000)
-	    (inhibit-message t))
-        (desktop-read))))
+    (unless desktop-initialized-in-hook
+      (setq desktop-restore-frames t)
+      (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
+	(let ((gc-cons-threshold 800000)
+	      (inhibit-message t))
+          (desktop-read)))
+
+      (setq desktop-initialized-in-hook t)
+
+      (if (daemonp)
+	  (remove-hook 'server-after-make-frame 'tychoish/desktop-read-init)
+	(remove-hook 'after-make-frame-functions 'tychoish/desktop-read-init))))
 
   (defun tychoish-save-desktop ()
     "Save desktop... sometimes"
@@ -674,7 +692,6 @@
       (desktop-save-in-desktop-dir)))
   :config
   (setq desktop-load-locked-desktop t)
-  (setq desktop-restore-frames t)
   (setq desktop-restore-eager t)
   (setq desktop-path `(,user-emacs-directory))
 
@@ -692,7 +709,6 @@
                 "^/home.+\\.cargo"))
   (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
   (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
 
   (add-to-list 'desktop-globals-to-save 'register-alist)
   (add-to-list 'desktop-globals-to-save 'file-name-history)
@@ -707,8 +723,8 @@
   :hook ((prescient-persist-mode . savehist-mode-setup))
   :init
   (defun savehist-mode-setup ()
-    (savehist-mode 1)
-    (setq-default savehist-file (tychoish-get-config-file-path "savehist.el")))
+    (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
+    (savehist-mode 1))
   :config
   (setq savehist-coding-system 'utf-8-emacs))
 
@@ -717,7 +733,7 @@
   :init
   (defun tychoish/bookmark-setup ()
     ;; setting the list before calling the function reduce the total time
-    (setq bookmark-default-file (tychoish-get-config-file-path "bookmarks.el")))
+    (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el")))
   :custom
   (setq bookmark-save-flag 1))
 
@@ -744,7 +760,7 @@
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
   (setq recentf-max-menu-items 100)
-  (setq recentf-save-file (tychoish-get-config-file-path "recentf.el")))
+  (setq recentf-save-file (tychoish/conf-state-path "recentf.el")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1137,7 +1153,7 @@
 ;;   :delight (abbrev-mode "abb")
 ;;   :config
 ;;   (setq save-abbrevs t)
-;;   (setq abbrev-file-name (tychoish-get-config-file-path "abbrev.el"))
+;;   (setq abbrev-file-name (tychoish/conf-state-path "abbrev.el"))
 ;;   (if (file-exists-p abbrev-file-name)
 ;;       (quietly-read-abbrev-file)))
 
@@ -1151,7 +1167,7 @@
   (setq prescient-sort-length-enable nil)
   (setq completion-preview-sort-function #'prescient-completion-sort)
   :config
-  (setq prescient-save-file (tychoish-get-config-file-path "prescient.el")))
+  (setq prescient-save-file (tychoish/conf-state-path "prescient.el")))
 
 (use-package vertico
   :ensure t
@@ -1209,7 +1225,7 @@
 
 (use-package corfu
   :ensure t
-  :defines (corfu-margin-formatters corfu-continue-commands corfu-ap )
+  :defines (corfu-margin-formatters corfu-continue-commands)
   :hook (((prog-mode shell-mode eshell-mode text-mode) . corfu-mode)
          (telega-chat-mode . corfu-mode))
   :bind (:map corfu-map
@@ -1224,11 +1240,13 @@
          ("C-j" . corfu-quick-jump)
          ("M-d" . corfu-popupinfo-toggle)
          ("C-i" . corfu-popupinfo-toggle)
-         ("M-m" . corfu-move-to-minibuffer))
+         ("M-m" . corfu-move-to-minibuffer)
+         ("M-S-m" . corfu-move-to-minibuffer))
   :init
   (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
   (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
-    (defun tychoish/corfu-text-mode-setup ()
+
+  (defun tychoish/corfu-text-mode-setup ()
     (setq-local corfu-auto-prefix 2))
 
   (defun tychoish/corfu-prog-mode-setup ()
@@ -1241,18 +1259,23 @@
        (let ((completion-extra-properties extras)
              completion-cycle-threshold completion-cycling)
          (consult-completion-in-region beg end table pred)))))
+
   :config
   (setq corfu-cycle t)
   (setq corfu-quit-at-boundary t)
   (setq corfu-quit-no-match t)
   (setq corfu-preview-current t)
-  (setq corfu-preselect 'valid)
-  (setq corfu-on-exact-match 'insert)
+  (setq corfu-preselect nil)
+  (setq corfu-on-exact-match nil)
   (setq corfu-auto t)
   (setq corfu-auto-delay 0.15)
-  (setq corfu-popupinfo-delay .1)
+  (setq corfu-popupinfo-delay .125)
   (setq corfu-indexed-start 1)
   (setq global-corfu-minibuffer nil)
+  (setq read-file-name-completion-ignore-case t)
+  (setq read-buffer-completion-ignore-case t)
+  (setq completion-ignore-case t)
+
   (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer)
   (corfu-indexed-mode)
   (corfu-history-mode)
@@ -1581,10 +1604,11 @@
   (setq helm-input-idle-delay 0.0)
   (setq helm-man-or-woman-function 'woman)
   (setq helm-split-window-in-side-p t)
-  (setq helm-c-adaptive-history-file (tychoish-get-config-file-path "helm-c-adaptive-history.el"))
+  (setq helm-c-adaptive-history-file (tychoish/conf-state-path "helm-c-adaptive-history.el"))
   (setq helm-c-adaptive-sorting t)
   (helm-autoresize-mode 1)
-  (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold :background 'unspecified))
+  (when (window-system)
+    (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold :background 'unspecified)))
 
 (use-package helm-projectile
   :ensure t
@@ -1641,15 +1665,16 @@
          ("r" . helm-rg))
   :commands (helm-rg)
   :config
-  (set-face-attribute 'helm-rg-error-message nil :foreground "pink4" :background 'unspecified :weight 'normal)
-  (set-face-attribute 'helm-rg-active-arg-face nil :foreground "olive drab")
-  (set-face-attribute 'helm-rg-base-rg-cmd-face nil :foreground "dim gray")
-  (set-face-attribute 'helm-rg-directory-cmd-face nil :foreground "brown")
-  (set-face-attribute 'helm-rg-directory-header-face nil :foreground 'unspecified :weight 'extra-bold)
-  (set-face-attribute 'helm-rg-extra-arg-face nil :foreground "yellow4")
-  (set-face-attribute 'helm-rg-file-match-face nil :foreground "#088")
-  (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray")
-  (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold))
+  (when (window-system)
+    (set-face-attribute 'helm-rg-error-message nil :foreground "pink4" :background 'unspecified :weight 'normal)
+    (set-face-attribute 'helm-rg-active-arg-face nil :foreground "olive drab")
+    (set-face-attribute 'helm-rg-base-rg-cmd-face nil :foreground "dim gray")
+    (set-face-attribute 'helm-rg-directory-cmd-face nil :foreground "brown")
+    (set-face-attribute 'helm-rg-directory-header-face nil :foreground 'unspecified :weight 'extra-bold)
+    (set-face-attribute 'helm-rg-extra-arg-face nil :foreground "yellow4")
+    (set-face-attribute 'helm-rg-file-match-face nil :foreground "#088")
+    (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray")
+    (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold)))
 
 (use-package helm-swoop
   :ensure t
@@ -1884,8 +1909,8 @@
              ("R" . compose-reply-wide-or-not-please-ask)
              ("r" . mu4e-headers-mark-for-read))
   (bind-keys :map mu4e-headers-mode-map
-             ("R" . compose-reply-wide-or-not-please-ask)
              ("C-r" . compose-reply-wide-or-not-please-ask)
+             ("R" . compose-reply-wide-or-not-please-ask)
              ("r" . mu4e-headers-mark-for-read)
              ("o" . mu4e-headers-mark-for-unread)
              ("u" . mu4e-headers-mark-for-unread)
@@ -1940,14 +1965,30 @@
   :config
   (setq alert-log-messages nil)
   (setq alert-fade-time 15)
+
   (cond
-   ((eq system-type 'darwin)
-    (setq-default alert-default-style 'osx-notifier))
+   ((and (eq system-type 'darwin))
+    (cond
+     ((window-system)
+      (setq-default alert-default-style 'osx-notifier))
+     ((daemonp)
+      (setq alert-default-style 'notifier)
+      (add-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server))
+     (t
+      (setq-default alert-default-style 'notifier))))
    (alert-libnotify-command
       (setq-default alert-default-style 'libnotify))
    ((eql system-type 'gnu/linux)
     (setq-default alert-default-style 'notifications))
-   (t (setq-default alert-default-style 'message))))
+   (t (setq-default alert-default-style 'message)))
+
+  (defun tychoish/darwin-alert-config-for-server ()
+    (if (and (window-system)
+	     (eq system-type 'darwin)
+	     (not (eq alert-default-style 'osx-notifier)))
+	(setq-default alert-default-style 'osx-notifier)
+      (remove-hook 'server-after-make-frame 'tychoish/darwin-alert-config-for-server)
+      (unintern 'tychoish/darwin-alert-config-for-server))))
 
 (use-package ercn
   :ensure t
@@ -2009,6 +2050,10 @@
               ("C-c C-f" . telega-root-buffer-auto-fill)
               ("<tab>" . telega-root-cycle-next))
   :config
+  (when (eq system-type 'darwin)
+    (setq telega-server-libs-prefix "/opt/homebrew")
+    (setq-default alert-default-style 'osx-notifier))
+
   (setq telega-emoji-use-images t)
 
   (require 'telega-alert)
@@ -3040,8 +3085,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'eglot-server-programs
                `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
                  . ,(eglot-alternatives
-                     `(("gopls-systemd" ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)))
-                       ("gopls-auto" "-remote=auto")
+                     `(
+		       ("/opt/homebrew/bin/gopls" "-remote=unix;/tmp/gopls.socket")
+                       ("gopls" "-remote=auto")
+		       ("gopls" ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)))
+		       ("gopls" "-remote=unix;/tmp/gopls.socket")
+
                        ("gopls")))))
 
   (setq-default eglot-workspace-configuration tychoish/eglot-default-server-configuration)

@@ -154,6 +154,12 @@
   (when (or (daemonp) (window-system))
     t))
 
+(defun contextual-menubar (&optional frame)
+  "Display the menubar in FRAME (default: selected frame) if on a graphical display, but hide it if in terminal."
+  (interactive)
+  (set-frame-parameter frame 'menu-bar-lines (if (display-graphic-p frame) 1 0)))
+
+
 (defun trimmed-string-or-nil (value)
   (and (stringp value)
        (unless (string-empty-p (setq value (string-trim value))) value)
@@ -241,16 +247,23 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
-  (s-join "-" (list
-	       (system-name)
-	       (or tychoish/emacs-instance-id
-		   (tychoish/resolve-instance-id))
-	       name)))
+  (s-join "-" (append (tychoish/conf-emacs-host-and-instance) `(,name))))
+
+(defun tychoish/conf-emacs-host-and-instance ()
+  (list
+   (if (eq system-type 'darwin)
+       (car (s-split "\\." (system-name)))
+     (system-name))
+   (or tychoish/emacs-instance-id
+       (tychoish/resolve-instance-id))))
 
 (defun tychoish-get-config-file-path (name)
   "Return an absolute path for NAME in the configuration directory.
 The is unique to the system and daemon instance."
   (f-join (expand-file-name user-emacs-directory) (tychoish-get-config-file-prefix name)))
+
+(defun tychoish/conf-state-path (name)
+  (f-join (expand-file-name user-emacs-directory) "state" (tychoish-get-config-file-prefix name)))
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
