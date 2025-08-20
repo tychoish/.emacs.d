@@ -1,1 +1,14 @@
 .yas-compiled-snippets.el
+user/*.el
+eln-cache
+server
+state/*
+!state/.gitkeep
+auto-save-list
+*-backup/
+#.*#
+.#.*#
+projects
+tree-sitter/*.dylib
+url/*
+transient/*.el

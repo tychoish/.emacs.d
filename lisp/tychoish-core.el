@@ -580,6 +580,7 @@
   :bind-keymap ("C-c /" . google-this-mode-submap)
   :commands (google-this-mode)
   :config
+  (setq google-this-browse-url-function 'browse-url-default-browser)
   (google-this-mode 1))
 
 (use-package eldoc
@@ -663,6 +664,7 @@
   :commands (desktop-save-mode desktop-read desktop-save-in-desktop-dir)
   :init
   (setq desktop-dirname (f-join user-emacs-directory "state"))
+  (setq desktop-path (list desktop-dirname user-emacs-directory "~"))
 
   (defvar desktop-initialized-in-hook nil)
 
@@ -690,11 +692,10 @@
 
     (when (> 40 (random 100))
       (desktop-save-in-desktop-dir)))
-  :config
   (setq desktop-load-locked-desktop t)
   (setq desktop-restore-eager t)
-  (setq desktop-path `(,user-emacs-directory))
 
+  :config
   (setq desktop-buffers-not-to-save
         (concat "\\("
                 "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
@@ -1328,14 +1329,14 @@
          ([remap Info-search] . consult-info)
          ;; C-x bindings in `ctl-x-map'
          ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
-         ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
-         ("C-x C-b" . switch-to-buffer)            ;; orig. list-buffers
+         ("C-x b" . switch-to-buffer)                ;; orig. switch-to-buffer
+         ("C-x C-b" . consult-buffer)            ;; orig. list-buffers
          ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
          ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
          ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
          ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
          ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
-         ("C-x C-f" . consult-find)
+         ("C-x C-f" . find-file)
          ;; Custom M-# bindings for fast register access
          ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
          ("M-#" . consult-register-load)
@@ -2437,7 +2438,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :init
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
-    (setq-local fill-column 128))
+    (setq-local fill-column 128)
+    (flycheck-disable-checker 'go-build)
+    (flycheck-disable-checker 'go-test))
 
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
@@ -2458,7 +2461,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (unless (getenv "GOPATH")
     (setenv "GOPATH" (expand-file-name "~/go")))
   (setq local-go-bin (concat (getenv "GOPATH") "/bin"))
-  (setq exec-path (cons local-go-bin exec-path))
   (setenv "PATH" (format "%s:%s" (getenv "PATH") local-go-bin ))
   (add-to-list 'exec-path local-go-bin))
 
@@ -2797,7 +2799,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :config
   (add-to-list 'flycheck-checkers 'golangci-lint)
   (setq flycheck-go-vet-shadow t)
-  (setq flycheck-go-build-install-deps t)
+  (setq flycheck-go-build-install-deps nil)
   (setq flycheck-golangci-lint-fast t)
   (setq flycheck-golangci-lint-tests t))
 
