@@ -115,12 +115,14 @@
 		    (setq ,value ,(cdr def))))
 	       ops))))
 
-(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (local nil))
+(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil))
   (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
     `(progn
        (add-hook ',hook ',cleanup nil ,local)
-       (defun ,cleanup (&opional &rest args)
-	 (apply-partially #',function args)
+       (defun ,cleanup ,args
+	 (if ,args
+	     (apply #',function ,args)
+	   (funcall #',function))
          (remove-hook ',hook ',cleanup)
          (unintern ',cleanup))
        #',cleanup)))
@@ -258,8 +260,12 @@ This combines the host name and the dameon name."
 The is unique to the system and daemon instance."
   (f-join (expand-file-name user-emacs-directory) (tychoish-get-config-file-prefix name)))
 
+(defconst tychoish/conf-state-directory-name "state")
+
 (defun tychoish/conf-state-path (name)
-  (f-join (expand-file-name user-emacs-directory) "state" (tychoish-get-config-file-prefix name)))
+  (f-join (expand-file-name user-emacs-directory)
+	  tychoish/conf-state-directory-name
+	  (tychoish-get-config-file-prefix name)))
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."

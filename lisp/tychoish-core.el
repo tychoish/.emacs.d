@@ -26,10 +26,10 @@
 
 (use-package emacs
   :delight
-  (auto-fill-function "afm")
+  (auto-fill-function " afm")
   (overwrite-mode "om")
   (refill-mode "rf")
-  (visual-line-mode "wr")
+  (visual-line-mode " wr")
   (fundamental-mode "fun")
   :init
   ;; we don't need autoload magic from use-package
@@ -169,6 +169,7 @@
 
 (use-package tychoish-bootstrap
   :functions (gui-p default-string)
+  :defines (tychoish/conf-state-directory-name)
   :bind (("C-c f =" . text-scale-increase)
          ("C-c f -" . text-scale-decrease)
          ("C-c f 0" . text-scale-reset)
@@ -644,8 +645,8 @@
   :commands (session-initialize session-save-session)
   :init
   (add-hygenic-one-shot-hook
-   :name "daemon-session-setup"
-   :hook after-make-frame-functions
+   :name "session-setup"
+   :hook emacs-startup-hook
    :function session-initialize)
 
   (defvar session/last-save-time nil)
@@ -659,7 +660,6 @@
     (when (or (> 40 (random 100))
 	      (< 150 (float-time (time-since desktop/last-save-time)))))
         (session-save-session t))
-
   :config
   (setq session-save-file-coding-system 'utf-8-emacs)
   (setq session-save-print-spec '(t nil 40000))
@@ -670,7 +670,7 @@
   :hook ((after-save . tychoish-save-desktop))
   :commands (desktop-save-mode desktop-read desktop-save-in-desktop-dir)
   :init
-  (setq desktop-dirname (f-join user-emacs-directory "state"))
+  (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
   (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
   (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
   (setq desktop-path (list desktop-dirname user-emacs-directory "~"))
@@ -681,7 +681,7 @@
 	(add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init))
     (setq desktop-restore-eager t)
     (setq desktop-load-locked-desktop t)
-    (add-hook 'after-make-frame-functions 'tychoish/desktop-read-init))
+    (add-hook 'emacs-startup-hook 'tychoish/desktop-read-init))
 
   (defun tychoish/desktop-read-init ()
     (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
@@ -689,8 +689,8 @@
 	    (inhibit-message t))
         (desktop-read)))
     (if (daemonp)
-	(remove-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init)
-      (remove-hook 'after-make-frame-functions 'tychoish/desktop-read-init)))
+	(remove-hook 'server-after-make-frame-hook #'tychoish/desktop-read-init)
+      (remove-hook 'emacs-startup-hook #'tychoish/desktop-read-init)))
 
   (defvar desktop/last-save-time nil)
   (set-to-current-time-on-startup desktop/last-save-time)
@@ -1796,7 +1796,9 @@
 
 (use-package forge
   :ensure t
-  :commands (forge-dispatch forge-configure))
+  :commands (forge-dispatch forge-configure)
+  :config
+  (setq forge-database-file (expand-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name "state" "forge-database.sqlite"))))
 
 (use-package gist
   :ensure t
@@ -2004,7 +2006,6 @@
 (use-package telega
   :ensure t
   :delight
-  (telega-mnz-mode "")
   (telega-chat-auto-fill-mode "")
   :defines (telega-chat-mode-hook)
   :bind-keymap (("C-c v" . telega-prefix-map)
@@ -2038,11 +2039,11 @@
   (require 'telega-alert)
   (telega-mode-line-mode 1)
   (telega-alert-mode 1)
-  (add-hook 'telega-chat-mode-hook 'tychoish/telega-set-up-chat-mode)
 
+  (add-hook 'telega-chat-mode-hook 'tychoish/telega-set-up-chat-mode)
   (defun tychoish/telega-set-up-chat-mode ()
-    (require 'telega-mnz)
-    (telega-mnz-mode 1)
+    ;; (require 'telega-mnz)
+    ;; (telega-mnz-mode 1)
     (telega-chat-auto-fill-mode 1))
 
   (setq telega-root-view-grouping-folders t)
