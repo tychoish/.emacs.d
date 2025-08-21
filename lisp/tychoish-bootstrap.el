@@ -59,7 +59,7 @@
         "solo")))
 
 (defun tychoish/setup-auto-save ()
-  (let ((path (tychoish-get-config-file-path "backup/")))
+  (let ((path (tychoish/conf-state-path "backup/")))
     (setq auto-save-file-name-transforms `((".*" ,path t)))
     (add-to-list 'backup-directory-alist (cons "." path))
 
@@ -115,25 +115,22 @@
 		    (setq ,value ,(cdr def))))
 	       ops))))
 
-(cl-defmacro add-hygenic-one-shot-hook-variadic (&key name hook function (local nil))
-  (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
-    `(progn
-       (add-hook ',hook ',cleanup nil ,local)
-       (defun ,cleanup (&opional _ignored)
-         (funcall ,function)
-         (remove-hook ',hook ',cleanup)
-         (unintern ',cleanup))
-       #',cleanup)))
-
 (cl-defmacro add-hygenic-one-shot-hook (&key name hook function (local nil))
   (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
     `(progn
        (add-hook ',hook ',cleanup nil ,local)
-       (defun ,cleanup ()
-         (funcall ,function)
+       (defun ,cleanup (&opional &rest args)
+	 (apply-partially #',function args)
          (remove-hook ',hook ',cleanup)
          (unintern ',cleanup))
        #',cleanup)))
+
+(defmacro set-to-current-time-on-startup (variable)
+  (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
+    `(progn
+       (add-hook 'emacs-startup-hook ',operation)
+       (defun ,operation ()
+	 (setq ,variable (current-time))))))
 
 (defmacro -add-if-empty (op list-val)
   `(if ,list-val
@@ -189,8 +186,7 @@
 (defun on-frame-open (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
   (unless (display-graphic-p frame)
-    (set-face-foreground 'default "unspecified-fg" frame)
-    (set-face-background 'default "unspecified-bg" frame)))
+    (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
 
 (defun on-after-init ()
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
@@ -423,7 +419,6 @@ Returns the number of buffers killed."
   "Return a font-lock style keyword for strings beyond WIDTH that use 'font-lock-warning-face'."
   `((,(format "^%s\\(.+\\)" (make-string width ?.))
      (1 font-lock-warning-face t))))
-
 (defun uniquify-region-lines (beg end)
   "Remove duplicate adjacent lines between BEG and END."
   (interactive "*r")

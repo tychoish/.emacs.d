@@ -189,6 +189,7 @@
              tychoish-setup-font
              tychoish-get-config-file-prefix
 	     tychoish/set-tab-width
+	     set-to-current-time-on-startup
              add-hygenic-one-shot-hook
              create-toggle-functions
              create-run-hooks-function-for
@@ -565,7 +566,7 @@
          ("C-c w c" . browse-url-chrome)
          ("C-c w g" . eww-search-words))
   :commands (eww eww-browse-url)
-  :init 
+  :init
   (setq browse-url-browser-function 'eww-browse-url)
   :config
   (setq browse-url-generic-program "chrome")
@@ -639,20 +640,26 @@
 (use-package session
   :ensure t
   :bind (("C-c t ;" . session-toggle-permanent-flag))
-  :hook ((server-after-make-frame . tychoish/setup-daemon-session)
-	 (after-save . tychoish-save-session))
+  :hook ((after-save . tychoish-save-session))
   :commands (session-initialize session-save-session)
   :init
-  (defun tychoish/setup-daemon-session ()
-    (session-initialize))
+  (add-hygenic-one-shot-hook
+   :name "daemon-session-setup"
+   :hook after-make-frame-functions
+   :function session-initialize)
+
+  (defvar session/last-save-time nil)
+  (set-to-current-time-on-startup session/last-save-time)
 
   ;; use session-save to save the desktop manually
   (defun tychoish-save-session ()
     "Save an emacs session... sometimes"
     (interactive)
 
-    (when (> 40 (random 100))
-        (session-save-session t)))
+    (when (or (> 40 (random 100))
+	      (< 150 (float-time (time-since desktop/last-save-time)))))
+        (session-save-session t))
+
   :config
   (setq session-save-file-coding-system 'utf-8-emacs)
   (setq session-save-print-spec '(t nil 40000))
@@ -664,36 +671,37 @@
   :commands (desktop-save-mode desktop-read desktop-save-in-desktop-dir)
   :init
   (setq desktop-dirname (f-join user-emacs-directory "state"))
+  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
+  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
   (setq desktop-path (list desktop-dirname user-emacs-directory "~"))
 
-  (defvar desktop-initialized-in-hook nil)
-
   (if (daemonp)
-      (add-hook 'server-after-make-frame 'tychoish/desktop-read-init)
+      (progn
+	(setq desktop-restore-frames t)
+	(add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init))
+    (setq desktop-restore-eager t)
+    (setq desktop-load-locked-desktop t)
     (add-hook 'after-make-frame-functions 'tychoish/desktop-read-init))
 
   (defun tychoish/desktop-read-init ()
-    (unless desktop-initialized-in-hook
-      (setq desktop-restore-frames t)
-      (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
-	(let ((gc-cons-threshold 800000)
-	      (inhibit-message t))
-          (desktop-read)))
+    (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
+      (let ((gc-cons-threshold 800000)
+	    (inhibit-message t))
+        (desktop-read)))
+    (if (daemonp)
+	(remove-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init)
+      (remove-hook 'after-make-frame-functions 'tychoish/desktop-read-init)))
 
-      (setq desktop-initialized-in-hook t)
-
-      (if (daemonp)
-	  (remove-hook 'server-after-make-frame 'tychoish/desktop-read-init)
-	(remove-hook 'after-make-frame-functions 'tychoish/desktop-read-init))))
+  (defvar desktop/last-save-time nil)
+  (set-to-current-time-on-startup desktop/last-save-time)
 
   (defun tychoish-save-desktop ()
     "Save desktop... sometimes"
     (interactive)
-
-    (when (> 40 (random 100))
-      (desktop-save-in-desktop-dir)))
-  (setq desktop-load-locked-desktop t)
-  (setq desktop-restore-eager t)
+    (when (or (> 40 (random 100))
+	      (< 150 (float-time (time-since desktop/last-save-time))))
+      (desktop-save-in-desktop-dir)
+      (setq desktop/time-since-last-save (current-time))))
 
   :config
   (setq desktop-buffers-not-to-save
@@ -708,8 +716,6 @@
                 "^/usr/lib/rustlib/.*\\|"
                 "^/home.+go/pkg/mod\\|"
                 "^/home.+\\.cargo"))
-  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
-  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
 
   (add-to-list 'desktop-globals-to-save 'register-alist)
   (add-to-list 'desktop-globals-to-save 'file-name-history)
@@ -1991,52 +1997,15 @@
       (remove-hook 'server-after-make-frame 'tychoish/darwin-alert-config-for-server)
       (unintern 'tychoish/darwin-alert-config-for-server))))
 
-(use-package ercn
-  :ensure t
-  :after (erc alert)
-  :config
-  (setq ercn-suppress-rules '((system . all)
-                              (fool . all)
-                              (dangerous-host . all)))
-
-  (setq ercn-notify-rules '((current-nick . all)
-                            (query-buffer . all)
-                            (message . ("#unclear" "#general"))))
-
-  (defun do-erc-notify (nickname message)
-    "Hook implementation of a notification."
-    (catch 'early-return
-      (let* ((channel (buffer-name))
-             (_check (when (or (string-prefix-p "*irc-" channel)
-                              (string= "bot" nickname)
-                              (search "bitlbee" (downcase channel)))
-                      (throw 'early-return "skip notification noise")))
-             (msg (s-trim (s-collapse-whitespace message)))
-             (title (if (string-match-p (concat "^" nickname) channel)
-                        nickname
-                      (concat nickname " (" channel ")"))))
-        (alert msg :title title))))
-
-  (add-hook 'ercn-notify-hook 'do-erc-notify))
-
 (use-package tracking
   :ensure t
-  :after (telega erc))
-
-
-(use-package telega-mnz
-  :delight telega-mnz-mode
-  :hook (telega-chat-mode . telega-mnz-mode))
+  :after (:any telega erc))
 
 (use-package telega
   :ensure t
-  :delight telega-chat-auto-fill-mode
-  :commands (telega
-             telega-chat-mode
-             tychoish/telega-switch-to-root
-             tychoish/telega-kill-chat-buffers
-             tychoish/telega-bury-chat-buffers
-             tychoish/telega-force-kill)
+  :delight
+  (telega-mnz-mode "")
+  (telega-chat-auto-fill-mode "")
   :defines (telega-chat-mode-hook)
   :bind-keymap (("C-c v" . telega-prefix-map)
                 ("C-c n" . telega-prefix-map))
@@ -2050,17 +2019,31 @@
               :map telega-root-mode-map
               ("C-c C-f" . telega-root-buffer-auto-fill)
               ("<tab>" . telega-root-cycle-next))
+  :commands (telega
+             telega-chat-mode
+             tychoish/telega-switch-to-root
+             tychoish/telega-kill-chat-buffers
+             tychoish/telega-bury-chat-buffers
+             tychoish/telega-force-kill)
   :config
   (when (eq system-type 'darwin)
     (setq telega-server-libs-prefix "/opt/homebrew")
     (setq-default alert-default-style 'osx-notifier))
 
+  (when (eq system-type 'gnu/linux)
+      (setq telega-server-libs-prefix "/usr"))
+
   (setq telega-emoji-use-images t)
 
   (require 'telega-alert)
-
   (telega-mode-line-mode 1)
   (telega-alert-mode 1)
+  (add-hook 'telega-chat-mode-hook 'tychoish/telega-set-up-chat-mode)
+
+  (defun tychoish/telega-set-up-chat-mode ()
+    (require 'telega-mnz)
+    (telega-mnz-mode 1)
+    (telega-chat-auto-fill-mode 1))
 
   (setq telega-root-view-grouping-folders t)
   (setq telega-folder-icons-alist nil)
@@ -2086,12 +2069,10 @@
   (setq telega-chat-folders-exclude
         '("unknowns" "InlineBots" "Calls" "Personal"))
 
-  (defun telega-chat-folders (chat) nil)
   (setq telega-chat-folders-insexp #'telega-folders-insert-default)
 
   (setq telega-use-images t)
   (setq telega-chat-input-markups '("markdown2"))
-  (setq telega-server-libs-prefix "/usr")
   (setq telega-use-tracking-for '(or unmuted mention unread))
   (setq telega-markdown2-backquotes-as-precode t)
   (setq telega-debug nil)
@@ -2099,6 +2080,8 @@
   (with-eval-after-load 'company
     (setq telega-company-emoji-fuzzy-match t)
     (setq telega-company-username-show-avatars t))
+
+  (defun telega-chat-folders (chat) nil)
 
   (setq telega-chat--display-buffer-action
         '((display-buffer-reuse-window display-buffer-use-some-window)))
@@ -2287,7 +2270,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package markdown-mode
   :ensure t
   :delight (markdown-mode "mdwn")
-  :mode ("\\.mdwn" "\\.md" "\\.markdown")
+  :mode ("\\.mdwn" "\\.md" "\\.markdown" "\\.txt")
   :init
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
@@ -2315,12 +2298,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package rst
   :delight (rst-mode "rst")
-  :mode ("\\.rst" "\\.txt")
+  :mode ("\\.rst")
   :bind (:map rst-mode-map
 	 ("C-c C-t h" . rst-adjust))
   :init
   (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
-  (defun tychoish/rst-setup-mode ()
+  (defun tychoish/set-up-rst-mode ()
     (turn-on-auto-fill)
     (setq-local fill-column 78)
     (setq-local rst-level-face-max 0)

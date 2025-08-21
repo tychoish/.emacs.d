@@ -58,7 +58,7 @@
     (setq compilation-finish-functions nil)
 
     (with-current-buffer (get-buffer-create op-buffer-name)
-      (add-hygenic-one-shot-hook-variadic
+      (add-hygenic-one-shot-hook
        :name task-id
        :hook compilation-finish-functions
        :function (lambda ()

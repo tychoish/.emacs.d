@@ -10,5 +10,6 @@ auto-save-list
 .#.*#
 projects
 tree-sitter/*.dylib
+tree-sitter/*.so
 url/*
 transient/*.el

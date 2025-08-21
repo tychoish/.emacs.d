@@ -201,4 +201,32 @@ if not already started."
   :ensure t
   :after (erc))
 
+(use-package ercn
+  :ensure t
+  :after (erc alert)
+  :config
+  (setq ercn-suppress-rules '((system . all)
+                              (fool . all)
+                              (dangerous-host . all)))
+
+  (setq ercn-notify-rules '((current-nick . all)
+                            (query-buffer . all)
+                            (message . ("#unclear" "#general"))))
+
+  (defun do-erc-notify (nickname message)
+    "Hook implementation of a notification."
+    (catch 'early-return
+      (let* ((channel (buffer-name))
+             (_check (when (or (string-prefix-p "*irc-" channel)
+                              (string= "bot" nickname)
+                              (search "bitlbee" (downcase channel)))
+                      (throw 'early-return "skip notification noise")))
+             (msg (s-trim (s-collapse-whitespace message)))
+             (title (if (string-match-p (concat "^" nickname) channel)
+                        nickname
+                      (concat nickname " (" channel ")"))))
+        (alert msg :title title))))
+
+  (add-hook 'ercn-notify-hook 'do-erc-notify))
+
 (provide 'tychoish-erc)
