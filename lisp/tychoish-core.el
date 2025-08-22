@@ -1063,7 +1063,7 @@
          ("_" . cape-tex)
          ("^" . cape-tex)
          ("&" . cape-sgml)
-         ("r" . cape-rfc1345))
+         ("u" . cape-rfc1345))
   :init
   (defun tychoish/capf-line ()
     (cape-wrap-prefix-length #'cape-line 5))
@@ -2422,9 +2422,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :init
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
-    (setq-local fill-column 128)
-    (flycheck-disable-checker 'go-build)
-    (flycheck-disable-checker 'go-test))
+    (setq-local fill-column 128))
 
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
@@ -3218,15 +3216,19 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package gptel
   :ensure t
-  :bind (("C-c r a g" . gptel)
-         ("C-c r a r" . gptel-rewrite)
+  :bind (:prefix "C-c r"
+	 :prefix-map tychoish/robot-map
+	 ("g g" . gptel)
+         ("g r" . gptel-rewrite)
          :map gptel-mode-map
+	 ("C-c m" . gptel-menu)
          ("C-c r a m c" . tychoish-gptel-copilot)
-         ("C-c r a m C" . tychoish-gptel-copilot-default)
          ("C-c r a m g" . tychoish-gptel-gemini)
-         ("C-c r a m G" . tychoish-gptel-copilot-default))
+         ("C-c r a m C" . tychoish-gptel-copilot-default)
+         ("C-c r a m G" . tychoish-gptel-gemini-default))
   :commands gptel
   :config
+  (setq gptel-include-reasoning 'ignore)
   (setq tychoish--gemini-backend (gptel-make-gemini "gemini" :key google-gemini-key :stream t))
   (setq tychoish--gemini-model 'gemini-2.5-pro-preview-06-05)
   (setq tychoish--copilot-backend (gptel-make-gh-copilot "copilot"))
@@ -3257,7 +3259,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package gptel-aibo
   :ensure t
-  :bind (("C-c r a w" . gptel-aibo-summon))
+  :bind (:map tychoish/robot-map
+         ("g w" . gptel-aibo-summon))
   :commands (gptel-aibo-summon gptel-aibo))
 
 (use-package mcp
@@ -3269,19 +3272,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'mcp-hub-servers '("git" . (:command "uvx" :args ("mcp-server-git"))))
   (require 'mcp-hub))
 
-(use-package copilot-chat
-  :ensure t
-  :bind (("C-c r c m" . copilot-chat-transient)
-         ("C-c r c t" . copilot-chat))
-  :config
-  (setq copilot-chat-frontend 'markdown)
-  (setq copilot-chat-follow t)
-  (setq copilot-chat-markdown-prompt "##"))
-
 (use-package copilot
   :ensure t
-  :bind (("C-c r c s" . copilot-complete)
-         ("C-c r c g" . copilot-clear-overlay)
+  :bind (:map tychoish/robot-map ;; "C-c r"
+	 :prefix "c"
+	 :prefix-map tychoish/robot-copilot-map ;; "C-c r c"
+	 ("s" . copilot-complete)
+         ("g" . copilot-clear-overlay)
+	 :map tychoish/completion-map
+	 ("r" . copilot-complete)
          :map copilot-completion-map
          ("C-c a" . copilot-acept-completion)
          ("C-c l" . copilot-acept-completion-by-line)
@@ -3298,6 +3297,32 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'copilot-major-mode-alist '("python-ts-mode" . "python"))
   (add-to-list 'copilot-major-mode-alist '("yaml-ts-mode" . "yaml"))
   (add-to-list 'copilot-major-mode-alist '("bash-ts-mode" . "shellscript")))
+
+(use-package copilot-chat
+  :ensure t
+  :bind (:map tychoish/robot-copilot-map ;; "C-c r c"
+	 ("m" . copilot-chat-transient)
+         ("t" . copilot-chat))
+  :config
+  (setq copilot-chat-frontend 'markdown)
+  (setq copilot-chat-follow t)
+  (setq copilot-chat-markdown-prompt "##"))
+
+(use-package aider
+  :ensure t
+  :bind (:map tychoish/robot-map
+         ("a" . aider-transient-menu))
+  :config
+  ;; Or chatgpt model
+  ;; (setq aider-args '("--model" "o4-mini"))
+  ;; (setenv "OPENAI_API_KEY" <your-openai-api-key>)
+  ;; Or use your personal config file
+  ;; (setq aider-args `("--config" ,(expand-file-name "~/.aider.conf.yml")))
+
+  ;; for latest calude sonnet model
+  ;; (setq aider-args '("--model" "sonnet" "--no-auto-accept-architect")) ;; add --no-auto-commits if you don't want it
+  ;; (setenv "ANTHROPIC_API_KEY" anthropic-api-key)
+  (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets")))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here
