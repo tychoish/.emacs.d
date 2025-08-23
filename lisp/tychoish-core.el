@@ -190,6 +190,8 @@
              tychoish-setup-font
              tychoish-get-config-file-prefix
 	     tychoish/set-tab-width
+	     tychoish/ensure-light-theme
+	     tychoish/ensure-dark-theme
 	     set-to-current-time-on-startup
              add-hygenic-one-shot-hook
              create-toggle-functions
@@ -203,7 +205,9 @@
              font-lock-width-keyword)
   :config
   (when (eq system-type 'darwin)
-    (add-hook 'after-make-frame-functions #'contextual-menubar)))
+    (add-hook 'after-make-frame-functions #'contextual-menubar))
+
+)
 
 (use-package auto-package-update
   :ensure t
@@ -1730,7 +1734,7 @@
   :commands (helm-org-capture-templates
              helm-org-in-buffer-heddings
              helm-org-agenda-files-headings)
-  :config 
+  :config
   (setq add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
   (setq add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
 
@@ -1848,10 +1852,12 @@
 
 (use-package mu4e
   :ensure nil
-  :bind (("C-c m m" . mu4e)
-         ("C-c m d" . mu4e~headers-jump-to-maildir)
-         ("C-c m b" . mu4e-headers-search-bookmark)
-         ("C-c m c" . mu4e-compose-new))
+  :bind (:prefix "C-c m"
+	 :prefix-map tychoish/mail-map
+	 ("m" . mu4e)
+         ("d" . mu4e~headers-jump-to-maildir)
+         ("b" . mu4e-headers-search-bookmark)
+         ("c" . mu4e-compose-new))
   :commands (mu4e
              mu4e-compose-new
              mu4e-headers-jump-to-maildir
@@ -1867,12 +1873,14 @@
     (setq-local make-backup-files nil))
 
   (defun tychoish/set-maildir (maildir)
+    (setq maildir (expand-file-name maildir))
     (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
     (setq mu4e-mu-home (f-join maildir ".mu"))
     (setq mu4e-maildir maildir)
     (setq message-directory maildir)
     (setq message-auto-save-directory (f-join maildir "drafts"))
-    (setq message-signature-directory (f-join maildir "tools" "signatures")))
+    (setq message-signature-directory (f-join maildir "tools" "signatures"))
+    maildir)
 
   (defun tychoish/set-email-address (name address)
     (setq user-mail-address address)

@@ -36,13 +36,16 @@
 (setq default-frame-alist nil)
 
 (defun tychoish/bootstrap-after-init-hook-fn ()
+  (scroll-bar-mode -1)
+  (menu-bar-mode -1)
+  (tool-bar-mode -1)
+
   (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
   (add-to-list 'default-frame-alist '(menu-bar-lines . nil))
   (add-to-list 'default-frame-alist '(tool-bar-lines . nil))
 
-  (scroll-bar-mode -1)
-  (menu-bar-mode -1)
-  (tool-bar-mode -1)
+  (tychoish/ensure-light-theme)
+  (tychoish/ensure-default-font)
 
   (indent-tabs-mode -1)
   (column-number-mode 1)
@@ -115,6 +118,28 @@
 		    (setq ,value ,(cdr def))))
 	       ops))))
 
+(defmacro with-silence (&rest body)
+  "Report on NAME and the time taken to execute BODY."
+  `(let ((inhibit-message t)
+         (message-log-max nil))
+     (null ,@body)))
+
+(defmacro without-messages (&rest body)
+  "Report on NAME and the time taken to execute BODY."
+  `(let ((inhibit-message t))
+     (null ,@body)))
+
+(defmacro with-temp-keymap (map &rest body)
+  "Create a temporary MAP and return it after evaluating it in the BODY."
+  `(let ((,map (make-sparse-keymap)))
+     ,@body
+     map))
+
+(defmacro -add-if-empty (op list-val)
+  `(if ,list-val
+       ,list-val
+     (list ,op)))
+
 (cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil))
   (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
     `(progn
@@ -134,10 +159,6 @@
        (defun ,operation ()
 	 (setq ,variable (current-time))))))
 
-(defmacro -add-if-empty (op list-val)
-  `(if ,list-val
-       ,list-val
-     (list ,op)))
 
 (defun set-tab-width (num-spaces)
   (interactive "nTab width: ")
@@ -157,7 +178,6 @@
   "Display the menubar in FRAME (default: selected frame) if on a graphical display, but hide it if in terminal."
   (interactive)
   (set-frame-parameter frame 'menu-bar-lines (if (display-graphic-p frame) 1 0)))
-
 
 (defun trimmed-string-or-nil (value)
   (and (stringp value)
@@ -180,10 +200,6 @@
     default)
    (t
     input)))
-
-(defun disable-all-themes ()
-  (interactive)
-  (mapc #'disable-theme custom-enabled-themes))
 
 (defun on-frame-open (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
@@ -222,12 +238,24 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (interactive)
   (modify-frame-parameters nil `((alpha . 95))))
 
+(defun disable-all-themes ()
+  (interactive)
+  (mapc #'disable-theme custom-enabled-themes))
+
 (defun tychoish-load-light-theme ()
   (interactive)
   (disable-all-themes)
   (when (load-theme 'modus-operandi t t)
     (enable-theme 'modus-operandi))
   (add-to-list 'default-frame-alist '(alpha . 97)))
+
+(defun tychoish/ensure-light-theme ()
+  (unless custom-enabled-themes
+    (tychoish-load-light-theme)))
+
+(defun tychoish/ensure-dark-theme ()
+  (unless custom-enabled-themes
+    (tychoish-load-dark-theme)))
 
 (defun tychoish-load-dark-theme ()
   (interactive)
@@ -236,16 +264,20 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
     (enable-theme 'modus-vivendi))
   (add-to-list 'default-frame-alist '(alpha . 95)))
 
-(defun tychoish-setup-font (name number)
+(defun tychoish-setup-font (font-face-name size)
   (interactive "sName: \nNSize: ")
-  (let ((new-font-name (concat name "-" (number-to-string number))))
-    (face-remap-add-relative new-font-name)
-    (add-to-list 'default-frame-alist (cons 'font new-font-name))))
+  (let ((new-font-name (concat font-face-name "-" (number-to-string number)))
+	(font-cell (assoc 'font default-frame-alist)))
+    (if font-cell
+	(setcdr font-cell new-font-name)
+      (add-to-list 'default-frame-alist (cons 'font new-font-name)))))
 
-(defun tychoish-get-config-file-prefix (name)
-  "Build a config file basename, for NAME.
-This combines the host name and the dameon name."
-  (s-join "-" (append (tychoish/conf-emacs-host-and-instance) `(,name))))
+(defun tychoish/ensure-font (font-face-name size)
+  (unless (assoc 'font default-frame-alist)
+    (tychoish-setup-font font-face-name size)))
+
+(defun tychoish/ensure-default-font ()
+  (tychoish/ensure-font "Source Code Pro" 13))
 
 (defun tychoish/conf-emacs-host-and-instance ()
   (list
@@ -255,17 +287,23 @@ This combines the host name and the dameon name."
    (or tychoish/emacs-instance-id
        (tychoish/resolve-instance-id))))
 
-(defun tychoish-get-config-file-path (name)
-  "Return an absolute path for NAME in the configuration directory.
-The is unique to the system and daemon instance."
-  (f-join (expand-file-name user-emacs-directory) (tychoish-get-config-file-prefix name)))
-
 (defconst tychoish/conf-state-directory-name "state")
 
 (defun tychoish/conf-state-path (name)
   (f-join (expand-file-name user-emacs-directory)
 	  tychoish/conf-state-directory-name
 	  (tychoish-get-config-file-prefix name)))
+
+(defun tychoish-get-config-file-prefix (name)
+  "Build a config file basename, for NAME.
+This combines the host name and the dameon name."
+  (s-join "-" (append (tychoish/conf-emacs-host-and-instance) `(,name))))
+
+(defun tychoish-get-config-file-path (name)
+  "Return an absolute path for NAME in the configuration directory.
+The is unique to the system and daemon instance."
+  (f-expand (f-join user-emacs-directory (tychoish-get-config-file-prefix name))))
+
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
@@ -516,23 +554,6 @@ interactively then remove duplicate items from the `kill-ring'."
   "Move region (transient-mark-mode active) or current line arg lines up."
   (interactive "*p")
   (move-text-internal (- arg)))
-
-(defmacro with-silence (&rest body)
-  "Report on NAME and the time taken to execute BODY."
-  `(let ((inhibit-message t)
-         (message-log-max nil))
-     (null ,@body)))
-
-(defmacro without-messages (&rest body)
-  "Report on NAME and the time taken to execute BODY."
-  `(let ((inhibit-message t))
-     (null ,@body)))
-
-(defmacro with-temp-keymap (map &rest body)
-  "Create a temporary MAP and return it after evaluating it in the BODY."
-  `(let ((,map (make-sparse-keymap)))
-     ,@body
-     map))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
