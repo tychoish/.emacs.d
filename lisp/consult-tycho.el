@@ -138,7 +138,7 @@ entry of `org-capture-templates'."
 		(thing-at-point 'filename)
 		(thing-at-point 'existing-filename))))
 
-(defun consult-tycho--select-directory (&optional input-dirs)
+(defun consult-tycho--select-directory (&optional &key input-dirs require-match)
   "Select a directory from a provided or likely set of `INPUT-DIRS`'."
   (consult--read
    (consult-tycho--clean-directory-options-for-selection
@@ -149,12 +149,14 @@ entry of `org-capture-templates'."
 	  (list input-dirs))
 	(get-directory-default-candidate-list)))
    :sort nil
+   :command this-command
+   :require-match require-match
    :prompt "in directory: "))
 
 (defun consult-tycho--discover-directory (dir)
   "Expand or produce a non-zero directory for DIR."
   (or (when current-prefix-arg
-        (consult-tycho--select-directory dir))
+        (consult-tycho--select-directory :dirs dir))
       (trimmed-string-or-nil dir)
       (or (projectile-project-root)
           default-directory)))
@@ -191,7 +193,7 @@ entry of `org-capture-templates'."
 (defun consult-tycho--context-base-list (&optional seed-list)
   (->> (list (s-trim (buffer-substring (region-beginning) (region-end))))
        (-concat seed-list)
-       (-concat (cl-subseq kill-ring 0 3))
+       (-concat (cl-subseq kill-ring 0 (min 3 (length kill-ring))))
        (-concat
         (cond ((derived-mode-p 'text-mode)
                (list (thing-at-point 'word)

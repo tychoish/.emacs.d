@@ -49,9 +49,9 @@
 (defun make-filename-slug (s)
   "Turn a string, S, into a slug for a blog post filename."
   (downcase
-   (string-clean-whitespace
-    (replace-regexp-in-string
-     "[^A-Za-z0-9 ]" "-" s))))
+   (replace-regexp-in-string
+    "[^A-Za-z0-9]" "-"
+    (string-clean-whitespace s))))
 
 (defun tychoish-blog-push ()
   "Run 'make push' in a compile buffer for the project."
@@ -69,31 +69,41 @@
   "Create a new file for a post of with the specified TITLE."
   (interactive "sPost Title: ")
   (let* ((slug (make-filename-slug title))
-         (draft-fn (f-join tychoish-blog-path (concat slug tychoish-blog-extension))))
+         (draft-fn (f-join tychoish-blog-path (concat slug "-" tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
-      (progn
-	(kill-new title)
-        (find-file draft-fn)
-        (yas-expand-snippet
-         (yas-lookup-snippet "hugo"))))
+      (kill-new title)
+      (find-file draft-fn)
+      (yas-expand-snippet
+       (yas-lookup-snippet "hugo")))
     (message "working on post: %s" draft-fn)))
 
-(defun tychoish-create-note-file (title)
+(defun tychoish-create-note-file (title &optional &key path)
   "Create a new file for a post of with the specified TITLE."
   (interactive "sName: ")
   (let* ((slug (make-filename-slug title))
          (datetime (format-time-string "%Y-%02m-%02d"))
-         (draft-fn (f-join tychoish-project-note-file (concat datetime "." slug ".md"))))
+         (draft-fn (f-join (or path
+			       (when (boundp 'tychoish-project-note-file)
+				 tychoish-project-note-file)
+			       (consult-tycho--select-directory))
+			   (concat datetime "." slug "." tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
-      (progn
-        (find-file draft-fn)
-        (insert (concat "# " title))
-        (end-of-buffer)
-        (whitespace-cleanup)
-        (insert "\n")))
+      (find-file draft-fn)
+      (insert (concat "# " title))
+      (end-of-buffer)
+      (whitespace-cleanup)
+      (insert "\n"))
     (message "new note: %s" draft-fn)))
+
+(cl-defmacro tychoish/define-project-notes (&key project path)
+  (let ((symbol (intern (format "tychoish/create-%s-note" project)))
+	(path (expand-file-name path)))
+    `(defun ,symbol (name)
+       ,(format "Create a date prefixed note file in the %s project in %s." project path)
+       (interactive "sName: ")
+       (tychoish-create-note-file name :path ,path))))
 
 (defun tychoish-blog-publish-post ()
   "Move the blog post in the current buffer to the publication location.

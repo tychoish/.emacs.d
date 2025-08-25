@@ -1,5 +1,7 @@
 ;;; consult-sardis.el --- sards cmdr consult helpers -*- lexical-binding: t -*-
 
+(require 'consult)
+
 (defun --quiet-log-when (cond msg &rest args)
   (when cond (apply #'--quiet-log (cons msg args))))
 
@@ -35,6 +37,13 @@
 		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
 	 (setq buffer-read-only t)))))
 
+(defmacro with-force-write (&rest body)
+  (declare (indent 1) (debug t))
+  `(progn
+     (setq buffer-read-only nil)
+     ,@body
+     (setq buffer-read-only t)))
+
 (defun consult-sardis--select-cmd ()
   (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd") "\n" t))   )
     (consult--read
@@ -45,43 +54,50 @@
      :require-match nil
      :category 'tychoish/sardis-cmds)))
 
+(defalias 'sardis-run 'consult-sardis-run)
 ;;;###autoload
-(defun consult-sardis-run ()
+(defun consult-sardis-run (&optional sardis-command)
   "select and run a sardis command in a compile buffer"
   (interactive)
-  (let* ((selection (consult-sardis--select-cmd))
+  (let* ((selection (or sardis-command
+			(consult-sardis--select-cmd)))
          ;; setup the environment
          (start-at (current-time))
          (task-id (format "sardis-cmd-%s" selection))
          (op-buffer-name (concat "*" task-id "*")))
-
-    (setq compilation-finish-functions nil)
 
     (with-current-buffer (get-buffer-create op-buffer-name)
       (add-hygenic-one-shot-hook
        :name task-id
        :hook compilation-finish-functions
        :function (lambda ()
-		  (tychoish/compile--post-hook-collection
-		  selection op-buffer-name start-at))
-       :local nil)
+		   (tychoish/compile--post-hook-collection
+		    selection op-buffer-name start-at))
+       :local t)
 
       (save-excursion
         (end-of-buffer)
-        (setq buffer-read-only nil)
+	(with-force-write
+	    (if (zerop (buffer-size))
+		(compilation-insert-annotation (format "# %s\n\n" selection))
+	      (compilation-insert-annotation "\n"))
 
-	(if (zerop (buffer-size))
-	    (compilation-insert-annotation (format "# %s\n\n" selection))
-	  (compilation-insert-annotation "\n"))
-
-        (compilation-insert-annotation
-	 (format "--- [%s] -- %s --\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at)))
-	(setq buffer-read-only t)))
+          (compilation-insert-annotation
+	   (format "--- [%s] -- %s --\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at))))))
 
     (compilation-start
      (concat "sardis cmd " selection)
-     nil
-     (lambda (&optional _) op-buffer-name)
-     nil t)))
+     (pa "mode" :is nil)
+     (compile-buffer-name op-buffer-name)
+     (pa "highlight-regexp" :is nil)
+     (pa "continue" :is nil))))
+
+(defalias 'pa 'pos-arg)
+
+(defmacro pos-arg (name &key is)
+  "Allow positional arguments to have annotated call-sites."
+  (unless (or (stringp name) (symbolp name))
+    (user-error "cannot annotate a positional arg without a name"))
+  is)
 
 (provide 'consult-sardis)

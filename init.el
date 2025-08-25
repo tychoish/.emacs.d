@@ -17,14 +17,16 @@
                  (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))
                  (setq max-specpdl-size 13000)
                  (setq gc-cons-threshold 800000)
-                 (let ((garbage-collection-messages t))
-                   (garbage-collect))
+                 (let ((garbage-collection-messages t)) (garbage-collect))
+
                  (let ((msg (format "started (%d) in %s" (emacs-pid) (emacs-init-time))))
-                   (message (concat "emacs: " msg))
-                   (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id))))
-               (when (string-match "NATIVE_COMP" system-configuration-features)
-                 (setq native-comp-deferred-compilation t)
-                 (setq native-compile-prune-cache t)))
+                   (message "emacs: %s" msg)
+                   (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id)))))
+
+  (when (string-match "NATIVE_COMP" system-configuration-features)
+    (setq native-comp-deferred-compilation t)
+    (setq native-compile-prune-cache t))
+
   ;; start: init-without-gc
   (defvar local-notes-directory (expand-file-name "~/notes")
     "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
@@ -66,9 +68,9 @@
                                        ("nongnu"    . 1)
                                        ("jcs-elpa" . 0))))
 
-  ; (toggle-debug-on-error)
-  ; (setq use-package-expand-minimally t)
-  ; (setq use-package-verbose t)
+  ;; (toggle-debug-on-error)
+  ;; (setq use-package-expand-minimally t)
+  ;; (setq use-package-verbose t)
   (setq use-package-compute-statistics t)
   (setq use-package-minimum-reported-time 0.5)
 

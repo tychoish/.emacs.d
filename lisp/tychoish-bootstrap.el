@@ -147,7 +147,7 @@
        (defun ,cleanup ,args
 	 (if ,args
 	     (apply #',function ,args)
-	   (funcall #',function))
+	   (apply-partially #',function ,args))
          (remove-hook ',hook ',cleanup)
          (unintern ',cleanup))
        #',cleanup)))
@@ -158,7 +158,6 @@
        (add-hook 'emacs-startup-hook ',operation)
        (defun ,operation ()
 	 (setq ,variable (current-time))))))
-
 
 (defun set-tab-width (num-spaces)
   (interactive "nTab width: ")
@@ -266,7 +265,7 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 (defun tychoish-setup-font (font-face-name size)
   (interactive "sName: \nNSize: ")
-  (let ((new-font-name (concat font-face-name "-" (number-to-string number)))
+  (let ((new-font-name (concat font-face-name "-" (number-to-string size)))
 	(font-cell (assoc 'font default-frame-alist)))
     (if font-cell
 	(setcdr font-cell new-font-name)
@@ -304,7 +303,6 @@ This combines the host name and the dameon name."
 The is unique to the system and daemon instance."
   (f-expand (f-join user-emacs-directory (tychoish-get-config-file-prefix name))))
 
-
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
   (let ((dirname (concat (expand-file-name user-emacs-directory) "user")))
@@ -340,7 +338,8 @@ each buffer, unless NO-ASK is non-nil."
 Returns the number of buffers killed."
   (interactive (list (intern
     (completing-read
-     "mode: " obarray
+     "mode: " ;; prompt
+     obarray  ;; collection
      (lambda (symbol) (s-ends-with? "-mode" (symbol-name symbol)))
      t nil nil major-mode))))
  (message "killing all buffers with mode \"%s\"" mode)
@@ -390,6 +389,7 @@ Returns the number of buffers killed."
          (elc-file (replace-regexp-in-string "\\.el\\.elc$" ".elc" naive-elc-file)))
     (or (gethash elc-file comp--no-native-compile)
         (funcall native--compile-async-skip-p file load selector))))
+
 (advice-add 'native--compile-async-skip-p :around 'fixed-native--compile-async-skip-p)
 
 (defvar tychoish-xterm-mouse-state nil)
@@ -463,6 +463,7 @@ Returns the number of buffers killed."
   "Return a font-lock style keyword for strings beyond WIDTH that use 'font-lock-warning-face'."
   `((,(format "^%s\\(.+\\)" (make-string width ?.))
      (1 font-lock-warning-face t))))
+
 (defun uniquify-region-lines (beg end)
   "Remove duplicate adjacent lines between BEG and END."
   (interactive "*r")

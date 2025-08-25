@@ -36,8 +36,10 @@
   (bind-keys ("C-x m" . execute-extended-command)
 	     ("C-x C-m" . execute-extended-command)
 	     ("M-X" . execute-extended-command-for-buffer)
+             ("C-x b" . switch-to-buffer) ;; vs consult-buffer
              ("C-x l" . goto-line)
              ("C-x f" . find-file)
+             ("C-x C-f" . find-file)
              ("C-x d" . dired)
              ("C-x h" . help)
              ("C-x C-x" . exchange-point-and-mark)
@@ -47,6 +49,7 @@
              ("C-x C-d" . dired)
              ("C-x C-n" . count-words)
              ("C-c i" . indent-region)
+             ("C-c c" . comment-region)
              ("C-<backspace>" . backward-kill-word)
              ("C-h" . backward-kill-word)
              ("C-c d k s" . backward-kill-sentence)
@@ -54,13 +57,10 @@
              ("C-c d k f" . backward-kill-sexp)
              ("C-c d k d" . delete-region)
              ("C-c d k w" . delete-trailing-whitespace)
-	     ;; ("C-c C-w" . whitespace-cleanup)
-             ("C-c c" . comment-region)
+             ("C-c d s" . describe-symbol)
+             ("C-c d v" . describe-variable)
              ("C-c C-f" . set-fill-column)
              ("C-c C-p" . set-mark-command)
-             ("C-c t t d" . disable-theme)
-             ("C-c t t e" . enable-theme)
-             ("C-c t t l" . load-theme)
              ("C-c C-r" . rename-buffer)
 	     ("M-<SPC>" . set-mark-command)
 	     ("M-<SPC>" . set-mark-command)
@@ -72,6 +72,8 @@
 	     ("C-z" . undo)
              ("C-w" . kill-region)
              ("C-<tab>" . completion-at-point)
+             :map minibuffer-local-map
+             ("C-l" . backward-kill-word)
              :prefix "C-c g"
              :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
              ("o" . occur)
@@ -207,9 +209,7 @@
              font-lock-width-keyword)
   :config
   (when (eq system-type 'darwin)
-    (add-hook 'after-make-frame-functions #'contextual-menubar))
-
-)
+    (add-hook 'after-make-frame-functions #'contextual-menubar)))
 
 (use-package auto-package-update
   :ensure t
@@ -574,7 +574,6 @@
   :defines (grep-mode-map)
   :bind (:map tychoish/ecclectic-grep-map
          ("g" . grep)))
-
 
 (use-package wgrep
   :ensure t
@@ -1054,8 +1053,8 @@
          ("C-c t b n" . tychoish-blog-create-post)
          ("C-c t b C-p" . tychoish-blog-push)
          ("C-c t b d" . tychoish-blog-open-drafts-dired))
-  :commands (tychoish-create-note-file
-             make-filename-slug)
+  :commands (make-filename-slug
+             tychoish/define-project-notes)
   :config
   (setq tychoish-blog-path (expand-file-name "~/src/blog")))
 
@@ -1111,7 +1110,7 @@
     (setq-local completion-at-point-functions
                 (list #'tychoish/capf-elisp-combined
                       #'yasnippet-capf
-                      ;; #'tychoish/capf-line
+                      #'tychoish/capf-line
                       #'cape-file
                       #'cape-emoji)))
 
@@ -1257,22 +1256,14 @@
 (use-package corfu
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands)
-  :hook (((prog-mode shell-mode eshell-mode text-mode) . corfu-mode)
-         (telega-chat-mode . corfu-mode))
-  :bind (:map corfu-map
-         ("C-<tab>" . corfu-quick-complete)
-         ([tab] . corfu-complete)
-         ("<return>" . corfu-insert)
-         ("C-<return>" . corfu-quick-insert)
-         ("M-SPC" . corfu-insert-separator)
-         ("C-SPC" . corfu-insert-separator)
-         ([backtab] . corfu-insert-separator)
-         ("C-j" . corfu-quick-jump)
-         ("C-j" . corfu-quick-jump)
-         ("M-d" . corfu-popupinfo-toggle)
-         ("C-i" . corfu-popupinfo-toggle)
-         ("M-m" . corfu-move-to-minibuffer)
-         ("M-S-m" . corfu-move-to-minibuffer))
+  :hook (((prog-mode text-mode) . corfu-mode)
+         (text-mode . tychoish/corfu-text-mode-setup)
+         (prog-mode . tychoish/corfu-prog-mode-setup)
+         ((shell-mode eshell-mode) . corfu-mode)
+         (telega-chat-mode . corfu-mode)
+         (corfu-mode . corfu-history-mode)
+         (corfu-mode . corfu-indexed-mode)
+         (corfu-mode . corfu-popupinfo-mode))
   :init
   (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
   (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
@@ -1282,16 +1273,23 @@
 
   (defun tychoish/corfu-prog-mode-setup ()
     (setq-local corfu-auto-prefix 3))
-
-  (defun corfu-move-to-minibuffer ()
-    (interactive)
-    (pcase completion-in-region--data
-      (`(,beg ,end ,table ,pred ,extras)
-       (let ((completion-extra-properties extras)
-             completion-cycle-threshold completion-cycling)
-         (consult-completion-in-region beg end table pred)))))
-
   :config
+  (bind-keys :map corfu-map
+             ("C-<tab>" . corfu-quick-complete)
+             ([tab] . corfu-complete)
+             ("<return>" . corfu-insert)
+             ("C-<return>" . corfu-quick-insert)
+             ("M-SPC" . corfu-insert-separator)
+             ("C-SPC" . corfu-insert-separator)
+             ([backtab] . corfu-insert-separator)
+             ("C-j" . corfu-quick-jump)
+             ("C-j" . corfu-quick-jump)
+             ("M-d" . corfu-popupinfo-toggle)
+             ("C-i" . corfu-popupinfo-toggle)
+             ("M-m" . corfu-move-to-minibuffer)
+             ("C-m" . corfu-move-to-minibuffer)
+             ("M-S-m" . corfu-move-to-minibuffer))
+
   (setq corfu-cycle t)
   (setq corfu-quit-at-boundary t)
   (setq corfu-quit-no-match t)
@@ -1306,6 +1304,14 @@
   (setq read-file-name-completion-ignore-case t)
   (setq read-buffer-completion-ignore-case t)
   (setq completion-ignore-case t)
+
+  (defun corfu-move-to-minibuffer ()
+    (interactive)
+    (pcase completion-in-region--data
+      (`(,beg ,end ,table ,pred ,extras)
+       (let ((completion-extra-properties extras)
+             completion-cycle-threshold completion-cycling)
+         (consult-completion-in-region beg end table pred)))))
 
   (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer)
   (corfu-indexed-mode)
@@ -1353,19 +1359,19 @@
          ("C-c C-x r r" . consult-register)
          ("C-c C-x r s" . consult-register-store)
          ("C-c C-x r l" . consult-register-load)
+         ("C-c e" . consult-compile-error)
+         ("C-c C-s" . consult-line)
+         ("C-c f C-f" . consult-find)
          ;; tychoish/wacky
-         ("C-c d s" . describe-symbol)
          ([remap Info-search] . consult-info)
          ;; C-x bindings in `ctl-x-map'
          ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
-         ("C-x b" . switch-to-buffer)                ;; orig. switch-to-buffer
          ("C-x C-b" . consult-buffer)            ;; orig. list-buffers
          ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
          ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
          ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
          ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
          ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
-         ("C-x C-f" . find-file)
          ;; Custom M-# bindings for fast register access
          ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
          ("M-#" . consult-register-load)
@@ -1373,18 +1379,16 @@
          ("C-M-#" . consult-register)
          ;; Other custom bindings
          ("M-y" . consult-yank-from-kill-ring)                ;; orig. yank-pop
+         ("C-M-I" . consult-imenu-multi)
          ;; M-g bindings in `goto-map'
          ("M-g e" . consult-compile-error)
-         ("C-c e" . consult-compile-error)
          ("M-g g" . consult-goto-line)             ;; orig. goto-line
          ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
          ("M-g m" . consult-mark)
          ("M-g k" . consult-global-mark)
          ("M-g i" . consult-imenu)
-         ("C-c C-s" . consult-line)
          ("M-g s" . consult-line)
          ("M-i" . consult-imenu)
-         ("C-M-I" . consult-imenu-multi)
          ;; M-s bindings in `search-map'
          ("M-s d" . consult-find)                  ;; Alternative: consult-find
          ("M-s c" . consult-locate)
@@ -1396,8 +1400,6 @@
          ;; Minibuffer history
          :map minibuffer-local-map
          ("C-g" . tychoish/super-abort-minibuffers)
-         ("C-j" . tychoish/super-abort-minibuffers)
-         ("C-l" . backward-kill-word)
          ("M-s" . consult-history)                 ;; orig. next-matching-history-element
          ("M-r" . consult-history)                 ;; orig. previous-matching-history-element
          :map isearch-mode-map
@@ -1457,12 +1459,16 @@
   (setq consult-async-input-throttle 0.125)
   (setq consult-async-refresh-delay 0.05)
 
-  (setq consult-preview-key '("M-." "M-?"))
-  (setq consult-preview-key (append consult-preview-key '(:debounce 0.25)))
+  (setq consult-preview-key '("M-." "M-?" :debounce 0))
 
   (add-to-list 'consult-mode-histories '(compilation-mode compile-history))
 
   (advice-add #'register-preview :override #'consult-register-window)
+
+  (consult-customize
+   consult-yank-from-kill-ring consult-yank-pop consult-yank-replace
+   :preview-key 'any)
+
   (consult-customize consult-find
    :require-match nil
    :initial (or (thing-at-point 'existing-filename)
@@ -1696,7 +1702,8 @@
 (use-package helm-rg
   :ensure t
   :bind (:map tychoish/helm-grep-tools-map ;; "C-c h g"
-         ("r" . helm-rg))
+         ("r" . helm-rg)
+         ("s" . helm-rg))
   :commands (helm-rg)
   :config
   (when (window-system)
@@ -1708,7 +1715,7 @@
     (set-face-attribute 'helm-rg-extra-arg-face nil :foreground "yellow4")
     (set-face-attribute 'helm-rg-file-match-face nil :foreground "#088")
     (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray")
-    (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold)))
+    (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold)consult-yank-rotate))
 
 (use-package helm-swoop
   :ensure t
@@ -1812,7 +1819,7 @@
          ("C-x g f" . magit-branch)
          ("C-x g b" . magit-blame))
   :commands (magit-toplevel)
-  :config 
+  :config
   (setq vc-follow-symlinks t)
   (setq version-control t)
   (setq magit-auto-revert-mode nil)
@@ -1886,7 +1893,7 @@
              mu4e-headers-jump-to-maildir
              mu4e-headers-search-bookmark
              mu4e-update-mail-and-index)
-  :defines (mu4e-mail-view-actions mu4e-get-mail-command mu4e-compose-minor-mode-map)
+  :defines (mu4e-mail-view-actions mu4e-get-mail-command mu4e-compose-minor-mode-map mu4e-user-mail-address-list)
   :init
   (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
   (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
@@ -1895,28 +1902,48 @@
     (setq-local use-hard-newlines t)
     (setq-local make-backup-files nil))
 
-  (defun tychoish/set-maildir (maildir)
-    (setq maildir (expand-file-name maildir))
-    (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
-    (setq mu4e-mu-home (f-join maildir ".mu"))
-    (setq mu4e-maildir maildir)
-    (setq message-directory maildir)
-    (setq message-auto-save-directory (f-join maildir "drafts"))
-    (setq message-signature-directory (f-join maildir "tools" "signatures"))
-    maildir)
+  (cl-defmacro tychoish/define-mail-account (&key name address key id command (maildir (expand-file-name "~/mail")) (instances '()) (systems '()))
+    (let ((symbol (intern (format "tychoish-mail-%s" id)))
+          (cmd-setter (if command
+                          `(setq mu4e-get-mail-command ,command)
+                        `(message "using existing mail command '%s'" mu4e-get-mail-command))))
 
-  (defun tychoish/set-email-address (name address)
-    (setq user-mail-address address)
-    (setq message-signature-file address)
-    (setq user-full-name name)
-    (setq mu4e-compose-reply-to-address address)
-    (setq mu4e-reply-to-address user-mail-address)
-    (setq mail-host-address (s-replace-regexp ".*@" "" address))
-    (setq message-sendmail-extra-arguments `("-a" ,address))
-    (tychoish-change-email-body
-       user-full-name
-       user-mail-address)
-    (message "mail: configured address [%s]" address))
+      `(progn
+         (define-key 'tychoish/mail-map (kbd ,key) ',symbol)
+         (dolist (instance ,instances)
+           (when (string-equal instance tychoish/emacs-instance-id)
+             (add-hook 'emacs-startup-hook ',symbol)))
+
+         (dolist (sysn ,systems)
+           (when (string-equal sysn ,system-name)
+             (add-hook 'emacs-startup-hook ',symbol)))
+
+	 (defun ,symbol ()
+	   (interactive)
+           (setq smtpmail-queue-dir ,(f-join maildir "queue" "cur"))
+           (setq mu4e-mu-home ,(f-join maildir ".mu"))
+           (setq mu4e-maildir ,maildir)
+           (setq message-directory ,maildir)
+           (setq message-auto-save-directory ,(f-join maildir "drafts"))
+           (setq message-signature-directory ,(f-join maildir "tools" "signatures"))
+
+           (setq user-mail-address ,address)
+           (setq message-signature-file ,address)
+           (setq user-full-name ,name)
+           (setq mu4e-compose-reply-to-address ,address)
+           (setq mu4e-reply-to-address ,address)
+
+           (setq mail-host-address ,(s-replace-regexp ".*@" "" address))
+           (setq message-sendmail-extra-arguments '("-a" ,address))
+
+           (when (eq major-mode 'mu4e-compose-mode)
+             (goto-char (point-min))
+             (let ((new-from ,(concat "From: " name " <" address ">")))
+               (while (re-search-forward "^From:.*$" nil t 1)
+                 (replace-match new-from nil nil))))
+
+           ,cmd-setter
+           (message ,(concat "mail: configured address [" address "]"))))))
 
   (defun tychoish/initialize-standard-mail-bookmarks ()
     "Add a standard/generic litst of bookmarks. Resets/removes all existing bookmarks."
@@ -1931,14 +1958,6 @@
                                    "to read/process queue" ?q))
     (add-to-list 'mu4e-bookmarks '("m:/inbox OR m:/prof" "unread primary queues to file"?f))
     (add-to-list 'mu4e-bookmarks '("(NOT m:/inbox AND NOT m:/prof) AND flag:unread" "all sorted email" ?s)))
-
-  (defun tychoish-change-email-body (name address)
-    "change an email address on an extant mail buffer"
-    (when (equal major-mode 'mu4e-compose-mode)
-      (goto-char (point-min))
-      (let ((new-from (concat "From: " name " <" address ">")))
-        (while (re-search-forward "^From:.*$" nil t 1)
-          (replace-match new-from nil nil)))))
 
   (defun compose-reply-wide-or-not-please-ask ()
     "Ask whether to reply-to-all or not."
@@ -1990,7 +2009,7 @@
   (setq smtpmail-queue-mail nil)
   (setq mail-header-separator "--------------------------")
 
-  (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t))
+  (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)q)
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
   (tychoish/initialize-standard-mail-bookmarks))
 
@@ -2224,7 +2243,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (defun tychoish/telega-switch-to-root ()
     (interactive)
-    (switch-to-buffer (get-buffer telega-root-buffer-name)))
+    (switch-to-buffer (get-buffer (or telega-root-buffer-name
+                                      initial-buffer-choice
+                                      "*scratch*"))))
 
   (defun tychoish/telega-default-root-buffer (toggle)
     (setq initial-buffer-choice
@@ -2829,6 +2850,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
              tychoish-compile-project-golang-lint
              tychoish-compile-project-super-lint
              tychoish-compile-project-build-tests)
+  :init
+  (defmacro compile-buffer-name (name)
+    `(lambda (&optional _) ,name))
   :config
   (defun tychoish/guess-compilation-root ()
     (or (trimmed-string-or-nil (projectile-project-root))
@@ -2854,7 +2878,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     "set of default compilation options")
 
   ;; this is the inner "select which command to use" for entering a new compile command.
-  (defun compilation-read-command (&key command initial)
+  (defun tychoish--compilation-read-command (&key command initial)
     (let ((minibuf-shell-commands (minibuffer-default-add-shell-commands)))
       (consult--read
        (->> (when command (list command))
@@ -2879,6 +2903,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                     ((member item minibuf-shell-commands) "\n from 'minibuffer-shell-commands")
                     (t ""))))))
 
+  (advice-add 'compilation-read-command :override 'tychoish--compilation-read-command)
+
   (defun tychoish/compile-project (name cmd)
     (let* ((default-directory (or (trimmed-string-or-nil (projectile-project-root))
                                   default-directory))
@@ -2902,7 +2928,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
         (compilation-start
          compile-command        ;; the command
          'compilation-mode      ;; the default
-         (lambda (_) op-name))) ;; name function
+         (compile-buffer-name op-buffer-name)))
         (switch-to-buffer-other-window compile-buf)))
 
   (defun tychoish-compile ()
