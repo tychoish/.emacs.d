@@ -560,7 +560,7 @@
 	 ("s" . ag)
 	 ("f" . ag-files)
 	 ("p" . ag-project)
-	 ("o" . ag-project-at-point)
+	 ("o" . ag-project)
 	 :map tychoish/ecclectic-ag-grep-map
 	 :prefix "d"
 	 :prefix-map tychoish/ecclectic-ag-dired-map
@@ -681,8 +681,8 @@
     (interactive)
 
     (when (or (> 40 (random 100))
-	      (< 150 (float-time (time-since desktop/last-save-time)))))
-        (session-save-session t))
+	      (< 150 (float-time (time-since desktop/last-save-time))))
+        (session-save-session t)))
   :config
   (setq session-save-file-coding-system 'utf-8-emacs)
   (setq session-save-print-spec '(t nil 40000))
@@ -955,7 +955,7 @@
   (setq org-track-ordered-property-with-tag t)
   (setq org-use-fast-tag-selection 'auto)
   (setq org-use-fast-todo-selection 'auto)
-  (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**"))))
+  (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**" nil))))
 
   (setq org-agenda-files (cl-remove-duplicates (append org-agenda-files user-org-directories)))
   (setq org-annotate-file-storage-file (concat org-directory "/records.org"))
@@ -1489,21 +1489,14 @@
 (use-package consult-flyspell
   :ensure t
   :after (consult flyspell)
-  :bind (("C-c ;" . consult-flyspell)
-         ("C-;" . flyspell-correct-wrapper)
-         ("C-c a f" . consult-flyspell))
+  :bind (:map tychoish/consult-mode-map
+         ("f" . consult-flyspell))
   :commands (consult-flyspell flyspell-correct-consult)
   :init
-  (defun flyspell-correct-consult (candidates word)
-    (let ((completing-read-function
-           (lambda (prompt collection &rest _)
-	     (consult--read collection
-	                    :initial word
-	                    :prompt prompt))))
-      (flyspell-correct-completing-read
-       candidates
-       word)))
-  (setq flyspell-correct-interface #'flyspell-correct-consult))
+  (defun consult-flyspell--round-trip ()
+    (flyspell-correct-at-point)
+    (consult-flyspell))
+  (setq consult-flyspell-select-function 'consult-flyspell--round-trip))
 
 (use-package consult-eglot
   :ensure t
@@ -1538,9 +1531,9 @@
 
 (use-package consult-tycho
   :bind (("M-g r" . consult-rg)
-	 :map tychoish/consult-mode-map
+	 :map tychoish/consult-mode-map ;; "C-c C-;"
          ("t" . consult-rg-for-thing)
-         ("s" . consult-rg-pwd)
+         ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
 	 :map tychoish/ecclectic-rg-map
          ("t" . consult-rg-for-thing)
@@ -1715,7 +1708,7 @@
     (set-face-attribute 'helm-rg-extra-arg-face nil :foreground "yellow4")
     (set-face-attribute 'helm-rg-file-match-face nil :foreground "#088")
     (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray")
-    (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold)consult-yank-rotate))
+    (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold)))
 
 (use-package helm-swoop
   :ensure t
@@ -1966,8 +1959,8 @@
   :config
   (bind-keys :map mu4e-compose-minor-mode-map
              ("R" . compose-reply-wide-or-not-please-ask)
-             ("r" . mu4e-headers-mark-for-read))
-  (bind-keys :map mu4e-headers-mode-map
+             ("r" . mu4e-headers-mark-for-read)
+             :map mu4e-headers-mode-map
              ("C-r" . compose-reply-wide-or-not-please-ask)
              ("R" . compose-reply-wide-or-not-please-ask)
              ("r" . mu4e-headers-mark-for-read)
@@ -2007,9 +2000,10 @@
   (setq compose-mail-user-agent-warnings nil)
   (setq sendmail-program "msmtp")
   (setq smtpmail-queue-mail nil)
-  (setq mail-header-separator "--------------------------")
 
-  (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)q)
+  (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t)
+        mu4e--header-separator mail-header-separator)
+
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
   (tychoish/initialize-standard-mail-bookmarks))
 
@@ -2377,6 +2371,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :hook ((prog-mode . flyspell-prog-mode)
          (text-mode . flyspell-mode)
          (telega-chat-mode . flyspell-mode))
+  :bind (("C-c [" . flyspell-correct-next)
+         ("C-c ]" . flyspell-correct-previous)
+         ("C-c \\" . flyspell-correct-at-point)
+         ("C-;" . flyspell-correct-previous))
   :commands (flyspell-mode flyspell-prog-mode flyspell-correct-wrapper)
   :config
   (setq ispell-list-command "list")
@@ -2403,7 +2401,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :defines (grammarly-on-message-function-list
             grammarly-on-open-function-list
             grammarly-on-close-function-list))
-
 
 (use-package artbollocks-mode
   :ensure t
@@ -2699,8 +2696,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package emacs-lisp-mode
   :mode (("\\.el$" . emacs-lisp-mode))
-  :config
+  :init
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
+  :config
   (setq checkdoc-force-docstrings-flag nil)
   (setq checkdoc-spellcheck-documentation-flag t))
 
