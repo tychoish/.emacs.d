@@ -25,12 +25,6 @@
   :commands (--remove --select ->>))
 
 (use-package emacs
-  :delight
-  (auto-fill-function " afm")
-  (overwrite-mode "om")
-  (refill-mode "rf")
-  (visual-line-mode " wr")
-  (fundamental-mode "fun")
   :init
   ;; we don't need autoload magic from use-package
   (bind-keys ("C-x m" . execute-extended-command)
@@ -72,8 +66,6 @@
 	     ("C-z" . undo)
              ("C-w" . kill-region)
              ("C-<tab>" . completion-at-point)
-             :map minibuffer-local-map
-             ("C-l" . backward-kill-word)
              :prefix "C-c g"
              :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
              ("o" . occur)
@@ -81,7 +73,9 @@
              :map tychoish/ecclectic-grep-map
              :prefix "p"
              :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
-             ("f" . find-grep))
+             ("f" . find-grep)
+	     :map minibuffer-local-map
+             ("C-l" . backward-kill-word))
   (setq custom-file "/dev/null")
   (setq server-use-tcp t)
 
@@ -112,6 +106,7 @@
      redefine
      suspicious
      unresolved))
+
   (setq fringe-mode 0)
   (setq ring-bell-function (lambda () nil))
   (setq font-lock-support-mode 'jit-lock-mode)
@@ -150,24 +145,14 @@
   (setq select-enable-primary nil)
   (setq select-enable-clipboard nil)
   :config
-  (setq confirm-kill-processes nil)
-  (setq confirm-nonexistent-file-or-buffer nil)
-  (setq confirm-kill-emacs nil)
-
   ;; (put 'list-timers 'disabled nil)
 
   ;; (setq server-host "127.0.0.1")
   ;; (setq server-port 2286)
-  (cond
-   ((eq system-type 'darwin)
-    (setq ns-function-modifier 'hyper)
-    (setq mac-command-modifier 'meta)
-    (setq mac-option-modifier 'super)
-    (setq ns-use-srgb-colorspace nil)
-    (setq display-highres t))
-   ((eq system-type 'gnu/linux)
-    (setq x-alt-keysym 'meta)
-    (setq x-super-keysym 'super))))
+
+  (setq confirm-kill-processes nil)
+  (setq confirm-nonexistent-file-or-buffer nil)
+  (setq confirm-kill-emacs nil))
 
 (use-package tychoish-bootstrap
   :functions (gui-p default-string)
@@ -209,7 +194,16 @@
              font-lock-width-keyword)
   :config
   (when (eq system-type 'darwin)
-    (add-hook 'after-make-frame-functions #'contextual-menubar)))
+    (setq ns-function-modifier 'hyper)
+    (setq mac-command-modifier 'meta)
+    (setq mac-option-modifier 'super)
+    (setq ns-use-srgb-colorspace nil)
+    (setq display-highres t)
+    (add-hook 'after-make-frame-functions #'contextual-menubar))
+
+  (when (eq system-type 'gnu/linux)
+    (setq x-alt-keysym 'meta)
+    (setq x-super-keysym 'super)))
 
 (use-package auto-package-update
   :ensure t
@@ -550,7 +544,7 @@
          ("d" . #'deadgrep)
          :map tychoish/ecclectic-rg-map
 	 ("x" . #'deadgrep))
-  :after (ripgrep))
+  :commands (deadgrep))
 
 (use-package ag
   :ensure t
@@ -560,7 +554,6 @@
 	 ("s" . ag)
 	 ("f" . ag-files)
 	 ("p" . ag-project)
-	 ("o" . ag-project)
 	 :map tychoish/ecclectic-ag-grep-map
 	 :prefix "d"
 	 :prefix-map tychoish/ecclectic-ag-dired-map
@@ -609,12 +602,12 @@
   (google-this-mode 1))
 
 (use-package eldoc
-  :delight eldoc-mode
   :bind (("C-c d d" . eldoc)
 	 ("C-c d e" . eldoc-doc-buffer))
   :commands (eldoc-mode
-	     global-eldoc-mode
              eldoc
+             eldoc-doc-buffer
+	     global-eldoc-mode
 	     eldoc-print-current-symbol-info
              eldoc-documentation-compose-eagerly
              turn-on-eldoc-mode)
@@ -857,7 +850,6 @@
   :commands (org-save-all-org-buffers)
   :defines (org-mode-agenda-map org-mode-map)
   :config
-  (setq org-agenda-files `(,org-directory))
   (setq org-agenda-include-diary nil)
   (setq org-agenda-custom-commands
         '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")
@@ -957,12 +949,6 @@
   (setq org-use-fast-todo-selection 'auto)
   (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**" nil))))
 
-  (setq org-agenda-files (cl-remove-duplicates (append org-agenda-files user-org-directories)))
-  (setq org-annotate-file-storage-file (concat org-directory "/records.org"))
-  (setq org-archive-location (concat org-directory "/archive/%s::datetree/"))
-  (setq org-default-notes-file (concat org-directory "/records.org"))
-  (setq org-directory (concat local-notes-directory "/org"))
-
   (add-hook 'org-mode-hook 'turn-on-soft-wrap)
   (add-hook 'org-shiftup-final-hook 'windmove-up)
   (add-hook 'org-shiftleft-final-hook 'windmove-left)
@@ -1042,6 +1028,22 @@
              tychoish-org-date-now
              org-set-weekday-of-timestamp
              tychoish-org-mark-done-and-archive)
+  :init
+  (defun tychoish/set-notes-directory (&optional path)
+    (when path
+      (setq local-notes-directory (expand-file-name path)))
+
+    (setq org-directory (f-join local-notes-directory "org"))
+    (setq org-agenda-files (->> (list org-directory user-org-directories)
+                                (-flatten)
+                                (-map #'expand-file-name)
+                                (-keep #'trimmed-string-or-nil)
+                                (-distinct)))
+    (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
+    (setq org-default-notes-file (f-join org-directory "records.org"))
+    (setq org-archive-location (f-join org-directory "archive/%s::datetree/"))
+    (setq deft-directory (f-join local-notes-directory "deft"))
+    local-notes-directory)
   :config
   (tychoish-org-reset-capture-templates)
   (tychoish-org-setup-standard-capture-templates)
@@ -1203,6 +1205,7 @@
   :ensure t
   :hook (after-init . vertico-mode)
   :defines (vertico-multiform-categories tychoish/vertico-disable-sort-for vertico-sort-function)
+  :commands (vertico-mode)
   :init
   (defmacro tychoish/vertico-disable-sort-for (command)
     "Disable sorting in vertico rendering."
@@ -1488,7 +1491,7 @@
 
 (use-package consult-flyspell
   :ensure t
-  :after (consult flyspell)
+  :after (flyspell)
   :bind (:map tychoish/consult-mode-map
          ("f" . consult-flyspell))
   :commands (consult-flyspell flyspell-correct-consult)
@@ -1500,17 +1503,15 @@
 
 (use-package consult-eglot
   :ensure t
-  :after (consult eglot)
+  :after (eglot)
   :bind ("C-c d a" . consult-eglot-symbols)
   :commands (consult-eglot-symbols))
 
 (use-package consult-gh
   :ensure t
-  :after (consult)
   :commands (consult-gh))
 
 (use-package consult-ag
-  :after (consult)
   :bind (("M-g a" . consult-ag)
 	 :map tychoish/ecclectic-ag-grep-map
 	 ("g" . consult-ag)
@@ -1520,14 +1521,13 @@
 
 (use-package consult-yasnippet
   :ensure t
-  :after (consult yasnippet)
+  :after (yasnippet)
   :bind (:map tychoish/consult-mode-map
          ("s" . consult-yasnippet)))
 
 (use-package embark-consult
   :ensure t ; only need to install it, embark loads it after consult if found
-  :hook
-  (embark-collect-mode . consult-preview-at-point-mode))
+  :hook (embark-collect-mode . consult-preview-at-point-mode))
 
 (use-package consult-tycho
   :bind (("M-g r" . consult-rg)
@@ -1840,7 +1840,7 @@
 
 (use-package git-link
   :ensure t
-  :bind (("C-c g l" . git-link)))
+  :bind (("C-x g l" . git-link)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2237,9 +2237,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (defun tychoish/telega-switch-to-root ()
     (interactive)
-    (switch-to-buffer (get-buffer (or telega-root-buffer-name
-                                      initial-buffer-choice
-                                      "*scratch*"))))
+    (switch-to-buffer (or (get-buffer telega-root-buffer-name)
+			  (when (bufferp initial-buffer-choice) initial-buffer-choice)
+			  (when (stringp initial-buffer-choice) (get-buffer initial-buffer-choice)
+				(last-buffer)
+
+				(get-buffer "*scratch*")
+))))
 
   (defun tychoish/telega-default-root-buffer (toggle)
     (setq initial-buffer-choice
@@ -2291,7 +2295,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
         (find-file draft-file)
         (insert (title)))))
   :config
-  (setq deft-directory (concat local-notes-directory "/deft"))
   (setq deft-extension "txt")
   (setq deft-text-mode 'markdown-mode)
   (setq deft-use-filename-as-title t)
@@ -2697,8 +2700,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package emacs-lisp-mode
   :mode (("\\.el$" . emacs-lisp-mode))
   :init
-  (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
-  :config
   (setq checkdoc-force-docstrings-flag nil)
   (setq checkdoc-spellcheck-documentation-flag t))
 

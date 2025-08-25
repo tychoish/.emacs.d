@@ -51,7 +51,15 @@
   (column-number-mode 1)
   (delete-selection-mode 1)
   (transient-mark-mode 1)
-  (xterm-mouse-mode 1))
+  (xterm-mouse-mode 1)
+
+  (delight 'eldoc-mode)
+  (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
+  (delight 'auto-fill-function " afm")
+  (delight 'overwrite-mode "om")
+  (delight 'refill-mode "rf")
+  (delight 'visual-line-mode " wr")
+  (delight 'fundamental-mode "fun"))
 
 (defun tychoish/resolve-instance-id ()
   (let ((daemon (daemonp)))
@@ -317,7 +325,7 @@ The is unique to the system and daemon instance."
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 
 (defun force-kill-buffers-matching-path (regexp)
-  (interactive "sKill buffers visiting a path matching this regular expression: \nP")
+  (interactive "sKill buffers visiting a path matching this regular expression: \n")
   (kill-buffers-matching-path regexp t t))
 
 (defun kill-buffers-matching-path (regexp &optional internal-too no-ask)
@@ -325,13 +333,16 @@ The is unique to the system and daemon instance."
 Ignores buffers whose name starts with a space, unless optional
 prefix argument INTERNAL-TOO is non-nil.  Asks before killing
 each buffer, unless NO-ASK is non-nil."
-  (interactive "sKill buffers visiting a path matching this regular expression: \nP")
-  (dolist (buffer (buffer-list))
-    (let ((name (buffer-file-name buffer)))
-      (when (and name (not (string-equal name ""))
-                 (or internal-too (/= (aref name 0) ?\s))
-                 (string-match regexp name))
-        (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)))))
+  (interactive "sKill buffers visiting a path matching this regular expression: \n")
+  (let ((count 0))
+    (dolist (buffer (buffer-list))
+      (let ((name (buffer-file-name buffer)))
+	(when (and name (not (string-equal name ""))
+                   (or internal-too (/= (aref name 0) ?\s))
+                   (string-match regexp name))
+          (when (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)
+	    (setq count (+1 count))))))
+    (mesage "killed %d buffers matching '%S'" count regexp)))
 
 (defun kill-buffers-matching-mode (mode)
   "Kill all buffers matching the symbol defined by MODE.
