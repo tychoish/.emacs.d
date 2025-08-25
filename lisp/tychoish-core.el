@@ -196,9 +196,11 @@
              add-hygenic-one-shot-hook
              create-toggle-functions
              create-run-hooks-function-for
+             trimmed-string-or-nil
              with-silence
 	     without-messages
              with-temp-keymap
+             buffer-in-frame-p
 	     uniquify-region-lines
              uniquify-buffer-lines
              font-lock-show-tabs
@@ -504,23 +506,39 @@
   :bind (:map tychoish/ecclectic-grep-map ;; "C-c g"
          :prefix "r"
          :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
-         ("d" . tychoish-rg-repo)
-         ("g" . tychoish-rg)
+         ("d" . tychoish-rg)
+         ("c" . consult-rg-compile)
          ("m" . tychoish-find-merges)
          :map tychoish/ecclectic-grep-project-map
-         ("r" . tychoish-rg-repo))
+         ("r" . consult-rg-compile)
+         ("p" . tychoish-rg-repo))
   :defines (tychoish/ecclectic-rg-map)
   :commands (tychoish-rg tychoish-rg-repo tychoish-find-merges)
   :config
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
+  (defvar ripgrep-regexp-history nil)
+
+  (defun consult-rg-compile (&optional initial)
+    (interactive "P")
+    (let ((default-directory (consult-tycho--select-directory)))
+      (tychoish-rg initial)))
 
   (defun tychoish-rg (regexp)
-    (interactive (list (read-from-minibuffer "ripgrep for: " (thing-at-point 'symbol))))
-    (ripgrep-regexp regexp default-directory))
+    (interactive "P")
+    (ripgrep-regexp
+     (consult--read
+      (consult-tycho--context-base-list ripgrep-regexp-history)
+      :prompt (format "[%s]<rg>: " default-directory)
+      :command this-command
+      :initial regexp
+      :history ripgrep-regexp-history
+      :require-match nil)
+     default-directory))
 
-  (defun tychoish-rg-repo (regexp)
-    (interactive (list (read-from-minibuffer "ripgrep for: " (thing-at-point 'symbol))))
-    (ripgrep-regexp regexp (projectile-project-root)))
+  (defun tychoish-rg-repo (&optional regexp)
+    (interactive "P")
+    (let ((default-directory (projectile-project-root)) )
+      (tychoish-rg regexp)))
 
   (defun tychoish-find-merges ()
     (interactive)
@@ -528,8 +546,10 @@
 
 (use-package deadgrep
   :ensure t
-  :bind (:map tychoish/ecclectic-rg-map
-	      ("x" . #'deadgrep))
+  :bind (:map tychoish/ecclectic-grep-map
+         ("d" . #'deadgrep)
+         :map tychoish/ecclectic-rg-map
+	 ("x" . #'deadgrep))
   :after (ripgrep))
 
 (use-package ag
@@ -1326,8 +1346,7 @@
 
 (use-package consult
   :ensure t
-  :bind (;; C-c bindings in `mode-specific-map'
-         ("C-c C-x C-m" . consult-mode-command)
+  :bind (("C-c C-x C-m" . consult-mode-command)
          ("C-c k" . consult-kmacro)
          ("C-c i" . consult-info)
          ("C-c d m" . consult-man)
@@ -1371,12 +1390,7 @@
          ("M-s c" . consult-locate)
          ;; Isearch integration
          ("M-s e" . consult-isearch-history)
-         :map isearch-mode-map
-         ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
-         ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
-         ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-         ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
-         :prefix "C-c C-."
+         :prefix "C-c C-;"
          :prefix-map tychoish/consult-mode-map
          ("h" . consult-history)
          ;; Minibuffer history
@@ -1386,6 +1400,11 @@
          ("C-l" . backward-kill-word)
          ("M-s" . consult-history)                 ;; orig. next-matching-history-element
          ("M-r" . consult-history)                 ;; orig. previous-matching-history-element
+         :map isearch-mode-map
+         ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+         ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+         ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+         ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
 	 :map tychoish/ecclectic-grep-map ;; "C-c g"
          ("f" . consult-grep)
          ("s l" . consult-line)
@@ -1441,10 +1460,15 @@
   (setq consult-preview-key '("M-." "M-?"))
   (setq consult-preview-key (append consult-preview-key '(:debounce 0.25)))
 
+  (add-to-list 'consult-mode-histories '(compilation-mode compile-history))
+
   (advice-add #'register-preview :override #'consult-register-window)
   (consult-customize consult-find
    :require-match nil
-   :initial "./")
+   :initial (or (thing-at-point 'existing-filename)
+		(thing-at-point 'filename)
+		"./"))
+
   (consult-customize consult-ripgrep consult-git-grep consult-grep
    :require-match nil
    :keymap
@@ -1491,7 +1515,7 @@
   :bind (("M-g a" . consult-ag)
 	 :map tychoish/ecclectic-ag-grep-map
 	 ("g" . consult-ag)
-         :map tychoish/consult-mode-map
+         :map tychoish/consult-mode-map ; "C-c C-."
          ("a" . consult-ag))
   :commands (consult-ag))
 
@@ -1516,7 +1540,6 @@
          ("t" . consult-rg-for-thing)
          ("r" . consult-rg)
          ("s" . consult-rg-pwd)
-	 ("p" . consult-rg)
 	 :map tychoish/ecclectic-grep-map ;; "C-c g"
          ("s r" . consult-rg)
 	 :map tychoish/global-org-map ;; "C-c o"
@@ -2794,7 +2817,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq flycheck-golangci-lint-tests t))
 
 (use-package compile
-  :functions (tychoish-uniq-compile-buffer)
+  :after (s)
+  :defines (compile-add-error-syntax)
   :bind (("C-c t c" . tychoish-compile-project-build)
          ("C-c t l" . tychoish-compile-project-golang-lint)
          ("C-c C-t c" . compile)
@@ -2806,12 +2830,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
              tychoish-compile-project-super-lint
              tychoish-compile-project-build-tests)
   :config
-  (setq-default compilation-save-buffers-predicate #'tychoish/guess-compilation-root)
-
   (defun tychoish/guess-compilation-root ()
-    (if-let* ((project-root (projectile-project-root)))
-        project-root
-      default-directory))
+    (or (trimmed-string-or-nil (projectile-project-root))
+        default-directory))
+
+  (setq-default compilation-save-buffers-predicate #'tychoish/guess-compilation-root)
 
   (defun compile-add-error-syntax (name regexp file line &optional col level)
     "Register new compilation error syntax."
@@ -2825,27 +2848,92 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
 
+  ;; TODO: make the default/suggestion options better
+  (defvar default-compile-options
+    '("make build" "make lint" "make all" "make test" "go test ./..." "go build ./...")
+    "set of default compilation options")
+
+  ;; this is the inner "select which command to use" for entering a new compile command.
+  (defun compilation-read-command (&key command initial)
+    (let ((minibuf-shell-commands (minibuffer-default-add-shell-commands)))
+      (consult--read
+       (->> (when command (list command))
+            (-concat default-compile-options
+                     minibuf-shell-commands
+                     shell-command-history)
+            (-flatten)
+            (-filter #'stringp)
+            (-keep #'trimmed-string-or-nil)
+            (-distinct))
+       :prompt "compile command => "
+       :command this-command
+       :initial "make "
+       :require-match initial
+       :history 'compile-history
+       :annotate (lambda (item)
+                   (cond
+                    ((equal item command) "\t user supplied build command")
+                    ((member item compile-history) "\t session compile history")
+                    ((member item default-compile-options) "\t from 'default-compile-options")
+                    ((member item shell-command-history) "\t from 'shell-command-history")
+                    ((member item minibuf-shell-commands) "\n from 'minibuffer-shell-commands")
+                    (t ""))))))
+
+  (defun tychoish/compile-project (name cmd)
+    (let* ((default-directory (or (trimmed-string-or-nil (projectile-project-root))
+                                  default-directory))
+           (project-name (or (trimmed-string-or-nil (projectile-project-name))
+                             (file-name-nondirectory (s-chop-suffix "/" project-directory))))
+           (op-name (format "*%s-%s*" project-name (or name "compile")))
+           (compile-buf (get-buffer op-name))
+           (compile-command (or (trimmed-string-or-nil cmd)
+                                (when compile-buf compile-command)
+                                (compilation-read-command :command nil :initial nil)))
+           (compilation-arguments compilation-arguments))
+
+      (save-some-buffers t 'save-some-buffers-root)
+
+      (if compile-buf
+        (with-current-buffer compile-buf
+          (when (trimmed-string-or-nil cmd))
+            (setq compilation-arguments nil)
+            (message "old BUFFER: %s %s" compile-buf compile-command)
+            (recompile current-prefix-arg))
+        (compilation-start
+         compile-command        ;; the command
+         'compilation-mode      ;; the default
+         (lambda (_) op-name))) ;; name function
+        (switch-to-buffer-other-window compile-buf)))
+
+  (defun tychoish-compile ()
+    (interactive)
+    (tychoish/compile-project nil nil))
+
   (defun tychoish-compile-project-build ()
     (interactive)
-    (tychoish-compile-project "build" "time make -k build"))
+    (tychoish/compile-project "build"
+       "time make -k build"))
 
   (defun tychoish-compile-project-build-tests ()
     (interactive)
-    (tychoish-compile-project "build-test" "go test ./... -run=NOOP"))
+    (tychoish/compile-project "build-test"
+       "go test ./... -run=NOOP"))
 
   (defun tychoish-compile-project-golang-lint ()
     (interactive)
-    (tychoish-compile-project "lint" "golangci-lint run --allow-parallel-runners"))
+    (tychoish/compile-project "lint"
+       "golangci-lint run --allow-parallel-runners"))
 
   (defun tychoish-compile-gotests ()
     (interactive)
-    (tychoish-compile-project "go-test" "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"))
+    (tychoish/compile-project "go-test"
+       "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"))
 
   (defun tychoish-compile-project-super-lint ()
     (interactive)
-    (let* ((project-directory (if (eq "" (projectile-project-root))
-                                  (default-directory)
-                                (projectile-project-root)))
+    (let* ((project-directory (or (when (featurep 'projectile) (trimmed-string-or-nil (projectile-project-root)))
+                                  (when (featurep 'project) (project-current))
+                                  default-directory))
            (options (list "VALIDATE_YAML=true"
                           "VALIDATE_OPENAPI=true"
                           "VALIDATE_MD=true"
@@ -2855,36 +2943,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                           "RUN_LOCAL=true"))
            (optstr (format "-e %s" (s-join " -e " options)))
            (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
-      (tychoish-compile-project "super-lint" command-string)))
-
-  (defun tychoish-compile-project (name cmd)
-    (let* ((project-directory (if (eq "" (projectile-project-root))
-                                  (default-directory)
-                                (projectile-project-root)))
-           (project-name (if (eq "" (projectile-project-name))
-                             (file-name-nondirectory (s-chop-suffix "/" project-directory))
-                           (projectile-project-name)))
-           (project-compile-buffer (concat "*" project-name "-" name "*")))
-      (if (get-buffer project-compile-buffer)
-          (switch-to-buffer-other-window (get-buffer project-compile-buffer))
-        (progn
-          (let ((default-directory project-directory))
-            (compile cmd))
-          (switch-to-buffer-other-window "*compilation*")
-          (rename-buffer project-compile-buffer)))))
-
-  (defun tychoish-uniq-compile-buffer (compile-buffer-name &optional cmd)
-    (if (get-buffer compile-buffer-name)
-        (progn
-          (switch-to-buffer-other-window (get-buffer compile-buffer-name))
-          (recompile))
-      (progn
-        (if cmd
-            (compile cmd)
-          (compile))
-        (switch-to-buffer-other-window "*compilation*")
-        (rename-buffer compile-buffer-name)
-        nil))))
+      (tychoish/compile-project "super-lint" command-string))))
 
 (use-package cargo
   :ensure t

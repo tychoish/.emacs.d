@@ -44,104 +44,10 @@ helm-appropos replacement."
                    (t (push `(,name 'variable ,symb) symbs))))))
     symbs))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun consult-tycho--clean-options-for-selection (input)
-  "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
-  (->> input
-       (-filter #'stringp)
-       (-map #'string-trim)
-       (-remove #'string-empty-p)
-       (-map #'expand-file-name)
-       (-sort #'string-greaterp)
-       (-distinct)))
-
-(defun consult-tycho--resolve-initial-grep (prompt prompt-annotation initial)
-  "Return the initial text for a query, processing `INITIAL' as needed."
-  ;; if the string is empty or only whitespace, it's undefined,
-  ;; otherwise use it.
-  (or (trimmed-string-or-nil initial)
-      ;; with the prefix argument, ask the user
-      (when current-prefix-arg
-	(consult-tycho--get-seed-for-operation
-	 (format "%s<init:%s>: " "TEST" "xxx") (trimmed-string-or-nil "")))
-      ;; otherwise, provide the empty string...
-      ""))
-
-(defun consult-tycho--get-seed-for-operation (prompt initial)
-  "Generate a list of contextual seeds if `INITIAL' is unspecified with the provided `PROMPT'."
-  (or initial (consult-tycho--select-context-for-operation prompt)))
-
-(defun consult-tycho--select-context-for-operation (prompt)
-  "Pick string to use as context in a follow up operation using PROMPT."
-  (let* ((current-selection (s-trim (buffer-substring (region-beginning) (region-end))))
-         (this-command this-command)
-         (selections (->> (list (when (and (not current-prefix-arg)
-                                           (<= 2 (length current-selection)))
-                                  current-selection))
-                          (-concat
-                           (cond ((derived-mode-p 'text-mode)
-                                  (list (thing-at-point 'word)
-                                        (thing-at-point 'email)
-                                        (thing-at-point 'url)
-                                        (thing-at-point 'sentence)))
-                                 ((derived-mode-p 'prog-mode)
-                                  (list (thing-at-point 'symbol)
-                                        (thing-at-point 'word)
-                                        (thing-at-point 'sexp)
-                                        (thing-at-point 'defun)))
-                                 (t '())))
-                          (-keep #'trimmed-string-or-nil)
-                          (-add-if-empty (thing-at-point 'line))
-                          (-filter (lambda (elem) (> 32 (length elem))))
-                          (-sort #'string-greaterp)
-                          (-distinct))))
-
-    (or (when (length= selections 1) (nth 0 selections))
-        (when (length> selections 1)
-          (consult--read selections
-           :sort nil
-           :command this-command
-           :require-match nil
-           :prompt (format "%s: " prompt))))))
-
-(defun get-parent-dirs (start stop)
-  "Generate list of intermediate paths between `START' and `STOP'."
-  (let* ((stop-path (expand-file-name (string-trim stop)))
-         (current (expand-file-name (string-trim start)))
-         (output (list stop-path current)))
-    (while (or (not (string= current stop-path))
-               (not (string-prefix-p stop-path current)))
-      (push (setq current (file-name-parent-directory current)) output))
-    output))
-
-(defun consult-tycho--select-directory (&optional input-dirs)
-  "Select a directory from a provided or likely set of `INPUT-DIRS`'."
-  (setq input-dirs (or input-dirs default-directory))
-  (consult--read
-   (or (when (listp input-dirs)
-         (consult-tycho--filter-directory-candidate-list input-dirs))
-       (if (stringp input-dirs)
-           (listp (setq input-dirs (expand-file-name (string-trim input-dirs))))
-         (list input-dirs))
-       (consult-tycho--clean-options-for-selection
-        (append (get-parent-dirs default-directory (or (projectile-project-root) ""))
-                (list user-emacs-directory "~/")))
-       (list default-directory (projectile-project-root)))
-   :sort nil
-   :prompt "in directory: "))
-
-(defun consult-tycho--discover-directory (dir)
-  "Expand or produce a non-zero directory for DIR."
-  (or (when current-prefix-arg
-        (consult-tycho--select-directory dir))
-      (trimmed-string-or-nil dir)
-      (or (projectile-project-root)
-          default-directory)))
-
-(defun consult-tycho--filter-directory-candidate-list (input-dirs)
-  "Expand all paths in `INPUT-DIRS' removing non-string, duplicate and whitespace options."
-  (mapcar #'expand-file-name (consult-tycho--clean-options-for-selection input-dirs)))
+;; consult-tycho: org-capture
 
 (defun consult-org--setup-template ()
   "Add special template to capture to a target selectable via consult. Named for clarity in hooks."
@@ -168,62 +74,6 @@ entry of `org-capture-templates'."
              (save-window-excursion
                (consult-org-heading nil 'agenda)
                (current-buffer))))))))
-
-(defun consult-tycho--incremental-grep (prompt builder initial)
-  "Do incremental grep-type operation. Like the `consult-grep' operation
-upon which it was based, permits interoperability between git-grep ag, ack, and rg"
-  (let ((consult-async-input-debounce 0.025)
-	(consult-async-input-throttle 0.05)
-	(consult-async-refresh-delay 0.025)
-	(this-command this-command))
-    (consult--read
-     (consult--process-collection builder
-       :transform (consult--grep-format builder)
-       :file-handler t)
-     :prompt prompt
-     :lookup #'consult--lookup-member
-     :state (consult--grep-state)
-     :initial initial
-     :add-history (thing-at-point 'symbol)
-     :require-match nil
-     :category 'consult-grep
-     :group nil ;; #'consult--prefix-group <- this groups results by common prefix (e.g. file)
-     :history '(:input consult--grep-history)
-     :sort nil)))
-
-;;;###autoload
-(defun consult-rg-pwd (&optional initial)
-  "Start an iterative rg session with context.
-DIR and INITIAL integrate with the consult-grep API."
-  (interactive "P")
-  (let ((dir-base (f-base default-directory)))
-    (consult-tycho--incremental-grep
-     (format "rg<pwd:%s>: " dir-base)
-     (consult--ripgrep-make-builder (list (expand-file-name default-directory)))
-     (consult-tycho--resolve-initial-grep "rg" (f-base default-directory) initial))))
-
-;;;###autoload
-(defun consult-rg-for-thing (&optional dir initial)
-  "Start an iterative rg session with context.
-DIR and INITIAL integrate with the consult-grep API."
-  (interactive "P")
-  (consult-rg dir (consult-tycho--select-context-for-operation "rg<thing>")))
-
-;;;###autoload
-(defun consult-rg (&optional dir initial)
-  "Start and iterative rg session.
-DIR and INITIAL integrate with the consult-grep API."
-  (interactive "P")
-  ;; `consult--directory-prompt' --> '(prompt paths <default>-dir)
-  (let* ((prompt-paths-dir (consult--directory-prompt "rg" (consult-tycho--discover-directory dir)))
-         (default-directory (nth 2 prompt-paths-dir)))
-    (consult-tycho--incremental-grep
-     ;; prompt:
-     (nth 0 prompt-paths-dir)
-     ;; builder:
-     (consult--ripgrep-make-builder (nth 1 prompt-paths-dir))
-     ;; initial:
-     (consult-tycho--resolve-initial-grep "rg" "regex" initial))))
 
 ;;;###autoload
 (defun consult-org-capture ()
@@ -256,6 +106,166 @@ DIR and INITIAL integrate with the consult-grep API."
   (org-capture nil "c"))
 
 (add-hook 'org-capture-mode-hook #'consult-org--setup-template)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; consult-tycho: contextual directory selection
+
+(defun consult-tycho--clean-directory-options-for-selection (input)
+  "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
+  (->> input
+       (-keep #'trimmed-string-or-nil)
+       (-map #'expand-file-name)
+       (-sort #'string-greaterp)
+       (-distinct)))
+
+(defun get-directory-parents (start stop)
+  "Generate list of intermediate paths between `START' and `STOP'."
+  (let* ((stop-path (expand-file-name (string-trim stop)))
+         (current (expand-file-name (string-trim start)))
+         (output (list stop-path current)))
+    (while (or (not (string= current stop-path))
+               (not (string-prefix-p stop-path current)))
+      (push (setq current (file-name-parent-directory current)) output))
+    output))
+
+(defun get-directory-default-candidate-list ()
+  (append (get-directory-parents default-directory (or (projectile-project-root) ""))
+	  (list default-directory
+		user-emacs-directory
+		(expand-file-name "~/")
+		(projectile-project-root)
+		(thing-at-point 'filename)
+		(thing-at-point 'existing-filename))))
+
+(defun consult-tycho--select-directory (&optional input-dirs)
+  "Select a directory from a provided or likely set of `INPUT-DIRS`'."
+  (consult--read
+   (consult-tycho--clean-directory-options-for-selection
+    (or (when (listp input-dirs)
+	  (consult-tycho--clean-directory-options-for-selection input-dirs))
+	(when-let* ((strp (stringp input-dirs))
+		    (input-dirs (trimmed-string-or-nil input-dirs)))
+	  (list input-dirs))
+	(get-directory-default-candidate-list)))
+   :sort nil
+   :prompt "in directory: "))
+
+(defun consult-tycho--discover-directory (dir)
+  "Expand or produce a non-zero directory for DIR."
+  (or (when current-prefix-arg
+        (consult-tycho--select-directory dir))
+      (trimmed-string-or-nil dir)
+      (or (projectile-project-root)
+          default-directory)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; consult-tycho: increment-grep
+
+(defun consult-tycho--resolve-initial-grep (prompt prompt-annotation initial)
+  "Return the initial text for a query, processing `INITIAL' as needed."
+  ;; if the string is empty or only whitespace, it's undefined,
+  ;; otherwise use it.
+  (or (trimmed-string-or-nil initial)
+      ;; with the prefix argument, ask the user
+      (when current-prefix-arg
+	(consult-tycho--select-context-for-operation
+	 (format "%s<init:%s>: " prompt prompt-annotation)))
+      ;; otherwise, provide the empty string...
+      ""))
+
+(defun consult-tycho--select-context-for-operation (prompt &optional seed-list)
+  "Pick string to use as context in a follow up operation using PROMPT."
+  (let* ((current-selection )
+         (this-command this-command)
+         (selections (consult-tycho--context-base-list (list current-selection))))
+    (or (when (length= selections 1) (nth 0 selections))
+        (when (length> selections 1)
+          (consult--read selections
+           :sort nil
+           :command this-command
+           :require-match nil
+           :prompt (format "%s: " prompt))))))
+
+(defun consult-tycho--context-base-list (&optional seed-list)
+  (->> (list (s-trim (buffer-substring (region-beginning) (region-end))))
+       (-concat seed-list)
+       (-concat (cl-subseq kill-ring 0 3))
+       (-concat
+        (cond ((derived-mode-p 'text-mode)
+               (list (thing-at-point 'word)
+                     (thing-at-point 'email)
+                     (thing-at-point 'url)
+                     (thing-at-point 'sentence)))
+              ((derived-mode-p 'prog-mode)
+               (list (thing-at-point 'symbol)
+                     (thing-at-point 'word)
+                     (thing-at-point 'sexp)
+                     (thing-at-point 'defun)))
+              (t '())))
+       (-keep #'trimmed-string-or-nil)
+       (-add-if-empty (thing-at-point 'line))
+       (-filter (lambda (elem) (and (> 32 (length elem))
+				    (< 2 (length elem)))))
+       (-sort #'string-greaterp)
+       (-distinct)))
+
+(defun consult-tycho--incremental-grep (prompt builder initial)
+  "Do incremental grep-type operation. Like the `consult-grep' operation
+upon which it was based, permits interoperability between git-grep ag, ack, and rg"
+  (let ((consult-async-input-debounce 0.025)
+	(consult-async-input-throttle 0.05)
+	(consult-async-refresh-delay 0.025)
+	(this-command this-command))
+    (consult--read
+     (consult--process-collection builder
+       :transform (consult--grep-format builder)
+       :file-handler t)
+     :prompt prompt
+     :lookup #'consult--lookup-member
+     :state (consult--grep-state)
+     :initial initial
+     :add-history (thing-at-point 'symbol)
+     :require-match nil
+     :category 'consult-grep
+     :group nil ;; #'consult--prefix-group <- this groups results by common prefix (e.g. file)
+     :history '(:input consult--grep-history)
+     :sort nil)))
+
+;;;###autoload
+(defun consult-rg (&optional dir initial)
+  "Start and iterative rg session.
+DIR and INITIAL integrate with the consult-grep API."
+  (interactive "P")
+  ;; `consult--directory-prompt' --> '(prompt paths <default>-dir)
+  (let* ((prompt-paths-dir (consult--directory-prompt "rg" (consult-tycho--discover-directory dir)))
+         (default-directory (nth 2 prompt-paths-dir)))
+    (consult-tycho--incremental-grep
+     ;; prompt:
+     (nth 0 prompt-paths-dir)
+     ;; builder:
+     (consult--ripgrep-make-builder (nth 1 prompt-paths-dir))
+     ;; initial:
+     (consult-tycho--resolve-initial-grep "rg" "regex" initial))))
+
+;;;###autoload
+(defun consult-rg-for-thing (&optional dir initial)
+  "Start an iterative rg session with context.
+DIR and INITIAL integrate with the consult-grep API."
+  (interactive "P")
+  (consult-rg dir (consult-tycho--select-context-for-operation "rg<thing>")))
+
+;;;###autoload
+(defun consult-rg-pwd (&optional initial)
+  "Start an iterative rg session with context.
+DIR and INITIAL integrate with the consult-grep API."
+  (interactive "P")
+  (let ((dir-base (f-base default-directory)))
+    (consult-tycho--incremental-grep
+     (format "rg<pwd:%s>: " dir-base)
+     (consult--ripgrep-make-builder (list (expand-file-name default-directory)))
+     (consult-tycho--resolve-initial-grep "rg" (f-base default-directory) initial))))
 
 (provide 'consult-tycho)
 ;;; consult-tycho.el ends here

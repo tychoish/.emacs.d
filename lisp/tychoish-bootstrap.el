@@ -375,7 +375,7 @@ Returns the number of buffers killed."
         (message-log-max nil))
     (apply f arg)))
 
-(defun ad:set-fill-column-local (f &rest arg)
+(defun ad:set-fill-column-locally (f &rest arg)
   (let ((had-default (default-boundp 'fill-column))
 	(previous-default (default-value 'fill-column))
 	(new-value (apply f arg)))

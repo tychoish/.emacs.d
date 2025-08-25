@@ -57,11 +57,11 @@
   "Run 'make push' in a compile buffer for the project."
   (interactive)
   (let ((compile-buffer-name "*tychoish-blog-push*")
-        (push-command "time PATH=/usr/local/bin:$PATH make push")
+        (push-command "make push")
         ;; set's the context for the command
         (default-directory tychoish-blog-path))
 
-    (when (tychoish-uniq-compile-buffer compile-buffer-name push-command)
+    (when (tychoish-compile-buffer compile-buffer-name push-command)
       (recompile))
     (revbufs)))
 
