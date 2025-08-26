@@ -1,4 +1,4 @@
-;; tychoish-blogging -- static blog posting automation
+;; tychoish-blogging -- static blog posting automation -*- lexical-binding: t; -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish

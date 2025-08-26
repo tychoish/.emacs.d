@@ -14,3 +14,4 @@ tree-sitter/*.so
 url/*
 transient/*.el
 .cache/
+lisp/*.elc

@@ -18,7 +18,7 @@
 
 (use-package s
   :ensure t
-  :commands (s-contains? s-ends-with?))
+  :commands (s-join s-contains? s-ends-with?))
 
 (use-package dash
   :ensure t
@@ -27,55 +27,6 @@
 (use-package emacs
   :init
   ;; we don't need autoload magic from use-package
-  (bind-keys ("C-x m" . execute-extended-command)
-	     ("C-x C-m" . execute-extended-command)
-	     ("M-X" . execute-extended-command-for-buffer)
-             ("C-x b" . switch-to-buffer) ;; vs consult-buffer
-             ("C-x l" . goto-line)
-             ("C-x f" . find-file)
-             ("C-x C-f" . find-file)
-             ("C-x d" . dired)
-             ("C-x h" . help)
-             ("C-x C-x" . exchange-point-and-mark)
-	     ;; ("C-x C-u w" . upcase-word)
-	     ;; ("C-x C-u t" . upcase-initials-region)
-	     ;; ("C-x C-u r" . upcase-region)
-             ("C-x C-d" . dired)
-             ("C-x C-n" . count-words)
-             ("C-c i" . indent-region)
-             ("C-c c" . comment-region)
-             ("C-<backspace>" . backward-kill-word)
-             ("C-h" . backward-kill-word)
-             ("C-c d k s" . backward-kill-sentence)
-             ("C-c d k p" . backward-kill-paragraph)
-             ("C-c d k f" . backward-kill-sexp)
-             ("C-c d k d" . delete-region)
-             ("C-c d k w" . delete-trailing-whitespace)
-             ("C-c d s" . describe-symbol)
-             ("C-c d v" . describe-variable)
-             ("C-c C-f" . set-fill-column)
-             ("C-c C-p" . set-mark-command)
-             ("C-c C-r" . rename-buffer)
-	     ("M-<SPC>" . set-mark-command)
-	     ("M-<SPC>" . set-mark-command)
-	     ;; ("C-c h a" . mark-whole-buffer)
-	     ("s-c" . clipboard-kill-ring-save) ;; (CUA/macOS) copy
-	     ("s-v" . clipboard-yank)           ;; (CUA/macOS) paste
-	     ("s-x" . clipboard-kill-region)    ;; (CUA/macOS) cut
-             ("<mouse-2>" . clipboard-yank)
-	     ("C-z" . undo)
-             ("C-w" . kill-region)
-             ("C-<tab>" . completion-at-point)
-             :prefix "C-c g"
-             :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
-             ("o" . occur)
-             ("g" . grep)
-             :map tychoish/ecclectic-grep-map
-             :prefix "p"
-             :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
-             ("f" . find-grep)
-	     :map minibuffer-local-map
-             ("C-l" . backward-kill-word))
   (setq custom-file "/dev/null")
   (setq server-use-tcp t)
 
@@ -105,105 +56,49 @@
      obsolete
      redefine
      suspicious
-     unresolved))
+     unresolved)))
 
-  (setq fringe-mode 0)
-  (setq ring-bell-function (lambda () nil))
-  (setq font-lock-support-mode 'jit-lock-mode)
-  (setq jit-lock-stealth-time nil)
-  (setq jit-lock-defer-time 0.2)
-  (setq jit-lock-stealth-nice 0.2)
-  (setq jit-lock-stealth-load 100)
-  (setq truncate-lines t)
-  (setq use-dialog-box nil)
-  (setq indent-tabs-mode nil) ; (setq tab-width 4)
-  (setq tab-always-indent t)
-  (setq cursor-in-non-selected-windows nil)
-  (setq comment-auto-fill-only-comments t)
-
-  (setq split-height-threshold 100)
-  (setq scroll-conservatively 25)
-  (setq scroll-preserve-screen-position t)
-  (setq indicate-empty-lines t)
-  (setq use-short-answers t) ;; (fset 'yes-or-no-p 'y-or-n-p)
-  (setq shell-command-dont-erase-buffer 'end-last-out)
-  (setq show-paren-delay 0.25)
-
-  (setq completion-cycle-threshold 2)
-  (setq completion-ignore-case t)
-  (setq enable-recursive-minibuffers t)
-  (setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
-  (setq read-buffer-completion-ignore-case t)
-  (setq read-extended-command-predicate #'command-completion-default-include-p)
-  (setq read-file-name-completion-ignore-case t)
-  (setq text-mode-ispell-word-completion nil)
-
-  (setq next-line-add-newlines nil)
-  (setq undo-auto-current-boundary-timer t)
-  (setq read-file-name-completion-ignore-case t)
-
-  (setq select-enable-primary nil)
-  (setq select-enable-clipboard nil)
-  :config
-  ;; (put 'list-timers 'disabled nil)
-
-  ;; (setq server-host "127.0.0.1")
-  ;; (setq server-port 2286)
-
-  (setq confirm-kill-processes nil)
-  (setq confirm-nonexistent-file-or-buffer nil)
-  (setq confirm-kill-emacs nil))
-
-(use-package tychoish-bootstrap
+(use-package tychoish-common
   :functions (gui-p default-string)
-  :defines (tychoish/conf-state-directory-name)
   :bind (("C-c f =" . text-scale-increase)
          ("C-c f -" . text-scale-decrease)
          ("C-c f 0" . text-scale-reset)
          ("C-c C-=" . opacity-increase)
          ("C-c C--" . opacity-decrease)
          ("C-c f C-0" . opacity-reset)
-         ("<f5>" . xterm-mouse-mode-toggle)
          ("C-c t t D" . disable-all-themes)
          ("C-c t w" . toggle-local-whitespace-cleanup)
 	 ("M-<up>" . move-text-up)
          ("M-<down>" . move-text-down))
-  :hook (((text-mode prog-mode) . tychoish/set-up-show-whitespace)
-	 (after-init . tychoish-set-up-user-local-config)
-	 (after-init . tychoish/bootstrap-after-init-hook-fn)
-	 (auto-save . tychoish/set-up-auto-save))
-  :commands (tychoish-set-up-user-local-config
-	     tychoish/resolve-instance-id
-             tychoish-setup-font
-             tychoish-get-config-file-prefix
-	     tychoish/set-tab-width
-	     tychoish/ensure-light-theme
-	     tychoish/ensure-dark-theme
-	     set-to-current-time-on-startup
-             add-hygenic-one-shot-hook
+  :commands (kill-buffers-matching-mode
+             kill-buffers-matching-path
+             force-kill-buffers-matching-path
+	     uniquify-region-lines
+             uniquify-buffer-lines
+             font-lock-show-tabs
+             font-lock-width-keyword
              create-toggle-functions
              create-run-hooks-function-for
              trimmed-string-or-nil
              with-silence
 	     without-messages
              with-temp-keymap
+             add-hygenic-one-shot-hook
              buffer-in-frame-p
-	     uniquify-region-lines
-             uniquify-buffer-lines
-             font-lock-show-tabs
-             font-lock-width-keyword)
-  :config
-  (when (eq system-type 'darwin)
-    (setq ns-function-modifier 'hyper)
-    (setq mac-command-modifier 'meta)
-    (setq mac-option-modifier 'super)
-    (setq ns-use-srgb-colorspace nil)
-    (setq display-highres t)
-    (add-hook 'after-make-frame-functions #'contextual-menubar))
+	     tychoish/resolve-instance-id
+             tychoish-setup-font
+             tychoish-get-config-file-prefix
+	     tychoish/set-tab-width
+	     tychoish/ensure-light-theme
+	     tychoish/ensure-dark-theme
+	     set-to-current-time-on-startup))
 
-  (when (eq system-type 'gnu/linux)
-    (setq x-alt-keysym 'meta)
-    (setq x-super-keysym 'super)))
+(use-package tychoish-bootstrap
+  :demand
+  :hook (((text-mode prog-mode) . tychoish/set-up-show-whitespace)
+	 (after-init . tychoish-set-up-user-local-config)
+	 (after-init . tychoish/bootstrap-after-init-hook-fn)
+	 (auto-save . tychoish/set-up-auto-save)))
 
 (use-package auto-package-update
   :ensure t
@@ -654,42 +549,15 @@
   :bind (("C-c C-g" . revbufs))
   :commands (revbufs))
 
-(use-package session
-  :ensure t
-  :bind (("C-c t ;" . session-toggle-permanent-flag))
-  :hook ((after-save . tychoish-save-session))
-  :commands (session-initialize session-save-session)
-  :init
-  (add-hygenic-one-shot-hook
-   :name "session-setup"
-   :hook emacs-startup-hook
-   :function session-initialize)
-
-  (defvar session/last-save-time nil)
-  (set-to-current-time-on-startup session/last-save-time)
-
-  ;; use session-save to save the desktop manually
-  (defun tychoish-save-session ()
-    "Save an emacs session... sometimes"
-    (interactive)
-
-    (when (or (> 40 (random 100))
-	      (< 150 (float-time (time-since desktop/last-save-time))))
-        (session-save-session t)))
-  :config
-  (setq session-save-file-coding-system 'utf-8-emacs)
-  (setq session-save-print-spec '(t nil 40000))
-  (setq session-save-file (tychoish/conf-state-path "session.el")))
-
 (use-package desktop
   :ensure t
   :hook ((after-save . tychoish-save-desktop))
-  :commands (desktop-save-mode desktop-read desktop-save-in-desktop-dir)
+  :commands (desktop-save-mode
+             desktop-read
+             desktop-save-in-desktop-dir
+             tychoish/desktop-read-init)
   :init
-  (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
-  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
-  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-  (setq desktop-path (list desktop-dirname user-emacs-directory "~"))
+  (setq desktop-save t) ;; t is "always save, never ask"
 
   (if (daemonp)
       (progn
@@ -698,6 +566,11 @@
     (setq desktop-restore-eager t)
     (setq desktop-load-locked-desktop t)
     (add-hook 'emacs-startup-hook 'tychoish/desktop-read-init))
+  :config
+  (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
+  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
+  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
+  (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~")))
 
   (defun tychoish/desktop-read-init ()
     (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
@@ -716,10 +589,10 @@
     (interactive)
     (when (or (> 40 (random 100))
 	      (< 150 (float-time (time-since desktop/last-save-time))))
-      (desktop-save-in-desktop-dir)
+      (desktop-save desktop-dirname)
       (setq desktop/time-since-last-save (current-time))))
 
-  :config
+
   (setq desktop-buffers-not-to-save
         (concat "\\("
                 "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
