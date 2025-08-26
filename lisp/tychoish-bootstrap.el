@@ -46,6 +46,7 @@
 
   (tychoish/ensure-light-theme)
   (tychoish/ensure-default-font)
+  (tychoish/set-up-ssh-agent)
 
   (indent-tabs-mode -1)
   (column-number-mode 1)
@@ -69,7 +70,7 @@
         tychoish/emacs-instance-id
         "solo")))
 
-(defun tychoish/setup-auto-save ()
+(defun tychoish/set-up-auto-save ()
   (let ((path (tychoish/conf-state-path "backup/")))
     (setq auto-save-file-name-transforms `((".*" ,path t)))
     (add-to-list 'backup-directory-alist (cons "." path))
@@ -78,7 +79,24 @@
       (make-directory path))
     (chmod path #o700)))
 
-(defun tychoish/setup-show-whitespace ()
+(defun find-ssh-agent-socket-candidates ()
+  (->> (-value-to-list (format "/run/user/%d/ssh-agent.socket" (user-uid)))
+       (-concat (-sort #'s-less? (f-glob (f-join temporary-file-directory "ssh-*/agent.*" )))
+       (-distinct)
+       (-non-nil)
+       (-filter #'f-writable?)
+       (nreverse))))
+
+(defun tychoish/set-up-ssh-agent ()
+  (let (env-value sockets)
+    (unless (setq env-value (getenv "SSH_AUTH_SOCK"))
+      (setq sockets (find-ssh-agent-socket-candidates))
+      (when (and sockets
+		 (<= 1 (length sockets)))
+	(setq env-value (setenv "SSH_AUTH_SOCK" (car sockets)))))
+    env-value))
+
+(defun tychoish/set-up-show-whitespace ()
   (setq-local show-trailing-whitespace t))
 
 (defmacro tychoish/set-tab-width (num)

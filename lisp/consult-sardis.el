@@ -48,7 +48,7 @@
   (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd") "\n" t))   )
     (consult--read
      sardis-commands
-     :prompt "sards.cmds=>: "
+     :prompt "sards.cmds => "
      :group (consult--type-group sardis-commands)
      :narrow (consult--type-narrow sardis-commands)
      :require-match nil

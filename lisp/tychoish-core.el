@@ -168,10 +168,10 @@
          ("C-c t w" . toggle-local-whitespace-cleanup)
 	 ("M-<up>" . move-text-up)
          ("M-<down>" . move-text-down))
-  :hook (((text-mode prog-mode) . tychoish/setup-show-whitespace)
+  :hook (((text-mode prog-mode) . tychoish/set-up-show-whitespace)
 	 (after-init . tychoish-set-up-user-local-config)
 	 (after-init . tychoish/bootstrap-after-init-hook-fn)
-	 (auto-save . tychoish/setup-auto-save))
+	 (auto-save . tychoish/set-up-auto-save))
   :commands (tychoish-set-up-user-local-config
 	     tychoish/resolve-instance-id
              tychoish-setup-font
@@ -1853,7 +1853,8 @@
   :config
   (setq emojify-emoji-styles '(ascii unicode github))
   (setq emojify-display-style 'unicode)
-  (setq emojify-company-tooltips-p t)
+  (with-eval-after-load 'company
+    (setq emojify-company-tooltips-p t))
   (setq emojify-point-entered-behaviour 'echo))
 
 (use-package message
@@ -2235,15 +2236,26 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
     (telega-kill t))
 
+  (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
+  (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
+
+  (defun tychoish/make-telega-root-default-buffer ()
+    (add-hook 'after-make-frame-functions #'tychoish/telega-switch-to-root)
+    (add-hook 'server-after-make-frame-hook #'tychoish/telega-switch-to-root)
+    (setq initial-buffer-choice #'tychoish/telega-switch-to-root))
+
+  (defun tychoish/remove-telega-root-as-default-buffer ()
+    (remove-hook 'after-make-frame-functions #'tychoish/telega-switch-to-root)
+    (remove-hook 'server-after-make-frame-hook #'tychoish/telega-switch-to-root)
+    (setq initial-buffer-choice nil))
+
   (defun tychoish/telega-switch-to-root ()
     (interactive)
     (switch-to-buffer (or (get-buffer telega-root-buffer-name)
 			  (when (bufferp initial-buffer-choice) initial-buffer-choice)
 			  (when (stringp initial-buffer-choice) (get-buffer initial-buffer-choice)
 				(last-buffer)
-
-				(get-buffer "*scratch*")
-))))
+				(get-buffer "*scratch*")))))
 
   (defun tychoish/telega-default-root-buffer (toggle)
     (setq initial-buffer-choice
@@ -2376,7 +2388,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          (telega-chat-mode . flyspell-mode))
   :bind (("C-c [" . flyspell-correct-next)
          ("C-c ]" . flyspell-correct-previous)
-         ("C-c \\" . flyspell-correct-at-point)
+         ("M-$" . flyspell-correct-at-point)
          ("C-;" . flyspell-correct-previous))
   :commands (flyspell-mode flyspell-prog-mode flyspell-correct-wrapper)
   :config
@@ -2442,12 +2454,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :mode (("\\.yaml$" . yaml-ts-mode)
 	 ("\\.yml$" . yaml-ts-mode))
   :init
-  (defun tychoish/yaml-company-setup ()
-    (when (and (featurep 'company) (not corfu-mode)))
-      (setq-local company-backends
-		  '((company-keywords company-dabbrev company-capf company-files
-		                      :with company-yasnippet))))
-
   (add-to-list 'tychoish/eglot-default-server-configuration
                 '((:yaml (:format
                           :enable t
@@ -2459,7 +2465,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                           :hover t
                           :completion t))))
 
-  (add-hook 'yaml-ts-mode-hook 'tychoish/yaml-company-setup)
   (add-hook 'yaml-ts-mode-hook (tychoish/set-tab-width 2)))
 
 (use-package go-ts-mode
@@ -2492,11 +2497,17 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                                   :functionTypeParameters :json-false)))
   (add-hook 'go-ts-mode-hook 'tychoish/go-mode-setup)
   :config
-  (unless (getenv "GOPATH")
-    (setenv "GOPATH" (expand-file-name "~/go")))
-  (setq local-go-bin (concat (getenv "GOPATH") "/bin"))
-  (setenv "PATH" (format "%s:%s" (getenv "PATH") local-go-bin ))
-  (add-to-list 'exec-path local-go-bin))
+  (let ((current-path (getenv "PATH"))
+        (gopath (getenv "GOPATH")))
+
+    (unless gopath
+      (setq gopath (setenv "GOPATH" (expand-file-name "~/go"))))
+
+    (setq local-go-bin (f-join gopath "/bin"))
+    (add-to-list 'exec-path local-go-bin)
+
+    (unless (s-contains? local-go-bin current-path)
+      (setenv "PATH" (format "%s:%s" current-path local-go-bin)))))
 
 (use-package rustic
   :ensure t
