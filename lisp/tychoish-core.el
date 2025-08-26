@@ -26,37 +26,11 @@
 
 (use-package emacs
   :init
-  ;; we don't need autoload magic from use-package
-  (setq custom-file "/dev/null")
   (setq server-use-tcp t)
-
-  (setq gnutls-log-level 0)
-  (setq native-comp-jit-compilation t)
-  (setq backup-by-copying t)
-  (setq make-backup-files t)
-  (setq delete-old-versions t)
+  ;; (setq server-host "127.0.0.1")
+  ;; (setq server-port 2286)
   (setq ad-redefinition-action 'accept)
-
-  (setq byte-compile-warnings
-   ;; OMIT: free-vars docstrings-wide
-   '(callargs
-     constants
-     docstrings
-     docstrings-non-ascii-quotes
-     docstrings-control-chars
-     empty-body
-     ignored-return-value
-     interactive-only
-     lexical
-     lexical-dynamic
-     make-local
-     mutate-constant
-     noruntime
-     not-unused
-     obsolete
-     redefine
-     suspicious
-     unresolved)))
+  (setq custom-file "/dev/null"))
 
 (use-package tychoish-common
   :functions (gui-p default-string)
@@ -96,8 +70,8 @@
 (use-package tychoish-bootstrap
   :demand
   :hook (((text-mode prog-mode) . tychoish/set-up-show-whitespace)
-	 (after-init . tychoish-set-up-user-local-config)
-	 (after-init . tychoish/bootstrap-after-init-hook-fn)
+	 (after-init . tychoish/late-init-opertions)
+	 (emacs-startup . tychoish-set-up-user-local-config)
 	 (auto-save . tychoish/set-up-auto-save)))
 
 (use-package auto-package-update
@@ -117,7 +91,7 @@
   :delight
   (async-bytecomp-package-mode "")
   (dired-async-mode "")
-  :hook ((after-init . tychoish/async-mode-setup))
+  :hook ((emacs-startup . tychoish/async-mode-setup))
   :commands (async-start
 	     async-start-process
 	     async-bytecomp-package-mode
@@ -204,7 +178,7 @@
   (add-hook 'after-init-hook 'turn-on-doom-modeline-icon))
 
 (use-package winner
-  :hook (after-init . turn-on-winner-mode)
+  :hook (emacs-startup . turn-on-winner-mode)
   :commands (winner-mode winner-undo winner-redo)
   :init
   (defun turn-on-winner-mode ()
@@ -284,7 +258,7 @@
 	  newline-mark)))
 
 (use-package elec-pair
-  :hook ((after-init . electric-pair-mode))
+  :hook ((emacs-startup . electric-pair-mode))
   :bind (("C-c t p" . #'toggle-electric-pair-inhibition)
          ("C-c t e" . #'toggle-electric-pair-eagerness))
   :init
@@ -1064,7 +1038,7 @@
 
 (use-package prescient
   :ensure t
-  :hook (after-init . prescient-persist-mode)
+  :hook (emacs-statup. prescient-persist-mode)
   :config
   (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
   (setq prescient-sort-full-matches-first t)
@@ -1076,7 +1050,7 @@
 
 (use-package vertico
   :ensure t
-  :hook (after-init . vertico-mode)
+  :hook (emacs-startup . vertico-mode)
   :defines (vertico-multiform-categories tychoish/vertico-disable-sort-for vertico-sort-function)
   :commands (vertico-mode)
   :init
@@ -1110,7 +1084,7 @@
   :ensure t
   :bind (:map minibuffer-local-map
          ("M-A" . marginalia-cycle))
-  :hook (after-init . marginalia-mode))
+  :hook (emacs-startup . marginalia-mode))
 
 (use-package embark
   :ensure t

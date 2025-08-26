@@ -84,8 +84,6 @@
 
 ;; (put 'list-timers 'disabled nil)
 
-;; (setq server-host "127.0.0.1")
-;; (setq server-port 2286)
 
 (setq fringe-mode 0)
 (setq ring-bell-function (lambda () nil))
@@ -94,12 +92,17 @@
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
+
 (setq truncate-lines t)
 (setq use-dialog-box nil)
 (setq indent-tabs-mode nil) ; (setq tab-width 4)
 (setq tab-always-indent t)
 (setq cursor-in-non-selected-windows nil)
 (setq comment-auto-fill-only-comments t)
+
+(setq backup-by-copying t)
+(setq make-backup-files t)
+(setq delete-old-versions t)
 
 (setq split-height-threshold 100)
 (setq scroll-conservatively 25)
@@ -129,21 +132,26 @@
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq confirm-kill-emacs nil)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; system -- darwin or linux specific settings
-
-(when (eq system-type 'darwin)
-  (setq ns-function-modifier 'hyper)
-  (setq mac-command-modifier 'meta)
-  (setq mac-option-modifier 'super)
-  (setq ns-use-srgb-colorspace nil)
-  (setq display-highres t)
-  (add-hook 'after-make-frame-functions #'contextual-menubar))
-
-(when (eq system-type 'gnu/linux)
-  (setq x-alt-keysym 'meta)
-  (setq x-super-keysym 'super))
+(setq byte-compile-warnings
+      ;; OMIT: free-vars docstrings-wide
+      '(callargs
+	constants
+	docstrings
+	docstrings-non-ascii-quotes
+	docstrings-control-chars
+	empty-body
+	ignored-return-value
+	interactive-only
+	lexical
+	lexical-dynamic
+	make-local
+	mutate-constant
+	noruntime
+	not-unused
+	obsolete
+	redefine
+	suspicious
+	unresolved))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -178,34 +186,14 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; frames -- use hooks to keep things clean
-
-(defun on-frame-open (frame)
-  ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
-  (unless (display-graphic-p frame)
-    (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
-
-(defun on-after-init ()
-  ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
-  (on-frame-open (selected-frame)))
-
-(add-hook 'after-make-frame-functions #'on-frame-open)
-(add-hook 'window-setup-hook #'on-after-init)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; hooks -- functions that run in hooks configured in 'tychoish-core
 
 (setq default-frame-alist nil)
 
-(defun tychoish/bootstrap-after-init-hook-fn ()
+(defun tychoish/late-init-opertions ()
   (scroll-bar-mode -1)
-  (menu-bar-mode -1)
   (tool-bar-mode -1)
-
-  (add-to-list 'default-frame-alist '(vertical-scroll-bars . nil))
-  (add-to-list 'default-frame-alist '(menu-bar-lines . nil))
-  (add-to-list 'default-frame-alist '(tool-bar-lines . nil))
+  (menu-bar-mode -1)
 
   (tychoish/ensure-light-theme)
   (tychoish/ensure-default-font)
@@ -244,6 +232,42 @@
     (unless (file-exists-p path)
       (make-directory path))
     (chmod path #o700)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; frames -- use hooks to keep things clean
+
+(defun on-frame-open (frame)
+  ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
+  (unless (display-graphic-p frame)
+    (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
+
+(defun on-after-init ()
+  ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
+  (on-frame-open (selected-frame)))
+
+(add-hook 'after-make-frame-functions #'on-frame-open)
+(add-hook 'window-setup-hook #'on-after-init)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; system -- darwin or linux specific settings
+
+(when (eq system-type 'darwin)
+  (setq ns-function-modifier 'hyper)
+  (setq mac-command-modifier 'meta)
+  (setq mac-option-modifier 'super)
+  (setq ns-use-srgb-colorspace nil)
+  (setq display-highres t)
+  (add-hook 'after-make-frame-functions #'contextual-menubar))
+
+(when (eq system-type 'gnu/linux)
+  (setq x-alt-keysym 'meta)
+  (setq x-super-keysym 'super))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

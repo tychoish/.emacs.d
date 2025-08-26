@@ -24,6 +24,7 @@
                    (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id)))))
 
   (when (string-match "NATIVE_COMP" system-configuration-features)
+    (setq native-comp-jit-compilation t)
     (setq native-comp-deferred-compilation t)
     (setq native-compile-prune-cache t))
 

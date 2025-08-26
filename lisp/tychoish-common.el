@@ -47,11 +47,11 @@ The is unique to the system and daemon instance."
 
 (defun find-ssh-agent-socket-candidates ()
   (->> (-value-to-list (format "/run/user/%d/ssh-agent.socket" (user-uid)))
-       (-concat (-sort #'s-less? (f-glob (f-join temporary-file-directory "ssh-*/agent.*" )))
+       (-concat (-sort #'s-less? (f-glob (f-join temporary-file-directory "ssh-*/agent.*" ))))
        (-distinct)
        (-non-nil)
        (-filter #'f-writable?)
-       (nreverse))))
+       (nreverse)))
 
 (defun tychoish/set-up-ssh-agent ()
   (let (env-value sockets)
