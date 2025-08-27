@@ -9,7 +9,7 @@
 
 ;; init-without-gc
 (let ((file-name-handler-alist nil)
-      (gc-cons-threshold 80000000000000))
+      (gc-cons-threshold 800000000000000))
 
     ;; reset gc after init is complete
   (add-to-list 'emacs-startup-hook
@@ -83,6 +83,10 @@
     (setq initial-major-mode 'fundamental-mode)
     (setq initial-scratch-message nil)
     (setq inhibit-startup-message t)
+
+    ;; (setq server-host "127.0.0.1")
+    ;; (setq server-port 2286)
+    (setq server-use-tcp t)
     :config
     (setq inhibit-startup-echo-area-message (user-login-name))
     (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))

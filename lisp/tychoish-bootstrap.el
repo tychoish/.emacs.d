@@ -83,7 +83,7 @@
            ("C-l" . backward-kill-word))
 
 ;; (put 'list-timers 'disabled nil)
-
+(setq ad-redefinition-action 'accept)
 
 (setq fringe-mode 0)
 (setq ring-bell-function (lambda () nil))

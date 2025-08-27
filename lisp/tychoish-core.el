@@ -1,4 +1,4 @@
-;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t; -*-
+;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t -*-
 ;;; Commentary:
 
 ;; Provides my collection of use-package forms and related
@@ -23,14 +23,6 @@
 (use-package dash
   :ensure t
   :commands (--remove --select ->>))
-
-(use-package emacs
-  :init
-  (setq server-use-tcp t)
-  ;; (setq server-host "127.0.0.1")
-  ;; (setq server-port 2286)
-  (setq ad-redefinition-action 'accept)
-  (setq custom-file "/dev/null"))
 
 (use-package tychoish-common
   :functions (gui-p default-string)
@@ -101,10 +93,6 @@
     (async-bytecomp-package-mode 1)
     (dired-async-mode 1)))
 
-(use-package esup
-  :ensure t
-  :commands (esup))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; UI, Display, Rendering, Window Man
@@ -168,8 +156,7 @@
   (setq doom-modeline-irc-stylize 'identity)
   (setq doom-modeline-irc t)
 
-  (create-toggle-functions doom-modeline-icon)
-
+;  (create-toggle-functions doom-modeline-icon)
   (defun my-doom-modeline--font-height ()
     "Calculate the actual char height of the mode-line."
     (/ (frame-char-height) 4))
@@ -493,6 +480,7 @@
     (interactive)
     (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
   :config
+  (setq eldoc-minor-mode-string "")
   (setq eldoc-echo-area-use-multiline-p t)
   (setq eldoc-echo-area-prefer-doc-buffer nil)
   (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly))
@@ -524,70 +512,72 @@
   :commands (revbufs))
 
 (use-package desktop
-  :ensure t
-  :hook ((after-save . tychoish-save-desktop))
   :commands (desktop-save-mode
              desktop-read
              desktop-save-in-desktop-dir
              tychoish/desktop-read-init)
   :init
-  (setq desktop-save t) ;; t is "always save, never ask"
-
   (if (daemonp)
-      (progn
-	(setq desktop-restore-frames t)
-	(add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init))
-    (setq desktop-restore-eager t)
-    (setq desktop-load-locked-desktop t)
-    (add-hook 'emacs-startup-hook 'tychoish/desktop-read-init))
+      (add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init)
+    (add-hook 'window-setup-hook 'tychoish/desktop-read-init))
   :config
-  (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
-  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
-  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-  (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~")))
+  (defvar desktop/last-save-time nil)
 
   (defun tychoish/desktop-read-init ()
-    (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
-      (let ((gc-cons-threshold 800000)
-	    (inhibit-message t))
-        (desktop-read)))
+    (unless (equal "solo" tychoish/emacs-instance-id)
+      (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
+      (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
+      (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
+      (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~")))
+      (set-to-current-time-on-startup desktop/last-save-time)
+
+      (add-hook 'after-save-hook 'tychoish-save-desktop)
+
+      (add-to-list 'desktop-globals-to-save 'register-alist)
+      (add-to-list 'desktop-globals-to-save 'file-name-history)
+      (add-to-list 'desktop-modes-not-to-save 'dired-mode)
+      (add-to-list 'desktop-modes-not-to-save 'Info-mode)
+      (add-to-list 'desktop-modes-not-to-save 'org-mode)
+      (add-to-list 'desktop-modes-not-to-save 'eww-mode)
+      (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
+      (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
+
+      (setq desktop-buffers-not-to-save
+            (concat "\\("
+                    "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
+                    "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
+                    "\\)$"))
+
+      (setq desktop-files-not-to-save
+            (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
+                    "^/usr/lib/go/.*\\|"
+                    "^/usr/lib/rustlib/.*\\|"
+                    "^/home.+go/pkg/mod\\|"
+                    "^/home.+\\.cargo"))
+      (setq desktop-save t)
+
+      (if (daemonp)
+	  (progn
+	    (setq desktop-restore-frames t)
+	    (setq desktop-load-locked-desktop t))
+	(setq desktop-restore-eager t)
+	(setq desktop-load-locked-desktop nil))
+
+      (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
+	(let ((gc-cons-threshold 80000000)
+	      (with-silence (desktop-read))))))
     (if (daemonp)
 	(remove-hook 'server-after-make-frame-hook #'tychoish/desktop-read-init)
       (remove-hook 'emacs-startup-hook #'tychoish/desktop-read-init)))
 
-  (defvar desktop/last-save-time nil)
-  (set-to-current-time-on-startup desktop/last-save-time)
-
   (defun tychoish-save-desktop ()
     "Save desktop... sometimes"
     (interactive)
-    (when (or (> 40 (random 100))
-	      (< 150 (float-time (time-since desktop/last-save-time))))
-      (desktop-save desktop-dirname)
-      (setq desktop/time-since-last-save (current-time))))
-
-
-  (setq desktop-buffers-not-to-save
-        (concat "\\("
-                "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
-                "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
-                "\\)$"))
-
-  (setq desktop-files-not-to-save
-        (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
-                "^/usr/lib/go/.*\\|"
-                "^/usr/lib/rustlib/.*\\|"
-                "^/home.+go/pkg/mod\\|"
-                "^/home.+\\.cargo"))
-
-  (add-to-list 'desktop-globals-to-save 'register-alist)
-  (add-to-list 'desktop-globals-to-save 'file-name-history)
-  (add-to-list 'desktop-modes-not-to-save 'dired-mode)
-  (add-to-list 'desktop-modes-not-to-save 'Info-mode)
-  (add-to-list 'desktop-modes-not-to-save 'org-mode)
-  (add-to-list 'desktop-modes-not-to-save 'eww-mode)
-  (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
-  (add-to-list 'desktop-modes-not-to-save 'fundamental-mode))
+    (unless (equal "solo" tychoish/emacs-instance-id)
+      (when (or (> 40 (random 100))
+		(< 150 (float-time (time-since desktop/last-save-time))))
+	(desktop-save desktop-dirname)
+	(setq desktop/time-since-last-save (current-time))))))
 
 (use-package savehist
   :hook ((prescient-persist-mode . savehist-mode-setup))
@@ -1107,8 +1097,6 @@
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands)
   :hook (((prog-mode text-mode) . corfu-mode)
-         (text-mode . tychoish/corfu-text-mode-setup)
-         (prog-mode . tychoish/corfu-prog-mode-setup)
          ((shell-mode eshell-mode) . corfu-mode)
          (telega-chat-mode . corfu-mode)
          (corfu-mode . corfu-history-mode)
@@ -1763,7 +1751,6 @@
 	   (interactive)
            (setq smtpmail-queue-dir ,(f-join maildir "queue" "cur"))
            (setq mu4e-mu-home ,(f-join maildir ".mu"))
-           (setq mu4e-maildir ,maildir)
            (setq message-directory ,maildir)
            (setq message-auto-save-directory ,(f-join maildir "drafts"))
            (setq message-signature-directory ,(f-join maildir "tools" "signatures"))
@@ -2287,17 +2274,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq passive-voice t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
+
 ;; modes for programming languages other formats
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
+
 ;; programming major-modes
 
 (use-package yaml-ts-mode
-  :ensure nil
-  :after (eglot treesit)
-  :defer t
+  :ensure t
   :mode (("\\.yaml$" . yaml-ts-mode)
 	 ("\\.yml$" . yaml-ts-mode))
   :init
@@ -2311,8 +2296,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                           :validate t
                           :hover t
                           :completion t))))
-
+  :config
   (add-hook 'yaml-ts-mode-hook (tychoish/set-tab-width 2)))
+
+(use-package yaml-pro
+  :ensure t
+  :commands (yaml-pro-ts-mode)
+  :hook (yaml-ts-mode . yaml-pro-ts-mode))
 
 (use-package go-ts-mode
   :ensure nil
@@ -2715,6 +2705,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (or (trimmed-string-or-nil (projectile-project-root))
         default-directory))
 
+  (with-eval-after-load 'rust-mode (require 'rust-compile))
+
   (setq-default compilation-save-buffers-predicate #'tychoish/guess-compilation-root)
 
   (defun compile-add-error-syntax (name regexp file line &optional col level)
@@ -2902,13 +2894,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (flycheck-remove-next-checker 'org-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
 
-(use-package rust-compile
-  :after (rustic-mode))
-
-(use-package rust-playground
-  :ensure t
-  :commands (rust-playground rust-playground-run-command))
-
 (use-package clang-format
   :ensure t
   :after (c++-mode)
@@ -2945,10 +2930,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq path-to-ctags (executable-find "ctags"))
   (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
 
-(use-package virtualenvwrapper
-  :ensure t
-  :commands (venv-workon venv-deactivate venv-initialize-eshell venv-initialize-interactive-shells))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; language server protocol (lsp) [eglot] + treesitter
@@ -2963,11 +2944,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
            typescript-ts-mode
 	   go-ts-mode
 	   go-mod-ts-mode
-	   yaml-mode
 	   yaml-ts-mode
 	   rust-mode
 	   rust-ts-mode
 	   rustic-mode
+	   c++-ts-mode
+	   c-ts-mode
+	   c-or-c++-mode
 	   python-mode
 	   python-ts-mode
 	   go-mode
@@ -3019,13 +3002,17 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'eglot-server-programs
                `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
                  . ,(eglot-alternatives
-                     `(
-		       ("/opt/homebrew/bin/gopls" "-remote=unix;/tmp/gopls.socket")
-                       ("gopls" "-remote=auto")
-		       ("gopls" ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)))
+                     `(("gopls" ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)))
 		       ("gopls" "-remote=unix;/tmp/gopls.socket")
+		       ("gopls" "-remote=auto")
+		       ("gopls")))))
 
-                       ("gopls")))))
+  (add-to-list 'eglot-server-programs
+	       `((c-mode c++-mode c-ts-mode c++-ts-mode c-or-c++-ts-mode c-or-c++-mode)
+		 . ,(eglot-alternatives
+		     `(("clangd" "-j=8" "--background-index" "--clang-tidy" "--cross-file-rename" "--completion-style=detailed")
+		       ("clangd")
+		       ("ccls")))))
 
   (setq-default eglot-workspace-configuration tychoish/eglot-default-server-configuration)
 
@@ -3079,13 +3066,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("\\.json\\'" . json-ts-mode)
          ("\\.toml\\'" . toml-ts-mode)
          ;; -- c/c++
-         ("\\.cpp\\'" . c++-ts-mode)
+         ("CMakeLists.txt" . cmake-ts-mode)
+	 ("\\.h\\'" . c-or-c++-ts-mode)
+         ("\\.c\\'" . c-ts-mode)
+	 ("\\.cpp\\'" . c++-ts-mode)
          ("\\.cc\\'" . c++-ts-mode)
          ("\\.hh\\'" . c++-ts-mode)
          ("\\.cxx\\'" . c++-ts-mode)
-         ("\\.h\\'" . c-or-c++-ts-mode)
-         ("\\.c\\'" . c-ts-mode)
-         ("CMakeLists.txt" . cmake-ts-mode)
          ;; -- jvm
          ("\\.java\\'" . java-ts-mode)
          ("\\.scala\\'" . scala-ts-mode)
@@ -3094,18 +3081,19 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("\\.kts\\'" . kotlin-ts-mode)
          ("\\.kdl\\'" . kdl-ts-mode))
   :init
-  (add-hook 'js-ts-mode-hook (create-run-hooks-function-for js-mode))
   (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
   (add-to-list 'major-mode-remap-alist '(jav-mode . js-ts-mode))
   (add-to-list 'major-mode-remap-alist '(css-mode . css-ts-mode))
   (add-to-list 'major-mode-remap-alist '(js-json-mode . json-ts-mode))
 
-  (add-hook 'c++-ts-mode-hook (create-run-hooks-function-for c++-mode))
-  (add-hook 'c-ts-mode-hook (create-run-hooks-function-for c-mode))
-  (add-to-list 'major-mode-remap-alist '(c-mode . c-mode))
-  (add-to-list 'major-mode-remap-alist '(c++-mode . c++-mode))
-  (add-to-list 'major-mode-remap-alist '(c-or-c++-ts-mode . c-or-c++-mode))
+  (add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
+  (add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
+  (add-to-list 'major-mode-remap-alist '(c-or-c++-mode . c-or-c++-ts-mode))
   :config
+  (add-hook 'js-ts-mode-hook (create-run-hooks-function-for js-mode))
+  (add-hook 'c-ts-mode-hook (create-run-hooks-function-for c-mode))
+  (add-hook 'c++-ts-mode-hook (create-run-hooks-function-for c++-mode))
+
   (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100))
   (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
 
@@ -3137,8 +3125,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
           (solidity "https://github.com/JoranHonig/tree-sitter-solidity")
           (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
           (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
-          (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")
-          (yaml "https://github.com/ikatyang/tree-sitter-yaml")))
+          (yaml "https://github.com/ikatyang/tree-sitter-yaml")
+          (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")))
 
   (defun tychoish-background-rebuild-treesit-bindings ()
     (interactive)
