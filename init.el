@@ -95,3 +95,45 @@
 
 (provide 'init)
 ;;; init.el ends here
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages
+   '(ace-window ag aider alert anzu artbollocks-mode auctex auto-complete
+		auto-package-update cape cargo company-emojify
+		company-posframe company-quickhelp-terminal
+		company-solidity company-statistics company-wordfreq
+		concurrent consult-dir consult-eglot consult-flycheck
+		consult-flyspell consult-gh consult-yasnippet copilot
+		copilot-chat corfu-prescient ctable ctags-update
+		cython-mode dash-functional deadgrep deft delight
+		diminish docker doom-modeline emacsql-sqlite
+		emacsql-sqlite3 embark-consult flycheck-aspell
+		flycheck-eglot flycheck-golangci-lint
+		flycheck-grammarly flycheck-vale flyspell-correct-helm
+		forge fountain-mode ghub+ git-grep git-link
+		github-review go-eldoc google-gemini google-this
+		gptel-aibo graphql graphviz-dot-mode helm-ag
+		helm-c-yasnippet helm-company helm-eww helm-flycheck
+		helm-flyspell helm-make helm-mu helm-org
+		helm-projectile helm-rg helm-swoop helm-xref
+		jinja2-mode journalctl-mode just-mode kv leetcode lv
+		marginalia mcp modus-themes nerd-icons-completion
+		nerd-icons-corfu nerd-icons-dired nerd-icons-xref
+		ninja-mode org-contrib org-web-tools ov ox-gist
+		ox-hugo ox-leanpub ox-rst package-lint
+		page-break-lines pfuture pkg-info pkgbuild-mode popon
+		protobuf-mode rainbow-identifiers revbufs ripgrep
+		rust-playground rustic shell-pop slime-company
+		solidity-flycheck sqlite3 system-packages telega
+		terraform-mode toc-org tracking vertico-prescient
+		virtualenvwrapper web-mode wgrep winum writeroom-mode
+		yaml-pro yasnippet-capf yasnippet-snippets)))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )

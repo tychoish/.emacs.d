@@ -164,15 +164,6 @@
   (advice-add #'doom-modeline--font-height :override #'my-doom-modeline--font-height)
   (add-hook 'after-init-hook 'turn-on-doom-modeline-icon))
 
-(use-package winner
-  :hook (emacs-startup . turn-on-winner-mode)
-  :commands (winner-mode winner-undo winner-redo)
-  :init
-  (defun turn-on-winner-mode ()
-    (interactive)
-    (unless winner-mode
-      (winner-mode))))
-
 (use-package winum
   :ensure t
   :bind (("C-x w n" . winum-select-window-by-number)
@@ -965,7 +956,7 @@
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
 
-  (defun tychoish/soliditiy-capf-setup ()
+  (defun tychoish/soliditiysolidity-capf-setup ()
     (setq-local completion-at-point-functions
                 (list #'tychoish/capf-solidity
                       #'tychoish/capf-line
@@ -973,7 +964,7 @@
                       #'cape-emoji
                       #'cape-file)))
 
-  (add-hook 'solidity-mode-hook #'tychoish/soliditiy-capf-setup)
+  (add-hook 'solidity-mode-hook #'tychoish/solidity-capf-setup)
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-capf-setup)
   (add-hook 'emacs-lisp-mode-hook 'tychoish/elisp-capf-setup)
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
@@ -1180,7 +1171,6 @@
 
 (use-package nerd-icons-xref
   :ensure t
-  :after (xref)
   :hook (nerd-icons-completion-mode . nerd-icons-xref-mode))
 
 (use-package nerd-icons-completion
@@ -1437,6 +1427,12 @@
          ("g" . helm-google-suggest)
          ("f" . helm-grep-do-git-grep)
 
+	 :map eshell-command-mode-map
+         ("M-p" . helm-eshell-history)
+         ([remap eshell-pcomplete] . helm-esh-pcomplete)
+         ("M-s f" . helm-eshell-prompts-all)
+         ("M-r" . helm-eshell-history)
+
          :map tychoish/helm-center-menu-map ;; "C-c h"
          :prefix "g"
          :prefix-map tychoish/helm-grep-tools-map ;; "C-c h g"
@@ -1596,17 +1592,6 @@
   (setq add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
   (setq add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
 
-(use-package eshell
-  :commands (eshell)
-  :after (helm)
-  :bind (("C-c s e" . eshell)
-         :map eshell-command-mode-map
-         ("M-p" . helm-eshell-history)
-         ([remap eshell-pcomplete] . helm-esh-pcomplete)
-         ("M-s f" . helm-eshell-prompts-all)
-         ("M-r" . helm-eshell-history))
-  :hook (eshell-mode . eshell-cmpl-initialize))
-
 (use-package helm-mu
   :ensure t
   :bind (:map tychoish/helm-center-menu-map ; "C-c h"
@@ -1688,26 +1673,7 @@
   :config
   (setq emojify-emoji-styles '(ascii unicode github))
   (setq emojify-display-style 'unicode)
-  (with-eval-after-load 'company
-    (setq emojify-company-tooltips-p t))
   (setq emojify-point-entered-behaviour 'echo))
-
-(use-package message
-  :mode ((".*mutt.*" . message-mode)
-         ("/mutt" . message-mode))
-  :config
-  (bind-key "M-q" 'ignore message-mode-map)
-  (setq-default message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
-  (setq-default message-citation-line-function 'message-insert-formatted-citation-line)
-  (setq-default message-interactive t)
-  (setq-default message-kill-buffer-on-exit nil)
-  (setq-default message-send-mail-function 'message-send-mail-with-sendmail)
-  (setq-default message-forward-as-mime nil)
-  (setq-default message-fill-column 72)
-  (setq-default message-cite-style message-cite-style-gmail)
-  (add-to-list 'mm-discouraged-alternatives "text/html")
-  (add-to-list 'mm-discouraged-alternatives "text/richtext")
-  (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
 
 (use-package mu4e
   :ensure nil
@@ -1791,6 +1757,21 @@
     "Ask whether to reply-to-all or not."
     (interactive)
     (mu4e-compose-reply (yes-or-no-p "Reply to all?")))
+
+  (add-to-list 'auto-mode-alist '(".*mutt.*"  message-mode))
+  (with-eval-after-load 'message
+    (bind-key "M-q" 'ignore message-mode-map)
+    (setq-default message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
+    (setq-default message-citation-line-function 'message-insert-formatted-citation-line)
+    (setq-default message-interactive t)
+    (setq-default message-kill-buffer-on-exit nil)
+    (setq-default message-send-mail-function 'message-send-mail-with-sendmail)
+    (setq-default message-forward-as-mime nil)
+    (setq-default message-fill-column 80)
+    (setq-default message-cite-style message-cite-style-gmail)
+    (add-to-list 'mm-discouraged-alternatives "text/richtext")
+    (add-to-list 'mm-discouraged-alternatives "text/html")
+    (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
   :config
   (bind-keys :map mu4e-compose-minor-mode-map
              ("R" . compose-reply-wide-or-not-please-ask)
@@ -1906,6 +1887,11 @@
              tychoish/telega-bury-chat-buffers
              tychoish/telega-force-kill)
   :config
+  (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
+  (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
+  (add-hook 'telega-chat-mode-hook 'tychoish/telega-set-up-chat-mode)
+
+
   (when (eq system-type 'darwin)
     (setq telega-server-libs-prefix "/opt/homebrew")
     (setq-default alert-default-style 'osx-notifier))
@@ -1914,16 +1900,6 @@
       (setq telega-server-libs-prefix "/usr"))
 
   (setq telega-emoji-use-images t)
-
-  (require 'telega-alert)
-  (telega-mode-line-mode 1)
-  (telega-alert-mode 1)
-
-  (add-hook 'telega-chat-mode-hook 'tychoish/telega-set-up-chat-mode)
-  (defun tychoish/telega-set-up-chat-mode ()
-    ;; (require 'telega-mnz)
-    ;; (telega-mnz-mode 1)
-    (telega-chat-auto-fill-mode 1))
 
   (setq telega-root-view-grouping-folders t)
   (setq telega-folder-icons-alist nil)
@@ -1957,14 +1933,14 @@
   (setq telega-markdown2-backquotes-as-precode t)
   (setq telega-debug nil)
 
-  (with-eval-after-load 'company
-    (setq telega-company-emoji-fuzzy-match t)
-    (setq telega-company-username-show-avatars t))
-
-  (defun telega-chat-folders (chat) nil)
-
   (setq telega-chat--display-buffer-action
         '((display-buffer-reuse-window display-buffer-use-some-window)))
+
+  (require 'telega-alert)
+  (telega-mode-line-mode 1)
+  (telega-alert-mode 1)
+
+  (defun telega-chat-folders (chat) nil)
 
   (defun telega-root-cycle-next (chat)
     "Either expand if forum or cycle to next `CHAT' at point."
@@ -1977,6 +1953,11 @@
         (telega-root-next-mention (point))
         (telega-root-next-reaction (point))
         (telega-root-next-unread (point)))))
+
+  (defun tychoish/telega-set-up-chat-mode ()
+    ;; (require 'telega-mnz)
+    ;; (telega-mnz-mode 1)
+    (telega-chat-auto-fill-mode 1))
 
   (defun telega-toggle-debug ()
     (interactive)
@@ -2070,9 +2051,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
     (telega-kill t))
 
-  (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
-  (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
-
   (defun tychoish/make-telega-root-default-buffer ()
     (add-hook 'after-make-frame-functions #'tychoish/telega-switch-to-root)
     (add-hook 'server-after-make-frame-hook #'tychoish/telega-switch-to-root)
@@ -2146,22 +2124,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq deft-use-filename-as-title t)
   (setq deft-auto-save-interval 0)
   (setq deft-auto-save-interval nil))
-
-(use-package tex
-  :defer t
-  :ensure auctex
-  :config
-  (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
-
-  (setq TeX-auto-save t)
-  (setq TeX-parse-self t)
-  (setq TeX-PDF-mode t)
-  (setq TeX-master nil)
-  (setq auto-mode-alist (cons '("\\.tex" . latex-mode) auto-mode-alist))
-  (add-hook 'LaTeX-mode-hook 'LaTeX-math-mode)
-  (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
-  (add-hook 'LaTeX-mode-hook 'visual-line-mode)
-  (add-hook 'latex-mode-hook 'turn-on-auto-fill))
 
 (use-package markdown-mode
   :ensure t
@@ -2481,37 +2443,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
 
-(use-package make-mode
-  :ensure t
-  :mode (("makefile" . makefile-mode)
-         ("Makefile" . makefile-mode)
-         ("\\.mk%" . makefile-mode))
-  :config
-  (setq makefile-electric-keys t))
-
 (use-package just-mode
   :ensure t
   :mode (("justfile" . just-mode)
-         ("justfile" . just-mode)
+         ("Justfile" . just-mode)
          ("\\.just%" . just-mode)))
-
-(use-package conf-mode
-  :ensure t
-  :mode (("\\.service$'" . conf-unix-mode)
-         ("\\.timer$'" . conf-unix-mode)
-         ("\\.target$'" . conf-unix-mode)
-         ("\\.mount$'" . conf-unix-mode)
-         ("\\.automount$'" . conf-unix-mode)
-         ("\\.slice$'" . conf-unix-mode)
-         ("\\.socket$'" . conf-unix-mode)
-         ("\\.path$'" . conf-unix-mode)
-         ("\\.conf$'" . conf-unix-mode)))
-
-(use-package sh-script
-  :ensure t
-  :mode (("\\.zsh$'" . sh-mode)
-         ("\\.zshrc$'" . sh-mode)
-         ("\\.bash_profile$'" . sh-mode)))
 
 (use-package nxml-mode
   :mode (("\\.xml$'". nxml-mode)))
@@ -2545,12 +2481,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :mode "\\.ninja\\'")
 
-(use-package emacs-lisp-mode
-  :mode (("\\.el$" . emacs-lisp-mode))
-  :init
-  (setq checkdoc-force-docstrings-flag nil)
-  (setq checkdoc-spellcheck-documentation-flag t))
-
 (use-package solidity-mode
   :ensure t
   :mode ("\\.sol$'" . solidity-mode)
@@ -2581,17 +2511,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
 
-(use-package comint
-  :defer t
-  :bind (:map comint-mode-map
-              ("M-n" . comint-next-input)
-              ("M-p" . comint-previous-input)
-              ([down] . comint-next-matching-input-from-input)
-              ([up] . comint-previous-matching-input-from-input))
-  :commands (comint-mode comint-run)
-  :config
-  (setq ansi-color-for-comint-mode t))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; programming adjacent tools
@@ -2616,12 +2535,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :commands (docker)
   :bind ("C-c C-d" . docker))
-
-(use-package lpr
-  :ensure t
-  :commands (lpr-region lpr-buffer)
-  :config
-  (setq lpr-add-switches "-T ''"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2894,24 +2807,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (flycheck-remove-next-checker 'org-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
 
-(use-package clang-format
-  :ensure t
-  :after (c++-mode)
-  :bind (([C-M-tab] . clang-format-region))
-  :commands (clang-format clang-format-buffer clang-format-region)
-  :init
-  (defun clang-format-before-save ()
-    (interactive)
-    (when (or (eq major-mode 'c++-mode)
-              (eq major-mode 'c-mode)
-              (eq major-mode 'c-ts-mode)
-              (eq major-mode 'c++-ts-mode))
-      (clang-format-buffer)))
-
-  (add-hook 'before-save-hook 'clang-format-before-save)
-  :config
-  (setq clang-format-style "Google"))
-
 (use-package ctags-update
   :ensure t
   :bind (("C-c E" . ctags-update))
@@ -2976,6 +2871,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("C-c l c" . eglot-call-type-hierarchy)
          ("C-c l t" . eglot-show-type-hierarchy))
   :init
+  (bind-keys ("M-." . xref-find-definitions)
+             ("C-c l c" . xref-find-references)
+             ("C-c l d" . xref-find-definitions)
+             ("C-c l p" . xref-go-back)
+             ("C-c l n" . xref-go-forward)
+             ("C-c l o" . xref-find-definitions-other-window))
+
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-ensure-hook)
   (defun tychoish/eglot-ensure-hook ()
     (setq-local eldoc-docuemntation-stratedgy 'eldoc-documentation-compose-eagerly)
@@ -3043,14 +2945,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'flycheck-checkers 'eglot-check)
   (setq flycheck-eglot-enable-diagnostic-tags nil)
   (flycheck-add-next-checker 'eglot-check 'go-gofmt))
-
-(use-package xref
-  :bind (("M-." . xref-find-definitions)
-         ("C-c l c" . xref-find-references)
-         ("C-c l d" . xref-find-definitions)
-         ("C-c l p" . xref-go-back)
-         ("C-c l n" . xref-go-forward)
-         ("C-c l o" . xref-find-definitions-other-window)))
 
 (use-package treesit
   :mode (("\\.sh\\'" . bash-ts-mode)

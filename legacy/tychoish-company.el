@@ -1,3 +1,9 @@
+
+(with-eval-after-load 'telega
+  (setq telega-company-emoji-fuzzy-match t)
+  (setq telega-company-username-show-avatars t))
+
+
 (use-package helm-company
   :ensure t
   :bind (:map tychoish/helm-center-menu-map
@@ -235,8 +241,6 @@ the current frame."
 	(cape-wrap-super #'cape-corp-solidity #'cape-keyword #'cape-dabbrev))
       (defun cape-corp-solidity ()
 	(cape-company-to-capf #'company-solidity))))
-
-
 
   (defun tychoish/company-solidity-backend ()
     (setq-local company-backends '((company-solidity company-capf company-dabbrev-code

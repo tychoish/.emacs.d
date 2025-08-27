@@ -71,6 +71,7 @@
 	   ("C-z" . undo)
            ("C-w" . kill-region)
            ("C-<tab>" . completion-at-point)
+           ("C-c s e" . eshell)
            :prefix "C-c g"
            :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
            ("o" . occur)
@@ -112,6 +113,11 @@
 (setq shell-command-dont-erase-buffer 'end-last-out)
 (setq show-paren-delay 0.25)
 
+(setq checkdoc-force-docstrings-flag nil)
+(setq checkdoc-spellcheck-documentation-flag t)
+(setq ansi-color-for-comint-mode t)
+(setq makefile-electric-keys t)
+
 (setq completion-cycle-threshold 2)
 (setq completion-ignore-case t)
 (setq enable-recursive-minibuffers t)
@@ -131,6 +137,8 @@
 (setq confirm-kill-processes nil)
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq confirm-kill-emacs nil)
+
+(setq lpr-add-switches "-T ''")
 
 (setq byte-compile-warnings
       ;; OMIT: free-vars docstrings-wide
@@ -233,10 +241,9 @@
       (make-directory path))
     (chmod path #o700)))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; frames -- use hooks to keep things clean
+;; frame/window -- setup and manage frames and windows
 
 (defun on-frame-open (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
@@ -249,7 +256,7 @@
 
 (add-hook 'after-make-frame-functions #'on-frame-open)
 (add-hook 'window-setup-hook #'on-after-init)
-
+(add-hook 'window-setup-hook 'winner-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -269,6 +276,46 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; stdlib -- configuration of default/included emacs packages
+
+;;; no need for use-package for minimal configurations of packages
+;;; that are included with emacs by default and that already have
+;;; appropriate autoloads.
+
+(setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
+
+(add-to-list 'auto-mode-alist '("\\.tex'" . LaTeX-mode))
+(add-hook 'LaTeX-mode-hook 'turn-on-reftex)
+(add-hook 'LaTeX-mode-hook 'visual-line-mode)
+(add-hook 'LaTeX-mode-hook 'turn-off-auto-fill)
+(add-hook 'eshell-mode #'eshell-cmpl-initialize)
+
+(add-to-list 'auto-mode-alist '("\\.el$'" . emacs-lisp-mode))
+
+(add-to-list 'auto-mode-alist '("makefile" . makefile-mode))
+(add-to-list 'auto-mode-alist '("Makefile" . makefile-mode))
+(add-to-list 'auto-mode-alist '("\\.mk$'" . makefile-mode))
+
+(add-to-list 'auto-mode-alist '("\\.service$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.timer$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.target$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.mount$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.automount$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.slice$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.socket$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.path$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.conf$'" . conf-unix-mode))
+
+(add-to-list 'auto-mode-alist '("\\.zsh$'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.zshrc$'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.bash_profile$'" . sh-mode))
+
+(with-eval-after-load 'comint
+  (bind-keys :map comint-mode-map
+             ("M-n" . comint-next-input)
+             ("M-p" . comint-previous-input)
+             ([down] . comint-next-matching-input-from-input)
+             ([up] . comint-previous-matching-input-from-input)))
+
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
-
