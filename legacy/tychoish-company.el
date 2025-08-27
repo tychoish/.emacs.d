@@ -3,6 +3,8 @@
   (setq telega-company-emoji-fuzzy-match t)
   (setq telega-company-username-show-avatars t))
 
+(with-eval-after-load 'emojify
+  (setq emojify-company-tooltips-p t))
 
 (use-package helm-company
   :ensure t

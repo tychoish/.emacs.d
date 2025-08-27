@@ -241,6 +241,9 @@
       (make-directory path))
     (chmod path #o700)))
 
+(defun tychoish/set-up-show-whitespace ()
+  (setq-local show-trailing-whitespace t))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; frame/window -- setup and manage frames and windows

@@ -83,12 +83,12 @@
   :delight
   (async-bytecomp-package-mode "")
   (dired-async-mode "")
-  :hook ((emacs-startup . tychoish/async-mode-setup))
   :commands (async-start
 	     async-start-process
 	     async-bytecomp-package-mode
 	     dired-async-mode)
   :init
+  (add-hook 'emacs-startup-hook 'tychoish/async-mode-setup)
   (defun tychoish/async-mode-setup ()
     (async-bytecomp-package-mode 1)
     (dired-async-mode 1)))
@@ -956,15 +956,6 @@
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
 
-  (defun tychoish/soliditiysolidity-capf-setup ()
-    (setq-local completion-at-point-functions
-                (list #'tychoish/capf-solidity
-                      #'tychoish/capf-line
-                      #'yasnippet-capf
-                      #'cape-emoji
-                      #'cape-file)))
-
-  (add-hook 'solidity-mode-hook #'tychoish/solidity-capf-setup)
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-capf-setup)
   (add-hook 'emacs-lisp-mode-hook 'tychoish/elisp-capf-setup)
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
@@ -1651,13 +1642,6 @@
   :ensure t
   :commands (gist-region gist-buffer gist-list gist-region-private gist-buffer-private))
 
-(use-package github-review
-  :ensure t
-  :commands (github-review-start
-             github-review-forge-pr-at-point
-             github-review-approve
-             github-review-reject))
-
 (use-package git-link
   :ensure t
   :bind (("C-x g l" . git-link)))
@@ -2213,28 +2197,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
             grammarly-on-open-function-list
             grammarly-on-close-function-list))
 
-(use-package artbollocks-mode
-  :ensure t
-  :commands (artbollocks-mode)
-  :config
-  (setq weasel-words-regex
-        (concat "\\b" (regexp-opt
-                       '("one of the"
-                         "very"
-                         "sort of"
-                         "a lot"
-                         "probably"
-                         "maybe"
-                         "perhaps"
-                         "I think"
-                         "really"
-                         "nice"
-                         "utilize"
-                         "leverage") t) "\\b"))
-  (setq lexical-illusions nil)
-  (setq weasl-words t)
-  (setq passive-voice t))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; modes for programming languages other formats
@@ -2414,12 +2376,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
-(use-package cython-mode
-  :ensure t
-  :mode (("\\.pyx\\'" . cython-mode)
-         ("\\.pxd\\'" . cython-mode)
-         ("\\.pxi\\'" . cython-mode)))
-
 (use-package pkgbuild-mode
   :ensure t
   :mode ("PKGBUILD$"))
@@ -2481,21 +2437,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :mode "\\.ninja\\'")
 
-(use-package solidity-mode
-  :ensure t
-  :mode ("\\.sol$'" . solidity-mode)
-  :config
-  (setq solidity-comment-style 'slash))
-
-(use-package solidity-flycheck
-  :ensure t
-  :hook (solidity-mode . tychoish/solidity-flycheck-setup)
-  :commands (solidity-flycheck)
-  :config
-  (defun tychoish/solidity-flycheck-setup ()
-    (setq-local solidity-flycheck-solc-checker-active t))
-
-  (add-to-list 'flycheck-checkers 'solidity-flycheck))
 
 (use-package slime
   :load-path "~/quicklisp/dists/quicklisp/software/slime-v2.31/"
@@ -2956,7 +2897,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("\\.js\\'" . js-ts-mode)
          ("\\.tsx\\'" . tsx-ts-mode)
          ("\\.css\\'" . css-ts-mode)
-         ("\\.sol\\'" . solidity-ts-mode)
          ("\\.json\\'" . json-ts-mode)
          ("\\.toml\\'" . toml-ts-mode)
          ;; -- c/c++
@@ -2968,12 +2908,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("\\.hh\\'" . c++-ts-mode)
          ("\\.cxx\\'" . c++-ts-mode)
          ;; -- jvm
-         ("\\.java\\'" . java-ts-mode)
-         ("\\.scala\\'" . scala-ts-mode)
-         ("\\.sc\\'" . scala-ts-mode)
-         ("\\.kt\\'" . kotlin-ts-mode)
-         ("\\.kts\\'" . kotlin-ts-mode)
-         ("\\.kdl\\'" . kdl-ts-mode))
+         ("\\.java\\'" . java-ts-mode))
   :init
   (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
   (add-to-list 'major-mode-remap-alist '(jav-mode . js-ts-mode))
@@ -3000,23 +2935,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
           (c "https://github.com/tree-sitter/tree-sitter-c")
           (css "https://github.com/tree-sitter/tree-sitter-css")
           (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
-          (elisp "https://github.com/Wilfred/tree-sitter-elisp")
           (go "https://github.com/tree-sitter/tree-sitter-go")
           (html "https://github.com/tree-sitter/tree-sitter-html")
           (java "https://github.com/tree-sitter/tree-sitter-java")
           (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
           (json "https://github.com/tree-sitter/tree-sitter-json")
-          (kotlin "https://github.com/fwcd/tree-sitter-kotlin")
-          (make "https://github.com/alemuller/tree-sitter-make")
-          (markdown "https://github.com/ikatyang/tree-sitter-markdown")
           (python "https://github.com/tree-sitter/tree-sitter-python")
-          (regex "https://github.com/tree-sitter/tree-sitter-regex")
           (ruby "https://github.com/tree-sitter/tree-sitter-ruby")
           (rust "https://github.com/tree-sitter/tree-sitter-rust")
-          (scala "https://github.com/tree-sitter/tree-sitter-scala")
           (toml "https://github.com/tree-sitter/tree-sitter-toml")
-          (kdl "https://github.com/amaanq/tree-sitter-kdl")
-          (solidity "https://github.com/JoranHonig/tree-sitter-solidity")
           (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
           (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
           (yaml "https://github.com/ikatyang/tree-sitter-yaml")

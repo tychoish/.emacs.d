@@ -336,9 +336,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;; whitespace  --
 
-(defun tychoish/set-up-show-whitespace ()
-  (setq-local show-trailing-whitespace t))
-
 (defun set-tab-width (num-spaces)
   (interactive "nTab width: ")
   (setq-local tab-width num-spaces))
