@@ -282,7 +282,7 @@
 
     (set-to-current-time-on-startup desktop/last-save-time)
     (setq desktop-save t)
-    (add-hook 'after-save-hook 'tychoish-save-desktop))
+    (add-hook 'after-save-hook 'tychoish/save-desktop))
 
   ;; the desktop package loads lazily during the desktop-read function
   ;; call, so there are init errors if we don't call this in the block
