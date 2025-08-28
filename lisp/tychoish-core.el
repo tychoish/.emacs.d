@@ -103,7 +103,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; UI, Display, Rendering, Window Man
+;; UI, Display, Rendering, Window Management
 
 (use-package modus-themes
   :ensure t
@@ -180,38 +180,6 @@
   (setq winum-auto-setup-mode-line nil)
   (setq winum-scope 'frame-local))
 
-(use-package which-key
-  :ensure t
-  :delight which-key-mode
-  :hook ((emacs-startup . which-key-mode)
-         (which-key-mode . which-key-setup-side-window-bottom))
-  :config
-  (setq which-key-idle-delay .25)
-  (setq which-key-idle-secondary-delay 0.125))
-
-(use-package windmove
-  :bind (("M-h" . windmove-left)
-         ("M-j" . windmove-down)
-         ("M-k" . windmove-up)
-         ("M-l" . windmove-right)
-         ("S-<left>" . windmove-left)
-         ("S-<down>" . windmove-down)
-         ("S-<right>" . windmove-right)
-         ("S-<up>" . windmove-up)
-         ("M-H" . increase-window-left)
-         ("M-J" . increase-window-down)
-         ("M-K" . increase-window-up)
-         ("M-L" . increase-window-right)
-         ("M-<left>" . increase-window-left)
-         ("M-<down>" . increase-window-down)
-         ("M-<up>" . increase-window-up)
-         ("M-<right>" . increase-window-right))
-  :init
-  (defun increase-window-up () (interactive) (enlarge-window 1 nil))
-  (defun increase-window-down () (interactive) (enlarge-window -1 nil))
-  (defun increase-window-left () (interactive) (enlarge-window 1 t))
-  (defun increase-window-right () (interactive) (enlarge-window -1 t)))
-
 (use-package writeroom-mode
   :ensure t
   :bind (("C-c t i" . writeroom-mode)))
@@ -223,43 +191,6 @@
   :commands (global-page-break-lines-mode)
   :config
   (setq page-break-lines-modes '(text-mode prog-mode)))
-
-(use-package whitespace
-  :ensure t
-  :bind (("C-c C-w" . whitespace-cleanup))
-  :commands (whitespace-report)
-  :config
-  (setq whitespace-style
-	'(face
-	  trailing
-	  tabs
-	  spaces
-	  lines
-	  newline
-	  missing-newline-at-eof
-          empty
-	  space-mark
-	  tab-mark
-	  newline-mark)))
-
-(use-package elec-pair
-  :hook ((emacs-startup . electric-pair-mode))
-  :bind (("C-c t p" . #'toggle-electric-pair-inhibition)
-         ("C-c t e" . #'toggle-electric-pair-eagerness))
-  :init
-  (defvar electric-pair-inhibition nil)
-  (defvar electric-pair-eagerness t)
-  (defun tychoish/electric-pair-inhibition (char)
-    (if electric-pair-inhibition
-	nil
-      (if electric-pair-eagerness
-          (electric-pair-default-inhibit char)
-        (electric-pair-conservative-inhibit char))))
-  :config
-  (setq electric-pair-inhibit-predicate #'tychoish/electric-pair-inhibition)
-  (create-toggle-functions electric-pair-inhibition)
-  (create-toggle-functions electric-pair-eagerness)
-  (add-to-list 'electric-pair-pairs '(?< . ?>)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -314,24 +245,6 @@
   (setq projectile-completion-system 'auto)
   (setq projectile-require-project-root nil)
   (setq projectile-known-projects-file (tychoish/conf-state-path "projectile-bookmarks.el")))
-
-(use-package project
-  :after (:any go-ts-mode go-mode c++-mode c-mode c++-ts-mode c-ts-mode)
-  :init
-  (defun project-find-go-module (dir)
-    (when-let ((root (or (locate-dominating-file dir "go.work")
-                         (locate-dominating-file dir "go.mod"))))
-      (cons 'go-module root)))
-
-  (defun project-find-cmake-project (dir)
-    (when-let ((root (locate-dominating-file dir "CMakeLists.txt")))
-      (cons 'cmake-root root)))
-
-  (cl-defmethod project-root ((project (head go-module))) (cdr project))
-  (cl-defmethod project-root ((project (head cmake-root))) (cdr project))
-
-  (add-hook 'project-find-functions #'project-find-go-module)
-  (add-hook 'project-find-functions #'project-find-cmake-project))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -426,34 +339,6 @@
   (setq google-this-browse-url-function 'browse-url-default-browser)
   (google-this-mode 1))
 
-(use-package eldoc
-  :bind (("C-c d d" . eldoc)
-	 ("C-c d e" . eldoc-doc-buffer))
-  :commands (eldoc-mode
-             eldoc
-             eldoc-doc-buffer
-	     global-eldoc-mode
-	     eldoc-print-current-symbol-info
-             eldoc-documentation-compose-eagerly
-             turn-on-eldoc-mode)
-  :init
-  (bind-keys ("C-c d q" . #'kill-eldoc-and-help-buffers)
-	     ("C-c d j" . jump-to-elisp-help))
-
-  (defun kill-eldoc-and-help-buffers ()
-    "Kills all eldoc and help buffers"
-    (interactive)
-    (kill-matching-buffers "\*Help\\*\\|*eldoc.*\\*" nil t))
-
-  (defun jump-to-elisp-help ()
-    (interactive)
-    (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
-  :config
-  (setq eldoc-minor-mode-string "")
-  (setq eldoc-echo-area-use-multiline-p t)
-  (setq eldoc-echo-area-prefer-doc-buffer nil)
-  (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly))
-
 (use-package anzu
   :ensure t
   :delight anzu-mode
@@ -470,7 +355,6 @@
   (defalias 'sr 'string-replace)
   (defalias 'qrr 'anzu-query-replace-regexp)
   (defalias 'qr 'anzu-query-replace))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

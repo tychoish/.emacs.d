@@ -53,6 +53,9 @@
 	   ("C-x C-r" . recentf)
            ("C-<backspace>" . backward-kill-word)
            ("C-h" . backward-kill-word)
+	   ("C-c C-w" . whitespace-cleanup)
+	   ("C-c t p" . #'toggle-electric-pair-inhibition)
+           ("C-c t e" . #'toggle-electric-pair-eagerness)
            ("C-c d k s" . backward-kill-sentence)
            ("C-c d k p" . backward-kill-paragraph)
            ("C-c d k f" . backward-kill-sexp)
@@ -60,6 +63,10 @@
            ("C-c d k w" . delete-trailing-whitespace)
            ("C-c d s" . describe-symbol)
            ("C-c d v" . describe-variable)
+	   ("C-c d q" . #'kill-eldoc-and-help-buffers)
+	   ("C-c d j" . jump-to-elisp-help)
+	   ("C-c d d" . eldoc)
+	   ("C-c d e" . eldoc-doc-buffer)
            ("C-c C-f" . set-fill-column)
            ("C-c C-p" . set-mark-command)
            ("C-c C-r" . rename-buffer)
@@ -73,6 +80,22 @@
            ("C-w" . kill-region)
            ("C-<tab>" . completion-at-point)
            ("C-c s e" . eshell)
+	   ("M-h" . windmove-left)
+           ("M-j" . windmove-down)
+           ("M-k" . windmove-up)
+           ("M-l" . windmove-right)
+           ("S-<left>" . windmove-left)
+           ("S-<down>" . windmove-down)
+           ("S-<right>" . windmove-right)
+           ("S-<up>" . windmove-up)
+           ("M-H" . increase-window-left)
+           ("M-J" . increase-window-down)
+           ("M-K" . increase-window-up)
+           ("M-L" . increase-window-right)
+           ("M-<left>" . increase-window-left)
+           ("M-<down>" . increase-window-down)
+           ("M-<up>" . increase-window-up)
+           ("M-<right>" . increase-window-right)
 	   :prefix "C-c w"
 	   :prefix-map tychoish/web-browser-map ;; C-c w
 	   ("d" . browse-url-generic)
@@ -130,6 +153,9 @@
 (setq ansi-color-for-comint-mode t)
 (setq makefile-electric-keys t)
 
+(setq which-key-idle-delay .25)
+(setq which-key-idle-secondary-delay 0.125)
+
 (setq completion-cycle-threshold 2)
 (setq completion-ignore-case t)
 (setq enable-recursive-minibuffers t)
@@ -157,6 +183,11 @@
 (setq shr-use-fonts nil)
 (setq eww-search-prefix "https://www.google.com/search?q=")
 
+(setq eldoc-minor-mode-string "")
+(setq eldoc-echo-area-use-multiline-p t)
+(setq eldoc-echo-area-prefer-doc-buffer nil)
+(setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
+
 (setq lpr-add-switches "-T ''")
 
 (setq byte-compile-warnings
@@ -180,9 +211,22 @@
 	suspicious
 	unresolved))
 
+(setq whitespace-style
+      '(face
+	trailing
+	tabs
+	spaces
+	lines
+	newline
+	missing-newline-at-eof
+        empty
+	space-mark
+	tab-mark
+	newline-mark))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; state -- setup desktop/bookmarks/
+;; state -- setup desktop/bookmarks/savehist
 
 (defvar desktop/last-save-time nil)
 
@@ -327,6 +371,7 @@
   (global-auto-revert-mode 1)
 
   (delight 'auto-revert-mode)
+  (delight 'which-key-mode)
   (delight 'eldoc-mode)
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
   (delight 'auto-fill-function " afm")
@@ -362,6 +407,16 @@
 
 ;; frame/window -- setup and manage frames and windows
 
+(defun kill-eldoc-and-help-buffers ()
+  "Kills all eldoc and help buffers"
+  (interactive)
+  (kill-matching-buffers "\*Help\\*\\|*eldoc.*\\*" nil t))
+
+(defun increase-window-up () (interactive) (enlarge-window 1 nil))
+(defun increase-window-down () (interactive) (enlarge-window -1 nil))
+(defun increase-window-left () (interactive) (enlarge-window 1 t))
+(defun increase-window-right () (interactive) (enlarge-window -1 t))
+
 (defun on-frame-open (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
   (unless (display-graphic-p frame)
@@ -374,6 +429,51 @@
 (add-hook 'after-make-frame-functions #'on-frame-open)
 (add-hook 'window-setup-hook #'on-after-init)
 (add-hook 'window-setup-hook 'winner-mode)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; editing -- text editing, experience, and manipulation
+
+(defvar electric-pair-inhibition nil)
+(defvar electric-pair-eagerness t)
+
+(defun tychoish/electric-pair-inhibition (char)
+  (if electric-pair-inhibition
+      nil
+    (if electric-pair-eagerness
+        (electric-pair-default-inhibit char)
+      (electric-pair-conservative-inhibit char))))
+
+(create-toggle-functions electric-pair-inhibition)
+(create-toggle-functions electric-pair-eagerness)
+
+(with-eval-after-load 'elec-pair
+  (add-to-list 'electric-pair-pairs '(?< . ?>)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; project.el -- groups of related files
+
+
+(defun project-find-go-module (dir)
+  (when-let ((root (or (locate-dominating-file dir "go.work")
+		       (locate-dominating-file dir "go.mod"))))
+    (cons 'go-module root)))
+
+(defun project-find-cmake-project (dir)
+  (when-let ((root (locate-dominating-file dir "CMakeLists.txt")))
+    (cons 'cmake-root root)))
+
+(cl-defmethod project-root ((project (head go-module))) (cdr project))
+(cl-defmethod project-root ((project (head cmake-root))) (cdr project))
+
+(add-hook 'project-find-functions #'project-find-go-module)
+(add-hook 'project-find-functions #'project-find-cmake-project)
+
+(defun jump-to-elisp-help ()
+  (interactive)
+  (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -399,13 +499,20 @@
 ;;; that are included with emacs by default and that already have
 ;;; appropriate autoloads.
 
-(setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
 
-(add-to-list 'auto-mode-alist '("\\.tex'" . LaTeX-mode))
+(add-hook 'emacs-startup-hook 'electric-pair-mode)
+(add-hook 'emacs-startup-hook 'which-key-mode)
+(add-hook 'which-key-mode-hook 'which-key-setup-side-window-bottom)
+
+(setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
+(setq electric-pair-inhibit-predicate #'tychoish/electric-pair-inhibition)
+
 (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
 (add-hook 'LaTeX-mode-hook 'visual-line-mode)
 (add-hook 'LaTeX-mode-hook 'turn-off-auto-fill)
 (add-hook 'eshell-mode #'eshell-cmpl-initialize)
+
+(add-to-list 'auto-mode-alist '("\\.tex'" . LaTeX-mode))
 
 (add-to-list 'auto-mode-alist '("\\.el$'" . emacs-lisp-mode))
 
