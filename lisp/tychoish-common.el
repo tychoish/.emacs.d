@@ -76,7 +76,6 @@ The is unique to the system and daemon instance."
   (interactive)
   (set-frame-parameter frame 'menu-bar-lines (if (display-graphic-p frame) 1 0)))
 
-
 (defun text-scale-reset ()
   (interactive)
   (text-scale-set 0))
@@ -407,7 +406,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (interactive "*p")
   (move-text-internal (- arg)))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; clean kill ring -- "deduplicate kill-ring"
@@ -509,7 +507,6 @@ Returns the number of buffers killed."
     (if current-state
 	(message "pinned %s to window" buf-name)
       (message "unpinned %s from window" buf-name))))
-
 
 (provide 'tychoish-common)
 

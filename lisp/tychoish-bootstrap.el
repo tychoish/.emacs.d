@@ -40,16 +40,17 @@
            ("C-x l" . goto-line)
            ("C-x f" . find-file)
            ("C-x C-f" . find-file)
-           ("C-x d" . dired)
            ("C-x h" . help)
            ("C-x C-x" . exchange-point-and-mark)
 	   ;; ("C-x C-u w" . upcase-word)
 	   ;; ("C-x C-u t" . upcase-initials-region)
 	   ;; ("C-x C-u r" . upcase-region)
            ("C-x C-d" . dired)
+           ("C-x d" . dired)
            ("C-x C-n" . count-words)
            ("C-c i" . indent-region)
            ("C-c c" . comment-region)
+	   ("C-x C-r" . recentf)
            ("C-<backspace>" . backward-kill-word)
            ("C-h" . backward-kill-word)
            ("C-c d k s" . backward-kill-sentence)
@@ -72,6 +73,13 @@
            ("C-w" . kill-region)
            ("C-<tab>" . completion-at-point)
            ("C-c s e" . eshell)
+	   :prefix "C-c w"
+	   :prefix-map tychoish/web-browser-map ;; C-c w
+	   ("d" . browse-url-generic)
+           ("e" . browse-url)
+           ("f" . browse-url-firefox)
+           ("c" . browse-url-chrome)
+           ("g" . eww-search-words)
            :prefix "C-c g"
            :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
            ("o" . occur)
@@ -84,6 +92,7 @@
            ("C-l" . backward-kill-word))
 
 ;; (put 'list-timers 'disabled nil)
+(put 'dired-find-alternate-file 'disabled nil)
 (setq ad-redefinition-action 'accept)
 
 (setq fringe-mode 0)
@@ -104,6 +113,9 @@
 (setq backup-by-copying t)
 (setq make-backup-files t)
 (setq delete-old-versions t)
+(setq auto-revert-verbose nil)
+(setq auto-revert-avoid-polling t)
+(setq auto-revert-interval 60)
 
 (setq split-height-threshold 100)
 (setq scroll-conservatively 25)
@@ -138,6 +150,13 @@
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq confirm-kill-emacs nil)
 
+(setq browse-url-browser-function 'eww-browse-url)
+(setq browse-url-generic-program "chrome")
+(setq shr-color-visible-luminance-min 80)
+(setq shr-use-colors nil)
+(setq shr-use-fonts nil)
+(setq eww-search-prefix "https://www.google.com/search?q=")
+
 (setq lpr-add-switches "-T ''")
 
 (setq byte-compile-warnings
@@ -160,6 +179,97 @@
 	redefine
 	suspicious
 	unresolved))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; state -- setup desktop/bookmarks/
+
+(defvar desktop/last-save-time nil)
+
+(defun tychoish/set-up-emacs-instance-persistence ()
+  (with-silence
+   (recentf-mode t)
+   (savehist-mode 1))
+
+  (with-eval-after-load 'consult
+    (bind-key "C-x C-r" #'consult-recent-file 'global-map))
+
+  (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
+  (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
+  (setq bookmark-save-flag 1)
+  (setq savehist-coding-system 'utf-8-emacs)
+  (setq recentf-auto-cleanup 'never)
+  (setq recentf-keep '(file-remote-p file-readable-p))
+  (setq recentf-max-menu-items 100)
+  (setq recentf-save-file (tychoish/conf-state-path "recentf.el")))
+
+(defun tychoish/desktop-save ()
+  "Save desktop... sometimes"
+  (interactive)
+  (unless (equal "solo" tychoish/emacs-instance-id)
+    (when (or (> 40 (random 100))
+	      (< 150 (float-time (time-since desktop/last-save-time))))
+      (desktop-save desktop-dirname)
+      (setq desktop/time-since-last-save (current-time)))))
+
+(defun tychoish/desktop-read-init ()
+  (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
+  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
+  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
+  (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
+
+  ;; only read the desktop if we're not in the "solo" (no ID) emacs
+  ;; instance.
+  ;;
+  ;; TODO This should get a better runtime/feature flag (and have
+  ;; a list of instance names that are epehemral)
+  (unless (equal "solo" tychoish/emacs-instance-id)
+    (if (daemonp)
+	(progn
+	  (setq desktop-restore-frames t)
+	  (setq desktop-load-locked-desktop t)
+	  (setq desktop-restore-eager nil))
+      (setq desktop-restore-eager t)
+      (setq desktop-load-locked-desktop nil))
+
+    (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
+      (let ((gc-cons-threshold 80000000)
+	    (with-silence (desktop-read)))))
+
+    (set-to-current-time-on-startup desktop/last-save-time)
+    (setq desktop-save t)
+    (add-hook 'after-save-hook 'tychoish-save-desktop))
+
+  ;; the desktop package loads lazily during the desktop-read function
+  ;; call, so there are init errors if we don't call this in the block
+  (with-eval-after-load 'desktop
+    (add-to-list 'desktop-globals-to-save 'register-alist)
+    (add-to-list 'desktop-globals-to-save 'file-name-history)
+    (add-to-list 'desktop-modes-not-to-save 'dired-mode)
+    (add-to-list 'desktop-modes-not-to-save 'Info-mode)
+    (add-to-list 'desktop-modes-not-to-save 'org-mode)
+    (add-to-list 'desktop-modes-not-to-save 'eww-mode)
+    (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
+    (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
+
+    (setq desktop-buffers-not-to-save
+          (concat "\\("
+                  "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
+                  "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
+                  "\\)$"))
+
+    (setq desktop-files-not-to-save
+          (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
+                  "^/usr/lib/go/.*\\|"
+                  "^/usr/lib/rustlib/.*\\|"
+                  "^/home.+go/pkg/mod\\|"
+                  "^/home.+\\.cargo")))
+
+  ;; now remove this function from the hook so that we don't reload on
+  ;; frame creation, accidentally
+  (if (daemonp)
+      (remove-hook 'server-after-make-frame-hook #'tychoish/desktop-read-init)
+    (remove-hook 'window-setup-hook #'tychoish/desktop-read-init)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -198,7 +308,7 @@
 
 (setq default-frame-alist nil)
 
-(defun tychoish/late-init-opertions ()
+(defun tychoish/after-init-operations ()
   (scroll-bar-mode -1)
   (tool-bar-mode -1)
   (menu-bar-mode -1)
@@ -211,8 +321,12 @@
   (column-number-mode 1)
   (delete-selection-mode 1)
   (transient-mark-mode 1)
-  (xterm-mouse-mode 1)
+  (xterm-mouse-mode 1))
 
+(defun tychoish/emacs-startup-operations ()
+  (global-auto-revert-mode 1)
+
+  (delight 'auto-revert-mode)
   (delight 'eldoc-mode)
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
   (delight 'auto-fill-function " afm")
@@ -223,7 +337,7 @@
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
-  (let ((dirname (concat (expand-file-name user-emacs-directory) "user")))
+  (let ((dirname (f-join (f-expand user-emacs-directory) "user")))
     (when (file-accessible-directory-p dirname)
       (add-to-list 'load-path dirname)
       (mapc (lambda (fn)

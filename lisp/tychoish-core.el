@@ -10,19 +10,19 @@
 ;;; Code:
 (use-package delight
   :ensure t
-  :commands (delight))
+  :defer t)
 
 (use-package f
   :ensure t
-  :commands (f-exists? f-join f-glob f-expand))
+  :defer t)
 
 (use-package s
   :ensure t
-  :commands (s-join s-contains? s-ends-with?))
+  :defer t)
 
 (use-package dash
   :ensure t
-  :commands (--remove --select ->>))
+  :defer t)
 
 (use-package tychoish-common
   :functions (gui-p default-string)
@@ -52,19 +52,27 @@
              add-hygenic-one-shot-hook
              buffer-in-frame-p
 	     tychoish/resolve-instance-id
+	     tychoish/conf-state-path
              tychoish-setup-font
              tychoish-get-config-file-prefix
 	     tychoish/set-tab-width
 	     tychoish/ensure-light-theme
 	     tychoish/ensure-dark-theme
+	     tychoish/set-up-ssh-agent
 	     set-to-current-time-on-startup))
 
 (use-package tychoish-bootstrap
   :demand
   :hook (((text-mode prog-mode) . tychoish/set-up-show-whitespace)
-	 (after-init . tychoish/late-init-opertions)
+	 (after-init . tychoish/after-init-operations)
+	 (emacs-startup . tychoish/emacs-startup-operations)
 	 (emacs-startup . tychoish-set-up-user-local-config)
-	 (auto-save . tychoish/set-up-auto-save)))
+	 (prescient-persist-mode . tychoish/set-up-emacs-instance-persistence)
+	 (auto-save . tychoish/set-up-auto-save))
+  :init
+    (if (daemonp)
+      (add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init)
+    (add-hook 'window-setup-hook 'tychoish/desktop-read-init)))
 
 (use-package auto-package-update
   :ensure t
@@ -112,7 +120,6 @@
         '((border-mode-line-active bg-mode-line-active)
           (border-mode-line-inactive bg-mode-line-inactive)
           (message-separator bg-main))))
-
 
 ;; (use-package modus-themes-exporter
 ;;   :after modus-themes
@@ -326,13 +333,6 @@
   (add-hook 'project-find-functions #'project-find-go-module)
   (add-hook 'project-find-functions #'project-find-cmake-project))
 
-(use-package dired
-  :bind (("C-x d" . dired)
-	 :map dired-mode-map
-	 ("r" . wdired-change-to-wdired-mode))
-  :config
-  (put 'dired-find-alternate-file 'disabled nil))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; grep/search
@@ -409,12 +409,6 @@
   :config
   (setq ag-highlight-search t))
 
-(use-package grep-mode
-  :defer t
-  :defines (grep-mode-map)
-  :bind (:map tychoish/ecclectic-grep-map
-         ("g" . grep)))
-
 (use-package wgrep
   :ensure t
   :after (grep)
@@ -422,22 +416,6 @@
          ("r" . wgrep-change-to-wgrep-mode))
   :config
   (setq wgrep-enable-key "r"))
-
-(use-package eww
-  :bind (("C-c w d" . browse-url-generic)
-         ("C-c w e" . browse-url)
-         ("C-c w f" . browse-url-firefox)
-         ("C-c w c" . browse-url-chrome)
-         ("C-c w g" . eww-search-words))
-  :commands (eww eww-browse-url)
-  :init
-  (setq browse-url-browser-function 'eww-browse-url)
-  :config
-  (setq browse-url-generic-program "chrome")
-  (setq shr-color-visible-luminance-min 80)
-  (setq shr-use-colors nil)
-  (setq shr-use-fonts nil)
-  (setq eww-search-prefix "https://www.google.com/search?q="))
 
 (use-package google-this
   :ensure t
@@ -493,125 +471,6 @@
   (defalias 'qrr 'anzu-query-replace-regexp)
   (defalias 'qr 'anzu-query-replace))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Session/State Management
-
-(use-package revbufs
-  :ensure t
-  :bind (("C-c C-g" . revbufs))
-  :commands (revbufs))
-
-(use-package desktop
-  :commands (desktop-save-mode
-             desktop-read
-             desktop-save-in-desktop-dir
-             tychoish/desktop-read-init)
-  :init
-  (if (daemonp)
-      (add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init)
-    (add-hook 'window-setup-hook 'tychoish/desktop-read-init))
-  :config
-  (defvar desktop/last-save-time nil)
-
-  (defun tychoish/desktop-read-init ()
-    (unless (equal "solo" tychoish/emacs-instance-id)
-      (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
-      (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
-      (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-      (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~")))
-      (set-to-current-time-on-startup desktop/last-save-time)
-
-      (add-hook 'after-save-hook 'tychoish-save-desktop)
-
-      (add-to-list 'desktop-globals-to-save 'register-alist)
-      (add-to-list 'desktop-globals-to-save 'file-name-history)
-      (add-to-list 'desktop-modes-not-to-save 'dired-mode)
-      (add-to-list 'desktop-modes-not-to-save 'Info-mode)
-      (add-to-list 'desktop-modes-not-to-save 'org-mode)
-      (add-to-list 'desktop-modes-not-to-save 'eww-mode)
-      (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
-      (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
-
-      (setq desktop-buffers-not-to-save
-            (concat "\\("
-                    "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
-                    "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
-                    "\\)$"))
-
-      (setq desktop-files-not-to-save
-            (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
-                    "^/usr/lib/go/.*\\|"
-                    "^/usr/lib/rustlib/.*\\|"
-                    "^/home.+go/pkg/mod\\|"
-                    "^/home.+\\.cargo"))
-      (setq desktop-save t)
-
-      (if (daemonp)
-	  (progn
-	    (setq desktop-restore-frames t)
-	    (setq desktop-load-locked-desktop t))
-	(setq desktop-restore-eager t)
-	(setq desktop-load-locked-desktop nil))
-
-      (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
-	(let ((gc-cons-threshold 80000000)
-	      (with-silence (desktop-read))))))
-    (if (daemonp)
-	(remove-hook 'server-after-make-frame-hook #'tychoish/desktop-read-init)
-      (remove-hook 'emacs-startup-hook #'tychoish/desktop-read-init)))
-
-  (defun tychoish-save-desktop ()
-    "Save desktop... sometimes"
-    (interactive)
-    (unless (equal "solo" tychoish/emacs-instance-id)
-      (when (or (> 40 (random 100))
-		(< 150 (float-time (time-since desktop/last-save-time))))
-	(desktop-save desktop-dirname)
-	(setq desktop/time-since-last-save (current-time))))))
-
-(use-package savehist
-  :hook ((prescient-persist-mode . savehist-mode-setup))
-  :init
-  (defun savehist-mode-setup ()
-    (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
-    (savehist-mode 1))
-  :config
-  (setq savehist-coding-system 'utf-8-emacs))
-
-(use-package bookmark
-  :hook (prescient-persist-mode . tychoish/bookmark-setup)
-  :init
-  (defun tychoish/bookmark-setup ()
-    ;; setting the list before calling the function reduce the total time
-    (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el")))
-  :custom
-  (setq bookmark-save-flag 1))
-
-(use-package autorevert
-  :hook (emacs-startup . global-auto-revert-mode)
-  :delight auto-revert-mode
-  :commands (auto-revert-mode)
-  :config
-  (setq auto-revert-verbose nil)
-  (setq auto-revert-avoid-polling t)
-  (setq auto-revert-interval 60))
-
-(use-package recentf
-  :bind ("C-x C-r" . recentf)
-  :hook ((prescient-persist-mode . quiet-start-recentf-mode))
-  :init
-  (defun quiet-start-recentf-mode ()
-    (with-silence (recentf-mode t)))
-
-  (with-eval-after-load 'consult
-    ;; rebind key after lazy loading package
-    (bind-key "C-x C-r" #'consult-recent-file 'global-map))
-  :config
-  (setq recentf-auto-cleanup 'never)
-  (setq recentf-keep '(file-remote-p file-readable-p))
-  (setq recentf-max-menu-items 100)
-  (setq recentf-save-file (tychoish/conf-state-path "recentf.el")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
