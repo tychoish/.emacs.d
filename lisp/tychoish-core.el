@@ -2180,7 +2180,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :mode "\\.ninja\\'")
 
-
 (use-package slime
   :load-path "~/quicklisp/dists/quicklisp/software/slime-v2.31/"
   :after (f lisp-mode)
@@ -2319,72 +2318,139 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
 
   ;; TODO: make the default/suggestion options better
-  (defvar default-compile-options
-    '("make build" "make lint" "make all" "make test" "go test ./..." "go build ./...")
+  (defvar default-compile-commands
+    '("build"
+     "make lint"
+     "make all"
+     "make test"
+     "go test ./..."
+     "go build ./...")
     "set of default compilation options")
 
+  (defun tychoish--get-compilation-candidates (&optional directory)
+    "Generate a mapping of copilation commands to a cons cell of the directory and an annotation (command . (directory . username))"
+    (unless directory (setq directory default-directory))
+    (let* ((proj (projectile-project-root))
+	   (package-directories (get-directory-parents directory proj))
+	   (make-directories (-keep (lambda (dir) (when (or (file-in-directory-p "makefile" dir)
+							    (file-in-directory-p "Makefile" dir))
+						   dir))
+				    package-directories))
+	   (go-mod-directories (-keep (lambda (dir) (when (f-exists-p (f-join dir "go.mod")) dir))
+				      package-directories))
+	   (go-pkg-directories (->> go-mod-directories
+				    (-map (lambda (gmd) (get-directory-parents directory gmd)))
+				    (-flatten)
+				    (-distinct))))
+      (->>
+       (-concat
+	(-map (lambda (dir)
+		(if (eql directory dir)
+		    (list
+		     (cons "make build" (cons default-directory "run build target"))
+		     (cons "make test" (cons default-directory "run test target"))
+		     (cons "make lint" (cons default-directory "run lint target")))
+		  (-map (lambda (elem)
+			  (cons (format (car elem) dir)
+				(cons dir (format (cdr elem) dir))))
+			(list
+			 (cons "make -C %s build" "run build target in %s")
+			 (cons "make -C %s test" "run test target in %s")
+			 (cons "make -C %s lint" "run lint target in %s")))))
+	      make-directories)
+	(-flatten-n 1 (-map (lambda (dir)
+			      (-map (lambda (cmd)
+				      (let* ((prefix (concat "." (f-path-separator)))
+					     (cmd-dir dir)
+					     (dir (if (equal dir default-directory) "./" dir))
+					     (dir (cond
+						   ((string-prefix-p (f-path-separator) dir) dir)
+						   ((string-prefix-p prefix dir) dir)
+						   (t (concat prefix dir))))
+					     (dir-with-dots (concat dir "...")))
+					(list
+					 (cons (format (car cmd) dir-with-dots)
+					       (cons cmd-dir (concat (format (cdr cmd) cmd-dir) " (and sub-packages)")))
+					 (cons (format "go test -c -o /dev/null %s" dir)
+					       (cons cmd-dir (format "build all package and test files for %s, without running tests" dir))))))
+				    (list (cons "go test -v %s" "run go tests in verbose mode in %s")
+					  (cons "go test -v -cover %s" "run go tests in verbose mode and collect coverage data in %s")
+					  (cons "go test -v -race %s" "run go tests in verbose mode with the race detector in %s")
+					  (cons "go test -v -cover -race %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
+					  (cons "go test -cover %s" "run go tests while collecting coverage data in %s")
+					  (cons "go test -race %s" "run go tests with the race detector in %s")
+					  (cons "go test -race -cover %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
+					  (cons "go test %s" "run go tests in %s")
+ 					  (cons "go build %s" "build the go package in %s"))))
+			    go-pkg-directories))
+	(-map (lambda (cmd)
+		(list
+		 (cons cmd (cons directory (format "operation from `'default-compile-options' in current directory (%s)" directory)))
+		 (cons cmd (cons proj (format "operation from `'default-compile-options' in project root directory (%s)" proj)))))
+	      default-compile-options)
+	(-map (lambda (cmd)
+		(list
+		 (cons cmd (cons directory (format "operation from `'minibuffer-shell-commands' in current directory (%s)" directory)))
+		 (cons cmd (cons proj (format "operation from `'minibuffer-shell-commands' in project root directory (%s)" proj)))))
+	      (minibuffer-default-add-shell-commands))
+	(-map (lambda (cmd)
+		(list
+		 (cons cmd (cons directory (format "operation from `'shell-command-hisorty' in current directory (%s)" directory)))
+		 (cons cmd (cons proj (format "operation from `'shell-command-hisorty' in project root directory (%s)" proj)))))
+	      shell-command-history))
+       (-flatten-n 1)
+       (-distinct-by-car)
+       (-sort (lambda (st nd) (string-lessp (car st) (car nd)))))))
+
   ;; this is the inner "select which command to use" for entering a new compile command.
-  (defun tychoish--compilation-read-command (&key command initial)
-    (let ((minibuf-shell-commands (minibuffer-default-add-shell-commands)))
+  (defun tychoish--compilation-read-command (command)
+    (let* ((candidates (tychoish--get-compilation-candidates default-directory))
+	   (width 0)
+	   (longest-key (dolist (elem candidates)
+			  (when (< width (length (car elem)))
+			    (setq width (length (car elem)))))))
       (consult--read
-       (->> (when command (list command))
-            (-concat default-compile-options
-                     minibuf-shell-commands
-                     shell-command-history)
-            (-flatten)
-            (-filter #'stringp)
-            (-keep #'trimmed-string-or-nil)
-            (-distinct))
+       (mapcar #'car candidates)
        :prompt "compile command => "
        :command this-command
-       :initial "make "
-       :require-match initial
        :history 'compile-history
-       :annotate (lambda (item)
-                   (cond
-                    ((equal item command) "\t user supplied build command")
-                    ((member item compile-history) "\t session compile history")
-                    ((member item default-compile-options) "\t from 'default-compile-options")
-                    ((member item shell-command-history) "\t from 'shell-command-history")
-                    ((member item minibuf-shell-commands) "\n from 'minibuffer-shell-commands")
-                    (t ""))))))
+       :require-match nil
+       :annotate (lambda (key) (format "%s%s" (make-string (- (+ 2 width) (length key)) ? ) (cddr (assoc key candidates)))))))
 
   (advice-add 'compilation-read-command :override 'tychoish--compilation-read-command)
 
-  (defun tychoish/compile-project (name cmd)
+  (defun tychoish/compile-project (name &optional command)
     (let* ((default-directory (or (trimmed-string-or-nil (projectile-project-root))
                                   default-directory))
            (project-name (or (trimmed-string-or-nil (projectile-project-name))
                              (file-name-nondirectory (s-chop-suffix "/" project-directory))))
            (op-name (format "*%s-%s*" project-name (or name "compile")))
            (compile-buf (get-buffer op-name))
-           (compile-command (or (trimmed-string-or-nil cmd)
-                                (when compile-buf compile-command)
-                                (compilation-read-command :command nil :initial nil)))
+           (compile-command (or command
+				(when compile-buf compile-command)
+                                (compilation-read-command nil)))
            (compilation-arguments compilation-arguments))
 
       (save-some-buffers t 'save-some-buffers-root)
 
       (if compile-buf
         (with-current-buffer compile-buf
-          (when (trimmed-string-or-nil cmd))
+          (when (trimmed-string-or-nil compile-command))
             (setq compilation-arguments nil)
-            (message "old BUFFER: %s %s" compile-buf compile-command)
             (recompile current-prefix-arg))
         (compilation-start
          compile-command        ;; the command
          'compilation-mode      ;; the default
-         (compile-buffer-name op-buffer-name)))
-        (switch-to-buffer-other-window compile-buf)))
+         (compile-buffer-name op-name)))
+      (switch-to-buffer-other-window (get-buffer op-name))))
 
   (defun tychoish-compile ()
     (interactive)
-    (tychoish/compile-project nil nil))
+    (tychoish/compile-project "compile"))
 
   (defun tychoish-compile-project-build ()
     (interactive)
-    (tychoish/compile-project "build"
-       "time make -k build"))
+    (tychoish/compile-project "build" "make -k build"))
 
   (defun tychoish-compile-project-build-tests ()
     (interactive)

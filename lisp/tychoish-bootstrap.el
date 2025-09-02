@@ -454,7 +454,6 @@
 
 ;; project.el -- groups of related files
 
-
 (defun project-find-go-module (dir)
   (when-let ((root (or (locate-dominating-file dir "go.work")
 		       (locate-dominating-file dir "go.mod"))))
@@ -498,7 +497,6 @@
 ;;; no need for use-package for minimal configurations of packages
 ;;; that are included with emacs by default and that already have
 ;;; appropriate autoloads.
-
 
 (add-hook 'emacs-startup-hook 'electric-pair-mode)
 (add-hook 'emacs-startup-hook 'which-key-mode)

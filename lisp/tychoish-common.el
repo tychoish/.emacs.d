@@ -170,6 +170,14 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; lists -- helpers, mostly a-la dash.el
+
+(defun -distinct-by-car (cell)
+  (let ((-compare-fn (lambda (a b) (equal (car a) (car b)))))
+    (-distinct cell)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;; macros -- helper macros for
 
 (defmacro tychoish/set-tab-width (num)
