@@ -176,6 +176,11 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (let ((-compare-fn (lambda (a b) (equal (car a) (car b)))))
     (-distinct cell)))
 
+(defun -distinct-by-alist-key (key cell)
+  (let ((-compare-fn (lambda (a b) (equal (alist-get key a) (alist-get key b)))))
+    (-distinct cell)))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; macros -- helper macros for common operations

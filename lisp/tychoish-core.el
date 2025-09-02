@@ -2238,18 +2238,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq flycheck-golangci-lint-tests t))
 
 (use-package compile
-  :after (s)
   :defines (compile-add-error-syntax)
-  :bind (("C-c t c" . tychoish-compile-project-build)
-         ("C-c t l" . tychoish-compile-project-golang-lint)
+  :bind (("C-c t c" . compile)
          ("C-c C-t c" . compile)
 	 :map compilation-mode-map
 	 ("C" . compile))
-  :commands (compile
-             tychoish-compile-project-build
-             tychoish-compile-project-golang-lint
-             tychoish-compile-project-super-lint
-             tychoish-compile-project-build-tests)
   :init
   (defmacro compile-buffer-name (name)
     `(lambda (&optional _) ,name))
@@ -2274,15 +2267,26 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
 
-  ;; TODO: make the default/suggestion options better
-  (defvar default-compile-commands
-    '("build"
-     "make lint"
-     "make all"
-     "make test"
-     "go test ./..."
-     "go build ./...")
-    "set of default compilation options")
+  (cl-defun make-compilation-target-alist (&key cmd directory annotation)
+    `(list (cmd . ,cmd) (directory . ,directory) (annotation . ,annotation)))
+
+  (defun compilation-candidates-for-make-targets (&rest target-cells)
+    (->> target-cells
+     (-map (lambda (cell)
+	     (list
+	      (make-compilation-target-alist
+	       :cmd (format "make -k %s" (alist-get 'cmd cell))
+	       :directory (alist-get 'directory cell)
+	       :annotation (format "%s, continuing on error" (alist-get 'annotation cell)))
+	      (make-compilation-target-alist
+	       :cmd (format "make %s" (alist-get 'cmd cell))
+	       :directory (alist-get 'directory cell)
+	       :annotation (alist-get 'annotation cell))
+	      (make-compilation-target-alist
+	       :cmd (format "make -B %s" (alist-get 'cmd cell))
+	       :directory (alist-get 'directory cell)
+	       :annotation (format "%s, forcing a rebuild, even when the target is up to date" (alist-get 'annotation cell))))))
+     (-flatten-n 1)))
 
   ;; TODO: this should be a collection of hooks that you register and
   ;; are given a buffer or a directory (and?) each function returns
@@ -2304,22 +2308,22 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 				    (-distinct))))
       (->>
        (-concat
-	(-map (lambda (dir)
+	(-keep (lambda (dir)
 		(if (eql directory dir)
-		    (list
-		     (cons "make build" (cons default-directory "run build target"))
-		     (cons "make test" (cons default-directory "run test target"))
-		     (cons "make lint" (cons default-directory "run lint target")))
-		  (-map (lambda (elem)
-			  (cons (format (car elem) dir)
-				(cons dir (format (cdr elem) dir))))
-			(list
-			 (cons "make -C %s build" "run build target in %s")
-			 (cons "make -C %s test" "run test target in %s")
-			 (cons "make -C %s lint" "run lint target in %s")))))
+		    (compilation-candidates-for-make-targets
+		     (make-compilation-target-alist :cmd "build" :directory default-directory :annotation "run build target")
+		     (make-compilation-target-alist :cmd "test" :directory default-directory :annotation "run test target")
+		     (make-compilation-target-alist :cmd "lint" :directory default-directory :annotation "run lint target"))
+		  (-keep (lambda (target)
+			  (compilation-candidates-for-make-targets
+			   (make-compilation-target-alist
+			    :cmd (format "-C %s %s" dir target)
+			    :directory dir
+			    :annotation (format "run build target in %s" target))))
+		  '("build" "test" "lint"))))
 	      make-directories)
-	(-flatten-n 1 (-map (lambda (dir)
-			      (-map (lambda (cmd)
+	(-flatten-n 1 (-keep (lambda (dir)
+			      (-keep (lambda (command-template)
 				      (let* ((prefix (concat "." (f-path-separator)))
 					     (cmd-dir dir)
 					     (dir (if (equal dir default-directory) "./" dir))
@@ -2329,10 +2333,14 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 						   (t (concat prefix dir))))
 					     (dir-with-dots (concat dir "...")))
 					(list
-					 (cons (format (car cmd) dir-with-dots)
-					       (cons cmd-dir (concat (format (cdr cmd) cmd-dir) " (and sub-packages)")))
-					 (cons (format "go test -c -o /dev/null %s" dir)
-					       (cons cmd-dir (format "build all package and test files for %s, without running tests" dir))))))
+					 (make-compilation-target-alist
+					  :cmd (format (car command-template) dir)
+					  :directory dir
+					  :annotation (format (cdr command-template) dir))
+					 (make-compilation-target-alist
+					  :cmd (format (car command-template) dir-with-dots)
+					  :directory dir
+					  :annotation (format "%s, and all subdirectories" (cdr command-template))))))
 				    (list (cons "go test -v %s" "run go tests in verbose mode in %s")
 					  (cons "go test -v -cover %s" "run go tests in verbose mode and collect coverage data in %s")
 					  (cons "go test -v -race %s" "run go tests in verbose mode with the race detector in %s")
@@ -2341,45 +2349,60 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 					  (cons "go test -race %s" "run go tests with the race detector in %s")
 					  (cons "go test -race -cover %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
 					  (cons "go test %s" "run go tests in %s")
+					  (cons "go test %s -run=NOOP" "build go tests in %s but skip tests")
  					  (cons "go build %s" "build the go package in %s"))))
 			    go-pkg-directories))
-	(-map (lambda (cmd)
+	(-keep (lambda (cmd)
 		(list
-		 (cons cmd (cons directory (format "operation from `'default-compile-options' in current directory (%s)" directory)))
-		 (cons cmd (cons proj (format "operation from `'default-compile-options' in project root directory (%s)" proj)))))
-	      default-compile-options)
-	(-map (lambda (cmd)
-		(list
-		 (cons cmd (cons directory (format "operation from `'minibuffer-shell-commands' in current directory (%s)" directory)))
-		 (cons cmd (cons proj (format "operation from `'minibuffer-shell-commands' in project root directory (%s)" proj)))))
+		 (make-compilation-target-alist :cmd cmd :directory directory :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" directory))
+		 (make-compilation-target-alist :cmd cmd :directory proj :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" proj))))
 	      (minibuffer-default-add-shell-commands))
-	(-map (lambda (cmd)
+	(-keep (lambda (cmd)
 		(list
-		 (cons cmd (cons directory (format "operation from `'shell-command-history' in current directory (%s)" directory)))
-		 (cons cmd (cons proj (format "operation from `'shell-command-history' in project root directory (%s)" proj)))))
-	      shell-command-history))
-	(-map (lambda (dir)
+		 (make-compilation-target-alist :cmd cmd :directory directory :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))
+		 (make-compilation-target-alist :cmd cmd :directory proj :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))))
+	      shell-command-history)
+	(-keep (lambda (dir)
 		(list
-		 (cons "golangci-lint run" (cons dir (format "run `golangci-lint' in package %s" (f-filename dir))))))
+		 (make-compilation-target-alist
+		  :cmd "golangci-lint run"
+		  :directory dir
+		  :annotation (format "run `golangci-lint' in package %s" (f-filename dir)))
+		 (make-compilation-target-alist
+		  :cmd "golangci-lint run --allow-parallel-runners"
+		  :directory dir
+		  :annotation (format "run `golangci-lint' in package %s with parallel runners" (f-filename dir)))
+		 ;; (make-compilation-target-alist
+		 ;;  :cmd "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"
+		 ;;  :directory dir
+		 ;;  :annotation (format "crazy go xargs test" (f-filename dir)))
+		 (make-compilation-target-alist
+		  :cmd "go mod tidy"
+		  :directory dir
+		  :annotation (format "run `go mod tidy' in package %s" (f-filename dir)))))
 	      go-mod-directories))
        (-flatten-n 1)
-       (-distinct-by-car)
-       (-sort (lambda (st nd) (string-lessp (car st) (car nd))))))
+       (-distinct-by-alist-key 'cmd)
+       (-sort (lambda (st nd) (string-lessp (alist-get 'cmd st) (alist-get 'cmd nd)))))))
 
   ;; this is the inner "select which command to use" for entering a new compile command.
   (defun tychoish--compilation-read-command (command)
     (let* ((candidates (tychoish--get-compilation-candidates default-directory))
-	   (width 0)
-	   (longest-key (dolist (elem candidates)
-			  (when (< width (length (car elem)))
-			    (setq width (length (car elem)))))))
-      (consult--read
-       (mapcar #'car candidates)
+	   (data (-keep (lambda (tripple) (when-let* ((cmd (alist-get 'cmd tripple))
+						      (annotation (alist-get 'annotation tripple)))
+					    (cons cmd annotation))) candidates))
+	   (width 1)
+	   (longest-key (dolist (elem data)
+			  (let* ((cmd (car elem))
+				 (key-width (length cmd)))
+			    (when (< width key-width)
+			      (setq width key-width))))))
+      (consult--read data
        :prompt "compile command => "
        :command this-command
        :history 'compile-history
        :require-match nil
-       :annotate (lambda (key) (format "%s%s" (make-string (- (+ 2 width) (length key)) ? ) (cddr (assoc key candidates)))))))
+       :annotate (lambda (key) (format "%s%s" (make-string (- (+ 2 width) (length key)) ? ) (cdr (assoc key data)))))))
 
   (advice-add 'compilation-read-command :override 'tychoish--compilation-read-command)
 
@@ -2407,29 +2430,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          'compilation-mode      ;; the default
          (compile-buffer-name op-name)))
       (switch-to-buffer-other-window (get-buffer op-name))))
-
-  (defun tychoish-compile ()
-    (interactive)
-    (tychoish/compile-project "compile"))
-
-  (defun tychoish-compile-project-build ()
-    (interactive)
-    (tychoish/compile-project "build" "make -k build"))
-
-  (defun tychoish-compile-project-build-tests ()
-    (interactive)
-    (tychoish/compile-project "build-test"
-       "go test ./... -run=NOOP"))
-
-  (defun tychoish-compile-project-golang-lint ()
-    (interactive)
-    (tychoish/compile-project "lint"
-       "golangci-lint run --allow-parallel-runners"))
-
-  (defun tychoish-compile-gotests ()
-    (interactive)
-    (tychoish/compile-project "go-test"
-       "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"))
 
   (defun tychoish-compile-project-super-lint ()
     (interactive)
@@ -2836,10 +2836,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("a" . aidermacs-transient-menu))
   :init
   (defun tychoish/set-up-aider-env-vars ()
-    (when anthropic-api-key
+    (when (boundp 'anthropic-api-key)
       (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
-    (when google-gemini-key
-      (setenv "GEMINI_API_KEY" google-gemini-api-key)))
+    (when (boundp 'google-gemini-key)
+      (setenv "GEMINI_API_KEY" google-gemini-key)))
 
   :config
   (setq aidermacs-default-chat-mode 'architect)
