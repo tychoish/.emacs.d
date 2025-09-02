@@ -7,6 +7,8 @@
 ;; This configuration optimizes for lazy-loading so that configuration
 ;; only loads when called directly or a mode is activated.
 
+(toggle-debug-on-error t)
+
 ;;; Code:
 (use-package delight
   :ensure t
@@ -70,7 +72,7 @@
 	 (prescient-persist-mode . tychoish/set-up-emacs-instance-persistence)
 	 (auto-save . tychoish/set-up-auto-save))
   :init
-    (if (daemonp)
+  (if (daemonp)
       (add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init)
     (add-hook 'window-setup-hook 'tychoish/desktop-read-init)))
 
@@ -741,15 +743,12 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
-;; (use-package abbrev
-;;   :defer t
-;;   :commands (abbrev-mode expand-abbrev abbrev-suggest)
-;;   :delight (abbrev-mode "abb")
-;;   :config
-;;   (setq save-abbrevs t)
-;;   (setq abbrev-file-name (tychoish/conf-state-path "abbrev.el"))
-;;   (if (file-exists-p abbrev-file-name)
-;;       (quietly-read-abbrev-file)))
+(use-package abbrev
+  :defer t
+  :commands (abbrev-mode expand-abbrev abbrev-suggest)
+  :delight (abbrev-mode "abb")
+  :hook (((text-mode prog-mode telega-chat-mode) . abbrev-mode)
+	 (emas-startup . tychoish/load-abbrev-files)))
 
 (use-package prescient
   :ensure t
@@ -1423,48 +1422,6 @@
   (defun tychoish/set-up-message-mode-buffer ()
     (setq-local use-hard-newlines t)
     (setq-local make-backup-files nil))
-
-  (cl-defmacro tychoish/define-mail-account (&key name address key id command (maildir (expand-file-name "~/mail")) (instances '()) (systems '()))
-    (let ((symbol (intern (format "tychoish-mail-%s" id)))
-          (cmd-setter (if command
-                          `(setq mu4e-get-mail-command ,command)
-                        `(message "using existing mail command '%s'" mu4e-get-mail-command))))
-
-      `(progn
-         (define-key 'tychoish/mail-map (kbd ,key) ',symbol)
-         (dolist (instance ,instances)
-           (when (string-equal instance tychoish/emacs-instance-id)
-             (add-hook 'emacs-startup-hook ',symbol)))
-
-         (dolist (sysn ,systems)
-           (when (string-equal sysn ,system-name)
-             (add-hook 'emacs-startup-hook ',symbol)))
-
-	 (defun ,symbol ()
-	   (interactive)
-           (setq smtpmail-queue-dir ,(f-join maildir "queue" "cur"))
-           (setq mu4e-mu-home ,(f-join maildir ".mu"))
-           (setq message-directory ,maildir)
-           (setq message-auto-save-directory ,(f-join maildir "drafts"))
-           (setq message-signature-directory ,(f-join maildir "tools" "signatures"))
-
-           (setq user-mail-address ,address)
-           (setq message-signature-file ,address)
-           (setq user-full-name ,name)
-           (setq mu4e-compose-reply-to-address ,address)
-           (setq mu4e-reply-to-address ,address)
-
-           (setq mail-host-address ,(s-replace-regexp ".*@" "" address))
-           (setq message-sendmail-extra-arguments '("-a" ,address))
-
-           (when (eq major-mode 'mu4e-compose-mode)
-             (goto-char (point-min))
-             (let ((new-from ,(concat "From: " name " <" address ">")))
-               (while (re-search-forward "^From:.*$" nil t 1)
-                 (replace-match new-from nil nil))))
-
-           ,cmd-setter
-           (message ,(concat "mail: configured address [" address "]"))))))
 
   (defun tychoish/initialize-standard-mail-bookmarks ()
     "Add a standard/generic litst of bookmarks. Resets/removes all existing bookmarks."
@@ -2327,6 +2284,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
      "go build ./...")
     "set of default compilation options")
 
+  ;; TODO: this should be a collection of hooks that you register and
+  ;; are given a buffer or a directory (and?) each function returns
+  ;; some candidates (or not)
   (defun tychoish--get-compilation-candidates (&optional directory)
     "Generate a mapping of copilation commands to a cons cell of the directory and an annotation (command . (directory . username))"
     (unless directory (setq directory default-directory))
@@ -2395,12 +2355,16 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	      (minibuffer-default-add-shell-commands))
 	(-map (lambda (cmd)
 		(list
-		 (cons cmd (cons directory (format "operation from `'shell-command-hisorty' in current directory (%s)" directory)))
-		 (cons cmd (cons proj (format "operation from `'shell-command-hisorty' in project root directory (%s)" proj)))))
+		 (cons cmd (cons directory (format "operation from `'shell-command-history' in current directory (%s)" directory)))
+		 (cons cmd (cons proj (format "operation from `'shell-command-history' in project root directory (%s)" proj)))))
 	      shell-command-history))
+	(-map (lambda (dir)
+		(list
+		 (cons "golangci-lint run" (cons dir (format "run `golangci-lint' in package %s" (f-filename dir))))))
+	      go-mod-directories))
        (-flatten-n 1)
        (-distinct-by-car)
-       (-sort (lambda (st nd) (string-lessp (car st) (car nd)))))))
+       (-sort (lambda (st nd) (string-lessp (car st) (car nd))))))
 
   ;; this is the inner "select which command to use" for entering a new compile command.
   (defun tychoish--compilation-read-command (command)
@@ -2789,38 +2753,28 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("g g" . gptel)
          ("g r" . gptel-rewrite)
          :map gptel-mode-map
-	 ("C-c m" . gptel-menu)
-         ("C-c r a m c" . tychoish-gptel-copilot)
-         ("C-c r a m g" . tychoish-gptel-gemini)
-         ("C-c r a m C" . tychoish-gptel-copilot-default)
-         ("C-c r a m G" . tychoish-gptel-gemini-default))
+	 ("C-c m" . gptel-menu))
   :commands gptel
   :config
   (setq gptel-include-reasoning 'ignore)
-  (setq tychoish--gemini-backend (gptel-make-gemini "gemini" :key google-gemini-key :stream t))
-  (setq tychoish--gemini-model 'gemini-2.5-pro-preview-06-05)
-  (setq tychoish--copilot-backend (gptel-make-gh-copilot "copilot"))
-  (setq tychoish--copilot-model 'claude-3.5-sonnet)
 
-  (defun tychoish-gptel-copilot ()
-    (interactive)
-    (setq-local gptel-model tychoish--copilot-model)
-    (setq-local gptel-backend tychoish--copilot-backend))
+  (tychoish/gptel-set-up-backend
+   :name "gemini"
+   :key "g"
+   :model 'gemini-2.5-pro-preview-06-05
+   :backend (gptel-make-gemini "gemini" :key google-gemini-key :stream t))
 
-  (defun tychoish-gptel-copilot-default ()
-    (interactive)
-    (setq-default gptel-model tychoish--copilot-model)
-    (setq-default gptel-backend tychoish--copilot-backend))
+  (tychoish/gptel-set-up-backend
+   :name "copilot"
+   :key "c"
+   :model 'claude-3.5-sonnet
+   :backend (gptel-make-gh-copilot "copilot"))
 
-  (defun tychoish-gptel-gemini ()
-    (interactive)
-    (setq-local gptel-model tychoish--gemini-model)
-    (setq-local gptel-backend tychoish--gemini-backend))
-
-  (defun tychoish-gptel-gemini-default ()
-    (interactive)
-    (setq-default gptel-model tychoish--gemini-model)
-    (setq-default gptel-backend tychoish--gemini-backend))
+  (tychoish/gptel-set-up-backend
+   :name "anthropic"
+   :key "a"
+   :model 'claude-3-5-sonnet-20241022
+   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t))
 
   (tychoish-gptel-gemini-default)
   (require 'gptel-integrations))
@@ -2876,21 +2830,29 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq copilot-chat-follow t)
   (setq copilot-chat-markdown-prompt "##"))
 
+(use-package aidermacs
+  :ensure t
+  :bind (:map tychoish/robot-map
+	 ("a" . aidermacs-transient-menu))
+  :init
+  (defun tychoish/set-up-aider-env-vars ()
+    (when anthropic-api-key
+      (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
+    (when google-gemini-key
+      (setenv "GEMINI_API_KEY" google-gemini-api-key)))
+
+  :config
+  (setq aidermacs-default-chat-mode 'architect)
+  (setq aidermacs-default-model "sonnet")
+  (tychoish/set-up-aider-env-vars))
+
 (use-package aider
   :ensure t
   :bind (:map tychoish/robot-map
-         ("a" . aider-transient-menu))
+	 ("C-a" . aider-transient-menu))
   :config
-  ;; Or chatgpt model
-  ;; (setq aider-args '("--model" "o4-mini"))
-  ;; (setenv "OPENAI_API_KEY" <your-openai-api-key>)
-  ;; Or use your personal config file
-  ;; (setq aider-args `("--config" ,(expand-file-name "~/.aider.conf.yml")))
-
-  ;; for latest calude sonnet model
-  ;; (setq aider-args '("--model" "sonnet" "--no-auto-accept-architect")) ;; add --no-auto-commits if you don't want it
-  ;; (setenv "ANTHROPIC_API_KEY" anthropic-api-key)
-  (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets")))
+  (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets"))
+  (tychoish/set-up-aider-env-vars))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

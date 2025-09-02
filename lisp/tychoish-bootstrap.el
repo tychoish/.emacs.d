@@ -238,8 +238,10 @@
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" #'consult-recent-file 'global-map))
 
+  (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
   (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
+  (setq custom-file (tychoish/conf-state-path "custom.el"))
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)
   (setq recentf-auto-cleanup 'never)
@@ -317,7 +319,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; silent startup --
+;; silent startup -- avoid printing or using the Messages buffer
+
+(defun read-abbrev-file-quietly (filename)
+  (when (f-exists-p filename)
+    (read-abbrev-file filename t)))
 
 (defun display-startup-echo-area-message ()
   "Called during setup, intentially a noop, which omit the message."  nil)
@@ -390,6 +396,11 @@
                          (not (string-match-p "^flycheck_.*\\.el$" fn)))
                  (require (intern (string-remove-suffix ".el" fn)))))
             (directory-files dirname))) t))
+
+(defun tychoish/load-abbrev-files ()
+  (mapc #'read-abbrev-file-quietly
+	(cons abbrev-file-name (f-entries (f-join user-emacs-directory "abbrev") (f-has-ext-p-fn "el"))))
+  (setq save-abbrevs t))
 
 (defun tychoish/set-up-auto-save ()
   (let ((path (tychoish/conf-state-path "backup/")))
@@ -472,7 +483,6 @@
 (defun jump-to-elisp-help ()
   (interactive)
   (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

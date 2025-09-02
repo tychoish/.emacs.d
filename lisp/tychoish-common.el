@@ -178,7 +178,7 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; macros -- helper macros for
+;; macros -- helper macros for common operations
 
 (defmacro tychoish/set-tab-width (num)
   (unless (integerp num)
@@ -279,6 +279,74 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 	  (duration (time-to-seconds (time-since time))))
      (when (> duration  ,threshold)
        (message "%s: %.06fs" ,name duration))))
+
+(defmacro f-has-ext-p-fn (ext)
+  `(lambda (filename) (f-ext-p filename ext)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; macros -- configuration and setup
+
+(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
+  (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
+	(default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
+    `(progn
+       (defun ,local-function-symbol ()
+	 (interactive)
+	 (setq-local gptel-model ,model)
+	 (setq-local gptel-backend ,backend))
+
+       (defun ,default-function-symbol ()
+	 (interactive)
+	 (setq-default gptel-model ,model)
+	 (setq-default gptel-backend ,backend))
+
+       (bind-keys :map gptel-mode-map
+		  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
+		  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)))))
+
+(defvar mu4e-get-mail-command "true")
+
+(cl-defmacro tychoish/define-mail-account
+    (&key name address key id (command mu4e-get-mail-command) (maildir (expand-file-name "~/mail")) (instances '()) (systems '()))
+
+  (let ((symbol (intern (format "tychoish-mail-%s" id))))
+    `(progn
+       (define-key 'tychoish/mail-map (kbd ,key) ',symbol)
+       (dolist (instance ,instances)
+         (when (string-equal instance tychoish/emacs-instance-id)
+           (add-hook 'emacs-startup-hook ',symbol)))
+
+       (dolist (sysn ,systems)
+         (when (string-equal sysn ,system-name)
+           (add-hook 'emacs-startup-hook ',symbol)))
+
+       (defun ,symbol ()
+	 (interactive)
+         (setq smtpmail-queue-dir ,(f-join maildir "queue" "cur"))
+         (setq mu4e-mu-home ,(f-join maildir ".mu"))
+         (setq message-directory ,maildir)
+         (setq message-auto-save-directory ,(f-join maildir "drafts"))
+         (setq message-signature-directory ,(f-join maildir "tools" "signatures"))
+
+         (setq user-mail-address ,address)
+         (setq message-signature-file ,address)
+         (setq user-full-name ,name)
+         (setq mu4e-compose-reply-to-address ,address)
+         (setq mu4e-reply-to-address ,address)
+
+         (setq mail-host-address ,(s-replace-regexp ".*@" "" address))
+         (setq message-sendmail-extra-arguments '("-a" ,address))
+
+         (when (eq major-mode 'mu4e-compose-mode)
+           (goto-char (point-min))
+           (let ((new-from ,(concat "From: " name " <" address ">")))
+             (while (re-search-forward "^From:.*$" nil t 1)
+               (replace-match new-from nil nil))))
+
+         (setq mu4e-get-mail-command ,command)
+
+         (message ,(concat "mail: configured address [" address "]"))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -517,4 +585,3 @@ Returns the number of buffers killed."
       (message "unpinned %s from window" buf-name))))
 
 (provide 'tychoish-common)
-

@@ -1,0 +1,207 @@
+Cataline->Catalina
+Enlish->English
+Guaduloupe->Guadeloupe
+Guadulupe->Guadeloupe
+Hallowean->Halloween
+Yementite->Yemeni
+accension->ascension
+achive->achieve
+achived->achieved
+ackward->backward
+addres->address
+adressing->addressing
+affort->afford
+agina->again
+alot->a lot
+alusion->allusion
+amature->amateur
+apon->upon
+appealling->appealing
+archaoelogy->archaeology
+archaology->archaeology
+archeaologist->archaeologist
+archeaologists->archaeologists
+attaindre->attained
+baout->about
+becames->becomes
+beggin->begging
+behavour->behavior
+belived->believed
+belives->believes
+boaut->about
+buring->burying
+busineses->businesses
+
+;; edit the following
+calander->calendar
+carcas->carcass
+carnege->carnage
+carnige->carnage
+censur->censure
+ceratin->certain
+cervial->cervical
+chasr->chaser
+clera->clear
+comander->commander
+competion->competition
+coorperation->corporation
+coudl->could
+councellor->counselor
+councellors->counselors
+countrie's->countries
+coururier->courier
+coverted->converted
+cpoy->copy
+critising->criticizing
+critisize->criticize
+critisized->criticized
+critisizes->criticizes
+critisizing->criticizing
+dael->deal
+deram->dream
+desparate->desperate
+diea->idea
+dieing->dying, dyeing
+diversed->diverse, diverged
+doub->doubt, daub
+efford->effort, afford
+effords->efforts, affords
+eigth->eighth, eight
+electic->eclectic, electric
+electon->election, electron
+emition->emission, emotion
+emmigrated->emigrated, immigrated
+emminent->eminent, imminent
+empirial->empirical, imperial
+erally->orally, really
+erested->arrested, erected
+ethose->those, ethos
+extint->extinct, extant
+eyar->year, eyas
+eyars->years, eyas
+eyasr->years, eyas
+fiel->feel, field, file, phial
+fiels->feels, fields, files, phials
+firts->flirts, first
+fleed->fled, freed
+fomr->from, form
+formaly->formally, formerly
+futhroc->futhark, futhorc
+gae->game, Gael, gale
+gaurd->guard, gourd
+gogin->going, Gauguin
+haev->have, heave
+herad->heard, Hera
+housr->hours, house
+hten->then, hen, the
+htere->there, here
+humer->humor, humour
+humerous->humorous, humerus
+hvea->have, heave
+idesa->ideas, ides
+imaginery->imaginary, imagery
+imanent->eminent, imminent
+imigrant->emigrant, immigrant
+imigrated->emigrated, immigrated
+imigration->emigration, immigration
+iminent->eminent, imminent, immanent
+inheritage->heritage, inheritance
+inspite->in spite, inspire
+instutions->institutions, intuitions
+intented->intended, indented
+interbread->interbreed, interbred
+intered->interred, interned
+inumerable->enumerable, innumerable
+labatory->lavatory, laboratory
+labled->labelled, labeled
+launchs->launch, launches
+leanr->lean, learn, leaner
+lible->libel, liable
+liscense->license, licence
+lisence->license, licence
+lisense->license, licence
+lonly->lonely, only
+maching->machine, marching, matching
+maked->marked, made
+managable->manageable, manageably
+manouver->maneuver, manoeuvre
+manouverability->maneuverability, manoeuvrability, manoeuverability
+manouverable->maneuverable, manoeuvrable
+manouvers->maneuvers, manoeuvres
+manuever->maneuver, manoeuvre
+manuevers->maneuvers, manoeuvres
+mear->wear, mere, mare
+meranda->veranda, Miranda
+monestary->monastery, monetary
+moreso->more, more so
+muscels->mussels, muscles
+neice->niece, nice
+neigbour->neighbour, neighbor
+neigbouring->neighbouring, neighboring
+neigbours->neighbours, neighbors
+oging->going, ogling
+onot->note, not
+orgin->origin, organ
+originall->original, originally
+palce->place, palace
+performes->performed, performs
+personel->personnel, personal
+positon->position, positron
+procede->proceed, precede
+proceded->proceeded, preceded
+procedes->proceeds, precedes
+proceding->proceeding, preceding
+profesion->profusion, profession
+progrom->pogrom, program
+progroms->pogroms, programs
+prominately->prominently, predominately
+qtuie->quite, quiet
+qutie->quite, quiet
+refernce->reference, references
+relized->realised, realized
+repatition->repetition, repartition
+restraunt->restraint, restaurant
+rigeur->rigueur, rigour, rigor
+rised->raised, rose
+sasy->says, sassy
+scholarstic->scholastic, scholarly
+secceeded->seceded, succeeded
+seceed->succeed, secede
+seceeded->succeeded, seceded
+sence->sense, since
+sepulchure->sepulchre, sepulcher
+sepulcre->sepulchre, sepulcher
+shamen->shaman, shamans
+sheat->sheath, sheet, cheat
+shoudln->should, shouldn't
+sieze->seize, size
+siezed->seized, sized
+siezing->seizing, sizing
+sinse->sines, since
+sotyr->satyr, story
+sould->could, should, sold, soul
+speciallized->specialised, specialized
+specif->specific, specify
+spects->aspects, expects
+strat->start, strata
+stroy->story, destroy
+surley->surly, surely
+surrended->surrounded, surrendered
+thast->that, that's
+ther->there, their, the
+thikning->thinking, thickening
+throught->thought, through, throughout
+tiem->time, Tim
+tiome->time, tome
+tourch->torch, touch
+transcripting->transcribing, transcription
+troups->troupes, troops
+turnk->turnkey, trunk
+unmanouverable->unmaneuverable, unmanoeuvrable
+unsed->used, unused, unsaid
+vigeur->vigueur, vigour, vigor
+villin->villi, villain, villein
+weild->wield, wild
+wholy->wholly, holy
+wich->which, witch
+withdrawl->withdrawal, withdraw
