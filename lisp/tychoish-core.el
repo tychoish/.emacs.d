@@ -2681,8 +2681,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (when (boundp 'anthropic-api-key)
       (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
     (when (boundp 'google-gemini-key)
-      (setenv "GEMINI_API_KEY" google-gemini-key)))
-
+      (setenv "GEMINI_API_KEY" google-gemini-key))
+    (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md")))
   :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-default-model "sonnet")
