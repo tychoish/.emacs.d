@@ -151,10 +151,18 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
        (unless (string-empty-p (setq value (string-trim value))) value)
        value))
 
+(defun string-trim-non-word-chars (value)
+  (and (stringp value)
+       (unless (string-empty-p (setq value (string-trim value "\\W+" "\\W+"))) value)
+       value))
+
 (defun string-with-non-whitespace-content-p (value)
   "Return t when `VALUE' is a string with non-whitespace content and nil otherwise."
   (and (stringp value)
        (not (string-empty-p (string-trim value)))))
+
+(defun prefix-padding-for-annotation (key longest)
+  (make-string (abs (+ 4 (- longest (length key)))) ? ))
 
 (defun default-string (default input)
   "Return the DEFAULT value if the INPUT is empty or nil."
@@ -177,8 +185,27 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
     (-distinct cell)))
 
 (defun -distinct-by-alist-key (key cell)
-  (let ((-compare-fn (lambda (a b) (equal (alist-get key a) (alist-get key b)))))
+  (let ((-compare-fn (lambda (a b) (equal (a-get key a) (a-get key b)))))
     (-distinct cell)))
+
+(defun larger (&optional first second)
+  "Return the larger item or 0, if neither FIRST and SECOND are non-negative numbers."
+  (if (> (setq first (if (numberp first) first 0))
+	 (setq second (if (numberp second) second 0)))
+      first
+    second))
+
+(defun smaller (&optional first second)
+  (if (< (setq first (if (numberp first) first 0))
+	 (setq second (if (numberp second) second 0)))
+      first
+    second))
+
+(defun length-of-longest-item (items)
+  "Return the length of the longest item in the list ITEMS."
+  (->> items
+       (-map #'length)
+       (-reduce #'larger)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -573,7 +600,7 @@ Returns the number of buffers killed."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; buffer/frame management -- helper interactive functions.
+;; buffer/frame management -- helper functions.
 
 (defun pin-buffer-to-window-toggle ()
   "pin buffer to window, most useful in keeping chat buffers under control"
@@ -588,5 +615,32 @@ Returns the number of buffers killed."
     (if current-state
 	(message "pinned %s to window" buf-name)
       (message "unpinned %s from window" buf-name))))
+
+(defun buffer-line-count (&optional buf)
+  "Return the number of lines in the specified buffer (name or buffer), defaulting to the current buffer."
+  (car (buffer-line-statistics buf)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; project -- tools for managing groups of buffers and files by project
+
+(defun approximate-project-root ()
+  (or (when (and (featurep 'project) (project-current)) (project-root (project-current)))
+      (when (featurep 'projectile) (trimmed-string-or-nil (projectile-project-root)))
+      default-directory))
+
+(defun approximate-project-name ()
+  (string-trim-non-word-chars
+   (or (when (featurep 'project) (project-current))
+       (when (featurep 'projectile) (projectile-project-name))
+       (f-filename default-directory))))
+
+(cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (projectile-project-root)))
+  (-keep (lambda (buf)
+	   (with-current-buffer buf
+	     (when (and
+		    (derived-mode-p mode)
+		    (file-in-directory-p default-directory directory))
+	       (current-buffer)))) (buffer-list)))
 
 (provide 'tychoish-common)
