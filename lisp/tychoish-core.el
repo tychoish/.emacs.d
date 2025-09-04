@@ -647,8 +647,8 @@
          ("d" . cape-dabbrev)
          ("h" . cape-history)
          ("f" . cape-file)
-         ("s" . cape-elisp-symbol)
-         ("e" . cape-elisp-block)
+         ("n" . cape-elisp-symbol)
+         ("b" . cape-elisp-block)
          ("a" . cape-abbrev)
          ("l" . cape-line)
          ("w" . cape-dict)
@@ -668,8 +668,10 @@
     (cape-wrap-super #'cape-dabbrev #'cape-dict #'tychoish/capf-line))
 
   (defun tychoish/capf-elisp-combined ()
-    (cape-wrap-super #'cape-elisp-symbol #'cape-elisp-block
-                     #'cape-keyword #'cape-dabbrev))
+    (cape-wrap-super #'cape-elisp-symbol
+		     #'cape-elisp-block
+                     #'cape-keyword
+		     #'cape-dabbrev))
 
   (defun tychoish/text-mode-capf-setup ()
     (setq-local completion-at-point-functions
@@ -683,7 +685,7 @@
     (setq-local completion-at-point-functions
                 (list #'tychoish/capf-elisp-combined
                       #'yasnippet-capf
-                      #'tychoish/capf-line
+                      ;; #'tychoish/capf-line
                       #'cape-file
                       #'cape-emoji)))
 
@@ -1402,13 +1404,13 @@
 
 (use-package mu4e
   :ensure nil
-  :bind (:prefix "C-c m"
-	 :prefix-map tychoish/mail-map
+  :bind (:map tychoish/mail-map
 	 ("m" . mu4e)
          ("d" . mu4e~headers-jump-to-maildir)
          ("b" . mu4e-headers-search-bookmark)
          ("c" . mu4e-compose-new))
   :commands (mu4e
+	     mu4e-update-index
              mu4e-compose-new
              mu4e-headers-jump-to-maildir
              mu4e-headers-search-bookmark

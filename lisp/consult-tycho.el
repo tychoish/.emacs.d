@@ -273,8 +273,8 @@ DIR and INITIAL integrate with the consult-grep API."
 
 ;; consult-tycho: project compilation mode
 
-(cl-defun make-compilation-target-alist (&key cmd directory annotation)
-  `(list (cmd . ,cmd) (directory . ,directory) (annotation . ,annotation)))
+(cl-defun make-compilation-target-alist (&key cmd directory annotation name)
+  `(list (name . ,(or name cmd)) (cmd . ,cmd) (directory . ,directory) (annotation . ,annotation)))
 
 (defun compilation-candidates-for-make-targets (&rest target-cells)
   (->> target-cells
@@ -298,9 +298,9 @@ DIR and INITIAL integrate with the consult-grep API."
 ;; are given a buffer or a directory (and?) each function returns
 ;; some candidates (or not)
 (defun tychoish--get-compilation-candidates (&optional directory)
-  "Generate a mapping of copilation commands to a cons cell of the directory and an annotation (command . (directory . username))"
+  "Generate a sequence of candidate compile commands (an alist) with ('name 'cmd 'directory 'annotation) keys."
   (unless directory (setq directory default-directory))
-  (let* ((proj (projectile-project-root))
+  (let* ((proj (approximate-project-root))
 	 (package-directories (get-directory-parents directory proj))
 	 (make-directories (-keep (lambda (dir) (when (or (file-in-directory-p "makefile" dir)
 							  (file-in-directory-p "Makefile" dir))
@@ -314,115 +314,123 @@ DIR and INITIAL integrate with the consult-grep API."
 				  (-distinct)))
 	 (project-compile-buffer-commands (->> (mode-buffers-for-project :mode 'compilation-mode :directory directory)
 					       (-keep (lambda (buf) (with-current-buffer buf (cons (string-trim (car compilation-arguments)) (buffer-name))))))))
-    (->>
-     (-concat
-      (-map (lambda (dir)
-	      (if (eql directory dir)
-		  (compilation-candidates-for-make-targets
-		   (make-compilation-target-alist :cmd "build" :directory default-directory :annotation "run build target")
-		   (make-compilation-target-alist :cmd "test" :directory default-directory :annotation "run test target")
-		   (make-compilation-target-alist :cmd "lint" :directory default-directory :annotation "run lint target"))
-		(-map (lambda (target)
-			(compilation-candidates-for-make-targets
-			 (make-compilation-target-alist
-			  :cmd (format "-C %s %s" dir target)
-			  :directory dir
-			  :annotation (format "run build target in %s" target))))
-		      '("build" "test" "lint"))))
-	    make-directories)
-      (-flatten-n 1 (-map (lambda (dir)
-			    (-map (lambda (command-template)
-				    (let* ((prefix (concat "." (f-path-separator)))
-					   (cmd-dir dir)
-					   (dir (if (equal dir default-directory) "./" dir))
-					   (dir (cond
-						 ((string-prefix-p (f-path-separator) dir) dir)
-						 ((string-prefix-p prefix dir) dir)
-						 (t (concat prefix dir))))
-					   (dir-with-dots (concat dir "...")))
-				      (list
-				       (make-compilation-target-alist
-					:cmd (format (car command-template) dir)
-					:directory dir
-					:annotation (format (cdr command-template) dir))
-				       (make-compilation-target-alist
-					:cmd (format (car command-template) dir-with-dots)
-					:directory dir
-					:annotation (format "%s, and all subdirectories" (cdr command-template))))))
-				  (list (cons "go test -v %s" "run go tests in verbose mode in %s")
-					(cons "go test -v -cover %s" "run go tests in verbose mode and collect coverage data in %s")
-					(cons "go test -v -race %s" "run go tests in verbose mode with the race detector in %s")
-					(cons "go test -v -cover -race %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
-					(cons "go test -cover %s" "run go tests while collecting coverage data in %s")
-					(cons "go test -race %s" "run go tests with the race detector in %s")
-					(cons "go test -race -cover %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
-					(cons "golint %s" "run golint for %s")
-					(cons "go test %s" "run go tests in %s")
-					(cons "go test %s -run=NOOP" "build go tests in %s but skip tests")
- 					(cons "go build %s" "build the go package in %s"))))
-			  go-pkg-directories))
-      (-map (lambda (cmd)
-	      (list
-	       (make-compilation-target-alist
-		:cmd cmd
-		:directory directory
-		:annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" directory))
-	       (make-compilation-target-alist
-		:cmd cmd
-		:directory proj
-		:annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" proj))))
-	    (minibuffer-default-add-shell-commands))
-      (-map (lambda (cmd)
-	      (list
-	       (make-compilation-target-alist
-		:cmd cmd
-		:directory directory
-		:annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))
-	       (make-compilation-target-alist
-		:cmd cmd
-		:directory proj
-		:annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))))
-	    shell-command-history)
-      (-map (lambda (dir)
-	      (list
-	       (make-compilation-target-alist
-		:cmd "golangci-lint run"
-		:directory dir
-		:annotation (format "run `golangci-lint' in package %s" (f-filename dir)))
-	       (make-compilation-target-alist
-		:cmd "golangci-lint run --allow-parallel-runners"
-		:directory dir
-		:annotation (format "run `golangci-lint' in package %s with parallel runners" (f-filename dir)))
-	       ;; (make-compilation-target-alist
-	       ;;  :cmd "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"
-	       ;;  :directory dir
-	       ;;  :annotation (format "crazy go xargs test" (f-filename dir)))
-	       (make-compilation-target-alist
-		:cmd "go mod tidy"
-		:directory dir
-		:annotation (format "run `go mod tidy' in package %s" (f-filename dir)))))
-	    go-mod-directories)
-      (-map (lambda (cmd)
-	      (list (make-compilation-target-alist :cmd (car cmd) :directory proj :annotation (format "run %s, from compile buffer %s" (car cmd) (cdr cmd)))))
-	    project-compile-buffer-commands))
-     (-flatten-n 1)
-     (-distinct-by-alist-key 'cmd)
-     (-sort (lambda (st nd) (string-lessp (alist-get 'cmd st) (alist-get 'cmd nd)))))))
+    (->> '()
+	 (-flat-map-and-append
+	  (lambda (dir)
+	    (if (eql directory dir)
+		(compilation-candidates-for-make-targets
+		 (make-compilation-target-alist :cmd "build" :directory default-directory :annotation "run build target")
+		 (make-compilation-target-alist :cmd "test" :directory default-directory :annotation "run test target")
+		 (make-compilation-target-alist :cmd "lint" :directory default-directory :annotation "run lint target"))
+	      (-map (lambda (target)
+		      (compilation-candidates-for-make-targets
+		       (make-compilation-target-alist
+			:cmd (format "-C %s %s" dir target)
+			:directory dir
+			:annotation (format "run target %s in %s" target dir))))
+		    '("build" "test" "lint"))))
+	  make-directories)
+	 (-flat-map-and-append
+	  (lambda (dir)
+	    (-flat-map (lambda (command-template)
+			 (let* ((prefix (concat "." (f-path-separator)))
+				(cmd-dir dir)
+				(dir (if (equal dir default-directory) "./" dir))
+				(dir (cond
+				      ((string-prefix-p (f-path-separator) dir) dir)
+				      ((string-prefix-p prefix dir) dir)
+				      (t (concat prefix dir))))
+				(dir-with-dots (concat dir "...")))
+			   (list
+			    (make-compilation-target-alist
+			     :cmd (format (car command-template) dir)
+			     :directory dir
+			     :annotation (format (cdr command-template) dir))
+			    (make-compilation-target-alist
+			     :cmd (format (car command-template) dir-with-dots)
+			     :directory dir
+			     :annotation (format "%s, and all subdirectories" (cdr command-template))))))
+		       (list (cons "go test -v %s" "run go tests in verbose mode in %s")
+			     (cons "go test -v -cover %s" "run go tests in verbose mode and collect coverage data in %s")
+			     (cons "go test -v -race %s" "run go tests in verbose mode with the race detector in %s")
+			     (cons "go test -v -cover -race %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
+			     (cons "go test -cover %s" "run go tests while collecting coverage data in %s")
+			     (cons "go test -race %s" "run go tests with the race detector in %s")
+			     (cons "go test -race -cover %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
+			     (cons "golint %s" "run golint for %s")
+			     (cons "go test %s" "run go tests in %s")
+			     (cons "go test %s -run=NOOP" "build go tests in %s but skip tests")
+ 			     (cons "go build %s" "build the go package in %s"))))
+	  go-pkg-directories)
+	 (-flat-map-and-append
+	  (lambda (cmd)
+	    (list
+	     (make-compilation-target-alist
+	      :cmd cmd
+	      :directory directory
+	      :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" directory))
+	     (make-compilation-target-alist
+	      :cmd cmd
+	      :directory proj
+	      :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" proj))))
+	  (minibuffer-default-add-shell-commands))
+	 (-flat-map-and-append
+	  (lambda (cmd)
+	    (list
+	     (make-compilation-target-alist
+	      :cmd cmd
+	      :directory directory
+	      :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))
+	     (make-compilation-target-alist
+	      :cmd cmd
+	      :directory proj
+	      :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))))
+	  shell-command-history)
+	 (-flat-map-and-append
+	  (lambda (dir)
+	    (list
+	     (make-compilation-target-alist
+	      :cmd "golangci-lint run"
+	      :directory dir
+	      :annotation (format "run `golangci-lint' in package %s" (f-filename dir)))
+	     (make-compilation-target-alist
+	      :cmd "golangci-lint run --allow-parallel-runners"
+	      :directory dir
+	      :annotation (format "run `golangci-lint' in package %s with parallel runners" (f-filename dir)))
+	     (make-compilation-target-alist
+	      :name "go list <pkgs...> | xargs -t go test -race -v"
+	      :cmd "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"
+	      :directory dir
+	      :annotation (format "crazy go xargs test" (f-filename dir)))
+	     (make-compilation-target-alist
+	      :cmd "go mod tidy"
+	      :directory dir
+	      :annotation (format "run `go mod tidy' in package %s" (f-filename dir)))))
+	  go-mod-directories)
+	 (-flat-map-and-append
+	  (lambda (cmd)
+	    (list (make-compilation-target-alist :cmd (car cmd) :directory proj :annotation (format "run %s, from compile buffer %s" (car cmd) (cdr cmd)))))
+	  project-compile-buffer-commands)
+	 (-distinct-by-alist-key 'name)
+	 (-sort (lambda (st nd) (string-lessp (alist-get 'name st) (alist-get 'name nd)))))))
 
 ;; this is the inner "select which command to use" for entering a new compile command.
 (defun tychoish--compilation-read-command (command)
   (let* ((candidates (tychoish--get-compilation-candidates default-directory))
-	 (data (-keep (lambda (tripple) (when-let* ((cmd (alist-get 'cmd tripple))
+	 (data (-keep (lambda (tripple) (when-let* ((cmd (alist-get 'name tripple))
 						    (annotation (alist-get 'annotation tripple)))
 					  (cons cmd annotation))) candidates))
 	 (options (-map #'car data))
-	 (longest-id (length-of-longest-item options)))
-    (consult--read options
+	 (longest-id (length-of-longest-item options))
+	 (selection-name (consult--read options
 		   :prompt "compile command => "
 		   :command this-command
 		   :history 'compile-history
 		   :require-match nil
 		   :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id) (cdr (assoc key data)))))))
+
+    ;; TODO make the candidates list be a hashmap
+    (alist-get 'cmd (-flatten-n 1 (-filter (lambda (elem) (when (equal selection-name (alist-get 'name elem)) elem)) candidates)))))
 
 (cl-defun project-compilation-buffers (&optional &key (name "build") (project (approximate-project-name)))
   (let* ((default-names (->> (list name "build" "compilation" "test" "lint" "check" "benchmark" "run")
