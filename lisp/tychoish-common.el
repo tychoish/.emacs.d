@@ -207,23 +207,92 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
        (-map #'length)
        (-reduce #'larger)))
 
-(defun -map-and-append (mapping-operation input-list append-to-list)
+(defun -map-join (mapping-operation input-list append-to-list)
   (->> input-list
        (-map mapping-operation)
-       (-concat append-to-list)))
+       (-join append-to-list)))
 
 (defun -flat-map (mapping-operation input-list)
   (->> input-list
        (-map mapping-operation)
        (-flatten-n 1)))
 
-(defun -flat-map-and-append (mapping-operation input-list append-to-list)
-  (append (-flat-map mapping-operation input-list) append-to-list))
+(defun -unwind (list)
+  "Flattens a list of lists into a list by collecting items in one list"
+  (-flatten-n 1 list))
 
-(defun -map-reduce (mapping-op reduce-op input-list)
+(defmacro -flat->> (x &optional form &rest more)
+  `(->> ,x ,form ,@more (-unwind)))
+
+(defmacro --flat-map (form input-list)
+  `(->> ,input-list
+	(-map (lambda (it) (ignore it) ,form))
+	(-flatten-n 1)))
+
+(defun -flat-map-join (mapping-operation input-list append-to-list)
   (->> input-list
-       (-map #'mapping-op)
-       (-reduce #'reduce-op)))
+       (-map mapping-operation)
+       (-join append-to-list)))
+
+(defmacro --flat-map-join (form input-list append-to-list)
+  `(->> ,input-list
+       (--map ,form)
+       (-join ,append-to-list)))
+
+(defun -join (&rest items)
+  (apply #'nconc items))
+
+(defun -map-in-place (mapping-op items)
+  (let ((head items))
+    (while head
+      (setf (car head) (funcall mapping-op (car head)))
+      (setq head (cdr head))))
+  items)
+
+(defmacro --map-in-place (form items)
+  `(let* ((lst ,items)
+	  (head lst))
+     (while head
+       (setf (car head) (funcall #'(lambda (it) (ignore it) ,form) (car head)))
+       (setq head (cdr head)))
+     lst))
+
+(defun -in-place (mapping-op items)
+  (let ((head items)
+	 (count 0))
+    (while head
+      (setf (car head) (funcall mapping-op (car head)))
+      (setq head (cdr head))
+      (setq count (+ 1 count)))
+    count))
+
+(defmacro --in-place (form items)
+  `(let ((head ,items)
+	 (count 0))
+     (while head
+       (setf (car head) (funcall #'(lambda (it) (ignore it) ,form) (car head)))
+       (setq head (cdr head))
+       (setq count (+ 1 count)))
+     count))
+
+(defmacro ht-make-getter (table)
+  `(lambda (key) (ht-get ,table key)))
+
+(defmacro ht-make-setter (table)
+  `(lambda (key value) (ht-set ,table key value)))
+
+(defmacro ht-make-contains-p (table)
+  `(lambda (key) (ht-contains-p ,table key)))
+
+(defun f-directory-has-file-p (path files)
+  (when (stringp files)
+    (setq files (list files)))
+
+  (when (f-directory-p path)
+    (->> (f-entries path #'f-filename)
+	 (-map-in-place (lambda (fn) (member fn files)))
+	 (-reduce (lambda (a b) (or a b))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; macros -- helper macros for common operations
@@ -584,7 +653,7 @@ Returns the number of buffers killed."
   (string-trim-non-word-chars
    (or (when (featurep 'project) (project-current))
        (when (featurep 'projectile) (projectile-project-name))
-       (f-filename default-directory))))
+       (f-filename (expand-file-name default-directory)))))
 
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (projectile-project-root)))
   (-keep (lambda (buf)

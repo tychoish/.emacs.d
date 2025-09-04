@@ -1109,6 +1109,8 @@
              consult-rg
 	     get-directory-parents
              consult-org-capture
+	     tychoish--compilation-read-command
+	     tychoish/compile-project
              consult-org-capture-target))
 
 (use-package consult-sardis
@@ -2248,27 +2250,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defmacro compile-buffer-name (name)
     `(lambda (&optional _) ,name))
   :config
-  (defun tychoish/guess-compilation-root ()
-    (or (trimmed-string-or-nil (projectile-project-root))
-        default-directory))
-
-  (with-eval-after-load 'rust-mode (require 'rust-compile))
-
-  (setq-default compilation-save-buffers-predicate #'tychoish/guess-compilation-root)
-
   (defun compile-add-error-syntax (name regexp file line &optional col level)
     "Register new compilation error syntax."
     (add-to-list 'compilation-error-regexp-alist-alist (list name regexp file line col level))
     (add-to-list 'compilation-error-regexp-alist name))
 
-  (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
-
   (defun colorize-compilation-buffer ()
     (ansi-color-apply-on-region compilation-filter-start (point)))
-
-  (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
-
-  (advice-add 'compilation-read-command :override 'tychoish--compilation-read-command)
 
   (defun tychoish-compile ()
     "Run compile operation selecting compile buffer and commands."
@@ -2289,7 +2277,17 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                           "RUN_LOCAL=true"))
            (optstr (format "-e %s" (s-join " -e " options)))
            (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
-      (tychoish/compile-project "super-lint" command-string))))
+      (tychoish/compile-project "super-lint" command-string)))
+
+  (with-eval-after-load 'rust-mode (require 'rust-compile))
+
+  (setq-default compilation-save-buffers-predicate #'approximate-project-root)
+
+  (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
+
+  (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
+
+  (advice-add 'compilation-read-command :override 'tychoish--compilation-read-command))
 
 (use-package cargo
   :ensure t
