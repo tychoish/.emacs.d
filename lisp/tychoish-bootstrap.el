@@ -155,6 +155,7 @@
 
 (setq which-key-idle-delay .25)
 (setq which-key-idle-secondary-delay 0.125)
+(setq which-key-lighter "")
 
 (setq completion-cycle-threshold 2)
 (setq completion-ignore-case t)
@@ -181,7 +182,7 @@
 (setq shr-color-visible-luminance-min 80)
 (setq shr-use-colors nil)
 (setq shr-use-fonts nil)
-(setq eww-search-prefix "https://www.google.com/search?q=")
+(setq eww-search-prefix "https://lite.duckduckgo.com/search?q=")
 
 (setq eldoc-minor-mode-string "")
 (setq eldoc-echo-area-use-multiline-p t)
@@ -377,7 +378,6 @@
   (global-auto-revert-mode 1)
 
   (delight 'auto-revert-mode)
-  (delight 'which-key-mode)
   (delight 'eldoc-mode)
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
   (delight 'auto-fill-function " afm")

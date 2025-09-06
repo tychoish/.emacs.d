@@ -746,7 +746,7 @@
 (use-package abbrev
   :defer t
   :commands (abbrev-mode expand-abbrev abbrev-suggest)
-  :delight (abbrev-mode "abb")
+  :delight (abbrev-mode " abb")
   :hook (((text-mode prog-mode telega-chat-mode) . abbrev-mode)
 	 (emas-startup . tychoish/load-abbrev-files)))
 
@@ -1163,12 +1163,6 @@
          ("g" . helm-google-suggest)
          ("f" . helm-grep-do-git-grep)
 
-	 :map eshell-command-mode-map
-         ("M-p" . helm-eshell-history)
-         ([remap eshell-pcomplete] . helm-esh-pcomplete)
-         ("M-s f" . helm-eshell-prompts-all)
-         ("M-r" . helm-eshell-history)
-
          :map tychoish/helm-center-menu-map ;; "C-c h"
          :prefix "g"
          :prefix-map tychoish/helm-grep-tools-map ;; "C-c h g"
@@ -1180,6 +1174,13 @@
          ("C-j" . helm-select-action))
   :commands (helm-mode helm-autoresize-mode)
   :config
+  (eval-after-load 'eshell
+    (bind-keys :map eshell-command-mode-map
+               ("M-p" . helm-eshell-history)
+               ([remap eshell-pcomplete] . helm-esh-pcomplete)
+               ("M-s f" . helm-eshell-prompts-all)
+               ("M-r" . helm-eshell-history)))
+
   (setq history-delete-duplicates t)
   (setq history-length 250)
 
