@@ -276,7 +276,8 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
      count))
 
 (defmacro ht-make-getter (table)
-  `(lambda (key) (ht-get ,table key)))
+  (inline-quote
+   (lambda (key) (ht-get ,table key))))
 
 (defmacro ht-make-setter (table)
   `(lambda (key value) (ht-set ,table key value)))
@@ -651,8 +652,9 @@ Returns the number of buffers killed."
 
 (defun approximate-project-name ()
   (string-trim-non-word-chars
-   (or (when (featurep 'project) (project-current))
+   (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
        (when (featurep 'projectile) (projectile-project-name))
+       (when (project-current))
        (f-filename (expand-file-name default-directory)))))
 
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (projectile-project-root)))

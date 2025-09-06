@@ -55,9 +55,9 @@ helm-appropos replacement."
   (add-to-list 'org-capture-templates
                '("c" "consult-org-capture: select heading interactively ..." entry (consult-org--capture-target 'agenda)
                   "* TODO %?\n  %i"
-		  :prepend t
-		  :kill-buffer t
-		  :empty-lines-after 1)))
+                  :prepend t
+                  :kill-buffer t
+                  :empty-lines-after 1)))
 
 (defun consult-org--capture-target ()
   "Choose a capture target interactively.
@@ -65,7 +65,7 @@ This function returns a value suitable for use as the `target'
 entry of `org-capture-templates'."
   (list 'function
         (lambda ()
-	  (unless (derived-mode-p #'org-mode)
+          (unless (derived-mode-p #'org-mode)
                  (user-error "Must call from an Org buffer.")
           (let ((consult--read-config
                  `((,this-command
@@ -93,7 +93,7 @@ entry of `org-capture-templates'."
                          :require-match nil
                          :group (consult--type-group templ)
                          :narrow (consult--type-narrow templ)
-			 :annotate (lambda (selection) (format " --> [%s]" (cdr (assoc selection templ))))
+                         :annotate (lambda (selection) (format " --> [%s]" (cdr (assoc selection templ))))
                          :lookup (lambda (selection candidates &rest _) (cdr (assoc selection candidates)))
                          :category 'org-capture
                          :history '(:input consult-org--capture-history))))
@@ -132,23 +132,23 @@ entry of `org-capture-templates'."
 
 (defun get-directory-default-candidate-list ()
   (append (get-directory-parents default-directory (or (projectile-project-root) ""))
-	  (list default-directory
-		user-emacs-directory
-		(expand-file-name "~/")
-		(projectile-project-root)
-		(thing-at-point 'filename)
-		(thing-at-point 'existing-filename))))
+          (list default-directory
+                user-emacs-directory
+                (expand-file-name "~/")
+                (projectile-project-root)
+                (thing-at-point 'filename)
+                (thing-at-point 'existing-filename))))
 
 (defun consult-tycho--select-directory (&optional &key input-dirs require-match)
   "Select a directory from a provided or likely set of `INPUT-DIRS`'."
   (consult--read
    (consult-tycho--clean-directory-options-for-selection
     (or (when (listp input-dirs)
-	  (consult-tycho--clean-directory-options-for-selection input-dirs))
-	(when-let* ((strp (stringp input-dirs))
-		    (input-dirs (trimmed-string-or-nil input-dirs)))
-	  (list input-dirs))
-	(get-directory-default-candidate-list)))
+          (consult-tycho--clean-directory-options-for-selection input-dirs))
+        (when-let* ((strp (stringp input-dirs))
+                    (input-dirs (trimmed-string-or-nil input-dirs)))
+          (list input-dirs))
+        (get-directory-default-candidate-list)))
    :sort nil
    :command this-command
    :require-match require-match
@@ -173,29 +173,30 @@ entry of `org-capture-templates'."
   (or (trimmed-string-or-nil initial)
       ;; with the prefix argument, ask the user
       (when current-prefix-arg
-	(consult-tycho--select-context-for-operation
-	 (format "%s<init:%s>: " prompt prompt-annotation)))
+        (consult-tycho--select-context-for-operation
+         (format "%s<init:%s>: " prompt prompt-annotation)))
       ;; otherwise, provide the empty string...
       ""))
 
 (defun consult-tycho--select-context-for-operation (prompt &optional seed-list)
   "Pick string to use as context in a follow up operation using PROMPT."
-  (let* ((current-selection )
-         (this-command this-command)
-         (selections (consult-tycho--context-base-list (list current-selection))))
+  (let ((this-command this-command)
+        (selections (consult-tycho--context-base-list seed-list)))
     (or (when (length= selections 1) (nth 0 selections))
         (when (length> selections 1)
           (consult--read selections
            :sort nil
            :command this-command
            :require-match nil
-           :prompt (format "%s: " prompt))))))
+           :prompt prompt)))))
 
-(defun consult-tycho--context-base-list (&optional seed-list)
-  (->> (list (s-trim (buffer-substring (region-beginning) (region-end))))
-       (-concat seed-list)
-       (-concat (cl-subseq kill-ring 0 (min 3 (length kill-ring))))
-       (-concat
+(defun consult-tycho--context-base-list (&optional seed)
+  (->> (-join
+        (if (listp seed)
+            seed
+          (list seed))
+        (s-lines (s-trim (buffer-substring (region-beginning) (region-end))))
+        (-take 10 kill-ring)
         (cond ((derived-mode-p 'text-mode)
                (list (thing-at-point 'word)
                      (thing-at-point 'email)
@@ -206,21 +207,18 @@ entry of `org-capture-templates'."
                      (thing-at-point 'word)
                      (thing-at-point 'sexp)
                      (thing-at-point 'defun)))
-              (t '())))
+              (t '()))
+        (list (thing-at-point 'line)))
        (-keep #'trimmed-string-or-nil)
-       (-add-if-empty (thing-at-point 'line))
-       (-filter (lambda (elem) (and (> 32 (length elem))
-				    (< 2 (length elem)))))
-       (-sort #'string-greaterp)
        (-distinct)))
 
-(defun consult-tycho--incremental-grep (prompt builder initial)
+(defun consult-tycho--incremental-grep (&key prompt builder initial)
   "Do incremental grep-type operation. Like the `consult-grep' operation
 upon which it was based, permits interoperability between git-grep ag, ack, and rg"
   (let ((consult-async-input-debounce 0.025)
-	(consult-async-input-throttle 0.05)
-	(consult-async-refresh-delay 0.025)
-	(this-command this-command))
+        (consult-async-input-throttle 0.05)
+        (consult-async-refresh-delay 0.025)
+        (this-command this-command))
     (consult--read
      (consult--process-collection builder
        :transform (consult--grep-format builder)
@@ -243,21 +241,20 @@ DIR and INITIAL integrate with the consult-grep API."
   (interactive "P")
   ;; `consult--directory-prompt' --> '(prompt paths <default>-dir)
   (let* ((prompt-paths-dir (consult--directory-prompt "rg" (consult-tycho--discover-directory dir)))
-         (default-directory (nth 2 prompt-paths-dir)))
+         (default-directory (nth 2 prompt-paths-dir))
+         (prompt (nth 0 prompt-paths-dir))
+         (initial (or initial (consult-tycho--select-context-for-operation prompt))))
     (consult-tycho--incremental-grep
-     ;; prompt:
-     (nth 0 prompt-paths-dir)
-     ;; builder:
-     (consult--ripgrep-make-builder (nth 1 prompt-paths-dir))
-     ;; initial:
-     (consult-tycho--resolve-initial-grep "rg" "regex" initial))))
+     :prompt prompt
+     :builder (consult--ripgrep-make-builder (nth 1 prompt-paths-dir))
+     :initial (consult-tycho--resolve-initial-grep "rg" "regex" initial))))
 
 ;;;###autoload
 (defun consult-rg-for-thing (&optional dir initial)
   "Start an iterative rg session with context.
 DIR and INITIAL integrate with the consult-grep API."
   (interactive "P")
-  (consult-rg dir (consult-tycho--select-context-for-operation "rg<thing>")))
+  (consult-rg dir (consult-tycho--select-context-for-operation "rg<thing>: ")))
 
 ;;;###autoload
 (defun consult-rg-pwd (&optional initial)
@@ -275,8 +272,8 @@ DIR and INITIAL integrate with the consult-grep API."
 ;; consult-tycho: project compilation mode
 
 (cl-defstruct (tychoish--compilation-candidate
-	       (:constructor nil) ;; disable default
-	       (:constructor make-compilation-candidate (&key command annotation (directory default-directory) (name command))))
+               (:constructor nil) ;; disable default
+               (:constructor make-compilation-candidate (&key command annotation (directory default-directory) (name command))))
   "Structure for compilation candidates"
   (name
    "build"
@@ -301,63 +298,60 @@ DIR and INITIAL integrate with the consult-grep API."
 (defun add-candidates-to-table (table candidates)
   (mapc (lambda (item) (push-compilation-candidate item table)) candidates))
 
-(defun collect-compilation-candidates-operation (table)
-  `(lambda (item) (push-compilation-candidate item table)))
-
 (defun compilation-candidates-for-make-targets (directory &rest targets)
   (let ((command-template "make %s%s")
-	(annotation-template "run target %s%s"))
+        (annotation-template "run target %s%s"))
 
     (unless (equal default-directory directory)
       (setq command-template (format "make %%s-C %s %%s" directory))
       (setq annotation-template (format "run target %%s in %s%%s" directory)))
 
     (->> targets
-	 (--flat-map
-	  (list
-	   (make-compilation-candidate
-	    :command (format command-template "-k " it)
-	    :annotation (format annotation-template it ", continuing on error"))
-	   (make-compilation-candidate
-	    :command (format command-template "" it)
-	    :annotation (format annotation-template it ""))
-	   (make-compilation-candidate
-	    :command (format command-template "-B " it)
-	    :annotation (format annotation-template it ", unconditionally"))
-	   (make-compilation-candidate
-	    :command (format command-template "-k -B " it)
-	    :annotation (format annotation-template it ", unconditionally while continuing on error")))))))
+         (--flat-map
+          (list
+           (make-compilation-candidate
+            :command (format command-template "-k " it)
+            :annotation (format annotation-template it ", continuing on error"))
+           (make-compilation-candidate
+            :command (format command-template "" it)
+            :annotation (format annotation-template it ""))
+           (make-compilation-candidate
+            :command (format command-template "-B " it)
+            :annotation (format annotation-template it ", unconditionally"))
+           (make-compilation-candidate
+            :command (format command-template "-k -B " it)
+            :annotation (format annotation-template it ", unconditionally while continuing on error")))))))
 
 (defun compilation-candidates-for-go-packages (directory)
   (->> (list (cons "go test -v %s" "run go tests in verbose mode in %s")
-	     (cons "go test -v -cover %s" "run go tests in verbose mode and collect coverage data in %s")
-	     (cons "go test -v -race %s" "run go tests in verbose mode with the race detector in %s")
-	     (cons "go test -v -cover -race %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
-	     (cons "go test -cover %s" "run go tests while collecting coverage data in %s")
-	     (cons "go test -race %s" "run go tests with the race detector in %s")
-	     (cons "go test -race -cover %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
-	     (cons "golint %s" "run golint for %s")
-	     (cons "go test %s" "run go tests in %s")
-	     (cons "go test %s -run=NOOP" "build all sources, including tests in %s")
- 	     (cons "go build %s" "build the go package in %s"))
+             (cons "go test -v -cover %s" "run go tests in verbose mode and collect coverage data in %s")
+             (cons "go test -v -race %s" "run go tests in verbose mode with the race detector in %s")
+             (cons "go test -v -cover -race %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
+             (cons "go test -cover %s" "run go tests while collecting coverage data in %s")
+             (cons "go test -race %s" "run go tests with the race detector in %s")
+             (cons "go test -race -cover %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
+             (cons "golint %s" "run golint for %s")
+             (cons "go test %s" "run go tests in %s")
+             (cons "go test %s -run=NOOP" "build all sources, including tests in %s")
+             (cons "go build %s" "build the go package in %s"))
 
        (--flat-map
-	(let* ((prefix (concat "." (f-path-separator)))
-	       (dir (if (equal directory default-directory) "./" directory))
-	       (dir (cond
-		     ((string-prefix-p (f-path-separator) dir) dir)
-		     ((string-prefix-p prefix dir) dir)
-		     (t (concat prefix dir))))
-	       (dir-with-dots (concat dir "...")))
-	  (list
-	   (make-compilation-candidate
-	    :command (format (car it) dir)
-	    :directory directory
-	    :annotation (format (cdr it) dir))
-	   (make-compilation-candidate
-	    :command (format (car it) dir-with-dots)
-	    :directory directory
-	    :annotation (format "%s, and all subdirectories" (format (cdr it) dir))))))))
+        (let* ((prefix (concat "." (f-path-separator)))
+               (dir (if (equal directory default-directory) "./" directory))
+               (dir (cond
+                     ((string-prefix-p (f-path-separator) dir) dir)
+                     ((string-prefix-p prefix dir) dir)
+                     (t (concat prefix dir))))
+               (dir-with-dots (concat dir "...")))
+          (list
+           (make-compilation-candidate
+            :command (format (car it) dir)
+            :directory directory
+            :annotation (format (cdr it) dir))
+           (make-compilation-candidate
+            :command (format (car it) dir-with-dots)
+            :directory directory
+            :annotation (format "%s, and all subdirectories" (format (cdr it) dir))))))))
 
 
 ;; TODO: this should be a collection of hooks that you register and
@@ -367,171 +361,173 @@ DIR and INITIAL integrate with the consult-grep API."
   "Generate a sequence of candidate compile commands (an alist) with ('name 'cmd 'directory 'annotation) keys."
   (unless directory (setq directory default-directory))
   (let* ((proj (approximate-project-root))
-	 (package-directories (get-directory-parents directory proj))
-	 (go-mod-directories (->> package-directories
-				  (-keep (lambda (dir) (when (f-exists-p (f-join dir "go.mod")) dir)))))
-	 (go-pkg-directories (->> go-mod-directories
-				  (-flat-map (lambda (gmd) (get-directory-parents directory gmd)))
-				  (-distinct)))
-	 (operation-table (ht-create)))
-
+         (package-directories (get-directory-parents directory proj))
+         (go-mod-directories (->> package-directories
+                                  (-keep (lambda (dir) (when (f-exists-p (f-join dir "go.mod")) dir)))))
+         (go-pkg-directories (->> go-mod-directories
+                                  (-flat-map (lambda (gmd) (get-directory-parents directory gmd)))
+                                  (-distinct)))
+         (operation-table (ht-create)))
 
     (add-candidates-to-table
      operation-table
      (->> package-directories
-	  (--filter (f-directory-has-file-p it '("makefile" "Makefile")))
-	  (--flat-map
-	   (compilation-candidates-for-make-targets directory it "build" "test" "lint"))))
+          (--filter (f-directory-has-file-p it '("makefile" "Makefile")))
+          (--flat-map
+           (compilation-candidates-for-make-targets directory it "build" "test" "lint"))))
 
     (add-candidates-to-table
      operation-table
      (->> go-mod-directories
-	  (--flat-map (compilation-candidates-for-go-packages it))))
+          (--flat-map (compilation-candidates-for-go-packages it))))
 
     (add-candidates-to-table
      operation-table
      (->> go-mod-directories
-	  (--flat-map
-	   (list
-	    (make-compilation-candidate
-	     :command "golangci-lint run"
-	     :directory it
-	     :annotation (format "run `golangci-lint' in package %s" (f-filename it)))
-	    (make-compilation-candidate
-	     :command "golangci-lint run --allow-parallel-runners"
-	     :directory it
-	     :annotation (format "run `golangci-lint' in package %s with parallel runners" (f-filename it)))
-	    (make-compilation-candidate
-	     :name "go list <pkgs...> | xargs -t go test -race -v"
-	     :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"
-	     :directory it
-	     :annotation (format "crazy go xargs test" (f-filename it)))
-	    (make-compilation-candidate
-	     :command "go mod tidy"
-	     :directory it
-	     :annotation (format "run `go mod tidy' in package %s" (f-filename it)))))))
+          (--flat-map
+           (list
+            (make-compilation-candidate
+             :command "golangci-lint run"
+             :directory it
+             :annotation (format "run `golangci-lint' in package %s" (f-filename it)))
+            (make-compilation-candidate
+             :command "golangci-lint run --allow-parallel-runners"
+             :directory it
+             :annotation (format "run `golangci-lint' in package %s with parallel runners" (f-filename it)))
+            (make-compilation-candidate
+             :name "go list <pkgs...> | xargs -t go test -race -v"
+             :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"
+             :directory it
+             :annotation (format "crazy go xargs test" (f-filename it)))
+            (make-compilation-candidate
+             :command "go mod tidy"
+             :directory it
+             :annotation (format "run `go mod tidy' in package %s" (f-filename it)))))))
 
     (add-candidates-to-table
      operation-table
      (->> (minibuffer-default-add-shell-commands)
-	  (--flat-map
-	   (list
-	    (make-compilation-candidate
-	     :command it
-	     :directory directory
-	     :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" directory))
-	    (make-compilation-candidate
-	     :command it
-	     :directory proj
-	     :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" proj))))))
+          (--flat-map
+           (list
+            (make-compilation-candidate
+             :command it
+             :directory directory
+             :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" directory))
+            (make-compilation-candidate
+             :command it
+             :directory proj
+             :annotation (format "operation from `'minibuffer-shell-commands' in current directory (%s)" proj))))))
 
     (add-candidates-to-table
      operation-table
      (->> shell-command-history
-	  (--flat-map
-	   (list
-	    (make-compilation-candidate
-	     :command it
-	     :directory directory
-	     :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))
-	    (make-compilation-candidate
-	     :command it
-	     :directory proj
-	     :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))))))
+          (--flat-map
+           (list
+            (make-compilation-candidate
+             :command it
+             :directory directory
+             :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))
+            (make-compilation-candidate
+             :command it
+             :directory proj
+             :annotation (format "operation from `'shell-command-history' in current directory (%s)" directory))))))
 
     (add-candidates-to-table
      operation-table
      (->> (mode-buffers-for-project
-	   :mode 'compilation-mode
-	   :directory directory)
-	  (--keep
-	   (with-current-buffer it
-	     (cons (string-trim (car compilation-arguments)) (buffer-name))))
-	  (--map-in-place
-	   (make-compilation-candidate
-	    :command (car it)
-	    :directory proj
-	    :annotation (format "run %s, from compile buffer %s" (car it) (cdr it))))))
+           :mode 'compilation-mode
+           :directory directory)
+          (--keep
+           (with-current-buffer it
+             (cons (string-trim (car compilation-arguments)) (buffer-name))))
+          (--map-in-place
+           (make-compilation-candidate
+            :command (car it)
+            :directory proj
+            :annotation (format "run %s, from compile buffer %s" (car it) (cdr it))))))
 
     operation-table))
 
 ;; this is the inner "select which command to use" for entering a new compile command.
 (defun tychoish--compilation-read-command (command)
   (let* ((candidates (tychoish--get-compilation-candidates default-directory))
-	 (names (->> candidates
-		     (ht-map (lambda (key value) (tychoish--compilation-candidate-name value)))
-		     (-sort #'string-lessp)))
-	 (longest-id (length-of-longest-item names))
-	 (selection-name
-	  (consult--read
-	   names
-	   :prompt "compile command => "
-	   :command this-command
-	   :history 'compile-history
-	   :require-match nil
-	   :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id)
-		    			   (tychoish--compilation-candidate-annotation (ht-get candidates key)))))))
+         (names (->> candidates
+                     (ht-map (lambda (key value) (tychoish--compilation-candidate-name value)))
+                     (-sort #'string-lessp)))
+         (longest-id (length-of-longest-item names))
+         (selection-name
+          (consult--read
+           names
+           :prompt "compile command => "
+           :command this-command
+           :history 'compile-history
+           :require-match nil
+           :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id)
+                                           (tychoish--compilation-candidate-annotation (ht-get candidates key)))))))
 
     (tychoish--compilation-candidate-name (ht-get candidates selection-name))))
 
 (cl-defun project-compilation-buffers (&optional &key (name "build") (project (approximate-project-name)))
-  (let ((buffer-table (make-hash-table))
-	(default-names (list "build" "compilation" "test" "lint" "check" "benchmark" "run")))
+  (let ((buffer-table (ht-create))
+        (default-names (list "build" "compilation" "test" "lint" "check" "benchmark" "run")))
     (when name
       (cl-pushnew name default-names :test #'equal))
 
     (--each ;; existing-compilation-buffers-for-project
-	(mode-buffers-for-project
-	 :directory (approximate-project-root)
-	 :mode 'compilation-mode)
+        (mode-buffers-for-project
+         :directory (approximate-project-root)
+         :mode 'compilation-mode)
+
       (with-current-buffer it
-	(ht-set
-	 buffer-table
-	 (buffer-name it)
-	 (format "reuse buffer: project=%s errors=%s lines=%s command='%s'"
-		 project
-		 compilation-num-errors-found
-		 (buffer-line-count)
-		 (string-trim (car compilation-arguments))))))
+        (ht-set
+         buffer-table
+         (buffer-name it)
+         (format "reuse buffer: project=%s errors=%s lines=%s command='%s'"
+                 project
+                 compilation-num-errors-found
+                 (buffer-line-count)
+                 (string-trim (car compilation-arguments))))))
 
     (--each default-names ;; default-compilation-buffer-names-for-project
       (let ((name (format "*%s-%s*" project it)))
-	(if (ht-contains-p buffer-table name)
-	    (ht-set
-	     buffer-table
-	     (generate-new-buffer-name name)
-	     (format "new %s buffer for project %s" name project))
-	  (ht-set
-	   buffer-table
-	   name
-	   (format "create default compilation buffer for %s" project)))))
+        (if (ht-contains-p buffer-table name)
+            (ht-set
+             buffer-table
+             (generate-new-buffer-name name)
+             (format "new %s buffer for project %s" name project))
+          (ht-set
+           buffer-table
+           name
+           (format "create default compilation buffer for %s" project)))))
 
     buffer-table))
 
 (defun tychoish/compile-project (&optional name command)
   (let* ((compilation-buffer-candidates (project-compilation-buffers :name name))
+         (longest-key (length-of-longest-item (ht-keys compilation-buffer-candidates)))
          (op-name (consult--read
-		   (ht-keys compilation-buffer-candidates)
-		   :prompt "compilation buffer => "
-		   :require-match nil
-		   :annotate (ht-make-getter compilation-buffer-candidates)))
+                   (ht-keys compilation-buffer-candidates)
+                   :prompt "compilation buffer => "
+                   :require-match nil
+                   :annotate (lambda (key) (concat (prefix-padding-for-annotation key longest-key)
+                                                   (ht-get compilation-buffer-candidates key)))))
          (compile-buf (get-buffer op-name)))
 
     (save-some-buffers t 'save-some-buffers-root)
 
     (if compile-buf
         (with-current-buffer compile-buf
-	  (when (or current-prefix-arg command)
-	    (setq compilation-arguments nil))
+          (when (or current-prefix-arg command)
+            (setq compilation-arguments nil))
           (when (trimmed-string-or-nil compile-command)
-	    (recompile current-prefix-arg)))
+            (recompile current-prefix-arg)))
       (compilation-start
        compile-command        ;; the command
        'compilation-mode      ;; the default
        (compile-buffer-name op-name)))
 
     (if-let* ((op-window (get-buffer-window op-name (selected-frame))))
-	(select-window op-window)
+        (select-window op-window)
       (switch-to-buffer-other-window (get-buffer op-name)))))
 
 (provide 'consult-tycho)
