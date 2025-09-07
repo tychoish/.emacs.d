@@ -530,5 +530,25 @@ DIR and INITIAL integrate with the consult-grep API."
         (select-window op-window)
       (switch-to-buffer-other-window (get-buffer op-name)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; consult-tycho: mail
+
+;;;###autoload
+(defun tychoish-mail-select-account (account-id)
+  "Use consult to select an account/mail configuration."
+  (interactive
+   (list
+    (let* ((accounts (ht-keys tychoish/mail-accounts))
+	   (longest-key (length-of-longest-item accounts)))
+      (consult--read
+       accounts
+       :prompt "mail-account => "
+       :require-match nil
+       :annotate (tychoish/mail-get-account-annotation-function longest-key)))))
+
+  (let ((select-account-operation (intern account-id)))
+    (funcall select-account-operation)))
+
 (provide 'consult-tycho)
 ;;; consult-tycho.el ends here

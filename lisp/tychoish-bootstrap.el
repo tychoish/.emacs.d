@@ -33,28 +33,33 @@
 
 ;;; Code:
 
+(require 'ht)
+
+(bind-keys :prefix "C-c m"
+           :prefix-map tychoish/mail-map)
+
 (bind-keys ("C-x m" . execute-extended-command)
-	   ("C-x C-m" . execute-extended-command)
-	   ("M-X" . execute-extended-command-for-buffer)
+           ("C-x C-m" . execute-extended-command)
+           ("M-X" . execute-extended-command-for-buffer)
            ("C-x b" . switch-to-buffer) ;; vs consult-buffer
            ("C-x l" . goto-line)
            ("C-x f" . find-file)
            ("C-x C-f" . find-file)
            ("C-x h" . help)
            ("C-x C-x" . exchange-point-and-mark)
-	   ;; ("C-x C-u w" . upcase-word)
-	   ;; ("C-x C-u t" . upcase-initials-region)
-	   ;; ("C-x C-u r" . upcase-region)
+           ;; ("C-x C-u w" . upcase-word)
+           ;; ("C-x C-u t" . upcase-initials-region)
+           ;; ("C-x C-u r" . upcase-region)
            ("C-x C-d" . dired)
            ("C-x d" . dired)
            ("C-x C-n" . count-words)
            ("C-c i" . indent-region)
            ("C-c c" . comment-region)
-	   ("C-x C-r" . recentf)
+           ("C-x C-r" . recentf)
            ("C-<backspace>" . backward-kill-word)
            ("C-h" . backward-kill-word)
-	   ("C-c C-w" . whitespace-cleanup)
-	   ("C-c t p" . #'toggle-electric-pair-inhibition)
+           ("C-c C-w" . whitespace-cleanup)
+           ("C-c t p" . #'toggle-electric-pair-inhibition)
            ("C-c t e" . #'toggle-electric-pair-eagerness)
            ("C-c d k s" . backward-kill-sentence)
            ("C-c d k p" . backward-kill-paragraph)
@@ -63,24 +68,24 @@
            ("C-c d k w" . delete-trailing-whitespace)
            ("C-c d s" . describe-symbol)
            ("C-c d v" . describe-variable)
-	   ("C-c d q" . #'kill-eldoc-and-help-buffers)
-	   ("C-c d j" . jump-to-elisp-help)
-	   ("C-c d d" . eldoc)
-	   ("C-c d e" . eldoc-doc-buffer)
+           ("C-c d q" . #'kill-eldoc-and-help-buffers)
+           ("C-c d j" . jump-to-elisp-help)
+           ("C-c d d" . eldoc)
+           ("C-c d e" . eldoc-doc-buffer)
            ("C-c C-f" . set-fill-column)
            ("C-c C-p" . set-mark-command)
            ("C-c C-r" . rename-buffer)
-	   ("M-<SPC>" . set-mark-command)
-	   ;; ("C-c h a" . mark-whole-buffer)
-	   ("s-c" . clipboard-kill-ring-save) ;; (CUA/macOS) copy
-	   ("s-v" . clipboard-yank)           ;; (CUA/macOS) paste
-	   ("s-x" . clipboard-kill-region)    ;; (CUA/macOS) cut
+           ("M-<SPC>" . set-mark-command)
+           ;; ("C-c h a" . mark-whole-buffer)
+           ("s-c" . clipboard-kill-ring-save) ;; (CUA/macOS) copy
+           ("s-v" . clipboard-yank)           ;; (CUA/macOS) paste
+           ("s-x" . clipboard-kill-region)    ;; (CUA/macOS) cut
            ("<mouse-2>" . clipboard-yank)
-	   ("C-z" . undo)
+           ("C-z" . undo)
            ("C-w" . kill-region)
            ("C-<tab>" . completion-at-point)
            ("C-c s e" . eshell)
-	   ("M-h" . windmove-left)
+           ("M-h" . windmove-left)
            ("M-j" . windmove-down)
            ("M-k" . windmove-up)
            ("M-l" . windmove-right)
@@ -96,9 +101,9 @@
            ("M-<down>" . increase-window-down)
            ("M-<up>" . increase-window-up)
            ("M-<right>" . increase-window-right)
-	   :prefix "C-c w"
-	   :prefix-map tychoish/web-browser-map ;; C-c w
-	   ("d" . browse-url-generic)
+           :prefix "C-c w"
+           :prefix-map tychoish/web-browser-map ;; C-c w
+           ("d" . browse-url-generic)
            ("e" . browse-url)
            ("f" . browse-url-firefox)
            ("c" . browse-url-chrome)
@@ -111,7 +116,7 @@
            :prefix "p"
            :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
            ("f" . find-grep)
-	   :map minibuffer-local-map
+           :map minibuffer-local-map
            ("C-l" . backward-kill-word))
 
 ;; (put 'list-timers 'disabled nil)
@@ -194,36 +199,36 @@
 (setq byte-compile-warnings
       ;; OMIT: free-vars docstrings-wide
       '(callargs
-	constants
-	docstrings
-	docstrings-non-ascii-quotes
-	docstrings-control-chars
-	empty-body
-	ignored-return-value
-	interactive-only
-	lexical
-	lexical-dynamic
-	make-local
-	mutate-constant
-	noruntime
-	not-unused
-	obsolete
-	redefine
-	suspicious
-	unresolved))
+        constants
+        docstrings
+        docstrings-non-ascii-quotes
+        docstrings-control-chars
+        empty-body
+        ignored-return-value
+        interactive-only
+        lexical
+        lexical-dynamic
+        make-local
+        mutate-constant
+        noruntime
+        not-unused
+        obsolete
+        redefine
+        suspicious
+        unresolved))
 
 (setq whitespace-style
       '(face
-	trailing
-	tabs
-	spaces
-	lines
-	newline
-	missing-newline-at-eof
+        trailing
+        tabs
+        spaces
+        lines
+        newline
+        missing-newline-at-eof
         empty
-	space-mark
-	tab-mark
-	newline-mark))
+        space-mark
+        tab-mark
+        newline-mark))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -255,7 +260,7 @@
   (interactive)
   (unless (equal "solo" tychoish/emacs-instance-id)
     (when (or (> 40 (random 100))
-	      (< 150 (float-time (time-since desktop/last-save-time))))
+              (< 150 (float-time (time-since desktop/last-save-time))))
       (desktop-save desktop-dirname)
       (setq desktop/time-since-last-save (current-time)))))
 
@@ -272,16 +277,16 @@
   ;; a list of instance names that are epehemral)
   (unless (equal "solo" tychoish/emacs-instance-id)
     (if (daemonp)
-	(progn
-	  (setq desktop-restore-frames t)
-	  (setq desktop-load-locked-desktop t)
-	  (setq desktop-restore-eager nil))
+        (progn
+          (setq desktop-restore-frames t)
+          (setq desktop-load-locked-desktop t)
+          (setq desktop-restore-eager nil))
       (setq desktop-restore-eager t)
       (setq desktop-load-locked-desktop nil))
 
     (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
       (let ((gc-cons-threshold 80000000)
-	    (with-silence (desktop-read)))))
+            (with-silence (desktop-read)))))
 
     (set-to-current-time-on-startup desktop/last-save-time)
     (setq desktop-save t)
@@ -399,7 +404,7 @@
 
 (defun tychoish/load-abbrev-files ()
   (mapc #'read-abbrev-file-quietly
-	(cons abbrev-file-name (f-entries (f-join user-emacs-directory "abbrev") (f-has-ext-p-fn "el"))))
+        (cons abbrev-file-name (f-entries (f-join user-emacs-directory "abbrev") (f-has-ext-p-fn "el"))))
   (setq save-abbrevs t))
 
 (defun tychoish/set-up-auto-save ()
@@ -467,7 +472,7 @@
 
 (defun project-find-go-module (dir)
   (when-let ((root (or (locate-dominating-file dir "go.work")
-		       (locate-dominating-file dir "go.mod"))))
+                       (locate-dominating-file dir "go.mod"))))
     (cons 'go-module root)))
 
 (defun project-find-cmake-project (dir)
@@ -555,67 +560,189 @@
 
 (cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
   (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
-	(default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
+        (default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
     `(progn
        (defun ,local-function-symbol ()
-	 (interactive)
-	 (setq-local gptel-model ,model)
-	 (setq-local gptel-backend ,backend))
+         (interactive)
+         (setq-local gptel-model ,model)
+         (setq-local gptel-backend ,backend))
 
        (defun ,default-function-symbol ()
-	 (interactive)
-	 (setq-default gptel-model ,model)
-	 (setq-default gptel-backend ,backend))
+         (interactive)
+         (setq-default gptel-model ,model)
+         (setq-default gptel-backend ,backend))
 
        (bind-keys :map gptel-mode-map
-		  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-		  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)))))
+                  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
+                  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)))))
+
+(defvar tychoish/mail-accounts (ht-create #'equal))
+(defvar tychoish/mail-account-current nil)
+
+(cl-deftype signature-source '(signature-file
+                               signature-directory
+                               signature-text))
+
+(cl-defstruct (tychoish--mail-account
+               (:constructor tychoish--make--mail-account
+                             (&key id maildir name address keybinding signature signature-kind signature fetchmail
+                              &aux (maildir (cond
+                                             ((null maildir) (f-expand "~/mail"))
+                                             ((not (stringp maildir)) (user-error "maildir must be a string"))
+                                             ((not (f-directory-p maildir)) (user-error "maildir does not exist"))
+                                             (t (f-expand maildir))))g
+                                   (signature-kind (cond
+                                                    ((eq (type-of signature) 'signature-source) signature)
+                                                    ((not (eq (type-of signature) 'string)) (user-error "invalid type for signature"))
+                                                    ((f-directory-p signature) 'signature-directory)
+                                                    ((f-exists-p signature) 'signature-file)
+                                                    (t 'signature-text)))
+                                   (signature (setq signature (and (when (trimmed-string-or-nil signature)
+                                                                    (cond ((eq signature-kind 'signature-directory)
+                                                                           (f-join maildir ".sig"))
+                                                                          ((eq signature-kind 'signature-file)
+                                                                           (f-join maildir ".sig" address))
+                                                                          ((eq signature-kind 'signature-text)
+                                                                           (user-error "signature text is not defined"))
+                                                                          ((null signature-kind)
+                                                                           (user-error "signature configuration is not supported"))
+                                                                          (t signature)))
+                                                                   signature)
+                                                    ;; now validate
+                                                    signature (cond
+                                                               ((eq signature-kind 'signature-directory)
+                                                                (if (or (null signature) (not (f-directory-p signature)))
+                                                                    (user-error "signature directory does not exist")
+                                                                  signature))
+                                                               ((eq signature-kind 'signature-file)
+                                                                (if (not (f-file-p signature))
+                                                                    (user-error "signature file does not exist")
+                                                                  signature))
+                                                               ((eq signature-kind 'signature-text)
+                                                                (or (when (not (s-contains-p "\n" signature))
+                                                                      (warn "signature string does not contain newlines")
+                                                                      signature)
+                                                                    signature))
+                                                               (t signature)))))))
+
+  "track mail account configurations. used internally by tychoish/define-mail-account"
+  (maildir (expand-file-name "~/mail")
+   :documentation "path for maildirs"
+   :type 'string)
+  (id nil
+   :documentation "symbol of function that activates this account"
+   :type 'symbol)
+  (address user-mail-address
+   :documentation "email address"
+   :type '(string t))
+  (name (user-full-name) ;; from /etc/password
+   :documentation "(given) name, used to populate `USER-FULL-NAME'"
+   :type 'string)
+  (keybinding "m"
+   :documentation "keybinding in the tychoish/mail-map keymap"
+   :type 'char)
+  (fetchmail mu4e-get-mail-command
+   :documentation "external command to run to fetch mail."
+   :type 'string)
+  (signature-kind 'signature-directory
+   :documentation "determines how signatures are configured"
+   :type 'signature-source)
+  (signature ""
+   :documentation "content or filename of signature"
+   :type 'string))
+
+(defmacro tychoish/mail-get-account-annotation-function (longest-key)
+  `(lambda (key)
+    (let ((account (ht-get tychoish/mail-accounts key)))
+      (format "%s-- %s <%s>%s"
+              (prefix-padding-for-annotation key ,longest-key)
+              (tychoish--mail-account-name account)
+              (tychoish--mail-account-address account)
+              (or (when (equal tychoish/mail-account-current key) " -- CURRENT") "")))))
+
+(defconst tychoish/mail-id-template "tychoish-mail-%s")
 
 (defvar mu4e-get-mail-command "true")
-
-(bind-keys :prefix "C-c m"
-	   :prefix-map tychoish/mail-map)
 
 (cl-defmacro tychoish/define-mail-account
     (&key name address key id (command mu4e-get-mail-command) (maildir (expand-file-name "~/mail")) (instances '()) (systems '()))
 
-  (let ((symbol (intern (format "tychoish-mail-%s" id))))
-    `(progn
-       (define-key 'tychoish/mail-map (kbd ,key) ',symbol)
-       (dolist (instance ,instances)
-         (when (string-equal instance tychoish/emacs-instance-id)
-           (add-hook 'emacs-startup-hook ',symbol)))
+  (let* ((account-name (format tychoish/mail-id-template id))
+         (configure-account-symbol (intern account-name)))
 
-       (dolist (sysn ,systems)
-         (when (string-equal sysn ,system-name)
-           (add-hook 'emacs-startup-hook ',symbol)))
+    (define-key 'tychoish/mail-map (kbd key) configure-account-symbol)
 
-       (defun ,symbol ()
-	 (interactive)
-         (setq smtpmail-queue-dir ,(f-join maildir "queue" "cur"))
-         (setq mu4e-mu-home ,(f-join maildir ".mu"))
-         (setq message-directory ,maildir)
-         (setq message-auto-save-directory ,(f-join maildir "drafts"))
-         (setq message-signature-directory ,(f-join maildir "tools" "signatures"))
+    (ht-set tychoish/mail-accounts account-name
+            (tychoish--make--mail-account
+             :name name
+             :address address
+             :keybinding key
+             :maildir maildir
+             :fetchmail command
+             :id id
+             :signature-kind 'signature-directory
+             :signature (f-join maildir "tools" "signatures")))
 
-         (setq user-mail-address ,address)
-         (setq message-signature-file ,address)
-         (setq user-full-name ,name)
-         (setq mu4e-compose-reply-to-address ,address)
-         (setq mu4e-reply-to-address ,address)
+    (dolist (instance instances)
+      (when (and (stringp instance) (string-equal instance tychoish/emacs-instance-id))
+        (add-hook 'emacs-startup-hook configure-account-symbol)))
 
-         (setq mail-host-address ,(s-replace-regexp ".*@" "" address))
-         (setq message-sendmail-extra-arguments '("-a" ,address))
+    (dolist (sysn systems)
+      (when (and (stringp) (string-equal sysn (system-name)))
+        (add-hook 'emacs-startup-hook configure-account-symbol)))
+
+  `(defun ,configure-account-symbol ()
+     (interactive)
+
+     (let* ((account-id ,id)
+            (account-name ,account-name)
+            ;; nothing beyond this point should access compilation env ->
+            (conf (ht-get tychoish/mail-accounts account-name))
+            (maildir (tychoish--mail-account-maildir conf)))
+
+       (setq tychoish/mail-account-current account-name)
+       (setq message-directory maildir)
+       (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
+       (setq mu4e-mu-home (f-join maildir ".mu"))
+       (setq message-auto-save-directory (f-join maildir "drafts"))
+
+       (let ((signature-kind (tychoish--mail-account-signature-kind conf))
+             (signature (tychoish--mail-account-signature conf))
+             (address (tychoish--mail-account-address conf))
+             (given-name (tychoish--mail-account-name conf)))
+
+         (cond
+          ((eq signature-kind 'signature-directory)
+           (setq message-signature-directory (or signature (f-join maildir "tools" "signatures")))
+           (setq message-signature-file (or address account-id account-name))
+           (setq message-signature t))
+          ((eq (tychoish--mail-account-signature-kind conf) 'signature-file)
+           (setq message-signature-directory nil)
+           (setq message-signature-file signature)
+           (setq message-signature t))
+          ((eq (tychoish--mail-account-signature-kind conf) 'signature-text)
+           (setq message-signature-directory nil)
+           (setq message-signature-file nil)
+           (setq message-signature signature)))
+
+         (setq user-mail-address address)
+         (setq message-signature-file address)
+         (setq user-full-name given-name)
+         (setq mu4e-compose-reply-to-address address)
+         (setq mu4e-reply-to-address address)
+
+         (setq mail-host-address (s-replace-regexp ".*@" "" address))
+         (setq message-sendmail-extra-arguments '("-a" address))
 
          (when (eq major-mode 'mu4e-compose-mode)
            (goto-char (point-min))
-           (let ((new-from ,(concat "From: " name " <" address ">")))
+           (let ((new-from (format "From: %s <%s>" given-name address)))
              (while (re-search-forward "^From:.*$" nil t 1)
-               (replace-match new-from nil nil))))
+               (replace-match new-from))))
 
-         (setq mu4e-get-mail-command ,command)
+         (setq mu4e-get-mail-command (tychoish--mail-account-fetchmail conf))
 
-         (message ,(concat "mail: configured address [" address "]"))))))
+         (message (format "mail: configured address [%s]" address)))))))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

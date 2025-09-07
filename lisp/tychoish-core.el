@@ -684,7 +684,9 @@
   (defun tychoish/elisp-capf-setup  ()
     (setq-local completion-at-point-functions
                 (list #'tychoish/capf-elisp-combined
+		      #'cape-dabbrev
                       #'yasnippet-capf
+		      #'cape-dict
                       ;; #'tychoish/capf-line
                       #'cape-file
                       #'cape-emoji)))
@@ -890,7 +892,7 @@
   (setq corfu-prescient-enable-filtering t))
 
 (use-package corfu-terminal
-  :hook ((global-corfu-mode corfu-mode) . corfu-terminal-mode)
+  :hook (corfu-mode . corfu-terminal-mode)
   :after (popon)
   :defines (corfu-terminal-disable-on-gui)
   :commands (corfu-terminal-mode))
@@ -1104,7 +1106,9 @@
 	 ("c" . consult-org-capture)
 	 :map tychoish/org-mode-capture-map
 	 ("j" . consult-org-capture)
-	 ("h" . consult-org-capture-target))
+	 ("h" . consult-org-capture-target)
+	 :map tychoish/mail-map
+	 ("a" . tychoish-mail-select-account))
   :commands (consult-rg-for-thing
              consult-rg
 	     get-directory-parents
@@ -1174,13 +1178,6 @@
          ("C-j" . helm-select-action))
   :commands (helm-mode helm-autoresize-mode)
   :config
-  (eval-after-load 'eshell
-    (bind-keys :map eshell-command-mode-map
-               ("M-p" . helm-eshell-history)
-               ([remap eshell-pcomplete] . helm-esh-pcomplete)
-               ("M-s f" . helm-eshell-prompts-all)
-               ("M-r" . helm-eshell-history)))
-
   (setq history-delete-duplicates t)
   (setq history-length 250)
 
