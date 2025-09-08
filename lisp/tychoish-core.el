@@ -1092,15 +1092,13 @@
 (use-package consult-tycho
   :bind (("M-g r" . consult-rg)
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
-         ("t" . consult-rg-for-thing)
          ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
 	 :map tychoish/ecclectic-rg-map
-         ("t" . consult-rg-for-thing)
-         ("r" . consult-rg)
+         ("r" . consult-rg-project)
          ("s" . consult-rg-pwd)
-	 :map tychoish/ecclectic-grep-map ;; "C-c g"
-         ("s r" . consult-rg)
+         ("p" . consult-rg-project-wizard)
+         ("l" . consult-rg-pwd-wizard)
 	 :map tychoish/global-org-map ;; "C-c o"
 	 ("j" . consult-org-capture)
 	 ("c" . consult-org-capture)

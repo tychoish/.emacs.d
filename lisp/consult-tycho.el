@@ -85,8 +85,6 @@ entry of `org-capture-templates'."
   (let* ((templ (cl-loop for template in org-capture-templates
                          when (> (length template) 2)
                            collect (cons (nth 1 template) (nth 0 template))))
-         (_ (message "OPTIONS: %s" templ))
-         (_ (message "SOURCE: %s" org-capture-templates))
          (capture-template
           (consult--read templ
                          :prompt "org-capture-templates=>: "
@@ -131,15 +129,18 @@ entry of `org-capture-templates'."
     output))
 
 (defun get-directory-default-candidate-list ()
-  (append (get-directory-parents default-directory (or (projectile-project-root) ""))
-          (list default-directory
-                user-emacs-directory
-                (expand-file-name "~/")
-                (projectile-project-root)
-                (thing-at-point 'filename)
-                (thing-at-point 'existing-filename))))
+  (->> (get-directory-parents default-directory (or (approximate-project-root) ""))
+       (-join (list default-directory
+                    user-emacs-directory
+                    "~/"
+                    (approximate-project-root)
+                    (thing-at-point 'filename)
+                    (thing-at-point 'existing-filename)))
+       (-filter #'stringp)
+       (-map #'expand-file-name)
+       (-distinct)))
 
-(defun consult-tycho--select-directory (&optional &key input-dirs require-match)
+(cl-defun consult-tycho--select-directory (&optional &key input-dirs (require-match nil))
   "Select a directory from a provided or likely set of `INPUT-DIRS`'."
   (consult--read
    (consult-tycho--clean-directory-options-for-selection
@@ -152,21 +153,13 @@ entry of `org-capture-templates'."
    :sort nil
    :command this-command
    :require-match require-match
-   :prompt "in directory: "))
-
-(defun consult-tycho--discover-directory (dir)
-  "Expand or produce a non-zero directory for DIR."
-  (or (when current-prefix-arg
-        (consult-tycho--select-directory :dirs dir))
-      (trimmed-string-or-nil dir)
-      (or (projectile-project-root)
-          default-directory)))
+   :prompt "in directory =>> "))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: increment-grep
 
-(defun consult-tycho--resolve-initial-grep (prompt prompt-annotation initial)
+(defun consult-tycho--resolve-initial-grep (prompt prompt-annotation initial &key context)
   "Return the initial text for a query, processing `INITIAL' as needed."
   ;; if the string is empty or only whitespace, it's undefined,
   ;; otherwise use it.
@@ -178,10 +171,11 @@ entry of `org-capture-templates'."
       ;; otherwise, provide the empty string...
       ""))
 
-(defun consult-tycho--select-context-for-operation (prompt &optional seed-list)
-  "Pick string to use as context in a follow up operation using PROMPT."
+(defun consult-tycho--select-context-for-operation (&optional prompt seed-list)
+  "Pick string to use as context in a follow up operation."
   (let ((this-command this-command)
-        (selections (consult-tycho--context-base-list seed-list)))
+        (selections (consult-tycho--context-base-list seed-list))
+	(prompt (or prompt "grep =>>")))
     (or (when (length= selections 1) (nth 0 selections))
         (when (length> selections 1)
           (consult--read selections
@@ -195,7 +189,11 @@ entry of `org-capture-templates'."
         (if (listp seed)
             seed
           (list seed))
-        (s-lines (s-trim (buffer-substring (region-beginning) (region-end))))
+        (if-let* ((mark-pos (mark))
+			(start (or (region-beginning) (min (point) mark-pos)))
+			(end (or (region-end) (max mark-pos (point)))))
+	    (s-lines (s-trim (buffer-substring start end)))
+	  '())
         (-take 10 kill-ring)
         (cond ((derived-mode-p 'text-mode)
                (list (thing-at-point 'word)
@@ -212,7 +210,7 @@ entry of `org-capture-templates'."
        (-keep #'trimmed-string-or-nil)
        (-distinct)))
 
-(defun consult-tycho--incremental-grep (&key prompt builder initial)
+(cl-defun consult-tycho--incremental-grep (&key (prompt "=>> ") (builder '()) (initial ""))
   "Do incremental grep-type operation. Like the `consult-grep' operation
 upon which it was based, permits interoperability between git-grep ag, ack, and rg"
   (let ((consult-async-input-debounce 0.025)
@@ -230,42 +228,65 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
      :add-history (thing-at-point 'symbol)
      :require-match nil
      :category 'consult-grep
+     :command this-command
+     :sort nil
      :group nil ;; #'consult--prefix-group <- this groups results by common prefix (e.g. file)
-     :history '(:input consult--grep-history)
-     :sort nil)))
+     :history '(:input consult--grep-history))))
 
 ;;;###autoload
-(defun consult-rg (&optional dir initial)
-  "Start and iterative rg session.
-DIR and INITIAL integrate with the consult-grep API."
+(defun consult-rg (&optional dir initial &key context)
+  "Start and iterative rg session. DIR and INITIAL integrate with the consult-grep API."
   (interactive "P")
   ;; `consult--directory-prompt' --> '(prompt paths <default>-dir)
-  (let* ((prompt-paths-dir (consult--directory-prompt "rg" (consult-tycho--discover-directory dir)))
+  (let* ((prompt-paths-dir (consult--directory-prompt "rg" (or (trimmed-string-or-nil dir)
+							       (consult-tycho--select-directory)
+							       (approximate-project-root))))
          (default-directory (nth 2 prompt-paths-dir))
          (prompt (nth 0 prompt-paths-dir))
-         (initial (or initial (consult-tycho--select-context-for-operation prompt))))
+         (initial (if (and (or context (not initial)) (not (eq context 'override)))
+		      (consult-tycho--select-context-for-operation (format "rg(init) =>> "))
+		    initial)))
+
     (consult-tycho--incremental-grep
      :prompt prompt
      :builder (consult--ripgrep-make-builder (nth 1 prompt-paths-dir))
-     :initial (consult-tycho--resolve-initial-grep "rg" "regex" initial))))
+     :initial initial)))
 
 ;;;###autoload
-(defun consult-rg-for-thing (&optional dir initial)
-  "Start an iterative rg session with context.
-DIR and INITIAL integrate with the consult-grep API."
+(defun consult-rg-project (&optional initial &key context)
+  "Start an iterative rg session in the project root, if possible, falling back as necessary."
   (interactive "P")
-  (consult-rg dir (consult-tycho--select-context-for-operation "rg<thing>: ")))
+  (consult-rg
+   (or (approximate-project-root) (consult-tycho--select-directory))
+   initial
+   :context (or context current-prefix-arg 'override)))
 
 ;;;###autoload
-(defun consult-rg-pwd (&optional initial)
-  "Start an iterative rg session with context.
-DIR and INITIAL integrate with the consult-grep API."
+(defun consult-rg-pwd (&optional initial &key context)
+  "Start an iterative rg session for the current directory."
+  ;; (let ((base-directory (f-base default-directory)))
   (interactive "P")
-  (let ((dir-base (f-base default-directory)))
-    (consult-tycho--incremental-grep
-     (format "rg<pwd:%s>: " dir-base)
-     (consult--ripgrep-make-builder (list (expand-file-name default-directory)))
-     (consult-tycho--resolve-initial-grep "rg" (f-base default-directory) initial))))
+
+  (consult-rg
+   (or default-directory (consult-tycho--select-directory))
+   initial
+   :context (or context current-prefix-arg 'override)))
+
+;;;###autoload
+(defun consult-rg-pwd-wizard (&optional initial)
+  "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
+  ;; (let ((base-directory (f-base default-directory)))
+  (interactive "P")
+  (consult-rg-pwd initial :context t))
+
+;;;###autoload
+(defun consult-rg-project-wizard (&optional initial)
+  "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
+  ;; (let ((base-directory (f-base default-directory)))
+  (interactive "P")
+  (consult-rg-project initial :context t))
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
