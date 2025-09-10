@@ -641,6 +641,15 @@ Returns the number of buffers killed."
   "Return the number of lines in the specified buffer (name or buffer), defaulting to the current buffer."
   (car (buffer-line-statistics buf)))
 
+(defun tychoish-run-current-major-mode-hooks (&optional buffer)
+  "Run all mode-hooks for the current major mode."
+  (interactive)
+  (with-current-buffer (or (when (bufferp buffer) buffer)
+			   (when (and (stringp buffer) (get-buffer buffer)) buffer)
+			   (current-buffer))
+    (apply #'run-mode-hooks (--keep (-concat (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; project -- tools for managing groups of buffers and files by project

@@ -244,6 +244,7 @@
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" #'consult-recent-file 'global-map))
 
+  (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
   (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
@@ -732,7 +733,7 @@
          (setq mu4e-reply-to-address address)
 
          (setq mail-host-address (s-replace-regexp ".*@" "" address))
-         (setq message-sendmail-extra-arguments '("-a" address))
+         (setq message-sendmail-extra-arguments (list "-a" address))
 
          (when (eq major-mode 'mu4e-compose-mode)
            (goto-char (point-min))

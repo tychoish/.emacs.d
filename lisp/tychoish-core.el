@@ -291,7 +291,7 @@
 
   (defun tychoish-rg-repo (&optional regexp)
     (interactive "P")
-    (let ((default-directory (projectile-project-root)) )
+    (let ((default-directory (approximate-project-root)) )
       (tychoish-rg regexp)))
 
   (defun tychoish-find-merges ()
@@ -664,53 +664,100 @@
   (defun tychoish/capf-line ()
     (cape-wrap-prefix-length #'cape-line 5))
 
-  (defun tychoish/capf-local-sources ()
-    (cape-wrap-super #'cape-dabbrev #'cape-dict #'tychoish/capf-line))
+  (defmacro disabled (&rest body)
+    `(unless 'disabled
+       ,@body))
 
-  (defun tychoish/capf-elisp-combined ()
-    (cape-wrap-super #'cape-elisp-symbol
-		     #'cape-elisp-block
-                     #'cape-keyword
-		     #'cape-dabbrev))
+  (defun tychoish/get-available-word-capfs ()
+    (->> (list (tychoish/maybe-capf-wordfreq)
+	       (tychoish/maybe-capf-dict))
+	 (-non-nil)
+	 (-filter #'symbolp)))
+
+  (defun tychoish/maybe-capf-dict ()
+    (and (boundp 'cape-dict-file) (f-exists-p cape-dict-file) #'cape-dict))
+
+  (defun tychoish/maybe-capf-wordfreq ()
+    (disabled (when (capf-wordfreq-avalible-p)
+		#'capf-wordfreq-completion-at-point-function)))
+
+  (defmacro cape-capf-wrapper (wrapper inner)
+    (when inner
+      (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
+	     (wrapper-name (symbol-name wrapper))
+	     (capf-name (symbol-name inner))
+	     (name (format "%s-<%s>" capf-name wrapper-name ))
+	     (symbol-name (intern-soft name)))
+      `(defun ,(intern name) ()
+	 (funcall #',wrapper #',inner)))))
 
   (defun tychoish/text-mode-capf-setup ()
+    "so here is the"
     (setq-local completion-at-point-functions
-                (list #'tychoish/capf-local-sources
-                      #'yasnippet-capf
-                      #'cape-rfc1345
-                      #'cape-emoji
-                      #'cape-file)))
+		(->> (-concat
+		      (tychoish/get-available-word-capfs)
+		      (list #'cape-dabbrev
+			  #'yasnippet-capf
+			  #'cape-rfc1345
+			  #'cape-emoji
+			  #'cape-file))
+		     (-flatten)
+		     (-non-nil))))
 
   (defun tychoish/elisp-capf-setup  ()
+    (require 'cape)
     (setq-local completion-at-point-functions
-                (list #'tychoish/capf-elisp-combined
-		      #'cape-dabbrev
-                      #'yasnippet-capf
-		      #'cape-dict
-                      ;; #'tychoish/capf-line
-                      #'cape-file
-                      #'cape-emoji)))
+                (->> (list #'cape-elisp-symbol
+			   (cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
+			   #'cape-dabbrev
+			   (cape-capf-wrapper cape-capf-inside-code cape-keyword)
+			   #'yasnippet-capf
+			   (->> (tychoish/get-available-word-capfs)
+				(-map (lambda (in)
+					`(progn
+					   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
+					   (cape-capf-wrapper cape-capf-inside-string ,in)))))
+				(-map 'eval))
+			   #'cape-emoji)
+		     (-flatten)
+		     (-non-nil)
+		     (-distinct))))
 
   (defun tychoish/eglot-capf-setup ()
     (setq-local completion-category-defaults nil)
     (setq-local completion-at-point-functions
-                (list #'eglot-completion-at-point
-                      #'tychoish/capf-local-sources
-                      #'yasnippet-capf
-                      #'cape-emoji
-                      #'cape-file)))
+                (-> (list #'eglot-completion-at-point
+			  #'cape-dabbrev
+			   (->> (tychoish/get-available-word-capfs)
+				(-map (lambda (in)
+					`(progn
+					   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
+					   (cape-capf-wrapper cape-capf-inside-string ,in)))))
+				(-map 'eval))
+			  yasnippet-capf
+			  tychoish/capf-line
+			  cape-emoji
+			  cape-file)
+		     (-flatten)
+		     (-non-nil)
+		     (-distinct))))
+
+  (defun cape--project-buffers ()
+    "ok does this work now df"
+    (let ((directory (approximate-project-root)))
+      (cape--buffer-list (lambda (buf)
+			   (string-prefix-p directory (buffer-file-name buf))))))
 
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
 
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-capf-setup)
-  (add-hook 'emacs-lisp-mode-hook 'tychoish/elisp-capf-setup)
+  (add-hook 'emacs-lisp-mode-hook #'tychoish/elisp-capf-setup)
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
   (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup)
 
-  (add-hook 'completion-at-point-functions #'tychoish/capf-local-sources)
   (add-hook 'completion-at-point-functions #'yasnippet-capf)
-  (add-hook 'completion-at-point-functions #'cape-keyword)
+  (add-hook 'completion-at-point-functions (cape-capf-inside-code #'cape-keyword))
   (add-hook 'completion-at-point-functions #'cape-rfc1345)
   (add-hook 'completion-at-point-functions #'cape-emoji)
   (add-hook 'completion-at-point-functions #'cape-file)
@@ -751,6 +798,16 @@
   :delight (abbrev-mode " abb")
   :hook (((text-mode prog-mode telega-chat-mode) . abbrev-mode)
 	 (emas-startup . tychoish/load-abbrev-files)))
+
+(use-package capf-wordfreq
+  :load-path "external/"
+  :commands (capf-wordfreq-completion-at-point-function capf-wordfreq--dictionary)
+  :init
+  (defun capf-wordfreq-avalible-p ()
+    (and (fboundp 'capf-wordfreq-completion-at-point-function)
+	 (fboundp 'capf-wordfreq--dictionary)
+	 (f-exists-p (capf-wordfreq--dictionary))))
+  (setq capf-wordfreq-minimal-candidate-length 5))
 
 (use-package prescient
   :ensure t
@@ -1419,6 +1476,11 @@
   (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
   (add-hook 'mu4e-compose-mode-hook 'tychoish/set-up-message-mode-buffer)
   (defun tychoish/set-up-message-mode-buffer ()
+    (setq-local completion-at-point-functions
+		'(mu4e-complete-contact
+		  cape-emoji
+		  cape-dict
+		  yasnippet-capf))
     (setq-local use-hard-newlines t)
     (setq-local make-backup-files nil))
 

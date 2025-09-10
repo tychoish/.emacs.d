@@ -209,8 +209,9 @@ the current frame."
 
 (use-package company-wordfreq
   :ensure t
+  :load-path "external/" ;; removes the company dependency; for downloading wordlists
   :after company
-  :commands (company-wordfreq company-wordfreq-download-list))
+  :commands (company-wordfreq-download-list))
 
 (use-package slime-company
   :ensure t

@@ -287,7 +287,6 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
   (consult-rg-project initial :context t))
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: project compilation mode
