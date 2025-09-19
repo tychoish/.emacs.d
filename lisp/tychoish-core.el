@@ -724,6 +724,7 @@
 		     (-distinct))))
 
   (defun tychoish/eglot-capf-setup ()
+    (interactive) ;; todo remove
     (setq-local completion-category-defaults nil)
     (setq-local completion-at-point-functions
                 (-> (list #'eglot-completion-at-point
@@ -734,10 +735,9 @@
 					   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
 					   (cape-capf-wrapper cape-capf-inside-string ,in)))))
 				(-map 'eval))
-			  yasnippet-capf
-			  tychoish/capf-line
-			  cape-emoji
-			  cape-file)
+			  #'yasnippet-capf
+			  #'cape-emoji
+			  #'cape-file)
 		     (-flatten)
 		     (-non-nil)
 		     (-distinct))))
@@ -2063,6 +2063,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (when rustup-p
       (setq rustic-rustfmt-args "+nightly")
       (setq rustic-analyzer-command '(rustup-path "run" "stable" "rust-analyzer")))
+
   (add-to-list 'tychoish/eglot-default-server-configuration
 	       `((:rust-analyzer :initializationOptions
                    (:server (:extraEnv (:RUSTUP_TOOLCHAIN ,rustup-toolchain))
@@ -2080,8 +2081,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :mode (("\\.py$" . python-ts-mode))
   :bind (:map python-ts-mode-map
          ("M-<right>" . balle-python-shift-right)
-         ("M-<left>" . balle-python-shift-left)
-         ("C-m" . py-newline-and-indent))
+         ("M-<left>" . balle-python-shift-left))
   :init
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
   (add-hook 'python-ts-mode 'tychoish/python-setup)
@@ -2089,15 +2089,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                '((:pylsp (:plugins
                           :black (:enabled t)
                           :jedi_completion (:enabled t
-						     :fuzzy t
-						     :include_params t)
+					    :fuzzy t
+					    :include_params t)
                           :ruff (:enabled t
-					  :formatEnabled t
-					  :lineLength 80
-					  :format ["I"]
-					  :extendSelect ["I"])
+  			         :formatEnabled t
+				 :lineLength 100
+    			         :format ["I"]
+				 :extendSelect ["I"])
+                          :rope (:enabled t)
                           :flake8 (:enabled :json-false)
-                          :rope (:enabled :json-false)
                           :pycodestyle (:enabled :json-false)
                           :mccabe (:enabled :json-false)
                           :autopep8 (:enabled :json-false)
@@ -2120,6 +2120,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
           (setq start (car bds) end (cdr bds))))
       (python-indent-shift-left start end))
     (setq deactivate-mark nil))
+
+
 
   (defun balle-python-shift-right ()
     (interactive)
@@ -2535,6 +2537,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defun eglot-organize-imports ()
     (interactive)
     (when (eglot-managed-p)
+      (eglot-code-actions)
       (with-demoted-errors "WARN (`eglot-organize-imports'): %S"
         (eglot-code-actions nil nil "source.organizeImports" t))))
 
@@ -2611,6 +2614,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
           (go "https://github.com/tree-sitter/tree-sitter-go")
           (html "https://github.com/tree-sitter/tree-sitter-html")
           (java "https://github.com/tree-sitter/tree-sitter-java")
+	  (dockerfile "https://github.com/camdencheek/tree-sitter-dockerfile")
           (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
           (json "https://github.com/tree-sitter/tree-sitter-json")
           (python "https://github.com/tree-sitter/tree-sitter-python")
@@ -2676,7 +2680,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :model 'claude-3-5-sonnet-20241022
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t))
 
-  (tychoish-gptel-gemini-default)
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
@@ -2740,7 +2743,14 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
       (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
     (when (boundp 'google-gemini-key)
       (setenv "GEMINI_API_KEY" google-gemini-key))
-    (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md")))
+    (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md"))
+    (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
+		(_ (f-exists-p uv-bin-path))
+		(aider-bin-path (f-join uv-bin-path "aider"))
+		(search-path (getenv "PATH")))
+      (unless (s-contains-p uv-bin-path search-path)
+	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
+      (add-to-list 'exec-path uv-bin-path)))
   :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-default-model "sonnet")

@@ -95,3 +95,36 @@
 
 (provide 'init)
 ;;; init.el ends here
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages
+   '(a ace-window ag aider aidermacs alert anzu auto-complete
+       auto-package-update cape cargo consult-dir consult-eglot
+       consult-flycheck consult-flyspell consult-gh consult-yasnippet
+       copilot copilot-chat corfu-prescient ctags-update deadgrep deft
+       delight docker doom-modeline emacsql-sqlite emacsql-sqlite3
+       embark-consult emojify flycheck-aspell flycheck-eglot
+       flycheck-golangci-lint flycheck-grammarly flycheck-vale
+       flyspell-correct-helm forge fountain-mode git-grep git-link
+       google-gemini google-this gptel-aibo graphql graphviz-dot-mode
+       helm-ag helm-c-yasnippet helm-eww helm-flycheck helm-flyspell
+       helm-make helm-mu helm-org helm-projectile helm-rg helm-swoop
+       helm-xref jinja2-mode journalctl-mode just-mode kv lv
+       marginalia mcp modus-themes nerd-icons-completion
+       nerd-icons-corfu nerd-icons-dired nerd-icons-xref ninja-mode
+       org-contrib org-web-tools ov ox-gist ox-hugo ox-leanpub ox-rst
+       package-lint page-break-lines pfuture pkg-info pkgbuild-mode
+       popon pos-tip posframe protobuf-mode rainbow-identifiers
+       revbufs ripgrep rustic shell-pop slime sqlite3 system-packages
+       telega terraform-mode toc-org tracking uuidgen
+       vertico-prescient web-mode wgrep winum writeroom-mode yaml-pro
+       yasnippet-capf yasnippet-snippets)))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )

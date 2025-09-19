@@ -289,10 +289,11 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (when (stringp files)
     (setq files (list files)))
 
-  (when (f-directory-p path)
-    (->> (f-entries path #'f-filename)
-	 (-map-in-place (lambda (fn) (member fn files)))
-	 (-reduce (lambda (a b) (or a b))))))
+  (when (and (f-directory-p path)
+	     (->> (f-entries path #'f-filename)
+		  (-map (lambda (filename) (f-base filename)))
+		  (-filter (lambda (filename) (member filename files)))))
+    t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -657,7 +658,7 @@ Returns the number of buffers killed."
 (defun approximate-project-root ()
   (or (when (and (featurep 'project) (project-current)) (project-root (project-current)))
       (when (featurep 'projectile) (trimmed-string-or-nil (projectile-project-root)))
-      default-directory))
+      (expand-file-name default-directory)))
 
 (defun approximate-project-name ()
   (string-trim-non-word-chars
