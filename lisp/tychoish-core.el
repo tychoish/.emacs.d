@@ -1163,7 +1163,9 @@
 	 ("j" . consult-org-capture)
 	 ("h" . consult-org-capture-target)
 	 :map tychoish/mail-map
-	 ("a" . tychoish-mail-select-account))
+	 ("a" . tychoish-mail-select-account)
+	 :map compilation-mode-map
+	 ("d" . compilation-buffer-change-directory))
   :commands (consult-rg-for-thing
              consult-rg
 	     get-directory-parents

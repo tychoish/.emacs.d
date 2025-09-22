@@ -668,11 +668,10 @@ Returns the number of buffers killed."
        (f-filename (expand-file-name default-directory)))))
 
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (projectile-project-root)))
-  (-keep (lambda (buf)
-	   (with-current-buffer buf
+  (--keep (with-current-buffer it
 	     (when (and
 		    (derived-mode-p mode)
 		    (file-in-directory-p default-directory directory))
-	       (current-buffer)))) (buffer-list)))
+	       (current-buffer))) (buffer-list)))
 
 (provide 'tychoish-common)
