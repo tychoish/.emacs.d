@@ -43,6 +43,7 @@
              uniquify-buffer-lines
              font-lock-show-tabs
              font-lock-width-keyword
+	     compile-buffer-name
              create-toggle-functions
              create-run-hooks-function-for
              trimmed-string-or-nil
@@ -274,7 +275,7 @@
 
   (defun consult-rg-compile (&optional initial)
     (interactive "P")
-    (let ((default-directory (consult-tycho--select-directory)))
+    (let ((default-directory (consult--select-directory)))
       (tychoish-rg initial)))
 
   (defun tychoish-rg (regexp)
@@ -1163,19 +1164,22 @@
 	 ("j" . consult-org-capture)
 	 ("h" . consult-org-capture-target)
 	 :map tychoish/mail-map
-	 ("a" . tychoish-mail-select-account)
-	 :map compilation-mode-map
-	 ("d" . compilation-buffer-change-directory))
+	 ("a" . tychoish-mail-select-account))
   :commands (consult-rg-for-thing
              consult-rg
 	     get-directory-parents
              consult-org-capture
-	     tychoish--compilation-read-command
-	     tychoish/compile-project
              consult-org-capture-target))
 
 (use-package consult-sardis
   :bind ("C-c t r" . consult-sardis-run))
+
+(use-package consult-builder
+  :bind (:map compilation-mode-map
+         ("d" . compilation-buffer-change-directory))
+  :commands (consult--select-directory
+	     tychoish--compilation-read-command
+	     tychoish/compile-project))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2308,9 +2312,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("C-c C-t c" . compile)
 	 :map compilation-mode-map
 	 ("C" . compile))
-  :init
-  (defmacro compile-buffer-name (name)
-    `(lambda (&optional _) ,name))
   :config
   (defun compile-add-error-syntax (name regexp file line &optional col level)
     "Register new compilation error syntax."

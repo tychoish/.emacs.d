@@ -399,8 +399,29 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
      (when (> duration  ,threshold)
        (message "%s: %.06fs" ,name duration))))
 
+(defmacro compile-buffer-name (name)
+  `(lambda (&optional _) ,name))
+
 (defmacro f-has-ext-p-fn (ext)
   `(lambda (filename) (f-ext-p filename ext)))
+
+(defmacro f-file-has-ext-predicate (extension)
+  `(lambda (filename) (f-ext-p filename ,extension)))
+
+(defmacro f-filename-is-predicate (name)
+  `(lambda (filename) (string= (f-filename filename) ,name)))
+
+(defmacro f-directory-containing-file-function (filename)
+  `(defun ,(intern (format "f-directory-containing-file-%s" (string-replace "." "-" filename))) (filename)
+		   (and (f-file-p filename)
+			(string= (f-filename filename) ,filename)
+			(f-dirname filename))))
+
+(defmacro f-directory-containing-file-with-extension-function (extension)
+  `(defun ,(intern (format "f-directory-containing-file-with-extension-%s" (string-replace "." "" extension))) (filename)
+     (and (f-file-p filename)
+	  (f-ext-p filename ,extension)
+	  (f-dirname filename))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

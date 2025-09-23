@@ -86,7 +86,7 @@
          (draft-fn (f-join (or path
 			       (when (boundp 'tychoish-project-note-file)
 				 tychoish-project-note-file)
-			       (consult-tycho--select-directory))
+			       (consult--select-directory))
 			   (concat datetime "." slug "." tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
