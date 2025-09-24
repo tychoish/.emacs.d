@@ -48,7 +48,7 @@
              create-run-hooks-function-for
              trimmed-string-or-nil
              with-silence
-	     without-messages
+	     with-quiet
              with-temp-keymap
              add-hygenic-one-shot-hook
              buffer-in-frame-p

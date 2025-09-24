@@ -180,14 +180,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;; lists -- helpers, mostly a-la dash.el
 
-(defun -distinct-by-car (cell)
-  (let ((-compare-fn (lambda (a b) (equal (car a) (car b)))))
-    (-distinct cell)))
-
-(defun -distinct-by-alist-key (key cell)
-  (let ((-compare-fn (lambda (a b) (equal (alist-get key a) (alist-get key b)))))
-    (-distinct cell)))
-
 (defun larger (&optional first second)
   "Return the larger item or 0, if neither FIRST and SECOND are non-negative numbers."
   (if (> (setq first (if (numberp first) first 0))
@@ -201,46 +193,30 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
       first
     second))
 
+(defun -distinct-by-car (cell)
+  (let ((-compare-fn (lambda (a b) (equal (car a) (car b)))))
+    (-distinct cell)))
+
+(defun -distinct-by-alist-key (key cell)
+  (let ((-compare-fn (lambda (a b) (equal (alist-get key a) (alist-get key b)))))
+    (-distinct cell)))
+
 (defun length-of-longest-item (items)
   "Return the length of the longest item in the list ITEMS."
   (->> items
        (-map #'length)
        (-reduce #'larger)))
 
-(defun -map-join (mapping-operation input-list append-to-list)
-  (->> input-list
-       (-map mapping-operation)
-       (-join append-to-list)))
-
-(defun -flat-map (mapping-operation input-list)
-  (->> input-list
-       (-map mapping-operation)
-       (-flatten-n 1)))
-
 (defun -unwind (list)
   "Flattens a list of lists into a list by collecting items in one list"
   (-flatten-n 1 list))
 
-(defmacro -flat->> (x &optional form &rest more)
-  `(->> ,x ,form ,@more (-unwind)))
+(defalias '-flat-map #'mapcan)
+(defalias '-join #'nconc)
 
 (defmacro --flat-map (form input-list)
-  `(->> ,input-list
-	(-map (lambda (it) (ignore it) ,form))
-	(-flatten-n 1)))
-
-(defun -flat-map-join (mapping-operation input-list append-to-list)
-  (->> input-list
-       (-map mapping-operation)
-       (-join append-to-list)))
-
-(defmacro --flat-map-join (form input-list append-to-list)
-  `(->> ,input-list
-       (--map ,form)
-       (-join ,append-to-list)))
-
-(defun -join (&rest items)
-  (apply #'nconc items))
+  (declare (debug (def-form form)))
+  `(mapcan (lambda (it) (ignore it) ,form) ,input-list))
 
 (defun -map-in-place (mapping-op items)
   (let ((head items))
@@ -295,6 +271,27 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 		  (-filter (lambda (filename) (member filename files)))))
     t))
 
+(defmacro f-has-ext-p-fn (ext)
+  `(lambda (filename) (f-ext-p filename ext)))
+
+(defmacro f-file-has-ext-predicate (extension)
+  `(lambda (filename) (f-ext-p filename ,extension)))
+
+(defmacro f-filename-is-predicate (name)
+  `(lambda (filename) (string= (f-filename filename) ,name)))
+
+(defmacro f-directory-containing-file-function (filename)
+  `(defun ,(intern (format "f-directory-containing-file-%s" (string-replace "." "-" filename))) (filename)
+		   (and (f-file-p filename)
+			(string= (f-filename filename) ,filename)
+			(f-dirname filename))))
+
+(defmacro f-directory-containing-file-with-extension-function (extension)
+  `(defun ,(intern (format "f-directory-containing-file-with-extension-%s" (string-replace "." "" extension))) (filename)
+     (and (f-file-p filename)
+	  (f-ext-p filename ,extension)
+	  (f-dirname filename))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; macros -- helper macros for common operations
@@ -345,15 +342,24 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 	       ops))))
 
 (defmacro with-silence (&rest body)
-  "Report on NAME and the time taken to execute BODY."
+  "Totally suppress message from either the minibuffer or the *Messages* buffer.."
   `(let ((inhibit-message t)
          (message-log-max nil))
      (null ,@body)))
 
-(defmacro without-messages (&rest body)
-  "Report on NAME and the time taken to execute BODY."
+(defmacro with-quiet (&rest body)
+  "Suppress any messages from appearing in the minibuffer area."
   `(let ((inhibit-message t))
      (null ,@body)))
+
+
+(defmacro with-force-write (&rest body)
+  (declare (indent 1) (debug t))
+  `(progn
+     (setq buffer-read-only nil)
+     ,@body
+     (setq buffer-read-only t)))
+
 
 (defmacro with-temp-keymap (map &rest body)
   "Create a temporary MAP and return it after evaluating it in the BODY."
@@ -402,26 +408,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (defmacro compile-buffer-name (name)
   `(lambda (&optional _) ,name))
 
-(defmacro f-has-ext-p-fn (ext)
-  `(lambda (filename) (f-ext-p filename ext)))
-
-(defmacro f-file-has-ext-predicate (extension)
-  `(lambda (filename) (f-ext-p filename ,extension)))
-
-(defmacro f-filename-is-predicate (name)
-  `(lambda (filename) (string= (f-filename filename) ,name)))
-
-(defmacro f-directory-containing-file-function (filename)
-  `(defun ,(intern (format "f-directory-containing-file-%s" (string-replace "." "-" filename))) (filename)
-		   (and (f-file-p filename)
-			(string= (f-filename filename) ,filename)
-			(f-dirname filename))))
-
-(defmacro f-directory-containing-file-with-extension-function (extension)
-  `(defun ,(intern (format "f-directory-containing-file-with-extension-%s" (string-replace "." "" extension))) (filename)
-     (and (f-file-p filename)
-	  (f-ext-p filename ,extension)
-	  (f-dirname filename))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

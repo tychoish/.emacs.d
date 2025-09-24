@@ -2,23 +2,18 @@
 
 (require 'consult)
 
-(defun --quiet-log-when (cond msg &rest args)
-  (when cond (apply #'--quiet-log (cons msg args))))
-
-(defun --quiet-log (msg &rest args)
-  (let ((inhibit-message t))
-    (apply #'message msg args)))
-
 (defun tychoish/compile--post-hook-collection (selection buffer-name started-at)
   (let* ((end-at (current-time))
 	 (duration (time-subtract end-at started-at))
 	 (msg (format "completed %s in %.06fs" selection (float-time duration))))
 
     (when (> (float-time duration) 300)
-      (async-start-process "sardis-notify"
-         "sardis"
-	 (lambda (out) (--quiet-log-when out "notify process completed [%s] for %s" out selection))
-	 "notify" "send" msg))
+      (async-start-process
+       (pa "emacs-process-name" :is "sardis-notify")
+       (pa "program" :is " sardis")
+       (pa "on-finish" :is (lambda (out) (with-quiet (message "notify process completed [%s] for %s" out selection))))
+       ;; args
+       "notify" "send" msg))
 
     (alert
      msg
@@ -37,13 +32,6 @@
 		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
 	 (setq buffer-read-only t)))))
 
-(defmacro with-force-write (&rest body)
-  (declare (indent 1) (debug t))
-  `(progn
-     (setq buffer-read-only nil)
-     ,@body
-     (setq buffer-read-only t)))
-
 (defun consult-sardis--select-cmd ()
   (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd") "\n" t))   )
     (consult--read
@@ -55,6 +43,7 @@
      :category 'tychoish/sardis-cmds)))
 
 (defalias 'sardis-run 'consult-sardis-run)
+
 ;;;###autoload
 (defun consult-sardis-run (&optional sardis-command)
   "select and run a sardis command in a compile buffer"
