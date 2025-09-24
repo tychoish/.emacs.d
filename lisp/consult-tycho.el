@@ -242,30 +242,6 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
 
 ;; consult-tycho: file object processing
 
-(defmacro f-file-has-ext-predicate (extension)
-  `(lambda (filename) (f-ext-p filename ,extension)))
-
-(defmacro f-filename-is-predicate (name)
-  `(lambda (filename) (string= (f-filename filename) ,name)))
-
-(defmacro f-directory-containing-file-function (filename)
-  `(defun ,(intern (format "f-directory-containing-file-%s" (string-replace "." "-" filename))) (filename)
-		   (and (f-file-p filename)
-			(string= (f-filename filename) ,filename)
-			(f-dirname filename))))
-
-(defmacro f-directory-containing-file-with-extension-function (extension)
-  `(defun ,(intern (format "f-directory-containing-file-with-extension-%s" (string-replace "." "" extension))) (filename)
-     (and (f-file-p filename)
-	  (f-ext-p filename ,extension)
-	  (f-dirname filename))))
-
-(f-directory-containing-file-with-extension-function ".go")
-(f-directory-containing-file-with-extension-function ".py")
-(f-directory-containing-file-with-extension-function ".rs")
-(f-directory-containing-file-function "go.mod")
-(f-directory-containing-file-function "pyproject.toml")
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: mail

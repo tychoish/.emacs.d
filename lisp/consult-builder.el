@@ -3,27 +3,6 @@
 (require 'dash)
 (require 'f)
 
-;; this is the inner "select which command to use" for entering a new compile command.
-(defun tychoish--compilation-read-command (command)
-  (let* ((candidates (tychoish--get-compilation-candidates default-directory))
-         (names (->> candidates
-                     (ht-map (lambda (key value) (tychoish--compilation-candidate-name value)))
-                     (-sort #'string-lessp)))
-         (longest-id (length-of-longest-item names))
-         (selection-name
-          (consult--read
-           names
-           :prompt "compile command => "
-           :command this-command
-           :history 'compile-history
-           :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id)
-                                           (tychoish--compilation-candidate-annotation (ht-get candidates key))))))
-	 (selection (ht-get candidates selection-name)))
-
-    (if selection
-	(tychoish--compilation-candidate-name selection)
-      selection-name)))
-
 ;;;###autoload
 (defun tychoish/compile-project (&optional name command)
   (let* ((compilation-buffer-candidates (project-compilation-buffers :name name))
@@ -58,13 +37,40 @@
 
 ;; directory selection
 
+;;;###autoload
+(defun compilation-buffer-change-directory ()
+  "Change the directory for the current compilation buffer."
+  (interactive)
+  (unless (derived-mode-p 'compilation-mode)
+    (user-error "operation is only applicable for COMPILATION-MODE buffers"))
+  (let ((directory (or (consult--select-directory
+			:input-dirs (append (list compilation-directory default-directory)
+					    (get-directory-default-candidate-list)))
+		       compilation-directory
+		       default-directory)))
+    (setq-local default-directory directory
+		compilation-directory directory)))
+
+(cl-defun consult--select-directory (&optional &key input-dirs (require-match nil))
+  "Select a directory from a provided or likely set of `INPUT-DIRS`'."
+  (consult--read
+   (or (clean-directory-options-for-selection input-dirs)
+       (get-directory-default-candidate-list))
+   :sort nil
+   :command this-command
+   :require-match require-match
+   :prompt "in directory =>> "))
+
 (defun clean-directory-options-for-selection (input)
   "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
-  (->> input
-       (-keep #'trimmed-string-or-nil)
-       (-map #'expand-file-name)
-       (-sort #'string-greaterp)
-       (-distinct)))
+  (when (stringp input)
+    (setq input (list input)))
+  (when (listp input)
+    (->> input
+	 (-keep #'trimmed-string-or-nil)
+	 (-map #'expand-file-name)
+	 (-sort #'string-greaterp)
+	 (-distinct))))
 
 (defun get-directory-parents (start stop)
   "Generate list of intermediate paths between `START' and `STOP'."
@@ -92,44 +98,43 @@
        (-map #'expand-file-name)
        (-distinct))))
 
-(cl-defun consult--select-directory (&optional &key input-dirs (require-match nil))
-  "Select a directory from a provided or likely set of `INPUT-DIRS`'."
-  (consult--read
-   (or (when (listp input-dirs)
-         (clean-directory-options-for-selection input-dirs))
-       (when (stringp input-dirs)
-         (clean-directory-options-for-selection (list input-dirs)))
-       (get-directory-default-candidate-list))
-   :sort nil
-   :command this-command
-   :require-match require-match
-   :prompt "in directory =>> "))
-
-;;;###autoload
-(defun compilation-buffer-change-directory ()
-  "Change the directory for the current compilation buffer."
-  (interactive)
-  (unless (derived-mode-p 'compilation-mode)
-    (user-error "operation is only applicable for COMPILATION-MODE buffers"))
-  (let ((directory (or (consult--select-directory
-			:input-dirs (append (list compilation-directory default-directory)
-					    (get-directory-default-candidate-list)))
-		       compilation-directory
-		       default-directory)))
-    (setq-local default-directory directory
-		compilation-directory directory)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; helper functions
+;; tychoish/compile-project implementation
 
-(f-directory-containing-file-with-extension-function ".go")
-(f-directory-containing-file-with-extension-function ".py")
-(f-directory-containing-file-with-extension-function ".rs")
-(f-directory-containing-file-function "go.mod")
-(f-directory-containing-file-function "pyproject.toml")
+(defun tychoish--get-compilation-candidates (&optional directory)
+ "Generate a sequence of candidate compilation commands based on mode and directory structure."
+  (let* ((project-root-directory (approximate-project-root))
+	 (default-directory (or directory default-directory))
+         (directories (get-directory-parents default-directory project-root-directory))
+         (operation-table (ht-create)))
+
+    (run-hook-with-args 'tychoish--compilation-candidate-functions project-root-directory directories operation-table)
+    operation-table))
+
+;; this is the inner "select which command to use" for entering a new compile command.
+(defun tychoish--compilation-read-command (command)
+  (let* ((candidates (tychoish--get-compilation-candidates default-directory))
+         (names (->> candidates
+                     (ht-map (lambda (key value) (tychoish--compilation-candidate-name value)))
+                     (-sort #'string-lessp)))
+         (longest-id (length-of-longest-item names))
+         (selection-name
+          (consult--read
+           names
+           :prompt "compile command => "
+           :command this-command
+           :history 'compile-history
+           :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id)
+                                           (tychoish--compilation-candidate-annotation (ht-get candidates key))))))
+	 (selection (ht-get candidates selection-name)))
+
+    (if selection
+	(tychoish--compilation-candidate-name selection)
+      selection-name)))
 
 (cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
+  "Find "
   (let ((buffer-table (ht-create))
         (default-names (list "build" "compilation" "test" "lint" "check" "benchmark" "run")))
     (when name
@@ -163,6 +168,12 @@
            (format "create default compilation buffer for %s" project)))))
 
     buffer-table))
+
+(f-directory-containing-file-with-extension-function ".go")
+(f-directory-containing-file-with-extension-function ".py")
+(f-directory-containing-file-with-extension-function ".rs")
+(f-directory-containing-file-function "go.mod")
+(f-directory-containing-file-function "pyproject.toml")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -202,53 +213,6 @@ All functions are called with (PROJECT-ROOT-DIRECTORY DIRECTORIES TABLE)
 as arguments where the `project-root-directory' is the root of the
 current project, `directories' are all of the directories between the
 current directory and the project root, and `table' is table of `tychoish--completion-candiate' objects.")
-
-(defun tychoish--get-compilation-candidates (&optional directory)
- "Generate a sequence of candidate compilation commands based on mode and directory structure."
-  (let* ((project-root-directory (approximate-project-root))
-	 (default-directory (or directory default-directory))
-         (directories (get-directory-parents default-directory project-root-directory))
-         (operation-table (ht-create)))
-
-    (run-hook-with-args 'tychoish--compilation-candidate-functions project-root-directory directories operation-table)
-    operation-table))
-
-(cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
-  (let ((buffer-table (ht-create))
-        (default-names (list "build" "compilation" "test" "lint" "check" "benchmark" "run")))
-    (when name
-      (cl-pushnew name default-names :test #'equal))
-
-    (--each ;; existing-compilation-buffers-for-project
-        (mode-buffers-for-project
-         :directory (approximate-project-root)
-         :mode 'compilation-mode)
-
-      (with-current-buffer it
-        (ht-set
-         buffer-table
-         (buffer-name it)
-         (format "reuse buffer: project=%s errors=%s lines=%s command='%s'"
-                 project
-                 compilation-num-errors-found
-                 (buffer-line-count)
-                 (string-trim (car compilation-arguments))))))
-
-    (--each default-names ;; default-compilation-buffer-names-for-project
-      (let ((name (format "*%s-%s*" project it)))
-        (if (ht-contains-p buffer-table name)
-            (ht-set
-             buffer-table
-             (generate-new-buffer-name name)
-             (format "new %s buffer for project %s" name project))
-          (ht-set
-           buffer-table
-           name
-           (format "create default compilation buffer for %s" project)))))
-
-    buffer-table))
-
-
 
 ;;;###autoload
 (cl-defmacro register-compilation-candidates (&key name (local nil) pipeline)

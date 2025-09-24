@@ -1181,6 +1181,78 @@
 	     tychoish--compilation-read-command
 	     tychoish/compile-project))
 
+(use-package consult-mu
+  :load-path "external/consult-mu/"
+  :after (consult mu4e)
+  :bind (:map tychoish/mail-map
+	 ("C-;" . consult-mu)
+	 (";" . consult-mu-bookmark))
+  :config
+  (defun consult-mu-bookmark ()
+    "Select `consult-mu' initial query from mu4e-bookmarks."
+    (interactive)
+    (let* ((bookmarks (ht-create #'equal))
+	   (_ (mapc (lambda (bookmark) (setf (ht-get bookmarks (plist-get bookmark :name)) bookmark)) mu4e-bookmarks))
+	   (longest-id (length-of-longest-item (ht-keys bookmarks)))
+	   (selection (consult--read
+		       bookmarks
+		       :prompt "mu4e query =>> "
+		       :annotate (lambda (candidate)
+				   (let* ((bookmark (ht-get bookmarks candidate))
+					  (key (plist-get bookmark :key))
+					  (query (plist-get bookmark :query)))
+
+				     (marginalia--fields
+				      (:left (char-to-string key)
+				       :format (format "%s(b%%s)" (prefix-padding-for-annotation candidate longest-id))
+				       :face 'marginalia-key)
+				      (query
+				       :format "query: \"%s\""
+				       :face 'marginalia-value)))))))
+      (consult-mu (plist-get (ht-get bookmarks selection) :query))))
+
+  (defun tychoish/consult-mu-headers-template ()
+    (concat "%f" (number-to-string
+		  (floor (* (frame-width) 0.15)))
+	    "%s" (number-to-string (floor (* (frame-width) 0.5)))
+	    "%d13" "%g" "%x"))
+
+  (setq consult-mu-maxnum 200)
+  (setq consult-mu-preview-key 'any)
+  (setq consult-mu-mark-previewed-as-read nil)
+  (setq consult-mu-mark-viewed-as-read t)
+  (setq consult-mu-use-wide-reply t)
+  (setq consult-mu-headers-template #'tychoish/consult-mu-headers-template)
+
+  (setq consult-mu-saved-searches-dynamics '("#flag:unread"))
+  (setq consult-mu-saved-searches-async '("#flag:unread"))
+
+  (use-package consult-mu-compose
+    :load-path "external/consult-mu/extras/"
+    :after (consult-mu)
+    :config
+    (setq consult-mu-compose-use-dired-attachment 'in-dired)
+    (setq consult-mu-compose-preview-key "M-o"))
+
+  (use-package consult-mu-contacts
+    :load-path "external/consult-mu/extras/"
+    :after (consult-mu)
+    :config
+    (setq consult-mu-contacts-ignore-case-fold-search t)
+    (setq consult-mu-contacts-ignore-list '("^.*no.*reply.*")))
+
+  (use-package consult-mu-embark
+    :load-path "external/consult-mu/extras/"
+    :after (consult-mu)
+    :config
+    (setq consult-mu-embark-attach-file-key "C-a")
+    (with-eval-after-load 'consult-mu-compose
+      (require 'consult-mu-compose-embark)
+      (consult-mu-compose-embark-bind-attach-file-key))
+
+    (with-eval-after-load 'consult-mu-contacts
+      (require 'consult-mu-contacts-embark))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; helm tools (legacy)
@@ -1490,20 +1562,6 @@
     (setq-local use-hard-newlines t)
     (setq-local make-backup-files nil))
 
-  (defun tychoish/initialize-standard-mail-bookmarks ()
-    "Add a standard/generic litst of bookmarks. Resets/removes all existing bookmarks."
-    (setq mu4e-bookmarks nil)
-    (add-to-list 'mu4e-bookmarks '("mime:image/*" "Messages with images" ?p))
-    (add-to-list 'mu4e-bookmarks '("date:today..now" "Today's messages" ?t))
-    (add-to-list 'mu4e-bookmarks '("date:7d..now" "This Week's messages" ?w))
-    (add-to-list 'mu4e-bookmarks '("m:/inbox OR m:/prof" "Inbox (all)" ?i))
-    (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)" "all unread message" ?a))
-    (add-to-list 'mu4e-bookmarks '("flag:unread AND NOT flag:trashed" "Unread messages (no RSS)" ?u))
-    (add-to-list 'mu4e-bookmarks '("m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
-                                   "to read/process queue" ?q))
-    (add-to-list 'mu4e-bookmarks '("m:/inbox OR m:/prof" "unread primary queues to file"?f))
-    (add-to-list 'mu4e-bookmarks '("(NOT m:/inbox AND NOT m:/prof) AND flag:unread" "all sorted email" ?s)))
-
   (defun compose-reply-wide-or-not-please-ask ()
     "Ask whether to reply-to-all or not."
     (interactive)
@@ -1544,6 +1602,32 @@
           ("To"       "^To: *\\(.*\\)" 1)
           ("From"     "^From: *\\(.*\\)" 1)))
 
+  (setq mu4e-bookmarks
+        '((:name "unread primary queues to file"
+           :query "m:/inbox OR m:/prof"
+           :key ?f)
+          (:name "to read/process queue"
+           :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
+           :key ?q)
+          (:name "all unread message"
+           :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
+           :key ?a)
+          (:name "all sorted email"
+           :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
+           :key ?s)
+          (:name "inbox and prof (all)"
+           :query "m:/inbox OR m:/prof"
+           :key ?i)
+          (:name "messages with images"
+           :query "mime:image/*"
+           :key ?p)
+          (:name "mesages from today"
+           :query "date:today..now"
+           :key ?t)
+          (:name "messages from the last week"
+           :query "date:7d..now"
+           :key ?w)))
+
   (setq mu4e-compose-complete-addresses t)
   (setq mu4e-compose-complete-only-after "2015-01-01")
   (setq mu4e-compose-dont-reply-to-self t)
@@ -1571,8 +1655,7 @@
   (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t)
         mu4e--header-separator mail-header-separator)
 
-  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
-  (tychoish/initialize-standard-mail-bookmarks))
+  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1641,7 +1724,6 @@
   (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
   (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
   (add-hook 'telega-chat-mode-hook 'tychoish/telega-set-up-chat-mode)
-
 
   (when (eq system-type 'darwin)
     (setq telega-server-libs-prefix "/opt/homebrew")
