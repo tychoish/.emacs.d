@@ -33,7 +33,7 @@
 	 (setq buffer-read-only t)))))
 
 (defun consult-sardis--select-cmd ()
-  (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd") "\n" t))   )
+  (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd") "\n" t)))
     (consult--read
      sardis-commands
      :prompt "sards.cmds => "

@@ -252,8 +252,7 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
      count))
 
 (defmacro ht-make-getter (table)
-  (inline-quote
-   (lambda (key) (ht-get ,table key))))
+  `(lambda (key) (ht-get ,table key)))
 
 (defmacro ht-make-setter (table)
   `(lambda (key value) (ht-set ,table key value)))
@@ -261,36 +260,56 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (defmacro ht-make-contains-p (table)
   `(lambda (key) (ht-contains-p ,table key)))
 
-(defun f-directory-has-file-p (path files)
-  (when (stringp files)
-    (setq files (list files)))
+(defun f-mtime (filename)
+  (file-attribute-modification-time (file-attributes filename)))
 
-  (when (and (f-directory-p path)
-	     (->> (f-entries path #'f-filename)
-		  (-map (lambda (filename) (f-base filename)))
-		  (-filter (lambda (filename) (member filename files)))))
-    t))
-
-(defmacro f-has-ext-p-fn (ext)
-  `(lambda (filename) (f-ext-p filename ext)))
-
-(defmacro f-file-has-ext-predicate (extension)
+(defmacro f-file-has-extension-function (extension)
   `(lambda (filename) (f-ext-p filename ,extension)))
 
-(defmacro f-filename-is-predicate (name)
-  `(lambda (filename) (string= (f-filename filename) ,name)))
+(defmacro f-filename-is-function (name)
+  `(lambda (filename) (f-filename-is-p filename name)))
 
-(defmacro f-directory-containing-file-function (filename)
-  `(defun ,(intern (format "f-directory-containing-file-%s" (string-replace "." "-" filename))) (filename)
-		   (and (f-file-p filename)
-			(string= (f-filename filename) ,filename)
-			(f-dirname filename))))
+(defun f-filename-is-p (entry name)
+  (f-equal-p (f-filename entry) name))
 
-(defmacro f-directory-containing-file-with-extension-function (extension)
-  `(defun ,(intern (format "f-directory-containing-file-with-extension-%s" (string-replace "." "" extension))) (filename)
-     (and (f-file-p filename)
-	  (f-ext-p filename ,extension)
-	  (f-dirname filename))))
+(defmacro f-directories-containing-file-with-extension-function (extension)
+  (when (s-prefix-p "." extension)
+    (setq extension (string-trim-left extension "^\\.")))
+
+  `(defun ,(intern (format "f-directories-containing-file-with-extension-%s" (string-replace "." "" (downcase extension)))) (paths)
+     (when (stringp paths)
+       (setq paths (list paths)))
+     (->> paths
+	  (--flat-map (f-entries it #'f-file-p))
+	  (--filter (f-ext-p it ,extension))
+	  (-map #'f-dirname)
+	  (-distinct))))
+
+(defun f-files-in-directory (path)
+  (cond
+   ((stringp path)
+    (cond
+     ((f-directory-p path) (f-entries path #'f-file-p))
+     ((f-file-p path) (f-entries (f-dirname path) #'file-p))))
+   ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
+
+(defun f-directories-containing-file (directory file)
+  (->> (f-files-in-directory directory)
+       (--filter (string-equal file (f-filename it)))
+       (-map #'f-dirname)
+       (-distinct)))
+
+(defmacro f-directories-containing-file-function (filename &rest files)
+  (let ((filenames (cons filename files)))
+  `(defun ,(intern (format "f-directories-containing-file-%s" (string-replace "." "-" (downcase filename)))) (path)
+     (let ((filenames (list ,@filenames)))
+     (->> (f-files-in-directory path)
+	  (--filter (car (member (f-filename it) filenames)))
+	  (-map #'f-dirname)
+	  (-distinct))))))
+
+(defun f-collapse-homedir (path)
+  (string-replace (expand-file-name "~/") "~/" path))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

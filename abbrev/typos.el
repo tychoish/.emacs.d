@@ -1,4 +1,4 @@
-(define-abbrev-table tychoish/abbrev-wikipedia-common-typos
+(define-abbrev-table 'tychoish/abbrev-wikipedia-common-typos
   '(("abandonned" "abandoned")
     ("aberation" "aberration")
     ("abilityes" "abilities")

@@ -795,10 +795,10 @@
 
 (use-package abbrev
   :defer t
-  :commands (abbrev-mode expand-abbrev abbrev-suggest)
   :delight (abbrev-mode " abb")
   :hook (((text-mode prog-mode telega-chat-mode) . abbrev-mode)
-	 (emas-startup . tychoish/load-abbrev-files)))
+  	 (abbrev-mode . tychoish/load-abbrev-files))
+  :commands (abbrev-mode expand-abbrev abbrev-suggest))
 
 (use-package capf-wordfreq
   :load-path "external/"
@@ -1175,9 +1175,13 @@
   :bind ("C-c t r" . consult-sardis-run))
 
 (use-package consult-builder
+  :after (compile)
   :bind (:map compilation-mode-map
          ("d" . compilation-buffer-change-directory))
   :commands (consult--select-directory
+	     make-compilation-candidate
+	     push-compilation-candidate
+	     register-compilation-candidates
 	     tychoish--compilation-read-command
 	     tychoish/compile-project))
 
@@ -2105,6 +2109,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                                   :compositeLiteralFields :json-false
                                   :rangeVariableTypes :json-false
                                   :functionTypeParameters :json-false)))
+
   (add-hook 'go-ts-mode-hook 'tychoish/go-mode-setup)
   :config
   (let ((current-path (getenv "PATH"))
@@ -2145,6 +2150,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq rustic-use-rust-save-some-buffers t)
   (setq rustic-clippy-arguments "--all --all-features -- --deny warnings")
 
+
   (let* ((rustup-path (executable-find "rustup"))
 	 (rustup-p (not (string-empty-p rustup-path)))
 	 (rustup-toolchain (if rustup-p "nightly" "stable")))
@@ -2163,6 +2169,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'flycheck-checkers 'rustic-clippy))
 
 (use-package python-ts-mode
+  :ensure nil
   :delight
   (python-ts-mode "py.ts")
   (python-mode "py")
@@ -2209,8 +2216,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
       (python-indent-shift-left start end))
     (setq deactivate-mark nil))
 
-
-
   (defun balle-python-shift-right ()
     (interactive)
     (let (start end bds)
@@ -2252,6 +2257,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package just-mode
   :ensure t
+  :after (consult-builder)
   :mode (("justfile" . just-mode)
          ("Justfile" . just-mode)
          ("\\.just%" . just-mode)))
@@ -2389,7 +2395,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq flycheck-golangci-lint-tests t))
 
 (use-package compile
-  :defines (compile-add-error-syntax)
+  :defines (compile-add-error-syntax compilation-mode-map)
   :bind (("C-c t c" . tychoish-compile)
          ("C-c C-t c" . compile)
 	 :map compilation-mode-map
@@ -2599,8 +2605,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'eglot-stay-out-of 'flymake)
   (add-to-list 'eglot-stay-out-of 'company)
 
-  (add-hook 'before-save-hook 'eglot-organize-imports)
-  (add-hook 'before-save-hook 'eglot-format-for-hook)
+  (add-hook 'before-save-hook 'eglot-organize-imports 10)
+  (add-hook 'before-save-hook 'eglot-format-for-hook -10)
 
   (add-to-list 'eglot-server-programs
                `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)

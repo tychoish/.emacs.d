@@ -328,9 +328,6 @@
 
 ;; silent startup -- avoid printing or using the Messages buffer
 
-(defun read-abbrev-file-quietly (filename)
-  (when (f-exists-p filename)
-    (read-abbrev-file filename t)))
 
 (defun display-startup-echo-area-message ()
   "Called during setup, intentially a noop, which omit the message."  nil)
@@ -403,9 +400,20 @@
                  (require (intern (string-remove-suffix ".el" fn)))))
             (directory-files dirname))) t))
 
+(defvar tychoish/abbrev-files-cache (ht-create)
+  "cache mapping file names to files' mtime to avoid re-importing files")
+
+(defun should-read-abbrev-file-p (path)
+  (or (not (ht-contains-p tychoish/abbrev-files-cache path))
+      (time-less-p (ht-get tychoish/abbrev-files-cache path) (f-mtime path))))
+
 (defun tychoish/load-abbrev-files ()
-  (mapc #'read-abbrev-file-quietly
-        (cons abbrev-file-name (f-entries (f-join user-emacs-directory "abbrev") (f-has-ext-p-fn "el"))))
+  (->> (f-entries (f-join user-emacs-directory "abbrev"))
+       (--filter (f-ext-p it "el"))
+       (-filter #'f-exists-p)
+       (-filter #'should-read-abbrev-file-p)
+       (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
+       (--map (ht-set tychoish/abbrev-files-cache it (f-mtime it))))
   (setq save-abbrevs t))
 
 (defun tychoish/set-up-auto-save ()
