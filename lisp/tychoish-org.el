@@ -180,7 +180,7 @@
            (heading (cdr ival-pair))
            (interval-prefix (downcase (substring heading 0 1)))
            (lower-heading (downcase heading))
-           (menu-name (concat name lower-heading "routine"))
+           (menu-name (s-join " " (list name lower-heading "routine")))
            (template (concat "* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")))
 
       (dolist (prefix (list (concat prefix-key "r" interval-prefix)

@@ -22,11 +22,13 @@
         (with-current-buffer compile-buf
           (when (or current-prefix-arg command)
             (setq compilation-arguments nil))
-          (when (trimmed-string-or-nil compile-command)
+
+          (let* ((compile-command (tychoish--compilation-read-command (or command compile-command))))
             (recompile current-prefix-arg)))
+
       (compilation-start
-       compile-command        ;; the command
-       'compilation-mode      ;; the default
+       (tychoish--compilation-read-command nil)  ;; the command
+       'compilation-mode                                     ;; the default
        (compile-buffer-name op-name)))
 
     (if-let* ((op-window (get-buffer-window op-name (selected-frame))))
@@ -224,9 +226,15 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
        ,(if (eql 0 (length hooks))
 	    `(add-hook 'tychoish--compilation-candidate-functions #',symbol-name)
-	  `(defun ,hook-registering-function-name ()
-	     (add-hook 'tychoish--compilation-candidate-functions #',symbol-name 0 t))
-	  `(->> ,hooks (--map (add-hook it #',hook-registering-function-name)))))))
+	  `(let ((hooks ,hooks))
+	     (defun ,hook-registering-function-name ()
+	       (add-hook 'tychoish--compilation-candidate-functions #',symbol-name 0 t))
+
+	     (with-eval-after-load "compile"
+	       (push 'compilation-mode-hook hooks))
+
+	     (->> hooks (--map (add-hook it #',hook-registering-function-name))))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -250,13 +258,11 @@ current directory and the project root, and `table' is table of `tychoish--compl
     (->> (split-string makefile-report)
 	 (--map (list (cons 'target it) (cons 'directory default-directory)))))))
 
-(--map (alist-get 'target it) (tychoish--compilation-discover-make-targets "/home/tychoish/garen"))
-
-
 (register-compilation-candidates
  :name "makefiles"
- :pipeline (->> (f-directories-containing-file-makefile directories)
-		(tychoish--compilation-discover-make-targets)
+ :pipeline (->> directories
+		(-flat-map #'f-directories-containing-file-makefile)
+		(-flat-map #'tychoish--compilation-discover-make-targets)
 		(--flat-map
 		 (let* ((directory (alist-get 'directory it))
 			(target (alist-get 'target it))
@@ -327,7 +333,6 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		  :command (car it)
 		  :directory project-root-directory
 		  :annotation (format "run %s, from compile buffer %s in the project root (%s) " (car it) (cdr it) project-root-directory)))))
-
 
 (register-compilation-candidates
  :name "go-packages"
@@ -451,7 +456,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			    :command (format "cd %s; cargo %s" directory it)
 			    :annotation (format "run cargo target '%s' in package (%s)" it annotation-directory)))))))
 		(-concat
-		 (when (f-directory-contains-file-p project-root-directory "Cargo.toml")
+		 (when (f-directories-containing-file-cargo-toml project-root-directory)
 		   (let ((annotation-directory (f-collapse-homedir project-root-directory)))
 		     (->> '("libs" "bins" "examples" "tests" "benches" "all-targets")
 			  (--flat-map
@@ -471,7 +476,10 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		(--flat-map
 		 (let ((directory it)
 		       (annotation-directory (f-collapse-homedir it)))
-		   (->> (split-string (shell-command-to-string "just --summary"))
+		   (->> (when-let* ((default-directory directory)
+				    (output (shell-command-to-string "just --summary"))
+				    (candidates (split-string output)))
+			  candidates)
 			(--map (make-compilation-candidate
 				:directory directory
 				:command (format "just %s" it)

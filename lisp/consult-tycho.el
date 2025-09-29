@@ -122,24 +122,10 @@ entry of `org-capture-templates'."
       ;; otherwise, provide the empty string...
       ""))
 
-(defun consult-tycho--select-context-for-operation (&optional prompt seed-list)
-  "Pick string to use as context in a follow up operation."
-  (let ((this-command this-command)
-        (selections (consult-tycho--context-base-list seed-list))
-	(prompt (or prompt "grep =>>")))
-    (or (when (length= selections 1) (nth 0 selections))
-        (when (length> selections 1)
-          (consult--read selections
-           :sort nil
-           :command this-command
-           :require-match nil
-           :prompt prompt)))))
-
 (defun consult-tycho--context-base-list (&optional seed)
   (->> (-join
-        (if (listp seed)
-            seed
-          (list seed))
+	(or (when (listp) seed)
+	    (when (stringp seed) (list seed)))
         (if-let* ((mark-pos (mark))
 			(start (or (region-beginning) (min (point) mark-pos)))
 			(end (or (region-end) (max mark-pos (point)))))
@@ -160,6 +146,19 @@ entry of `org-capture-templates'."
         (list (thing-at-point 'line)))
        (-keep #'trimmed-string-or-nil)
        (-distinct)))
+
+(defun consult-tycho--select-context-for-operation (&optional prompt seed-list)
+  "Pick string to use as context in a follow up operation."
+  (let ((this-command this-command)
+        (selections (consult-tycho--context-base-list seed-list))
+	(prompt (or prompt "grep =>>")))
+    (or (when (length= selections 1) (nth 0 selections))
+        (when (length> selections 1)
+          (consult--read selections
+           :sort nil
+           :command this-command
+           :require-match nil
+           :prompt prompt)))))
 
 (cl-defun consult-tycho--incremental-grep (&key (prompt "=>> ") (builder '()) (initial ""))
   "Do incremental grep-type operation. Like the `consult-grep' operation

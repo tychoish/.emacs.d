@@ -1493,6 +1493,13 @@
 (use-package tychoish-company
   :disabled)
 
+(use-package revbufs
+  :ensure t
+  :config
+  (bind-key "C-k" 'revbufs-kill 'revbufs-mode-map)
+  (defalias 'revbufs-kill
+   (kmacro "C-f C-f C-f C-k")))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; version control

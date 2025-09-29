@@ -15,8 +15,7 @@
        ;; args
        "notify" "send" msg))
 
-    (alert
-     msg
+    (alert msg
      :title selection
      :buffer (get-buffer buffer-name))
 
