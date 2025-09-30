@@ -326,8 +326,9 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		 :directory default-directory)
 		(--keep
 		 (with-current-buffer it
-		   (cons (trimmed-string-or-nil (car compilation-arguments)) (buffer-name))))
-		(--filter (car it))
+		   (let ((key (trimmed-string-or-nil (car compilation-arguments))))
+		     (when key
+		       (cons key (buffer-name))))))
 		(--map
 		 (make-compilation-candidate
 		  :command (car it)
