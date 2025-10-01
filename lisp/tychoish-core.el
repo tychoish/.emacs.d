@@ -2849,18 +2849,23 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
       (unless (s-contains-p uv-bin-path search-path)
 	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
       (add-to-list 'exec-path uv-bin-path)))
-  :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-default-model "sonnet")
-  (tychoish/set-up-aider-env-vars))
+  (add-to-list 'aidermacs-extra-args "--notifications")
+  (add-to-list 'aidermacs-extra-args "--cache-prompts")
+  (add-to-list 'aidermacs-extra-args "--cache-keepalive-pings 12")
+  (add-hook 'aidermacs-before-run-backend-hook 'tychoish/set-up-aider-env-vars))
 
 (use-package aider
   :ensure t
   :bind (:map tychoish/robot-map
 	 ("C-a" . aider-transient-menu))
   :config
-  (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets"))
-  (tychoish/set-up-aider-env-vars))
+  (tychoish/set-up-aider-env-vars)
+  (add-to-list 'aider-args "--notifications")
+  (add-to-list 'aider-args "--cache-prompts")
+  (add-to-list 'aider-args "--cache-keepalive-pings 12")
+  (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets")))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here
