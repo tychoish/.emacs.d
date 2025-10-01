@@ -32,12 +32,10 @@
 	 (setq buffer-read-only t)))))
 
 (defun consult-sardis--select-cmd ()
-  (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd") "\n" t)))
+  (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd"))))
     (consult--read
      sardis-commands
      :prompt "sards.cmds => "
-     :group (consult--type-group sardis-commands)
-     :narrow (consult--type-narrow sardis-commands)
      :require-match nil
      :category 'tychoish/sardis-cmds)))
 
@@ -79,13 +77,5 @@
      (compile-buffer-name op-buffer-name)
      (pa "highlight-regexp" :is nil)
      (pa "continue" :is nil))))
-
-(defalias 'pa 'pos-arg)
-
-(defmacro pos-arg (name &key is)
-  "Allow positional arguments to have annotated call-sites."
-  (unless (or (stringp name) (symbolp name))
-    (user-error "cannot annotate a positional arg without a name"))
-  is)
 
 (provide 'consult-sardis)

@@ -124,7 +124,7 @@ entry of `org-capture-templates'."
 
 (defun consult-tycho--context-base-list (&optional seed)
   (->> (-join
-	(or (when (listp) seed)
+	(or (when (listp seed) seed)
 	    (when (stringp seed) (list seed)))
         (if-let* ((mark-pos (mark))
 			(start (or (region-beginning) (min (point) mark-pos)))

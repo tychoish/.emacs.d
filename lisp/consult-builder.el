@@ -2,6 +2,7 @@
 (require 'ht)
 (require 'dash)
 (require 'f)
+(require 'tychoish-common)
 
 ;;;###autoload
 (defun tychoish/compile-project (&optional name command)
@@ -28,7 +29,7 @@
 
       (compilation-start
        (tychoish--compilation-read-command nil)  ;; the command
-       'compilation-mode                                     ;; the default
+       'compilation-mode                         ;; the default
        (compile-buffer-name op-name)))
 
     (if-let* ((op-window (get-buffer-window op-name (selected-frame))))
@@ -198,11 +199,8 @@
    :documentation "description of command, used for marginalia annotations."
    :type string))
 
-(cl-defmethod push-compilation-candidate ((candidate tychoish--compilation-candidate) (table hash-table))
-  (ht-set table (tychoish--compilation-candidate-name candidate) candidate))
-
 (defun add-candidates-to-table (table candidates)
-  (mapc (lambda (item) (push-compilation-candidate item table)) candidates))
+  (mapc (lambda (item) (ht-set table (tychoish--compilation-candidate-name item) item)) candidates))
 
 (defvar tychoish--compilation-candidate-functions nil
   "A List of functions that populate a table of possible completion commands
@@ -323,7 +321,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
  :name "project-compilation-buffer-commands"
  :pipeline (->> (mode-buffers-for-project
 		 :mode 'compilation-mode
-		 :directory default-directory)
+		 :directory project-root-directory)
 		(--keep
 		 (with-current-buffer it
 		   (let ((key (trimmed-string-or-nil (car compilation-arguments))))
@@ -377,9 +375,9 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		   :directory it
 		   :annotation (format "run `golangci-lint' in package %s" (f-filename it)))
 		  (make-compilation-candidate
-		   :command "golangci-lint run --allow-parallel-runners"
+		   :command "golangci-lint run --fix"
 		   :directory it
-		   :annotation (format "run `golangci-lint' in package %s with parallel runners" (f-filename it)))
+		   :annotation (format "run `golangci-lint' in package %s with fixing trivial errors" (f-filename it)))
 		  (make-compilation-candidate
 		   :name "go list <pkgs...> | xargs -t go test -race -v"
 		   :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"

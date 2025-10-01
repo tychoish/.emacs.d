@@ -280,15 +280,16 @@
 
   (defun tychoish-rg (regexp)
     (interactive "P")
-    (ripgrep-regexp
-     (consult--read
-      (consult-tycho--context-base-list ripgrep-regexp-history)
-      :prompt (format "[%s]<rg>: " default-directory)
-      :command this-command
-      :initial regexp
-      :history ripgrep-regexp-history
-      :require-match nil)
-     default-directory))
+    (let ((compilation-buffer-name-function (compile-buffer-name (format "*%s-rg*" (approximate-project-name)))))
+      (ripgrep-regexp
+       (consult--read
+	(consult-tycho--context-base-list ripgrep-regexp-history)
+	:prompt (format "[%s]<rg>: " default-directory)
+	:command this-command
+	:initial regexp
+	:history ripgrep-regexp-history
+	:require-match nil)
+       default-directory)))
 
   (defun tychoish-rg-repo (&optional regexp)
     (interactive "P")
@@ -927,15 +928,26 @@
   (setq read-buffer-completion-ignore-case t)
   (setq completion-ignore-case t)
 
+  (defun tychoish/corfu-popupinfo-resolver (candidate)
+    (let ((frame-type (framep (window-frame (get-buffer-window)))))
+      (unless (or
+	       (eq frame-type 't) ;; this is "normal" text terminal
+	       (eq frame-type 'pc)) ;; this is "ms-dos" terminal (good measure)
+	(funcall corfu-popupinfo--function candidate))))
+
+  (setq corfu-popupinfo--function #'tychoish/corfu-popupinfo-resolver)
+
   (defun corfu-move-to-minibuffer ()
     (interactive)
     (pcase completion-in-region--data
       (`(,beg ,end ,table ,pred ,extras)
        (let ((completion-extra-properties extras)
-             completion-cycle-threshold completion-cycling)
+             completion-cycle-threshold
+	     completion-cycling)
          (consult-completion-in-region beg end table pred)))))
 
   (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer)
+
   (corfu-indexed-mode)
   (corfu-history-mode)
   (corfu-popupinfo-mode))
@@ -950,6 +962,7 @@
   (setq corfu-prescient-enable-filtering t))
 
 (use-package corfu-terminal
+  :load-path "external/"
   :hook (corfu-mode . corfu-terminal-mode)
   :after (popon)
   :defines (corfu-terminal-disable-on-gui)
@@ -1074,6 +1087,7 @@
   (setq xref-show-xrefs-function #'consult-xref)
   (setq xref-show-definitions-function #'consult-xref)
 
+  (setq consult-narrow-key "C-+")
   (setq consult-async-split-style 'semicolon)
   (setq consult-async-min-input 2)
   (setq consult-async-input-debounce 0.05)
@@ -1180,7 +1194,6 @@
          ("d" . compilation-buffer-change-directory))
   :commands (consult--select-directory
 	     make-compilation-candidate
-	     push-compilation-candidate
 	     register-compilation-candidates
 	     tychoish--compilation-read-command
 	     tychoish/compile-project))
@@ -2125,7 +2138,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (unless gopath
       (setq gopath (setenv "GOPATH" (expand-file-name "~/go"))))
 
-    (setq local-go-bin (f-join gopath "/bin"))
+    (setq local-go-bin (f-expand (concat gopath "/bin")))
     (add-to-list 'exec-path local-go-bin)
 
     (unless (s-contains? local-go-bin current-path)

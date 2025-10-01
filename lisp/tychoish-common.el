@@ -6,7 +6,7 @@
 
 (defun tychoish-system-name ()
   (interactive)
-  (message (s-join " " (list "system:" (system-name)))))
+  (message "system: %s" (system-name)))
 
 (defun tychoish/resolve-instance-id ()
   (let ((daemon (daemonp)))
@@ -293,23 +293,32 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
      ((f-file-p path) (f-entries (f-dirname path) #'file-p))))
    ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
 
-(defun f-directories-containing-file (directory file)
-  (->> (f-files-in-directory directory)
-       (--filter (string-equal file (f-filename it)))
-       (-map #'f-dirname)
-       (-distinct)))
-
 (defmacro f-directories-containing-file-function (filename &rest files)
   (let ((filenames (cons filename files)))
-  `(defun ,(intern (format "f-directories-containing-file-%s" (string-replace "." "-" (downcase filename)))) (path)
-     (let ((filenames (list ,@filenames)))
-     (->> (f-files-in-directory path)
-	  (--filter (car (member (f-filename it) filenames)))
-	  (-map #'f-dirname)
-	  (-distinct))))))
+  `(defun ,(intern (format "f-directories-containing-file-%s" (string-replace "." "-" (downcase filename)))) (path &rest paths)
+     (let ((filenames (list ,@filenames))
+	   (paths (cons path paths)))
+       (->> paths
+	    (-flat-map #'f-files-in-directory)
+	    (--filter (car (member (f-filename it) filenames)))
+	    (-map #'f-dirname)
+	    (-distinct))))))
 
 (defun f-collapse-homedir (path)
   (string-replace (expand-file-name "~/") "~/" path))
+
+(defun -flatten-some (input)
+  (unless (proper-list-p input)
+    (user-error "can only flatten proper lists (has nil terminating final cdr)"))
+
+  (let ((head input) flattened)
+    (while head
+      (if (listp (car head))
+	  (setq flattened (nconc (car head) flattened))
+	(setq flattened (cons (car head) flattened)))
+      (setq head (cdr head)))
+
+    (nreverse flattened)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -332,32 +341,25 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
     `(defun ,function-name nil
        (run-hooks (intern ,hook-name)))))
 
-(defmacro create-local-toggle-functions (value)
+(defmacro create-toggle-functions (value &optional &key local)
   (let* ((name (symbol-name value))
 	 (ops (list
-	       `(,(intern (concat "turn-on-" name "-local")) . t)
-	       `(,(intern (concat "turn-off-" name "-local")) . nil)
-	      `(,(intern (concat "toggle-" name "-local")) . (not ,value)))))
+	       `(,(intern (concat "turn-on-" name)) t)
+	       `(,(intern (concat "turn-off-" name)) nil)
+	       `(,(intern (concat "toggle-" name )) (not ,value))))
+	 (setter (if local 'setq-local 'setq)))
+
+    (when local
+      (cl-maplist
+       (lambda (val)
+	 (setf (caar val) (intern (concat (symbol-name (caar val)) "-local"))))
+       ops))
 
   `(progn
      ,@(mapcar (lambda (def)
                  `(defun ,(car def) ()
 		    (interactive)
-		    (setq-local ,value ,(cdr def))))
-	       ops))))
-
-(defmacro create-toggle-functions (value)
-  (let* ((name (symbol-name value))
-	 (ops (list
-	       `(,(intern (concat "turn-on-" name)) . t)
-	       `(,(intern (concat "turn-off-" name)) . nil)
-	      `(,(intern (concat "toggle-" name )) . (not ,value)))))
-
-  `(progn
-     ,@(mapcar (lambda (def)
-                 `(defun ,(car def) ()
-		    (interactive)
-		    (setq ,value ,(cdr def))))
+		    (,setter ,value ,(cdr def))))
 	       ops))))
 
 (defmacro with-silence (&rest body)
@@ -371,7 +373,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   `(let ((inhibit-message t))
      (null ,@body)))
 
-
 (defmacro with-force-write (&rest body)
   (declare (indent 1) (debug t))
   `(progn
@@ -379,17 +380,11 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
      ,@body
      (setq buffer-read-only t)))
 
-
 (defmacro with-temp-keymap (map &rest body)
   "Create a temporary MAP and return it after evaluating it in the BODY."
   `(let ((,map (make-sparse-keymap)))
      ,@body
      map))
-
-(defmacro -add-if-empty (op list-val)
-  `(if ,list-val
-       ,list-val
-     (list ,op)))
 
 (cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil))
   (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
@@ -424,9 +419,16 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
      (when (> duration  ,threshold)
        (message "%s: %.06fs" ,name duration))))
 
-(defmacro compile-buffer-name (name)
+(defun compile-buffer-name (name)
   `(lambda (&optional _) ,name))
 
+(defalias 'pa 'pos-arg)
+
+(defmacro pos-arg (name &key is)
+  "Allow positional arguments to have annotated call-sites."
+  (unless (or (stringp name) (symbolp name))
+    (user-error "cannot annotate a positional arg without a name"))
+  is)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -698,6 +700,7 @@ Returns the number of buffers killed."
 	     (when (and
 		    (derived-mode-p mode)
 		    (file-in-directory-p default-directory directory))
-	       (current-buffer))) (buffer-list)))
+	       (current-buffer)))
+	  (buffer-list)))
 
 (provide 'tychoish-common)
