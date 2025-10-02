@@ -32,11 +32,17 @@
 	 (setq buffer-read-only t)))))
 
 (defun consult-sardis--select-cmd ()
-  (let ((sardis-commands (split-string (shell-command-to-string "sardis cmd"))))
-    (consult--read
-     sardis-commands
+  (let ((table (ht-create)))
+
+    (->> (split-string (shell-command-to-string "sardis cmd --annotate") "\n")
+	 (--map (-let (cmd annotation) (split-string it "\t" t "[ \s\t\n]")))
+	 (--mapc (ht-set table (car it) (cadr it))))
+
+    (consult-tycho--read-annotated
+     table
      :prompt "sards.cmds => "
      :require-match nil
+     :command 'consult-sardis
      :category 'tychoish/sardis-cmds)))
 
 (defalias 'sardis-run 'consult-sardis-run)

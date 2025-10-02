@@ -590,13 +590,6 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
-(use-package abbrev
-  :defer t
-  :delight (abbrev-mode " abb")
-  :hook (((text-mode prog-mode telega-chat-mode) . abbrev-mode)
-  	 (abbrev-mode . tychoish/load-abbrev-files))
-  :commands (abbrev-mode expand-abbrev abbrev-suggest))
-
 (use-package capf-wordfreq
   :load-path "external/"
   :commands (capf-wordfreq-completion-at-point-function capf-wordfreq--dictionary)
@@ -1298,6 +1291,7 @@
 
 (use-package revbufs
   :ensure t
+  :commands (revbufs)
   :config
   (bind-key "C-k" 'revbufs-kill 'revbufs-mode-map)
   (defalias 'revbufs-kill
@@ -2652,6 +2646,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
       (unless (s-contains-p uv-bin-path search-path)
 	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
       (add-to-list 'exec-path uv-bin-path)))
+  :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-default-model "sonnet")
   :config

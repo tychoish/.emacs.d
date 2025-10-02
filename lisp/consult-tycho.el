@@ -28,24 +28,6 @@
 (require 'consult)
 (require 'ht)
 
-(defun consult-apropos--get-all-symbols ()
-  "In progress consult source function.
-Builds and returns a list of (name kind symbol) values in persuit of a
-helm-appropos replacement."
-  (let ((symbs '()))
-    (mapatoms (lambda (symb)
-                (let ((name (symbol-name symb)))
-                  (cond
-                   ((local-variable-p symb) (push `(,name 'local-variable ,symb) symbs))
-                   ((custom-variable-p symb) (push `(,name 'custom-variable ,symb) symbs))
-                   ((commandp symb) (push `(,name 'command ,symb) symbs))
-                   ((functionp symb) (push `(,name 'function ,symb) symbs))
-                   ((facep symb) (push `(,name 'face ,symb) symbs))
-                   ((string-match-p "%" name))
-                   (t (push `(,name 'variable ,symb) symbs))))))
-    symbs))
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: org-capture
@@ -87,13 +69,14 @@ entry of `org-capture-templates'."
                            collect (cons (nth 1 template) (nth 0 template))))
          (capture-template
           (consult--read templ
-                         :prompt "org-capture-templates=>: "
+                         :prompt "org-capture-templates => "
                          :require-match nil
                          :group (consult--type-group templ)
                          :narrow (consult--type-narrow templ)
                          :annotate (lambda (selection) (format " --> [%s]" (cdr (assoc selection templ))))
                          :lookup (lambda (selection candidates &rest _) (cdr (assoc selection candidates)))
                          :category 'org-capture
+			 :command 'consult-org-capture
                          :history '(:input consult-org--capture-history))))
     (unless (string-with-non-whitespace-content-p capture-template)
       (user-error "must select a valid templae %s (%s)" capture-template (type-of capture-template)))
@@ -160,7 +143,7 @@ entry of `org-capture-templates'."
            :require-match nil
            :prompt prompt)))))
 
-(cl-defun consult-tycho--incremental-grep (&key (prompt "=>> ") (builder '()) (initial ""))
+(cl-defun consult-tycho--incremental-grep (&key (prompt "=>> ") (builder '()) (initial "") (command this-command))
   "Do incremental grep-type operation. Like the `consult-grep' operation
 upon which it was based, permits interoperability between git-grep ag, ack, and rg"
   (let ((consult-async-input-debounce 0.025)
@@ -178,7 +161,7 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
      :add-history (thing-at-point 'symbol)
      :require-match nil
      :category 'consult-grep
-     :command this-command
+     :command command
      :sort nil
      :group nil ;; #'consult--prefix-group <- this groups results by common prefix (e.g. file)
      :history '(:input consult--grep-history))))
@@ -199,6 +182,7 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
 
     (consult-tycho--incremental-grep
      :prompt prompt
+     :command 'consult-rg
      :builder (consult--ripgrep-make-builder (nth 1 prompt-paths-dir))
      :initial initial)))
 
@@ -236,7 +220,6 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
   (interactive "P")
   (consult-rg-project initial :context t))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: file object processing
@@ -248,18 +231,41 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
 ;;;###autoload
 (defun tychoish-mail-select-account (account-id)
   "Use consult to select an account/mail configuration."
+
   (interactive
-   (list
-    (let* ((accounts (ht-keys tychoish/mail-accounts))
-	   (longest-key (length-of-longest-item accounts)))
-      (consult--read
-       accounts
-       :prompt "mail-account => "
-       :require-match nil
-       :annotate (tychoish/mail-get-account-annotation-function longest-key)))))
+   (list (let ((table (ht-create)))
+	   (ht-map (lambda (key account)
+		     (ht-set table key (format "%s <%s>%s"
+					       (tychoish--mail-account-name account)
+					       (tychoish--mail-account-address account)
+					       (or (when (equal tychoish/mail-account-current key) " -- CURRENT") ""))))
+		   tychoish/mail-accounts)
+	   (consult-tycho--read-annotated
+	    table
+	    :prompt "mail-account => "
+	    :require-match nil
+	    :command 'tychoish-mail-select-account
+	    :category 'consult-mu))))
 
   (let ((select-account-operation (intern account-id)))
     (funcall select-account-operation)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; consult-tycho: helpers for working with consult
+
+(cl-defun consult-tycho--read-annotated (table &key (prompt "=> ") require-match category (command this-command))
+  (unless (ht-p table)
+    (user-error "must specify annotated table as a hashmap of options to annotations"))
+
+  (let ((longest (length-of-longest-item (ht-keys table))))
+    (consult--read
+     table
+     :prompt prompt
+     :require-match require-match
+     :command command
+     :annotate (lambda (candidate) (concat (prefix-padding-for-annotation candidate longest) (ht-get table candidate)))
+     :category category)))
 
 (provide 'consult-tycho)
 ;;; consult-tycho.el ends here

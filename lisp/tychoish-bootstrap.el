@@ -380,6 +380,7 @@
 (defun tychoish/emacs-startup-operations ()
   (global-auto-revert-mode 1)
 
+
   (delight 'auto-revert-mode)
   (delight 'eldoc-mode)
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
@@ -414,6 +415,8 @@
        (-filter #'should-read-abbrev-file-p)
        (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
        (--map (ht-set tychoish/abbrev-files-cache it (f-mtime it))))
+
+  (delight 'abbrev-mode "abb")
   (setq save-abbrevs t))
 
 (defun tychoish/set-up-auto-save ()
@@ -525,6 +528,7 @@
 (add-hook 'emacs-startup-hook 'electric-pair-mode)
 (add-hook 'emacs-startup-hook 'which-key-mode)
 (add-hook 'which-key-mode-hook 'which-key-setup-side-window-bottom)
+(add-hook 'abbrev-mode-hook 'tychoish/load-abbrev-files)
 
 (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
 (setq electric-pair-inhibit-predicate #'tychoish/electric-pair-inhibition)
@@ -659,15 +663,6 @@
   (signature ""
    :documentation "content or filename of signature"
    :type 'string))
-
-(defmacro tychoish/mail-get-account-annotation-function (longest-key)
-  `(lambda (key)
-    (let ((account (ht-get tychoish/mail-accounts key)))
-      (format "%s-- %s <%s>%s"
-              (prefix-padding-for-annotation key ,longest-key)
-              (tychoish--mail-account-name account)
-              (tychoish--mail-account-address account)
-              (or (when (equal tychoish/mail-account-current key) " -- CURRENT") "")))))
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
 
