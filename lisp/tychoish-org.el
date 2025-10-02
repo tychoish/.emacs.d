@@ -376,28 +376,28 @@
   (add-to-list 'org-capture-templates
                '("tx" "tasks (prime; X buffer)"
                  entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%x\n%?"
+                 "* TODO %^{Task}\n%x\n"
                  :prepend t
                  :kill-buffer t
                  :empty-lines-after 1))
   (add-to-list 'org-capture-templates
                '("tk" "tasks (prime; kill buffer)"
                  entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%^C\n%?"
+                 "* TODO %^{Task}\n%^C\n"
                  :prepend t
                  :kill-buffer t
                  :empty-lines-after 1))
   (add-to-list 'org-capture-templates
                '("tl" "tasks (prime; org-link)"
                  entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%A\n%?"
+                 "* TODO %^{Task}\n%A\n"
                  :prepend t
                  :kill-buffer t
                  :empty-lines-after 1))
   (add-to-list 'org-capture-templates
                '("tt" "tasks (prime; selection)"
                  entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%?\n%i"
+                 "* TODO %^{Task}\n%i\n"
                  :prepend t
                  :kill-buffer t
                  :empty-lines-after 1))
@@ -410,8 +410,8 @@
 
   (if (string-equal "" key)
       (add-to-list 'org-capture-templates '("r" "routines"))
-    (add-to-list 'org-capture-templates `(,(concat "r" key) ,name))
-    (add-to-list 'org-capture-templates `(,(concat key "r") "routines")))
+    (add-to-list 'org-capture-templates `(,(concat "r" key) ,(concat name " routines")))
+    (add-to-list 'org-capture-templates `(,(concat key "r") ,(concat name " routines"))))
 
   (->> '(("1d" .  "Daily")
          ("1w" .  "Weekly")
@@ -425,13 +425,13 @@
 			  (interval-prefix (downcase (substring heading 0 1))))
 		     (->> (list (format "%s%s%s" key "r" interval-prefix)
 				(format "%s%s%s" "r" key interval-prefix))
+			  (-distinct)
 			  (-map (lambda (prefix) (cons prefix (cons interval heading)))))))
 
        (--map (let* ((prefix (car it))
 		     (interval (cadr it))
 		     (heading (cddr it))
 		     (lower-heading (downcase heading))
-		     (interval-prefix (substring heading 0 1))
 		     (menu-name (s-join " " (list name lower-heading "routine"))))
 
 		(add-to-list 'org-capture-templates
@@ -475,7 +475,7 @@
       (add-to-list 'org-capture-templates
                    `(,prefix ,(concat name " journal")
                      entry (file+olp+datetree ,org-filename "Journal")
-                     "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%?"
+                     "* %^{Title} <%<%Y-%m-%d %H:%M>>\n"
                      :prepend nil
                      :kill-buffer t
                      :empty-lines-after 1)))
@@ -485,7 +485,7 @@
       (add-to-list 'org-capture-templates
                    `(,prefix ,(concat name " notes")
                      entry (file+headline ,org-filename "Inbox")
-                     "* %^{Title}\n%?\n%i"
+                     "* %^{Title}\n%?\n%i\n"
                      :prepend t
                      :kill-buffer t
                      :empty-lines-after 1)))
@@ -493,9 +493,9 @@
     (dolist (prefix (list (concat "t" key)
                           (concat key "tt")))
       (add-to-list 'org-capture-templates
-                   `(,prefix ,(concat name " basic tasks")
+                   `(,prefix ,(concat name " tasks")
                              entry (file+headline ,org-filename "Tasks")
-                             "* TODO %^{Task}\n%i\n%?"
+                             "* TODO %^{Task}\n%i\n"
                              :prepend t
                              :kill-buffer t
                              :empty-lines-after 0)))
@@ -503,14 +503,21 @@
     (add-to-list 'org-capture-templates
                  `(,(concat key "jl") ,(concat name " journal (org-link)")
                    entry (file+olp+datetree ,org-filename "Journal")
-                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%a\n%?"
+                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%a\n"
+                   :prepend nil
+                   :kill-buffer t
+                   :empty-lines-after 1))
+    (add-to-list 'org-capture-templates
+                 `(,(concat key "jx") ,(concat name " journal (X buffer)")
+                   entry (file+olp+datetree ,org-filename "Journal")
+                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%x\n"
                    :prepend nil
                    :kill-buffer t
                    :empty-lines-after 1))
     (add-to-list 'org-capture-templates
                  `(,(concat key "jx") ,(concat name " journal (kill-buffer)")
                    entry (file+olp+datetree ,org-filename "Journal")
-                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%x\n%?"
+                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%c\n"
                    :prepend nil
                    :kill-buffer t
                    :empty-lines-after 1))
@@ -541,21 +548,21 @@
     (add-to-list 'org-capture-templates
                  `(,(concat key "tl") ,(concat name " tasks (org-link)")
                    entry (file+headline ,org-filename "Tasks")
-                   "* TODO %^{Task}\n%a\n%?"
+                   "* TODO %^{Task}\n%a\n"
                    :prepend t
                    :kill-buffer t
                    :empty-lines-after 0))
     (add-to-list 'org-capture-templates
-                 `(,(concat key "tl") ,(concat name " tasks (X buffer)")
+                 `(,(concat key "tx") ,(concat name " tasks (X buffer)")
                    entry (file+headline ,org-filename "Tasks")
-                   "* TODO %^{Task}\n%x\n%?"
+                   "* TODO %^{Task}\n%x\n"
                    :prepend t
                    :kill-buffer t
                    :empty-lines-after 0))
     (add-to-list 'org-capture-templates
                  `(,(concat key "tk") ,(concat name " tasks (kill buffer)")
                    entry (file+headline ,org-filename "Tasks")
-                   "* TODO %^{Task}\n%c\n%?"
+                   "* TODO %^{Task}\n%c\n"
                    :prepend t
                    :kill-buffer t
                    :empty-lines-after 0))
