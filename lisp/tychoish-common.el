@@ -1,5 +1,8 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'f)
+(require 'dash)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; id-state -- emacs daemon/instance identification for state config
@@ -193,6 +196,16 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
       first
     second))
 
+(defun length-of-longest-item (items)
+  "Return the length of the longest item in the list ITEMS."
+  (->> items
+       (-map #'length)
+       (-reduce #'larger)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `dash.el' -- extensions and additons
+
 (defun -distinct-by-car (cell)
   (let ((-compare-fn (lambda (a b) (equal (car a) (car b)))))
     (-distinct cell)))
@@ -201,46 +214,38 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (let ((-compare-fn (lambda (a b) (equal (alist-get key a) (alist-get key b)))))
     (-distinct cell)))
 
-(defun length-of-longest-item (items)
-  "Return the length of the longest item in the list ITEMS."
-  (->> items
-       (-map #'length)
-       (-reduce #'larger)))
-
 (defun -unwind (list)
   "Flattens a list of lists into a list by collecting items in one list"
   (-flatten-n 1 list))
 
 (defalias '-flat-map #'mapcan)
+
+(defalias '-mapc #'mapc)
+
 (defalias '-join #'nconc)
 
 (defmacro --flat-map (form input-list)
   (declare (debug (def-form form)))
   `(mapcan (lambda (it) (ignore it) ,form) ,input-list))
 
-(defun -map-in-place (mapping-op items)
-  (let ((head items))
-    (while head
-      (setf (car head) (funcall mapping-op (car head)))
-      (setq head (cdr head))))
-  items)
+(defmacro --mapc (form input-list)
+  "Apply the form (with the current element avalible as the variable `it')
+to all item in the list, primarily for side effects. Returns the input
+list. This is an anaphoric equivalent to `mapc'. As opposed to `--each'
+and `-each', which return nil, `-mapc' returns the input list."
+  (declare (debug (def-form form)))
+  `(mapc (lambda (it) (ignore it) ,form) ,input-list))
 
 (defmacro --map-in-place (form items)
+  "Apply the form, (with the current element as `it') to each item in the
+list, distructively setting the return value of the form to the value in
+the list."
   `(let* ((lst ,items)
 	  (head lst))
      (while head
        (setf (car head) (funcall #'(lambda (it) (ignore it) ,form) (car head)))
        (setq head (cdr head)))
      lst))
-
-(defun -in-place (mapping-op items)
-  (let ((head items)
-	 (count 0))
-    (while head
-      (setf (car head) (funcall mapping-op (car head)))
-      (setq head (cdr head))
-      (setq count (+ 1 count)))
-    count))
 
 (defmacro --in-place (form items)
   `(let ((head ,items)
@@ -251,6 +256,29 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
        (setq count (+ 1 count)))
      count))
 
+(defun -map-in-place (mapping-op items)
+  (--map-in-place (funcall mapping-op it) items))
+
+(defun -in-place (mapping-op items)
+  (--in-place (funcall mapping-op it) items))
+
+(defun -flatten-some (input)
+  (unless (proper-list-p input)
+    (user-error "can only flatten proper lists (has nil terminating final cdr)"))
+
+  (let ((head input) flattened)
+    (while head
+      (if (listp (car head))
+	  (setq flattened (nconc (car head) flattened))
+	(setq flattened (cons (car head) flattened)))
+      (setq head (cdr head)))
+
+    (nreverse flattened)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `ht.el' -- extensions and aditions
+
 (defmacro ht-make-getter (table)
   `(lambda (key) (ht-get ,table key)))
 
@@ -259,6 +287,10 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 (defmacro ht-make-contains-p (table)
   `(lambda (key) (ht-contains-p ,table key)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `f.el' -- extensions and additions
 
 (defun f-mtime (filename)
   (file-attribute-modification-time (file-attributes filename)))
@@ -306,19 +338,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 (defun f-collapse-homedir (path)
   (string-replace (expand-file-name "~/") "~/" path))
-
-(defun -flatten-some (input)
-  (unless (proper-list-p input)
-    (user-error "can only flatten proper lists (has nil terminating final cdr)"))
-
-  (let ((head input) flattened)
-    (while head
-      (if (listp (car head))
-	  (setq flattened (nconc (car head) flattened))
-	(setq flattened (cons (car head) flattened)))
-      (setq head (cdr head)))
-
-    (nreverse flattened)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -701,6 +720,18 @@ Returns the number of buffers killed."
 		    (derived-mode-p mode)
 		    (file-in-directory-p default-directory directory))
 	       (current-buffer)))
+	  (buffer-list)))
+
+(cl-defun mode-buffers (&optional (mode major-mode) &key (visiting 'file))
+  (--keep (with-current-buffer it
+	    (when (and (derived-mode-p mode)
+		       (cond ((eq visiting 'read-only) (when buffer-read-only t))
+			     ((eq visiting 'stale) (when-let ((stale (funcall buffer-stale-function it)))
+						     (and stale (not 'fast))))
+			     ((eq visiting 'file) (when buffer-file-name t))
+			     ((eq visiting 'internal) (when (not buffer-file-name) t))
+			     (t t)))
+	      (current-buffer)))
 	  (buffer-list)))
 
 (provide 'tychoish-common)

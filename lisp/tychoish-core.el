@@ -362,245 +362,35 @@
 ;;
 ;; org-mode, tychoish custom, etc
 
-(use-package org
-  :mode (("\\.org$" . org-mode))
+(use-package tychoish-org
   :delight
   (org-mode "org")
   (org-agenda-mode "agenda")
+  :mode (("\\.org$" . org-mode))
   :bind (:prefix "C-c o"
          :prefix-map tychoish/global-org-map
          ("a" . org-agenda)
          ("k" . org-capture)
+	 ("f" . org-agenda-files-open)
          :map tychoish/global-org-map
          :prefix "l"
          :prefix-map tychoish/org-link-mode-map
          ("s" . org-store-link)
          ("i" . org-insert-link)
-         ("a" . org-annotate-file)
-         :map org-mode-map
-         ("C-c l o" . org-link-open-from-string)
-         ("C-c C-p" . set-mark-command)
-         ("M-TAB" . org-cycle)
-         ("C-M-TAB" . org-cycle-force-archived)
-         :map org-mode-map
-         :prefix "C-c o"
-         :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
-         ("a" . org-agenda)
-         ("t" . org-set-tags-command)
-         ("n" . org-narrow-to-subtree)
-         ("w" . widen)
-         ("p" . org-insert-property-drawer)
-         ("w" . org-refile)
-         ("d" . tychoish-org-date-now)
-         ("i" . org-ctags-create-tags)
-         :map tychoish/org-mode-personal-map
-         :prefix "c"
-         :prefix-map tychoish/org-mode-capture-map
-         ("c" . org-capture)
-         ("p" . org-capture-goto-last-stored)
-         ("l" . org-capture-goto-last-stored)
-         ("t" . org-capture-goto-target)
-         ("r" . org-capture-refile)
-         ("w" . org-capture-refile)
-         :map tychoish/org-mode-personal-map
-         :prefix "a"
-         :prefix-map tychoish/org-mode-personal-archive-map
-         ("d" . tychoish-org-mark-done-and-archive)
-         ("e" . org-cycle-force-archived)
-         ("f" . org-archive-set-tag)
-         ("s" . org-archive-to-archive-sibling)
-         :map tychoish/org-mode-personal-map
-         :prefix "r"
-         :prefix-map tychoish/org-mode-personal-bibtex-map
-         ("a" . org-bibtex-check-all)
-         ("c" . org-bibtex-create)
-         ("e" . org-bibtex)
-         ("k" . org-bibtex-export-to-kill-ring)
-         ("r" . org-bibtex-create-in-current-entry)
-         ("s" . org-bibtex-search)
-         ("v" . org-bibtex-check))
-  :hook ((org-ctrl-c-ctrl-c-hook . org-set-weekday-of-timestamp))
-  :commands (org-save-all-org-buffers)
-  :defines (org-mode-agenda-map org-mode-map)
-  :config
-  (setq org-agenda-include-diary nil)
-  (setq org-agenda-custom-commands
-        '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")
-          ("c" "SuperView"
-           ((agenda "" ((org-agenda-overriding-header "Schedule:")
-                        (org-super-agenda-groups
-                         '((:name "Today"
-                                  :time-grid t
-                                  :date today
-                                  :order 1)))))
-            (alltodo "" ((org-agenda-overriding-header "Tasks:")
-                         (org-super-agenda-groups
-                          '((:log t)
-                            (:name "To refile"
-                                   :file-path (concat tychoish-org-fn-main "/refile"))
-                            (:name "Today's tasks"
-                                   :file-path "journal/")
-                            (:name "Due Today"
-                                   :deadline today
-                                   :order 2)
-                            (:name "Scheduled Soon"
-                                   :scheduled future
-                                   :order 8)
-                            (:name "Overdue"
-                                   :deadline past
-                                   :order 7)
-                            (:discard (:not (:todo "TODO")))))))))))
-
-  (setq org-todo-keywords
-        '((sequence "TODO(t)" "|" "DONE(d!)")
-          (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
-
-  (setq org-todo-keyword-faces
-        '(("TODO" . org-warning)
-          ("INPROGRESS" . "orange")
-          ("INCOMPLETE" . "orange")
-          ("SCHEDULED" . "green")
-          ("BACKLOG" . (:foreground "orange" :weight bold))
-          ("PROJECT" . (:foreground "blue" :weight bold))))
-
-  (setq org-tag-alist
-        '((:startgroup . nil)
-          ("inbox" . ?i)
-          ("backlog" . ?b)
-          (:endgroup . nil)
-          (:startgroup . nil)
-          ("@desk" . ?d)
-          ("@personal" . ?p)
-          ("@work" . ?w)
-          (:endgroup . nil)))
-
-  (setq org-modules
-        '(org-capture
-          org-datetree
-          org-annotate-file
-          org-depend
-          org-habit))
-
-  (setq org-CUA-compatible t)
-  (setq org-tags-column -70)
-  (setq org-agenda-block-separator nil)
-  (setq org-agenda-columns-add-appointments-to-effort-sum t)
-  (setq org-agenda-compact-blocks t)
-  (setq org-agenda-default-appointment-duration 60)
-  (setq org-agenda-inhibit-startup nil)
-  (setq org-agenda-mouse-1-follows-link t)
-  (setq org-agenda-use-time-grid t)
-  (setq org-agenda-skip-deadline-if-done nil)
-  (setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
-  (setq org-agenda-skip-scheduled-if-done t)
-  (setq org-agenda-skip-unavailable-files t)
-  (setq org-agenda-skip-timestamp-if-done t)
-  (setq org-agenda-todo-ignore-deadlines t)
-  (setq org-agenda-todo-ignore-scheduled t)
-  (setq org-agenda-start-on-weekday nil)
-  (setq org-enforce-todo-checkbox-dependencies t)
-  (setq org-enforce-todo-dependencies t)
-  (setq org-fast-tag-selection-include-todo t)
-  (setq org-fontify-done-headline t)
-  (setq org-footnote-auto-label nil)
-  (setq org-footnote-define-inline nil)
-  (setq org-footnote-section nil)
-  (setq org-log-into-drawer t)
-  (setq org-outline-path-complete-in-steps nil)
-  (setq org-provide-todo-statistics t)
-  (setq org-refile-allow-creating-parent-nodes 'confirm)
-  (setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
-  (setq org-refile-use-outline-path 'file)
-  (setq org-replace-disputed-keys t)
-  (setq org-return-follows-link t)
-  (setq org-reverse-note-order t)
-  (setq org-startup-folded 'content)
-  (setq org-startup-indented nil)
-  (setq org-tags-exclude-from-inheritance '("project"))
-  (setq org-track-ordered-property-with-tag t)
-  (setq org-use-fast-tag-selection 'auto)
-  (setq org-use-fast-todo-selection 'auto)
-  (setq org-use-speed-commands (lambda () (and (looking-at org-outline-regexp) (looking-back "^\**" nil))))
-
-  (add-hook 'org-mode-hook 'turn-on-soft-wrap)
-  (add-hook 'org-shiftup-final-hook 'windmove-up)
-  (add-hook 'org-shiftleft-final-hook 'windmove-left)
-  (add-hook 'org-shiftdown-final-hook 'windmove-down)
-  (add-hook 'org-shiftright-final-hook 'windmove-right)
-
-  (with-eval-after-load 'org-agenda
-    (bind-keys :map org-agenda-mode-map
-	       ("C-l" . org-agenda-open-link)
-	       ("M-c" . org-agenda-goto-calendar)))
-
-  (with-eval-after-load 'helm
-    (bind-keys :map tychoish/helm-center-menu-map
-               :prefix "o"
-               :prefix-map tychoish/org-mode-personal-helm-map
-               ("b" . helm-org-in-buffer-headings)
-               ("c" . helm-capture-templates)
-               ("p" . helm-org-parent-headings)
-               ("a" . helm-org-agenda-files-headings))))
-
-(use-package toc-org
-  :ensure t
-  :commands (toc-org-insert-toc)
-  :autoload (tychoish--add-toc-org-hook)
-  :config
-  (defun tychoish--add-toc-org-op ()
-    (save-excursion (toc-org-insert-toc)))
-
-  (defun tychoish--add-toc-org-hook ()
-    (add-hook 'write-contents-functions 'tychoish--add-toc-org-op nil t)))
-
-(use-package ox-gist
-  :ensure t
-  :bind (:map tychoish/org-mode-personal-map
-              ("e g p" . org-gist-export-to-private-gist)
-              ("e g g" . org-gist-export-to-public-gist))
-  :commands (org-gist-export-private-gist org-gist-export-to-public-gist)
-  :init
-  (defun org-gist-export-private-gist ()
-    (interactive)
-    (org-gist-export-to-gist))
-  (defun org-gist-export-public-gist ()
-    (interactive)
-    (org-gist-export-to-gist 'public)))
-
-(use-package ox-hugo
-  :ensure t
-  :after ox)
-
-(use-package ox-rst
-  :ensure t
-  :after ox
-  :commands (org-rst-export-to-rst org-rst-export-as-rst)
-  :config
-  (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
-
-(use-package ox-leanpub
-  :ensure t
-  :after ox
-  :commands (org-leanpub-book-export-markdown
-	     org-leanpub-book-export-markua
-	     org-leanpub-markua-export-to-markua
-	     org-leanpub-markua-export-as-markua
-	     org-leanpub-markdown-export-to-markdown
-	     org-leanpub-markdown-export-as-markdown)
-  :config
-  (require 'ox-leanpub-markua)
-  (org-leanpub-book-setup-menu-markua))
-
-(use-package tychoish-org
-  :hook ((org-mode . tychoish/background-revbufs-for-hook)
+         ("a" . org-annotate-file))
+  :hook ((org-ctrl-c-ctrl-c-hook . org-set-weekday-of-timestamp)
+	 (org-agenda-mode . tychoish/background-revbufs-for-hook)
          (org-mode . tychoish--add-toc-org-hook))
+  :defines (tychoish/org-gist-map tychoish/org-mode-personal-map)
   :commands (tychoish-org-setup-standard-capture-templates
              tychoish-org-add-project-file-capture-templates
              tychoish-org-reset-capture-templates
              org-agenda-files-reload
              tychoish-org-date-now
              org-set-weekday-of-timestamp
-             tychoish-org-mark-done-and-archive)
+             tychoish-org-mark-done-and-archive
+	     ;; org-core
+	     org-save-all-org-buffers)
   :init
   (defun tychoish/set-notes-directory (&optional path)
     (when path
@@ -618,6 +408,12 @@
     (setq deft-directory (f-join local-notes-directory "deft"))
     local-notes-directory)
   :config
+  (add-hook 'org-mode-hook 'turn-on-soft-wrap)
+  (add-hook 'org-shiftup-final-hook 'windmove-up)
+  (add-hook 'org-shiftleft-final-hook 'windmove-left)
+  (add-hook 'org-shiftdown-final-hook 'windmove-down)
+  (add-hook 'org-shiftright-final-hook 'windmove-right)
+
   (tychoish-org-reset-capture-templates)
   (tychoish-org-setup-standard-capture-templates)
   (org-load-modules-maybe t))
@@ -1048,10 +844,7 @@
          ("s k" . consult-keep-lines)
          ("s f" . consult-focus-lines)
 	 :map tychoish/ecclectic-grep-project-map ;; "C-c g p"
-         ("g" . consult-git-grep)                  ;; for git(?)
-	 :map tychoish/org-mode-personal-map ;; "C-c o"
-         ("h" . consult-org-heading)               ;; Alternative: consult-org-heading (for jump)
-         ("s" . consult-org-agenda))               ;; Alternative: consult-org-heading (for jump))
+         ("g" . consult-git-grep))                 ;; for git(?)
   :hook (completion-list-mode . consult-preview-at-point-mode)
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
@@ -1174,9 +967,6 @@
 	 :map tychoish/global-org-map ;; "C-c o"
 	 ("j" . consult-org-capture)
 	 ("c" . consult-org-capture)
-	 :map tychoish/org-mode-capture-map
-	 ("j" . consult-org-capture)
-	 ("h" . consult-org-capture-target)
 	 :map tychoish/mail-map
 	 ("a" . tychoish-mail-select-account))
   :commands (consult-rg-for-thing
@@ -1293,7 +1083,7 @@
          ("l" . helm-locate)
          ;; ("m" . helm-<...>)
          ;; ("n" . helm-<...>)
-         ;; ("o" . tychoish/orgmode-personal-helm-map)
+         ;; ("o" . tychoish/org-personal-helm-map)
          ;; ("p" . tychoish/helm-projectile-tools-map)
          ;; ("q" . tychoish/helm-query-tools-map)
          ("r" . helm-recentf)
@@ -2864,6 +2654,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
       (add-to-list 'exec-path uv-bin-path)))
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-default-model "sonnet")
+  :config
   (add-to-list 'aidermacs-extra-args "--notifications")
   (add-to-list 'aidermacs-extra-args "--cache-prompts")
   (add-to-list 'aidermacs-extra-args "--cache-keepalive-pings 12")
