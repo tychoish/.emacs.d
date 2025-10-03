@@ -106,85 +106,91 @@ entry of `org-capture-templates'."
       ""))
 
 (defun consult-tycho--context-base-list (&optional seed)
-  (->> (-join
-	(or (when (listp seed) seed)
-	    (when (stringp seed) (list seed)))
-        (if-let* ((mark-pos (mark))
-			(start (or (region-beginning) (min (point) mark-pos)))
-			(end (or (region-end) (max mark-pos (point)))))
-	    (s-lines (s-trim (buffer-substring start end)))
-	  '())
-        (-take 10 kill-ring)
-        (cond ((derived-mode-p 'text-mode)
-               (list (thing-at-point 'word)
-                     (thing-at-point 'email)
-                     (thing-at-point 'url)
-                     (thing-at-point 'sentence)))
-              ((derived-mode-p 'prog-mode)
-               (list (thing-at-point 'symbol)
-                     (thing-at-point 'word)
-                     (thing-at-point 'sexp)
-                     (thing-at-point 'defun)))
-              (t '()))
-        (list (thing-at-point 'line)))
-       (-keep #'trimmed-string-or-nil)
-       (-distinct)))
+  (let ((table (ht-create))
+	(seed '("ond")))
+
+    (->> (or (when (listp seed) seed)
+	     (when (stringp seed) (list seed)))
+	 (-keep #'trimmed-string-or-nil)
+	 (--filter (length> it 64))
+	 (--map (ht-set table it "user provided input (seed)")))
+
+    (when-let* ((mark-pos (mark))
+		(start (or (region-beginning) (min (point) mark-pos)))
+		(end (or (region-end) (max mark-pos (point))))
+		(selection (trimmed-string-or-nil (buffer-substring-no-properties start end)))
+		(is-oversized (< (length selection) 32)))
+
+      (ht-set table selection (format "current selection <%s>" (current-buffer))))
+
+    (->> kill-ring
+	 (-take 10)
+	 (-map #'substring-no-properties)
+	 (-keep #'trimmed-string-or-nil)
+	 (--filter (< (length it) 64))
+	 (--map-indexed (ht-set table it (format "kill ring [idx=%d]" it-index))))
+
+    (cond ((derived-mode-p 'text-mode)
+	   (->> '(word email url sentence)
+		(--map (cons it (thing-at-point it)))
+		(--keep (when (trimmed-string-or-nil (cdr it)) it))
+		(--filter (< (length it) 64))
+		(--mapc (ht-set table (cdr it) (format "%s at point (text-modes)" (car it))))))
+          ((derived-mode-p 'prog-mode)
+	   (->> '() ;; symbol word sexp defun
+		(--map (cons it (thing-at-point it)))
+		(--keep (when (setf (cdr it) (trimmed-string-or-nil (cdr it))) it))
+		(--filter (< (length it) 64))
+		(--mapc (ht-set table (substring-no-properties (cdr it)) (format "%s at point (prog-modes)" (car it)))))))
+
+    (when-let* ((line (trimmed-string-or-nil (thing-at-point 'line)))
+		(line (substring-no-properties line))
+		(is-oversized (< (length line) 32)))
+
+      (ht-set table line (format "current line <%s>" (buffer-name))))
+
+    table))
 
 (defun consult-tycho--select-context-for-operation (&optional prompt seed-list)
   "Pick string to use as context in a follow up operation."
-  (let ((this-command this-command)
-        (selections (consult-tycho--context-base-list seed-list))
-	(prompt (or prompt "grep =>>")))
-    (or (when (length= selections 1) (nth 0 selections))
-        (when (length> selections 1)
-          (consult--read selections
-           :sort nil
-           :command this-command
-           :require-match nil
-           :prompt prompt)))))
+  (let* ((this-command this-command)
+         (selections (consult-tycho--context-base-list seed-list))
+	 (size (ht-size selections))
+	 (prompt (or prompt "grep =>>")))
 
-(cl-defun consult-tycho--incremental-grep (&key (prompt "=>> ") (builder '()) (initial "") (command this-command))
-  "Do incremental grep-type operation. Like the `consult-grep' operation
-upon which it was based, permits interoperability between git-grep ag, ack, and rg"
-  (let ((consult-async-input-debounce 0.025)
-        (consult-async-input-throttle 0.05)
-        (consult-async-refresh-delay 0.025)
-        (this-command this-command))
-    (consult--read
-     (consult--process-collection builder
-       :transform (consult--grep-format builder)
-       :file-handler t)
-     :prompt prompt
-     :lookup #'consult--lookup-member
-     :state (consult--grep-state)
-     :initial initial
-     :add-history (thing-at-point 'symbol)
-     :require-match nil
-     :category 'consult-grep
-     :command command
-     :sort nil
-     :group nil ;; #'consult--prefix-group <- this groups results by common prefix (e.g. file)
-     :history '(:input consult--grep-history))))
+    (if (eql size 1)
+	(car (ht-keys selections))
+
+      (consult-tycho--read-annotated
+       selections
+       :command this-command
+       :require-match nil
+       :prompt prompt))))
 
 ;;;###autoload
 (defun consult-rg (&optional dir initial &key context)
   "Start and iterative rg session. DIR and INITIAL integrate with the consult-grep API."
   (interactive "P")
   ;; `consult--directory-prompt' --> '(prompt paths <default>-dir)
-  (let* ((prompt-paths-dir (consult--directory-prompt "rg" (or (trimmed-string-or-nil dir)
-							       (consult--select-directory)
-							       (approximate-project-root))))
-         (default-directory (nth 2 prompt-paths-dir))
-         (prompt (nth 0 prompt-paths-dir))
-         (initial (if (and (or context (not initial)) (not (eq context 'override)))
-		      (consult-tycho--select-context-for-operation (format "rg(init) =>> "))
-		    initial)))
+  (let ((consult-async-input-debounce 0.025)
+        (consult-async-input-throttle 0.05)
+        (consult-async-refresh-delay 0.025)
+	(consult-async-min-input 2)
+	(consult--prefix-group nil))
 
-    (consult-tycho--incremental-grep
-     :prompt prompt
-     :command 'consult-rg
-     :builder (consult--ripgrep-make-builder (nth 1 prompt-paths-dir))
-     :initial initial)))
+      (consult--grep
+       ;; prompt
+       "rg"
+       ;; builder
+       #'consult--ripgrep-make-builder
+       ;; directory
+       (or (trimmed-string-or-nil dir)
+	   (consult--select-directory)
+	   (approximate-project-root))
+       ;; initial
+       (if (and (or context (not initial)) (not (eq context 'override)))
+	   (consult-tycho--select-context-for-operation (format "rg(init) =>> "))
+	 initial))))
 
 ;;;###autoload
 (defun consult-rg-project (&optional initial &key context)
@@ -219,10 +225,6 @@ upon which it was based, permits interoperability between git-grep ag, ack, and 
   ;; (let ((base-directory (f-base default-directory)))
   (interactive "P")
   (consult-rg-project initial :context t))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; consult-tycho: file object processing
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

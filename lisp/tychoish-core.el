@@ -896,8 +896,11 @@
 		(thing-at-point 'filename)
 		"./"))
 
-  (consult-customize consult-ripgrep consult-git-grep consult-grep
+
+
+  (consult-customize consult-ripgrep consult-git-grep consult-grep consult-ag consult-rg
    :require-match nil
+   :group nil
    :keymap
    (with-temp-keymap map
      (define-key map (kbd "C-l") #'consult-ripgrep-up-directory))))

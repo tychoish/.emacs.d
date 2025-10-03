@@ -36,6 +36,7 @@
 
     (->> (split-string (shell-command-to-string "sardis cmd --annotate") "\n")
 	 (--map (-let (cmd annotation) (split-string it "\t" t "[ \s\t\n]")))
+	 (-non-nil)
 	 (--mapc (ht-set table (car it) (cadr it))))
 
     (consult-tycho--read-annotated

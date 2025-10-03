@@ -264,38 +264,12 @@
 
 (setq org-agenda-include-diary nil)
 (setq org-agenda-custom-commands
-      '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")
-        ("c" "SuperView"
-         ((agenda "" ((org-agenda-overriding-header "Schedule:")
-                      (org-super-agenda-groups
-                       '((:name "Today"
-                                :time-grid t
-                                :date today
-                                :order 1)))))
-          (alltodo "" ((org-agenda-overriding-header "Tasks:")
-                       (org-super-agenda-groups
-                        '((:log t)
-                          (:name "To refile"
-                                 :file-path (concat tychoish-org-fn-main "/refile"))
-                          (:name "Today's tasks"
-                                 :file-path "journal/")
-                          (:name "Due Today"
-                                 :deadline today
-                                 :order 2)
-                          (:name "Scheduled Soon"
-                                 :scheduled future
-                                 :order 8)
-                          (:name "Overdue"
-                                 :deadline past
-                                 :order 7)
-                          (:discard (:not (:todo "TODO")))))))))))
-
-
+      '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; org capture templates definitions
-
+(org-current)
 (defun tychoish-org-setup-standard-capture-templates ()
   "Defines a set of capture templates for a records.org, journal.org, and planner.org"
   (interactive)

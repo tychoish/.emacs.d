@@ -40,6 +40,16 @@
 
 ;; directory selection
 
+(cl-defun consult--select-directory (&optional &key input-dirs (require-match nil))
+  "Select a directory from a provided or likely set of `INPUT-DIRS`'."
+  (consult--read
+   (or (clean-directory-options-for-selection input-dirs)
+       (get-directory-default-candidate-list))
+   :sort nil
+   :command this-command
+   :require-match require-match
+   :prompt "in directory =>> "))
+
 ;;;###autoload
 (defun compilation-buffer-change-directory ()
   "Change the directory for the current compilation buffer."
@@ -53,16 +63,6 @@
 		       default-directory)))
     (setq-local default-directory directory
 		compilation-directory directory)))
-
-(cl-defun consult--select-directory (&optional &key input-dirs (require-match nil))
-  "Select a directory from a provided or likely set of `INPUT-DIRS`'."
-  (consult--read
-   (or (clean-directory-options-for-selection input-dirs)
-       (get-directory-default-candidate-list))
-   :sort nil
-   :command this-command
-   :require-match require-match
-   :prompt "in directory =>> "))
 
 (defun clean-directory-options-for-selection (input)
   "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
@@ -114,7 +114,6 @@
 
     (run-hook-with-args 'tychoish--compilation-candidate-functions project-root-directory directories operation-table)
     operation-table))
-
 
 ;; this is the inner "select which command to use" for entering a new compile command.
 (defun tychoish--compilation-read-command (command)
