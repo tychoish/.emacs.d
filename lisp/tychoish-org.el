@@ -71,6 +71,8 @@
            :prefix "C-c o"
            :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
            ("a" . org-agenda)
+           ("k" . org-capture)
+	   ("f" . org-agenda-files-open)
            ("t" . org-set-tags-command)
            ("n" . org-narrow-to-subtree)
            ("w" . widen)
@@ -88,17 +90,17 @@
            ("r" . org-capture-refile)
            ("w" . org-capture-refile)
            :map tychoish/org-mode-personal-map
-           :prefix "a"
+           :prefix "f"
            :prefix-map tychoish/org-mode-personal-archive-map
            ("d" . tychoish-org-mark-done-and-archive)
            ("e" . org-cycle-force-archived)
-           ("f" . org-archive-set-tag)
+           ("t" . org-archive-set-tag)
            ("s" . org-archive-to-archive-sibling)
            :map tychoish/org-mode-personal-map
            :prefix "r"
            :prefix-map tychoish/org-mode-personal-bibtex-map
            ("a" . org-bibtex-check-all)
-           ("c" . org-bibtex-create)
+           ("m" . org-bibtex-create)
            ("e" . org-bibtex)
            ("k" . org-bibtex-export-to-kill-ring)
            ("r" . org-bibtex-create-in-current-entry)

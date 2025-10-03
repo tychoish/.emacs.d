@@ -460,9 +460,6 @@
          ("&" . cape-sgml)
          ("u" . cape-rfc1345))
   :init
-  (defun tychoish/capf-line ()
-    (cape-wrap-prefix-length #'cape-line 5))
-
   (defmacro disabled (&rest body)
     `(unless 'disabled
        ,@body))
@@ -1365,12 +1362,14 @@
   (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
   (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
   (add-hook 'mu4e-compose-mode-hook 'tychoish/set-up-message-mode-buffer)
+
   (defun tychoish/set-up-message-mode-buffer ()
     (setq-local completion-at-point-functions
-		'(mu4e-complete-contact
-		  cape-emoji
-		  cape-dict
-		  yasnippet-capf))
+		(list (cape-capf-prefix-length #'mu4e-complete-contact 4)
+		      #'cape-emoji
+		      #'cape-dict
+		      #'yasnippet-capf))
+
     (setq-local use-hard-newlines t)
     (setq-local make-backup-files nil))
 
