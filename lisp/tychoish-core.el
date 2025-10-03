@@ -51,6 +51,7 @@
 	     with-quiet
              with-temp-keymap
              add-hygenic-one-shot-hook
+	     f-mtime
              buffer-in-frame-p
 	     tychoish/resolve-instance-id
 	     tychoish/conf-state-path
@@ -380,7 +381,7 @@
          ("a" . org-annotate-file))
   :hook ((org-ctrl-c-ctrl-c-hook . org-set-weekday-of-timestamp)
 	 (org-agenda-mode . tychoish/background-revbufs-for-hook)
-         (org-mode . tychoish--add-toc-org-hook))
+         (org-mode . tychoish/set-up-buffer-org-mode))
   :defines (tychoish/org-gist-map tychoish/org-mode-personal-map)
   :commands (tychoish-org-setup-standard-capture-templates
              tychoish-org-add-project-file-capture-templates
@@ -1900,7 +1901,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :init
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
-    (setq-local fill-column 128))
+    (setq-local fill-column 100))
 
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))

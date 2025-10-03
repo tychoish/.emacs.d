@@ -13,10 +13,7 @@
   :commands (toc-org-insert-toc)
   :init
   (defun tychoish--add-toc-org-op ()
-    (save-excursion (toc-org-insert-toc)))
-
-  (defun tychoish--add-toc-org-hook ()
-    (add-hook 'write-contents-functions 'tychoish--add-toc-org-op nil t)))
+    (save-excursion (toc-org-insert-toc))))
 
 (use-package ox-gist
   :ensure t
@@ -212,6 +209,10 @@
 
 ;; functions and helpers
 
+(defun tychoish/set-up-buffer-org-mode ()
+  (add-hook 'write-contents-functions 'tychoish--add-toc-org-op nil t)
+  (setq-local fill-column 80))
+
 ;;;###autoload
 (defun tychoish-org-reset-capture-templates ()
   (interactive)
@@ -237,9 +238,15 @@
       (revbufs)
       (bury-buffer buf))))
 
-(defun tychoish-org-date-now ()
+(defconst tychoish/org-date-spec-datetime "<%Y-%02m-%02d %02H:%02M:%02S %Z>")
+
+(defconst tychoish/org-date-spec-date "<%Y-%02m-%02d>")
+
+(defun tychoish-org-date-now (&optional &key short)
   (interactive)
-  (format-time-string "<%Y-%02m-%02d %02H:%02M:%02S %Z>" (time-stamp)))
+  (format-time-string (if short
+			  tychoish/org-date-spec-date
+			tychoish/org-date-spec-datetime) (time-stamp)))
 
 (defun tychoish-org-mark-done-and-archive ()
   "mark done and move to completed archive sibling"
@@ -268,124 +275,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; org capture templates definitions
-(org-current)
-(defun tychoish-org-setup-standard-capture-templates ()
-  "Defines a set of capture templates for a records.org, journal.org, and planner.org"
-  (interactive)
-  ;;
-  ;; loops/routines
-  ;;
-  (tychoish/org-add-routines
-   :name "prime"
-   :path "planner.org")
+;; org-capture-templates
 
-  ;;
-  ;; notes
-  ;;
-  (add-to-list 'org-capture-templates
-               '("nx" "notes (prime; X buffer)"
-                 entry (file+headline "records.org" "Inbox")
-                 "* %^{Title}\n%x\n%?"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("nk" "notes (prime; kill buffer)"
-                 entry (file+headline "records.org" "Inbox")
-                 "* %^{Title}\n%^C\n%?"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("nl" "notes (prime; org-link)"
-                 entry (file+headline "records.org" "Inbox")
-                 "* %^{Title}\n%A\n%?"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("nn" "notes (prime; selection)"
-                 entry (file+headline "records.org" "Inbox")
-                 "* %^{Title}\n%?\n%i"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
+(cl-defun tychoish/org-capture-add-routine-templates (&key name
+							   (key "")
+							   (path (concat (make-filename-slug name) ".org")))
+  (when (string-equal "r" key)
+    (user-error "cannot define routine (loops) %s org-capture-templates with key `r'" name))
 
-  ;;
-  ;; journal
-  ;;
-  (add-to-list 'org-capture-templates
-               '("jx" "journal (prime; X11 buffer)"
-                 entry (file+olp+datetree "journal.org")
-                 "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%x\n\n%?"
-                 :prepend nil
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("jk" "journal (prime; kill buffer)"
-                 entry (file+olp+datetree "journal.org")
-                 "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%^C\n\n%?"
-                 :prepend nil
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("jl" "journal (prime; org-link)"
-                 entry (file+olp+datetree "journal.org")
-                 "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%A\n\n%?"
-                 :prepend nil
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("jj" "journal (prime; selection)"
-                 entry (file+olp+datetree "journal.org")
-                 "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%?\n%i"
-                 :prepend nil
-                 :kill-buffer t
-                 :empty-lines-after 1))
-
-  ;;
-  ;; tasks
-  ;;
-  (add-to-list 'org-capture-templates
-               '("tx" "tasks (prime; X buffer)"
-                 entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%x\n"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("tk" "tasks (prime; kill buffer)"
-                 entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%^C\n"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("tl" "tasks (prime; org-link)"
-                 entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%A\n"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
-  (add-to-list 'org-capture-templates
-               '("tt" "tasks (prime; selection)"
-                 entry (file+headline "planner.org" "Tasks")
-                 "* TODO %^{Task}\n%i\n"
-                 :prepend t
-                 :kill-buffer t
-                 :empty-lines-after 1))
-
-  (message "registered standard tychoish org-capture templates"))
-
-(cl-defun tychoish/org-add-routines (&key name
-					  (key "")
-					  (path (concat (make-filename-slug name) ".org")))
-
-  (if (string-equal "" key)
-      (add-to-list 'org-capture-templates '("r" "routines"))
-    (add-to-list 'org-capture-templates `(,(concat "r" key) ,(concat name " routines")))
-    (add-to-list 'org-capture-templates `(,(concat key "r") ,(concat name " routines"))))
+  (let ((description (format "%s routines <%s>" name (f-filename path))))
+    (unless (string-equal "" key)
+      (add-to-list 'org-capture-templates (list (concat "r" key) description))
+      (add-to-list 'org-capture-templates (list (concat key "r") description))))
 
   (->> '(("1d" .  "Daily")
          ("1w" .  "Weekly")
@@ -393,154 +294,184 @@
          ("12w" . "Quarterly")
          ("21w" . "Half Yearly")
          ("52w" . "Yearly"))
-
        (--flat-map (let* ((interval (car it))
 			  (heading (cdr it))
-			  (interval-prefix (downcase (substring heading 0 1))))
-		     (->> (list (format "%s%s%s" key "r" interval-prefix)
-				(format "%s%s%s" "r" key interval-prefix))
-			  (-distinct)
+			  (interval-key (downcase (substring-no-properties heading 0 1))))
+		     (->> (list (concat key "r" interval-key)
+				(concat "r" key interval-key))
 			  (-map (lambda (prefix) (cons prefix (cons interval heading)))))))
 
        (--map (let* ((prefix (car it))
 		     (interval (cadr it))
 		     (heading (cddr it))
 		     (lower-heading (downcase heading))
-		     (menu-name (s-join " " (list name lower-heading "routine"))))
+		     (menu-name (format "routine (%s; %s)" name lower-heading)))
 
-		(add-to-list 'org-capture-templates
-			     `(,prefix ,menu-name
-			       entry (file+olp ,path "Loops" ,heading)
-			       ,(concat "\n* %^{Title}\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")
-			       :prepend t
-			       :kill-buffer t
-			       :empty-lines-after 1))))))
+		(add-to-list
+		 'org-capture-templates
+		 (list prefix menu-name
+		       'entry (list 'file+olp path "Loops" heading)
+		       (concat "* %(~title~)\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")
+		       :prepend t
+		       :kill-buffer t
+		       :empty-lines-after 1))))))
 
-(cl-defun tychoish-org-add-project-file-capture-templates (&key name
-								(key "")
-							        (path (concat (make-filename-slug name) ".org")))
-  "Defines a set of capture mode templates for adding notes and tasks to a file."
-  (interactive)
+(cl-defun tychoish/org-capture-add-journal-templates (&key name path (key ""))
+  (when (string-equal "j" key)
+    (user-error "cannot define journal %s org-capture-templates with key `j'" name))
 
-  (when (s-contains? key "jntr")
-    (error "org-capture prefix key '%s' for '%s' contains well-known prefix" key path))
-  (when (s-contains? key "xlk")
-    (error "org-capture prefix key '%s' for '%s' contains sub-template key" key path))
-  (when (s-contains? key "csw")
-    (error "org-capture prefix key '%s' for '%s' contains, which is a reserved key" key path))
-
-  (let ((org-filename (concat org-directory "/" path)))
+  (let (specs apend-item
+	(capture-location (if (equal "" key)
+			      (list 'file+olp+datetree path)
+			    (list 'file+olp+datetree path "Journal"))))
 
     (unless (string-equal "" key)
-      (add-to-list 'org-capture-templates `(,key ,name)))
+      (setq append-item t)
+      (add-to-list 'org-capture-templates (list (concat key "j") (format "%s journal <%s>" name  (f-filename path))))
+      (push (cons (concat "j" key) (cons "" "<today>")) specs))
 
-    ;; journal, for date related content
-    (add-to-list 'org-capture-templates `(,(concat key "j") ,(concat name " journal")))
-    (add-to-list 'org-capture-templates `(,(concat key "n") ,(concat name " notes")))
-    (add-to-list 'org-capture-templates `(,(concat key "t") ,(concat name " tasks")))
+    (->> (-join specs
+		(-l (cons (concat key "jj") (cons "" "<today>"))
+		    (cons (concat key "jp") (cons "" "<date prompt>"))
+		    (cons (concat key "jx") (cons "%x" "X11 buffer"))
+		    (cons (concat key "jl") (cons "%a" "org-link"))
+		    (cons (concat key "jk") (cons "%c" "emacs kill-ring"))))
+	 (reverse)
+	 (--map (let ((key-sequence (car it))
+		      (template-anchor (cadr it))
+		      (description (cddr it)))
+		  (add-to-list
+		   'org-capture-templates
+		   (-l key-sequence (format "journal (%s; %s)" name description)
+		       'entry capture-location
+                       (concat "* %(~title~) <%<%Y-%m-%d %H:%M>>" template-anchor "\n%?")
+                       :prepend nil
+                       :kill-buffer t
+		       :time-prompt (s-suffix-p "jp" key-sequence)
+                       :empty-lines-after 1)
+		   append-item))))))
 
-    (tychoish/org-add-routines
+(defun ~title~ () (consult-tycho--select-context-for-operation "title => "))
+
+(cl-defun tychoish/org-capture-add-task-templates (&key name path (key ""))
+  (when (string-equal "t" key)
+    (user-error "cannot define task %s org-capture-templates with key `t'" name))
+
+  (let (specs append-item)
+    (unless (string-equal "" key)
+      (add-to-list 'org-capture-templates (list (concat key "t") (format "%s tasks <%s>" name  (f-filename path))))
+      (push (cons (concat "t" key) (cons "%i" "selection")) specs)
+      (setq append-item t))
+
+    (->> (-join specs
+		(-l (cons (concat key "tt") (cons "%i" "selection"))
+		    (cons (concat key "tx") (cons "%x" "X11 buffer"))
+		    (cons (concat key "tl") (cons "%a" "org-link"))
+		    (cons (concat key "tk") (cons "%c" "emacs kill-ring"))))
+	 (-non-nil)
+	 (--map (let ((key-sequence (car it))
+		      (template-anchor (cadr it))
+		      (description (cddr it)))
+		  (add-to-list
+		   'org-capture-templates
+		   (-l key-sequence (format "tasks (%s; %s)" name description)
+		       'entry
+		       (list 'file+headline path "Tasks")
+                       (concat "* %(~title~)\n" template-anchor "\n%?")
+                       :prepend t
+                       :kill-buffer t
+                       :empty-lines-after 1)
+		   append-item))))))
+
+(cl-defun tychoish/org-capture-add-note-templates (&key name path (key ""))
+  (when (string-equal "n" key)
+    (user-error "cannot define notes %s org-capture-templates with key `n'" name))
+
+  (let (specs append-item)
+	(unless (string-equal "" key)
+	  (setq append-item t)
+	  (add-to-list 'org-capture-templates (list (concat key "t") (format "%s notes <%s>" name  (f-filename path))))
+	  (push (cons (concat "n" key) (cons "%i" "selection")) specs))
+
+	(->> (-join specs
+		    (-l (cons (concat key "nn") (cons "%i" "selection"))
+			(cons (concat key "nx") (cons "%x" "X11 buffer"))
+			(cons (concat key "nl") (cons "%a" "org-link"))
+			(cons (concat key "nk") (cons "%c" "emacs kill-ring"))))
+	     (-non-nil)
+	     (--map (let ((key-sequence (car it))
+			  (template-anchor (cadr it))
+			  (description (cddr it)))
+		      (add-to-list
+		       'org-capture-templates
+		       (-l key-sequence (format "notes (%s; %s)" name description)
+			   'entry
+			   (list 'file+headline path "Inbox")
+			   (concat "* %(~title~)\n" template-anchor "\n%?")
+			   :prepend t
+			   :kill-buffer t
+			   :empty-lines-after 1)
+		       append-item))))))
+
+;; registration helpers
+
+(cl-defun tychoish-org-add-project-file-capture-templates (&key name (path nil) (key ""))
+  "Defines a set of capture mode templates for adding notes and tasks to a file."
+
+  (when (not (equal "" key))
+    (when (s-contains? key "jntr")
+      (error "org-capture prefix key '%s' for '%s' contains well-known prefix" key path))
+    (when (s-contains? key "xlk")
+      (error "org-capture prefix key '%s' for '%s' contains sub-template key" key path))
+    (when (s-contains? key "csw")
+      (error "org-capture prefix key '%s' for '%s' contains, which is a reserved key" key path)))
+
+  (unless path
+    (setq path (concat (make-filename-slug name) ".org")))
+
+  (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
+
+  (let ((org-filename (concat org-directory "/" path)))
+    (tychoish/org-capture-add-routine-templates
      :name name
      :key key
      :path org-filename)
 
-    (dolist (prefix (list (concat key "jj")
-                          (concat "j" key)))
-      (add-to-list 'org-capture-templates
-                   `(,prefix ,(concat name " journal")
-                     entry (file+olp+datetree ,org-filename "Journal")
-                     "* %^{Title} <%<%Y-%m-%d %H:%M>>\n"
-                     :prepend nil
-                     :kill-buffer t
-                     :empty-lines-after 1)))
+    (tychoish/org-capture-add-note-templates
+     :name name
+     :key key
+     :path org-filename)
 
-    (dolist (prefix (list (concat key "nn")
-                          (concat "n" key)))
-      (add-to-list 'org-capture-templates
-                   `(,prefix ,(concat name " notes")
-                     entry (file+headline ,org-filename "Inbox")
-                     "* %^{Title}\n%?\n%i\n"
-                     :prepend t
-                     :kill-buffer t
-                     :empty-lines-after 1)))
+    (tychoish/org-capture-add-journal-templates
+     :name name
+     :key key
+     :path org-filename)
 
-    (dolist (prefix (list (concat "t" key)
-                          (concat key "tt")))
-      (add-to-list 'org-capture-templates
-                   `(,prefix ,(concat name " tasks")
-                             entry (file+headline ,org-filename "Tasks")
-                             "* TODO %^{Task}\n%i\n"
-                             :prepend t
-                             :kill-buffer t
-                             :empty-lines-after 0)))
+    (tychoish/org-capture-add-task-templates
+     :name name
+     :key key
+     :path org-filename)
 
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "jl") ,(concat name " journal (org-link)")
-                   entry (file+olp+datetree ,org-filename "Journal")
-                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%a\n"
-                   :prepend nil
-                   :kill-buffer t
-                   :empty-lines-after 1))
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "jx") ,(concat name " journal (X buffer)")
-                   entry (file+olp+datetree ,org-filename "Journal")
-                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%x\n"
-                   :prepend nil
-                   :kill-buffer t
-                   :empty-lines-after 1))
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "jx") ,(concat name " journal (kill-buffer)")
-                   entry (file+olp+datetree ,org-filename "Journal")
-                   "* %^{Title} <%<%Y-%m-%d %H:%M>>\n%c\n"
-                   :prepend nil
-                   :kill-buffer t
-                   :empty-lines-after 1))
+    (message "registered org-capture templates for %s" org-filename)))
 
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "nl") ,(concat name " notes (org-link)")
-                   entry (file+headline ,org-filename "Inbox")
-                   "* %^{Title}\n%?\n%a"
-                   :prepend t
-                   :kill-buffer t
-                   :empty-lines-after 1))
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "nx") ,(concat name " notes (X buffer)")
-                   entry (file+headline ,org-filename "Inbox")
-                   "* %^{Title}\n%?\n%x"
-                   :prepend t
-                   :kill-buffer t
-                   :empty-lines-after 1))
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "nk") ,(concat name " notes (kill buffer)")
-                   entry (file+headline ,org-filename "Inbox")
-                   "* %^{Title}\n%?\n%c"
-                   :prepend t
-                   :kill-buffer t
-                   :empty-lines-after 1))
+;; org capture templates definitions
+(defun tychoish-org-setup-standard-capture-templates ()
+  (tychoish/org-capture-add-routine-templates
+   :name "prime"
+   :path "planner.org")
 
-    ;; extra tasks
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "tl") ,(concat name " tasks (org-link)")
-                   entry (file+headline ,org-filename "Tasks")
-                   "* TODO %^{Task}\n%a\n"
-                   :prepend t
-                   :kill-buffer t
-                   :empty-lines-after 0))
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "tx") ,(concat name " tasks (X buffer)")
-                   entry (file+headline ,org-filename "Tasks")
-                   "* TODO %^{Task}\n%x\n"
-                   :prepend t
-                   :kill-buffer t
-                   :empty-lines-after 0))
-    (add-to-list 'org-capture-templates
-                 `(,(concat key "tk") ,(concat name " tasks (kill buffer)")
-                   entry (file+headline ,org-filename "Tasks")
-                   "* TODO %^{Task}\n%c\n"
-                   :prepend t
-                   :kill-buffer t
-                   :empty-lines-after 0))
-    (message (concat "registered org-capture templates for " org-filename))))
+  (tychoish/org-capture-add-note-templates
+   :name "scratch"
+   :path "records.org")
 
+  (tychoish/org-capture-add-journal-templates
+     :name "diary"
+     :path "journal.org")
+
+  (tychoish/org-capture-add-task-templates
+   :name "prime"
+   :path "planner.org")
+
+  (message "registered standard org-capture-templates"))
 
 (provide 'tychoish-org)

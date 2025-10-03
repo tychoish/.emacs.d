@@ -223,6 +223,13 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (defalias '-mapc #'mapc)
 
 (defalias '-join #'nconc)
+(defalias '-append #'append)
+
+(defalias '-l #'list)
+(defalias 'll #'list)
+(defalias '-- #'list)
+
+
 
 (defmacro --flat-map (form input-list)
   (declare (debug (def-form form)))
@@ -279,21 +286,45 @@ the list."
 
 ;; `ht.el' -- extensions and aditions
 
-(defmacro ht-make-getter (table)
+(defmacro ht-get-function (table)
   `(lambda (key) (ht-get ,table key)))
 
-(defmacro ht-make-setter (table)
+(defmacro ht-set-function (table)
   `(lambda (key value) (ht-set ,table key value)))
 
-(defmacro ht-make-contains-p (table)
+(defmacro ht-contains-p-function (table)
   `(lambda (key) (ht-contains-p ,table key)))
+
+(defmacro ht-make-get-function (table)
+  (let ((name (symbol-name table)))
+    `(defun ,(format "ht-%s-get" name) (key) (ht-get ,table key))))
+
+(defmacro ht-make-set-function (table)
+  (let ((name (symbol-name table)))
+    `(defun ,(format "ht-%s-set" name) (key value) (ht-set ,table key value))))
+
+(defmacro ht-make-contains-p-function (table)
+  (let ((name (symbol-name table)))
+    `(defun ,(format "ht-%s-contains-p" name) (key) (ht-contains-p ,table key))))
+
+(cl-defmacro ht-named-table (name &optional &key (test #'equal))
+  (let ((name (or (when (stringp name) (intern name))
+		  (when (symbolp name) name)
+		  (intern (format "%S" name))))
+	(table (or (when (ht-p name) name)
+			 (ht-create test))))
+    `(progn
+       (defvar ,name ,table
+	 ,(format "Hash table `%s' with named accessor functions" name))
+       (ht-make-get-function ,name)
+       (ht-make-set-function ,name)
+       (ht-make-contains-p-function ,name))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `f.el' -- extensions and additions
 
-(defun f-mtime (filename)
-  (file-attribute-modification-time (file-attributes filename)))
+(defun f-mtime (filename)(file-attribute-modification-time (file-attributes filename)))
 
 (defmacro f-file-has-extension-function (extension)
   `(lambda (filename) (f-ext-p filename ,extension)))

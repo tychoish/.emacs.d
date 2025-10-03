@@ -34,12 +34,16 @@
 
 (defun consult-org--setup-template ()
   "Add special template to capture to a target selectable via consult. Named for clarity in hooks."
-  (add-to-list 'org-capture-templates
-               '("c" "consult-org-capture: select heading interactively ..." entry (consult-org--capture-target 'agenda)
-                  "* TODO %?\n  %i"
-                  :prepend t
-                  :kill-buffer t
-                  :empty-lines-after 1)))
+
+  (unless (and (boundp 'consult-org--capture-template-setup) consult-org--capture-template-setup)
+    (setq-local org-capture-templates
+		(append '("c" "consult-org-capture: select heading interactively ..." entry (consult-org--capture-target 'agenda)
+			  "* TODO %?\n  %i"
+			  :prepend t
+			  :kill-buffer t
+			  :empty-lines-after 1)
+			org-capture-templates)))
+  (setq-local consult-org--capture-template-setup t))
 
 (defun consult-org--capture-target ()
   "Choose a capture target interactively.
@@ -64,23 +68,33 @@ entry of `org-capture-templates'."
   (interactive)
   ;; TODO remove this hack so that things are loaded in time
   (require 'tychoish-org)
-  (let* ((templ (cl-loop for template in org-capture-templates
-                         when (> (length template) 2)
-                           collect (cons (nth 1 template) (nth 0 template))))
-         (capture-template
-          (consult--read templ
-                         :prompt "org-capture-templates => "
+
+  (let ((table (ht-create)))
+    (->> org-capture-templates
+	 (--filter (< 3 (length it)))
+	 (--map (ht-set table
+			(nth 1 it)
+			(cons
+			 (format "[%s]%s<%s> '%s'"
+				 (nth 0 it)
+				 (prefix-padding-for-annotation (nth 0 it) 0)
+				 (f-filename (cadr (nth 3 it)))
+				 (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 it)))))
+			 (nth 0 it)))))
+    (let* ((keys (ht-keys table))
+	   (longest (length-of-longest-item keys))
+	   (capture-template-key
+	    (consult--read
+	     keys
+	     :prompt "org-capture => "
+	     :annotate (lambda (candidate) (concat (prefix-padding-for-annotation candidate longest) (car (ht-get table candidate))))
+	     :lookup (lambda (selection candidates &rest _) (cdr (ht-get table selection)))
+	     :category 'org-capture
                          :require-match nil
-                         :group (consult--type-group templ)
-                         :narrow (consult--type-narrow templ)
-                         :annotate (lambda (selection) (format " --> [%s]" (cdr (assoc selection templ))))
-                         :lookup (lambda (selection candidates &rest _) (cdr (assoc selection candidates)))
-                         :category 'org-capture
-			 :command 'consult-org-capture
-                         :history '(:input consult-org--capture-history))))
-    (unless (string-with-non-whitespace-content-p capture-template)
-      (user-error "must select a valid templae %s (%s)" capture-template (type-of capture-template)))
-    (org-capture nil capture-template)))
+	     :command 'consult-org-capture
+             :history '(:input consult-org--capture-history))))
+
+      (org-capture nil capture-template-key))))
 
 ;;;###autoload
 (defun consult-org-capture-target ()
@@ -106,27 +120,14 @@ entry of `org-capture-templates'."
       ""))
 
 (defun consult-tycho--context-base-list (&optional seed)
-  (let ((table (ht-create)))
+  (let ((table (ht-create))
+	(position 0))
 
     (->> (or (when (listp seed) seed)
              (when (stringp seed) (list seed)))
          (-keep #'trimmed-string-or-nil)
          (--filter (length> it 64))
          (--map (ht-set table it "user provided input (seed)")))
-
-    (when-let* ((mark-pos (mark))
-                (start (or (region-beginning) (min (point) mark-pos)))
-                (end (or (region-end) (max mark-pos (point))))
-                (selection (trimmed-string-or-nil (buffer-substring-no-properties start end)))
-                (is-oversized (< (length selection) 32)))
-      (ht-set table selection (format "current selection <%s>" (current-buffer))))
-
-    (->> kill-ring
-         (-map #'substring-no-properties)
-         (-keep #'trimmed-string-or-nil)
-         (--filter (< (length it) 64))
-         (-take 10)
-         (--map-indexed (ht-set table it (format "kill ring [idx=%d]" it-index))))
 
     (->> (-join (->> '(word email url sentence)
                      (--map (cons 'text-mode it)))
@@ -140,10 +141,24 @@ entry of `org-capture-templates'."
          (--filter (< (length (car it)) 64))
          (--mapc (ht-set table (car it) (format "%s at point (%ss)" (cddr it) (cadr it)))))
 
+    (when-let* ((mark-pos (mark))
+                (start (or (region-beginning) (min (point) mark-pos)))
+                (end (or (region-end) (max mark-pos (point))))
+                (selection (trimmed-string-or-nil (buffer-substring-no-properties start end)))
+                (is-oversized (< (length selection) 32)))
+      (ht-set table selection (format "current selection <%s>" (current-buffer))))
+
     (when-let* ((line (trimmed-string-or-nil (thing-at-point 'line)))
 		(line (substring-no-properties line))
 		(is-oversized (< (length line) 32)))
       (ht-set table line (format "current line <%s>" (buffer-name))))
+
+    (->> kill-ring
+         (-map #'substring-no-properties)
+         (-keep #'trimmed-string-or-nil)
+         (--filter (< (length it) 64))
+         (-take 10)
+         (--map-indexed (ht-set table it (format "kill ring [idx=%d]" it-index))))
 
     table))
 
@@ -151,12 +166,10 @@ entry of `org-capture-templates'."
   "Pick string to use as context in a follow up operation."
   (let* ((this-command this-command)
          (selections (consult-tycho--context-base-list seed-list))
-	 (size (ht-size selections))
 	 (prompt (or prompt "grep =>>")))
 
-    (if (eql size 1)
+    (if (>= (ht-size selections) 1)
 	(car (ht-keys selections))
-
       (consult-tycho--read-annotated
        selections
        :command this-command
