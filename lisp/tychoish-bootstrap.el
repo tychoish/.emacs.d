@@ -59,19 +59,6 @@
            ("C-<backspace>" . backward-kill-word)
            ("C-h" . backward-kill-word)
            ("C-c C-w" . whitespace-cleanup)
-           ("C-c t p" . #'toggle-electric-pair-inhibition)
-           ("C-c t e" . #'toggle-electric-pair-eagerness)
-           ("C-c d k s" . backward-kill-sentence)
-           ("C-c d k p" . backward-kill-paragraph)
-           ("C-c d k f" . backward-kill-sexp)
-           ("C-c d k d" . delete-region)
-           ("C-c d k w" . delete-trailing-whitespace)
-           ("C-c d s" . describe-symbol)
-           ("C-c d v" . describe-variable)
-           ("C-c d q" . #'kill-eldoc-and-help-buffers)
-           ("C-c d j" . jump-to-elisp-help)
-           ("C-c d d" . eldoc)
-           ("C-c d e" . eldoc-doc-buffer)
            ("C-c C-f" . set-fill-column)
            ("C-c C-p" . set-mark-command)
            ("C-c C-r" . rename-buffer)
@@ -101,25 +88,61 @@
            ("M-<down>" . increase-window-down)
            ("M-<up>" . increase-window-up)
            ("M-<right>" . increase-window-right)
-           :prefix "C-c w"
+	   :map tychoish-core-map
+           ("p" . toggle-electric-pair-inhibition)
+           ("e" . toggle-electric-pair-eagerness)
+           :map minibuffer-local-map
+           ("C-l" . backward-kill-word))
+
+(bind-keys ("M-." . xref-find-definitions)
+	   :prefix "C-c l"
+	   :prefix-map tychoish/ide-map
+           ("m" . imenu)
+           ("c" . xref-find-references)
+           ("d" . xref-find-definitions)
+           ("p" . xref-go-back)
+           ("n" . xref-go-forward)
+           ("o" . xref-find-definitions-other-window))
+
+(bind-keys :prefix "C-c d"
+	   :prefix-map tychoish/docs-map
+           ("s" . describe-symbol)
+           ("v" . describe-variable)
+           ("q" . kill-eldoc-and-help-buffers)
+           ("j" . jump-to-elisp-help)
+           ("e" . eldoc)
+           ("b" . eldoc-doc-buffer))
+
+(bind-keys :prefix "C-c k"
+	   :prefix-map tychoish/kill-map
+           ("s" . backward-kill-sentence)
+           ("p" . backward-kill-paragraph)
+           ("f" . backward-kill-sexp)
+           ("d" . delete-region)
+           ("w" . delete-trailing-whitespace))
+
+(bind-keys :prefix "C-c w"
            :prefix-map tychoish/web-browser-map ;; C-c w
            ("d" . browse-url-generic)
            ("e" . browse-url)
            ("f" . browse-url-firefox)
            ("c" . browse-url-chrome)
-           ("g" . eww-search-words)
-           :prefix "C-c g"
+           ("g" . eww-search-words))
+
+(bind-keys :prefix "C-c g"
            :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
            ("o" . occur)
            ("g" . grep)
            :map tychoish/ecclectic-grep-map
            :prefix "p"
            :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
-           ("f" . find-grep)
-           :map minibuffer-local-map
-           ("C-l" . backward-kill-word))
+           ("f" . find-grep))
 
-;; (put 'list-timers 'disabled nil)
+(which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
+  "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
+
+(put 'narrow-to-region 'disabled nil)
+(put 'list-timers 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
 (setq ad-redefinition-action 'accept)
 
@@ -379,7 +402,6 @@
 
 (defun tychoish/emacs-startup-operations ()
   (global-auto-revert-mode 1)
-
 
   (delight 'auto-revert-mode)
   (delight 'eldoc-mode)

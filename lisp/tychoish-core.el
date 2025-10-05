@@ -26,16 +26,28 @@
 
 (use-package tychoish-common
   :functions (gui-p default-string)
-  :bind (("C-c f =" . text-scale-increase)
-         ("C-c f -" . text-scale-decrease)
-         ("C-c f 0" . text-scale-reset)
-         ("C-c C-=" . opacity-increase)
-         ("C-c C--" . opacity-decrease)
-         ("C-c f C-0" . opacity-reset)
-         ("C-c t t D" . disable-all-themes)
-         ("C-c t w" . toggle-local-whitespace-cleanup)
-	 ("M-<up>" . move-text-up)
-         ("M-<down>" . move-text-down))
+  :bind (("M-<up>" . move-text-up)
+         ("M-<down>" . move-text-down)
+	 :prefix "C-c f"
+	 :prefix-map tychoish/display-map
+	 ("=" . text-scale-increase)
+         ("-" . text-scale-decrease)
+         ("0" . text-scale-reset)
+	 :map tychoish/display-map ;; "C-c f"
+	 :prefix "o"
+	 :prefix-map tychoish/display-opacity-map
+         ("=" . opacity-increase)
+         ("-" . opacity-decrease)
+         ("0" . opacity-reset))
+  :bind (:prefix "C-c t"
+	 :prefix-map tychoish-core-map
+         ("w" . toggle-local-whitespace-cleanup)
+	 :map tychoish-core-map ;; "C-c t"
+	 :prefix "t"
+	 :prefix-map tychoish/theme-map
+         ("r" . disable-all-themes) ;; reset
+	 ("d" . tychoish-load-dark-theme)
+	 ("l" . tychoish-load-light-theme))
   :commands (kill-buffers-matching-mode
              kill-buffers-matching-path
              force-kill-buffers-matching-path
@@ -142,7 +154,8 @@
 
 (use-package doom-modeline
   :ensure t
-  :bind (("C-c t i" . toggle-modeline-icons))
+  :bind (:map tychoish/theme-map
+	 ("i" . toggle-modeline-icons))
   :hook ((after-init . doom-modeline-mode))
   :commands (doom-modeline-mode
              tychoish-legacy-mode-line)
@@ -184,7 +197,8 @@
 
 (use-package writeroom-mode
   :ensure t
-  :bind (("C-c t i" . writeroom-mode)))
+  :bind (:map tychoish/display-map
+	 ("i" . writeroom-mode)))
 
 (use-package page-break-lines
   :ensure t
@@ -212,6 +226,7 @@
              projectile-mode-on
              projectile-save-project-buffers)
   :init
+  (which-key-add-key-based-replacements "C-c p" "projectile")
   ;; previously added projectile-mode to the after-init-hook (probably
   ;; to get keybindings to load correctly,) appears unnecessary, but
   ;; wanted to leave note here.
@@ -270,6 +285,9 @@
          ("p" . tychoish-rg-repo))
   :defines (tychoish/ecclectic-rg-map)
   :commands (tychoish-rg tychoish-rg-repo tychoish-find-merges)
+  :init
+  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
+    "r" '("rg-grep" . tychoish/ecclectic-rg-map))
   :config
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
@@ -322,6 +340,9 @@
 	 :prefix-map tychoish/ecclectic-ag-dired-map
 	 ("f" . ag-dired)
 	 ("p" . ag-project-dired))
+  :init
+  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
+    "a" '("ag-grep" . tychoish/ecclectic-grep-map))
   :config
   (setq ag-highlight-search t))
 
@@ -339,6 +360,7 @@
   :bind-keymap ("C-c /" . google-this-mode-submap)
   :commands (google-this-mode)
   :config
+  (which-key-add-key-based-replacements "C-c /" "google-this")
   (setq google-this-browse-url-function 'browse-url-default-browser)
   (google-this-mode 1))
 
@@ -347,8 +369,10 @@
   :delight anzu-mode
   :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :hook ((isearch-mode) . anzu-mode)
-  :bind (("C-c q r" . anzu-query-replace)
-         ("C-c q x" . anzu-query-replace-regexp)
+  :bind (:prefix "C-c q"
+	 :prefix-map tychoish/anzu-map
+	 ("r" . anzu-query-replace)
+         ("x" . anzu-query-replace-regexp)
          :map isearch-mode-map
          ("C-o" . isearch-occur))
   :config
@@ -420,11 +444,14 @@
   (org-load-modules-maybe t))
 
 (use-package tychoish-blogging
-  :bind (("C-c t b m" . tychoish-blog-insert-date)
-         ("C-c t b p" . tychoish-blog-publish-post)
-         ("C-c t b n" . tychoish-blog-create-post)
-         ("C-c t b C-p" . tychoish-blog-push)
-         ("C-c t b d" . tychoish-blog-open-drafts-dired))
+  :bind (:map tychoish-core-map
+         :prefix "b"
+	 :prefix-map tychoish/blogging-map
+	 ("m" . tychoish-blog-insert-date)
+         ("p" . tychoish-blog-publish-post)
+         ("n" . tychoish-blog-create-post)
+         ("C-p" . tychoish-blog-push)
+         ("d" . tychoish-blog-open-drafts-dired))
   :commands (make-filename-slug
              tychoish/define-project-notes)
   :config
@@ -565,7 +592,8 @@
   :commands (yas-global-mode yas-insert-snippet yas-minor-mode)
   :hook ((text-mode prog-mode) . yas-minor-mode)
   :config
-  (add-to-list 'load-path (f-join user-emacs-directory "snippets")))
+  (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
+  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
 
 (use-package yasnippet-capf
   :ensure t
@@ -667,7 +695,7 @@
 
 (use-package corfu
   :ensure t
-  :defines (corfu-margin-formatters corfu-continue-commands)
+  :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
   :hook (((prog-mode text-mode) . corfu-mode)
          ((shell-mode eshell-mode) . corfu-mode)
          (telega-chat-mode . corfu-mode)
@@ -699,7 +727,6 @@
              ("M-m" . corfu-move-to-minibuffer)
              ("C-m" . corfu-move-to-minibuffer)
              ("M-S-m" . corfu-move-to-minibuffer))
-
   (setq corfu-cycle t)
   (setq corfu-quit-at-boundary t)
   (setq corfu-quit-no-match t)
@@ -720,7 +747,7 @@
       (unless (or
 	       (eq frame-type 't) ;; this is "normal" text terminal
 	       (eq frame-type 'pc)) ;; this is "ms-dos" terminal (good measure)
-	(funcall corfu-popupinfo--function candidate))))
+	(funcall #'corfu-popupinfo--get-documentation candidate))))
 
   (setq corfu-popupinfo--function #'tychoish/corfu-popupinfo-resolver)
 
@@ -774,9 +801,8 @@
 (use-package consult
   :ensure t
   :bind (("C-c C-x C-m" . consult-mode-command)
-         ("C-c k" . consult-kmacro)
          ("C-c i" . consult-info)
-         ("C-c d m" . consult-man)
+         ("C-c C-; m" . consult-kmacro)
          ("C-c C-x r r" . consult-register)
          ("C-c C-x r s" . consult-register-store)
          ("C-c C-x r l" . consult-register-load)
@@ -815,9 +841,8 @@
          ("M-s c" . consult-locate)
          ;; Isearch integration
          ("M-s e" . consult-isearch-history)
-         :prefix "C-c C-;"
-         :prefix-map tychoish/consult-mode-map
-         ("h" . consult-history)
+	 :map tychoish/docs-map
+         ("m" . consult-man)
          ;; Minibuffer history
          :map minibuffer-local-map
          ("C-g" . tychoish/super-abort-minibuffers)
@@ -827,13 +852,19 @@
          ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
          ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
          ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-         ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
-	 :map tychoish/ecclectic-grep-map ;; "C-c g"
+         ("M-s L" . consult-line-multi))            ;; needed by consult-line to detect isearch
+  :bind (:prefix "C-c C-;"
+         :prefix-map tychoish/consult-mode-map
+         ("h" . consult-history))
+  :bind (:map tychoish/ecclectic-grep-map ;; "C-c g"
          ("f" . consult-grep)
-         ("s l" . consult-line)
-         ("s m" . consult-line-multi)
-         ("s k" . consult-keep-lines)
-         ("s f" . consult-focus-lines)
+	 :map tychoish/ecclectic-grep-map ;; "C-c g"
+	 :prefix "s"
+	 :prefix-map tychoish/consult-search-map
+         ("l" . consult-line)
+         ("m" . consult-line-multi)
+         ("k" . consult-keep-lines)
+         ("f" . consult-focus-lines)
 	 :map tychoish/ecclectic-grep-project-map ;; "C-c g p"
          ("g" . consult-git-grep))                 ;; for git(?)
   :hook (completion-list-mode . consult-preview-at-point-mode)
@@ -905,8 +936,9 @@
 
 (use-package consult-flycheck
   :ensure t
-  :bind (("C-c f m" . consult-flycheck)
-         ("M-g f" . consult-flycheck)))
+  :bind (("M-g f" . consult-flycheck)
+	 :map flycheck-mode-map
+	 ("m" . consult-flycheck)))
 
 (use-package consult-flyspell
   :ensure t
@@ -1304,9 +1336,11 @@
 
 (use-package magit
   :ensure t
-  :bind (("C-x g s" . magit-status)
-         ("C-x g f" . magit-branch)
-         ("C-x g b" . magit-blame))
+  :bind (:prefix "C-x g"
+	 :prefix-map tychoish/magit-map
+	 ("s" . magit-status)
+         ("f" . magit-branch)
+         ("b" . magit-blame))
   :commands (magit-toplevel)
   :config
   (setq vc-follow-symlinks t)
@@ -1329,7 +1363,8 @@
 
 (use-package git-link
   :ensure t
-  :bind (("C-x g l" . git-link)))
+  :bind (:map tychoish/magit-map
+	 ("l" . git-link)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1516,21 +1551,24 @@
   :bind-keymap (("C-c v" . telega-prefix-map)
                 ("C-c n" . telega-prefix-map))
   :bind (:map telega-prefix-map
-              :prefix "d"
-              :prefix-map tychoish/telega-buffer-management-map
-              ("h" . tychoish/telega-bury-chat-buffers)
-              ("k" . tychoish/telega-kill-chat-buffers)
-              :map telega-chat-mode-map
-              ("C-c C-f" . telega-chat-buffer-auto-fill)
-              :map telega-root-mode-map
-              ("C-c C-f" . telega-root-buffer-auto-fill)
-              ("<tab>" . telega-root-cycle-next))
+         :prefix "d"
+         :prefix-map tychoish/telega-buffer-management-map
+         ("h" . tychoish/telega-bury-chat-buffers)
+         ("k" . tychoish/telega-kill-chat-buffers)
+         :map telega-chat-mode-map
+         ("C-c C-f" . telega-chat-buffer-auto-fill)
+         :map telega-root-mode-map
+         ("C-c C-f" . telega-root-buffer-auto-fill)
+         ("<tab>" . telega-root-cycle-next))
   :commands (telega
              telega-chat-mode
              tychoish/telega-switch-to-root
              tychoish/telega-kill-chat-buffers
              tychoish/telega-bury-chat-buffers
              tychoish/telega-force-kill)
+  :init
+  (which-key-add-key-based-replacements "C-c n" "telega-prefix")
+  (which-key-add-key-based-replacements "C-c v" "telega-prefix")
   :config
   (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
   (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
@@ -1736,9 +1774,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package deft
   :ensure t
-  :bind (("C-c d o" . deft)
-         ("C-c d n" . tychoish-deft-create)
-         ("C-c d d" . deft-find-file))
+  :bind (:prefix "C-c d"
+	 :prefix-map tychoish/docs-map
+	 ("o" . deft)
+         ("n" . tychoish-deft-create)
+         ("f" . deft-find-file))
   :init
   (defun deft-find-file ()
     (interactive)
@@ -2133,7 +2173,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package journalctl-mode
   :ensure t
-  :bind (("C-c t j" . journalctl)))
+  :bind (:map tychoish-core-map
+	 ("j" . journalctl)))
 
 (use-package docker
   :ensure t
@@ -2203,8 +2244,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
-  :bind (("C-c t c" . tychoish-compile)
-         ("C-c C-t c" . compile)
+  :bind (:map tychoish-core-map
+	 ("c" . tychoish-compile)
 	 :map compilation-mode-map
 	 ("C" . compile))
   :config
@@ -2367,31 +2408,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
            bash-ts-mode
            bash-mode
            sh-mode) . #'eglot-ensure))
-  :bind (("C-c l l s" . eglot)
-         ("C-c l l l" . eglot-list-connections)
-         ("C-c l l g" . eglot-forget-pending-continuations)
-         :map eglot-mode-map
-         ("C-c l l r" . eglot-reconnect)
-         ("C-c l l k" . eglot-shutdown)
-         ("C-c l r" . eglot-rename)
-         ("C-c l m" . imenu)
-         ("C-c l f" . eglot-format)
-         ("C-c l a" . eglot-code-actions)
-         ("C-c l o" . eglot-code-action-organize-imports)
-       ; ("C-c l i" . eglot-code-action-inline)
-         ("C-c l e" . eglot-code-action-extract)
-         ("C-c l w" . eglot-code-action-rewrite)
-         ("C-c l q" . eglot-code-action-quickfix)
-         ("C-c l c" . eglot-call-type-hierarchy)
-         ("C-c l t" . eglot-show-type-hierarchy))
+  :bind (:map tychoish/ide-map ;; "C-c l"
+	 :prefix "l"
+	 :prefix-map tychoish/eglot-global-map
+	 ("s" . eglot)
+         ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
+         ("k" . eglot-shutdown)
+         ("l" . eglot-list-connections)
+         ("g" . eglot-forget-pending-continuations))
   :init
-  (bind-keys ("M-." . xref-find-definitions)
-             ("C-c l c" . xref-find-references)
-             ("C-c l d" . xref-find-definitions)
-             ("C-c l p" . xref-go-back)
-             ("C-c l n" . xref-go-forward)
-             ("C-c l o" . xref-find-definitions-other-window))
-
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-ensure-hook)
   (defun tychoish/eglot-ensure-hook ()
     (setq-local eldoc-docuemntation-stratedgy 'eldoc-documentation-compose-eagerly)
@@ -2399,6 +2424,20 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (flycheck-eglot-mode -1)
     (flycheck-eglot-mode 1))
   :config
+  (bind-keys :map eglot-mode-map
+	     :prefix "C-c l"
+	     :prefix-map tychoish/eglot-map
+             ("r" . eglot-rename)
+             ("f" . eglot-format)
+             ("a" . eglot-code-actions)
+             ("o" . eglot-code-action-organize-imports)
+           ; ("i" . eglot-code-action-inline)
+             ("e" . eglot-code-action-extract)
+             ("w" . eglot-code-action-rewrite)
+             ("q" . eglot-code-action-quickfix)
+             ("c" . eglot-call-type-hierarchy)
+             ("t" . eglot-show-type-hierarchy))
+
   (setq eglot-menu-string "eg")
   (when (and (featurep 'helm) helm-mode
 	     (not (or (featurep 'vertico)
@@ -2552,8 +2591,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :bind (:prefix "C-c r"
 	 :prefix-map tychoish/robot-map
-	 ("g g" . gptel)
-         ("g r" . gptel-rewrite)
+	 ("g" . gptel)
+	 :map tychoish/robot-map
+	 :prefix "g"
+	 :prefix-map tychoish/robot-gptel-map
+	 ("g" . gptel)
+         ("r" . gptel-rewrite)
          :map gptel-mode-map
 	 ("C-c m" . gptel-menu))
   :commands gptel
@@ -2582,8 +2625,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package gptel-aibo
   :ensure t
-  :bind (:map tychoish/robot-map
-         ("g w" . gptel-aibo-summon))
+  :bind (:map tychoish/robot-gptel-map
+         ("w" . gptel-aibo-summon))
   :commands (gptel-aibo-summon gptel-aibo))
 
 (use-package mcp
@@ -2633,8 +2676,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package aidermacs
   :ensure t
-  :bind (:map tychoish/robot-map
-	 ("a" . aidermacs-transient-menu))
+  :bind (:map tychoish/robot-map ;; "C-c r"
+	 :prefix "a"
+	 :prefix-map tychoish/robot-aider-map
+	 ("m" . aidermacs-transient-menu))
   :init
   (defun tychoish/set-up-aider-env-vars ()
     (when (boundp 'anthropic-api-key)
@@ -2660,14 +2705,45 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package aider
   :ensure t
-  :bind (:map tychoish/robot-map
-	 ("C-a" . aider-transient-menu))
+  :bind (:map tychoish/robot-aider-map ;; "C-c r a"
+	 ("a" . aider-transient-menu))
   :config
   (tychoish/set-up-aider-env-vars)
   (add-to-list 'aider-args "--notifications")
   (add-to-list 'aider-args "--cache-prompts")
   (add-to-list 'aider-args "--cache-keepalive-pings 12")
   (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets")))
+
+(use-package monet
+  :vc (:url "https://github.com/stevemolitor/monet" :rev :newest)
+  :hook (claude-code-mode . monet-mode)
+  :defines (monet-command-map)
+  :bind-keymap ("C-c r i" . monet-command-map)
+  :commands (monet-start-server monet-start-server-function monet-mode)
+  :init
+  (setq monet-prefix-key nil)
+  (which-key-add-key-based-replacements "C-c r i" "monet-command-map")
+  (bind-key "i" 'monet-command-map 'tychoish/robot-map)
+  :config
+  (which-key-add-keymap-based-replacements 'tychoish/robot-map "i" (cons "monet-map"  monet-command-map)))
+
+(use-package claude-code
+  :ensure t
+  :vc (:url "https://github.com/stevemolitor/claude-code.el" :rev :newest)
+  :defines (claude-code-command-map)
+  :bind-keymap ("C-c r m" . claude-code-command-map)
+  :commands (claude-code-mode)
+  :init
+  (which-key-add-key-based-replacements "C-c r m" "claude-code-command-map")
+  (bind-key "m" 'claude-code-command-map 'tychoish/robot-map)
+  :config
+  (which-key-add-keymap-based-replacements 'tychoish/robot-map "m" (cons "claude-code" claude-code-command-map))
+  (add-hook 'claude-code-process-environment-functions #'monet-start-server-function))
+
+(use-package eat
+  :ensure t
+  :after (claude-code)
+  :defer t)
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

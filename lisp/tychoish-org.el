@@ -17,7 +17,15 @@
 
 (use-package ox-gist
   :ensure t
-  :commands (org-gist-export-to-gist))
+  :commands (org-gist-export-to-gist)
+  :init
+  (defun org-gist-export-private-gist ()
+    (interactive)
+    (org-gist-export-to-gist nil 'open))
+
+  (defun org-gist-export-public-gist ()
+    (interactive)
+    (org-gist-export-to-gist 'public)))
 
 (use-package ox-hugo
   :ensure t
@@ -53,14 +61,6 @@
   "p" #'org-gist-export-private-gist
   "g" #'org-gist-export-public-gist)
 
-(defun org-gist-export-private-gist ()
-  (interactive)
-  (org-gist-export-to-gist))
-
-(defun org-gist-export-public-gist ()
-  (interactive)
-  (org-gist-export-to-gist 'public))
-
 ;; bind keys inside of org-mode
 (bind-keys :map org-mode-map
            ("C-c l o" . org-link-open-from-string)
@@ -80,6 +80,7 @@
            ("w" . org-refile)
            ("d" . tychoish-org-date-now)
            ("i" . org-ctags-create-tags)
+	   ("g" . tychoish/org-gist-map)
            :map tychoish/org-mode-personal-map
            :prefix "c"
            :prefix-map tychoish/org-mode-capture-map
@@ -322,8 +323,8 @@
   (when (string-equal "j" key)
     (user-error "cannot define journal %s org-capture-templates with key `j'" name))
 
-  (let (specs apend-item
-	(capture-location (if (equal "" key)
+  (let (specs append-item
+	      (capture-location (if (equal "" key)
 			      (list 'file+olp+datetree path)
 			    (list 'file+olp+datetree path "Journal"))))
 
