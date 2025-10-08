@@ -16,3 +16,4 @@ transient/*.el
 .cache/
 lisp/*.elcwordfreq-dicts
 wordfreq-dicts/**
+lisp/**.elc

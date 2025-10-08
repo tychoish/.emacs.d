@@ -1,5 +1,7 @@
-(require 'org)
+;;  -*- lexical-binding: t -*-
 
+(require 'org)
+(require 'org-contrib)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; org-mode extensions and supporting packages
@@ -96,23 +98,24 @@
            ("d" . tychoish-org-mark-done-and-archive)
            ("e" . org-cycle-force-archived)
            ("t" . org-archive-set-tag)
-           ("s" . org-archive-to-archive-sibling)
-           :map tychoish/org-mode-personal-map
-           :prefix "r"
-           :prefix-map tychoish/org-mode-personal-bibtex-map
-           ("a" . org-bibtex-check-all)
-           ("m" . org-bibtex-create)
-           ("e" . org-bibtex)
-           ("k" . org-bibtex-export-to-kill-ring)
-           ("r" . org-bibtex-create-in-current-entry)
-           ("s" . org-bibtex-search)
-           ("v" . org-bibtex-check))
+           ("s" . org-archive-to-archive-sibling))
 
 (with-eval-after-load 'org-agenda
   (bind-keys :map org-agenda-mode-map
 	     ("C-l" . org-agenda-open-link)
 	     ("M-c" . org-agenda-goto-calendar)))
-
+(with-eval-after-load 'org-contrib
+  (with-eval-after-load 'org-bibtex-extras
+    (bind-keys :map tychoish/org-mode-personal-map
+               :prefix "r"
+               :prefix-map tychoish/org-mode-personal-bibtex-map
+               ("a" . org-bibtex-check-all)
+               ("m" . org-bibtex-create)
+               ("e" . org-bibtex)
+               ("k" . org-bibtex-export-to-kill-ring)
+               ("r" . org-bibtex-create-in-current-entry)
+               ("s" . org-bibtex-search)
+               ("v" . org-bibtex-check))))
 (with-eval-after-load 'helm
   (bind-keys :map tychoish/helm-center-menu-map
              :prefix "o"

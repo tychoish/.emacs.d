@@ -1,3 +1,5 @@
+;;  -*- lexical-binding: t -*-
+
 (require 'consult)
 (require 'ht)
 (require 'dash)
@@ -119,7 +121,8 @@
 (defun tychoish--compilation-read-command (command)
   (let* ((candidates (tychoish--get-compilation-candidates default-directory))
          (names (->> candidates
-                     (ht-map (lambda (key value) (tychoish--compilation-candidate-name value)))
+                     (ht-values)
+		     (--map (tychoish--compilation-candidate-name it))
                      (-sort #'string-lessp)))
          (longest-id (length-of-longest-item names))
          (selection-name
@@ -216,6 +219,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
     `(progn
        (defun ,symbol-name (project-root-directory directories operation-table)
 	 ,(format "Build list of `tychoish--compilation-candidate' objects for suggestion in compilation buffers")
+	 (ignore project-root-directory directories operation-table)
 	 (when ,predicate
 	   (add-candidates-to-table
 	    operation-table
@@ -230,7 +234,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 	     (with-eval-after-load "compile"
 	       (push 'compilation-mode-hook hooks))
 
-	     (->> hooks (--map (add-hook it #',hook-registering-function-name))))))))
+	     (->> hooks (--mapc (add-hook it #',hook-registering-function-name))))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -381,7 +385,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		   :name "go list <pkgs...> | xargs -t go test -race -v"
 		   :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"
 		   :directory it
-		   :annotation (format "crazy go xargs test" (f-filename it)))
+		   :annotation (format "crazy go xargs test %s" (f-filename it)))
 		  (make-compilation-candidate
 		   :command "go mod tidy"
 		   :directory it

@@ -72,7 +72,7 @@ entry of `org-capture-templates'."
   (let ((table (ht-create)))
     (->> org-capture-templates
 	 (--filter (< 3 (length it)))
-	 (--map (ht-set table
+	 (--mapc (ht-set table
 			(nth 1 it)
 			(cons
 			 (format "[%s]%s<%s> '%s'"
@@ -88,7 +88,7 @@ entry of `org-capture-templates'."
 	     keys
 	     :prompt "org-capture => "
 	     :annotate (lambda (candidate) (concat (prefix-padding-for-annotation candidate longest) (car (ht-get table candidate))))
-	     :lookup (lambda (selection candidates &rest _) (cdr (ht-get table selection)))
+	     :lookup (lambda (selection _candidates &rest _) (cdr (ht-get table selection)))
 	     :category 'org-capture
                          :require-match nil
 	     :command 'consult-org-capture
@@ -113,7 +113,7 @@ entry of `org-capture-templates'."
   ;; otherwise use it.
   (or (trimmed-string-or-nil initial)
       ;; with the prefix argument, ask the user
-      (when current-prefix-arg
+      (when (or current-prefix-arg context)
         (consult-tycho--select-context-for-operation
          (format "%s<init:%s>: " prompt prompt-annotation)))
       ;; otherwise, provide the empty string...
@@ -127,7 +127,7 @@ entry of `org-capture-templates'."
              (when (stringp seed) (list seed)))
          (-keep #'trimmed-string-or-nil)
          (--filter (length> it 64))
-         (--map (ht-set table it "user provided input (seed)")))
+         (--mapc (ht-set table it "user provided input (seed)")))
 
     (->> (-join (->> '(word email url sentence)
                      (--map (cons 'text-mode it)))

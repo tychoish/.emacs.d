@@ -35,6 +35,9 @@
 
 (require 'ht)
 
+(eval-when-compile
+  (require 'tychoish-common))
+
 (bind-keys :prefix "C-c m"
            :prefix-map tychoish/mail-map)
 
@@ -445,7 +448,7 @@
        (-filter #'f-exists-p)
        (-filter #'should-read-abbrev-file-p)
        (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
-       (--map (ht-set tychoish/abbrev-files-cache it (f-mtime it))))
+       (--mapc (ht-set tychoish/abbrev-files-cache it (f-mtime it))))
 
   (delight 'abbrev-mode "abb")
   (setq save-abbrevs t))
@@ -695,7 +698,7 @@
 	  default)
 
   (unless (and name address key id)
-    (user-error "cannot define mail account without name, address, key and id %S" `(:name ,name :address ,address :key ,key :id ,id)))
+    (user-error "cannot define mail account without name, address, key and id %S" (list :name name :address address :key key :id id)))
 
   (let* ((account-name (format tychoish/mail-id-template id))
          (configure-account-symbol (intern account-name)))

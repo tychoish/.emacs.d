@@ -424,7 +424,7 @@ the list."
     `(defun ,function-name nil
        (run-hooks (intern ,hook-name)))))
 
-(defmacro create-toggle-functions (value &optional &key local)
+(cl-defmacro create-toggle-functions (value &optional &key local)
   (let* ((name (symbol-name value))
 	 (ops (list
 	       `(,(intern (concat "turn-on-" name)) t)
@@ -438,12 +438,11 @@ the list."
 	 (setf (caar val) (intern (concat (symbol-name (caar val)) "-local"))))
        ops))
 
-  `(progn
-     ,@(mapcar (lambda (def)
-                 `(defun ,(car def) ()
-		    (interactive)
-		      (,setter ,value ,(cadr def))))
-	       ops))))
+    `(progn
+       ,@(--map `(defun ,(car it) ()
+		 (interactive)
+		 (,setter ,value ,(cadr it)))
+       ops))))
 
 (defmacro with-silence (&rest body)
   "Totally suppress message from either the minibuffer or the *Messages* buffer.."
@@ -483,7 +482,7 @@ the list."
 		`(apply ,function ,args))
 	    `,@function)
          (remove-hook ',hook #',cleanup ,local)
-         (unintern ',cleanup))
+         (unintern ',cleanup obarray))
        #',cleanup)))
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))

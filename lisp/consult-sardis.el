@@ -23,9 +23,9 @@
     (with-current-buffer (get-buffer buffer-name)
       (save-excursion
 	(setq buffer-read-only nil)
-	(beginning-of-buffer)
+	(goto-char (point-min))
 	(replace-regexp "\\(^Compilation.*\n$\\|\n{2,}\\)" "")
-	(end-of-buffer)
+	(goto-char (point-max))
 	(compilation-insert-annotation
 	 (format "--- %s completed in %.06fs at %s\n\n"
 		 selection (float-time duration)
@@ -69,7 +69,7 @@
        :local t)
 
       (save-excursion
-        (end-of-buffer)
+        (goto-char (point-min))
 	(with-force-write
 	    (if (zerop (buffer-size))
 		(compilation-insert-annotation (format "# %s\n\n" selection))

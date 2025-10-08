@@ -8,6 +8,9 @@
 ;; only loads when called directly or a mode is activated.
 
 ;;; Code:
+(eval-when-compile
+  (require 'tychoish-common))
+
 (use-package delight
   :ensure t
   :defer t)
@@ -436,8 +439,7 @@
       (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
 	     (wrapper-name (symbol-name wrapper))
 	     (capf-name (symbol-name inner))
-	     (name (format "%s-<%s>" capf-name wrapper-name ))
-	     (symbol-name (intern-soft name)))
+	     (name (format "%s-<%s>" capf-name wrapper-name )))
       `(defun ,(intern name) ()
 	 (funcall #',wrapper #',inner)))))
 
@@ -1092,7 +1094,7 @@
   (setq helm-grep-ag-pipe-cmd-switches '("--colors 'match:fg:black'" "--colors 'match:bg:yellow'"))
   (setq helm-input-idle-delay 0.0)
   (setq helm-man-or-woman-function 'woman)
-  (setq helm-split-window-in-side-p t)
+  (setq helm-split-window-inside-p t)
   (setq helm-c-adaptive-history-file (tychoish/conf-state-path "helm-c-adaptive-history.el"))
   (setq helm-c-adaptive-sorting t)
   (helm-autoresize-mode 1)
@@ -1308,14 +1310,14 @@
   :ensure nil
   :bind (:map tychoish/mail-map
 	 ("m" . mu4e)
-         ("d" . mu4e~headers-jump-to-maildir)
-         ("b" . mu4e-headers-search-bookmark)
+         ("d" . mu4e-search-maildir)
+         ("b" . mu4e-search-bookmark)
          ("c" . mu4e-compose-new))
   :commands (mu4e
 	     mu4e-update-index
              mu4e-compose-new
-             mu4e-headers-jump-to-maildir
-             mu4e-headers-search-bookmark
+             mu4e-search-maildir
+             mu4e-search-bookmark
              mu4e-update-mail-and-index)
   :defines (mu4e-mail-view-actions mu4e-get-mail-command mu4e-compose-minor-mode-map mu4e-user-mail-address-list)
   :init
@@ -1401,17 +1403,15 @@
 
   (setq mu4e-compose-complete-addresses t)
   (setq mu4e-compose-complete-only-after "2015-01-01")
-  (setq mu4e-compose-dont-reply-to-self t)
   (setq mu4e-compose-keep-self-cc nil)
-  (setq mu4e-compose-signature t)
+  (setq message-signature t)
   (setq mu4e-drafts-folder "/drafts")
   (setq mu4e-headers-include-related nil)
-  (setq mu4e-headers-results-limit 1000)
+  (setq mu4e-search-results-limit 1000)
   (setq mu4e-maildir-shortcuts nil)
   (setq mu4e-sent-folder "/sent")
   (setq mu4e-trash-folder "/trash")
   (setq mu4e-user-agent-string nil)
-  (setq mu4e-view-show-images t)
 
   (setq mail-signature t)
   (setq mail-specify-envelope-from t)
@@ -1422,6 +1422,8 @@
   (setq compose-mail-user-agent-warnings nil)
   (setq sendmail-program "msmtp")
   (setq smtpmail-queue-mail nil)
+
+  (setq message-dont-reply-to-names t)
 
   (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t)
         mu4e--header-separator mail-header-separator)
@@ -1462,7 +1464,7 @@
 	     (not (eq alert-default-style 'osx-notifier)))
 	(setq-default alert-default-style 'osx-notifier)
       (remove-hook 'server-after-make-frame 'tychoish/darwin-alert-config-for-server)
-      (unintern 'tychoish/darwin-alert-config-for-server))))
+      (unintern 'tychoish/darwin-alert-config-for-server obarray))))
 
 (use-package tracking
   :ensure t
@@ -1547,7 +1549,7 @@
   (telega-mode-line-mode 1)
   (telega-alert-mode 1)
 
-  (defun telega-chat-folders (chat) nil)
+  (defun telega-chat-folders (_chat) nil)
 
   (defun telega-root-cycle-next (chat)
     "Either expand if forum or cycle to next `CHAT' at point."
@@ -1623,7 +1625,7 @@
         (progn (message (format "TELEGA-NOTIFY: unexpected message [%s], notifying anyway" title)) t)))))
 
   (defun telega-chat-buf-mode-p (buffer)
-    "returns 't' for all chat buffers, and nil otherwise"
+    "returns `t' for all chat buffers, and `nil' otherwise"
     (with-current-buffer buffer
       (when (eq major-mode 'telega-chat-mode)
         t)))
@@ -1672,9 +1674,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
     (switch-to-buffer (or (get-buffer telega-root-buffer-name)
 			  (when (bufferp initial-buffer-choice) initial-buffer-choice)
-			  (when (stringp initial-buffer-choice) (get-buffer initial-buffer-choice)
-				(last-buffer)
-				(get-buffer "*scratch*")))))
+			  (when (stringp initial-buffer-choice) (get-buffer initial-buffer-choice))
+			  (last-buffer)
+			  (get-buffer "*scratch*"))))
 
   (defun tychoish/telega-default-root-buffer (toggle)
     (setq initial-buffer-choice
@@ -1722,13 +1724,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (let ((draft-file (concat deft-directory
                               (deft-file-make-slug title)
                               "."
-                              deft-extension)))
+                              deft-extensions)))
       (if (file-exists-p draft-file)
           (find-file draft-file)
         (find-file draft-file)
         (insert (title)))))
   :config
-  (setq deft-extension "txt")
+  (setq deft-extensions "md")
   (setq deft-text-mode 'markdown-mode)
   (setq deft-use-filename-as-title t)
   (setq deft-auto-save-interval 0)
@@ -1946,9 +1948,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (python-ts-mode "py.ts")
   (python-mode "py")
   :mode (("\\.py$" . python-ts-mode))
-  :bind (:map python-ts-mode-map
-         ("M-<right>" . balle-python-shift-right)
-         ("M-<left>" . balle-python-shift-left))
   :init
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
   (add-hook 'python-ts-mode 'tychoish/python-setup)
@@ -1975,6 +1974,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (setq-local python-indent-offset 4)
     (setq-local tab-width 4)
     (setq-local fill-column 100))
+  :config
+  (bind-keys :map python-ts-mode-map
+             ("M-<right>" . balle-python-shift-right)
+             ("M-<left>" . balle-python-shift-left))
 
   (defun balle-python-shift-left ()
     (interactive)
@@ -1999,7 +2002,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
           (setq start (car bds) end (cdr bds))))
       (python-indent-shift-right start end))
     (setq deactivate-mark nil))
-  :config
   ; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
@@ -2356,12 +2358,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
              ("f" . eglot-format)
              ("a" . eglot-code-actions)
              ("o" . eglot-code-action-organize-imports)
-           ; ("i" . eglot-code-action-inline)
+             ;; ("i" . eglot-code-action-inline)
+             ;; ("c" . eglot-call-type-hierarchy)
+             ;; ("t" . eglot-show-type-hierarchy)
              ("e" . eglot-code-action-extract)
-             ("w" . eglot-code-action-rewrite)
-             ("q" . eglot-code-action-quickfix)
-             ("c" . eglot-call-type-hierarchy)
-             ("t" . eglot-show-type-hierarchy))
+             ("w" . eglot-code-action-rewrite))
 
   (setq eglot-menu-string "eg")
   (when (and (featurep 'helm) helm-mode
@@ -2399,7 +2400,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defun eglot-organize-imports ()
     (interactive)
     (when (eglot-managed-p)
-      (eglot-code-actions)
       (with-demoted-errors "WARN (`eglot-organize-imports'): %S"
         (eglot-code-actions nil nil "source.organizeImports" t))))
 
@@ -2439,7 +2439,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("\\.toml\\'" . toml-ts-mode)
          ;; -- c/c++
          ("CMakeLists.txt" . cmake-ts-mode)
-	 ("\\.h\\'" . c-or-c++-ts-mode)
+	 ("\\.h\\'" . c-or-c++-mode)
          ("\\.c\\'" . c-ts-mode)
 	 ("\\.cpp\\'" . c++-ts-mode)
          ("\\.cc\\'" . c++-ts-mode)
