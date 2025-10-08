@@ -107,7 +107,7 @@
 
 ;; tychoish/compile-project implementation
 
-(defun tychoish--get-compilation-candidates (&optional directory)
+(defun tychoish--get-compilation-candidates (&optional directory command)
  "Generate a sequence of candidate compilation commands based on mode and directory structure."
   (let* ((project-root-directory (approximate-project-root))
 	 (default-directory (or directory default-directory))
@@ -115,11 +115,20 @@
          (operation-table (ht-create)))
 
     (run-hook-with-args 'tychoish--compilation-candidate-functions project-root-directory directories operation-table)
+
+    (when command
+      (add-candidates-to-table
+       operation-table
+       (make-compilation-candidate
+	:command command
+	:annotation "runtime suggested candidate"
+	:directory (or directory project-root-directory default-directory))))
+
     operation-table))
 
 ;; this is the inner "select which command to use" for entering a new compile command.
 (defun tychoish--compilation-read-command (command)
-  (let* ((candidates (tychoish--get-compilation-candidates default-directory))
+  (let* ((candidates (tychoish--get-compilation-candidates default-directory command))
          (names (->> candidates
                      (ht-values)
 		     (--map (tychoish--compilation-candidate-name it))

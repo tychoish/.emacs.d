@@ -52,15 +52,16 @@ entry of `org-capture-templates'."
   (list 'function
         (lambda ()
           (unless (derived-mode-p #'org-mode)
-                 (user-error "Must call from an Org buffer.")
-          (let ((consult--read-config
-                 `((,this-command
-                    :prompt "org-apture target: "
-                    :preview-key "M-."))))
-            (set-buffer
-             (save-window-excursion
-               (consult-org-heading nil 'agenda)
-               (current-buffer))))))))
+            (user-error "Must call from an Org buffer."))
+		 (let ((consult--read-config
+			`((,this-command
+			   :prompt "org-apture target: "
+			   :preview-key "M-."))))
+		   (ignore consult--read-config)
+		   (set-buffer
+		    (save-window-excursion
+		      (consult-org-heading nil 'agenda)
+		      (current-buffer)))))))
 
 ;;;###autoload
 (defun consult-org-capture ()
@@ -120,8 +121,7 @@ entry of `org-capture-templates'."
       ""))
 
 (defun consult-tycho--context-base-list (&optional seed)
-  (let ((table (ht-create))
-	(position 0))
+  (let ((table (ht-create)))
 
     (->> (or (when (listp seed) seed)
              (when (stringp seed) (list seed)))
@@ -153,12 +153,13 @@ entry of `org-capture-templates'."
 		(is-oversized (< (length line) 32)))
       (ht-set table line (format "current line <%s>" (buffer-name))))
 
-    (->> kill-ring
-         (-map #'substring-no-properties)
-         (-keep #'trimmed-string-or-nil)
-         (--filter (< (length it) 64))
-         (-take 10)
-         (--map-indexed (ht-set table it (format "kill ring [idx=%d]" it-index))))
+    (let ((count 0))
+      (->> kill-ring
+           (-map #'substring-no-properties)
+           (-keep #'trimmed-string-or-nil)
+           (--filter (< (length it) 64))
+           (-take 10)
+           (--mapc (ht-set table it (format "kill ring [idx=%d]" (cl-incf count))))))
 
     table))
 
@@ -187,20 +188,21 @@ entry of `org-capture-templates'."
         (consult-async-refresh-delay 0.025)
 	(consult-async-min-input 2)
 	(consult--prefix-group nil))
+    (ignore consult--prefix-group)
 
-      (consult--grep
-       ;; prompt
-       "rg"
-       ;; builder
-       #'consult--ripgrep-make-builder
-       ;; directory
-       (or (trimmed-string-or-nil dir)
-	   (consult--select-directory)
-	   (approximate-project-root))
-       ;; initial
-       (if (and (or context (not initial)) (not (eq context 'override)))
-	   (consult-tycho--select-context-for-operation (format "rg(init) =>> "))
-	 initial))))
+    (consult--grep
+     ;; prompt
+     "rg"
+     ;; builder
+     #'consult--ripgrep-make-builder
+     ;; directory
+     (or (trimmed-string-or-nil dir)
+	 (consult--select-directory)
+	 (approximate-project-root))
+     ;; initial
+     (if (and (or context (not initial)) (not (eq context 'override)))
+	 (consult-tycho--select-context-for-operation (format "rg(init) =>> "))
+       initial))))
 
 ;;;###autoload
 (defun consult-rg-project (&optional initial &key context)

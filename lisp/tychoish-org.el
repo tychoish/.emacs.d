@@ -104,18 +104,17 @@
   (bind-keys :map org-agenda-mode-map
 	     ("C-l" . org-agenda-open-link)
 	     ("M-c" . org-agenda-goto-calendar)))
+
 (with-eval-after-load 'org-contrib
   (with-eval-after-load 'org-bibtex-extras
     (bind-keys :map tychoish/org-mode-personal-map
                :prefix "r"
                :prefix-map tychoish/org-mode-personal-bibtex-map
-               ("a" . org-bibtex-check-all)
                ("m" . org-bibtex-create)
                ("e" . org-bibtex)
                ("k" . org-bibtex-export-to-kill-ring)
-               ("r" . org-bibtex-create-in-current-entry)
-               ("s" . org-bibtex-search)
-               ("v" . org-bibtex-check))))
+               ("r" . org-bibtex-create-in-current-entry))))
+
 (with-eval-after-load 'helm
   (bind-keys :map tychoish/helm-center-menu-map
              :prefix "o"

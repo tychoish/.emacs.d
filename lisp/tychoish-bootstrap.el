@@ -353,10 +353,10 @@
 (defun display-startup-echo-area-message ()
   "Called during setup, intentially a noop, which omit the message."  nil)
 
-(defun emacs-repository-version-git (dir)
+(defun emacs-repository-version-git (_dir)
   "Noop definition of function to speed up startup" "")
 
-(defun emacs-repository-get-version (&optional dir ext)
+(defun emacs-repository-get-version (&optional _dir _ext)
   "Noop definition of function to speed up startup" "")
 
 (defun ad:suppress-message (f &rest arg)
@@ -398,15 +398,17 @@
   (transient-mark-mode 1)
   (xterm-mouse-mode 1)
   (electric-pair-mode 1)
-  (which-key-mode 1)
+  (which-key-mode 1))
 
-  (add-hygenic-one-shot-hook
-   :name "restore-desktop"
-   :hook (if (daemonp)
-	     'server-after-make-frame-hook
-	   'window-setup-hook)
-   :function #'tychoish/desktop-read-init))
-
+(progn
+  (defun hygenic-one-shot-restore-desktop-g42 nil
+    (apply #'tychoish/desktop-read-init nil)
+    (remove-hook 'server-after-make-frame-hook
+		 #'hygenic-one-shot-restore-desktop-g42 nil)
+    (unintern 'hygenic-one-shot-restore-desktop-g42 obarray))
+  (add-hook 'server-after-make-frame-hook
+	    #'hygenic-one-shot-restore-desktop-g42 0 nil)
+  #'hygenic-one-shot-restore-desktop-g42)
 (defun tychoish/emacs-startup-operations ()
   (global-auto-revert-mode 1)
   (add-hook 'auto-save-mode-hook 'tychoish/set-up-auto-save)

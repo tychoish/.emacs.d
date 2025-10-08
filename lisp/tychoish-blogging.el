@@ -80,7 +80,7 @@
         (find-file draft-fn)
       (find-file draft-fn)
       (insert (concat "# " title))
-      (end-of-buffer)
+      (goto-char (point-max))
       (whitespace-cleanup)
       (insert "\n"))
     (message "new note: %s" draft-fn)))

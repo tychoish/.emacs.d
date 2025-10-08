@@ -363,7 +363,7 @@ the list."
   `(lambda (filename) (f-ext-p filename ,extension)))
 
 (defmacro f-filename-is-function (name)
-  `(lambda (filename) (f-filename-is-p filename name)))
+  `(lambda (filename) (f-filename-is-p filename ,name)))
 
 (defun f-filename-is-p (entry name)
   (f-equal-p (f-filename entry) name))
@@ -432,14 +432,10 @@ the list."
 	       `(,(intern (concat "toggle-" name )) (not ,value))))
 	 (setter (if local 'setq-local 'setq)))
 
-    (when local
-      (cl-maplist
-       (lambda (val)
-	 (setf (caar val) (intern (concat (symbol-name (caar val)) "-local"))))
-       ops))
-
     `(progn
-       ,@(--map `(defun ,(car it) ()
+       ,@(--map `(defun ,(if local
+			     (intern (concat (symbol-name (car it)) "-local"))
+			   (car it)) ()
 		 (interactive)
 		 (,setter ,value ,(cadr it)))
        ops))))
@@ -474,15 +470,12 @@ the list."
 		  hook
 		(eval hook))))
     `(progn
-       (add-hook ',hook #',cleanup ,depth ,local)
        (defun ,cleanup ,args
-	 ,(if (functionp function)
-	      (if (null args)
-		  `(funcall ,function)
-		`(apply ,function ,args))
-	    `,@function)
+	 (apply ,function ,args)
          (remove-hook ',hook #',cleanup ,local)
          (unintern ',cleanup obarray))
+       (add-hook ',hook #',cleanup ,depth ,local)
+
        #',cleanup)))
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
@@ -585,7 +578,7 @@ the list."
   "Remove all linebreaks in a region but leave paragraphs
   indented text (quotes,code) and lines starting with an asterix (lists) intakt."
   (interactive "r")
-  (replace-regexp "\\([^\n]\\)\n\\([^ *\n]\\)" "\\1 \\2" nil begin end))
+  (replace-regexp-in-region "\\([^\n]\\)\n\\([^ *\n]\\)" "\\1 \\2" begin end))
 
 ;; whitespace  --
 
@@ -699,17 +692,20 @@ interactively then remove duplicate items from the `kill-ring'."
         (setq kill-ring (delete-dups new-kill-ring))
       (setq kill-ring new-kill-ring))))
 
-(defadvice kill-region (before slick-cut activate compile)
-  "When called interactively with no active region, kill a single line instead."
-  (interactive
-    (if mark-active (list (region-beginning) (region-end))
-      (list (line-beginning-position)
-        (line-beginning-position 2)))))
+;; (advice-add
+;;  'kill-region :before
+;;  (lambda (inner start end &rest _)
+;;    (apply inner (interactive
+;; 		 (if mark-active
+;; 		     (list start
+;; 			   end)
+;; 		   (list
+;; 		    (line-beginning-position)
+;; 		    (line-beginning-position 2)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; bulk buffer killing -- kill groups of buffers efficiently
-
 (defun buffers-matching-path (regexp &optional internal-too)
   (->> (buffer-list)
        (--keep (let* ((buffer it)

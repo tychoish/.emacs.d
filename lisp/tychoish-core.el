@@ -105,7 +105,7 @@
   (setq doom-modeline-irc-stylize 'identity)
   (setq doom-modeline-irc t)
 
-  (create-toggle-functions doom-modeline-icon)
+  (create-toggle-functions doom-modeline-icon :local t)
 
   (bind-key "i" #'toggle-doom-modeline-icon tychoish/theme-map)
 
@@ -804,7 +804,7 @@
     (if (not (minibuffer-selected-window))
         (keyboard-quit)
       (abort-minibuffers)
-      (minibuffer-quit))
+      (minibuffer-keyboard-quit))
     (when (minibuffer-selected-window)
       (move-beginning-of-line nil)
       (kill-line)
@@ -1406,7 +1406,7 @@
   (setq mu4e-compose-keep-self-cc nil)
   (setq message-signature t)
   (setq mu4e-drafts-folder "/drafts")
-  (setq mu4e-headers-include-related nil)
+  (setq mu4e-search-include-related nil)
   (setq mu4e-search-results-limit 1000)
   (setq mu4e-maildir-shortcuts nil)
   (setq mu4e-sent-folder "/sent")
@@ -1728,7 +1728,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
       (if (file-exists-p draft-file)
           (find-file draft-file)
         (find-file draft-file)
-        (insert (title)))))
+        (insert title))))
   :config
   (setq deft-extensions "md")
   (setq deft-text-mode 'markdown-mode)

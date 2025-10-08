@@ -24,7 +24,8 @@
       (save-excursion
 	(setq buffer-read-only nil)
 	(goto-char (point-min))
-	(replace-regexp "\\(^Compilation.*\n$\\|\n{2,}\\)" "")
+	(unless (eq (point-min) (re-search-forward "\\(^Compilation.*\n$\\|\n{2,}\\)"))
+	  (replace-match ""))
 	(goto-char (point-max))
 	(compilation-insert-annotation
 	 (format "--- %s completed in %.06fs at %s\n\n"
@@ -36,7 +37,7 @@
   (let ((table (ht-create)))
 
     (->> (split-string (shell-command-to-string "sardis cmd --annotate") "\n")
-	 (--map (-let (cmd annotation) (split-string it "\t" t "[ \s\t\n]")))
+	 (--map (split-string it "\t" t "[ \s\t\n]"))
 	 (-non-nil)
 	 (--mapc (ht-set table (car it) (cadr it))))
 
@@ -64,8 +65,8 @@
       (add-hygenic-one-shot-hook
        :name task-id
        :hook 'compilation-finish-functions
-       :function (tychoish/compile--post-hook-collection
-		  selection op-buffer-name start-at)
+       :function (lambda () (tychoish/compile--post-hook-collection
+			     selection op-buffer-name start-at))
        :local t)
 
       (save-excursion
