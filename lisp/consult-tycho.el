@@ -168,13 +168,14 @@ entry of `org-capture-templates'."
          (selections (consult-tycho--context-base-list seed-list))
 	 (prompt (or prompt "grep =>>")))
 
-    (if (>= (ht-size selections) 1)
-	(car (ht-keys selections))
-      (consult-tycho--read-annotated
-       selections
-       :command this-command
-       :require-match nil
-       :prompt prompt))))
+    (if (> (ht-size selections) 1)
+	(consult-tycho--read-annotated
+	 selections
+	 :command this-command
+	 :require-match nil
+	 :prompt prompt)
+      (message "skipping context selection because %d" (ht-size selectiongs))
+      (car (ht-keys selections)))))
 
 ;;;###autoload
 (defun consult-rg (&optional dir initial &key context)

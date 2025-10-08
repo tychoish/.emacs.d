@@ -12,82 +12,6 @@
   :ensure t
   :defer t)
 
-(use-package f
-  :ensure t
-  :defer t)
-
-(use-package s
-  :ensure t
-  :defer t)
-
-(use-package dash
-  :ensure t
-  :defer t)
-
-(use-package tychoish-common
-  :functions (gui-p default-string)
-  :bind (("M-<up>" . move-text-up)
-         ("M-<down>" . move-text-down)
-	 :prefix "C-c f"
-	 :prefix-map tychoish/display-map
-	 ("=" . text-scale-increase)
-         ("-" . text-scale-decrease)
-         ("0" . text-scale-reset)
-	 :map tychoish/display-map ;; "C-c f"
-	 :prefix "o"
-	 :prefix-map tychoish/display-opacity-map
-         ("=" . opacity-increase)
-         ("-" . opacity-decrease)
-         ("0" . opacity-reset))
-  :bind (:prefix "C-c t"
-	 :prefix-map tychoish-core-map
-         ("w" . toggle-local-whitespace-cleanup)
-	 :map tychoish-core-map ;; "C-c t"
-	 :prefix "t"
-	 :prefix-map tychoish/theme-map
-         ("r" . disable-all-themes) ;; reset
-	 ("d" . tychoish-load-dark-theme)
-	 ("l" . tychoish-load-light-theme))
-  :commands (kill-buffers-matching-mode
-             kill-buffers-matching-path
-             force-kill-buffers-matching-path
-	     uniquify-region-lines
-             uniquify-buffer-lines
-             font-lock-show-tabs
-             font-lock-width-keyword
-	     compile-buffer-name
-             create-toggle-functions
-             create-run-hooks-function-for
-             trimmed-string-or-nil
-             with-silence
-	     with-quiet
-             with-temp-keymap
-             add-hygenic-one-shot-hook
-	     f-mtime
-             buffer-in-frame-p
-	     tychoish/resolve-instance-id
-	     tychoish/conf-state-path
-             tychoish-setup-font
-             tychoish-get-config-file-prefix
-	     tychoish/set-tab-width
-	     tychoish/ensure-light-theme
-	     tychoish/ensure-dark-theme
-	     tychoish/set-up-ssh-agent
-	     set-to-current-time-on-startup))
-
-(use-package tychoish-bootstrap
-  :demand
-  :hook (((text-mode prog-mode) . tychoish/set-up-show-whitespace)
-	 (after-init . tychoish/after-init-operations)
-	 (emacs-startup . tychoish/emacs-startup-operations)
-	 (emacs-startup . tychoish-set-up-user-local-config)
-	 (prescient-persist-mode . tychoish/set-up-emacs-instance-persistence)
-	 (auto-save . tychoish/set-up-auto-save))
-  :init
-  (if (daemonp)
-      (add-hook 'server-after-make-frame-hook 'tychoish/desktop-read-init)
-    (add-hook 'window-setup-hook 'tychoish/desktop-read-init)))
-
 (use-package auto-package-update
   :ensure t
   :commands (auto-package-update-maybe auto-package-update-now)
@@ -125,10 +49,12 @@
   :defines (modus-themes-deuteranopia modus-themes-common-palette-overrides)
   :init
   (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
+
   (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
     (setq-default custom-theme-directory theme-directory)
     (add-to-list 'custom-theme-load-path theme-directory)
     (add-to-list 'load-path theme-directory))
+
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
         '((border-mode-line-active bg-mode-line-active)
@@ -154,8 +80,6 @@
 
 (use-package doom-modeline
   :ensure t
-  :bind (:map tychoish/theme-map
-	 ("i" . toggle-modeline-icons))
   :hook ((after-init . doom-modeline-mode))
   :commands (doom-modeline-mode
              tychoish-legacy-mode-line)
@@ -178,13 +102,17 @@
   (setq doom-modeline-irc-stylize 'identity)
   (setq doom-modeline-irc t)
 
-;  (create-toggle-functions doom-modeline-icon)
+  (create-toggle-functions doom-modeline-icon)
+
+  (bind-key "i" #'toggle-doom-modeline-icon tychoish/theme-map)
+
+  (add-hook 'after-init-hook 'turn-on-doom-modeline-icon)
+
   (defun my-doom-modeline--font-height ()
     "Calculate the actual char height of the mode-line."
     (/ (frame-char-height) 4))
 
-  (advice-add #'doom-modeline--font-height :override #'my-doom-modeline--font-height)
-  (add-hook 'after-init-hook 'turn-on-doom-modeline-icon))
+  (advice-add #'doom-modeline--font-height :override #'my-doom-modeline--font-height))
 
 (use-package winum
   :ensure t
@@ -270,7 +198,7 @@
 (use-package git-grep
   :ensure t
   :bind (:map tychoish/ecclectic-grep-project-map
-              ("g" . git-grep)))
+         ("g" . git-grep)))
 
 (use-package ripgrep
   :ensure t
@@ -450,7 +378,6 @@
 	 ("m" . tychoish-blog-insert-date)
          ("p" . tychoish-blog-publish-post)
          ("n" . tychoish-blog-create-post)
-         ("C-p" . tychoish-blog-push)
          ("d" . tychoish-blog-open-drafts-dired))
   :commands (make-filename-slug
              tychoish/define-project-notes)
@@ -566,7 +493,6 @@
 		     (-distinct))))
 
   (defun cape--project-buffers ()
-    "ok does this work now df"
     (let ((directory (approximate-project-root)))
       (cape--buffer-list (lambda (buf)
 			   (string-prefix-p directory (buffer-file-name buf))))))
@@ -580,7 +506,7 @@
   (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup)
 
   (add-hook 'completion-at-point-functions #'yasnippet-capf)
-  (add-hook 'completion-at-point-functions (cape-capf-inside-code #'cape-keyword))
+  (add-hook 'completion-at-point-functions (cape-capf-wrapper cape-capf-inside-code cape-keyword))
   (add-hook 'completion-at-point-functions #'cape-rfc1345)
   (add-hook 'completion-at-point-functions #'cape-emoji)
   (add-hook 'completion-at-point-functions #'cape-file)
@@ -628,14 +554,13 @@
 
 (use-package prescient
   :ensure t
-  :hook (emacs-statup. prescient-persist-mode)
+  :hook (emacs-statup . prescient-persist-mode)
   :config
   (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
   (setq prescient-sort-full-matches-first t)
   (setq prescient-completion-highlight-matches t)
   (setq prescient-sort-length-enable nil)
   (setq completion-preview-sort-function #'prescient-completion-sort)
-  :config
   (setq prescient-save-file (tychoish/conf-state-path "prescient.el")))
 
 (use-package vertico
@@ -925,8 +850,6 @@
 		(thing-at-point 'filename)
 		"./"))
 
-
-
   (consult-customize consult-ripgrep consult-git-grep consult-grep consult-ag consult-rg
    :require-match nil
    :group nil
@@ -963,6 +886,8 @@
   :commands (consult-gh))
 
 (use-package consult-ag
+  :vc (:url "https://github.com/abrochard/consult-ag" :rev "cf740cc")
+  :ensure t
   :bind (("M-g a" . consult-ag)
 	 :map tychoish/ecclectic-ag-grep-map
 	 ("g" . consult-ag)

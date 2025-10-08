@@ -1,6 +1,7 @@
 ;;; consult-sardis.el --- sards cmdr consult helpers -*- lexical-binding: t -*-
 
 (require 'consult)
+(require 'tychoish-common)
 
 (defun tychoish/compile--post-hook-collection (selection buffer-name started-at)
   (let* ((end-at (current-time))
@@ -62,10 +63,9 @@
     (with-current-buffer (get-buffer-create op-buffer-name)
       (add-hygenic-one-shot-hook
        :name task-id
-       :hook compilation-finish-functions
-       :function (lambda ()
-		   (tychoish/compile--post-hook-collection
-		    selection op-buffer-name start-at))
+       :hook 'compilation-finish-functions
+       :function (tychoish/compile--post-hook-collection
+		  selection op-buffer-name start-at)
        :local t)
 
       (save-excursion

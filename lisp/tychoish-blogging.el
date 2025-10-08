@@ -53,18 +53,6 @@
     "[^A-Za-z0-9]" "-"
     (string-clean-whitespace s))))
 
-(defun tychoish-blog-push ()
-  "Run 'make push' in a compile buffer for the project."
-  (interactive)
-  (let ((compile-buffer-name "*tychoish-blog-push*")
-        (push-command "make push")
-        ;; set's the context for the command
-        (default-directory tychoish-blog-path))
-
-    (when (tychoish-compile-buffer compile-buffer-name push-command)
-      (recompile))
-    (revbufs)))
-
 (defun tychoish-blog-create-post (title)
   "Create a new file for a post of with the specified TITLE."
   (interactive "sPost Title: ")

@@ -139,7 +139,7 @@
 (cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
   "Find "
   (let ((buffer-table (ht-create))
-        (default-names (list "build" "compilation" "test" "lint" "check" "benchmark" "run")))
+        (default-names (list "build" "compilation" "test" "lint" "check" "benchmark" "run" "push")))
     (when name
       (cl-pushnew name default-names :test #'equal))
 

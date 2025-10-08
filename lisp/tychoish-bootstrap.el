@@ -219,6 +219,8 @@
 
 (setq lpr-add-switches "-T ''")
 
+(setq electric-pair-inhibit-predicate #'tychoish/electric-pair-inhibition)
+
 (setq byte-compile-warnings
       ;; OMIT: free-vars docstrings-wide
       '(callargs
@@ -261,7 +263,7 @@
 
 (defun tychoish/set-up-emacs-instance-persistence ()
   (with-silence
-   (recentf-mode t)
+   (recentf-mode 1)
    (savehist-mode 1))
 
   (with-eval-after-load 'consult
@@ -272,6 +274,7 @@
   (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
   (setq custom-file (tychoish/conf-state-path "custom.el"))
+
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)
   (setq recentf-auto-cleanup 'never)
@@ -289,17 +292,16 @@
       (setq desktop/time-since-last-save (current-time)))))
 
 (defun tychoish/desktop-read-init ()
-  (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
-  (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
-  (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-  (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
-
   ;; only read the desktop if we're not in the "solo" (no ID) emacs
   ;; instance.
-  ;;
-  ;; TODO This should get a better runtime/feature flag (and have
-  ;; a list of instance names that are epehemral)
   (unless (equal "solo" tychoish/emacs-instance-id)
+    ;; TODO This should get a better runtime/feature flag (and have
+    ;; a list of instance names that are epehemral)
+    (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
+    (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
+    (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
+    (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
+
     (if (daemonp)
         (progn
           (setq desktop-restore-frames t)
@@ -309,16 +311,16 @@
       (setq desktop-load-locked-desktop nil))
 
     (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
-      (let ((gc-cons-threshold 80000000)
-            (with-silence (desktop-read)))))
+      (with-gc-suppressed
+       (with-file-name-handler-disabled
+	(with-silence (desktop-read)))))
 
-    (set-to-current-time-on-startup desktop/last-save-time)
+    (require 'desktop)
     (setq desktop-save t)
-    (add-hook 'after-save-hook 'tychoish/desktop-save))
+    (setq desktop/last-save-time (current-time))
 
-  ;; the desktop package loads lazily during the desktop-read function
-  ;; call, so there are init errors if we don't call this in the block
-  (with-eval-after-load 'desktop
+    (add-hook 'after-save-hook 'tychoish/desktop-save)
+
     (add-to-list 'desktop-globals-to-save 'register-alist)
     (add-to-list 'desktop-globals-to-save 'file-name-history)
     (add-to-list 'desktop-modes-not-to-save 'dired-mode)
@@ -339,18 +341,11 @@
                   "^/usr/lib/go/.*\\|"
                   "^/usr/lib/rustlib/.*\\|"
                   "^/home.+go/pkg/mod\\|"
-                  "^/home.+\\.cargo")))
-
-  ;; now remove this function from the hook so that we don't reload on
-  ;; frame creation, accidentally
-  (if (daemonp)
-      (remove-hook 'server-after-make-frame-hook #'tychoish/desktop-read-init)
-    (remove-hook 'window-setup-hook #'tychoish/desktop-read-init)))
+                  "^/home.+\\.cargo"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; silent startup -- avoid printing or using the Messages buffer
-
 
 (defun display-startup-echo-area-message ()
   "Called during setup, intentially a noop, which omit the message."  nil)
@@ -398,10 +393,24 @@
   (column-number-mode 1)
   (delete-selection-mode 1)
   (transient-mark-mode 1)
-  (xterm-mouse-mode 1))
+  (xterm-mouse-mode 1)
+  (electric-pair-mode 1)
+  (which-key-mode 1)
+
+  (add-hygenic-one-shot-hook
+   :name "restore-desktop"
+   :hook (if (daemonp)
+	     'server-after-make-frame-hook
+	   'window-setup-hook)
+   :function #'tychoish/desktop-read-init))
 
 (defun tychoish/emacs-startup-operations ()
   (global-auto-revert-mode 1)
+  (add-hook 'auto-save-mode-hook 'tychoish/set-up-auto-save)
+  (add-hook 'prescient-persist-mode-hook 'tychoish/set-up-emacs-instance-persistence)
+
+  (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
+  (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))
 
   (delight 'auto-revert-mode)
   (delight 'eldoc-mode)
@@ -547,18 +556,20 @@
 ;;; that are included with emacs by default and that already have
 ;;; appropriate autoloads.
 
-(add-hook 'emacs-startup-hook 'electric-pair-mode)
-(add-hook 'emacs-startup-hook 'which-key-mode)
+(add-hook 'text-mode-hook 'tychoish/set-up-show-whitespace)
+(add-hook 'prog-mode-hook 'tychoish/set-up-show-whitespace)
+(add-hook 'after-init-hook 'tychoish/after-init-operations)
+(add-hook 'emacs-startup-hook 'tychoish/emacs-startup-operations)
+(add-hook 'emacs-startup-hook 'tychoish-set-up-user-local-config)
+
 (add-hook 'which-key-mode-hook 'which-key-setup-side-window-bottom)
 (add-hook 'abbrev-mode-hook 'tychoish/load-abbrev-files)
 
 (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
-(setq electric-pair-inhibit-predicate #'tychoish/electric-pair-inhibition)
 
 (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
 (add-hook 'LaTeX-mode-hook 'visual-line-mode)
 (add-hook 'LaTeX-mode-hook 'turn-off-auto-fill)
-(add-hook 'eshell-mode #'eshell-cmpl-initialize)
 
 (add-to-list 'auto-mode-alist '("\\.tex'" . LaTeX-mode))
 
@@ -582,6 +593,9 @@
 (add-to-list 'auto-mode-alist '("\\.zshrc$'" . sh-mode))
 (add-to-list 'auto-mode-alist '("\\.bash_profile$'" . sh-mode))
 
+(with-eval-after-load 'em-cmpl
+  (add-hook 'eshell-mode #'eshell-cmpl-initialize))
+
 (with-eval-after-load 'comint
   (bind-keys :map comint-mode-map
              ("M-n" . comint-next-input)
@@ -593,26 +607,12 @@
 
 ;; macros -- configuration and setup
 
-(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
-  (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
-        (default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
-    `(progn
-       (defun ,local-function-symbol ()
-         (interactive)
-         (setq-local gptel-model ,model)
-         (setq-local gptel-backend ,backend))
-
-       (defun ,default-function-symbol ()
-         (interactive)
-         (setq-default gptel-model ,model)
-         (setq-default gptel-backend ,backend))
-
-       (bind-keys :map gptel-mode-map
-                  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-                  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)))))
+(defconst tychoish/mail-id-template "tychoish-mail-%s")
 
 (defvar tychoish/mail-accounts (ht-create #'equal))
 (defvar tychoish/mail-account-current nil)
+
+(defvar mu4e-get-mail-command "true")
 
 (cl-deftype signature-source '(signature-file
                                signature-directory
@@ -620,12 +620,12 @@
 
 (cl-defstruct (tychoish--mail-account
                (:constructor tychoish--make--mail-account
-                             (&key id maildir name address keybinding signature signature-kind signature fetchmail
+                             (&key id maildir name address keybinding signature signature-kind fetchmail
                               &aux (maildir (cond
                                              ((null maildir) (f-expand "~/mail"))
                                              ((not (stringp maildir)) (user-error "maildir must be a string"))
                                              ((not (f-directory-p maildir)) (user-error "maildir does not exist"))
-                                             (t (f-expand maildir))))g
+                                             (t (f-expand maildir))))
                                    (signature-kind (cond
                                                     ((eq (type-of signature) 'signature-source) signature)
                                                     ((not (eq (type-of signature) 'string)) (user-error "invalid type for signature"))
@@ -686,12 +686,16 @@
    :documentation "content or filename of signature"
    :type 'string))
 
-(defconst tychoish/mail-id-template "tychoish-mail-%s")
-
-(defvar mu4e-get-mail-command "true")
-
 (cl-defmacro tychoish/define-mail-account
-    (&key name address key id (command mu4e-get-mail-command) (maildir (expand-file-name "~/mail")) (instances '()) (systems '()))
+    (&key name address key id
+	  (command mu4e-get-mail-command)
+	  (maildir (expand-file-name "~/mail"))
+	  (instances '())
+	  (systems '())
+	  default)
+
+  (unless (and name address key id)
+    (user-error "cannot define mail account without name, address, key and id %S" `(:name ,name :address ,address :key ,key :id ,id)))
 
   (let* ((account-name (format tychoish/mail-id-template id))
          (configure-account-symbol (intern account-name)))
@@ -714,61 +718,84 @@
         (add-hook 'emacs-startup-hook configure-account-symbol)))
 
     (dolist (sysn systems)
-      (when (and (stringp) (string-equal sysn (system-name)))
+      (when (and (stringp sysn) (string-equal sysn (system-name)))
         (add-hook 'emacs-startup-hook configure-account-symbol)))
 
-  `(defun ,configure-account-symbol ()
-     (interactive)
+    `(progn
+       (defun ,configure-account-symbol ()
+	 (interactive)
 
-     (let* ((account-id ,id)
-            (account-name ,account-name)
-            ;; nothing beyond this point should access compilation env ->
-            (conf (ht-get tychoish/mail-accounts account-name))
-            (maildir (tychoish--mail-account-maildir conf)))
+	 (let* ((account-id ,id)
+		(account-name ,account-name)
+		;; nothing beyond this point should access compilation env ->
+		(conf (ht-get tychoish/mail-accounts account-name))
+		(maildir (tychoish--mail-account-maildir conf)))
 
-       (setq tychoish/mail-account-current account-name)
-       (setq message-directory maildir)
-       (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
-       (setq mu4e-mu-home (f-join maildir ".mu"))
-       (setq message-auto-save-directory (f-join maildir "drafts"))
+	   (setq tychoish/mail-account-current account-name)
+	   (setq message-directory maildir)
+	   (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
+	   (setq mu4e-mu-home (f-join maildir ".mu"))
+	   (setq message-auto-save-directory (f-join maildir "drafts"))
 
-       (let ((signature-kind (tychoish--mail-account-signature-kind conf))
-             (signature (tychoish--mail-account-signature conf))
-             (address (tychoish--mail-account-address conf))
-             (given-name (tychoish--mail-account-name conf)))
+	   (let ((signature-kind (tychoish--mail-account-signature-kind conf))
+		 (signature (tychoish--mail-account-signature conf))
+		 (address (tychoish--mail-account-address conf))
+		 (given-name (tychoish--mail-account-name conf)))
 
-         (cond
-          ((eq signature-kind 'signature-directory)
-           (setq message-signature-directory (or signature (f-join maildir "tools" "signatures")))
-           (setq message-signature-file (or address account-id account-name))
-           (setq message-signature t))
-          ((eq (tychoish--mail-account-signature-kind conf) 'signature-file)
-           (setq message-signature-directory nil)
-           (setq message-signature-file signature)
-           (setq message-signature t))
-          ((eq (tychoish--mail-account-signature-kind conf) 'signature-text)
-           (setq message-signature-directory nil)
-           (setq message-signature-file nil)
-           (setq message-signature signature)))
+             (cond
+              ((eq signature-kind 'signature-directory)
+               (setq message-signature-directory (or signature (f-join maildir "tools" "signatures")))
+               (setq message-signature-file (or address account-id account-name))
+               (setq message-signature t))
+              ((eq (tychoish--mail-account-signature-kind conf) 'signature-file)
+               (setq message-signature-directory nil)
+               (setq message-signature-file signature)
+               (setq message-signature t))
+              ((eq (tychoish--mail-account-signature-kind conf) 'signature-text)
+               (setq message-signature-directory nil)
+               (setq message-signature-file nil)
+               (setq message-signature signature)))
 
-         (setq user-mail-address address)
-         (setq message-signature-file address)
-         (setq user-full-name given-name)
-         (setq mu4e-compose-reply-to-address address)
-         (setq mu4e-reply-to-address address)
+             (setq user-mail-address address)
+             (setq message-signature-file address)
+             (setq user-full-name given-name)
+             (setq mu4e-compose-reply-to-address address)
+             (setq mu4e-reply-to-address address)
 
-         (setq mail-host-address (s-replace-regexp ".*@" "" address))
-         (setq message-sendmail-extra-arguments (list "-a" address))
+             (setq mail-host-address (s-replace-regexp ".*@" "" address))
+             (setq message-sendmail-extra-arguments (list "-a" address))
 
-         (when (eq major-mode 'mu4e-compose-mode)
-           (goto-char (point-min))
-           (let ((new-from (format "From: %s <%s>" given-name address)))
-             (while (re-search-forward "^From:.*$" nil t 1)
-               (replace-match new-from))))
+             (when (eq major-mode 'mu4e-compose-mode)
+               (goto-char (point-min))
+               (let ((new-from (format "From: %s <%s>" given-name address)))
+		 (while (re-search-forward "^From:.*$" nil t 1)
+		   (replace-match new-from))))
 
-         (setq mu4e-get-mail-command (tychoish--mail-account-fetchmail conf))
+             (setq mu4e-get-mail-command (tychoish--mail-account-fetchmail conf))
 
-         (message (format "mail: configured address [%s]" address)))))))
+             (message (format "mail: configured address [%s]" address)))))
+
+       ,(when default
+	  (add-hook 'emacs-startup-hook configure-account-symbol)))))
+
+
+(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
+  (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
+        (default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
+    `(progn
+       (defun ,local-function-symbol ()
+         (interactive)
+         (setq-local gptel-model ,model)
+         (setq-local gptel-backend ,backend))
+
+       (defun ,default-function-symbol ()
+         (interactive)
+         (setq-default gptel-model ,model)
+         (setq-default gptel-backend ,backend))
+
+       (bind-keys :map gptel-mode-map
+                  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
+                  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)))))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

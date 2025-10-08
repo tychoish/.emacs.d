@@ -1,7 +1,39 @@
 ;; -*- lexical-binding: t; -*-
 
 (require 'f)
+(require 's)
 (require 'dash)
+
+(eval-when-compile
+  (require 'ht))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; keybindings
+
+(bind-keys ("M-<up>" . move-text-up)
+           ("M-<down>" . move-text-down)
+	   :prefix "C-c f"
+	   :prefix-map tychoish/display-map
+	   ("=" . text-scale-increase)
+           ("-" . text-scale-decrease)
+           ("0" . text-scale-reset)
+	   :map tychoish/display-map ;; "C-c f"
+	   :prefix "o"
+	   :prefix-map tychoish/display-opacity-map
+           ("=" . opacity-increase)
+           ("-" . opacity-decrease)
+           ("0" . opacity-reset))
+
+(bind-keys :prefix "C-c t"
+	   :prefix-map tychoish-core-map
+           ("w" . toggle-local-whitespace-cleanup)
+	   :map tychoish-core-map ;; "C-c t"
+	   :prefix "t"
+	   :prefix-map tychoish/theme-map
+           ("r" . disable-all-themes) ;; reset
+	   ("d" . tychoish-load-dark-theme)
+	   ("l" . tychoish-load-light-theme))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -18,6 +50,10 @@
         cli/instance-id
         tychoish/emacs-instance-id
         "solo")))
+
+(defun tychoish/set-up-instance-name ()
+  (unless tychoish/emacs-instance-id
+    (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))))
 
 (defun tychoish/conf-emacs-host-and-instance ()
   (list
@@ -219,17 +255,13 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (-flatten-n 1 list))
 
 (defalias '-flat-map #'mapcan)
-
 (defalias '-mapc #'mapc)
-
 (defalias '-join #'nconc)
 (defalias '-append #'append)
 
 (defalias '-l #'list)
 (defalias 'll #'list)
 (defalias '-- #'list)
-
-
 
 (defmacro --flat-map (form input-list)
   (declare (debug (def-form form)))
@@ -324,7 +356,8 @@ the list."
 
 ;; `f.el' -- extensions and additions
 
-(defun f-mtime (filename)(file-attribute-modification-time (file-attributes filename)))
+(defun f-mtime (filename)
+  (file-attribute-modification-time (file-attributes filename)))
 
 (defmacro f-file-has-extension-function (extension)
   `(lambda (filename) (f-ext-p filename ,extension)))
@@ -353,7 +386,7 @@ the list."
    ((stringp path)
     (cond
      ((f-directory-p path) (f-entries path #'f-file-p))
-     ((f-file-p path) (f-entries (f-dirname path) #'file-p))))
+     ((f-file-p path) (f-entries (f-dirname path) #'f-file-p))))
    ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
 
 (defmacro f-directories-containing-file-function (filename &rest files)
@@ -409,7 +442,7 @@ the list."
      ,@(mapcar (lambda (def)
                  `(defun ,(car def) ()
 		    (interactive)
-		    (,setter ,value ,(cdr def))))
+		      (,setter ,value ,(cadr def))))
 	       ops))))
 
 (defmacro with-silence (&rest body)
@@ -436,24 +469,38 @@ the list."
      ,@body
      map))
 
-(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil))
-  (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym)))))
+(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil) (depth 0))
+  (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym))))
+	(hook (if (symbolp hook)
+		  hook
+		(eval hook))))
     `(progn
-       (add-hook ',hook ',cleanup nil ,local)
+       (add-hook ',hook #',cleanup ,depth ,local)
        (defun ,cleanup ,args
-	 (if ,args
-	     (apply #',function ,args)
-	   (apply-partially #',function ,args))
-         (remove-hook ',hook ',cleanup)
+	 ,(if (functionp function)
+	      (if (null args)
+		  `(funcall ,function)
+		`(apply ,function ,args))
+	    `,@function)
+         (remove-hook ',hook #',cleanup ,local)
          (unintern ',cleanup))
        #',cleanup)))
 
-(defmacro set-to-current-time-on-startup (variable)
+(cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
     `(progn
-       (add-hook 'emacs-startup-hook ',operation)
+       (add-hook 'emacs-startup-hook ',operation ,depth)
        (defun ,operation ()
 	 (setq ,variable (current-time))))))
+
+(cl-defmacro setq-when-nil (variable value &optional &key local)
+  (unless (boundp variable)
+    (user-error "can only `set-when-nil' with variables that are already defined."))
+
+  `(unless ,variable
+     ,(let ((setter (if local 'setq-local 'setq))
+	    (resolved-value (if (functionp value) (funcall value) value)))
+	`(,setter ,variable ,resolved-value))))
 
 (defmacro with-timer (name &rest body)
   "Report on NAME and the time taken to execute BODY."
@@ -547,6 +594,7 @@ the list."
   (interactive "nTab width: ")
   (setq-local tab-width num-spaces))
 
+;;;###autoload
 (defun font-lock-show-tabs ()
   "Return a font-lock style keyword for tab characters."
   '(("\t" 0 'trailing-whitespace prepend)))
@@ -561,6 +609,7 @@ the list."
     (remove-hook 'before-save-hook 'whitespace-cleanup)
     (message "turned off whitespace-cleanup for '%s'" (buffer-file-name (current-buffer)))))
 
+;;;###autoload
 (defun font-lock-width-keyword (width)
   "Return a font-lock style keyword for strings beyond WIDTH that use `font-lock-warning-face'."
   `((,(format "^%s\\(.+\\)" (make-string width ?.))
@@ -660,7 +709,33 @@ interactively then remove duplicate items from the `kill-ring'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; bulk buffer killing -- kill groups of buffers efficeiently
+;; bulk buffer killing -- kill groups of buffers efficiently
+
+(defun buffers-matching-path (regexp &optional internal-too)
+  (->> (buffer-list)
+       (--keep (let* ((buffer it)
+		     (name (buffer-file-name buffer)))
+		(when (and name (not (string-equal name ""))
+			   (or internal-too (/= (aref name 0) ?\s))
+			   (string-match regexp name))
+		  buffer)))))
+
+(defun buffers-matching-mode (mode)
+  (->> (buffer-list)
+       (--select (with-current-buffer it (eq major-mode mode)))
+       (mapc #'kill-buffer)))
+
+(defun buffers-matching-project (thing)
+  (cond
+   ((or (bufferp thing) (and (stringp thing) (get-buffer thing)))
+    (with-current-buffer thing
+      (buffers-matching-path (approximate-project-root))))
+   ((and (stringp thing)
+	 (f-exists-p thing))
+    (->> (buffer-list)
+	 (--keep (f-equal-p thing (buffer-file-name it)))
+	 (-distinct)
+	 (--flat-map (with-current-buffer it (buffers-matching-path (approximate-project-root))))))))
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 
@@ -674,16 +749,13 @@ Ignores buffers whose name starts with a space, unless optional
 prefix argument INTERNAL-TOO is non-nil.  Asks before killing
 each buffer, unless NO-ASK is non-nil."
   (interactive "sKill buffers visiting a path matching this regular expression: \n")
-  (let ((count 0))
-    (dolist (buffer (buffer-list))
-      (let ((name (buffer-file-name buffer)))
-	(when (and name (not (string-equal name ""))
-                   (or internal-too (/= (aref name 0) ?\s))
-                   (string-match regexp name))
-          (when (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)
-	    (setq count (+ 1 count))))))
+  (let ((count (->> (buffers-matching-path regexp internal-too)
+		    (--map (when (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)
+			     1))
+		    (-reduce #'+))))
     (message "killed %d buffers matching '%S'" count regexp)))
 
+;;;###autoload
 (defun kill-buffers-matching-mode (mode)
   "Kill all buffers matching the symbol defined by MODE.
 Returns the number of buffers killed."
@@ -693,10 +765,11 @@ Returns the number of buffers killed."
      obarray  ;; collection
      (lambda (symbol) (s-ends-with? "-mode" (symbol-name symbol)))
      t nil nil major-mode))))
- (message "killing all buffers with mode \"%s\"" mode)
- (length (->> (buffer-list)
-	      (--select (with-current-buffer it (eq major-mode mode)))
-	      (mapc #'kill-buffer))))
+  (let* ((buffers (buffers-matching-mode mode))
+	 (count (length buffers)))
+    (message "killing all buffers (%d) with mode \"%s\"" count mode)
+    (mapc #'kill-buffer buffers)
+    count))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -742,7 +815,7 @@ Returns the number of buffers killed."
   (string-trim-non-word-chars
    (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
        (when (featurep 'projectile) (projectile-project-name))
-       (when (project-current))
+       (when (project-current) (project-root (project-current)))
        (f-filename (expand-file-name default-directory)))))
 
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (projectile-project-root)))
