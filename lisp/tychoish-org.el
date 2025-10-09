@@ -1,7 +1,16 @@
 ;;  -*- lexical-binding: t -*-
 
+(require 'f)
+(require 's)
+(require 'dash)
+
 (require 'org)
 (require 'org-contrib)
+(require 'org-capture)
+(require 'org-agenda)
+
+(require 'tychoish-common)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; org-mode extensions and supporting packages
@@ -57,12 +66,6 @@
 
 ;; key bindings
 
-(defvar-keymap tychoish/org-gist-map
-  :name "org-gist"
-  :doc "keymap for org-gist commands"
-  "p" #'org-gist-export-private-gist
-  "g" #'org-gist-export-public-gist)
-
 ;; bind keys inside of org-mode
 (bind-keys :map org-mode-map
            ("C-c l o" . org-link-open-from-string)
@@ -81,8 +84,8 @@
            ("p" . org-insert-property-drawer)
            ("w" . org-refile)
            ("d" . tychoish-org-date-now)
-           ("i" . org-ctags-create-tags)
-	   ("g" . tychoish/org-gist-map)
+           ;; ("i" . org-ctags-create-tags)
+	   ;; ("g" . tychoish/org-gist-map)
            :map tychoish/org-mode-personal-map
            :prefix "c"
            :prefix-map tychoish/org-mode-capture-map
@@ -92,6 +95,9 @@
            ("t" . org-capture-goto-target)
            ("r" . org-capture-refile)
            ("w" . org-capture-refile)
+	   :map org-agenda-mode-map
+	   ("C-l" . org-agenda-open-link)
+	   ("M-c" . org-agenda-goto-calendar)
            :map tychoish/org-mode-personal-map
            :prefix "f"
            :prefix-map tychoish/org-mode-personal-archive-map
@@ -100,27 +106,11 @@
            ("t" . org-archive-set-tag)
            ("s" . org-archive-to-archive-sibling))
 
-(with-eval-after-load 'org-agenda
-  (bind-keys :map org-agenda-mode-map
-	     ("C-l" . org-agenda-open-link)
-	     ("M-c" . org-agenda-goto-calendar)))
-
-(with-eval-after-load 'org-contrib
-  (with-eval-after-load 'org-bibtex-extras
-    (bind-keys :map tychoish/org-mode-personal-map
-               :prefix "r"
-               :prefix-map tychoish/org-mode-personal-bibtex-map
-               ("m" . org-bibtex-create)
-               ("e" . org-bibtex)
-               ("k" . org-bibtex-export-to-kill-ring)
-               ("r" . org-bibtex-create-in-current-entry))))
-
 (with-eval-after-load 'helm
   (bind-keys :map tychoish/helm-center-menu-map
              :prefix "o"
              :prefix-map tychoish/org-mode-personal-helm-map
              ("b" . helm-org-in-buffer-headings)
-             ("c" . helm-capture-templates)
              ("p" . helm-org-parent-headings)
              ("a" . helm-org-agenda-files-headings)))
 
@@ -134,6 +124,13 @@
 	     ("j" . consult-org-capture)
 	     ("h" . consult-org-capture-target)))
 
+(defvar-keymap tychoish/org-gist-map
+  :name "org-gist"
+  :doc "keymap for org-gist commands"
+  "p" #'org-gist-export-private-gist
+  "g" #'org-gist-export-public-gist)
+
+(bind-key "g" 'tychoish/org-gist-map tychoish/org-mode-personal-map)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -257,7 +254,9 @@
   "mark done and move to completed archive sibling"
   (interactive)
   (org-todo 'done)
+  (require 'org-archive)
   (let ((org-archive-sibling-heading "Completed"))
+    (ignore org-archive-sibling-heading)
     (org-archive-to-archive-sibling)))
 
 (defun org-set-weekday-of-timestamp ()

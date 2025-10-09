@@ -34,6 +34,8 @@
 ;;; Code:
 
 (require 'f)
+(require 'consult-builder)
+(require 'yasnippet)
 
 (defvar tychoish-blog-path (expand-file-name "~/blog")
   "Path to the blog's project directory.")
@@ -85,7 +87,8 @@
       (insert "\n"))
     (message "new note: %s" draft-fn)))
 
-(cl-defmacro tychoish/define-project-notes (&key project path)
+;;;###autoload
+(cl-defmacro tychoish-define-project-notes (&key project path)
   (let ((symbol (intern (format "tychoish/create-%s-note" project)))
 	(path (expand-file-name path)))
     `(defun ,symbol (name)

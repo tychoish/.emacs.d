@@ -25,8 +25,16 @@
 
 ;;; Code:
 
-(require 'consult)
 (require 'ht)
+(require 'dash)
+(require 's)
+(require 'f)
+
+(require 'consult)
+(require 'consult-org)
+
+(require 'tychoish-common)
+(require 'consult-builder)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -240,34 +248,9 @@ entry of `org-capture-templates'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; consult-tycho: mail
-
-;;;###autoload
-(defun tychoish-mail-select-account (account-id)
-  "Use consult to select an account/mail configuration."
-
-  (interactive
-   (list (let ((table (ht-create)))
-	   (ht-map (lambda (key account)
-		     (ht-set table key (format "%s <%s>%s"
-					       (tychoish--mail-account-name account)
-					       (tychoish--mail-account-address account)
-					       (or (when (equal tychoish/mail-account-current key) " -- CURRENT") ""))))
-		   tychoish/mail-accounts)
-	   (consult-tycho--read-annotated
-	    table
-	    :prompt "mail-account => "
-	    :require-match nil
-	    :command 'tychoish-mail-select-account
-	    :category 'consult-mu))))
-
-  (let ((select-account-operation (intern account-id)))
-    (funcall select-account-operation)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; consult-tycho: helpers for working with consult
 
+;;;###autoload
 (cl-defun consult-tycho--read-annotated (table &key (prompt "=> ") require-match category (command this-command))
   (unless (ht-p table)
     (user-error "must specify annotated table as a hashmap of options to annotations"))

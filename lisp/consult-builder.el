@@ -4,7 +4,10 @@
 (require 'ht)
 (require 'dash)
 (require 'f)
+
 (require 'tychoish-common)
+
+(require 'compile)
 
 ;;;###autoload
 (defun tychoish/compile-project (&optional name command)

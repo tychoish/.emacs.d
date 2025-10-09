@@ -185,6 +185,11 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;; strings -- helper functions for handling strings
 
+(defun symbol-join (&rest parts)
+  (->> parts
+       (-filter #'stringp)
+       (s-join "-")))
+
 (defun trimmed-string-or-nil (value)
   (and (stringp value)
        (unless (string-empty-p (setq value (string-trim value))) value)
@@ -391,7 +396,7 @@ the list."
 
 (defmacro f-directories-containing-file-function (filename &rest files)
   (let ((filenames (cons filename files)))
-  `(defun ,(intern (format "f-directories-containing-file-%s" (string-replace "." "-" (downcase filename)))) (path &rest paths)
+  `(defun ,(intern (symbol-join "f-directories-containing-file" (string-replace "." "-" (downcase filename)))) (path &rest paths)
      (let ((filenames (list ,@filenames))
 	   (paths (cons path paths)))
        (->> paths
@@ -424,21 +429,26 @@ the list."
     `(defun ,function-name nil
        (run-hooks (intern ,hook-name)))))
 
-(cl-defmacro create-toggle-functions (value &optional &key local)
+(cl-defmacro create-toggle-functions (value &optional &key local keymap key)
   (let* ((name (symbol-name value))
+	 (suffix (when local "local"))
 	 (ops (list
-	       `(,(intern (concat "turn-on-" name)) t)
-	       `(,(intern (concat "turn-off-" name)) nil)
-	       `(,(intern (concat "toggle-" name )) (not ,value))))
+	       `(,(intern (symbol-join "turn-on" name suffix)) t)
+	       `(,(intern (symbol-join "turn-off" name suffix)) nil)
+	       `(,(intern (symbol-join "toggle" name suffix)) (not ,value))))
 	 (setter (if local 'setq-local 'setq)))
 
+
+    (when (and keymap (not key))
+      (user-error "must define both keymap and a key"))
+
     `(progn
-       ,@(--map `(defun ,(if local
-			     (intern (concat (symbol-name (car it)) "-local"))
-			   (car it)) ()
+       ,@(--map `(defun ,(car it) ()
 		 (interactive)
 		 (,setter ,value ,(cadr it)))
-       ops))))
+       ops)
+    ,(when keymap
+       `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
 
 (defmacro with-silence (&rest body)
   "Totally suppress message from either the minibuffer or the *Messages* buffer.."
@@ -464,19 +474,20 @@ the list."
      ,@body
      map))
 
-(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil) (depth 0))
-  (let ((cleanup (intern (format "hygenic-one-shot-%s-%s" name (gensym))))
-	(hook (if (symbolp hook)
+(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil) (depth 0) (make-unique nil))
+  (let* ((unique-tag (or (when make-unique (gensym "hook-"))
+			 (make-symbol "hook")))
+	 (cleanup (intern (symbol-join "hygenic-one-shot" name (symbol-name unique-tag))))
+	 (hook (if (symbolp hook)
 		  hook
-		(eval hook))))
+		 (eval hook))))
+
     `(progn
        (defun ,cleanup ,args
 	 (apply ,function ,args)
-         (remove-hook ',hook #',cleanup ,local)
+         (remove-hook ',hook ',cleanup ,local)
          (unintern ',cleanup obarray))
-       (add-hook ',hook #',cleanup ,depth ,local)
-
-       #',cleanup)))
+       (add-hook ',hook ',cleanup ,depth ,local))))
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
@@ -499,14 +510,6 @@ the list."
   `(let ((time (current-time)))
      ,@body
      (message "%s: %.06fs" ,name (float-time (time-since time)))))
-
-(defmacro with-slow-op-timer (name threshold &rest body)
-  "Send a message the BODY operation of NAME takes longer to execute than the THRESHOLD."
-  `(let* ((time (current-time))
-	  (return-value ,@body)
-	  (duration (time-to-seconds (time-since time))))
-     (when (> duration  ,threshold)
-       (message "%s: %.06fs" ,name duration))))
 
 (defun compile-buffer-name (name)
   `(lambda (&optional _) ,name))
@@ -548,8 +551,9 @@ the list."
     (when was-soft-wrapping
       (tychoish-show-wrapping-mode))))
 
-(defun toggle-word-wrap ()
+(defun toggle-word-wrap (&optional arg)
   (interactive)
+  (when arg (user-error "ambiguous argument to `toggle-word-wrap'"))
   (if auto-fill-function
       (turn-on-soft-wrap)
     (turn-on-hard-wrap)))

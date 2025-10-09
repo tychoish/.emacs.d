@@ -63,11 +63,12 @@
 
     (with-current-buffer (get-buffer-create op-buffer-name)
       (add-hygenic-one-shot-hook
-       :name task-id
+       :name "task-id"
        :hook 'compilation-finish-functions
+       :local t
+       :make-unique t
        :function (lambda () (tychoish/compile--post-hook-collection
-			     selection op-buffer-name start-at))
-       :local t)
+			     selection op-buffer-name start-at)))
 
       (save-excursion
         (goto-char (point-min))

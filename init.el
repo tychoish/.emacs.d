@@ -18,9 +18,19 @@
   `(let ((file-name-handler-alist nil))
      ,@body))
 
+(cl-defmacro with-slow-op-timer (name &rest body)
+  "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
+  (let ((threshold 0.01))
+    `(let* ((inhibit-message t)
+	    (time (current-time))
+	    (return-value (progn ,@body))
+	    (duration (time-to-seconds (time-since time))))
+       (when (and (or debug-on-error init-file-debug) (> duration ,threshold))
+	 (message "[slow-op]: %s: %.06fs" ,name duration))
+       return-value)))
+
 (with-gc-suppressed
  (with-file-name-handler-disabled
-
   (defvar tychoish/emacs-instance-id nil)
   (defvar tychoish/startup-complete-time nil)
   (defvar cli/instance-id  nil)
@@ -40,9 +50,8 @@
 	     (emacs-init-time)
 	     (float-time (time-since before-init-time)))))
 
-  (add-hook 'emacs-startup-hook #'tychoish/set-up-instance-name -1)
-  (add-hook 'emacs-startup-hook #'tychoish/startup-mark-complete 80)
-  (add-hook 'emacs-startup-hook #'tychoish/startup-report-timing 90)
+  (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 80)
+  (add-hook 'emacs-startup-hook 'tychoish/startup-report-timing 90)
 
   (when (string-match "NATIVE_COMP" system-configuration-features)
     (setq native-comp-jit-compilation t)
@@ -103,9 +112,10 @@ The `--bootstrap CLI' flag will ensure that emacs is properly configured.")
   (setq package-enable-at-startup nil)
   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
   (add-to-list 'package-archives '( "jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/") t)
+  (add-to-list 'package-archives '("nongnu" . "https://elpa.nongnu.org/nongnu/"))
   (setq package-archive-priorities '(("melpa"    . 3)
-				     ("gnu"    . 2)
-				     ("nongnu"    . 1)
+				     ("nongnu"    . 2)
+				     ("gnu"    . 1)
 				     ("jcs-elpa" . 0)))
 
   ;; (toggle-debug-on-error)
@@ -113,14 +123,27 @@ The `--bootstrap CLI' flag will ensure that emacs is properly configured.")
   ;; (setq use-package-verbose t)
   (setq use-package-compute-statistics t)
   (setq use-package-minimum-reported-time 0.5)
+  (setq user-emacs-directory (expand-file-name user-emacs-directory))
 
   (add-to-list 'load-path (concat user-emacs-directory "lisp"))
+  (add-to-list 'load-path (concat user-emacs-directory "user"))
 
   ;; (only) functions and macros used in the rest of the configuration
-  (require 'tychoish-common)
+  (with-slow-op-timer
+   "<init.el> load tychoish-common"
+   (require 'tychoish-common)
+   (tychoish/set-up-instance-name))
   ;; customized setup and configuration of core emacs and included packages
-  (require 'tychoish-bootstrap)
+  (with-slow-op-timer
+   "<init.el> load tychoish-bootstrap"
+   (require 'tychoish-bootstrap))
   ;; all remaining use-package declarations.
-  (require 'tychoish-core)))
+  (with-slow-op-timer
+   "<init.el> load tychoish-core"
+   (require 'tychoish-core))
+  ;; load the user/*.el files
+  (with-slow-op-timer
+   "<init.el> load user directory"
+   (tychoish-set-up-user-local-config))))
 
 (provide 'init)

@@ -9,7 +9,12 @@
 
 ;;; Code:
 (eval-when-compile
-  (require 'tychoish-common))
+  (require 'tychoish-common)
+  (require 'tychoish-bootstrap)
+  (require 'dash)
+  (require 'f)
+  (require 's)
+  (require 'ht))
 
 (use-package delight
   :ensure t
@@ -37,10 +42,8 @@
 	     async-bytecomp-package-mode
 	     dired-async-mode)
   :init
-  (add-hook 'emacs-startup-hook 'tychoish/async-mode-setup)
-  (defun tychoish/async-mode-setup ()
-    (async-bytecomp-package-mode 1)
-    (dired-async-mode 1)))
+  (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
+  (add-hook 'dired-mode-hook 'dired-async-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -83,10 +86,21 @@
 
 (use-package doom-modeline
   :ensure t
-  :hook ((after-init . doom-modeline-mode))
   :commands (doom-modeline-mode
              tychoish-legacy-mode-line)
   :defines (doom-modeline-icon)
+  :init
+  (create-toggle-functions
+   doom-modeline-icon
+   :keymap tychoish/theme-map
+   :key "i")
+
+  (add-hygenic-one-shot-hook
+   :name "enable-modeline"
+   :hook (if (daemonp)
+	     'server-after-make-frame-hook
+	   'window-setup-hook)
+   :function #'doom-modeline-mode)
   :config
   (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
   (setq find-file-visit-truename t)
@@ -104,12 +118,6 @@
   (setq doom-modeline-env-version nil)
   (setq doom-modeline-irc-stylize 'identity)
   (setq doom-modeline-irc t)
-
-  (create-toggle-functions doom-modeline-icon :local t)
-
-  (bind-key "i" #'toggle-doom-modeline-icon tychoish/theme-map)
-
-  (add-hook 'after-init-hook 'turn-on-doom-modeline-icon)
 
   (defun my-doom-modeline--font-height ()
     "Calculate the actual char height of the mode-line."
@@ -348,7 +356,7 @@
 	     ;; org-core
 	     org-save-all-org-buffers)
   :init
-  (defun tychoish/set-notes-directory (&optional path)
+  (defun tychoish-set-notes-directory (&optional path)
     (when path
       (setq local-notes-directory (expand-file-name path)))
 
@@ -383,13 +391,42 @@
          ("n" . tychoish-blog-create-post)
          ("d" . tychoish-blog-open-drafts-dired))
   :commands (make-filename-slug
-             tychoish/define-project-notes)
+             tychoish-define-project-notes)
   :config
   (setq tychoish-blog-path (expand-file-name "~/src/blog")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Completion/Snippets Menus
+
+(use-package capf-wordfreq
+  :load-path "external/"
+  :commands (capf-wordfreq-completion-at-point-function capf-wordfreq--dictionary)
+  :init
+  (defun capf-wordfreq-avalible-p ()
+    (and (fboundp 'capf-wordfreq-completion-at-point-function)
+	 (fboundp 'capf-wordfreq--dictionary)
+	 (f-exists-p (capf-wordfreq--dictionary))))
+  (setq capf-wordfreq-minimal-candidate-length 5))
+
+(use-package yasnippet
+  :ensure t
+  :delight (yas-minor-mode " ys")
+  :commands (yas-global-mode yas-insert-snippet yas-minor-mode)
+  :hook ((text-mode prog-mode) . yas-minor-mode)
+  :config
+  (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
+  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
+
+(use-package yasnippet-capf
+  :ensure t
+  :bind (:map tychoish/completion-map
+         ("s" . yasnippet-capf))
+  :commands (yasnippet-capf))
+
+(use-package yasnippet-snippets
+  :ensure t
+  :after yasnippet)
 
 (use-package cape
   :ensure t
@@ -416,32 +453,37 @@
          ("^" . cape-tex)
          ("&" . cape-sgml)
          ("u" . cape-rfc1345))
+  :commands (cape-capf-inside-code)
   :init
   (defmacro disabled (&rest body)
     `(unless 'disabled
        ,@body))
-
-  (defun tychoish/get-available-word-capfs ()
-    (->> (list (tychoish/maybe-capf-wordfreq)
-	       (tychoish/maybe-capf-dict))
-	 (-non-nil)
-	 (-filter #'symbolp)))
-
-  (defun tychoish/maybe-capf-dict ()
-    (and (boundp 'cape-dict-file) (f-exists-p cape-dict-file) #'cape-dict))
-
-  (defun tychoish/maybe-capf-wordfreq ()
-    (disabled (when (capf-wordfreq-avalible-p)
-		#'capf-wordfreq-completion-at-point-function)))
 
   (defmacro cape-capf-wrapper (wrapper inner)
     (when inner
       (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
 	     (wrapper-name (symbol-name wrapper))
 	     (capf-name (symbol-name inner))
-	     (name (format "%s-<%s>" capf-name wrapper-name )))
-      `(defun ,(intern name) ()
-	 (funcall #',wrapper #',inner)))))
+	     (name (format "%s-<%s>" capf-name wrapper-name ))
+	     (symb (intern name)))
+	`(defun ,symb ()
+	  (funcall ',wrapper ',inner)))))
+
+  (defun tychoish/maybe-capf-dict ()
+    (and (boundp 'cape-dict-file) (f-exists-p cape-dict-file) #'cape-dict))
+
+  (declare-function 'capf-wordfreq-avalible-p "tychoish-core")
+  (declare-function 'cape-capf-inside-code "cape")
+
+  (defun tychoish/maybe-capf-wordfreq ()
+    (disabled (when (capf-wordfreq-avalible-p)
+		#'capf-wordfreq-completion-at-point-function)))
+
+  (defun tychoish/get-available-word-capfs ()
+    (->> (list (tychoish/maybe-capf-wordfreq)
+	       (tychoish/maybe-capf-dict))
+	 (-non-nil)
+	 (-filter #'symbolp)))
 
   (defun tychoish/text-mode-capf-setup ()
     "so here is the"
@@ -514,25 +556,6 @@
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-history))
 
-(use-package yasnippet
-  :ensure t
-  :delight (yas-minor-mode " ys")
-  :commands (yas-global-mode yas-insert-snippet yas-minor-mode)
-  :hook ((text-mode prog-mode) . yas-minor-mode)
-  :config
-  (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
-  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
-
-(use-package yasnippet-capf
-  :ensure t
-  :bind (:map tychoish/completion-map
-         ("s" . yasnippet-capf))
-  :commands (yasnippet-capf))
-
-(use-package yasnippet-snippets
-  :ensure t
-  :after yasnippet)
-
 (use-package dabbrev
   ;; Swap M-/ and C-M-/
   :bind (("M-/" . dabbrev-completion)
@@ -543,16 +566,6 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
-
-(use-package capf-wordfreq
-  :load-path "external/"
-  :commands (capf-wordfreq-completion-at-point-function capf-wordfreq--dictionary)
-  :init
-  (defun capf-wordfreq-avalible-p ()
-    (and (fboundp 'capf-wordfreq-completion-at-point-function)
-	 (fboundp 'capf-wordfreq--dictionary)
-	 (f-exists-p (capf-wordfreq--dictionary))))
-  (setq capf-wordfreq-minimal-candidate-length 5))
 
 (use-package prescient
   :ensure t
@@ -573,16 +586,16 @@
   :init
   (defmacro tychoish/vertico-disable-sort-for (command)
     "Disable sorting in vertico rendering."
-    `(add-to-list 'vertico-multiform-categories '(,command (vertico-sort-function . nil))))
+    `(add-to-list 'vertico-multiform-categories '((,command (vertico-sort-function . nil)))))
   :config
   (setq vertico-resize t)
   (setq vertico-count 25)
   (setq vertico-cycle t)
   (vertico-multiform-mode 1)
-  (tychoish/vertico-disable-sort-for yank)
-  (tychoish/vertico-disable-sort-for yank-from-kill-ring)
-  (tychoish/vertico-disable-sort-for consult-yank-from-kill-ring)
-  (tychoish/vertico-disable-sort-for consult-yank-pop)
+  ;; (tychoish/vertico-disable-sort-for yank)
+  ;; (tychoish/vertico-disable-sort-for yank-from-kill-ring)
+  ;; (tychoish/vertico-disable-sort-for consult-yank-from-kill-ring)
+  ;; (tychoish/vertico-disable-sort-for consult-yank-pop)
 
   (add-to-list 'vertico-multiform-commands
                '("\\`execute-extended-command"
@@ -601,7 +614,7 @@
   :ensure t
   :bind (:map minibuffer-local-map
          ("M-A" . marginalia-cycle))
-  :hook (emacs-startup . marginalia-mode))
+  :hook (vertico-mode . marginalia-mode))
 
 (use-package embark
   :ensure t
@@ -676,7 +689,7 @@
 	       (eq frame-type 'pc)) ;; this is "ms-dos" terminal (good measure)
 	(funcall #'corfu-popupinfo--get-documentation candidate))))
 
-  (setq corfu-popupinfo--function #'tychoish/corfu-popupinfo-resolver)
+  (setq corfu-popupinfo--function 'tychoish/corfu-popupinfo-resolver)
 
   (defun corfu-move-to-minibuffer ()
     (interactive)
@@ -880,7 +893,8 @@
 (use-package consult-eglot
   :ensure t
   :after (eglot)
-  :bind ("C-c d a" . consult-eglot-symbols)
+  :bind (:map tychoish/docs-map
+         ("a" . consult-eglot-symbols))
   :commands (consult-eglot-symbols))
 
 (use-package consult-gh
@@ -888,8 +902,8 @@
   :commands (consult-gh))
 
 (use-package consult-ag
-  :vc (:url "https://github.com/abrochard/consult-ag" :rev "cf740cc")
-  :ensure t
+  ;; :vc (:url "https://github.com/abrochard/consult-ag" :rev "cf740cc")
+  ;; :ensure t
   :bind (("M-g a" . consult-ag)
 	 :map tychoish/ecclectic-ag-grep-map
 	 ("g" . consult-ag)
@@ -982,7 +996,7 @@
   (setq consult-mu-mark-previewed-as-read nil)
   (setq consult-mu-mark-viewed-as-read t)
   (setq consult-mu-use-wide-reply t)
-  (setq consult-mu-headers-template #'tychoish/consult-mu-headers-template)
+  (setq consult-mu-headers-template 'tychoish/consult-mu-headers-template)
 
   (setq consult-mu-saved-searches-dynamics '("#flag:unread"))
   (setq consult-mu-saved-searches-async '("#flag:unread"))
@@ -1216,8 +1230,8 @@
              helm-org-in-buffer-heddings
              helm-org-agenda-files-headings)
   :config
-  (setq add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
-  (setq add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
+  (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
+  (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
 
 (use-package helm-mu
   :ensure t
@@ -1278,6 +1292,10 @@
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
   (add-to-list 'magit-status-sections-hook 'magit-insert-modules t))
 
+(use-package emacsql
+  :ensure t
+  :defer t)
+
 (use-package forge
   :ensure t
   :commands (forge-dispatch forge-configure)
@@ -1297,6 +1315,16 @@
 ;;
 ;; email (mu4e) configuration
 
+(use-package tychoish-mail
+  :commands (mu4e mu4e-search-maildir mu4e-search-bookmark mu4e-compuse-new
+	     tychoish-mail-select-account tychoish-define-mail-account)
+  :init
+  (bind-keys :map tychoish/mail-map
+             ("m" . mu4e)
+             ("d" . mu4e-search-maildir)
+             ("b" . mu4e-search-bookmark)
+             ("c" . mu4e-compose-new)))
+
 (use-package emojify
   :ensure t
   :commands (global-emojify-mode)
@@ -1306,129 +1334,6 @@
   (setq emojify-display-style 'unicode)
   (setq emojify-point-entered-behaviour 'echo))
 
-(use-package mu4e
-  :ensure nil
-  :bind (:map tychoish/mail-map
-	 ("m" . mu4e)
-         ("d" . mu4e-search-maildir)
-         ("b" . mu4e-search-bookmark)
-         ("c" . mu4e-compose-new))
-  :commands (mu4e
-	     mu4e-update-index
-             mu4e-compose-new
-             mu4e-search-maildir
-             mu4e-search-bookmark
-             mu4e-update-mail-and-index)
-  :defines (mu4e-mail-view-actions mu4e-get-mail-command mu4e-compose-minor-mode-map mu4e-user-mail-address-list)
-  :init
-  (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
-  (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
-  (add-hook 'mu4e-compose-mode-hook 'tychoish/set-up-message-mode-buffer)
-
-  (defun tychoish/set-up-message-mode-buffer ()
-    (setq-local completion-at-point-functions
-		(list (cape-capf-prefix-length #'mu4e-complete-contact 4)
-		      #'cape-emoji
-		      #'cape-dict
-		      #'yasnippet-capf))
-
-    (setq-local use-hard-newlines t)
-    (setq-local make-backup-files nil))
-
-  (defun compose-reply-wide-or-not-please-ask ()
-    "Ask whether to reply-to-all or not."
-    (interactive)
-    (mu4e-compose-reply (yes-or-no-p "Reply to all?")))
-
-  (add-to-list 'auto-mode-alist '(".*mutt.*"  message-mode))
-  (with-eval-after-load 'message
-    (bind-key "M-q" 'ignore message-mode-map)
-    (setq-default message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
-    (setq-default message-citation-line-function 'message-insert-formatted-citation-line)
-    (setq-default message-interactive t)
-    (setq-default message-kill-buffer-on-exit nil)
-    (setq-default message-send-mail-function 'message-send-mail-with-sendmail)
-    (setq-default message-forward-as-mime nil)
-    (setq-default message-fill-column 80)
-    (setq-default message-cite-style message-cite-style-gmail)
-    (add-to-list 'mm-discouraged-alternatives "text/richtext")
-    (add-to-list 'mm-discouraged-alternatives "text/html")
-    (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
-  :config
-  (bind-keys :map mu4e-compose-minor-mode-map
-             ("R" . compose-reply-wide-or-not-please-ask)
-             ("r" . mu4e-headers-mark-for-read)
-             :map mu4e-headers-mode-map
-             ("C-r" . compose-reply-wide-or-not-please-ask)
-             ("R" . compose-reply-wide-or-not-please-ask)
-             ("r" . mu4e-headers-mark-for-read)
-             ("o" . mu4e-headers-mark-for-unread)
-             ("u" . mu4e-headers-mark-for-unread)
-             ("*" . mu4e-headers-mark-for-something)
-             ("#" . mu4e-mark-resolve-deferred-marks)
-             (";" . mu4e-mark-resolve-deferred-marks))
-
-  (setq mail-imenu-generic-expression
-        '(("Subject"  "^Subject: *\\(.*\\)" 1)
-          ("Cc"       "^C[Cc]: *\\(.*\\)" 1)
-          ("Bcc"      "^B[Cc]: *\\(.*\\)" 1)
-          ("To"       "^To: *\\(.*\\)" 1)
-          ("From"     "^From: *\\(.*\\)" 1)))
-
-  (setq mu4e-bookmarks
-        '((:name "unread primary queues to file"
-           :query "m:/inbox OR m:/prof"
-           :key ?f)
-          (:name "to read/process queue"
-           :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
-           :key ?q)
-          (:name "all unread message"
-           :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
-           :key ?a)
-          (:name "all sorted email"
-           :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
-           :key ?s)
-          (:name "inbox and prof (all)"
-           :query "m:/inbox OR m:/prof"
-           :key ?i)
-          (:name "messages with images"
-           :query "mime:image/*"
-           :key ?p)
-          (:name "mesages from today"
-           :query "date:today..now"
-           :key ?t)
-          (:name "messages from the last week"
-           :query "date:7d..now"
-           :key ?w)))
-
-  (setq mu4e-compose-complete-addresses t)
-  (setq mu4e-compose-complete-only-after "2015-01-01")
-  (setq mu4e-compose-keep-self-cc nil)
-  (setq message-signature t)
-  (setq mu4e-drafts-folder "/drafts")
-  (setq mu4e-search-include-related nil)
-  (setq mu4e-search-results-limit 1000)
-  (setq mu4e-maildir-shortcuts nil)
-  (setq mu4e-sent-folder "/sent")
-  (setq mu4e-trash-folder "/trash")
-  (setq mu4e-user-agent-string nil)
-
-  (setq mail-signature t)
-  (setq mail-specify-envelope-from t)
-  (setq mail-user-agent 'mu4e-user-agent)
-  (setq mml-secure-openpgp-sign-with-sender t)
-  (setq mc-gpg-user-id (getenv "GPG_KEY_ID"))
-
-  (setq compose-mail-user-agent-warnings nil)
-  (setq sendmail-program "msmtp")
-  (setq smtpmail-queue-mail nil)
-
-  (setq message-dont-reply-to-names t)
-
-  (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t)
-        mu4e--header-separator mail-header-separator)
-
-  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1701,8 +1606,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package deft
   :ensure t
-  :bind (:prefix "C-c d"
-	 :prefix-map tychoish/docs-map
+  :bind (:map tychoish/docs-map
 	 ("o" . deft)
          ("n" . tychoish-deft-create)
          ("f" . deft-find-file))
@@ -1975,9 +1879,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (setq-local tab-width 4)
     (setq-local fill-column 100))
   :config
-  (bind-keys :map python-ts-mode-map
-             ("M-<right>" . balle-python-shift-right)
-             ("M-<left>" . balle-python-shift-left))
+  (require 'python-mode)
 
   (defun balle-python-shift-left ()
     (interactive)
@@ -2002,7 +1904,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
           (setq start (car bds) end (cdr bds))))
       (python-indent-shift-right start end))
     (setq deactivate-mark nil))
-  ; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
+
+  (bind-key "M-<left>" 'balle-python-shift-left python-ts-mode-map)
+  (bind-key "M-<right>" 'balle-python-shift-right python-ts-mode-map)
+
+; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
@@ -2076,7 +1982,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (slime-mode "sl")
   (slime-autodoc-mode "")
   :mode ("\\.lisp" . lisp-mode)
-  :bind ("C-c d c" . hyperspec-lookup)
+  :bind (:map tychoish/docs-map
+	 ("c" . hyperspec-lookup))
   :commands (slime slime-connect)
   :config
   (setq ls-lisp-dirs-first t)
@@ -2449,6 +2356,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("\\.java\\'" . java-ts-mode))
   :init
   (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
+  (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
   (add-to-list 'major-mode-remap-alist '(jav-mode . js-ts-mode))
   (add-to-list 'major-mode-remap-alist '(css-mode . css-ts-mode))
   (add-to-list 'major-mode-remap-alist '(js-json-mode . json-ts-mode))
@@ -2605,20 +2513,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 :prefix "a"
 	 :prefix-map tychoish/robot-aider-map
 	 ("m" . aidermacs-transient-menu))
-  :init
-  (defun tychoish/set-up-aider-env-vars ()
-    (when (boundp 'anthropic-api-key)
-      (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
-    (when (boundp 'google-gemini-key)
-      (setenv "GEMINI_API_KEY" google-gemini-key))
-    (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md"))
-    (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
-		(_ (f-exists-p uv-bin-path))
-		(aider-bin-path (f-join uv-bin-path "aider"))
-		(search-path (getenv "PATH")))
-      (unless (s-contains-p uv-bin-path search-path)
-	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
-      (add-to-list 'exec-path uv-bin-path)))
   :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-default-model "sonnet")
