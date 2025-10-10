@@ -7,7 +7,10 @@
 (require 'tychoish-common)
 (require 'consult-tycho)
 
-(require 'mu4e)
+(eval-when-compile
+  (with-slow-op-timer
+   "require-<mu4e>"
+   (require 'mu4e)))
 
 (require 'marginalia)
 
@@ -28,6 +31,7 @@
 (use-package consult-mu
   :load-path "external/consult-mu/"
   :defer t
+  :after mu4e
   :bind (:map tychoish/mail-map
 	 ("C-;" . consult-mu)
 	 (";" . consult-mu-bookmark))
@@ -144,7 +148,7 @@
              ("u" . mu4e-headers-mark-for-unread)
              ("*" . mu4e-headers-mark-for-something)
              ("#" . mu4e-mark-resolve-deferred-marks)
-             (";" . mu4e-mark-resolve-deferred-marks)))
+             (";" . mu4e-mark-resolve-deferred-marks))
 
 (setq mu4e-compose-complete-addresses t)
 (setq mu4e-compose-complete-only-after "2015-01-01")
@@ -188,7 +192,7 @@
          :key ?t)
         (:name "messages from the last week"
          :query "date:7d..now"
-         :key ?w)))
+         :key ?w))))
 
 (declare-function cape-capf-prefix-length "cape")
 (declare-function cape-dict "cape")
