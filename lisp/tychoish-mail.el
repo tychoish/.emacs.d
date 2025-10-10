@@ -337,16 +337,16 @@
              :signature-kind 'signature-directory
              :signature (f-join maildir "tools" "signatures")))
 
-    (dolist (instance instances)
-      (when (and (stringp instance) (string-equal instance tychoish/emacs-instance-id))
-        (add-hook 'emacs-startup-hook configure-account-symbol)))
+    (when (or default
+	      (and
+	       (not (and (null systems) (null instances)))
+	       (or (member tychoish/emacs-instance-id instances)
+		   (null instances))
+	       (or (member (system-name) systems)
+		   (null systems))))
+      (add-hook 'emacs-startup-hook configure-account-symbol))
 
-    (dolist (sysn systems)
-      (when (and (stringp sysn) (string-equal sysn (system-name)))
-        (add-hook 'emacs-startup-hook configure-account-symbol)))
-
-    `(progn
-       (defun ,configure-account-symbol ()
+    `(defun ,configure-account-symbol ()
 	 (interactive)
 
 	 (let* ((account-id ,id)
@@ -396,9 +396,6 @@
 
              (setq mu4e-get-mail-command (tychoish/mail-account-fetchmail conf))
 
-             (message (format "mail: configured address [%s]" address)))))
-
-       ,(when default
-	  (add-hook 'emacs-startup-hook configure-account-symbol)))))
+             (message (format "mail: configured address [%s]" address)))))))
 
 (provide 'tychoish-mail)

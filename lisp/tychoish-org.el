@@ -16,53 +16,49 @@
 
 ;; org-mode extensions and supporting packages
 
-(use-package org-contrib
-  :ensure t
-  :after org)
+(defvar tychoish-org--auxiliary-packages
+  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
+  "Supporting org packages that should be installed when org-mode loads the first time.")
 
-(use-package toc-org
-  :ensure t
-  :commands (toc-org-insert-toc)
-  :init
-  (defun tychoish--add-toc-org-op ()
-    (save-excursion (toc-org-insert-toc))))
+(defun tychoish-org--install-auxiliary-packages ()
+  "Install all of the auxiliary packages"
+  (->> tychoish-org--auxiliary-packages
+       (-remove #'package-installed-p)
+       (-map #'package-install-async)
+       (length)))
 
-(use-package ox-gist
-  :ensure t
-  :commands (org-gist-export-to-gist)
-  :init
-  (defun org-gist-export-private-gist ()
-    (interactive)
-    (org-gist-export-to-gist nil 'open))
+(add-hygenic-one-shot-hook
+ :name "org-install-aux-packages"
+ :hook org-mode-hook
+ :function 'tychoish-org--install-auxiliary-packages)
 
-  (defun org-gist-export-public-gist ()
-    (interactive)
-    (org-gist-export-to-gist 'public)))
+(autoload 'toc-org-insert-toc "toc-org")
+(autoload 'org-gist-export-to-gist "ox-gist")
+(autoload 'org-rst-export-to-rst "ox-rst")
+(autoload 'org-rst-export-as-rst "ox-rst")
+(autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
+(autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
+(autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
+(autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
+(autoload 'org-leanpub-markdown-export-to-markdown "ox-leanpub-markdown")
+(autoload 'org-leanpub-markdown-export-as-markdown "ox-leanpub-markdown")
 
-(use-package ox-hugo
-  :ensure t
-  :after ox)
-
-(use-package ox-rst
-  :ensure t
-  :after ox
-  :commands (org-rst-export-to-rst org-rst-export-as-rst)
-  :config
+(with-eval-after-load 'ox-rst
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
-(use-package ox-leanpub
-  :ensure t
-  :after ox
-  :commands (org-leanpub-book-export-markdown
-	     org-leanpub-book-export-markua
-	     org-leanpub-markua-export-to-markua
-	     org-leanpub-markua-export-as-markua
-	     org-leanpub-markdown-export-to-markdown
-	     org-leanpub-markdown-export-as-markdown)
-  :config
-  (require 'ox-leanpub-markua)
-  (require 'ox-leanpub-book)
+(with-eval-after-load 'ox-leanpub
   (org-leanpub-book-setup-menu-markua))
+
+(defun tychoish--add-toc-org-op ()
+  (save-excursion (toc-org-insert-toc)))
+
+(defun org-gist-export-private-gist ()
+  (interactive)
+  (org-gist-export-to-gist nil 'open))
+
+(defun org-gist-export-public-gist ()
+  (interactive)
+  (org-gist-export-to-gist 'public))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -86,6 +82,7 @@
            ("p" . org-insert-property-drawer)
            ("w" . org-refile)
            ("d" . tychoish-org-date-now)
+           ("C-s" . org-save-all-org-buffers)
            ;; ("i" . org-ctags-create-tags)
 	   ;; ("g" . tychoish/org-gist-map)
            :map tychoish/org-mode-personal-map

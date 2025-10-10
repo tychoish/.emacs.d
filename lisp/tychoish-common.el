@@ -528,10 +528,13 @@ the list."
 		 (eval hook))))
 
     `(progn
+
        (defun ,cleanup ,args
 	 (apply ,function ,args)
          (remove-hook ',hook ',cleanup ,local)
-         (unintern ',cleanup obarray))
+         ,(unless make-unique
+	    `(unintern ',cleanup obarray)))
+
        (add-hook ',hook ',cleanup ,depth ,local))))
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
@@ -571,7 +574,7 @@ the list."
   "Recompile all most relevant emacs lisp files in the current
 installation that need to be recompiled. Call with a prefix argument to
 forcibly recompile all emacs files. Returns a list of all files that
-were recompiled." 
+were recompiled."
   (interactive)
   (->> (list user-emacs-directory
 	     (f-join user-emacs-directory "lisp")
@@ -579,6 +582,29 @@ were recompiled."
        (--flat-map (f-entries it #'f-file-p))
        (--filter (f-ext-p it "el"))
        (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
+
+(require 'package)
+(require 'async-package)
+
+(defun async-package-operation (op pkgs)
+  (let* ((ops '(install upgrade 'reinstall))
+	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
+	 (filename (concat (f-join temporary-file-directory
+			   (s-join "-" (list
+					"emacs" tychoish/emacs-instance-id
+					"async-package"
+					(symbol-name op)))) ".log")))
+    (unless (member op ops)
+      (user-error "%s is not a valid operation %S" op ops))
+
+    (unless valid-packages
+      (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
+
+    (async-package-do-action op valid-packages filename)))
+
+(defun package-install-async (pkgs)
+  (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
+  (async-package-operation 'install pkgs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -808,7 +834,7 @@ prefix argument INTERNAL-TOO is non-nil.  Asks before killing
 each buffer, unless NO-ASK is non-nil."
   (interactive "sKill buffers visiting a path matching this regular expression: \n")
   (let* ((buffers (buffers-matching-path regexp internal-too))
-	 (killed (->> buffers 
+	 (killed (->> buffers
 		      (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
 		      (--filter (cdr it))
 		      (--keep (car it))
