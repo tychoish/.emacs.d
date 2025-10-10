@@ -2,8 +2,8 @@
 
 (require 'f)
 (require 's)
-(require 'dash)
 (require 'ht)
+(require 'dash)
 
 (require 'visual-fill-column)
 
@@ -43,30 +43,40 @@
   (interactive)
   (message "system: %s" (system-name)))
 
+(defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
+
+(defvar-local tychoish-cache--resolved-instance-id nil)
 (defun tychoish/resolve-instance-id ()
-  (let ((daemon (daemonp)))
-    (or (when (eq daemon t) "primary")
-        daemon
-        cli/instance-id
-        tychoish/emacs-instance-id
-        "solo")))
+  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
+    (or tychoish-cache--resolved-instance-id
+	(setq tychoish-cache/resolved-instance-id
+	      (let ((daemon (daemonp)))
+		(or (when (eq daemon t) "primary")
+		    daemon
+		    cli/instance-id
+		    tychoish/emacs-instance-id
+		    "solo"))))))
 
 (defun tychoish/set-up-instance-name ()
   (unless tychoish/emacs-instance-id
     (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))))
 
+(defvar-local tychoish-cache--conf-emacs-host-and-instance nil)
 (defun tychoish/conf-emacs-host-and-instance ()
-  (list
-   (if (eq system-type 'darwin)
-       (car (s-split "\\." (system-name)))
-     (system-name))
-   (or tychoish/emacs-instance-id
-       (tychoish/resolve-instance-id))))
+  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
+    (or tychoish-cache--conf-emacs-host-and-instance
+	(setq tychoish-cache--conf-emacs-host-and-instance
+	      (list
+	       (if (eq system-type 'darwin)
+		   (car (s-split "\\." (system-name)))
+		 (system-name))
+	       (or tychoish/emacs-instance-id
+		   (tychoish/resolve-instance-id)))))))
 
 (defconst tychoish/conf-state-directory-name "state")
 
 (defun tychoish/conf-state-path (name)
-  (f-join (expand-file-name user-emacs-directory)
+  (f-join user-emacs-directory
 	  tychoish/conf-state-directory-name
 	  (tychoish-get-config-file-prefix name)))
 
@@ -557,6 +567,19 @@ the list."
     (user-error "cannot annotate a positional arg without a name"))
   is)
 
+(defun byte-compile-all-user-emacs-files ()
+  "Recompile all most relevant emacs lisp files in the current
+installation that need to be recompiled. Call with a prefix argument to
+forcibly recompile all emacs files. Returns a list of all files that
+were recompiled." 
+  (interactive)
+  (->> (list user-emacs-directory
+	     (f-join user-emacs-directory "lisp")
+	     (f-join user-emacs-directory "user"))
+       (--flat-map (f-entries it #'f-file-p))
+       (--filter (f-ext-p it "el"))
+       (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; lines -- whitespace,  filling/wrapping, line manipulation
@@ -745,10 +768,11 @@ interactively then remove duplicate items from the `kill-ring'."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; bulk buffer killing -- kill groups of buffers efficiently
+
 (defun buffers-matching-path (regexp &optional internal-too)
   (->> (buffer-list)
        (--keep (let* ((buffer it)
-		     (name (buffer-file-name buffer)))
+		      (name (buffer-file-name buffer)))
 		(when (and name (not (string-equal name ""))
 			   (or internal-too (/= (aref name 0) ?\s))
 			   (string-match regexp name))
@@ -783,11 +807,33 @@ Ignores buffers whose name starts with a space, unless optional
 prefix argument INTERNAL-TOO is non-nil.  Asks before killing
 each buffer, unless NO-ASK is non-nil."
   (interactive "sKill buffers visiting a path matching this regular expression: \n")
-  (let ((count (->> (buffers-matching-path regexp internal-too)
-		    (--map (when (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) buffer)
-			     1))
-		    (-reduce #'+))))
-    (message "killed %d buffers matching '%S'" count regexp)))
+  (let* ((buffers (buffers-matching-path regexp internal-too))
+	 (killed (->> buffers 
+		      (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
+		      (--filter (cdr it))
+		      (--keep (car it))
+		      (-unwind)
+		      (-non-nil))))
+
+    (if (called-interactively-p 'any)
+	(message "killed %d buffers matching '%S'" (length length) (s-join ", " killed))
+      killed)))
+
+(defconst reference-source-paths
+  (append (cons package-user-dir package-directory-list) (list "/usr/share/emacs/.*" "/usr/lib/go/.*" ".*/src/emacs.*/src/.*"))
+  "paths of reference files, typically opened by jump-to-definition")
+
+(defun kill-all-reference-and-source-buffers ()
+  "Kill all buffers for files in external (upstream) sources, likely opened
+by jump-to-definition."
+  (interactive)
+  (let ((killed (->> reference-source-paths
+		     (-flat-map #'force-kill-buffers-matching-path)
+		     (-non-nil)
+		     (-map #'f-collapse-homedir))))
+    (if (called-interactively-p 'any)
+	(message "killed %s refrence/source buffers [%s]" (length killed) (s-join ", " killed))
+      killed)))
 
 ;;;###autoload
 (defun kill-buffers-matching-mode (mode)

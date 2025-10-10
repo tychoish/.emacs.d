@@ -287,7 +287,6 @@
   (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
   (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
-  (setq custom-file (tychoish/conf-state-path "custom.el"))
 
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)

@@ -65,7 +65,6 @@
   ;; (setq server-host "127.0.0.1")
   ;; (setq server-port 2286)
 
-
   (defun cli/resolve-id ()
     (or (when (string-equal "--id" argi)
 	  (setq cli/instance-id (pop argv)))
@@ -127,7 +126,9 @@
   ;; customized setup and configuration of core emacs and included packages
   (with-slow-op-timer
    "<init.el> load tychoish-bootstrap"
-   (require 'tychoish-bootstrap))
+   (require 'tychoish-bootstrap)
+   (setq custom-file (tychoish/conf-state-path "custom.el"))
+   'tychoish-bootstrap)
   ;; all remaining use-package declarations.
   (with-slow-op-timer
    "<init.el> load tychoish-core"
