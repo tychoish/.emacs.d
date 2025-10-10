@@ -3,9 +3,9 @@
 (require 'f)
 (require 's)
 (require 'dash)
+(require 'ht)
 
-(eval-when-compile
-  (require 'ht))
+(require 'visual-fill-column)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -412,6 +412,41 @@ the list."
 
 ;; macros -- helper macros for common operations
 
+(defmacro with-slow-op-timer (name &rest body)
+  "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
+  `(let* ((inhibit-message t)
+	  (time (current-time))
+	  (return-value (progn ,@body))
+	  (duration (time-to-seconds (time-since time))))
+     (when (and (or debug-on-error init-file-debug) (> duration tychoish/slow-op-time-threshold))
+       (message "[slow-op]: %s: %.06fs" ,name duration))
+     return-value))
+
+(defmacro with-gc-suppressed (&rest body)
+  `(progn
+     (let ((gc-cons-threshold 800000000000000))
+       ,@body)
+     (let ((garbage-collection-messages t))
+       (garbage-collect))))
+
+(defmacro with-file-name-handler-disabled (&rest body)
+  `(let ((file-name-handler-alist nil))
+     ,@body))
+
+(defmacro disabled (&rest body)
+  `(unless 'disabled
+     ,@body))
+
+(defmacro cape-capf-wrapper (wrapper inner)
+  (when inner
+    (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
+	   (wrapper-name (symbol-name wrapper))
+	   (capf-name (symbol-name inner))
+	   (name (format "%s-<%s>" capf-name wrapper-name ))
+	   (symb (intern name)))
+      `(defun ,symb ()
+	 (funcall ',wrapper ',inner)))))
+
 (defmacro tychoish/set-tab-width (num)
   (unless (integerp num)
     (signal 'wrong-type-argument num))
@@ -805,9 +840,15 @@ Returns the number of buffers killed."
 
 ;; project -- tools for managing groups of buffers and files by project
 
+(declare-function project-root "project")
+(declare-function project-current "project")
+
+(declare-function projectile-project-root "projectile")
+(declare-function projectile-project-name "projectile")
+
 (defun approximate-project-root ()
-  (or (when (and (featurep 'project) (project-current)) (project-root (project-current)))
-      (when (featurep 'projectile) (trimmed-string-or-nil (projectile-project-root)))
+  (or (when (featurep 'projectile) (trimmed-string-or-nil (projectile-project-root)))
+      (when (and (featurep 'project) (project-current)) (project-root (project-current)))
       (expand-file-name default-directory)))
 
 (defun approximate-project-name ()

@@ -8,6 +8,7 @@
 (require 'org-contrib)
 (require 'org-capture)
 (require 'org-agenda)
+(require 'org-archive)
 
 (require 'tychoish-common)
 
@@ -60,6 +61,7 @@
 	     org-leanpub-markdown-export-as-markdown)
   :config
   (require 'ox-leanpub-markua)
+  (require 'ox-leanpub-book)
   (org-leanpub-book-setup-menu-markua))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

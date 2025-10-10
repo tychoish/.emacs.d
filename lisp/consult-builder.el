@@ -246,7 +246,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 	     (with-eval-after-load "compile"
 	       (push 'compilation-mode-hook hooks))
 
-	     (->> hooks (--mapc (add-hook it #',hook-registering-function-name))))))))
+	     (->> hooks (--mapc (add-hook it ',hook-registering-function-name))))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

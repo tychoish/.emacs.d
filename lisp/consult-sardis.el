@@ -1,7 +1,9 @@
 ;;; consult-sardis.el --- sards cmdr consult helpers -*- lexical-binding: t -*-
 
 (require 'consult)
+
 (require 'tychoish-common)
+(require 'consult-tycho)
 
 (defun tychoish/compile--post-hook-collection (selection buffer-name started-at)
   (let* ((end-at (current-time))

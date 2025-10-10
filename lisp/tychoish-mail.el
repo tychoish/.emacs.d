@@ -9,11 +9,94 @@
 
 (require 'mu4e)
 
+(require 'marginalia)
+
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
 
 (defvar tychoish/mail-accounts-table (ht-create #'equal))
 
 (defvar tychoish/mail-account-current nil)
+
+(bind-keys :prefix "C-c m"
+           :prefix-map tychoish/mail-map
+	   ("a" . tychoish-mail-select-account)
+           ("m" . mu4e)
+           ("d" . mu4e-search-maildir)
+           ("b" . mu4e-search-bookmark)
+           ("c" . mu4e-compose-new))
+
+(use-package consult-mu
+  :load-path "external/consult-mu/"
+  :defer t
+  :bind (:map tychoish/mail-map
+	 ("C-;" . consult-mu)
+	 (";" . consult-mu-bookmark))
+  :config
+  (defun consult-mu-bookmark ()
+    "Select `consult-mu' initial query from mu4e-bookmarks."
+    (interactive)
+    (let* ((bookmarks (ht-create #'equal))
+	   (_ (mapc (lambda (bookmark) (setf (ht-get bookmarks (plist-get bookmark :name)) bookmark)) mu4e-bookmarks))
+	   (longest-id (length-of-longest-item (ht-keys bookmarks)))
+	   (selection (consult--read
+		       bookmarks
+		       :prompt "mu4e query =>> "
+		       :annotate (lambda (candidate)
+				   (let* ((bookmark (ht-get bookmarks candidate))
+					  (key (plist-get bookmark :key))
+					  (query (plist-get bookmark :query)))
+
+				     (marginalia--fields
+				      (:left (char-to-string key)
+				       :format (format "%s(b%%s)" (prefix-padding-for-annotation candidate longest-id))
+				       :face 'marginalia-key)
+				      (query
+				       :format (format "query: \"%s\"" query)
+				       :face 'marginalia-value)))))))
+      (consult-mu (plist-get (ht-get bookmarks selection) :query))))
+
+  (defun tychoish/consult-mu-headers-template ()
+    (concat "%f" (number-to-string
+		  (floor (* (frame-width) 0.15)))
+	    "%s" (number-to-string (floor (* (frame-width) 0.5)))
+	    "%d13" "%g" "%x"))
+
+  (setq consult-mu-maxnum 200)
+  (setq consult-mu-preview-key 'any)
+  (setq consult-mu-mark-previewed-as-read nil)
+  (setq consult-mu-mark-viewed-as-read t)
+  (setq consult-mu-use-wide-reply t)
+  (setq consult-mu-headers-template 'tychoish/consult-mu-headers-template)
+
+  (setq consult-mu-saved-searches-dynamics '("#flag:unread"))
+  (setq consult-mu-saved-searches-async '("#flag:unread"))
+
+  (use-package consult-mu-compose
+    :load-path "external/consult-mu/extras/"
+    :after (consult-mu)
+    :config
+    (setq consult-mu-compose-use-dired-attachment 'in-dired)
+    (setq consult-mu-compose-preview-key "M-o"))
+
+  (use-package consult-mu-contacts
+    :load-path "external/consult-mu/extras/"
+    :after (consult-mu)
+    :config
+    (setq consult-mu-contacts-ignore-case-fold-search t)
+    (setq consult-mu-contacts-ignore-list '("^.*no.*reply.*")))
+
+  (use-package consult-mu-embark
+    :load-path "external/consult-mu/extras/"
+    :after (consult-mu)
+    :config
+    (setq consult-mu-embark-attach-file-key "C-a")
+    (with-eval-after-load 'consult-mu-compose
+      (declare-function consult-mu-compose-embark-bind-attach-file-key "consult-mu-compose-embark")
+      (require 'consult-mu-compose-embark)
+      (consult-mu-compose-embark-bind-attach-file-key))
+
+    (with-eval-after-load 'consult-mu-contacts
+      (require 'consult-mu-contacts-embark))))
 
 (with-eval-after-load 'message
   (bind-key "M-q" 'ignore message-mode-map)
@@ -107,13 +190,17 @@
          :query "date:7d..now"
          :key ?w)))
 
+(declare-function cape-capf-prefix-length "cape")
+(declare-function cape-dict "cape")
+(declare-function cape-emoji "cape-char")
+(declare-function yasnippet-capf "`yasnippet-capf'")
 
 (defun tychoish/set-up-message-mode-buffer ()
   (setq-local completion-at-point-functions
 	      (list (cape-capf-prefix-length #'mu4e-complete-contact 4)
-		    #'cape-emoji
-		    #'cape-dict
-		    #'yasnippet-capf))
+		    'cape-emoji
+		    'cape-dict
+		    'yasnippet-capf))
 
   (setq-local use-hard-newlines t)
   (setq-local make-backup-files nil))
@@ -297,7 +384,6 @@
              (setq message-signature-file address)
              (setq user-full-name given-name)
              (setq mu4e-compose-reply-to-address address)
-             (setq mu4e-reply-to-address address)
 
              (setq mail-host-address (s-replace-regexp ".*@" "" address))
              (setq message-sendmail-extra-arguments (list "-a" address))

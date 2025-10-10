@@ -33,12 +33,16 @@
 
 ;;; Code:
 
+(require 'f)
+(require 's)
 (require 'ht)
+(require 'dash)
 
 (require 'tychoish-common)
 
-(bind-keys :prefix "C-c m"
-           :prefix-map tychoish/mail-map)
+(require 'use-package)
+
+(require 'delight)
 
 (bind-keys ("C-x m" . execute-extended-command)
            ("C-x C-m" . execute-extended-command)
@@ -122,6 +126,8 @@
            ("f" . backward-kill-sexp)
            ("d" . delete-region)
            ("w" . delete-trailing-whitespace))
+
+(declare-function browse-url-chrome "browse-url")
 
 (bind-keys :prefix "C-c w"
            :prefix-map tychoish/web-browser-map ;; C-c w
@@ -223,6 +229,8 @@
 (setq eldoc-echo-area-prefer-doc-buffer nil)
 (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
 
+(setq package-user-dir (concat user-emacs-directory "elpa"))
+
 (setq lpr-add-switches "-T ''")
 
 (setq electric-pair-inhibit-predicate #'tychoish/electric-pair-inhibition)
@@ -273,7 +281,7 @@
    (savehist-mode 1))
 
   (with-eval-after-load 'consult
-    (bind-key "C-x C-r" #'consult-recent-file 'global-map))
+    (bind-key "C-x C-r" 'consult-recent-file 'global-map))
 
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
@@ -434,15 +442,19 @@
     (delight 'visual-line-mode " wr")
     (delight 'fundamental-mode "fun")))
 
+(defun tychoish--load-user-file (feat)
+  (with-slow-op-timer
+   (format (symbol-join "load-user" feat))
+   (require feat)))
+
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
   (->> (f-entries (f-join user-emacs-directory "user"))
        (--filter (s-suffix-p ".el" it))
        (-map #'f-filename)
-       (--map (intern (string-remove-suffix ".el" it)))
-       (--map (with-slow-op-timer
-               (format "load-user-%s" it)
-               (require it)))))
+       (-map #'f-base)
+       (-map #'intern)
+       (-map #'tychoish--load-user-file)))
 
 (defvar tychoish/abbrev-files-cache (ht-create)
   "cache mapping file names to files' mtime to avoid re-importing files")
@@ -504,6 +516,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; editing -- text editing, experience, and manipulation
+
+(declare-function electric-pair-default-inhibit "elec-pair")
+(declare-function electric-pair-conservative-inhibit "elec-pair")
 
 (defvar electric-pair-inhibition nil)
 (defvar electric-pair-eagerness t)
@@ -632,9 +647,8 @@
          (setq-default gptel-model ,model)
          (setq-default gptel-backend ,backend))
 
-       (bind-keys :map gptel-mode-map
-                  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-                  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)))))
+       (bind-key ,(format "C-c r a m %s" (downcase key)) ,local-function-symbol gptel-mode-map)
+       (bind-key ,(format "C-c r a m %s" (upcase key)) ,default-function-symbol gptel-mode-map))))
 
 (defun tychoish/set-up-aider-env-vars ()
   (when (boundp 'anthropic-api-key)
@@ -649,6 +663,24 @@
     (unless (s-contains-p uv-bin-path search-path)
       (setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
     (add-to-list 'exec-path uv-bin-path)))
+
+
+(defun tychoish-set-notes-directory (&optional path)
+  (when path
+    (setq local-notes-directory (expand-file-name path)))
+
+  (setq org-directory (f-join local-notes-directory "org"))
+  (setq org-agenda-files (->> (list org-directory user-org-directories)
+                              (-flatten)
+                              (-map #'expand-file-name)
+                              (-keep #'trimmed-string-or-nil)
+                              (-distinct)))
+  (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
+  (setq org-default-notes-file (f-join org-directory "records.org"))
+  (setq org-archive-location (f-join org-directory "archive/%s::datetree/"))
+  (setq deft-directory (f-join local-notes-directory "deft"))
+  local-notes-directory)
+
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

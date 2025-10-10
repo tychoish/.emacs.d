@@ -8,13 +8,21 @@
 ;; only loads when called directly or a mode is activated.
 
 ;;; Code:
-(eval-when-compile
-  (require 'tychoish-common)
-  (require 'tychoish-bootstrap)
-  (require 'dash)
-  (require 'f)
-  (require 's)
-  (require 'ht))
+
+(require 'f)
+(require 's)
+(require 'ht)
+(require 'dash)
+
+(require 'tychoish-common)
+(require 'tychoish-bootstrap)
+
+(require 'use-package)
+
+;; (setq use-package-expand-minimally t)
+;; (setq use-package-verbose t)
+(setq use-package-compute-statistics t)
+(setq use-package-minimum-reported-time 0.5)
 
 (use-package delight
   :ensure t
@@ -223,7 +231,7 @@
          ("r" . consult-rg-compile)
          ("p" . tychoish-rg-repo))
   :defines (tychoish/ecclectic-rg-map)
-  :commands (tychoish-rg tychoish-rg-repo tychoish-find-merges)
+  :commands (tychoish-rg tychoish-rg-repo tychoish-find-merges ripgrep-regexp)
   :init
   (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
     "r" '("rg-grep" . tychoish/ecclectic-rg-map))
@@ -346,7 +354,8 @@
 	 (org-agenda-mode . tychoish/background-revbufs-for-hook)
          (org-mode . tychoish/set-up-buffer-org-mode))
   :defines (tychoish/org-gist-map tychoish/org-mode-personal-map)
-  :commands (tychoish-org-setup-standard-capture-templates
+  :commands (tychoish-set-notes-directory
+	     tychoish-org-setup-standard-capture-templates
              tychoish-org-add-project-file-capture-templates
              tychoish-org-reset-capture-templates
              org-agenda-files-reload
@@ -355,22 +364,6 @@
              tychoish-org-mark-done-and-archive
 	     ;; org-core
 	     org-save-all-org-buffers)
-  :init
-  (defun tychoish-set-notes-directory (&optional path)
-    (when path
-      (setq local-notes-directory (expand-file-name path)))
-
-    (setq org-directory (f-join local-notes-directory "org"))
-    (setq org-agenda-files (->> (list org-directory user-org-directories)
-                                (-flatten)
-                                (-map #'expand-file-name)
-                                (-keep #'trimmed-string-or-nil)
-                                (-distinct)))
-    (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
-    (setq org-default-notes-file (f-join org-directory "records.org"))
-    (setq org-archive-location (f-join org-directory "archive/%s::datetree/"))
-    (setq deft-directory (f-join local-notes-directory "deft"))
-    local-notes-directory)
   :config
   (add-hook 'org-mode-hook 'turn-on-soft-wrap)
   (add-hook 'org-shiftup-final-hook 'windmove-up)
@@ -394,6 +387,10 @@
              tychoish-define-project-notes)
   :config
   (setq tychoish-blog-path (expand-file-name "~/src/blog")))
+
+(with-slow-op-timer
+ "<core.el> load-<tychoish-mail>"
+ (require 'tychoish-mail))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -453,27 +450,12 @@
          ("^" . cape-tex)
          ("&" . cape-sgml)
          ("u" . cape-rfc1345))
-  :commands (cape-capf-inside-code)
   :init
-  (defmacro disabled (&rest body)
-    `(unless 'disabled
-       ,@body))
-
-  (defmacro cape-capf-wrapper (wrapper inner)
-    (when inner
-      (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
-	     (wrapper-name (symbol-name wrapper))
-	     (capf-name (symbol-name inner))
-	     (name (format "%s-<%s>" capf-name wrapper-name ))
-	     (symb (intern name)))
-	`(defun ,symb ()
-	  (funcall ',wrapper ',inner)))))
+  (declare-function capf-wordfreq-avalible-p "tychoish-core")
+  (declare-function cape-capf-inside-code "cape")
 
   (defun tychoish/maybe-capf-dict ()
     (and (boundp 'cape-dict-file) (f-exists-p cape-dict-file) #'cape-dict))
-
-  (declare-function 'capf-wordfreq-avalible-p "tychoish-core")
-  (declare-function 'cape-capf-inside-code "cape")
 
   (defun tychoish/maybe-capf-wordfreq ()
     (disabled (when (capf-wordfreq-avalible-p)
@@ -874,9 +856,7 @@
 
 (use-package consult-flycheck
   :ensure t
-  :bind (("M-g f" . consult-flycheck)
-	 :map flycheck-mode-map
-	 ("m" . consult-flycheck)))
+  :bind (("M-g f" . consult-flycheck)))
 
 (use-package consult-flyspell
   :ensure t
@@ -902,8 +882,8 @@
   :commands (consult-gh))
 
 (use-package consult-ag
-  ;; :vc (:url "https://github.com/abrochard/consult-ag" :rev "cf740cc")
-  ;; :ensure t
+  :vc (:url "https://github.com/abrochard/consult-ag" :rev "cf740cc")
+  :ensure t
   :bind (("M-g a" . consult-ag)
 	 :map tychoish/ecclectic-ag-grep-map
 	 ("g" . consult-ag)
@@ -933,9 +913,7 @@
          ("l" . consult-rg-pwd-wizard)
 	 :map tychoish/global-org-map ;; "C-c o"
 	 ("j" . consult-org-capture)
-	 ("c" . consult-org-capture)
-	 :map tychoish/mail-map
-	 ("a" . tychoish-mail-select-account))
+	 ("c" . consult-org-capture))
   :commands (consult-rg-for-thing
              consult-rg
 	     get-directory-parents
@@ -955,84 +933,13 @@
 	     tychoish--compilation-read-command
 	     tychoish/compile-project))
 
-(use-package consult-mu
-  :load-path "external/consult-mu/"
-  :after (consult mu4e)
-  :bind (:map tychoish/mail-map
-	 ("C-;" . consult-mu)
-	 (";" . consult-mu-bookmark))
-  :config
-  (defun consult-mu-bookmark ()
-    "Select `consult-mu' initial query from mu4e-bookmarks."
-    (interactive)
-    (let* ((bookmarks (ht-create #'equal))
-	   (_ (mapc (lambda (bookmark) (setf (ht-get bookmarks (plist-get bookmark :name)) bookmark)) mu4e-bookmarks))
-	   (longest-id (length-of-longest-item (ht-keys bookmarks)))
-	   (selection (consult--read
-		       bookmarks
-		       :prompt "mu4e query =>> "
-		       :annotate (lambda (candidate)
-				   (let* ((bookmark (ht-get bookmarks candidate))
-					  (key (plist-get bookmark :key))
-					  (query (plist-get bookmark :query)))
-
-				     (marginalia--fields
-				      (:left (char-to-string key)
-				       :format (format "%s(b%%s)" (prefix-padding-for-annotation candidate longest-id))
-				       :face 'marginalia-key)
-				      (query
-				       :format "query: \"%s\""
-				       :face 'marginalia-value)))))))
-      (consult-mu (plist-get (ht-get bookmarks selection) :query))))
-
-  (defun tychoish/consult-mu-headers-template ()
-    (concat "%f" (number-to-string
-		  (floor (* (frame-width) 0.15)))
-	    "%s" (number-to-string (floor (* (frame-width) 0.5)))
-	    "%d13" "%g" "%x"))
-
-  (setq consult-mu-maxnum 200)
-  (setq consult-mu-preview-key 'any)
-  (setq consult-mu-mark-previewed-as-read nil)
-  (setq consult-mu-mark-viewed-as-read t)
-  (setq consult-mu-use-wide-reply t)
-  (setq consult-mu-headers-template 'tychoish/consult-mu-headers-template)
-
-  (setq consult-mu-saved-searches-dynamics '("#flag:unread"))
-  (setq consult-mu-saved-searches-async '("#flag:unread"))
-
-  (use-package consult-mu-compose
-    :load-path "external/consult-mu/extras/"
-    :after (consult-mu)
-    :config
-    (setq consult-mu-compose-use-dired-attachment 'in-dired)
-    (setq consult-mu-compose-preview-key "M-o"))
-
-  (use-package consult-mu-contacts
-    :load-path "external/consult-mu/extras/"
-    :after (consult-mu)
-    :config
-    (setq consult-mu-contacts-ignore-case-fold-search t)
-    (setq consult-mu-contacts-ignore-list '("^.*no.*reply.*")))
-
-  (use-package consult-mu-embark
-    :load-path "external/consult-mu/extras/"
-    :after (consult-mu)
-    :config
-    (setq consult-mu-embark-attach-file-key "C-a")
-    (with-eval-after-load 'consult-mu-compose
-      (require 'consult-mu-compose-embark)
-      (consult-mu-compose-embark-bind-attach-file-key))
-
-    (with-eval-after-load 'consult-mu-contacts
-      (require 'consult-mu-contacts-embark))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; helm tools (legacy)
 
 (use-package helm
   :ensure t
+  :defines (helm-completing-read-handlers-alist)
   :bind (:prefix "C-c h"
          :prefix-map tychoish/helm-center-menu-map
          ;; most interesting helm menus are under one prefix
@@ -1313,30 +1220,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; email (mu4e) configuration
-
-(use-package tychoish-mail
-  :commands (mu4e mu4e-search-maildir mu4e-search-bookmark mu4e-compuse-new
-	     tychoish-mail-select-account tychoish-define-mail-account)
-  :init
-  (bind-keys :map tychoish/mail-map
-             ("m" . mu4e)
-             ("d" . mu4e-search-maildir)
-             ("b" . mu4e-search-bookmark)
-             ("c" . mu4e-compose-new)))
-
-(use-package emojify
-  :ensure t
-  :commands (global-emojify-mode)
-  :delight emojify-mode
-  :config
-  (setq emojify-emoji-styles '(ascii unicode github))
-  (setq emojify-display-style 'unicode)
-  (setq emojify-point-entered-behaviour 'echo))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; chat and notifications
 
 (use-package alert
@@ -1370,6 +1253,15 @@
 	(setq-default alert-default-style 'osx-notifier)
       (remove-hook 'server-after-make-frame 'tychoish/darwin-alert-config-for-server)
       (unintern 'tychoish/darwin-alert-config-for-server obarray))))
+
+(use-package emojify
+  :ensure t
+  :commands (global-emojify-mode)
+  :delight emojify-mode
+  :config
+  (setq emojify-emoji-styles '(ascii unicode github))
+  (setq emojify-display-style 'unicode)
+  (setq emojify-point-entered-behaviour 'echo))
 
 (use-package tracking
   :ensure t
@@ -1879,7 +1771,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (setq-local tab-width 4)
     (setq-local fill-column 100))
   :config
-  (require 'python-mode)
+  (require 'python)
 
   (defun balle-python-shift-left ()
     (interactive)
@@ -2039,6 +1931,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (define-key flycheck-mode-map flycheck-keymap-prefix flycheck-command-map)
   (setq flycheck-keymap-prefix (kbd "C-c f"))
 
+  (with-eval-after-load 'consult-flycheck
+    (bind-key "m" consult-flycheck flycheck-command-map))
+
   (defun flycheck-eldoc (callback &rest _ignored)
     "Print flycheck messages at point by calling CALLBACK." ;; from masteringemacs.org
     (when-let ((flycheck-errors (and flycheck-mode (flycheck-overlay-errors-at (point)))))
@@ -2112,14 +2007,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
            (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
       (tychoish/compile-project "super-lint" command-string)))
 
-  (with-eval-after-load 'rust-mode (require 'rust-compile))
+  (with-eval-after-load 'rust-mode
+    (require 'rust-compile))
 
   (setq-default compilation-save-buffers-predicate #'approximate-project-root)
-
   (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
-
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
-
   (advice-add 'compilation-read-command :override 'tychoish--compilation-read-command))
 
 (use-package cargo
@@ -2135,6 +2028,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :after (flycheck flyspell
   	  (:any org-mode rst-mode markdown-mode message-mode sgml-mode html-mode html-ts-mode))
   :defines (c-aspell-dynamic markdow-aspell-dynamic mail-aspell-dynamic html-aspell-dynamic)
+  :functions (flycheck-aspell--start-checker flycheck-aspell--parse)
   :config
   (add-to-list 'flycheck-checkers 'c-aspell-dynamic)
   (add-to-list 'flycheck-checkers 'org-aspell-dynamic)
@@ -2142,6 +2036,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'flycheck-checkers 'html-aspell-dynamic)
   (add-to-list 'flycheck-checkers 'markdown-aspell-dynamic)
   (add-to-list 'flycheck-checkers 'mail-aspell-dynamic)
+
+  (eval-when-compile
+    (require 'flycheck-aspell))
+
   (flycheck-aspell-define-checker "org" "Org" ("--add-filter" "url") (org-mode))
   (flycheck-aspell-define-checker "rst" "reStructuredText" ("--add-filter" "url") (rst-mode)))
 
@@ -2149,6 +2047,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :after (flycheck flycheck-aspell grammarly)
   :commands (flycheck-grammarly-setup tychoish/flycheck-grammarly-enable tychoish/flycheck-grammarly-disable)
+  :functions (flycheck-remove-next-checker flycheck-add-next-checker)
   :config
   (setq flycheck-grammarly-check-time 0.8)
 
@@ -2222,7 +2121,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package eglot
   :ensure nil
-  :defines (eglot-mode-map)
+  :defines (eglot-mode-map eglot-alternatives)
+  :functions (eglot-format-buffer eglot-managed-p eglot-completion-at-point)
   :hook (((js-mode
            js-ts-mode
            typescript-ts-mode
@@ -2250,13 +2150,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("k" . eglot-shutdown)
          ("l" . eglot-list-connections)
          ("g" . eglot-forget-pending-continuations))
+  :commands (eglot-code-action-rewrite eglot-code-action-extract eglot-code-actions eglot-format eglot-rename eglot-code-action-organize-imports)
+  :functions (eglot-alternatives)
   :init
-  (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-ensure-hook)
   (defun tychoish/eglot-ensure-hook ()
     (setq-local eldoc-docuemntation-stratedgy 'eldoc-documentation-compose-eagerly)
     ;; toggle it on and off so that the left-fringe isn't weird.
     (flycheck-eglot-mode -1)
     (flycheck-eglot-mode 1))
+  (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
   :config
   (bind-keys :map eglot-mode-map
 	     :prefix "C-c l"
@@ -2432,6 +2334,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("r" . gptel-rewrite)
          :map gptel-mode-map
 	 ("C-c m" . gptel-menu))
+  :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands gptel
   :config
   (setq gptel-include-reasoning 'ignore)
