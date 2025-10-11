@@ -1,4 +1,4 @@
-;;  -*- lexical-binding: t -*-
+;; -*- lexical-binding: t -*-
 
 (require 'consult)
 (require 'ht)
@@ -117,10 +117,10 @@
          (directories (get-directory-parents default-directory project-root-directory))
          (operation-table (ht-create)))
 
-    (run-hook-with-args 'tychoish--compilation-candidate-functions project-root-directory directories operation-table)
+    (run-hook-with-args 'tychoish-compilation-candidate-functions project-root-directory directories operation-table)
 
     (when command
-      (add-candidates-to-table
+      (tychoish-cc-add-to-table
        operation-table
        (make-compilation-candidate
 	:command command
@@ -134,7 +134,7 @@
   (let* ((candidates (tychoish--get-compilation-candidates default-directory command))
          (names (->> candidates
                      (ht-values)
-		     (--map (tychoish--compilation-candidate-name it))
+		     (--map (tychoish-compilation-candidate-name it))
                      (-sort #'string-lessp)))
          (longest-id (length-of-longest-item names))
          (selection-name
@@ -144,11 +144,11 @@
            :command this-command
            :history 'compile-history
            :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id)
-                                           (tychoish--compilation-candidate-annotation (ht-get candidates key))))))
+                                           (tychoish-compilation-candidate-annotation (ht-get candidates key))))))
 	 (selection (ht-get candidates selection-name)))
 
     (if selection
-	(tychoish--compilation-candidate-name selection)
+	(tychoish-compilation-candidate-name selection)
       selection-name)))
 
 (cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
@@ -192,7 +192,7 @@
 
 ;; compilation candidate discovery
 
-(cl-defstruct (tychoish--compilation-candidate
+(cl-defstruct (tychoish-compilation-candidate
                (:constructor nil) ;; disable default
                (:constructor make-compilation-candidate (&key command annotation (directory default-directory) (name command))))
   "Structure for compilation candidates"
@@ -213,10 +213,15 @@
    :documentation "description of command, used for marginalia annotations."
    :type string))
 
-(defun add-candidates-to-table (table candidates)
-  (mapc (lambda (item) (ht-set table (tychoish--compilation-candidate-name item) item)) candidates))
+(defun tychoish-cc-add-to-table (table candidate)
+  (ht-set table (tychoish-compilation-candidate-name candidate) candidate))
 
-(defvar tychoish--compilation-candidate-functions nil
+(defun add-candidates-to-table (table candidates)
+  (->> candidates
+       (-filter #'tychoish-compilation-candidate-p)
+       (--mapc (tychoish-cc-add-to-table table it))))
+
+(defvar tychoish-compilation-candidate-functions nil
   "A List of functions that populate a table of possible completion commands
 
 All functions are called with (PROJECT-ROOT-DIRECTORY DIRECTORIES TABLE)
@@ -226,11 +231,11 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
 ;;;###autoload
 (cl-defmacro register-compilation-candidates (&key name (predicate t) (hooks nil) pipeline)
-  (let ((symbol-name (intern (format "tychoish--compilation-candidates-for-%s" name)))
-	(hook-registering-function-name (intern (format "tychoish--compilation-candidate-registrar-for-%s" name))))
+  (let ((symbol-name (intern (format "tychoish-compilation-candidates-for-%s" name)))
+	(hook-registering-function-name (intern (format "tychoish-compilation-candidate-registrar-for-%s" name))))
     `(progn
        (defun ,symbol-name (project-root-directory directories operation-table)
-	 ,(format "Build list of `tychoish--compilation-candidate' objects for suggestion in compilation buffers")
+	 ,(format "Build list of `tychoish-compilation-candidate' objects for suggestion in compilation buffers")
 	 (ignore project-root-directory directories operation-table)
 	 (when ,predicate
 	   (add-candidates-to-table
@@ -238,10 +243,10 @@ current directory and the project root, and `table' is table of `tychoish--compl
 	    ,pipeline)))
 
        ,(if (eql 0 (length hooks))
-	    `(add-hook 'tychoish--compilation-candidate-functions #',symbol-name)
+	    `(add-hook 'tychoish-compilation-candidate-functions #',symbol-name)
 	  `(let ((hooks ,hooks))
 	     (defun ,hook-registering-function-name ()
-	       (add-hook 'tychoish--compilation-candidate-functions #',symbol-name 0 t))
+	       (add-hook 'tychoish-compilation-candidate-functions #',symbol-name 0 t))
 
 	     (with-eval-after-load "compile"
 	       (push 'compilation-mode-hook hooks))
