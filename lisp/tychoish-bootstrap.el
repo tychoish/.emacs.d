@@ -1,4 +1,4 @@
-;;; tychoish-bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
+;tty;; tychoish-bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -11,7 +11,7 @@
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
-;; the Free Sopftware Foundation; either version 3, or (at your option)
+;; the Free Software Foundation; either version 3, or (at your option)
 ;; any later version.
 
 ;; This program is distributed in the hope that it will be useful,
@@ -429,7 +429,7 @@
 
 (advice-add 'run-hooks :around 'with-hook-timing)
 
-(setq default-frame-alist nil)
+(setq default-frame-alist (unless (gui-p) '((background-color . nil))))
 
 (defun tychoish/init-late-disable-modes ()
   (with-slow-op-timer
@@ -484,7 +484,7 @@
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (add-hook 'emacs-startup-hook #'tychoish/init-late-disable-modes)
-(add-hook 'emacs-startup-hook #'tychoish/init-late-set-up-theme)
+(add-hook 'after-init-hook #'tychoish/init-late-set-up-theme)
 (add-hook 'auto-save-mode-hook 'tychoish/set-up-auto-save)
 
 (defun tychoish--load-user-file (feat)
