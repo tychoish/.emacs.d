@@ -18,7 +18,7 @@
   `(let ((file-name-handler-alist nil))
      ,@body))
 
-(defconst tychoish/slow-op-time-threshold 0.01
+(defconst tychoish/slow-op-time-threshold 0.001
   "minimum time before `with-slow-op-timer' logs")
 
 (defmacro with-slow-op-timer (name &rest body)
@@ -129,13 +129,23 @@
    (require 'tychoish-bootstrap)
    (setq custom-file (tychoish/conf-state-path "custom.el"))
    'tychoish-bootstrap)
-  ;; all remaining use-package declarations.
+
+  ;; remaining use-package declarations.
   (with-slow-op-timer
    "<init.el> load tychoish-core"
    (require 'tychoish-core))
+
+  (with-slow-op-timer
+   "<core.el> load tychoish-mail"
+   (require 'tychoish-mail))
+
+  (with-slow-op-timer
+   "<core.el> load tychoish-org"
+   (require 'tychoish-org))
+
   ;; load the user/*.el files
   (with-slow-op-timer
-   "<init.el> load user directory"
+   "<init.el> load all user files"
    (declare-function tychoish-set-up-user-local-config 'tychoish-bootstrap)
    (tychoish-set-up-user-local-config))))
 

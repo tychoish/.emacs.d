@@ -96,15 +96,15 @@
 (defun get-directory-default-candidate-list ()
   (let ((proj-root (approximate-project-root)))
     (->> (get-directory-parents default-directory (or proj-root ""))
-	 (-join (list default-directory
+	 (-join (list proj-root
+		      (thing-at-point 'filename)
+                      (thing-at-point 'existing-filename)
+		      default-directory
                       user-emacs-directory
-                      "~/"
-                      proj-root
-                      (thing-at-point 'filename)
-                      (thing-at-point 'existing-filename)))
+                      "~/"))))
        (-filter #'stringp)
        (-map #'expand-file-name)
-       (-distinct))))
+       (-distinct))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

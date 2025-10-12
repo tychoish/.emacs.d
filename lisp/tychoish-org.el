@@ -4,33 +4,41 @@
 (require 's)
 (require 'dash)
 
-(require 'org)
-(require 'org-contrib)
-(require 'org-capture)
-(require 'org-agenda)
-(require 'org-archive)
-
 (require 'tychoish-common)
+
+(autoload 'org-agenda-files "org")
+(autoload 'org-save-all-org-buffers "org")
+
+(defconst tychoish/org-date-spec-datetime "<%Y-%02m-%02d %02H:%02M:%02S %Z>")
+(defconst tychoish/org-date-spec-date "<%Y-%02m-%02d>")
+
+(with-eval-after-load 'org
+  (add-hook 'org-mode-hook 'turn-on-soft-wrap) ;; from 'tychoish-common
+  (add-hook 'org-agenda-mode-hook 'tychoish/background-revbufs-for-hook)
+  (add-hook 'org-mode-hook 'tychoish/set-up-buffer-org-mode)
+
+  (add-hook 'org-ctrl-c-ctrl-c-hook 'org-set-weekday-of-timestamp)
+  (add-hook 'org-shiftup-final-hook 'windmove-up)
+  (add-hook 'org-shiftleft-final-hook 'windmove-left)
+  (add-hook 'org-shiftdown-final-hook 'windmove-down)
+  (add-hook 'org-shiftright-final-hook 'windmove-right)
+
+  (setq org-modules
+	'(org-capture
+          org-datetree
+          org-annotate-file
+          org-depend
+          org-habit))
+
+  (org-load-modules-maybe t))
+
+(autoload 'org-store-link "ol")
+(autoload 'org-insert-link "ol")
+(autoload 'org-annotate-file "org-annotate-file")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; org-mode extensions and supporting packages
-
-(defvar tychoish-org--auxiliary-packages
-  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
-  "Supporting org packages that should be installed when org-mode loads the first time.")
-
-(defun tychoish-org--install-auxiliary-packages ()
-  "Install all of the auxiliary packages"
-  (->> tychoish-org--auxiliary-packages
-       (-remove #'package-installed-p)
-       (-map #'package-install-async)
-       (length)))
-
-(add-hygenic-one-shot-hook
- :name "org-install-aux-packages"
- :hook org-mode-hook
- :function 'tychoish-org--install-auxiliary-packages)
 
 (autoload 'toc-org-insert-toc "toc-org")
 (autoload 'org-gist-export-to-gist "ox-gist")
@@ -43,102 +51,113 @@
 (autoload 'org-leanpub-markdown-export-to-markdown "ox-leanpub-markdown")
 (autoload 'org-leanpub-markdown-export-as-markdown "ox-leanpub-markdown")
 
+(defvar tychoish-org--auxiliary-packages
+  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
+  "Supporting org packages that should be installed when org-mode loads the first time.")
+
+(defun tychoish-org--install-auxiliary-packages ()
+  "Install all of the auxiliary packages"
+  (with-slow-op-timer
+   "<org.el> install aux packages"
+   (->> tychoish-org--auxiliary-packages
+	(-remove #'package-installed-p)
+	(-map #'package-install-async)
+	(length))))
+
+(add-hygenic-one-shot-hook
+ :name "org-install-aux-packages"
+ :hook 'org-mode-hook
+ :function 'tychoish-org--install-auxiliary-packages)
+
+(add-hygenic-one-shot-hook
+ :name "org-capture [install standard templates]"
+ :hook 'emacs-startup-hook
+ :function 'tychoish-org-setup-standard-capture-templates)
+
 (with-eval-after-load 'ox-rst
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
 (with-eval-after-load 'ox-leanpub
   (org-leanpub-book-setup-menu-markua))
 
-(defun tychoish--add-toc-org-op ()
-  (save-excursion (toc-org-insert-toc)))
-
-(defun org-gist-export-private-gist ()
-  (interactive)
-  (org-gist-export-to-gist nil 'open))
-
-(defun org-gist-export-public-gist ()
-  (interactive)
-  (org-gist-export-to-gist 'public))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; key bindings
 
-;; bind keys inside of org-mode
-(bind-keys :map org-mode-map
-           ("C-c l o" . org-link-open-from-string)
-           ("C-c C-p" . set-mark-command)
-           ("M-TAB" . org-cycle)
-           ("C-M-TAB" . org-cycle-force-archived)
-           :map org-mode-map
-           :prefix "C-c o"
-           :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
-           ("a" . org-agenda)
-           ("k" . org-capture)
+(bind-keys :map tychoish/global-org-map
 	   ("f" . org-agenda-files-open)
-           ("t" . org-set-tags-command)
-           ("n" . org-narrow-to-subtree)
-           ("w" . widen)
-           ("p" . org-insert-property-drawer)
-           ("w" . org-refile)
-           ("d" . tychoish-org-date-now)
-           ("C-s" . org-save-all-org-buffers)
-           ;; ("i" . org-ctags-create-tags)
-	   ;; ("g" . tychoish/org-gist-map)
-           :map tychoish/org-mode-personal-map
-           :prefix "c"
-           :prefix-map tychoish/org-mode-capture-map
-           ("c" . org-capture)
-           ("p" . org-capture-goto-last-stored)
-           ("l" . org-capture-goto-last-stored)
-           ("t" . org-capture-goto-target)
-           ("r" . org-capture-refile)
-           ("w" . org-capture-refile)
-	   :map org-agenda-mode-map
-	   ("C-l" . org-agenda-open-link)
-	   ("M-c" . org-agenda-goto-calendar)
-           :map tychoish/org-mode-personal-map
-           :prefix "f"
-           :prefix-map tychoish/org-mode-personal-archive-map
-           ("d" . tychoish-org-mark-done-and-archive)
-           ("e" . org-cycle-force-archived)
-           ("t" . org-archive-set-tag)
-           ("s" . org-archive-to-archive-sibling))
+	   ("r" . org-agenda-files-reload)
+	   ("j" . consult-org-capture)
+	   ("c" . consult-org-capture)
+	   :map tychoish/org-link-mode-map
+           ("a" . org-annotate-file))
 
-(with-eval-after-load 'helm
-  (bind-keys :map tychoish/helm-center-menu-map
-             :prefix "o"
-             :prefix-map tychoish/org-mode-personal-helm-map
-             ("b" . helm-org-in-buffer-headings)
-             ("p" . helm-org-parent-headings)
-             ("a" . helm-org-agenda-files-headings)))
+(with-eval-after-load 'org
+  (bind-keys :map org-mode-map
+             ("C-c l o" . org-link-open-from-string)
+             ("C-c C-p" . set-mark-command)
+             ("M-TAB" . org-cycle)
+             ("C-M-TAB" . org-cycle-force-archived)
+             :map org-mode-map
+             :prefix "C-c o"
+             :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
+             ("a" . org-agenda)
+             ("k" . org-capture)
+	     ("f" . org-agenda-files-open)
+             ("t" . org-set-tags-command)
+             ("n" . org-narrow-to-subtree)
+             ("w" . widen)
+             ("p" . org-insert-property-drawer)
+             ("w" . org-refile)
+             ("d" . tychoish-org-date-now)
+             ("C-s" . org-save-all-org-buffers)
+             ;; ("i" . org-ctags-create-tags)
+	     ;; ("g" . tychoish/org-gist-map)
+             :map tychoish/org-mode-personal-map
+             :prefix "c"
+             :prefix-map tychoish/org-mode-capture-map
+             ("c" . org-capture)
+             ("p" . org-capture-goto-last-stored)
+             ("l" . org-capture-goto-last-stored)
+             ("t" . org-capture-goto-target)
+             ("r" . org-capture-refile)
+             ("w" . org-capture-refile)
+             :map tychoish/org-mode-personal-map
+             :prefix "f"
+             :prefix-map tychoish/org-mode-personal-archive-map
+             ("d" . tychoish-org-mark-done-and-archive)
+             ("e" . org-cycle-force-archived)
+             ("t" . org-archive-set-tag)
+             ("s" . org-archive-to-archive-sibling))
+
+  (defvar-keymap tychoish/org-gist-map
+    :name "org-gist"
+    :doc "keymap for org-gist commands"
+    "p" #'org-gist-export-private-gist
+    "g" #'org-gist-export-public-gist)
+
+  (bind-key "g" 'tychoish/org-gist-map tychoish/org-mode-personal-map))
+
+(with-eval-after-load 'org-agenda
+  (bind-keys :map org-agenda-mode-map
+	     ("C-l" . org-agenda-open-link)
+	     ("M-c" . org-agenda-goto-calendar)))
 
 (with-eval-after-load 'consult
   (bind-keys :map tychoish/org-mode-personal-map ;; "C-c o"
-             ("h" . consult-org-heading)               ;; Alternative: consult-org-heading (for jump)
-             ("s" . consult-org-agenda)))              ;; Alternative: consult-org-heading (for jump))
+             ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)
+             ("s" . consult-org-agenda)))        ;; Alternative: consult-org-heading (for jump))
 
 (with-eval-after-load 'consult-tycho
   (bind-keys :map tychoish/org-mode-capture-map
 	     ("j" . consult-org-capture)
 	     ("h" . consult-org-capture-target)))
 
-(defvar-keymap tychoish/org-gist-map
-  :name "org-gist"
-  :doc "keymap for org-gist commands"
-  "p" #'org-gist-export-private-gist
-  "g" #'org-gist-export-public-gist)
-
-(bind-key "g" 'tychoish/org-gist-map tychoish/org-mode-personal-map)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; configuration
 
-(setq org-todo-keywords
-      '((sequence "TODO(t)" "|" "DONE(d!)")
-        (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
-
+;; org-faces
 (setq org-todo-keyword-faces
       '(("TODO" . org-warning)
         ("INPROGRESS" . "orange")
@@ -147,6 +166,10 @@
         ("BACKLOG" . (:foreground "orange" :weight bold))
         ("PROJECT" . (:foreground "blue" :weight bold))))
 
+;; org.el
+(setq org-todo-keywords
+      '((sequence "TODO(t)" "|" "DONE(d!)")
+        (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
 (setq org-tag-alist
       '((:startgroup . nil)
         ("inbox" . ?i)
@@ -158,30 +181,9 @@
         ("@work" . ?w)
         (:endgroup . nil)))
 
-(setq org-modules
-      '(org-capture
-        org-datetree
-        org-annotate-file
-        org-depend
-        org-habit))
-
+;; org.el
 (setq org-CUA-compatible t)
 (setq org-tags-column -70)
-(setq org-agenda-block-separator nil)
-(setq org-agenda-columns-add-appointments-to-effort-sum t)
-(setq org-agenda-compact-blocks t)
-(setq org-agenda-default-appointment-duration 60)
-(setq org-agenda-inhibit-startup nil)
-(setq org-agenda-mouse-1-follows-link t)
-(setq org-agenda-use-time-grid t)
-(setq org-agenda-skip-deadline-if-done nil)
-(setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
-(setq org-agenda-skip-scheduled-if-done t)
-(setq org-agenda-skip-unavailable-files t)
-(setq org-agenda-skip-timestamp-if-done t)
-(setq org-agenda-todo-ignore-deadlines t)
-(setq org-agenda-todo-ignore-scheduled t)
-(setq org-agenda-start-on-weekday nil)
 (setq org-enforce-todo-checkbox-dependencies t)
 (setq org-enforce-todo-dependencies t)
 (setq org-fast-tag-selection-include-todo t)
@@ -190,13 +192,7 @@
 (setq org-footnote-define-inline nil)
 (setq org-footnote-section nil)
 (setq org-log-into-drawer t)
-(setq org-outline-path-complete-in-steps nil)
 (setq org-provide-todo-statistics t)
-(setq org-refile-allow-creating-parent-nodes 'confirm)
-(setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
-(setq org-refile-use-outline-path 'file)
-(setq org-replace-disputed-keys t)
-(setq org-return-follows-link t)
 (setq org-reverse-note-order t)
 (setq org-startup-folded 'content)
 (setq org-startup-indented nil)
@@ -204,6 +200,16 @@
 (setq org-track-ordered-property-with-tag t)
 (setq org-use-fast-tag-selection 'auto)
 (setq org-use-fast-todo-selection 'auto)
+
+;; org-refile.el
+(setq org-outline-path-complete-in-steps nil)
+(setq org-refile-allow-creating-parent-nodes 'confirm)
+(setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
+(setq org-refile-use-outline-path 'file)
+
+;; org-keys.el
+(setq org-replace-disputed-keys t)
+(setq org-return-follows-link t)
 (setq org-use-speed-commands #'tychoish/org-use-speed-commands)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -215,23 +221,28 @@
   (setq-local fill-column 80))
 
 ;;;###autoload
-(defun tychoish-org-reset-capture-templates ()
-  (interactive)
-  (setq org-capture-templates '(("t" "tasks")
-                                ("j" "journal")
-                                ("n" "notes")
-                                ("r" "routines")))
-  (message "reset all org-capture templates"))
-
-(defun org-agenda-files-reload ()
-  "reloads all agenda files"
-  (interactive)
-  (setq org-agenda-files (--remove (s-suffix-p "archive.org" it) (f-glob "*.org" org-directory))))
-
 (defun org-agenda-files-open ()
+  "Open all agenda files if not already open."
   (interactive)
-  (let ((files (--mapc (find-file-noselect it t) (org-agenda-files))))
-    (message "opened %d agenda files [%s]" (length files) (s-join ", " (-map #'f-filename files)))))
+  (let* ((files (->> (org-agenda-files)
+		     (--flat-map (if (f-directory-p it)
+				     (f-glob "*.org" org-directory)
+				   (cons it nil)))
+		     (--remove (s-suffix-p "archive.org" it))))
+	 (buffers (->> files
+		       (--map (or (get-file-buffer it)
+				  (find-file-noselect it t))))))
+    (message "opened %d agenda files [%s]" (length files) (s-join ", " files))
+    buffers))
+
+;;;###autoload
+(defun org-agenda-files-reload ()
+  "Open all agenda files, and reverting to the version on disk as needed."
+  (interactive)
+  (->> (org-agenda-files-open)
+       (--map (with-current-buffer it
+		(revert-buffer nil (or current-prefix-arg (not (called-interactively-p 'interactive))) t)
+		(buffer-file-name)))))
 
 (defun tychoish/background-revbufs-for-hook ()
   (let ((buf (get-buffer-create "*revbufs*")))
@@ -239,9 +250,16 @@
       (revbufs)
       (bury-buffer buf))))
 
-(defconst tychoish/org-date-spec-datetime "<%Y-%02m-%02d %02H:%02M:%02S %Z>")
+(defun tychoish--add-toc-org-op ()
+  (save-excursion (toc-org-insert-toc)))
 
-(defconst tychoish/org-date-spec-date "<%Y-%02m-%02d>")
+(defun org-gist-export-private-gist ()
+  (interactive)
+  (org-gist-export-to-gist nil 'open))
+
+(defun org-gist-export-public-gist ()
+  (interactive)
+  (org-gist-export-to-gist 'public))
 
 (defun tychoish-org-date-now (&optional &key short)
   (interactive)
@@ -272,17 +290,44 @@
 
 ;; org-agenda
 
-(setq org-agenda-include-diary nil)
 (setq org-agenda-custom-commands
       '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")))
+
+(setq org-agenda-include-diary nil)
+(setq org-agenda-block-separator nil)
+(setq org-agenda-columns-add-appointments-to-effort-sum t)
+(setq org-agenda-compact-blocks t)
+(setq org-agenda-default-appointment-duration 60)
+(setq org-agenda-inhibit-startup nil)
+(setq org-agenda-mouse-1-follows-link t)
+(setq org-agenda-use-time-grid t)
+(setq org-agenda-skip-deadline-if-done nil)
+(setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
+(setq org-agenda-skip-scheduled-if-done t)
+(setq org-agenda-skip-unavailable-files t)
+(setq org-agenda-skip-timestamp-if-done t)
+(setq org-agenda-todo-ignore-deadlines t)
+(setq org-agenda-todo-ignore-scheduled t)
+(setq org-agenda-start-on-weekday nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; org-capture-templates
 
+(defun tychoish-org-reset-capture-templates ()
+  (unless (boundp 'org-capture-templates)
+    (defvar org-capture-templates))
+
+  (setq org-capture-templates '(("t" "tasks")
+                                ("j" "journal")
+                                ("n" "notes")
+                                ("r" "routines"))))
+
+;;;###autoload
 (cl-defun tychoish/org-capture-add-routine-templates (&key name
 							   (key "")
 							   (path (concat (make-filename-slug name) ".org")))
+
   (when (string-equal "r" key)
     (user-error "cannot define routine (loops) %s org-capture-templates with key `r'" name))
 
@@ -418,8 +463,12 @@
 
 ;; registration helpers
 
+;;;###autoload
 (cl-defun tychoish-org-add-project-file-capture-templates (&key name (path nil) (key ""))
   "Defines a set of capture mode templates for adding notes and tasks to a file."
+
+  (unless (and (boundp 'org-capture-templates) org-capture-templates)
+    (tychoish-org-reset-capture-templates))
 
   (when (not (equal "" key))
     (when (s-contains? key "jntr")
@@ -453,9 +502,7 @@
     (tychoish/org-capture-add-task-templates
      :name name
      :key key
-     :path org-filename)
-
-    (message "registered org-capture templates for %s" org-filename)))
+     :path org-filename)))
 
 ;; org capture templates definitions
 (defun tychoish-org-setup-standard-capture-templates ()
@@ -473,8 +520,6 @@
 
   (tychoish/org-capture-add-task-templates
    :name "prime"
-   :path "planner.org")
-
-  (message "registered standard org-capture-templates"))
+   :path "planner.org"))
 
 (provide 'tychoish-org)

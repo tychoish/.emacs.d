@@ -44,6 +44,19 @@
 
 (require 'delight)
 
+(delight 'org-mode "org")
+(delight 'org-agenda-mode "agenda")
+(delight 'auto-revert-mode)
+(delight 'eldoc-mode)
+(delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
+(delight 'auto-fill-function " afm")
+(delight 'overwrite-mode "om")
+(delight 'refill-mode "rf")
+(delight 'visual-line-mode " wr")
+(delight 'fundamental-mode "fun")
+
+(declare-function browse-url-chrome "browse-url")
+
 (bind-keys ("C-x m" . execute-extended-command)
            ("C-x C-m" . execute-extended-command)
            ("M-X" . execute-extended-command-for-buffer)
@@ -94,6 +107,8 @@
            ("M-<down>" . increase-window-down)
            ("M-<up>" . increase-window-up)
            ("M-<right>" . increase-window-right)
+	   ("M-/" . dabbrev-completion)
+           ("C-M-/" . dabbrev-expand)
 	   :map tychoish-core-map
            ("p" . toggle-electric-pair-inhibition)
            ("e" . toggle-electric-pair-eagerness)
@@ -127,8 +142,6 @@
            ("d" . delete-region)
            ("w" . delete-trailing-whitespace))
 
-(declare-function browse-url-chrome "browse-url")
-
 (bind-keys :prefix "C-c w"
            :prefix-map tychoish/web-browser-map ;; C-c w
            ("d" . browse-url-generic)
@@ -145,6 +158,16 @@
            :prefix "p"
            :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
            ("f" . find-grep))
+
+(bind-keys :prefix "C-c o"
+           :prefix-map tychoish/global-org-map
+           ("a" . org-agenda)
+           ("k" . org-capture)
+	   :map tychoish/global-org-map
+           :prefix "l"
+           :prefix-map tychoish/org-link-mode-map
+           ("s" . org-store-link)
+           ("i" . org-insert-link))
 
 (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
@@ -286,6 +309,7 @@
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
   (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
+  (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
 
   (setq bookmark-save-flag 1)
@@ -343,6 +367,14 @@
     (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
     (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
 
+    (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
+    (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
+    (add-to-list 'dabbrev-ignored-buffer-modes 'archive-mode)
+    (add-to-list 'dabbrev-ignored-buffer-modes 'image-mode)
+    (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
+    (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
+    (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode)
+
     (setq desktop-buffers-not-to-save
           (concat "\\("
                   "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
@@ -399,51 +431,65 @@
 
 (setq default-frame-alist nil)
 
-(defun tychoish/after-init-operations ()
-  (scroll-bar-mode -1)
-  (tool-bar-mode -1)
-  (menu-bar-mode -1)
+(defun tychoish/init-late-disable-modes ()
+  (with-slow-op-timer
+   "<bootstrap.el> after-init [disable modes]"
+   (scroll-bar-mode -1)
+   (tool-bar-mode -1)
+   (indent-tabs-mode -1)
+   (menu-bar-mode -1)))
 
-  (tychoish/ensure-light-theme)
-  (tychoish/ensure-default-font)
-  (tychoish/set-up-ssh-agent)
+(defun tychoish/init-late-set-up-theme ()
+  (with-slow-op-timer
+   "<bootstrap.el> after-init [theme setup]"
+    (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
+    (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))
+    (tychoish/ensure-light-theme)
+    (tychoish/ensure-default-font)))
 
-  (indent-tabs-mode -1)
-  (column-number-mode 1)
-  (delete-selection-mode 1)
-  (transient-mark-mode 1)
-  (xterm-mouse-mode 1)
-  (electric-pair-mode 1)
-  (which-key-mode 1))
+(defun tychoish/init-late-enable-modes ()
+  (with-slow-op-timer
+   "<bootstrap.el> after-init [enable-modes]"
+   (global-auto-revert-mode 1)
+   (column-number-mode 1)
+   (delete-selection-mode 1)
+   (winner-mode 1)
+   (transient-mark-mode 1)
+   (xterm-mouse-mode 1)
+   (electric-pair-mode 1)
+   (which-key-mode 1)))
 
 (add-hygenic-one-shot-hook
  :name "restore-desktop"
+ :function #'tychoish/desktop-read-init
  :hook (if (daemonp)
 	   'server-after-make-frame-hook
-	 'window-setup-hook)
- :function #'tychoish/desktop-read-init)
+	 'window-setup-hook))
 
-(defun tychoish/emacs-startup-operations ()
-  (with-slow-op-timer "<bootstrap> emacs-startup-operations"
-    (global-auto-revert-mode 1)
-    (add-hook 'auto-save-mode-hook 'tychoish/set-up-auto-save)
-    (add-hook 'prescient-persist-mode-hook 'tychoish/set-up-emacs-instance-persistence)
+(add-hygenic-one-shot-hook
+ :name "emacs-instance-persistence"
+ :function #'tychoish/set-up-emacs-instance-persistence
+ :hook (if (daemonp)
+	   'server-after-make-frame-hook
+	 'window-setup-hook))
 
-    (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
-    (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))
+(add-hygenic-one-shot-hook
+ :name "enable-modes"
+ :function #'tychoish/init-late-enable-modes
+ :hook (prog-mode-hook text-mode-hook))
 
-    (delight 'auto-revert-mode)
-    (delight 'eldoc-mode)
-    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
-    (delight 'auto-fill-function " afm")
-    (delight 'overwrite-mode "om")
-    (delight 'refill-mode "rf")
-    (delight 'visual-line-mode " wr")
-    (delight 'fundamental-mode "fun")))
+(add-hygenic-one-shot-hook
+ :name "ssh-agent"
+ :function #'tychoish/set-up-ssh-agent
+ :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
+
+(add-hook 'emacs-startup-hook #'tychoish/init-late-disable-modes)
+(add-hook 'emacs-startup-hook #'tychoish/init-late-set-up-theme)
+(add-hook 'auto-save-mode-hook 'tychoish/set-up-auto-save)
 
 (defun tychoish--load-user-file (feat)
   (with-slow-op-timer
-   (format (symbol-join "load-user" feat))
+   (format "<%s.el> load user directory file" feat)
    (require feat)))
 
 (defun tychoish-set-up-user-local-config ()
@@ -510,7 +556,6 @@
 
 (add-hook 'after-make-frame-functions #'on-frame-open)
 (add-hook 'window-setup-hook #'on-after-init)
-(add-hook 'window-setup-hook 'winner-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -584,8 +629,6 @@
 
 (add-hook 'text-mode-hook 'tychoish/set-up-show-whitespace)
 (add-hook 'prog-mode-hook 'tychoish/set-up-show-whitespace)
-(add-hook 'after-init-hook 'tychoish/after-init-operations)
-(add-hook 'emacs-startup-hook 'tychoish/emacs-startup-operations)
 
 (add-hook 'which-key-mode-hook 'which-key-setup-side-window-bottom)
 (add-hook 'abbrev-mode-hook 'tychoish/load-abbrev-files)
@@ -613,6 +656,7 @@
 (add-to-list 'auto-mode-alist '("\\.socket$'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.path$'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.conf$'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.org$'" . org-mode))
 
 (add-to-list 'auto-mode-alist '("\\.zsh$'" . sh-mode))
 (add-to-list 'auto-mode-alist '("\\.zshrc$'" . sh-mode))

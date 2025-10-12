@@ -79,10 +79,6 @@
 ;;   :after modus-themes
 ;;   :commands (modus-themes-exporter-export))
 
-(use-package popon
-  :ensure t
-  :commands (popon-kill popon-create popon-x-y-at-posn))
-
 (use-package nerd-icons
   :ensure t
   :defer t)
@@ -104,11 +100,11 @@
    :key "i")
 
   (add-hygenic-one-shot-hook
-   :name "enable-modeline"
+   :name "doom-modeline"
+   :function #'doom-modeline-mode
    :hook (if (daemonp)
 	     'server-after-make-frame-hook
-	   'window-setup-hook)
-   :function #'doom-modeline-mode)
+	   'window-setup-hook))
   :config
   (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
   (setq find-file-visit-truename t)
@@ -330,68 +326,6 @@
   (defalias 'qrr 'anzu-query-replace-regexp)
   (defalias 'qr 'anzu-query-replace))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; org-mode, tychoish custom, etc
-
-(use-package tychoish-org
-  :delight
-  (org-mode "org")
-  (org-agenda-mode "agenda")
-  :mode (("\\.org$" . org-mode))
-  :bind (:prefix "C-c o"
-         :prefix-map tychoish/global-org-map
-         ("a" . org-agenda)
-         ("k" . org-capture)
-	 ("f" . org-agenda-files-open)
-         :map tychoish/global-org-map
-         :prefix "l"
-         :prefix-map tychoish/org-link-mode-map
-         ("s" . org-store-link)
-         ("i" . org-insert-link)
-         ("a" . org-annotate-file))
-  :hook ((org-ctrl-c-ctrl-c-hook . org-set-weekday-of-timestamp)
-	 (org-agenda-mode . tychoish/background-revbufs-for-hook)
-         (org-mode . tychoish/set-up-buffer-org-mode))
-  :defines (tychoish/org-gist-map tychoish/org-mode-personal-map)
-  :commands (tychoish-set-notes-directory
-	     tychoish-org-setup-standard-capture-templates
-             tychoish-org-add-project-file-capture-templates
-             tychoish-org-reset-capture-templates
-             org-agenda-files-reload
-             tychoish-org-date-now
-             org-set-weekday-of-timestamp
-             tychoish-org-mark-done-and-archive
-	     ;; org-core
-	     org-save-all-org-buffers)
-  :config
-  (add-hook 'org-mode-hook 'turn-on-soft-wrap)
-  (add-hook 'org-shiftup-final-hook 'windmove-up)
-  (add-hook 'org-shiftleft-final-hook 'windmove-left)
-  (add-hook 'org-shiftdown-final-hook 'windmove-down)
-  (add-hook 'org-shiftright-final-hook 'windmove-right)
-
-  (tychoish-org-reset-capture-templates)
-  (tychoish-org-setup-standard-capture-templates)
-  (org-load-modules-maybe t))
-
-(use-package tychoish-blogging
-  :bind (:map tychoish-core-map
-         :prefix "b"
-	 :prefix-map tychoish/blogging-map
-	 ("m" . tychoish-blog-insert-date)
-         ("p" . tychoish-blog-publish-post)
-         ("n" . tychoish-blog-create-post)
-         ("d" . tychoish-blog-open-drafts-dired))
-  :commands (make-filename-slug
-             tychoish-define-project-notes)
-  :config
-  (setq tychoish-blog-path (expand-file-name "~/src/blog")))
-
-(with-slow-op-timer
- "<core.el> load-<tychoish-mail>"
- (require 'tychoish-mail))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Completion/Snippets Menus
@@ -409,7 +343,7 @@
 (use-package yasnippet
   :ensure t
   :delight (yas-minor-mode " ys")
-  :commands (yas-global-mode yas-insert-snippet yas-minor-mode)
+  :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
   :hook ((text-mode prog-mode) . yas-minor-mode)
   :config
   (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
@@ -538,20 +472,14 @@
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-history))
 
-(use-package dabbrev
-  ;; Swap M-/ and C-M-/
-  :bind (("M-/" . dabbrev-completion)
-         ("C-M-/" . dabbrev-expand))
-  :config
-  (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
-  (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
-
 (use-package prescient
   :ensure t
-  :hook (emacs-statup . prescient-persist-mode)
+  :commands (prescient-persist-mode)
+  :init
+  (add-hygenic-one-shot-hook
+   :name "prescient"
+   :function #'prescient-persist-mode
+   :hook '(vertico-mode-hook corfu-mode-hook))
   :config
   (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
   (setq prescient-sort-full-matches-first t)
@@ -562,27 +490,37 @@
 
 (use-package vertico
   :ensure t
-  :hook (emacs-startup . vertico-mode)
-  :defines (vertico-multiform-categories tychoish/vertico-disable-sort-for vertico-sort-function)
+  :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
   :commands (vertico-mode)
   :init
-  (defmacro tychoish/vertico-disable-sort-for (command)
-    "Disable sorting in vertico rendering."
-    `(add-to-list 'vertico-multiform-categories '((,command (vertico-sort-function . nil)))))
-  :config
+  (add-hygenic-one-shot-hook
+   :name "vertico"
+   :function #'vertico-mode
+   :hook 'doom-modeline-mode-hook)
+
+  (add-hygenic-one-shot-hook
+   :name "vertico-multiform"
+   :function #'vertico-multiform-mode
+   :hook 'vertico-mode-hook)
+
   (setq vertico-resize t)
   (setq vertico-count 25)
   (setq vertico-cycle t)
-  (vertico-multiform-mode 1)
+  :config
+  (defmacro tychoish/vertico-disable-sort-for (command)
+    "Disable sorting in vertico rendering."
+    `(add-to-list 'vertico-multiform-categories '((,command (vertico-sort-function . nil)))))
+
   ;; (tychoish/vertico-disable-sort-for yank)
   ;; (tychoish/vertico-disable-sort-for yank-from-kill-ring)
   ;; (tychoish/vertico-disable-sort-for consult-yank-from-kill-ring)
   ;; (tychoish/vertico-disable-sort-for consult-yank-pop)
 
-  (add-to-list 'vertico-multiform-commands
-               '("\\`execute-extended-command"
-                 (vertico-flat-annotate . t)
-                 (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
+  (with-eval-after-load 'vertico-multiform
+    (add-to-list 'vertico-multiform-commands
+		 '("\\`execute-extended-command"
+                   (vertico-flat-annotate . t)
+                   (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding))))))
 
 (use-package vertico-prescient
   :ensure t
@@ -595,8 +533,13 @@
 (use-package marginalia
   :ensure t
   :bind (:map minibuffer-local-map
-         ("M-A" . marginalia-cycle))
-  :hook (vertico-mode . marginalia-mode))
+              ("M-A" . marginalia-cycle))
+  :commands (marginalia-mode)
+  :init
+  (add-hygenic-one-shot-hook
+   :name "marginalia"
+   :function #'marginalia-mode
+   :hook 'minibuffer-setup-hook))
 
 (use-package embark
   :ensure t
@@ -619,20 +562,30 @@
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
   :hook (((prog-mode text-mode) . corfu-mode)
-         ((shell-mode eshell-mode) . corfu-mode)
-         (telega-chat-mode . corfu-mode)
-         (corfu-mode . corfu-history-mode)
-         (corfu-mode . corfu-indexed-mode)
-         (corfu-mode . corfu-popupinfo-mode))
+         ((shell-mode eshell-mode eat-mode) . corfu-mode)
+         (telega-chat-mode . corfu-mode))
   :init
-  (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
-  (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
+  (add-hygenic-one-shot-hook
+   :name "corfu-history"
+   :function #'corfu-history-mode
+   :hook 'corfu-mode)
+  (add-hygenic-one-shot-hook
+   :name "corfu-indexed"
+   :function #'corfu-indexed-mode
+   :hook 'corfu-mode)
+  (add-hygenic-one-shot-hook
+   :name "corfu-indexed"
+   :function #'corfu-popupinfo-mode
+   :hook 'corfu-mode)
 
   (defun tychoish/corfu-text-mode-setup ()
     (setq-local corfu-auto-prefix 2))
 
   (defun tychoish/corfu-prog-mode-setup ()
     (setq-local corfu-auto-prefix 3))
+
+  (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
+  (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
   :config
   (bind-keys :map corfu-map
              ("C-<tab>" . corfu-quick-complete)
@@ -697,12 +650,20 @@
   (setq corfu-prescient-enable-sorting t)
   (setq corfu-prescient-enable-filtering t))
 
+(use-package popon
+  :ensure t
+  :commands (popon-kill popon-create popon-x-y-at-posn))
+
 (use-package corfu-terminal
   :load-path "external/"
-  :hook (corfu-mode . corfu-terminal-mode)
   :after (popon)
   :defines (corfu-terminal-disable-on-gui)
-  :commands (corfu-terminal-mode))
+  :commands (corfu-terminal-mode)
+  :init
+  (add-hygenic-one-shot-hook
+   :name "corfu-terminal"
+   :hook 'tty-setup-hook
+   :function #'corfu-terminal-mode))
 
 (use-package nerd-icons-corfu
   :ensure t
@@ -717,8 +678,13 @@
 
 (use-package nerd-icons-completion
   :ensure t
-  :hook (((marginalia-mode) . nerd-icons-completion-marginalia-setup)
-         ((corfu-mode vertico-mode) . nerd-icons-completion-mode)))
+  :hook ((marginalia-mode . nerd-icons-completion-marginalia-setup))
+  :commands (nerd-icons-completion-mode)
+  :init
+  (add-hygenic-one-shot-hook
+   :name "nerd-icons-completion"
+   :function #'nerd-icons-completion-mode
+   :hook '(corfu-mode-hook vertico-mode-hook)))
 
 (use-package consult
   :ensure t
@@ -767,7 +733,6 @@
          ("m" . consult-man)
          ;; Minibuffer history
          :map minibuffer-local-map
-         ("C-g" . tychoish/super-abort-minibuffers)
          ("M-s" . consult-history)                 ;; orig. next-matching-history-element
          ("M-r" . consult-history)                 ;; orig. previous-matching-history-element
          :map isearch-mode-map
@@ -793,30 +758,6 @@
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
   :commands (consult-find consult-git-grep consult-grep)
-  :init
-  (defun tychoish/super-abort-minibuffers ()
-    (interactive)
-    (if (not (minibuffer-selected-window))
-        (keyboard-quit)
-      (abort-minibuffers)
-      (minibuffer-keyboard-quit))
-    (when (minibuffer-selected-window)
-      (move-beginning-of-line nil)
-      (kill-line)
-      (abort-minibuffers)))
-
-  (defun consult-ripgrep--up-directory ()
-    (interactive)
-    (let ((parent-dir (file-name-directory (directory-file-name default-directory))))
-      (when parent-dir
-        (run-at-time 0 nil
-                     #'consult-ripgrep
-                     parent-dir
-                     (ignore-errors
-                       (buffer-substring-no-properties
-                        (1+ (minibuffer-prompt-end)) (point-max))))))
-    (minibuffer-quit-recursive-edit))
-
   :config
   (setq register-preview-delay 0.05)
 
@@ -836,6 +777,18 @@
   (add-to-list 'consult-mode-histories '(compilation-mode compile-history))
 
   (advice-add #'register-preview :override #'consult-register-window)
+
+  (defun consult-ripgrep--up-directory ()
+    (interactive)
+    (let ((parent-dir (file-name-directory (directory-file-name default-directory))))
+      (when parent-dir
+        (run-at-time 0 nil
+                     #'consult-ripgrep
+                     parent-dir
+                     (ignore-errors
+                       (buffer-substring-no-properties
+                        (1+ (minibuffer-prompt-end)) (point-max))))))
+    (minibuffer-quit-recursive-edit))
 
   (consult-customize
    consult-yank-from-kill-ring consult-yank-pop consult-yank-replace
@@ -895,7 +848,9 @@
   :ensure t
   :after (yasnippet)
   :bind (:map tychoish/consult-mode-map
-         ("s" . consult-yasnippet)))
+         ("s" . consult-yasnippet)
+	 :map tychoish/completion-map
+	 ("s" . consult-yasnippet)))
 
 (use-package embark-consult
   :ensure t ; only need to install it, embark loads it after consult if found
@@ -911,9 +866,13 @@
          ("s" . consult-rg-pwd)
          ("p" . consult-rg-project-wizard)
          ("l" . consult-rg-pwd-wizard)
-	 :map tychoish/global-org-map ;; "C-c o"
-	 ("j" . consult-org-capture)
-	 ("c" . consult-org-capture))
+	 :map tychoish-core-map
+         :prefix "b"
+	 :prefix-map tychoish/blogging-map
+	 ("m" . tychoish-insert-date)
+         ("p" . tychoish-blog-publish-post)
+         ("n" . tychoish-blog-create-post)
+         ("d" . tychoish-blog-open-drafts-dired))
   :commands (consult-rg-for-thing
              consult-rg
 	     get-directory-parents
@@ -1046,16 +1005,6 @@
   :init
   (add-hook 'projectile-mode-hook 'helm-projectile-on))
 
-(use-package helm-make
-  :ensure t
-  :commands (helm-make)
-  :config
-  (setq helm-make-named-buffer t)
-  (setq helm-make-fuzzy-matching t)
-  (setq helm-make-cache-targets t)
-  (setq helm-make-do-save t)
-  (setq helm-make-sort-targets t))
-
 (use-package helm-ag
   :bind (:map tychoish/helm-grep-tools-map
 	 :prefix "a"
@@ -1089,41 +1038,6 @@
     (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray")
     (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold)))
 
-(use-package helm-swoop
-  :ensure t
-  :bind (:map tychoish/helm-center-menu-map
-         :prefix "s"
-         :prefix-map tychoish/helm-swoop-map
-         ("s" . helm-swoop)
-         ("m" . helm-multi-swoop)
-         ("a" . helm-multi-swoop-all)
-	 ("o" . helm-multi-swoop-org)
-	 ("p" . helm-multi-swoop-projectile))
-  :commands (helm-swoop)
-  :config
-  (setq helm-swoop-split-with-multiple-windows t)
-  (setq helm-swoop-split-direction 'split-window-vertically))
-
-(use-package helm-c-yasnippet
-  :ensure t
-  :defer t
-  :commands (helm-yas-complete)
-  :bind (:map tychoish/helm-center-menu-map
-	 ("C-e" . helm-yas-complete)
-	 ("C-." . helm-yas-complete))
-  :config (setq helm-yas-space-match-any-greedy t))
-
-(use-package helm-eww
-  :ensure t
-  :bind (:map tychoish/helm-center-menu-map
-         ("C-c h c" . helm-eww-history)))
-
-(use-package helm-flycheck
-  :ensure t
-  :bind (:map tychoish/helm-center-menu-map
-         ("f" . 'helm-flycheck))
-  :commands (helm-flycheck))
-
 (use-package helm-org
   :ensure t
   :defer t
@@ -1132,6 +1046,12 @@
 	 :prefix-map tychoish/helm-org-mode-map
 	 ("c" . helm-org-capture-templates)
 	 ("f". helm-org-in-buffer-heddings)
+	 ("a" . helm-org-agenda-files-headings)
+	 :map tychoish/helm-center-menu-map
+	 :prefix "o"
+	 :prefix-map tychoish/org-mode-personal-helm-map
+	 ("b" . helm-org-in-buffer-headings)
+	 ("p" . helm-org-parent-headings)
 	 ("a" . helm-org-agenda-files-headings))
   :commands (helm-org-capture-templates
              helm-org-in-buffer-heddings
@@ -1139,12 +1059,6 @@
   :config
   (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
   (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
-
-(use-package helm-mu
-  :ensure t
-  :bind (:map tychoish/helm-center-menu-map ; "C-c h"
-         ("m" . helm-mu)
-         ("v" . helm-mu-contacts)))
 
 (use-package helm-flyspell
   :ensure t
@@ -1156,19 +1070,6 @@
   :after (helm-flyspell)
   :config
   (setq flyspell-correct-interface #'flyspell-correct-helm))
-
-(use-package helm-xref
-  :ensure t
-  :after (xref helm))
-
-;; (use-package helm-slime
-;;   :ensure t
-;;   :after (slime helm)
-;;   :commands (helm-slime-mode)
-;;   :hook (slime-lisp-mode . helm-slime-mode))
-
-(use-package tychoish-company
-  :disabled)
 
 (use-package revbufs
   :ensure t
@@ -1720,7 +1621,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq rustic-use-rust-save-some-buffers t)
   (setq rustic-clippy-arguments "--all --all-features -- --deny warnings")
 
-
   (let* ((rustup-path (executable-find "rustup"))
 	 (rustup-p (not (string-empty-p rustup-path)))
 	 (rustup-toolchain (if rustup-p "nightly" "stable")))
@@ -1867,8 +1767,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :mode "\\.ninja\\'")
 
 (use-package slime
-  :load-path "~/quicklisp/dists/quicklisp/software/slime-v2.31/"
-  :after (f lisp-mode)
   :delight
   (lisp-mode "lisp")
   (slime-mode "sl")
@@ -1884,18 +1782,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; programming adjacent tools
-
-(use-package shell-pop
-  :ensure t
-  :bind (("<f9>" . shell-pop))
-  :commands (shell-pop)
-  :config
-  (setq shell-pop-universal-key "<f9>")
-  (setq shell-pop-window-position "top")
-  (setq shell-pop-window-size 25)
-  (setq shell-pop-window-size 25)
-  (setq shell-pop-autocd-to-working-dir t)
-  (setq shell-pop-cleanup-buffer-at-process-exit t))
 
 (use-package journalctl-mode
   :ensure t
@@ -2036,9 +1922,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'flycheck-checkers 'html-aspell-dynamic)
   (add-to-list 'flycheck-checkers 'markdown-aspell-dynamic)
   (add-to-list 'flycheck-checkers 'mail-aspell-dynamic)
-
-  (eval-when-compile
-    (require 'flycheck-aspell))
 
   (flycheck-aspell-define-checker "org" "Org" ("--add-filter" "url") (org-mode))
   (flycheck-aspell-define-checker "rst" "reStructuredText" ("--add-filter" "url") (rst-mode)))
@@ -2466,6 +2349,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :after (claude-code)
   :defer t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; org-mode, tychoish custom, etc
+
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

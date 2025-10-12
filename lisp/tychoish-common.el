@@ -5,8 +5,6 @@
 (require 'ht)
 (require 'dash)
 
-(require 'visual-fill-column)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; keybindings
@@ -115,6 +113,8 @@ The is unique to the system and daemon instance."
 
 ;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
 
+(bind-key "C-g" 'tychoish/super-abort-minibuffers minibuffer-local-map)
+
 (defun gui-p ()
   "Return t when the current session is or may be a GUI session."
   (when (or (daemonp) (window-system))
@@ -124,6 +124,17 @@ The is unique to the system and daemon instance."
   "Display the menubar in FRAME (default: selected frame) if on a graphical display, but hide it if in terminal."
   (interactive)
   (set-frame-parameter frame 'menu-bar-lines (if (display-graphic-p frame) 1 0)))
+
+(defun tychoish/super-abort-minibuffers ()
+  (interactive)
+  (if (not (minibuffer-selected-window))
+      (keyboard-quit)
+    (abort-minibuffers)
+    (minibuffer-keyboard-quit))
+  (when (minibuffer-selected-window)
+    (move-beginning-of-line nil)
+    (kill-line)
+    (abort-minibuffers)))
 
 (defun text-scale-reset ()
   (interactive)
@@ -422,27 +433,6 @@ the list."
 
 ;; macros -- helper macros for common operations
 
-(defmacro with-slow-op-timer (name &rest body)
-  "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
-  `(let* ((inhibit-message t)
-	  (time (current-time))
-	  (return-value (progn ,@body))
-	  (duration (time-to-seconds (time-since time))))
-     (when (and (or debug-on-error init-file-debug) (> duration tychoish/slow-op-time-threshold))
-       (message "[slow-op]: %s: %.06fs" ,name duration))
-     return-value))
-
-(defmacro with-gc-suppressed (&rest body)
-  `(progn
-     (let ((gc-cons-threshold 800000000000000))
-       ,@body)
-     (let ((garbage-collection-messages t))
-       (garbage-collect))))
-
-(defmacro with-file-name-handler-disabled (&rest body)
-  `(let ((file-name-handler-alist nil))
-     ,@body))
-
 (defmacro disabled (&rest body)
   `(unless 'disabled
      ,@body))
@@ -483,7 +473,6 @@ the list."
 	       `(,(intern (symbol-join "toggle" name suffix)) (not ,value))))
 	 (setter (if local 'setq-local 'setq)))
 
-
     (when (and keymap (not key))
       (user-error "must define both keymap and a key"))
 
@@ -499,12 +488,12 @@ the list."
   "Totally suppress message from either the minibuffer or the *Messages* buffer.."
   `(let ((inhibit-message t)
          (message-log-max nil))
-     (null ,@body)))
+     ,@body))
 
 (defmacro with-quiet (&rest body)
   "Suppress any messages from appearing in the minibuffer area."
   `(let ((inhibit-message t))
-     (null ,@body)))
+     ,@body))
 
 (defmacro with-force-write (&rest body)
   (declare (indent 1) (debug t))
@@ -523,19 +512,38 @@ the list."
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
 	 (cleanup (intern (symbol-join "hygenic-one-shot" name (symbol-name unique-tag))))
-	 (hook (if (symbolp hook)
-		  hook
-		 (eval hook))))
+	 hooks)
+
+    (when (functionp hook)
+      (setq hook (funcall hook)))
+
+    (when (symbolp hook)
+      (setq hooks (list hook)))
+
+    (when (listp hook)
+      (if (null (-remove #'symbolp hook))
+	  (setq hooks hook)
+	(setq hooks (eval hook)))
+      (if (symbolp hooks)
+	  (setq hooks (list hooks))))
+
+    (unless hooks
+      (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
 
     `(progn
-
        (defun ,cleanup ,args
-	 (apply ,function ,args)
-         (remove-hook ',hook ',cleanup ,local)
-         ,(unless make-unique
+	 (with-slow-op-timer
+	  ,(format "<hygenic-hook> %s" name)
+	  (apply ,function ,args))
+
+	 ,@(--map
+	    `(remove-hook ',it ',cleanup ,local)
+	    (--remove (eq 'quote it) hooks))
+
+         ,@(when make-unique
 	    `(unintern ',cleanup obarray)))
 
-       (add-hook ',hook ',cleanup ,depth ,local))))
+       ,@(--map `(add-hook ',it ',cleanup ,depth ,local) (--remove (eq 'quote it) hooks)))))
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
@@ -583,8 +591,16 @@ were recompiled."
        (--filter (f-ext-p it "el"))
        (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
 
-(require 'package)
-(require 'async-package)
+(declare-function package-installed-p "package")
+(declare-function package-desc-p "package")
+
+(defun package-avalible-p (name)
+  (or (featurep name)
+      (when (package-installed-p name)
+	(require name)
+	t)))
+
+(autoload 'async-package-do-action "async-package")
 
 (defun async-package-operation (op pkgs)
   (let* ((ops '(install upgrade 'reinstall))
@@ -616,6 +632,8 @@ were recompiled."
 (defalias 'turn-off-hard-wrap 'turn-on-soft-wrap)
 (defalias 'toggle-soft-wrap 'toggle-on-soft-wrap)
 (defalias 'toggle-hard-wrap 'toggle-off-soft-wrap)
+
+(declare-function visual-fill-column-mode "`visual-fill-column'")
 
 (defun turn-on-soft-wrap ()
   (interactive)
@@ -907,6 +925,21 @@ Returns the number of buffers killed."
 			   (current-buffer))
     (apply #'run-mode-hooks (--keep (-concat (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; files and notes
+
+(defun make-filename-slug (s)
+  "Turn a string, S, into a slug for a blog post filename."
+  (downcase
+   (replace-regexp-in-string
+    "[^A-Za-z0-9]" "-"
+    (string-clean-whitespace s))))
+
+(defun tychoish-insert-date ()
+  "Insert date string."
+  (interactive)
+  (insert (format-time-string "%Y-%m-%d")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -919,8 +952,10 @@ Returns the number of buffers killed."
 (declare-function projectile-project-name "projectile")
 
 (defun approximate-project-root ()
-  (or (when (featurep 'projectile) (trimmed-string-or-nil (projectile-project-root)))
-      (when (and (featurep 'project) (project-current)) (project-root (project-current)))
+  (or (when (package-avalible-p 'projectile)
+	(trimmed-string-or-nil (projectile-project-root)))
+      (when (and (featurep 'project) (project-current))
+	(project-root (project-current)))
       (expand-file-name default-directory)))
 
 (defun approximate-project-name ()
