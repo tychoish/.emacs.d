@@ -167,10 +167,17 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 (defun tychoish-load-light-theme ()
   (interactive)
-  (disable-all-themes)
-  (when (load-theme 'modus-operandi t t)
-    (enable-theme 'modus-operandi))
-  (add-to-list 'default-frame-alist '(alpha . 97)))
+
+  (unless (member 'modus-operandi custom-enabled-themes)
+    (when custom-enabled-themes
+      (disable-all-themes))
+
+    (if (custom-theme-p 'modus-operandi)
+	(enable-theme 'modus-operandi)
+      (load-theme 'modus-operandi t nil)))
+
+  (unless (alist-get 'alpha default-frame-alist)
+    (add-to-list 'default-frame-alist '(alpha . 97))))
 
 (defun tychoish/ensure-light-theme ()
   (unless custom-enabled-themes

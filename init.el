@@ -20,7 +20,7 @@
 
 (defvar tychoish/slow-op-reporting (or debug-on-error init-file-debug))
 
-(defconst tychoish/slow-op-time-threshold 0.001
+(defconst tychoish/slow-op-time-threshold 0.0001
   "minimum time before `with-slow-op-timer' logs")
 
 (defmacro with-slow-op-timer (name &rest body)

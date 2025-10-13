@@ -33,137 +33,116 @@
 
 ;;; Code:
 
-(require 'f)
-(require 's)
-(require 'ht)
-(require 'dash)
-
-(require 'tychoish-common)
-
-(delight 'org-mode "org")
-(delight 'org-agenda-mode "agenda")
-(delight 'auto-revert-mode)
-(delight 'eldoc-mode)
-(delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
-(delight 'auto-fill-function " afm")
-(delight 'overwrite-mode "om")
-(delight 'refill-mode "rf")
-(delight 'visual-line-mode " wr")
-(delight 'fundamental-mode "fun")
 
 (declare-function browse-url-chrome "browse-url")
 
-(bind-keys ("C-x m" . execute-extended-command)
-           ("C-x C-m" . execute-extended-command)
-           ("M-X" . execute-extended-command-for-buffer)
-           ("C-x b" . switch-to-buffer) ;; vs consult-buffer
-           ("C-x l" . goto-line)
-           ("C-x f" . find-file)
-           ("C-x C-f" . find-file)
-           ("C-x h" . help)
-           ("C-x C-x" . exchange-point-and-mark)
-           ;; ("C-x C-u w" . upcase-word)
-           ;; ("C-x C-u t" . upcase-initials-region)
-           ;; ("C-x C-u r" . upcase-region)
-           ("C-x C-d" . dired)
-           ("C-x d" . dired)
-           ("C-x C-n" . count-words)
-           ("C-c i" . indent-region)
-           ("C-c c" . comment-region)
-           ("C-x C-r" . recentf)
-           ("C-<backspace>" . backward-kill-word)
-           ("C-h" . backward-kill-word)
-           ("C-c C-w" . whitespace-cleanup)
-           ("C-c C-f" . set-fill-column)
-           ("C-c C-p" . set-mark-command)
-           ("C-c C-r" . rename-buffer)
-           ("M-<SPC>" . set-mark-command)
-           ;; ("C-c h a" . mark-whole-buffer)
-           ("s-c" . clipboard-kill-ring-save) ;; (CUA/macOS) copy
-           ("s-v" . clipboard-yank)           ;; (CUA/macOS) paste
-           ("s-x" . clipboard-kill-region)    ;; (CUA/macOS) cut
-           ("<mouse-2>" . clipboard-yank)
-           ("C-z" . undo)
-           ("C-w" . kill-region)
-           ("C-<tab>" . completion-at-point)
-           ("C-c s e" . eshell)
-           ("M-h" . windmove-left)
-           ("M-j" . windmove-down)
-           ("M-k" . windmove-up)
-           ("M-l" . windmove-right)
-           ("S-<left>" . windmove-left)
-           ("S-<down>" . windmove-down)
-           ("S-<right>" . windmove-right)
-           ("S-<up>" . windmove-up)
-           ("M-H" . increase-window-left)
-           ("M-J" . increase-window-down)
-           ("M-K" . increase-window-up)
-           ("M-L" . increase-window-right)
-           ("M-<left>" . increase-window-left)
-           ("M-<down>" . increase-window-down)
-           ("M-<up>" . increase-window-up)
-           ("M-<right>" . increase-window-right)
-	   ("M-/" . dabbrev-completion)
-           ("C-M-/" . dabbrev-expand)
-	   :map tychoish-core-map
-           ("p" . toggle-electric-pair-inhibition)
-           ("e" . toggle-electric-pair-eagerness)
-           :map minibuffer-local-map
-           ("C-l" . backward-kill-word))
-
-(bind-keys ("M-." . xref-find-definitions)
-	   :prefix "C-c l"
-	   :prefix-map tychoish/ide-map
-           ("m" . imenu)
-           ("c" . xref-find-references)
-           ("d" . xref-find-definitions)
-           ("p" . xref-go-back)
-           ("n" . xref-go-forward)
-           ("o" . xref-find-definitions-other-window))
-
-(bind-keys :prefix "C-c d"
-	   :prefix-map tychoish/docs-map
-           ("s" . describe-symbol)
-           ("v" . describe-variable)
-           ("q" . kill-eldoc-and-help-buffers)
-           ("j" . jump-to-elisp-help)
-           ("e" . eldoc)
-           ("b" . eldoc-doc-buffer))
-
-(bind-keys :prefix "C-c k"
-	   :prefix-map tychoish/kill-map
-           ("s" . backward-kill-sentence)
-           ("p" . backward-kill-paragraph)
-           ("f" . backward-kill-sexp)
-           ("d" . delete-region)
-           ("w" . delete-trailing-whitespace))
-
-(bind-keys :prefix "C-c w"
-           :prefix-map tychoish/web-browser-map ;; C-c w
-           ("d" . browse-url-generic)
-           ("e" . browse-url)
-           ("f" . browse-url-firefox)
-           ("c" . browse-url-chrome)
-           ("g" . eww-search-words))
-
-(bind-keys :prefix "C-c g"
-           :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
-           ("o" . occur)
-           ("g" . grep)
-           :map tychoish/ecclectic-grep-map
-           :prefix "p"
-           :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
-           ("f" . find-grep))
-
-(bind-keys :prefix "C-c o"
-           :prefix-map tychoish/global-org-map
-           ("a" . org-agenda)
-           ("k" . org-capture)
-	   :map tychoish/global-org-map
-           :prefix "l"
-           :prefix-map tychoish/org-link-mode-map
-           ("s" . org-store-link)
-           ("i" . org-insert-link))
+(bind-keys
+ ("C-x m" . execute-extended-command)
+ ("C-x C-m" . execute-extended-command)
+ ("M-X" . execute-extended-command-for-buffer)
+ ("C-x b" . switch-to-buffer) ;; vs consult-buffer
+ ("C-x l" . goto-line)
+ ("C-x f" . find-file)
+ ("C-x C-f" . find-file)
+ ("C-x h" . help)
+ ("C-x C-x" . exchange-point-and-mark)
+ ;; ("C-x C-u w" . upcase-word)
+ ;; ("C-x C-u t" . upcase-initials-region)
+ ;; ("C-x C-u r" . upcase-region)
+ ("C-x C-d" . dired)
+ ("C-x d" . dired)
+ ("C-x C-n" . count-words)
+ ("C-c i" . indent-region)
+ ("C-c c" . comment-region)
+ ("C-x C-r" . recentf)
+ ("C-<backspace>" . backward-kill-word)
+ ("C-h" . backward-kill-word)
+ ("C-c C-w" . whitespace-cleanup)
+ ("C-c C-f" . set-fill-column)
+ ("C-c C-p" . set-mark-command)
+ ("C-c C-r" . rename-buffer)
+ ("M-<SPC>" . set-mark-command)
+ ;; ("C-c h a" . mark-whole-buffer)
+ ("s-c" . clipboard-kill-ring-save) ;; (CUA/macOS) copy
+ ("s-v" . clipboard-yank)           ;; (CUA/macOS) paste
+ ("s-x" . clipboard-kill-region)    ;; (CUA/macOS) cut
+ ("<mouse-2>" . clipboard-yank)
+ ("C-z" . undo)
+ ("C-w" . kill-region)
+ ("C-<tab>" . completion-at-point)
+ ("C-c s e" . eshell)
+ ("M-h" . windmove-left)
+ ("M-j" . windmove-down)
+ ("M-k" . windmove-up)
+ ("M-l" . windmove-right)
+ ("S-<left>" . windmove-left)
+ ("S-<down>" . windmove-down)
+ ("S-<right>" . windmove-right)
+ ("S-<up>" . windmove-up)
+ ("M-H" . increase-window-left)
+ ("M-J" . increase-window-down)
+ ("M-K" . increase-window-up)
+ ("M-L" . increase-window-right)
+ ("M-<left>" . increase-window-left)
+ ("M-<down>" . increase-window-down)
+ ("M-<up>" . increase-window-up)
+ ("M-<right>" . increase-window-right)
+ ("M-/" . dabbrev-completion)
+ ("C-M-/" . dabbrev-expand)
+ :map tychoish-core-map
+ ("p" . toggle-electric-pair-inhibition)
+ ("e" . toggle-electric-pair-eagerness)
+ :map minibuffer-local-map
+ ("C-l" . backward-kill-word)
+ :prefix "C-c d"
+ :prefix-map tychoish/docs-map
+ ("s" . describe-symbol)
+ ("v" . describe-variable)
+ ("q" . kill-eldoc-and-help-buffers)
+ ("j" . jump-to-elisp-help)
+ ("e" . eldoc)
+ ("b" . eldoc-doc-buffer)
+ :prefix "C-c k"
+ :prefix-map tychoish/kill-map
+ ("s" . backward-kill-sentence)
+ ("p" . backward-kill-paragraph)
+ ("f" . backward-kill-sexp)
+ ("d" . delete-region)
+ ("w" . delete-trailing-whitespace)
+ :prefix "C-c w"
+ :prefix-map tychoish/web-browser-map ;; C-c w
+ ("d" . browse-url-generic)
+ ("e" . browse-url)
+ ("f" . browse-url-firefox)
+ ("c" . browse-url-chrome)
+ ("g" . eww-search-words)
+ :prefix "C-c g"
+ :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
+ ("o" . occur)
+ ("g" . grep)
+ :map tychoish/ecclectic-grep-map
+ :prefix "p"
+ :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
+ ("f" . find-grep)
+ :prefix "C-c o"
+ :prefix-map tychoish/global-org-map
+ ("a" . org-agenda)
+ ("k" . org-capture)
+ :map tychoish/global-org-map
+ :prefix "l"
+ :prefix-map tychoish/org-link-mode-map
+ ("s" . org-store-link)
+ ("i" . org-insert-link)
+ :map global-map
+ ("M-." . xref-find-definitions)
+ :prefix "C-c l"
+ :prefix-map tychoish/ide-map
+ ("m" . imenu)
+ ("c" . xref-find-references)
+ ("d" . xref-find-definitions)
+ ("p" . xref-go-back)
+ ("n" . xref-go-forward)
+ ("o" . xref-find-definitions-other-window))
 
 (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
@@ -377,16 +356,6 @@
                   "^/home.+\\.cargo"))))
 
 
-;; forward declare... 
-(defvar dabbrev-ignored-buffer-regexps nil)
-(defvar dabbrev-ignored-buffer-modes nil)
-(add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
-(add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
-(add-to-list 'dabbrev-ignored-buffer-modes 'archive-mode)
-(add-to-list 'dabbrev-ignored-buffer-modes 'image-mode)
-(add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
-(add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
-(add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -458,6 +427,25 @@
    (xterm-mouse-mode 1)
    (electric-pair-mode 1)
    (which-key-mode 1)))
+
+(defun tychoish/set-up-delightful-mode-lighters ()
+  (with-slow-op-timer
+   "<bootstrap.el> after-init [delight]"
+   (delight 'org-mode "org")
+   (delight 'org-agenda-mode "agenda")
+   (delight 'auto-revert-mode)
+   (delight 'eldoc-mode)
+   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
+   (delight 'auto-fill-function " afm")
+   (delight 'overwrite-mode "om")
+   (delight 'refill-mode "rf")
+   (delight 'visual-line-mode " wr")
+   (delight 'fundamental-mode "fun")))
+
+(add-hygenic-one-shot-hook
+ :name "delight-modeline"
+ :function #'tychoish/set-up-delightful-mode-lighters
+ :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
 
 (add-hygenic-one-shot-hook
  :name "restore-desktop"
@@ -605,6 +593,65 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; macros -- configuration and setup
+
+(cl-defmacro tychoish-define-project-notes (&key project path)
+  (let ((symbol (intern (format "tychoish/create-%s-note" project)))
+	(path (expand-file-name path)))
+    `(defun ,symbol (name)
+       ,(format "Create a date prefixed note file in the %s project in %s." project path)
+       (interactive "sName: ")
+       (tychoish-create-note-file name :path ,path))))
+
+(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
+  (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
+        (default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
+    `(progn
+       (defun ,local-function-symbol ()
+         (interactive)
+         (setq-local gptel-model ,model)
+         (setq-local gptel-backend ,backend))
+
+       (defun ,default-function-symbol ()
+         (interactive)
+         (setq-default gptel-model ,model)
+         (setq-default gptel-backend ,backend))
+
+       (bind-key ,(format "C-c r a m %s" (downcase key)) ,local-function-symbol gptel-mode-map)
+       (bind-key ,(format "C-c r a m %s" (upcase key)) ,default-function-symbol gptel-mode-map))))
+
+(defun tychoish/set-up-aider-env-vars ()
+  (when (boundp 'anthropic-api-key)
+    (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
+  (when (boundp 'google-gemini-key)
+    (setenv "GEMINI_API_KEY" google-gemini-key))
+  (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md"))
+  (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
+	      (_ (f-exists-p uv-bin-path))
+	      (aider-bin-path (f-join uv-bin-path "aider"))
+	      (search-path (getenv "PATH")))
+    (unless (s-contains-p uv-bin-path search-path)
+      (setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
+    (add-to-list 'exec-path uv-bin-path)))
+
+(defun tychoish-set-notes-directory (&optional path)
+  (when path
+    (setq local-notes-directory (expand-file-name path)))
+
+  (setq org-directory (f-join local-notes-directory "org"))
+  (setq org-agenda-files (->> (list org-directory user-org-directories)
+                              (-flatten)
+                              (-map #'expand-file-name)
+                              (-keep #'trimmed-string-or-nil)
+                              (-distinct)))
+  (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
+  (setq org-default-notes-file (f-join org-directory "records.org"))
+  (setq org-archive-location (f-join org-directory "archive/%s::datetree/"))
+  (setq deft-directory (f-join local-notes-directory "deft"))
+  local-notes-directory)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;; system -- darwin or linux specific settings
 
 (when (eq system-type 'darwin)
@@ -667,70 +714,21 @@
   (add-hook 'eshell-mode 'eshell-cmpl-initialize))
 
 (with-eval-after-load 'comint
-  (bind-key "M-n" 'comint-next-input comint-mode-map)
-  (bind-key "M-p" 'comint-previous-input comint-mode-map)
-  (bind-key [down] 'comint-next-matching-input-from-input comint-mode-map)
-  (bind-key [up] 'comint-previous-matching-input-from-input comint-mode-map))
+  (bind-keys
+   :map comint-mode-map
+   ("M-n" . comint-next-input)
+   ("M-p" . 'comint-previous-input)
+   ([down] . comint-next-matching-input-from-input)
+   ([up] . 'comint-previous-matching-input-from-input)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; macros -- configuration and setup
-
-(cl-defmacro tychoish-define-project-notes (&key project path)
-  (let ((symbol (intern (format "tychoish/create-%s-note" project)))
-	(path (expand-file-name path)))
-    `(defun ,symbol (name)
-       ,(format "Create a date prefixed note file in the %s project in %s." project path)
-       (interactive "sName: ")
-       (tychoish-create-note-file name :path ,path))))
-
-(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
-  (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
-        (default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
-    `(progn
-       (defun ,local-function-symbol ()
-         (interactive)
-         (setq-local gptel-model ,model)
-         (setq-local gptel-backend ,backend))
-
-       (defun ,default-function-symbol ()
-         (interactive)
-         (setq-default gptel-model ,model)
-         (setq-default gptel-backend ,backend))
-
-       (bind-key ,(format "C-c r a m %s" (downcase key)) ,local-function-symbol gptel-mode-map)
-       (bind-key ,(format "C-c r a m %s" (upcase key)) ,default-function-symbol gptel-mode-map))))
-
-(defun tychoish/set-up-aider-env-vars ()
-  (when (boundp 'anthropic-api-key)
-    (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
-  (when (boundp 'google-gemini-key)
-    (setenv "GEMINI_API_KEY" google-gemini-key))
-  (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md"))
-  (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
-	      (_ (f-exists-p uv-bin-path))
-	      (aider-bin-path (f-join uv-bin-path "aider"))
-	      (search-path (getenv "PATH")))
-    (unless (s-contains-p uv-bin-path search-path)
-      (setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
-    (add-to-list 'exec-path uv-bin-path)))
-
-
-(defun tychoish-set-notes-directory (&optional path)
-  (when path
-    (setq local-notes-directory (expand-file-name path)))
-
-  (setq org-directory (f-join local-notes-directory "org"))
-  (setq org-agenda-files (->> (list org-directory user-org-directories)
-                              (-flatten)
-                              (-map #'expand-file-name)
-                              (-keep #'trimmed-string-or-nil)
-                              (-distinct)))
-  (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
-  (setq org-default-notes-file (f-join org-directory "records.org"))
-  (setq org-archive-location (f-join org-directory "archive/%s::datetree/"))
-  (setq deft-directory (f-join local-notes-directory "deft"))
-  local-notes-directory)
+(with-eval-after-load 'dabbrev
+  (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
+  (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'archive-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'image-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
 
 (provide 'tychoish-bootstrap)
