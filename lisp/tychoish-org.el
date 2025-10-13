@@ -87,8 +87,6 @@
 (bind-keys :map tychoish/global-org-map
 	   ("f" . org-agenda-files-open)
 	   ("r" . org-agenda-files-reload)
-	   ("j" . consult-org-capture)
-	   ("c" . consult-org-capture)
 	   :map tychoish/org-link-mode-map
            ("a" . org-annotate-file))
 

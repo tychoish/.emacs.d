@@ -5,17 +5,12 @@
 (require 'ht)
 
 (require 'tychoish-common)
-(require 'consult-tycho)
-
-(declare-function with-slow-op-timer "init")
-
-(eval-when-compile
-  (require 'mu4e-autoloads)
-  (require 'marginalia))
 
 (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
 
 (autoload 'consult-mu "consult-mu")
+
+(declare-function with-slow-op-timer "init")
 
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-new "mu4e-compose")
@@ -33,9 +28,7 @@
 (declare-function yasnippet-capf "`yasnippet-capf'")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
-
 (defvar tychoish/mail-accounts-table (ht-create #'equal))
-
 (defvar tychoish/mail-account-current nil)
 
 (bind-keys :prefix "C-c m"
@@ -90,7 +83,8 @@
   (setq-default message-signature t)
   (add-to-list 'mm-discouraged-alternatives "text/richtext")
   (add-to-list 'mm-discouraged-alternatives "text/html")
-  (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
+  (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil))
+)
 
 (with-eval-after-load 'mu4e
   (bind-keys :map mu4e-compose-minor-mode-map
@@ -293,7 +287,6 @@
    :documentation "determines how signatures are configured"
    :type 'signature-source))
 
-;;;###autoload
 (defun tychoish-mail-select-account (account-id)
   "Use consult to select an account/mail configuration."
 
@@ -321,7 +314,6 @@
   (let ((select-account-operation (intern account-id)))
     (funcall select-account-operation)))
 
-;;;###autoload
 (cl-defmacro tychoish-define-mail-account
     (&key name address key id
 	  (command mu4e-get-mail-command)

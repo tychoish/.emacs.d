@@ -18,6 +18,8 @@
   `(let ((file-name-handler-alist nil))
      ,@body))
 
+(defvar tychoish/slow-op-reporting (or debug-on-error init-file-debug))
+
 (defconst tychoish/slow-op-time-threshold 0.001
   "minimum time before `with-slow-op-timer' logs")
 
@@ -27,7 +29,7 @@
 	  (time (current-time))
 	  (return-value (progn ,@body))
 	  (duration (time-to-seconds (time-since time))))
-     (when (and (or debug-on-error init-file-debug) (> duration tychoish/slow-op-time-threshold))
+     (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-time-threshold))
        (message "[slow-op]: %s: %.06fs" ,name duration))
      return-value))
 
@@ -86,8 +88,14 @@
 	    (package-upgrade pkg)))
 	(message "bootstrap complete: installed %S; restart emacs without `--bootstrap'" installed))))
 
+  (defun cli/time-reporting ()
+    (when (string-prefix-p "--with-slow-op-timing" argi)
+      (message "[slow-op]: enabling reporting")
+      (setq tychoish/slow-op-reporting t)))
+
   (add-to-list 'command-line-functions 'cli/resolve-id)
   (add-to-list 'command-line-functions 'cli/bootstrap)
+  (add-to-list 'command-line-functions 'cli/time-reporting)
 
   (add-to-list 'load-path (concat user-emacs-directory "lisp"))
   (add-to-list 'load-path (concat user-emacs-directory "user"))
@@ -114,8 +122,8 @@
     (unless tychoish/startup-complete-time
       (setq tychoish/startup-complete-time (current-time))))
 
-  (add-hook 'emacs-startup-hook 'tychoish/startup-report-timing 90)
   (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 80)
+  (add-hook 'emacs-startup-hook 'tychoish/startup-report-timing 90)
 
   ;; (only) functions and macros used in the rest of the configuration
   (with-slow-op-timer
@@ -124,6 +132,7 @@
    (declare-function tychoish/set-up-instance-name "tychoish-common")
    (tychoish/set-up-instance-name))
   ;; customized setup and configuration of core emacs and included packages
+
   (with-slow-op-timer
    "<init.el> load tychoish-bootstrap"
    (require 'tychoish-bootstrap)

@@ -1,4 +1,4 @@
-;tty;; tychoish-bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
+;;; tychoish-bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -39,10 +39,6 @@
 (require 'dash)
 
 (require 'tychoish-common)
-
-(require 'use-package)
-
-(require 'delight)
 
 (delight 'org-mode "org")
 (delight 'org-agenda-mode "agenda")
@@ -367,14 +363,6 @@
     (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
     (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
 
-    (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
-    (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
-    (add-to-list 'dabbrev-ignored-buffer-modes 'archive-mode)
-    (add-to-list 'dabbrev-ignored-buffer-modes 'image-mode)
-    (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
-    (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
-    (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode)
-
     (setq desktop-buffers-not-to-save
           (concat "\\("
                   "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
@@ -387,6 +375,18 @@
                   "^/usr/lib/rustlib/.*\\|"
                   "^/home.+go/pkg/mod\\|"
                   "^/home.+\\.cargo"))))
+
+
+;; forward declare... 
+(defvar dabbrev-ignored-buffer-regexps nil)
+(defvar dabbrev-ignored-buffer-modes nil)
+(add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
+(add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
+(add-to-list 'dabbrev-ignored-buffer-modes 'archive-mode)
+(add-to-list 'dabbrev-ignored-buffer-modes 'image-mode)
+(add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
+(add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
+(add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -675,6 +675,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; macros -- configuration and setup
+
+(cl-defmacro tychoish-define-project-notes (&key project path)
+  (let ((symbol (intern (format "tychoish/create-%s-note" project)))
+	(path (expand-file-name path)))
+    `(defun ,symbol (name)
+       ,(format "Create a date prefixed note file in the %s project in %s." project path)
+       (interactive "sName: ")
+       (tychoish-create-note-file name :path ,path))))
 
 (cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
   (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))

@@ -59,14 +59,6 @@
        (yas-lookup-snippet "hugo")))
     (message "working on post: %s" draft-fn)))
 
-(cl-defmacro tychoish-define-project-notes (&key project path)
-  (let ((symbol (intern (format "tychoish/create-%s-note" project)))
-	(path (expand-file-name path)))
-    `(defun ,symbol (name)
-       ,(format "Create a date prefixed note file in the %s project in %s." project path)
-       (interactive "sName: ")
-       (tychoish-create-note-file name :path ,path))))
-
 (defun tychoish-create-note-file (title &optional &key path)
   "Create a new file for a post of with the specified TITLE."
   (interactive "sName: ")
@@ -111,6 +103,67 @@ Does nothing if the current post is not in the drafts folder."
   "Open a dired buffer for the drafts folder."
   (interactive)
   (find-file (expand-file-name tychoish-blog-path)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; sardis (command runner/orchestrator)
+
+(defalias 'sardis-run 'consult-sardis-run)
+
+(defun consult-sardis--select-cmd ()
+  (let ((table (ht-create)))
+
+    (->> (split-string (shell-command-to-string "sardis cmd --annotate") "\n")
+	 (--map (split-string it "\t" t "[ \s\t\n]"))
+	 (-non-nil)
+	 (--mapc (ht-set table (car it) (cadr it))))
+
+    (consult-tycho--read-annotated
+     table
+     :prompt "sards.cmds => "
+     :require-match nil
+     :command 'consult-sardis
+     :category 'tychoish/sardis-cmds)))
+
+(defun consult-sardis-run (&optional sardis-command)
+  "select and run a sardis command in a compile buffer"
+  (interactive)
+  (let* ((selection (or sardis-command
+			(consult-sardis--select-cmd)))
+         ;; setup the environment
+         (start-at (current-time))
+         (task-id (format "sardis-cmd-%s" selection))
+         (op-buffer-name (concat "*" task-id "*")))
+
+    (with-current-buffer (get-buffer-create op-buffer-name)
+      (add-hygenic-one-shot-hook
+       :name "task-id"
+       :hook 'compilation-finish-functions
+       :local t
+       :make-unique t
+       :function (lambda () (tychoish/compile--post-hook-collection
+			     selection op-buffer-name start-at
+			     :process-name "sardis-notify"
+			     :program "sardis"
+			     :args '("notify" "send"))))
+
+      (save-excursion
+        (goto-char (point-min))
+	(with-force-write
+	    (if (zerop (buffer-size))
+		(compilation-insert-annotation (format "# %s\n\n" selection))
+	      (compilation-insert-annotation "\n"))
+
+          (compilation-insert-annotation
+	   (format "--- [%s] -- %s --\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at))))))
+
+    (compilation-start
+     (concat "sardis cmd " selection)
+     (pa "mode" :is nil)
+     (compile-buffer-name op-buffer-name)
+     (pa "highlight-regexp" :is nil)
+     (pa "continue" :is nil))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

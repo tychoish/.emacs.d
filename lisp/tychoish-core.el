@@ -800,7 +800,7 @@
 		(thing-at-point 'filename)
 		"./"))
 
-  (consult-customize consult-ripgrep consult-git-grep consult-grep consult-ag consult-rg
+  (consult-customize consult-ripgrep consult-git-grep consult-grep consult-ag
    :require-match nil
    :group nil
    :keymap
@@ -856,11 +856,26 @@
   :ensure t ; only need to install it, embark loads it after consult if found
   :hook (embark-collect-mode . consult-preview-at-point-mode))
 
+(use-package consult-builder
+  :after (compile)
+  :bind (:map compilation-mode-map
+         ("d" . compilation-buffer-change-directory))
+  :commands (consult--select-directory
+	     make-compilation-candidate
+	     register-compilation-candidates
+	     tychoish--compilation-read-command
+	     tychoish/compile-project))
+
 (use-package consult-tycho
   :bind (("M-g r" . consult-rg)
+	 :map tychoish-core-map
+	 ("r" . consult-sardis-run)
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
          ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
+	 :map tychoish/global-org-map
+	 ("j" . consult-org-capture)
+	 ("c" . consult-org-capture)
 	 :map tychoish/ecclectic-rg-map
          ("r" . consult-rg-project)
          ("s" . consult-rg-pwd)
@@ -875,22 +890,10 @@
          ("d" . tychoish-blog-open-drafts-dired))
   :commands (consult-rg-for-thing
              consult-rg
+	     tychoish-define-project-notes
 	     get-directory-parents
              consult-org-capture
              consult-org-capture-target))
-
-(use-package consult-sardis
-  :bind ("C-c t r" . consult-sardis-run))
-
-(use-package consult-builder
-  :after (compile)
-  :bind (:map compilation-mode-map
-         ("d" . compilation-buffer-change-directory))
-  :commands (consult--select-directory
-	     make-compilation-candidate
-	     register-compilation-candidates
-	     tychoish--compilation-read-command
-	     tychoish/compile-project))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

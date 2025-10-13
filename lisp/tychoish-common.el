@@ -540,7 +540,7 @@ the list."
 	    `(remove-hook ',it ',cleanup ,local)
 	    (--remove (eq 'quote it) hooks))
 
-         ,@(when make-unique
+         ,(when make-unique
 	    `(unintern ',cleanup obarray)))
 
        ,@(--map `(add-hook ',it ',cleanup ,depth ,local) (--remove (eq 'quote it) hooks)))))
@@ -621,6 +621,44 @@ were recompiled."
 (defun package-install-async (pkgs)
   (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
   (async-package-operation 'install pkgs))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; compile -- compilation mode helpers
+
+(cl-defun tychoish/compile--post-hook-collection (selection buffer-name started-at &optional &key process-name program args)
+  (let* ((end-at (current-time))
+	 (duration (time-subtract end-at started-at))
+	 (msg (format "completed %s in %.06fs" selection (float-time duration))))
+
+    (when (or t (and (> (float-time duration) 300) process-name program args))
+      (setq args (append args (list msg)))
+
+      (message "%S" args)
+
+      (apply #'async-start-process
+	     (pa "emacs-process-name" :is process-name)
+	     (pa "program" :is program)
+	     (pa "on-finish" :is (lambda (out) (message "notify process completed [%s] for %s" out selection)))
+	     args))
+
+
+    (alert msg
+     :title selection
+     :buffer (get-buffer buffer-name))
+
+    (with-current-buffer (get-buffer buffer-name)
+      (save-excursion
+	(setq buffer-read-only nil)
+	(goto-char (point-min))
+	(unless (eq (point-min) (re-search-forward "\\(^Compilation.*\n$\\|\n{2,}\\)"))
+	  (replace-match ""))
+	(goto-char (point-max))
+	(compilation-insert-annotation
+	 (format "--- %s completed in %.06fs at %s\n\n"
+		 selection (float-time duration)
+		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
+	 (setq buffer-read-only t)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
