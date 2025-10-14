@@ -498,10 +498,7 @@
    :function #'vertico-mode
    :hook 'doom-modeline-mode-hook)
 
-  (add-hygenic-one-shot-hook
-   :name "vertico-multiform"
-   :function #'vertico-multiform-mode
-   :hook 'vertico-mode-hook)
+  (add-hook 'vertico-mode-hook 'vertico-multiform-mode)
 
   (setq vertico-resize t)
   (setq vertico-count 25)
@@ -533,9 +530,10 @@
 (use-package marginalia
   :ensure t
   :bind (:map minibuffer-local-map
-              ("M-A" . marginalia-cycle))
+         ("M-A" . marginalia-cycle))
   :commands (marginalia-mode)
   :init
+
   (add-hygenic-one-shot-hook
    :name "marginalia"
    :function #'marginalia-mode
@@ -593,6 +591,7 @@
              ("M-m" . corfu-move-to-minibuffer)
              ("C-m" . corfu-move-to-minibuffer)
              ("M-S-m" . corfu-move-to-minibuffer))
+
   (setq corfu-cycle t)
   (setq corfu-quit-at-boundary t)
   (setq corfu-quit-no-match t)
@@ -607,15 +606,18 @@
   (setq read-file-name-completion-ignore-case t)
   (setq read-buffer-completion-ignore-case t)
   (setq completion-ignore-case t)
+  (add-to-list 'marginalia-command-categories '(completion . symbol))
 
   (defun corfu-move-to-minibuffer ()
     (interactive)
     (pcase completion-in-region--data
       (`(,beg ,end ,table ,pred ,extras)
        (let ((completion-extra-properties extras)
+	     (this-command 'completion)
              completion-cycle-threshold
 	     completion-cycling)
          (consult-completion-in-region beg end table pred)))))
+
 
   (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
 
@@ -747,6 +749,7 @@
   (setq consult-async-input-debounce 0.05)
   (setq consult-async-input-throttle 0.125)
   (setq consult-async-refresh-delay 0.05)
+  (setq consult-project-function #'projectile-project-root)
 
   (setq consult-preview-key '("M-." "M-?" :debounce 0))
 
