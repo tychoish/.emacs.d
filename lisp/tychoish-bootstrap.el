@@ -33,6 +33,10 @@
 
 ;;; Code:
 
+(require 'f)
+(require 's)
+(require 'ht)
+(require 'dash)
 
 (declare-function browse-url-chrome "browse-url")
 
@@ -230,6 +234,9 @@
 
 (setq select-enable-primary nil)
 (setq select-enable-clipboard nil)
+
+(setq query-replace-highlight t)
+(setq search-highlight t)
 
 (setq confirm-kill-processes nil)
 (setq confirm-nonexistent-file-or-buffer nil)

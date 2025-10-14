@@ -25,8 +25,8 @@
 
 ;;; Code:
 
-(require 'ht)
 (require 'dash)
+(require 'ht)
 (require 's)
 (require 'f)
 
@@ -35,6 +35,9 @@
 
 (require 'tychoish-common)
 (require 'consult-builder)
+
+(eval-when-compile
+  (require 'yasnippet))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -1,11 +1,5 @@
 ;;  -*- lexical-binding: t -*-
 
-(require 'f)
-(require 's)
-(require 'dash)
-
-(require 'tychoish-common)
-
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")
 
@@ -45,6 +39,7 @@
 (autoload 'org-rst-export-to-rst "ox-rst")
 (autoload 'org-rst-export-as-rst "ox-rst")
 (autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
+
 (autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
 (autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
 (autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
@@ -57,12 +52,11 @@
 
 (defun tychoish-org--install-auxiliary-packages ()
   "Install all of the auxiliary packages"
-  (with-slow-op-timer
-   "<org.el> install aux packages"
-   (->> tychoish-org--auxiliary-packages
-	(-remove #'package-installed-p)
-	(-map #'package-install-async)
-	(length))))
+  "<org.el> install aux packages"
+  (->> tychoish-org--auxiliary-packages
+       (-remove #'package-installed-p)
+       (-map #'package-install-async)
+       (length)))
 
 (add-hygenic-one-shot-hook
  :name "org-install-aux-packages"

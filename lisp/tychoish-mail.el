@@ -1,16 +1,11 @@
 ;; -*- lexical-binding: t -*-
 
-(require 's)
-(require 'f)
-(require 'ht)
+(require 'mu4e-autoloads)
 
-(require 'tychoish-common)
-
+(declare-function f-join "f")
 (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
 
 (autoload 'consult-mu "consult-mu")
-
-(declare-function with-slow-op-timer "init")
 
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-new "mu4e-compose")
@@ -22,10 +17,8 @@
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 
-(declare-function cape-dict "cape")
-(declare-function cape-emoji "cape-char")
+(declare-function consult-tycho--read-annotated "consult-tycho")
 (declare-function cape-capf-prefix-length "cape")
-(declare-function yasnippet-capf "`yasnippet-capf'")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
 (defvar tychoish/mail-accounts-table (ht-create #'equal))
@@ -86,7 +79,7 @@
   (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil))
 )
 
-(with-eval-after-load 'mu4e
+(with-eval-after-load 'mu4e-compose 
   (bind-keys :map mu4e-compose-minor-mode-map
              ("R" . compose-reply-wide-or-not-please-ask)
              ("r" . mu4e-headers-mark-for-read)
@@ -98,51 +91,52 @@
              ("u" . mu4e-headers-mark-for-unread)
              ("*" . mu4e-headers-mark-for-something)
              ("#" . mu4e-mark-resolve-deferred-marks)
-             (";" . mu4e-mark-resolve-deferred-marks))
+             (";" . mu4e-mark-resolve-deferred-marks)))
 
-  (setq mu4e-compose-complete-addresses t)
-  (setq mu4e-compose-complete-only-after "2015-01-01")
-  (setq mu4e-compose-keep-self-cc nil)
-  (setq mu4e-drafts-folder "/drafts")
-  (setq mu4e-maildir-shortcuts nil)
-  (setq mu4e-search-include-related nil)
-  (setq mu4e-search-results-limit 1000)
-  (setq mu4e-sent-folder "/sent")
-  (setq mu4e-trash-folder "/trash")
-  (setq mu4e-user-agent-string nil)
-  (setq mu4e--header-separator mail-header-separator)
+(setq mu4e-compose-complete-addresses t)
+(setq mu4e-compose-complete-only-after "2015-01-01")
+(setq mu4e-compose-keep-self-cc nil)
+(setq mu4e-drafts-folder "/drafts")
+(setq mu4e-maildir-shortcuts nil)
+(setq mu4e-search-include-related nil)
+(setq mu4e-search-results-limit 1000)
+(setq mu4e-sent-folder "/sent")
+(setq mu4e-trash-folder "/trash")
+(setq mu4e-user-agent-string nil)
+(setq mu4e--header-separator mail-header-separator)
 
-  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
+(with-eval-after-load 'mu4e-view
+  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t))
 
-  (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
-  (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
-  (add-hook 'mu4e-compose-mode-hook 'tychoish/set-up-message-mode-buffer)
+(add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
+(add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
+(add-hook 'mu4e-compose-mode-hook 'tychoish/set-up-message-mode-buffer)
 
-  (setq mu4e-bookmarks
-	'((:name "unread primary queues to file"
-		 :query "m:/inbox OR m:/prof"
-		 :key ?f)
-          (:name "to read/process queue"
-		 :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
-		 :key ?q)
-          (:name "all unread message"
-		 :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
-		 :key ?a)
-          (:name "all sorted email"
-		 :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
-		 :key ?s)
-          (:name "inbox and prof (all)"
-		 :query "m:/inbox OR m:/prof"
-		 :key ?i)
-          (:name "messages with images"
-		 :query "mime:image/*"
-		 :key ?p)
-          (:name "mesages from today"
-		 :query "date:today..now"
-		 :key ?t)
-          (:name "messages from the last week"
-		 :query "date:7d..now"
-		 :key ?w)))
+(setq mu4e-bookmarks
+      '((:name "unread primary queues to file"
+	       :query "m:/inbox OR m:/prof"
+	       :key ?f)
+        (:name "to read/process queue"
+	       :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
+	       :key ?q)
+        (:name "all unread message"
+	       :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
+	       :key ?a)
+        (:name "all sorted email"
+	       :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
+	       :key ?s)
+        (:name "inbox and prof (all)"
+	       :query "m:/inbox OR m:/prof"
+	       :key ?i)
+        (:name "messages with images"
+	       :query "mime:image/*"
+	       :key ?p)
+        (:name "mesages from today"
+	       :query "date:today..now"
+	       :key ?t)
+        (:name "messages from the last week"
+	       :query "date:7d..now"
+	       :key ?w)))
 
 (setq compose-mail-user-agent-warnings nil)
 (setq sendmail-program "msmtp")
@@ -164,13 +158,13 @@
 
 (defun tychoish/set-up-message-mode-buffer ()
   (setq-local completion-at-point-functions
-	      (list (cape-capf-prefix-length 'mu4e-complete-contact 4)
-		    'cape-emoji
-		    'cape-dict
-		    'yasnippet-capf))
+	      `(,(cape-capf-prefix-length 'mu4e-complete-contact 4)
+		    cape-emoji
+		    cape-dict
+		    yasnippet-capf))
 
   (setq-local use-hard-newlines t)
-  (setq-local make-backup-files nil)))
+  (setq-local make-backup-files nil))
 
 (defun compose-reply-wide-or-not-please-ask ()
   "Ask whether to reply-to-all or not."

@@ -1,13 +1,15 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'consult)
-(require 'ht)
+(require 'compile)
+
 (require 'dash)
+(require 'ht)
 (require 'f)
+(require 's)
+
+(require 'consult)
 
 (require 'tychoish-common)
-
-(require 'compile)
 
 ;;;###autoload
 (defun tychoish/compile-project (&optional name command)
@@ -406,7 +408,16 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		  (make-compilation-candidate
 		   :command "go mod tidy"
 		   :directory it
-		   :annotation (format "run `go mod tidy' in package %s" (f-filename it)))))))
+		   :annotation (format "run `go mod tidy' in package %s" (f-filename it)))
+		  (make-compilation-candidate
+		   :command "go doc -all"
+		   :directory it
+		   :annotation (format "full go doc for entire package `%s'" (f-filename it)))
+		  (make-compilation-candidate
+		   :command "go doc --"
+		   :name "go doc"
+		   :directory it
+		   :annotation (format "go doc outline for package `%s'" (f-filename it)))))))
 
 (register-compilation-candidates
  :name "py-projects"

@@ -9,32 +9,15 @@
 
 ;;; Code:
 
-(require 'f)
-(require 's)
-(require 'ht)
-(require 'dash)
-
-(require 'tychoish-common)
-(require 'tychoish-bootstrap)
-
-(require 'use-package)
-
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
 (setq use-package-compute-statistics t)
 (setq use-package-minimum-reported-time 0.5)
 
-(use-package delight
-  :ensure t
-  :defer t)
-
 (use-package auto-package-update
   :ensure t
   :commands (auto-package-update-maybe auto-package-update-now)
-  :defines (auto-package-update-delete-old-versions
-            auto-package-update-hide-results
-            auto-package-update-interval)
-  :init
+  :config
   (setq auto-package-update-delete-old-versions t)
   (setq auto-package-update-hide-results t)
   (setq auto-package-update-interval 9001))
@@ -315,16 +298,9 @@
   :bind (:prefix "C-c q"
 	 :prefix-map tychoish/anzu-map
 	 ("r" . anzu-query-replace)
-         ("x" . anzu-query-replace-regexp)
+         ("e" . anzu-query-replace-regexp)
          :map isearch-mode-map
-         ("C-o" . isearch-occur))
-  :config
-  (setq query-replace-highlight t)
-  (setq search-highlight t)
-  (defalias 'srr 'string-replace-regexp)
-  (defalias 'sr 'string-replace)
-  (defalias 'qrr 'anzu-query-replace-regexp)
-  (defalias 'qr 'anzu-query-replace))
+         ("C-o" . isearch-occur)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -340,25 +316,6 @@
 	 (f-exists-p (capf-wordfreq--dictionary))))
   (setq capf-wordfreq-minimal-candidate-length 5))
 
-(use-package yasnippet
-  :ensure t
-  :delight (yas-minor-mode " ys")
-  :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
-  :hook ((text-mode prog-mode) . yas-minor-mode)
-  :config
-  (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
-  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
-
-(use-package yasnippet-capf
-  :ensure t
-  :bind (:map tychoish/completion-map
-         ("s" . yasnippet-capf))
-  :commands (yasnippet-capf))
-
-(use-package yasnippet-snippets
-  :ensure t
-  :after yasnippet)
-
 (use-package cape
   :ensure t
   :bind (:prefix "C-c ."
@@ -366,6 +323,7 @@
          ;; this is mostly copy-pasta from cape-mode-map, with tweaks
          ("TAB" . completion-at-point)
          ("." . completion-at-point)
+	 ("/" . dabbrev-completion)
          ("p" . completion-at-point)
          ("t" . complete-tag)
          ("d" . cape-dabbrev)
@@ -465,12 +423,32 @@
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
   (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup)
 
+  (declare-function yasnippet-capf "yasnippet-capf")
   (add-hook 'completion-at-point-functions #'yasnippet-capf)
   (add-hook 'completion-at-point-functions (cape-capf-wrapper cape-capf-inside-code cape-keyword))
   (add-hook 'completion-at-point-functions #'cape-rfc1345)
   (add-hook 'completion-at-point-functions #'cape-emoji)
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-history))
+
+(use-package yasnippet
+  :ensure t
+  :delight (yas-minor-mode " ys")
+  :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
+  :hook ((text-mode prog-mode) . yas-minor-mode)
+  :config
+  (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
+  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
+
+(use-package yasnippet-capf
+  :ensure t
+  :bind (:map tychoish/completion-map
+         ("s" . yasnippet-capf))
+  :commands (yasnippet-capf))
+
+(use-package yasnippet-snippets
+  :ensure t
+  :after yasnippet)
 
 (use-package prescient
   :ensure t
@@ -504,36 +482,36 @@
   (setq vertico-count 25)
   (setq vertico-cycle t)
   :config
+  (defvar vertico-multiform-categories nil)
+  (defvar vertico-multiform-commands nil)
   (defmacro tychoish/vertico-disable-sort-for (command)
     "Disable sorting in vertico rendering."
-    `(add-to-list 'vertico-multiform-categories '((,command (vertico-sort-function . nil)))))
+    `(add-to-list 'vertico-multiform-categories '(,command (vertico-sort-function . nil))))
 
-  ;; (tychoish/vertico-disable-sort-for yank)
-  ;; (tychoish/vertico-disable-sort-for yank-from-kill-ring)
-  ;; (tychoish/vertico-disable-sort-for consult-yank-from-kill-ring)
-  ;; (tychoish/vertico-disable-sort-for consult-yank-pop)
+  (tychoish/vertico-disable-sort-for yank)
+  (tychoish/vertico-disable-sort-for yank-from-kill-ring)
+  (tychoish/vertico-disable-sort-for consult-yank-from-kill-ring)
+  (tychoish/vertico-disable-sort-for consult-yank-pop)
 
-  (with-eval-after-load 'vertico-multiform
-    (add-to-list 'vertico-multiform-commands
-		 '("\\`execute-extended-command"
-                   (vertico-flat-annotate . t)
-                   (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding))))))
+  (add-to-list 'vertico-multiform-commands
+	       '("\\`execute-extended-command"
+                 (vertico-flat-annotate . t)
+                 (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
 
 (use-package vertico-prescient
   :ensure t
   :hook (vertico-mode . vertico-prescient-mode)
   :config
   (setq vertico-prescient-override-sorting t)
-  (setq vertico-prescient-enabl-sorting t)
+  (setq vertico-prescient-enable-sorting t)
   (setq vertico-prescient-enable-filtering t))
 
 (use-package marginalia
   :ensure t
   :bind (:map minibuffer-local-map
-         ("M-A" . marginalia-cycle))
+         ("C-c a" . marginalia-cycle))
   :commands (marginalia-mode)
   :init
-
   (add-hygenic-one-shot-hook
    :name "marginalia"
    :function #'marginalia-mode
@@ -606,19 +584,17 @@
   (setq read-file-name-completion-ignore-case t)
   (setq read-buffer-completion-ignore-case t)
   (setq completion-ignore-case t)
-  (add-to-list 'marginalia-command-categories '(completion . symbol))
 
   (defun corfu-move-to-minibuffer ()
     (interactive)
     (pcase completion-in-region--data
       (`(,beg ,end ,table ,pred ,extras)
        (let ((completion-extra-properties extras)
-	     (this-command 'completion)
+	     (this-command 'consult-completion-in-region)
              completion-cycle-threshold
 	     completion-cycling)
          (consult-completion-in-region beg end table pred)))))
-
-
+  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu))
   (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
 
 (use-package corfu-prescient
@@ -791,7 +767,11 @@
 
 (use-package consult-flycheck
   :ensure t
-  :bind (("M-g f" . consult-flycheck)))
+  :bind (("M-g f" . flycheck)
+	 :map tychoish/consult-mode-map
+	 ("c" . consult-flycheck)
+	 :map flycheck-command-map
+	 ("\\;" . consult-flycheck)))
 
 (use-package consult-flyspell
   :ensure t
@@ -872,192 +852,17 @@
          ("d" . tychoish-blog-open-drafts-dired))
   :commands (consult-rg-for-thing
              consult-rg
+	     consult-tycho--read-annotated
 	     tychoish-define-project-notes
 	     get-directory-parents
              consult-org-capture
              consult-org-capture-target))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; helm tools (legacy)
-
-(use-package helm
-  :ensure t
-  :defines (helm-completing-read-handlers-alist)
-  :bind (:prefix "C-c h"
-         :prefix-map tychoish/helm-center-menu-map
-         ;; most interesting helm menus are under one prefix
-         ("a" . helm-apropos)
-         ("b" . helm-buffers-list)
-         ;; ("c" . helm-company)
-         ("d" . helm-stumpwm-commands)
-         ;; ("e" . helm-flyspell-correct)
-         ;; ("f" . helm-flycheck)
-         ;; ("g" . tychoish/helm-grep-tools-map)
-         ;; ("h" . help)
-         ("i" . helm-imenu)
-         ("j" . helm-etags-select)
-         ("k" . helm-register)
-         ("l" . helm-locate)
-         ;; ("m" . helm-<...>)
-         ;; ("n" . helm-<...>)
-         ;; ("o" . tychoish/org-personal-helm-map)
-         ;; ("p" . tychoish/helm-projectile-tools-map)
-         ;; ("q" . tychoish/helm-query-tools-map)
-         ("r" . helm-recentf)
-         ;; ("r" . helm-recentf)
-         ;; ("s" . helm-<prefix>-swoop)
-         ("t" . helm-top)
-         ;; ("u" . helm-<...>)
-         ;; ("v" . helm-<...>)
-         ("w" . helm-mini)
-         ;; ("x" . helm-<...>)
-         ("y" . helm-show-kill-ring)
-         ;; ("x" . helm-<...>)
-
-         ;; helm searchch/queries
-         :map tychoish/helm-center-menu-map ;; "C-c h"
-         :prefix "q"
-         :prefix-map tychoish/helm-query-tools-map ;; "C-c h q"
-         ("i" . helm-info)
-         ("o" . helm-occur)
-         ("m" . helm-man-woman)
-         ("g" . helm-google-suggest)
-         ("f" . helm-grep-do-git-grep)
-
-         :map tychoish/helm-center-menu-map ;; "C-c h"
-         :prefix "g"
-         :prefix-map tychoish/helm-grep-tools-map ;; "C-c h g"
-         ("f" . helm-find-files-grep)
-         ("g" . helm-grep-do-git-grep)
-
-         :map helm-map
-	 ("<tab>" . helm-execute-persistent-action)
-         ("C-j" . helm-select-action))
-  :commands (helm-mode helm-autoresize-mode)
-  :config
-  (setq history-delete-duplicates t)
-  (setq history-length 250)
-
-  (setq helm-apropos-fuzzy-match t)
-  (setq helm-M-x-fuzzy-match t)
-  (setq helm-buffers-fuzzy-matching t)
-  (setq helm-display-function 'helm-default-display-buffer)
-
-  (setq helm-move-to-line-cycle-in-source nil)
-  (setq helm-autoresize-max-height 40)
-  (setq helm-autoresize-min-height 20)
-  (setq helm-autoresize-mode nil)
-  (setq helm-candidate-number-limit 250)
-  (setq helm-case-fold-search t)
-  (setq helm-display-header-line nil)
-  (setq helm-ff-cache-mode-max-idle-time 300)
-  (setq helm-ff-keep-cached-candidates "local")
-  (setq helm-ff-keep-cached-candidates nil)
-  (setq helm-ff-refresh-cache-delay 300)
-  (setq helm-grep-ag-command "rg --color=always --colors 'match:fg:black' --colors 'match:bg:yellow' --smart-case --no-heading --line-number %s %s %s")
-  (setq helm-grep-ag-pipe-cmd-switches '("--colors 'match:fg:black'" "--colors 'match:bg:yellow'"))
-  (setq helm-input-idle-delay 0.0)
-  (setq helm-man-or-woman-function 'woman)
-  (setq helm-split-window-inside-p t)
-  (setq helm-c-adaptive-history-file (tychoish/conf-state-path "helm-c-adaptive-history.el"))
-  (setq helm-c-adaptive-sorting t)
-  (helm-autoresize-mode 1)
-  (when (window-system)
-    (set-face-attribute 'helm-source-header nil :height 0.98 :family "Source Code Pro" :weight 'semibold :background 'unspecified)))
-
-(use-package helm-projectile
-  :ensure t
-  :bind (:map tychoish/helm-grep-tools-map ;; "C-c h g"
-         :prefix "p"
-         :prefix-map tychoish/helm-projectile-grep-map ;; "C-c h g p"
-         ("g" . helm-projectile-grep)
-         ("a" . helm-projectile-ag)
-         ("c" . helm-projectile-ak)
-         ("r" . helm-projectile-rg)
-         :map tychoish/helm-center-menu-map ;; "C-c h"
-         :prefix "p"
-         :prefix-map tychoish/helm-projectile-tools-map ;; "C-c h p"
-         ("m" . helm-make)
-         ("p" . helm-projectile)
-         ("r" . helm-projectile-rg)
-         ("a" . helm-projectile-ag)
-         ("g" . helm-projectile-grep)
-         ("f" . helm-projectile-find-file-dwim)
-         ("d" . helm-projectile-find-dir)
-         ("b" . helm-projectile-switch-to-buffer))
-  :commands (helm-projectile helm-projectile-rg)
-  :init
-  (add-hook 'projectile-mode-hook 'helm-projectile-on))
-
-(use-package helm-ag
-  :bind (:map tychoish/helm-grep-tools-map
-	 :prefix "a"
-	 :prefix-map tychoish/helm-ag-map
-	 ("s" . helm-do-grep-ag)
-         ("i" . helm-do-ag)
-         ("f" . helm-do-ag-this-file)
-         ("p" . helm-do-ag-project-root)
-         ("b" . helm-do-ag-buffers))
-  :init
-  (defalias 'helm-do-grep-rg 'helm-do-grep-ag)
-  :config
-  (setq helm-ag-insert-at-point 'word)
-  (setq helm-ag-fuzzy-match t))
-
-(use-package helm-rg
-  :ensure t
-  :bind (:map tychoish/helm-grep-tools-map ;; "C-c h g"
-         ("r" . helm-rg)
-         ("s" . helm-rg))
-  :commands (helm-rg)
-  :config
-  (when (window-system)
-    (set-face-attribute 'helm-rg-error-message nil :foreground "pink4" :background 'unspecified :weight 'normal)
-    (set-face-attribute 'helm-rg-active-arg-face nil :foreground "olive drab")
-    (set-face-attribute 'helm-rg-base-rg-cmd-face nil :foreground "dim gray")
-    (set-face-attribute 'helm-rg-directory-cmd-face nil :foreground "brown")
-    (set-face-attribute 'helm-rg-directory-header-face nil :foreground 'unspecified :weight 'extra-bold)
-    (set-face-attribute 'helm-rg-extra-arg-face nil :foreground "yellow4")
-    (set-face-attribute 'helm-rg-file-match-face nil :foreground "#088")
-    (set-face-attribute 'helm-rg-inactive-arg-face nil :foreground "dim gray")
-    (set-face-attribute 'helm-rg-title-face nil :foreground "purple" :weight 'bold)))
-
-(use-package helm-org
-  :ensure t
-  :defer t
-  :bind (:map tychoish/helm-center-menu-map
-	 :prefix ";"
-	 :prefix-map tychoish/helm-org-mode-map
-	 ("c" . helm-org-capture-templates)
-	 ("f". helm-org-in-buffer-heddings)
-	 ("a" . helm-org-agenda-files-headings)
-	 :map tychoish/helm-center-menu-map
-	 :prefix "o"
-	 :prefix-map tychoish/org-mode-personal-helm-map
-	 ("b" . helm-org-in-buffer-headings)
-	 ("p" . helm-org-parent-headings)
-	 ("a" . helm-org-agenda-files-headings))
-  :commands (helm-org-capture-templates
-             helm-org-in-buffer-heddings
-             helm-org-agenda-files-headings)
-  :config
-  (add-to-list 'helm-completing-read-handlers-alist '(org-capture . helm-org-completing-read-tags))
-  (add-to-list 'helm-completing-read-handlers-alist '(org-set-tags . helm-org-completing-read-tags)))
-
-(use-package helm-flyspell
-  :ensure t
-  :bind (:map tychoish/helm-center-menu-map
-         ("e" . helm-flyspell-correct)))
-
-(use-package flyspell-correct-helm
-  :ensure t
-  :after (helm-flyspell)
-  :config
-  (setq flyspell-correct-interface #'flyspell-correct-helm))
-
 (use-package revbufs
   :ensure t
+  :bind (:prefix "C-c b"
+	 :prefix-map tychoish/buffer-control-map
+	 ("r" . revbufs))
   :commands (revbufs)
   :config
   (bind-key "C-k" 'revbufs-kill 'revbufs-mode-map)
@@ -1449,7 +1254,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package rst
   :delight (rst-mode "rst")
-  :mode ("\\.rst")
+  :mode ("\\.rst" . rst-mode)
   :bind (:map rst-mode-map
 	 ("C-c C-t h" . rst-adjust))
   :init
@@ -2042,11 +1847,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
              ("w" . eglot-code-action-rewrite))
 
   (setq eglot-menu-string "eg")
-  (when (and (featurep 'helm) helm-mode
-	     (not (or (featurep 'vertico)
-		      vertico-mode)))
-    (bind-keys :map eglot-mode-map
-               ("C-c l m" . helm-imenu)))
 
   (setq eglot-autoshutdown t)
   (setq eglot-extend-to-xref t)
@@ -2334,11 +2134,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :after (claude-code)
   :defer t)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; org-mode, tychoish custom, etc
-
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

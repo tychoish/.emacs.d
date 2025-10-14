@@ -23,6 +23,7 @@
 (defconst tychoish/slow-op-time-threshold 0.0001
   "minimum time before `with-slow-op-timer' logs")
 
+;;;###autoload
 (defmacro with-slow-op-timer (name &rest body)
   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
   `(let* ((inhibit-message t)
