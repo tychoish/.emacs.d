@@ -565,19 +565,6 @@
          ((shell-mode eshell-mode eat-mode) . corfu-mode)
          (telega-chat-mode . corfu-mode))
   :init
-  (add-hygenic-one-shot-hook
-   :name "corfu-history"
-   :function #'corfu-history-mode
-   :hook 'corfu-mode)
-  (add-hygenic-one-shot-hook
-   :name "corfu-indexed"
-   :function #'corfu-indexed-mode
-   :hook 'corfu-mode)
-  (add-hygenic-one-shot-hook
-   :name "corfu-indexed"
-   :function #'corfu-popupinfo-mode
-   :hook 'corfu-mode)
-
   (defun tychoish/corfu-text-mode-setup ()
     (setq-local corfu-auto-prefix 2))
 
@@ -586,6 +573,10 @@
 
   (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
   (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
+
+  (add-hook 'corfu-mode-hook 'corfu-history-mode)
+  (add-hook 'corfu-mode-hook 'corfu-indexed-mode)
+  (add-hook 'corfu-mode-hook 'corfu-popupinfo-mode)
   :config
   (bind-keys :map corfu-map
              ("C-<tab>" . corfu-quick-complete)
@@ -617,15 +608,6 @@
   (setq read-buffer-completion-ignore-case t)
   (setq completion-ignore-case t)
 
-  (defun tychoish/corfu-popupinfo-resolver (candidate)
-    (let ((frame-type (framep (window-frame (get-buffer-window)))))
-      (unless (or
-	       (eq frame-type 't) ;; this is "normal" text terminal
-	       (eq frame-type 'pc)) ;; this is "ms-dos" terminal (good measure)
-	(funcall #'corfu-popupinfo--get-documentation candidate))))
-
-  (setq corfu-popupinfo--function 'tychoish/corfu-popupinfo-resolver)
-
   (defun corfu-move-to-minibuffer ()
     (interactive)
     (pcase completion-in-region--data
@@ -635,11 +617,7 @@
 	     completion-cycling)
          (consult-completion-in-region beg end table pred)))))
 
-  (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer)
-
-  (corfu-indexed-mode)
-  (corfu-history-mode)
-  (corfu-popupinfo-mode))
+  (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
 
 (use-package corfu-prescient
   :ensure t
@@ -656,14 +634,12 @@
 
 (use-package corfu-terminal
   :load-path "external/"
-  :after (popon)
-  :defines (corfu-terminal-disable-on-gui)
   :commands (corfu-terminal-mode)
   :init
-  (add-hygenic-one-shot-hook
-   :name "corfu-terminal"
-   :hook 'tty-setup-hook
-   :function #'corfu-terminal-mode))
+  (add-hook 'corfu-mode-hook #'corfu-terminal-mode)
+  :config
+  (setq corfu-terminal-disable-on-gui t)
+  (setq corfu-terminal-enable-on-minibuffer nil))
 
 (use-package nerd-icons-corfu
   :ensure t
@@ -777,6 +753,9 @@
   (add-to-list 'consult-mode-histories '(compilation-mode compile-history))
 
   (advice-add #'register-preview :override #'consult-register-window)
+
+  ;; (setq completion-in-region-function #'consult-completion-in-region)
+  ;; (setq completion-in-region-function #'corfu--in-region)
 
   (defun consult-ripgrep--up-directory ()
     (interactive)

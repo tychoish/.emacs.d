@@ -88,12 +88,18 @@
  ("M-<up>" . increase-window-up)
  ("M-<right>" . increase-window-right)
  ("M-/" . dabbrev-completion)
- ("C-M-/" . dabbrev-expand)
+ ("C-M-/" . dabbrev-expand))
+
+(bind-keys
  :map tychoish-core-map
  ("p" . toggle-electric-pair-inhibition)
- ("e" . toggle-electric-pair-eagerness)
+ ("e" . toggle-electric-pair-eagerness))
+
+(bind-keys
  :map minibuffer-local-map
- ("C-l" . backward-kill-word)
+ ("C-l" . backward-kill-word))
+
+(bind-keys
  :prefix "C-c d"
  :prefix-map tychoish/docs-map
  ("s" . describe-symbol)
@@ -101,38 +107,52 @@
  ("q" . kill-eldoc-and-help-buffers)
  ("j" . jump-to-elisp-help)
  ("e" . eldoc)
- ("b" . eldoc-doc-buffer)
+ ("b" . eldoc-doc-buffer))
+
+(bind-keys
  :prefix "C-c k"
  :prefix-map tychoish/kill-map
  ("s" . backward-kill-sentence)
  ("p" . backward-kill-paragraph)
  ("f" . backward-kill-sexp)
  ("d" . delete-region)
- ("w" . delete-trailing-whitespace)
+ ("w" . delete-trailing-whitespace))
+
+(bind-keys
  :prefix "C-c w"
  :prefix-map tychoish/web-browser-map ;; C-c w
  ("d" . browse-url-generic)
  ("e" . browse-url)
  ("f" . browse-url-firefox)
  ("c" . browse-url-chrome)
- ("g" . eww-search-words)
+ ("g" . eww-search-words))
+
+(bind-keys
  :prefix "C-c g"
  :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
  ("o" . occur)
- ("g" . grep)
+ ("g" . grep))
+
+(bind-keys
  :map tychoish/ecclectic-grep-map
  :prefix "p"
  :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
- ("f" . find-grep)
+ ("f" . find-grep))
+
+(bind-keys
  :prefix "C-c o"
  :prefix-map tychoish/global-org-map
  ("a" . org-agenda)
- ("k" . org-capture)
+ ("k" . org-capture))
+
+(bind-keys
  :map tychoish/global-org-map
  :prefix "l"
  :prefix-map tychoish/org-link-mode-map
  ("s" . org-store-link)
- ("i" . org-insert-link)
+ ("i" . org-insert-link))
+
+(bind-keys
  :map global-map
  ("M-." . xref-find-definitions)
  :prefix "C-c l"

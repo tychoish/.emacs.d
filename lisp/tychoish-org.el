@@ -90,6 +90,12 @@
 	   :map tychoish/org-link-mode-map
            ("a" . org-annotate-file))
 
+(defvar-keymap tychoish/org-gist-map
+  :name "org-gist"
+  :doc "keymap for org-gist commands"
+  "p" #'org-gist-export-private-gist
+  "g" #'org-gist-export-public-gist)
+
 (with-eval-after-load 'org
   (bind-keys :map org-mode-map
              ("C-c l o" . org-link-open-from-string)
@@ -128,23 +134,16 @@
              ("t" . org-archive-set-tag)
              ("s" . org-archive-to-archive-sibling))
 
-  (defvar-keymap tychoish/org-gist-map
-    :name "org-gist"
-    :doc "keymap for org-gist commands"
-    "p" #'org-gist-export-private-gist
-    "g" #'org-gist-export-public-gist)
+  (with-eval-after-load 'consult
+    (bind-keys :map tychoish/org-mode-personal-map
+               ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)
+               ("s" . consult-org-agenda))))        ;; Alternative: consult-org-heading (for jump))
 
-  (bind-key "g" 'tychoish/org-gist-map tychoish/org-mode-personal-map))
 
 (with-eval-after-load 'org-agenda
   (bind-keys :map org-agenda-mode-map
 	     ("C-l" . org-agenda-open-link)
 	     ("M-c" . org-agenda-goto-calendar)))
-
-(with-eval-after-load 'consult
-  (bind-keys :map tychoish/org-mode-personal-map ;; "C-c o"
-             ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)
-             ("s" . consult-org-agenda)))        ;; Alternative: consult-org-heading (for jump))
 
 (with-eval-after-load 'consult-tycho
   (bind-keys :map tychoish/org-mode-capture-map
