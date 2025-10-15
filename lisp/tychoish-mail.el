@@ -58,7 +58,7 @@
    (setq consult-mu-compose-preview-key "M-o")
    (setq consult-mu-contacts-ignore-case-fold-search t)
    (setq consult-mu-contacts-ignore-list '("^.*no.*reply.*"))
-   ;; the order of the following remains important: 
+   ;; the order of the following remains important:
    (setq consult-mu-embark-attach-file-key "C-a")
    (require 'consult-mu-compose-embark)))
 
@@ -79,19 +79,23 @@
   (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil))
 )
 
-(with-eval-after-load 'mu4e-compose 
-  (bind-keys :map mu4e-compose-minor-mode-map
-             ("R" . compose-reply-wide-or-not-please-ask)
-             ("r" . mu4e-headers-mark-for-read)
-             :map mu4e-headers-mode-map
-             ("C-r" . compose-reply-wide-or-not-please-ask)
-             ("R" . compose-reply-wide-or-not-please-ask)
-             ("r" . mu4e-headers-mark-for-read)
-             ("o" . mu4e-headers-mark-for-unread)
-             ("u" . mu4e-headers-mark-for-unread)
-             ("*" . mu4e-headers-mark-for-something)
-             ("#" . mu4e-mark-resolve-deferred-marks)
-             (";" . mu4e-mark-resolve-deferred-marks)))
+(with-eval-after-load 'mu4e-compose
+  (bind-keys
+   :map mu4e-compose-minor-mode-map
+   ("R" . compose-reply-wide-or-not-please-ask)
+   ("r" . mu4e-headers-mark-for-read)))
+
+(with-eval-after-load 'mu4e-headers
+  (bind-keys
+   :map mu4e-headers-mode-map
+   ("C-r" . compose-reply-wide-or-not-please-ask)
+   ("R" . compose-reply-wide-or-not-please-ask)
+   ("r" . mu4e-headers-mark-for-read)
+   ("o" . mu4e-headers-mark-for-unread)
+   ("u" . mu4e-headers-mark-for-unread)
+   ("*" . mu4e-headers-mark-for-something)
+   ("#" . mu4e-mark-resolve-deferred-marks)
+   (";" . mu4e-mark-resolve-deferred-marks)))
 
 (setq mu4e-compose-complete-addresses t)
 (setq mu4e-compose-complete-only-after "2015-01-01")
