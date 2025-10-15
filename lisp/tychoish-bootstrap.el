@@ -313,6 +313,7 @@
   (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
+  (setq tramp-persistency-file-name (tychoish/conf-state-path "tramp.el"))
 
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)

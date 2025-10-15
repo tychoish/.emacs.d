@@ -515,7 +515,9 @@
   (add-hygenic-one-shot-hook
    :name "marginalia"
    :function #'marginalia-mode
-   :hook 'minibuffer-setup-hook))
+   :hook 'minibuffer-setup-hook)
+  :config
+  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu)))
 
 (use-package embark
   :ensure t
@@ -594,7 +596,7 @@
              completion-cycle-threshold
 	     completion-cycling)
          (consult-completion-in-region beg end table pred)))))
-  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu))
+
   (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
 
 (use-package corfu-prescient

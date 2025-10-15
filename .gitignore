@@ -17,3 +17,4 @@ transient/*.el
 lisp/*.elcwordfreq-dicts
 wordfreq-dicts/**
 lisp/**.elc
+external/**.elc
