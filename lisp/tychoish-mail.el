@@ -311,16 +311,17 @@
 (cl-defmacro tychoish-define-mail-account
     (&key name address key id
 	  (command mu4e-get-mail-command)
-	  (maildir (expand-file-name "~/mail"))
+	  (maildir "~/mail")
 	  (instances '())
 	  (systems '())
 	  default)
 
-  (unless (and name address key id)
-    (user-error "cannot define mail account without name, address, key and id %S" (list :name name :address address :key key :id id)))
+  (unless (and name address key id maildir)
+    (user-error "cannot define mail account without name, address, key and id %S" (list :name name :address address :key key :id id :maildir maildir)))
 
   (let* ((account-name (format tychoish/mail-id-template id))
-         (configure-account-symbol (intern account-name)))
+         (configure-account-symbol (intern account-name))
+	 (maildir (expand-file-name maildir)))
 
     (define-key 'tychoish/mail-map (kbd key) configure-account-symbol)
 

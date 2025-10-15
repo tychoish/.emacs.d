@@ -645,15 +645,22 @@
          (setq-default gptel-model ,model)
          (setq-default gptel-backend ,backend))
 
-       (bind-key ,(format "C-c r a m %s" (downcase key)) ,local-function-symbol gptel-mode-map)
-       (bind-key ,(format "C-c r a m %s" (upcase key)) ,default-function-symbol gptel-mode-map))))
+       (bind-keys :map gptel-mode-map
+		  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
+		  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)))))
 
 (defun tychoish/set-up-aider-env-vars ()
   (when (boundp 'anthropic-api-key)
     (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
-  (when (boundp 'google-gemini-key)
-    (setenv "GEMINI_API_KEY" google-gemini-key))
+
+  (when (boundp 'gemini-api-key)
+    (setenv "GEMINI_API_KEY" gemini-api-key))
+
+  (when (boundp 'openai-api-key)
+    (setenv "OPENAI_API_KEY" openai-api-key))
+
   (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md"))
+
   (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
 	      (_ (f-exists-p uv-bin-path))
 	      (aider-bin-path (f-join uv-bin-path "aider"))

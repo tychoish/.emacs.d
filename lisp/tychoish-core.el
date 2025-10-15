@@ -773,7 +773,7 @@
 	 :map tychoish/consult-mode-map
 	 ("c" . consult-flycheck)
 	 :map flycheck-command-map
-	 ("\\;" . consult-flycheck)))
+	 ("\;" . consult-flycheck)))
 
 (use-package consult-flyspell
   :ensure t
@@ -1609,8 +1609,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (define-key flycheck-mode-map flycheck-keymap-prefix flycheck-command-map)
   (setq flycheck-keymap-prefix (kbd "C-c f"))
 
-  (with-eval-after-load 'consult-flycheck
-    (bind-key "m" consult-flycheck flycheck-command-map))
+  (bind-key "m" #'consult-flycheck flycheck-command-map)
 
   (defun flycheck-eldoc (callback &rest _ignored)
     "Print flycheck messages at point by calling CALLBACK." ;; from masteringemacs.org
@@ -1661,6 +1660,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (add-to-list 'compilation-error-regexp-alist-alist (list name regexp file line col level))
     (add-to-list 'compilation-error-regexp-alist name))
 
+  (declare-function 'ansi-color-apply-on-region "ansi-color")
+
   (defun colorize-compilation-buffer ()
     (ansi-color-apply-on-region compilation-filter-start (point)))
 
@@ -1671,9 +1672,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (defun tychoish-compile-project-super-lint ()
     (interactive)
-    (let* ((project-directory (or (when (featurep 'projectile) (trimmed-string-or-nil (projectile-project-root)))
-                                  (when (featurep 'project) (project-current))
-                                  default-directory))
+    (let* ((project-directory (approximate-project-root))
            (options (list "VALIDATE_YAML=true"
                           "VALIDATE_OPENAPI=true"
                           "VALIDATE_MD=true"
@@ -1743,7 +1742,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (flycheck-remove-next-checker 'mail-aspell-dynamic 'grammarly)
     (setq flycheck-checkers (remove 'grammarly flycheck-checkers))
     (setq grammarly-on-open-function-list (remove 'flycheck-grammarly--on-open 'grammarly-on-open-function-list))
-    (setq grammarly-on- message-function-list (remove 'flycheck-grammarly--on-message 'grammarly-on-open-function-list))
+    (setq grammarly-on-message-function-list (remove 'flycheck-grammarly--on-message 'grammarly-on-open-function-list))
     (setq grammarly-on-close-function-list (remove 'flycheck-grammarly--on-close 'grammarly-on-close-function-list))))
 
 (use-package flycheck-vale
@@ -1929,7 +1928,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :init
   (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(jav-mode . js-ts-mode))
+  (add-to-list 'major-mode-remap-alist '(java-mode . java-ts-mode))
   (add-to-list 'major-mode-remap-alist '(css-mode . css-ts-mode))
   (add-to-list 'major-mode-remap-alist '(js-json-mode . json-ts-mode))
 
@@ -1994,6 +1993,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package gptel
   :ensure t
+  :vc (:url "https://github.com/karthink/gptel" :rev newest)
   :bind (:prefix "C-c r"
 	 :prefix-map tychoish/robot-map
 	 ("g" . gptel)
@@ -2006,6 +2006,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("C-c m" . gptel-menu))
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands gptel
+  :init
+  (defvar gemini-api-key nil)
+  (defvar anthropic-api-key nil)
+  (defvar openai-api-key nil)
   :config
   (setq gptel-include-reasoning 'ignore)
 
@@ -2013,7 +2017,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :name "gemini"
    :key "g"
    :model 'gemini-2.5-pro-preview-06-05
-   :backend (gptel-make-gemini "gemini" :key google-gemini-key :stream t))
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (tychoish/gptel-set-up-backend
    :name "copilot"
@@ -2026,6 +2030,30 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :key "a"
    :model 'claude-3-5-sonnet-20241022
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t))
+
+  (tychoish/gptel-set-up-backend
+   :name "gpt-5"
+   :key "s"
+   :model 'gpt-5
+   :backend (gptel-make-openai "openai" :key openai-api-key))
+
+  (tychoish/gptel-set-up-backend
+   :name "gpt-5-mini"
+   :key "m"
+   :model 'gpt-5
+   :backend (gptel-make-openai "openai" :key openai-api-key))
+
+  (tychoish/gptel-set-up-backend
+   :name "o4-mini"
+   :key "o"
+   :model 'o4-mini
+   :backend (gptel-make-openai "openai" :key openai-api-key))
+
+  (tychoish/gptel-set-up-backend
+   :name "gpt-5-nano"
+   :key "n"
+   :model 'gpt-5
+   :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (require 'gptel-integrations))
 
