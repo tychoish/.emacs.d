@@ -24,17 +24,19 @@
 (defvar tychoish/mail-accounts-table (ht-create #'equal))
 (defvar tychoish/mail-account-current nil)
 
-(bind-keys :prefix "C-c m"
-           :prefix-map tychoish/mail-map
-	   ("a" . tychoish-mail-select-account))
+(bind-keys
+ :prefix "C-c m"
+ :prefix-map tychoish/mail-map
+ ("a" . tychoish-mail-select-account))
 
-(bind-keys :map tychoish/mail-map
-           ("m" . mu4e)
-           ("d" . mu4e-search-maildir)
-           ("b" . mu4e-search-bookmark)
-           ("c" . mu4e-compose-new)
-	   ("C-;" . consult-mu)
-	   (";" . consult-mu-bookmark))
+(bind-keys
+ :map tychoish/mail-map
+ ("m" . mu4e)
+ ("d" . mu4e-search-maildir)
+ ("b" . mu4e-search-bookmark)
+ ("c" . mu4e-compose-new)
+ ("C-;" . consult-mu)
+ (";" . consult-mu-bookmark))
 
 (setq consult-mu-maxnum 200)
 (setq consult-mu-preview-key 'any)
@@ -76,8 +78,7 @@
   (setq-default message-signature t)
   (add-to-list 'mm-discouraged-alternatives "text/richtext")
   (add-to-list 'mm-discouraged-alternatives "text/html")
-  (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil))
-)
+  (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
 
 (with-eval-after-load 'mu4e-compose
   (bind-keys
