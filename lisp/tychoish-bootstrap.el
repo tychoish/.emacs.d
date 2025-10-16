@@ -157,6 +157,14 @@
  ("i" . org-insert-link))
 
 (bind-keys
+ :prefix "C-c ."
+ :prefix-map tychoish/completion-map
+ ("TAB" . completion-at-point)
+ ("." . completion-at-point)
+ ("/" . dabbrev-completion)
+ ("p" . completion-at-point))
+
+(bind-keys
  :map global-map
  ("M-." . xref-find-definitions)
  :prefix "C-c l"
@@ -383,8 +391,6 @@
                   "^/home.+go/pkg/mod\\|"
                   "^/home.+\\.cargo"))))
 
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; silent startup -- avoid printing or using the Messages buffer
@@ -454,7 +460,8 @@
    (transient-mark-mode 1)
    (xterm-mouse-mode 1)
    (electric-pair-mode 1)
-   (which-key-mode 1)))
+   (which-key-mode 1)
+   (repeat-mode 1)))
 
 (defun tychoish/set-up-delightful-mode-lighters ()
   (with-slow-op-timer
@@ -551,6 +558,8 @@
 
 ;; frame/window -- setup and manage frames and windows
 
+(setq window-sides-vertical t)
+
 (defun kill-eldoc-and-help-buffers ()
   "Kills all eldoc and help buffers"
   (interactive)
@@ -561,17 +570,20 @@
 (defun increase-window-left () (interactive) (enlarge-window 1 t))
 (defun increase-window-right () (interactive) (enlarge-window -1 t))
 
-(defun on-frame-open (frame)
+(defun frame-unset-background-for-tty (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
   (unless (display-graphic-p frame)
+    (set-background-color "unspecified-bg")
     (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
 
-(defun on-after-init ()
-  ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
-  (on-frame-open (selected-frame)))
+(defun current-frame-unset-background-for-tty ()
+  "Reset the background on the current frame, but only if its a TTY frame."
+  (interactive)
+  (frame-unset-background-for-tty (selected-frame)))
 
-(add-hook 'after-make-frame-functions #'on-frame-open)
-(add-hook 'window-setup-hook #'on-after-init)
+(add-hook 'after-make-frame-functions #'frame-unset-background-for-tty)
+(add-hook 'server-after-make-frame-hook #'current-frame-unset-background-for-tty)
+(add-hook 'window-setup-hook #'current-frame-unset-background-for-tty)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -690,6 +702,7 @@
 ;; system -- darwin or linux specific settings
 
 (when (eq system-type 'darwin)
+  (setq read-process-output-max (* 64 1024))
   (setq ns-function-modifier 'hyper)
   (setq mac-command-modifier 'meta)
   (setq mac-option-modifier 'super)
@@ -698,6 +711,7 @@
   (add-hook 'after-make-frame-functions #'contextual-menubar))
 
 (when (eq system-type 'gnu/linux)
+  (setq read-process-output-max (* 1024 1024))
   (setq x-alt-keysym 'meta)
   (setq x-super-keysym 'super))
 

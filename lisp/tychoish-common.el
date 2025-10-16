@@ -858,6 +858,10 @@ interactively then remove duplicate items from the `kill-ring'."
 
 ;; bulk buffer killing -- kill groups of buffers efficiently
 
+(defun save-all-buffers ()
+  (interactive)
+  (save-some-buffers t t))
+
 (defun buffers-matching-path (regexp &optional internal-too)
   (->> (buffer-list)
        (--keep (let* ((buffer it)

@@ -318,13 +318,8 @@
 
 (use-package cape
   :ensure t
-  :bind (:prefix "C-c ."
-         :prefix-map tychoish/completion-map
+  :bind (:map tychoish/completion-map ;; "C-c ."
          ;; this is mostly copy-pasta from cape-mode-map, with tweaks
-         ("TAB" . completion-at-point)
-         ("." . completion-at-point)
-	 ("/" . dabbrev-completion)
-         ("p" . completion-at-point)
          ("t" . complete-tag)
          ("d" . cape-dabbrev)
          ("h" . cape-history)
@@ -338,9 +333,7 @@
          (":" . cape-emoji)
          ("e" . cape-emoji)
          ("\\" . cape-tex)
-         ("_" . cape-tex)
-         ("^" . cape-tex)
-         ("&" . cape-sgml)
+         ("/" . cape-sgml)
          ("u" . cape-rfc1345))
   :init
   (declare-function capf-wordfreq-avalible-p "tychoish-core")
@@ -539,6 +532,9 @@
 (use-package corfu
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
+  :bind (:map tychoish/completion-map
+	 ("m" . corfu-at-point)
+	 ("x" . corfu-at-point))
   :hook (((prog-mode text-mode) . corfu-mode)
          ((shell-mode eshell-mode eat-mode) . corfu-mode)
          (telega-chat-mode . corfu-mode))
@@ -548,6 +544,12 @@
 
   (defun tychoish/corfu-prog-mode-setup ()
     (setq-local corfu-auto-prefix 3))
+
+  (defun corfu-at-point ()
+    "Run `completion-at-point', but force using corfu, which may be useful in gui terminals"
+    (interactive)
+    (let ((completion-in-region-function #'corfu--in-region))
+      (completion-at-point)))
 
   (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
   (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
@@ -595,9 +597,7 @@
 	     (this-command 'consult-completion-in-region)
              completion-cycle-threshold
 	     completion-cycling)
-         (consult-completion-in-region beg end table pred)))))
-
-  (add-to-list 'corfu-continue-commands #'corfu-move-to-minibuffer))
+         (consult-completion-in-region beg end table pred))))))
 
 (use-package corfu-prescient
   :ensure t
@@ -642,6 +642,7 @@
    :function #'nerd-icons-completion-mode
    :hook '(corfu-mode-hook vertico-mode-hook)))
 
+
 (use-package consult
   :ensure t
   :bind (("C-c C-x C-m" . consult-mode-command)
@@ -685,6 +686,9 @@
          ("M-s c" . consult-locate)
          ;; Isearch integration
          ("M-s e" . consult-isearch-history)
+	 :map tychoish/completion-map
+	 ("r" . consult-at-point)
+	 ("c" . consult-at-point)
 	 :map tychoish/docs-map
          ("m" . consult-man)
          ;; Minibuffer history
@@ -714,6 +718,12 @@
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
   :commands (consult-find consult-git-grep consult-grep)
+  :init
+  (defun consult-at-point ()
+    "Run `completion-at-point', but force using consult, which may be useful in tty terminals"
+    (interactive)
+    (let ((completion-in-region-function #'consult-completion-in-region))
+      (completion-at-point)))
   :config
   (setq register-preview-delay 0.05)
 
@@ -1583,7 +1593,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package docker
   :ensure t
   :commands (docker)
-  :bind ("C-c C-d" . docker))
+  :bind ("C-c C-c" . docker))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1976,6 +1986,21 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
      (lambda (result)
        (message "rebuilt treesit grammars for %s" result)))))
 
+(use-package dape
+  :ensure t
+  :bind-keymap ("C-c C-d" . dape-global-map)
+  :config
+  (add-hook 'kill-emacs-hook 'dape-bakepoint-save)
+  (add-hook 'dape-start-hook #'save-all-buffers)
+  ;; (setq dape-info-hide-mode-line nil)
+  ;;
+  ;; Pulse source line (performance hit)
+  ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
+  (setq dape-key-prefix (kbd "C-c C-d"))
+  (which-key-add-key-based-replacements "C-c C-d" "dape")
+  (setq dape-buffer-window-arrangement 'right)
+  (setq dape-cwd-function #'approximate-project-root))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; ROBOTS (AI) Integration
@@ -2067,10 +2092,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :commands (mcp-hub-start-all-servers)
   :config
+  (require 'mcp-hub)
   (add-to-list 'mcp-hub-servers '("time" . (:command "uvx" :args ("mcp-server-time"))))
   (add-to-list 'mcp-hub-servers '("fetch" . (:command "uvx" :args ("mcp-server-fetch"))))
-  (add-to-list 'mcp-hub-servers '("git" . (:command "uvx" :args ("mcp-server-git"))))
-  (require 'mcp-hub))
+  (add-to-list 'mcp-hub-servers '("git" . (:command "uvx" :args ("mcp-server-git")))))
 
 (use-package copilot
   :ensure t
