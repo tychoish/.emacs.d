@@ -305,6 +305,8 @@
 
 ;; org-capture-templates
 
+(defvar org-capture-templates nil)
+
 (defun tychoish-org-reset-capture-templates ()
   (unless (boundp 'org-capture-templates)
     (defvar org-capture-templates))

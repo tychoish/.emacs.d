@@ -103,10 +103,10 @@
                       (thing-at-point 'existing-filename)
 		      default-directory
                       user-emacs-directory
-                      "~/"))))
-       (-filter #'stringp)
-       (-map #'expand-file-name)
-       (-distinct))
+                      "~/"))
+	 (-filter #'stringp)
+	 (-map #'expand-file-name)
+	 (-distinct))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -207,7 +207,8 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 	(font-cell (assoc 'font default-frame-alist)))
     (if font-cell
 	(setcdr font-cell new-font-name)
-      (add-to-list 'default-frame-alist (cons 'font new-font-name)))))
+      (add-to-list 'default-frame-alist (cons 'font new-font-name))))
+  (assoc 'font default-frame-alist))
 
 (defun tychoish/ensure-font (font-face-name size)
   (unless (assoc 'font default-frame-alist)
