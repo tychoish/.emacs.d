@@ -1372,16 +1372,16 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
   (add-to-list 'tychoish/eglot-default-server-configuration
                 '(:gopls :gofumpt t
-                          :usePlaceholders :json-false
-                          :hoverKind "FullDocumentation"
-                          :analyses (:unreachable t
-                                     :unusedvariable t)
-                          :hints (:parameterNames :json-false
-                                  :ignoredError t
-                                  :compositeLiteralTypes :json-false
-                                  :compositeLiteralFields :json-false
-                                  :rangeVariableTypes :json-false
-                                  :functionTypeParameters :json-false)))
+                         :usePlaceholders :json-false
+                         :hoverKind "FullDocumentation"
+                         :analyses (:unreachable t
+                                    :unusedvariable t)
+                         :hints (:parameterNames :json-false
+                                 :ignoredError t
+                                 :compositeLiteralTypes :json-false
+                                 :compositeLiteralFields :json-false
+                                 :rangeVariableTypes :json-false
+                                 :functionTypeParameters :json-false)))
 
   (add-hook 'go-ts-mode-hook 'tychoish/go-mode-setup)
   :config

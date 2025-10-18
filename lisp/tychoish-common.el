@@ -63,7 +63,7 @@
 (defun tychoish/conf-emacs-host-and-instance ()
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (or tychoish-cache--conf-emacs-host-and-instance
-	(setq tychoish-cache--conf-emacs-host-and-instance
+	(setq-local tychoish-cache--conf-emacs-host-and-instance
 	      (list
 	       (if (eq system-type 'darwin)
 		   (car (s-split "\\." (system-name)))
@@ -81,7 +81,14 @@
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
-  (s-join "-" (append (tychoish/conf-emacs-host-and-instance) `(,name))))
+  (s-join "-" (->> (tychoish/conf-emacs-host-and-instance)
+		      (reverse)
+		      (-concat (-l (when (or (equal "root" user-login-name)
+					     (f-symlink-p user-emacs-directory))
+				     user-login-name)
+				   name))
+		      (reverse)
+		      (-non-nil))))
 
 (defun tychoish-get-config-file-path (name)
   "Return an absolute path for NAME in the configuration directory.

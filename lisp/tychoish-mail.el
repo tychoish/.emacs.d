@@ -222,9 +222,9 @@
                (:constructor tychoish/mail-make-account
                              (&key id maildir name address keybinding signature signature-kind fetchmail
 				   &aux (maildir (cond
-						  ((null maildir) (f-expand "~/mail"))
 						  ((not (stringp maildir)) (user-error "maildir must be a string"))
-						  ((not (f-directory-p maildir)) (user-error "maildir does not exist"))
+						  ;; we could do more validation here, but it's probably more trouble
+						  ;; than it's worth.
 						  (t (f-expand maildir))))
                                    (signature (setq signature (and (when (trimmed-string-or-nil signature)
                                                                      (cond ((eq signature-kind 'signature-directory)
@@ -239,14 +239,18 @@
                                                                    signature)
                                                     ;; now validate
                                                     signature (cond
-                                                               ((eq signature-kind 'signature-directory)
-                                                                (if (or (null signature) (not (f-directory-p signature)))
-                                                                    (user-error "signature directory does not exist")
-                                                                  signature))
-                                                               ((eq signature-kind 'signature-file)
-                                                                (if (not (f-file-p signature))
-                                                                    (user-error "signature file does not exist")
-                                                                  signature))
+                                                                ;; ((eq signature-kind 'signature-directory)
+								;; could attempt to validate that signatures exist, but probably only
+								;; breaks in cases that don't matter, and will error appropriately at
+								;; runtime, and aren't that hard to debug, same as maildir checks.
+								;;
+								;;  (if (or (null signature) (not (f-directory-p signature)))
+								;;      (user-error "signature directory does not exist")
+								;;    signature))
+								;; ((eq signature-kind 'signature-file)
+								;;  (if (not (f-file-p signature))
+								;;      (user-error "signature file does not exist")
+								;;    signature))
                                                                ((eq signature-kind 'signature-text)
                                                                 (or (when (not (s-contains-p "\n" signature))
                                                                       (warn "signature string does not contain newlines")
