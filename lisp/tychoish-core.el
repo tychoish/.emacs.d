@@ -2174,7 +2174,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package claude-code
   :ensure t
-  :vc (:url "https://github.com/stevemolitor/claude-code.el" :rev :newest)
   :defines (claude-code-command-map)
   :bind-keymap ("C-c r m" . claude-code-command-map)
   :commands (claude-code-mode)
