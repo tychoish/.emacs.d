@@ -271,6 +271,12 @@ current directory and the project root, and `table' is table of `tychoish--compl
 (f-directories-containing-file-with-extension-function "py")
 (f-directories-containing-file-with-extension-function "rs")
 
+(f-directories-containing-file-with-extension-function "md")
+(f-directories-containing-file-with-extension-function "txt")
+(f-directories-containing-file-with-extension-function "rst")
+(f-directories-containing-file-with-extension-function "org")
+(f-directories-containing-file-with-extension-function "mdwn")
+
 (defun tychoish--compilation-discover-make-targets (&optional directory)
   (let* ((default-directory (or directory default-directory))
 	 (makefile-report (shell-command-to-string "make --dry-run --print-data-base | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//'")))
@@ -514,6 +520,5 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				:directory directory
 				:command (format "just %s" it)
 				:annotation (format "exec justfile target %s in %s" it annotation-directory))))))))
-
 
 (provide 'consult-builder)

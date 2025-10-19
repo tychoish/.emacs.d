@@ -283,19 +283,30 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;; `dash.el' -- extensions and additons
 
-(defun -distinct-by-car (cell)
-  (let ((-compare-fn (lambda (a b) (equal (car a) (car b)))))
+(cl-defun -distinct-by-car (cell &optional &key (test #'equal))
+  "Take a list of cons cells and return a new list that contains only the
+elements that have unique car values, ignoring the cdr entirely. Compare
+values using the test function, which defaults to `equal'."
+  (let ((-compare-fn (lambda (a b) (funcall test (car a) (car b)))))
     (-distinct cell)))
 
-(defun -distinct-by-alist-key (key cell)
-  (let ((-compare-fn (lambda (a b) (equal (alist-get key a) (alist-get key b)))))
+(cl-defun -distinct-by-alist-key (key cell &optional &key (test #'equal))
+  "Compare a list of alists, and return a new list that contains only the
+alists that have distinct values for a specific key. Compare values using the
+test function, which defaults to `equal'."
+  (let ((-compare-fn (lambda (a b) (funcall test (alist-get key a) (alist-get key b)))))
     (-distinct cell)))
 
 (defun -unwind (list)
   "Flattens a list of lists into a list by collecting items in one list"
   (-flatten-n 1 list))
 
-(defalias '-flat-map #'mapcan)
+(defalias '-flat-map #'mapcan
+  "`-flat-map' applies (maps) a function, which returns a list, to each
+item in a list. The lists that result from the map operation are then
+concatenated or joined. This provides a dash.el conforming API for the
+`mapcan' operation.")
+
 (defalias '-mapc #'mapc)
 (defalias '-join #'nconc)
 (defalias '-append #'append)
@@ -304,30 +315,83 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (defalias 'll #'list)
 (defalias '-- #'list)
 
-(defmacro --flat-map (form input-list)
-  (declare (debug (def-form form)))
-  `(mapcan (lambda (it) (ignore it) ,form) ,input-list))
+(defun -map-in-place (mapper items)
+  "Apply the `mapper' function to every item in the list `items' and
+replace the items in the original list with the results of the function,
+returning the list. This is a destructive operation."
+  (let ((output items)
+	(head items))
+     (while head
+       (setf (car head) (funcall mapper (car head)))
+       (setq head (cdr head)))
+     output))
+
+(defun -in-place (mapper items)
+  "Apply the `mapper' function to every item in the list `items' and
+replace the items in the original list with the results of the function,
+returning a count of the number of items in the list. This is a
+destructive operation."
+  (let ((head items)
+	(count 0))
+    (while head
+      (setf (car head) (funcall mapper (car head)))
+      (setq head (cdr head))
+      (cl-incf count))
+    count))
+
+(cl-defun -map-uniq (mapper input &optional &key (test #'equal))
+  "Apply the `mapper' function to every item in the `input' list, returning
+a new list that contains the unique output of the list. Comparisons use
+the `test' function, which defaults to `equal'."
+  (let ((head input)
+	(seen (ht-create test))
+	current
+	output)
+    (while head
+      (unless (ht-contains-p seen (setq current (funcall mapper (car head))))
+	(ht-set seen current current)
+	(push current output))
+      (setq head (cdr head)))
+    output))
 
 (defmacro --mapc (form input-list)
   "Apply the form (with the current element avalible as the variable `it')
 to all item in the list, primarily for side effects. Returns the input
 list. This is an anaphoric equivalent to `mapc'. As opposed to `--each'
-and `-each', which return nil, `-mapc' returns the input list."
+and `-each', which return nil, `-mapc' returns the input list.
+
+This is the anaphoric counterpart to `-mapc'."
   (declare (debug (def-form form)))
   `(mapc (lambda (it) (ignore it) ,form) ,input-list))
+
+(defmacro --flat-map (form input-list)
+  "`--flat-map' evaluates a form for very item in `input-list' with the
+item bound to `it'. The form must return a list, and the returned lists
+are then concatenated or joined into a single flattened list. This
+provides a dash.el conforming API for the `mapcan' operation.
+
+This is the anaphoric counterpart to `-flat-map'."
+  (declare (debug (def-form form)))
+  `(mapcan (lambda (it) (ignore it) ,form) ,input-list))
 
 (defmacro --map-in-place (form items)
   "Apply the form, (with the current element as `it') to each item in the
 list, distructively setting the return value of the form to the value in
-the list."
-  `(let* ((lst ,items)
-	  (head lst))
-     (while head
-       (setf (car head) (funcall #'(lambda (it) (ignore it) ,form) (car head)))
-       (setq head (cdr head)))
-     lst))
+the list.
+
+This is the anaphoric counterpart to `-map-in-place'."
+  (declare (debug (def-form form)))
+  `(-map-in-place (lambda (it) (ignore it) ,form) items))
 
 (defmacro --in-place (form items)
+  "Take a list and replace each element in the list with the result of
+evaluating `FORM' for that element. The original element is accessable
+in the `FORM' as `it`. Returns the number of items in the list. This is
+a destructive operation.
+
+This is the anaphoric counterpart to `-in-place'."
+  (declare (debug (def-form form)))
+  `(-in-place (lambda (it) (ignore it) ,form) items)
   `(let ((head ,items)
 	 (count 0))
      (while head
@@ -336,51 +400,43 @@ the list."
        (setq count (+ 1 count)))
      count))
 
-(defun -map-in-place (mapping-op items)
-  (--map-in-place (funcall mapping-op it) items))
+(defmacro --map-uniq (form input)
+  "Apply `FORM' to every item in the input list, available as `it', and
+collect the UNIQUE results, and returning them as a list.
+Items are compared for uniqueness with `equal' by default, which can be
+overridden with the `-compare-fn' dynamic variable.
 
-(defun -in-place (mapping-op items)
-  (--in-place (funcall mapping-op it) items))
-
-(defun -flatten-some (input)
-  (unless (proper-list-p input)
-    (user-error "can only flatten proper lists (has nil terminating final cdr)"))
-
-  (let ((head input) flattened)
-    (while head
-      (if (listp (car head))
-	  (setq flattened (nconc (car head) flattened))
-	(setq flattened (cons (car head) flattened)))
-      (setq head (cdr head)))
-
-    (nreverse flattened)))
+This is the anaphoric counterpart to -map-unique. Although the handling
+of the equality function customization differs slightly."
+  (declare (debug (def-form form)))
+  `(-map-uniq (lambda (it) (ignore it) ,form) ,input :test (dash--hash-test-fn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `ht.el' -- extensions and aditions
 
-(defmacro ht-get-function (table)
+(defmacro ht-get-lambda (table)
   `(lambda (key) (ht-get ,table key)))
 
-(defmacro ht-set-function (table)
+(defmacro ht-set-lambda (table)
   `(lambda (key value) (ht-set ,table key value)))
 
-(defmacro ht-contains-p-function (table)
+(defmacro ht-contains-p-lambda (table)
   `(lambda (key) (ht-contains-p ,table key)))
 
-(defmacro ht-make-get-function (table)
+(defmacro ht-get-function (table)
   (let ((name (symbol-name table)))
     `(defun ,(format "ht-%s-get" name) (key) (ht-get ,table key))))
 
-(defmacro ht-make-set-function (table)
+(defmacro ht-set-function (table)
   (let ((name (symbol-name table)))
     `(defun ,(format "ht-%s-set" name) (key value) (ht-set ,table key value))))
 
-(defmacro ht-make-contains-p-function (table)
+(defmacro ht-contains-p-function (table)
   (let ((name (symbol-name table)))
     `(defun ,(format "ht-%s-contains-p" name) (key) (ht-contains-p ,table key))))
 
-(cl-defmacro ht-named-table (name &optional &key (test #'equal))
+(cl-defmacro define-ht-named-table (name &optional &key (test #'equal))
   (let ((name (or (when (stringp name) (intern name))
 		  (when (symbolp name) name)
 		  (intern (format "%S" name))))
@@ -388,10 +444,10 @@ the list."
 			 (ht-create test))))
     `(progn
        (defvar ,name ,table
-	 ,(format "Hash table `%s' with named accessor functions" name))
-       (ht-make-get-function ,name)
-       (ht-make-set-function ,name)
-       (ht-make-contains-p-function ,name))))
+	 ,(format "Hash table `%s' with named accessor functions." name))
+       (ht-get-function ,name)
+       (ht-set-function ,name)
+       (ht-contains-p-function ,name))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -400,8 +456,9 @@ the list."
 (defun f-mtime (filename)
   (file-attribute-modification-time (file-attributes filename)))
 
-(defmacro f-file-has-extension-function (extension)
-  `(lambda (filename) (f-ext-p filename ,extension)))
+(defmacro f-file-with-ext-p-function (extension)
+  `(defun ,(intern (format "f-%s-file-p" (string-replace "." "" (downcase extension)))) (file)
+     (and (f-file-p file) (f-ext-p file ,extension))))
 
 (defmacro f-filename-is-function (name)
   `(lambda (filename) (f-filename-is-p filename ,name)))
@@ -413,14 +470,17 @@ the list."
   (when (s-prefix-p "." extension)
     (setq extension (string-trim-left extension "^\\.")))
 
-  `(defun ,(intern (format "f-directories-containing-file-with-extension-%s" (string-replace "." "" (downcase extension)))) (paths)
-     (when (stringp paths)
-       (setq paths (list paths)))
-     (->> paths
-	  (--flat-map (f-entries it #'f-file-p))
-	  (--filter (f-ext-p it ,extension))
-	  (-map #'f-dirname)
-	  (-distinct))))
+  `(progn
+     (f-file-with-ext-p-function ,extension)
+
+     (defun ,(intern (format "f-directories-containing-file-with-extension-%s" (string-replace "." "" (downcase extension)))) (paths)
+       (when (stringp paths)
+	 (setq paths (list paths)))
+       (->> paths
+	    (--flat-map (f-entries it #'f-file-p))
+	    (--filter (f-ext-p it ,extension))
+	    (-map #'f-dirname)
+	    (-distinct)))))
 
 (defun f-files-in-directory (path)
   (cond
