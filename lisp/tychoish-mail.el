@@ -98,18 +98,6 @@
    ("#" . mu4e-mark-resolve-deferred-marks)
    (";" . mu4e-mark-resolve-deferred-marks)))
 
-(setq mu4e-compose-complete-addresses t)
-(setq mu4e-compose-complete-only-after "2015-01-01")
-(setq mu4e-compose-keep-self-cc nil)
-(setq mu4e-drafts-folder "/drafts")
-(setq mu4e-maildir-shortcuts nil)
-(setq mu4e-search-include-related nil)
-(setq mu4e-search-results-limit 1000)
-(setq mu4e-sent-folder "/sent")
-(setq mu4e-trash-folder "/trash")
-(setq mu4e-user-agent-string nil)
-(setq mu4e--header-separator mail-header-separator)
-
 (with-eval-after-load 'mu4e-view
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t))
 
@@ -160,6 +148,19 @@
         ("Bcc"      "^B[Cc]: *\\(.*\\)" 1)
         ("To"       "^To: *\\(.*\\)" 1)
         ("From"     "^From: *\\(.*\\)" 1)))
+
+
+(setq mu4e-compose-complete-addresses t)
+(setq mu4e-compose-complete-only-after "2015-01-01")
+(setq mu4e-compose-keep-self-cc nil)
+(setq mu4e-drafts-folder "/drafts")
+(setq mu4e-maildir-shortcuts nil)
+(setq mu4e-search-include-related nil)
+(setq mu4e-search-results-limit 1000)
+(setq mu4e-sent-folder "/sent")
+(setq mu4e-trash-folder "/trash")
+(setq mu4e-user-agent-string nil)
+(setq mu4e--header-separator mail-header-separator)
 
 (defun tychoish/set-up-message-mode-buffer ()
   (setq-local completion-at-point-functions
