@@ -1697,10 +1697,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (with-eval-after-load 'rust-mode
     (require 'rust-compile))
 
+  (defun tychoish-compilation-read-command (command)
+    (car (tychoish--compilation-read-command command)))
+
   (setq-default compilation-save-buffers-predicate #'approximate-project-root)
   (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
-  (advice-add 'compilation-read-command :override 'tychoish--compilation-read-command))
+  (advice-add 'compilation-read-command :override 'tychoish-compilation-read-command))
 
 (use-package cargo
   :ensure t

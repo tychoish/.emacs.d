@@ -22,7 +22,9 @@
                    :annotate (lambda (key)
 			       (concat (prefix-padding-for-annotation key longest-key)
                                        (ht-get compilation-buffer-candidates key)))))
-         (compile-buf (get-buffer op-name)))
+         (compile-buf (get-buffer op-name))
+	 (start-at (current-time))
+	 ops)
 
     (save-some-buffers t 'save-some-buffers-root)
 
@@ -31,13 +33,45 @@
           (when (or current-prefix-arg command)
             (setq compilation-arguments nil))
 
-          (let* ((compile-command (tychoish--compilation-read-command (or command compile-command))))
+          (let* ((selection (tychoish--compilation-read-command (or command compile-command)))
+		 (compile-command (car selection)))
+	    (setq ops (cdr selection))
             (recompile current-prefix-arg)))
 
-      (compilation-start
-       (tychoish--compilation-read-command nil)  ;; the command
-       'compilation-mode                         ;; the default
-       (compile-buffer-name op-name)))
+      (let* ((selection (tychoish--compilation-read-command nil ops))
+	     (command (car selection))
+	     (op (ht-get (setq ops (cdr selection)) command))
+	     (default-directory (or (and op (tychoish-compilation-candidate-directory ops)) default-directory)))
+
+	(compilation-start
+	 command                            ;; the command
+	 'compilation-mode                  ;; the default
+	 (compile-buffer-name op-name))))
+
+    (with-current-buffer (or compile-buf op-name)
+      (add-hygenic-one-shot-hook
+       :name (format "%s notification hook" name)
+       :hook 'compilation-finish-functions
+       :local t
+       :make-unique t
+       :args (compilation-buffer message)
+       :function (lambda (&rest _)
+		   (tychoish/compile--post-hook-collection
+		    op-name op-name start-at
+		    :process-name "sardis-notify"
+		    :program "sardis"
+		    :args '("notify" "send")))))
+
+    (when-let* ((op (ht-get ops op-name))
+		(hook (and op (tychoish-compilation-candidate-hook op))))
+
+      (add-hygenic-one-shot-hook
+       :name (format "post-%s-hook-operation" op-name)
+       :hook 'compilation-finish-functions
+       :make-unique t
+       :local t
+       :args (compilation-buffer msg)
+       :function hook))
 
     (if-let* ((op-window (get-buffer-window op-name (selected-frame))))
         (select-window op-window)
@@ -132,8 +166,8 @@
     operation-table))
 
 ;; this is the inner "select which command to use" for entering a new compile command.
-(defun tychoish--compilation-read-command (command)
-  (let* ((candidates (tychoish--get-compilation-candidates default-directory command))
+(defun tychoish--compilation-read-command (command &optional table)
+  (let* ((candidates (or table (tychoish--get-compilation-candidates default-directory command)))
          (names (->> candidates
                      (ht-values)
 		     (--map (tychoish-compilation-candidate-name it))
@@ -147,11 +181,11 @@
            :history 'compile-history
            :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id)
                                            (tychoish-compilation-candidate-annotation (ht-get candidates key))))))
-	 (selection (ht-get candidates selection-name)))
-
-    (if selection
-	(tychoish-compilation-candidate-name selection)
-      selection-name)))
+	 (candidate (ht-get candidates selection-name))
+	 (operation-name (if candidate
+			     (tychoish-compilation-candidate-name candidate)
+			   selection-name)))
+    (cons operation-name candidates)))
 
 (cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
   "Find "
@@ -196,7 +230,7 @@
 
 (cl-defstruct (tychoish-compilation-candidate
                (:constructor nil) ;; disable default
-               (:constructor make-compilation-candidate (&key command annotation (directory default-directory) (name command))))
+               (:constructor make-compilation-candidate (&key command annotation (directory default-directory) (name command) hook notification-threshold)))
   "Structure for compilation candidates"
   (name
    "build"
@@ -208,12 +242,20 @@
    :type string)
   (directory
    default-directory
-   :documentation "directory in which to run the command. Not presently used."
+   :documentation "directory in which to run the command."
    :type string)
   (annotation
    "compilation command"
    :documentation "description of command, used for marginalia annotations."
-   :type string))
+   :type string)
+  (hook
+   nil
+   :documentation "a function to run when the compilation completes"
+   :type function)
+  (notification-threshold
+   300
+   :documentation "if a command runs longer than this number of seconds, send a notification when the compile completes."
+   :type integer))
 
 (defun tychoish-cc-add-to-table (table candidate)
   (ht-set table (tychoish-compilation-candidate-name candidate) candidate))
@@ -520,5 +562,33 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				:directory directory
 				:command (format "just %s" it)
 				:annotation (format "exec justfile target %s in %s" it annotation-directory))))))))
+
+(register-compilation-candidates
+ :name "current-buffer-text-file"
+ :predicate (let ((buf (current-buffer)))
+	      (when (and buf (buffer-file-name)
+			 (derived-mode-p '(rst-mode markdown-mode org-mode))))
+	      (save-buffer))
+ :pipeline (let ((filename (buffer-filenme)))
+	     (-- (make-compilation-candidate
+		  :directory directory
+		  :command (format "vale --output=line %s" filename)
+		  :name "find errors in the current buffer's file")
+		 (make-compilation-candidate
+		  :directory directory
+		  :command (format "vale --ls-metrics %s" filename)
+		  :name "report statics about the file"))))
+
+(defun tychoish-vale--insert-statistics (filename)
+  (interactive)
+  (let* ((table (json-parse-string (shell-command-to-string (format "vale ls-metrics --output=line %s" filename))))
+	 (longest-key (length-of-longest-item (ht-keys table))))
+    (insert (format "\nstatistics for %s" (propertize (f-collapse-homedir filename) 'face 'italic)))
+    (ht-map (lambda (key value)
+	      (insert (format "\n%s:%s%s"
+			      (propertize key 'face 'bold)
+			      (prefix-padding-for-annotation key longest-key)
+			      value)))
+	    table)))
 
 (provide 'consult-builder)

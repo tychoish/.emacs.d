@@ -583,10 +583,10 @@ of the equality function customization differs slightly."
      ,@body
      map))
 
-(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil) (depth 0) (make-unique nil))
+(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil) (depth 0) (make-unique nil) (cleanup nil))
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
-	 (cleanup (intern (symbol-join "hygenic-one-shot" name (symbol-name unique-tag))))
+	 (cleanup-symbol (intern (symbol-join "hygenic-one-shot" name (symbol-name unique-tag))))
 	 hooks)
 
     (when (functionp hook)
@@ -606,19 +606,19 @@ of the equality function customization differs slightly."
       (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
 
     `(progn
-       (defun ,cleanup ,args
+       (defun ,cleanup-symbol ,args
 	 (with-slow-op-timer
 	  ,(format "<hygenic-hook> %s" name)
 	  (apply ,function ,args))
 
 	 ,@(--map
-	    `(remove-hook ',it ',cleanup ,local)
+	    `(remove-hook ',it ',cleanup-symbol ,local)
 	    (--remove (eq 'quote it) hooks))
 
-         ,(when make-unique
-	    `(unintern ',cleanup obarray)))
+         ,(when (or make-unique cleanup)
+	    `(unintern ',cleanup-symbol obarray)))
 
-       ,@(--map `(add-hook ',it ',cleanup ,depth ,local) (--remove (eq 'quote it) hooks)))))
+       ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks)))))
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
@@ -701,12 +701,13 @@ were recompiled."
 
 ;; compile -- compilation mode helpers
 
-(cl-defun tychoish/compile--post-hook-collection (selection buffer-name started-at &optional &key process-name program args)
+(cl-defun tychoish/compile--post-hook-collection (selection buffer-name started-at &optional &key process-name program args (alert-threshold 60) (notification-threshold 300) force-send)
   (let* ((end-at (current-time))
 	 (duration (time-subtract end-at started-at))
 	 (msg (format "completed %s in %.06fs" selection (float-time duration))))
 
-    (when (or t (and (> (float-time duration) 300) process-name program args))
+    (when (or force-send
+	      (and (> (float-time duration) notification-threshold) process-name program args))
       (setq args (append args (list msg)))
 
       (message "%S" args)
@@ -718,9 +719,12 @@ were recompiled."
 	     args))
 
 
-    (alert msg
-     :title selection
-     :buffer (get-buffer buffer-name))
+    (when (or force-send
+	      (> alert-threshold (ffloor (float-time duration))))
+      (alert
+       msg
+       :title selection
+       :buffer (get-buffer buffer-name)))
 
     (with-current-buffer (get-buffer buffer-name)
       (save-excursion

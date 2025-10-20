@@ -144,11 +144,13 @@ Does nothing if the current post is not in the drafts folder."
        :hook 'compilation-finish-functions
        :local t
        :make-unique t
-       :function (lambda () (tychoish/compile--post-hook-collection
-			     selection op-buffer-name start-at
-			     :process-name "sardis-notify"
-			     :program "sardis"
-			     :args '("notify" "send"))))
+       :args (compilation-buffer message)
+       :function (lambda (&rest _)
+		   (tychoish/compile--post-hook-collection
+		    selection op-buffer-name start-at
+		    :process-name "sardis-notify"
+		    :program "sardis"
+		    :args '("notify" "send"))))
 
       (save-excursion
         (goto-char (point-min))
