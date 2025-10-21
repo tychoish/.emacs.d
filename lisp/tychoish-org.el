@@ -467,16 +467,21 @@
     (when (s-contains? key "jntr")
       (error "org-capture prefix key '%s' for '%s' contains well-known prefix" key path))
     (when (s-contains? key "xlk")
-      (error "org-capture prefix key '%s' for '%s' contains sub-template key" key path))
-    (when (s-contains? key "csw")
-      (error "org-capture prefix key '%s' for '%s' contains, which is a reserved key" key path)))
+      (error "org-capture prefix key '%s' for '%s' contains sub-template key" key path)))
 
-  (unless path
-    (setq path (concat (make-filename-slug name) ".org")))
+  (setq path (if path
+		 (f-expand path)
+	       (concat (make-filename-slug name) ".org")))
 
   (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
 
-  (let ((org-filename (concat org-directory "/" path)))
+
+  (let ((org-filename (if (or (f-exists-p path)
+			      (and
+			       (< 1 (length (f-split path)))
+			       (f-exists-p (f-dirname path))))
+			  path
+			(concat org-directory "/" path))))
     (tychoish/org-capture-add-routine-templates
      :name name
      :key key
@@ -499,20 +504,17 @@
 
 ;; org capture templates definitions
 (defun tychoish-org-setup-standard-capture-templates ()
-  (tychoish/org-capture-add-routine-templates
-   :name "prime"
-   :path "planner.org")
-
   (tychoish/org-capture-add-note-templates
    :name "scratch"
    :path "records.org")
 
   (tychoish/org-capture-add-journal-templates
-     :name "diary"
-     :path "journal.org")
+   :name "diary"
+   :path "journal.org")
 
   (tychoish/org-capture-add-task-templates
    :name "prime"
    :path "planner.org"))
+
 
 (provide 'tychoish-org)

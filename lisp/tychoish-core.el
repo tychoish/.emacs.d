@@ -1229,7 +1229,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
         (find-file draft-file)
         (insert title))))
   :config
-  (setq deft-extensions "md")
+  (setq deft-extensions '("md" "mdwn" "markdown" "txt" "text" "rst"))
+  (setq deft-new-file-format "%Y-%m-%dT.%H%M")
+  (setq deft-default-extension "md")
   (setq deft-text-mode 'markdown-mode)
   (setq deft-use-filename-as-title t)
   (setq deft-auto-save-interval 0)
