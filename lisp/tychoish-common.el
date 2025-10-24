@@ -466,6 +466,10 @@ of the equality function customization differs slightly."
 (defun f-filename-is-p (entry name)
   (f-equal-p (f-filename entry) name))
 
+(defun f-when-file-exists (path)
+  (when (f-exists-p path)
+    path))
+
 (defmacro f-directories-containing-file-with-extension-function (extension)
   (when (s-prefix-p "." extension)
     (setq extension (string-trim-left extension "^\\.")))
@@ -491,15 +495,26 @@ of the equality function customization differs slightly."
    ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
 
 (defmacro f-directories-containing-file-function (filename &rest files)
-  (let ((filenames (cons filename files)))
-  `(defun ,(intern (symbol-join "f-directories-containing-file" (string-replace "." "-" (downcase filename)))) (path &rest paths)
-     (let ((filenames (list ,@filenames))
-	   (paths (cons path paths)))
-       (->> paths
-	    (-flat-map #'f-files-in-directory)
-	    (--filter (car (member (f-filename it) filenames)))
-	    (-map #'f-dirname)
-	    (-distinct))))))
+  (let* ((filenames (cons filename files))
+	 (symbol-filename (string-replace "." "-" (downcase filename)))
+	 (pred (intern (symbol-join "f-directory-contains" symbol-filename "file"))))
+    `(progn
+       (defun ,pred (path)
+	 (let ((matching (->> (f-files-in-directory path)
+			      (--filter (f-equal-p ,filename (f-filename it)))
+			      (-uniq)
+			      (-non-nil))))
+	   (when matching
+	     (car matching))))
+
+       (defun ,(intern (symbol-join "f-directories-containing-file" symbol-filename)) (path &rest paths)
+	 (let ((filenames (list ,@filenames))
+	       (paths (cons path paths)))
+	   (->> paths
+		(-flat-map #'f-files-in-directory)
+		(--filter (car (member (f-filename it) filenames)))
+		(-map #'f-dirname)
+		(-distinct)))))))
 
 (defun f-collapse-homedir (path)
   (string-replace (expand-file-name "~/") "~/" path))
@@ -589,6 +604,11 @@ of the equality function customization differs slightly."
 	 (cleanup-symbol (intern (symbol-join "hygenic-one-shot" name (symbol-name unique-tag))))
 	 hooks)
 
+    (when (eq hook 'after-first-frame-created)
+      (setq hook (if (daemonp)
+		     'server-after-make-frame-hook
+		   'window-setup-hook)))
+
     (when (functionp hook)
       (setq hook (funcall hook)))
 
@@ -609,7 +629,8 @@ of the equality function customization differs slightly."
        (defun ,cleanup-symbol ,args
 	 (with-slow-op-timer
 	  ,(format "<hygenic-hook> %s" name)
-	  (apply ,function ,args))
+
+	  ,function)
 
 	 ,@(--map
 	    `(remove-hook ',it ',cleanup-symbol ,local)
@@ -619,6 +640,7 @@ of the equality function customization differs slightly."
 	    `(unintern ',cleanup-symbol obarray)))
 
        ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks)))))
+
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
@@ -709,8 +731,6 @@ were recompiled."
     (when (or force-send
 	      (and (> (float-time duration) notification-threshold) process-name program args))
       (setq args (append args (list msg)))
-
-      (message "%S" args)
 
       (apply #'async-start-process
 	     (pa "emacs-process-name" :is process-name)

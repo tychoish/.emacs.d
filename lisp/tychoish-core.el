@@ -84,7 +84,7 @@
 
   (add-hygenic-one-shot-hook
    :name "doom-modeline"
-   :function #'doom-modeline-mode
+   :function (doom-modeline-mode)
    :hook (if (daemonp)
 	     'server-after-make-frame-hook
 	   'window-setup-hook))
@@ -231,8 +231,7 @@
 	(consult-tycho--context-base-list ripgrep-regexp-history)
 	:prompt (format "[%s]<rg>: " default-directory)
 	:command this-command
-	:initial regexp
-	:history ripgrep-regexp-history
+	:history 'ripgrep-regexp-history
 	:require-match nil)
        default-directory)))
 
@@ -449,7 +448,7 @@
   :init
   (add-hygenic-one-shot-hook
    :name "prescient"
-   :function #'prescient-persist-mode
+   :function (prescient-persist-mode)
    :hook '(vertico-mode-hook corfu-mode-hook))
   :config
   (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
@@ -466,7 +465,7 @@
   :init
   (add-hygenic-one-shot-hook
    :name "vertico"
-   :function #'vertico-mode
+   :function (vertico-mode)
    :hook 'doom-modeline-mode-hook)
 
   (add-hook 'vertico-mode-hook 'vertico-multiform-mode)
@@ -507,7 +506,7 @@
   :init
   (add-hygenic-one-shot-hook
    :name "marginalia"
-   :function #'marginalia-mode
+   :function (marginalia-mode)
    :hook 'minibuffer-setup-hook)
   :config
   (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu)))
@@ -639,7 +638,7 @@
   :init
   (add-hygenic-one-shot-hook
    :name "nerd-icons-completion"
-   :function #'nerd-icons-completion-mode
+   :function (nerd-icons-completion-mode)
    :hook '(corfu-mode-hook vertico-mode-hook)))
 
 
@@ -833,11 +832,14 @@
 (use-package consult-builder
   :after (compile)
   :bind (:map compilation-mode-map
-         ("d" . compilation-buffer-change-directory))
+         ("d" . compilation-buffer-change-directory)
+	 :map tychoish-core-map
+	 ("c" . consult-builder))
   :commands (consult--select-directory
 	     make-compilation-candidate
 	     register-compilation-candidates
 	     tychoish--compilation-read-command
+	     consult-builder
 	     tychoish/compile-project))
 
 (use-package consult-tycho
@@ -1339,12 +1341,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("\\.yml$" . yaml-ts-mode))
   :init
   (add-to-list 'tychoish/eglot-default-server-configuration
-                '((:yaml (:format
-                          :enable t
-                          :singleQuote :json-false
-                          :bracketSpacing t
-                          :proseWrap "preserve" ;; preserve/always/never
-                          :printWidth 80
+                '((:yaml (:format (:enable t
+                                   :singleQuote :json-false
+                                   :bracketSpacing t
+                                   :proseWrap "preserve" ;; preserve/always/never
+                                   :printWidth 100)
                           :validate t
                           :hover t
                           :completion t))))
@@ -1354,7 +1355,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package yaml-pro
   :ensure t
   :commands (yaml-pro-ts-mode)
-  :hook (yaml-ts-mode . yaml-pro-ts-mode))
+  :hook ((yaml-ts-mode . yaml-pro-ts-mode)
+	 (yaml-mode . yaml-pro-mode)))
 
 (use-package go-ts-mode
   :ensure nil
@@ -1662,9 +1664,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
-  :bind (:map tychoish-core-map
-	 ("c" . tychoish-compile)
-	 :map compilation-mode-map
+  :bind (:map compilation-mode-map
 	 ("C" . compile))
   :config
   (defun compile-add-error-syntax (name regexp file line &optional col level)
@@ -1676,11 +1676,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (defun colorize-compilation-buffer ()
     (ansi-color-apply-on-region compilation-filter-start (point)))
-
-  (defun tychoish-compile ()
-    "Run compile operation selecting compile buffer and commands."
-    (interactive)
-    (tychoish/compile-project))
 
   (defun tychoish-compile-project-super-lint ()
     (interactive)
@@ -1700,7 +1695,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (require 'rust-compile))
 
   (defun tychoish-compilation-read-command (command)
-    (car (tychoish--compilation-read-command command)))
+      (let* ((cc-result (tychoish--compilation-read-command command))
+	     (selection-name (setq candidate-name (car cc-result)))
+	     (table (cdr cc-result))
+	     (candidate (ht-get table selection-name)))
+	(tychoish-compilation-candidate-command candidate)))
 
   (setq-default compilation-save-buffers-predicate #'approximate-project-root)
   (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)

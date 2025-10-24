@@ -11,6 +11,15 @@
 
 (require 'tychoish-common)
 
+(when (boundp 'tychoish-core-map)
+  (bind-keys :map 'tychoish-core-map
+	     ("c" . consult-builder)))
+
+(defun consult-builder ()
+  "Run compile operation selecting compile buffer and commands."
+  (interactive)
+  (tychoish/compile-project))
+
 ;;;###autoload
 (defun tychoish/compile-project (&optional name command)
   (let* ((compilation-buffer-candidates (project-compilation-buffers :name name))
@@ -23,59 +32,68 @@
 			       (concat (prefix-padding-for-annotation key longest-key)
                                        (ht-get compilation-buffer-candidates key)))))
          (compile-buf (get-buffer op-name))
+	 (project-root-directory (approximate-project-root))
 	 (start-at (current-time))
-	 ops)
+	 candidates
+	 candidate-name)
 
-    (save-some-buffers t 'save-some-buffers-root)
+    (save-some-buffers
+     ;; save with now questions:
+     t
+     ;; only consider files (nil)
+     (lambda () (let ((filename (buffer-file-name)))
+		  (and filename (file-in-directory-p filename project-root-directory)))))
 
     (if compile-buf
         (with-current-buffer compile-buf
           (when (or current-prefix-arg command)
             (setq compilation-arguments nil))
 
-          (let* ((selection (tychoish--compilation-read-command (or command compile-command)))
-		 (compile-command (car selection)))
-	    (setq ops (cdr selection))
+          (let* ((cc-result (tychoish--compilation-read-command (or command compile-command)))
+		 (selection-name (setq candidate-name (car cc-result)))
+		 (table (setq candidates (cdr cc-result)))
+		 (candidate (ht-get table selection-name))
+		 (compile-command (tychoish-compilation-candidate-command candidate))
+		 (default-directory (or (tychoish-compilation-candidate-directory candidate) default-directory)))
+
             (recompile current-prefix-arg)))
 
-      (let* ((selection (tychoish--compilation-read-command nil ops))
-	     (command (car selection))
-	     (op (ht-get (setq ops (cdr selection)) command))
-	     (default-directory (or (and op (tychoish-compilation-candidate-directory ops)) default-directory)))
+      (let* ((cc-result (tychoish--compilation-read-command command))
+	     (selection-name (setq candidate-name (car cc-result)))
+	     (table (setq candidates (cdr cc-result)))
+	     (candidate (ht-get table selection-name))
+	     (compile-command (tychoish-compilation-candidate-command candidate))
+	     (default-directory (or (tychoish-compilation-candidate-directory candidate) default-directory)))
 
 	(compilation-start
-	 command                            ;; the command
+	 compile-command                    ;; the command
 	 'compilation-mode                  ;; the default
 	 (compile-buffer-name op-name))))
 
     (with-current-buffer (or compile-buf op-name)
       (add-hygenic-one-shot-hook
-       :name (format "%s notification hook" name)
+       :name (format "%s notification hook" op-name)
        :hook 'compilation-finish-functions
        :local t
        :make-unique t
-       :args (compilation-buffer message)
-       :function (lambda (&rest _)
-		   (tychoish/compile--post-hook-collection
-		    op-name op-name start-at
+       :args (compilation-buffer msg)
+       :function (tychoish/compile--post-hook-collection
+		    op-name (buffer-name compilation-buffer) start-at
 		    :process-name "sardis-notify"
 		    :program "sardis"
-		    :args '("notify" "send")))))
+		    :args '("notify" "send" msg)))
 
-    (when-let* ((op (ht-get ops op-name))
-		(hook (and op (tychoish-compilation-candidate-hook op))))
+      (when-let* ((hook (tychoish-compilation-candidate-hook (ht-get candidates candidate-name))))
+      	(add-hygenic-one-shot-hook
+      	 :name (format "post-%s-hook-operation" op-name)
+      	 :hook 'compilation-finish-functions
+      	 :make-unique t
+      	 :local t
+      	 :function (hook)))
 
-      (add-hygenic-one-shot-hook
-       :name (format "post-%s-hook-operation" op-name)
-       :hook 'compilation-finish-functions
-       :make-unique t
-       :local t
-       :args (compilation-buffer msg)
-       :function hook))
-
-    (if-let* ((op-window (get-buffer-window op-name (selected-frame))))
-        (select-window op-window)
-      (switch-to-buffer-other-window (get-buffer op-name)))))
+      (if-let* ((op-window (get-buffer-window (current-buffer) (selected-frame))))
+          (select-window op-window)
+	(switch-to-buffer-other-window (current-buffer))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -127,7 +145,7 @@
 		(not (string-prefix-p stop-path current))))
       (setq current (file-name-parent-directory current))
       (push current output))
-    (-non-nil output)))
+    (-uniq (-non-nil output))))
 
 (defun get-directory-default-candidate-list ()
   (let ((proj-root (approximate-project-root)))
@@ -149,25 +167,28 @@
 (defun tychoish--get-compilation-candidates (&optional directory command)
  "Generate a sequence of candidate compilation commands based on mode and directory structure."
   (let* ((project-root-directory (approximate-project-root))
+	 directory
 	 (default-directory (or directory default-directory))
          (directories (get-directory-parents default-directory project-root-directory))
          (operation-table (ht-create)))
-
-    (run-hook-with-args 'tychoish-compilation-candidate-functions project-root-directory directories operation-table)
 
     (when command
       (tychoish-cc-add-to-table
        operation-table
        (make-compilation-candidate
-	:command command
-	:annotation "runtime suggested candidate"
-	:directory (or directory project-root-directory default-directory))))
+    	:command command
+    	:annotation "runtime suggested candidate"
+    	:directory (or directory project-root-directory default-directory))))
+
+    (run-hook-with-args 'tychoish-compilation-candidate-functions project-root-directory directories operation-table)
+    (message "GOTTEN %d -> %d [%s]" (length tychoish-compilation-candidate-functions) (ht-size  operation-table) tychoish-compilation-candidate-functions)
 
     operation-table))
 
 ;; this is the inner "select which command to use" for entering a new compile command.
-(defun tychoish--compilation-read-command (command &optional table)
-  (let* ((candidates (or table (tychoish--get-compilation-candidates default-directory command)))
+(defun tychoish--compilation-read-command (&optional command table)
+  (let* ((candidates (or table
+			 (tychoish--get-compilation-candidates default-directory command)))
          (names (->> candidates
                      (ht-values)
 		     (--map (tychoish-compilation-candidate-name it))
@@ -184,13 +205,19 @@
 	 (candidate (ht-get candidates selection-name))
 	 (operation-name (if candidate
 			     (tychoish-compilation-candidate-name candidate)
+			   (tychoish-cc-add-to-table
+			    candidates
+			    (make-compilation-candidate
+			     :command selection-name
+			     :directory default-directory
+			     :annotation "user input"))
 			   selection-name)))
     (cons operation-name candidates)))
 
 (cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
   "Find "
   (let ((buffer-table (ht-create))
-        (default-names (list "build" "compilation" "test" "lint" "check" "benchmark" "run" "push")))
+        (default-names (list "build" "gen" "buf" "compilation" "test" "lint" "check" "benchmark" "run" "push")))
     (when name
       (cl-pushnew name default-names :test #'equal))
 
@@ -230,7 +257,7 @@
 
 (cl-defstruct (tychoish-compilation-candidate
                (:constructor nil) ;; disable default
-               (:constructor make-compilation-candidate (&key command annotation (directory default-directory) (name command) hook notification-threshold)))
+               (:constructor make-compilation-candidate (&key command (name command) annotation (directory default-directory) hook notification-threshold)))
   "Structure for compilation candidates"
   (name
    "build"
@@ -284,16 +311,14 @@ current directory and the project root, and `table' is table of `tychoish--compl
 	 (when ,predicate
 	   (add-candidates-to-table
 	    operation-table
-	    ,pipeline)))
+	    ,pipeline))
+	 t)
 
        ,(if (eql 0 (length hooks))
 	    `(add-hook 'tychoish-compilation-candidate-functions #',symbol-name)
 	  `(let ((hooks ,hooks))
 	     (defun ,hook-registering-function-name ()
 	       (add-hook 'tychoish-compilation-candidate-functions #',symbol-name 0 t))
-
-	     (with-eval-after-load "compile"
-	       (push 'compilation-mode-hook hooks))
 
 	     (->> hooks (--mapc (add-hook it ',hook-registering-function-name))))))))
 
@@ -322,6 +347,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 (defun tychoish--compilation-discover-make-targets (&optional directory)
   (let* ((default-directory (or directory default-directory))
 	 (makefile-report (shell-command-to-string "make --dry-run --print-data-base | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//'")))
+    (message (concat default-directory " >>  " makefile-report))
   (unless (s-contains-p "***" makefile-report)
     (->> (split-string makefile-report)
 	 (--map (list (cons 'target it) (cons 'directory default-directory)))))))
@@ -409,7 +435,10 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		(--flat-map
 		 (let* ((directory it)
 			(prefix (concat "." (f-path-separator)))
-			(dir (if (f-equal-p directory default-directory) "./" directory))
+			(dir (if (or (f-equal-p directory project-root-directory)
+				     (f-directory-contains-go-mod-file directory))
+				 "./"
+			       directory))
 			(dir (cond
 			      ((string-prefix-p prefix dir) dir)
 			      ((string-prefix-p (f-path-separator) dir) dir)
@@ -429,11 +458,37 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			      (cons "go build %s" "build the go package in %s"))
 			(--flat-map (list
 				     (cons (format (car it) dir) (format (cdr it) dir))
-				     (cons (format (car it) dir-with-dots) (concat (format (cdr it) dir) ", and all subdirectories"))))
+				     (cons (format (car it) dir-with-dots) (concat (format (cdr it) (if (f-equal-p project-root-directory directory) project-root-directory dir))  ", and all subdirectories"))))
 			(--map (make-compilation-candidate
 				:command (car it)
 				:directory directory
 				:annotation (cdr it))))))))
+
+(register-compilation-candidates
+ :name "go-files"
+ :pipeline (when-let* ((filename (if (and (buffer-file-name) (derived-mode-p '(go-mode go-ts-mode)))
+				     (buffer-file-name)
+				   (thing-at-point 'filename)))
+		       (exists (f-exists-p filename))
+		       (is-golang (f-ext-p filename "go"))
+		       (short-filename (f-collapse-homedir filename))
+		       (basename (f-filename filename)))
+	     (-- (make-compilation-candidate
+		  :name (format "gofumt +extra %s" basename)
+		  :command (format "gofumpt -extra -w %s" filename)
+		  :annotation (format "run gofumpt with non-extra constraints on %s" short-filename))
+		 (make-compilation-candidate
+		  :name (format "gofumt %s" basename)
+		  :command (format "gofumpt -w %s" filename)
+		  :annotation (format "run gofumpt with standard gofmt constraints on %s" short-filename))
+		 (make-compilation-candidate
+		  :name (format "gci %s" basename)
+		  :command (format "golangci-lint fmt --enable gci %s" filename)
+		  :annotation (format "sort imports with gci for %s" short-filename))
+		 (make-compilation-candidate
+		  :name (format "meta fmt %s" basename)
+		  :command (format "golangci-lint fmt %s" filename)
+		  :annotation (format "run meta formatter on %s" short-filename)))))
 
 (register-compilation-candidates
  :name "go-modules"
@@ -516,7 +571,6 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
 (register-compilation-candidates
  :name "rust-project"
- :hooks '(rust-ts-mode rust-mode rustic-mode dired-mode)
  :pipeline (->> (f-directories-containing-file-cargo-toml directories)
 		(--flat-map
 		 (let ((annotation-directory (f-collapse-homedir it))
@@ -565,21 +619,23 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
 (register-compilation-candidates
  :name "current-buffer-text-file"
- :predicate (let ((buf (current-buffer)))
-	      (when (and buf (buffer-file-name)
-			 (derived-mode-p '(rst-mode markdown-mode org-mode))))
-	      (save-buffer))
- :pipeline (let ((filename (buffer-filenme)))
+ :predicate (when (and (buffer-file-name)
+		       (derived-mode-p '(org-mode markdown-mode rst-mode)))
+ 	      (save-buffer) t)
+ :pipeline (let ((filename (buffer-file-name)))
 	     (-- (make-compilation-candidate
-		  :directory directory
+		  :directory default-directory
 		  :command (format "vale --output=line %s" filename)
-		  :name "find errors in the current buffer's file")
+		  :name (format "vale check %s" (f-collapse-homedir filename))
+		  :annotation "find errors in the current file"
+		  :hook (lambda (buffer msg) (with-current-buffer buffer (tychoish--vale-insert-statistics filename))))
 		 (make-compilation-candidate
-		  :directory directory
+		  :directory default-directory
 		  :command (format "vale --ls-metrics %s" filename)
-		  :name "report statics about the file"))))
+		  :name (format "vale report %s" (f-collapse-homedir filename))
+		  :annotation "report statics about the current file"))))
 
-(defun tychoish-vale--insert-statistics (filename)
+(defun tychoish--vale-insert-statistics (buffer _message &key filename)
   (interactive)
   (let* ((table (json-parse-string (shell-command-to-string (format "vale ls-metrics --output=line %s" filename))))
 	 (longest-key (length-of-longest-item (ht-keys table))))

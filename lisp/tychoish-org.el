@@ -58,16 +58,6 @@
        (-map #'package-install-async)
        (length)))
 
-(add-hygenic-one-shot-hook
- :name "org-install-aux-packages"
- :hook 'org-mode-hook
- :function 'tychoish-org--install-auxiliary-packages)
-
-(add-hygenic-one-shot-hook
- :name "org-capture [install standard templates]"
- :hook 'emacs-startup-hook
- :function 'tychoish-org-setup-standard-capture-templates)
-
 (with-eval-after-load 'ox-rst
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
@@ -516,5 +506,18 @@
    :name "prime"
    :path "planner.org"))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; hooks
+
+(add-hygenic-one-shot-hook
+ :name "org-install-aux-packages"
+ :hook 'org-mode-hook
+ :function (tychoish-org--install-auxiliary-packages))
+
+(add-hygenic-one-shot-hook
+ :name "org-capture [install standard templates]"
+ :hook 'emacs-startup-hook
+ :function (tychoish-org-setup-standard-capture-templates))
 
 (provide 'tychoish-org)

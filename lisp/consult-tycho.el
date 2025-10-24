@@ -145,12 +145,11 @@ Does nothing if the current post is not in the drafts folder."
        :local t
        :make-unique t
        :args (compilation-buffer message)
-       :function (lambda (&rest _)
-		   (tychoish/compile--post-hook-collection
-		    selection op-buffer-name start-at
-		    :process-name "sardis-notify"
-		    :program "sardis"
-		    :args '("notify" "send"))))
+       :function ((tychoish/compile--post-hook-collection
+		   selection op-buffer-name start-at
+		   :process-name "sardis-notify"
+		   :program "sardis"
+		   :args '("notify" "send" message))))
 
       (save-excursion
         (goto-char (point-min))
@@ -160,14 +159,14 @@ Does nothing if the current post is not in the drafts folder."
 	      (compilation-insert-annotation "\n"))
 
           (compilation-insert-annotation
-	   (format "--- [%s] -- %s --\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at))))))
+	   (format "--- [%s] -- %s --\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at)))))
 
     (compilation-start
      (concat "sardis cmd " selection)
      (pa "mode" :is nil)
      (compile-buffer-name op-buffer-name)
      (pa "highlight-regexp" :is nil)
-     (pa "continue" :is nil))))
+     (pa "continue" :is nil)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

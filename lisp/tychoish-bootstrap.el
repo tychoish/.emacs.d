@@ -480,31 +480,36 @@
 
 (add-hygenic-one-shot-hook
  :name "delight-modeline"
- :function #'tychoish/set-up-delightful-mode-lighters
+ :function (tychoish/set-up-delightful-mode-lighters)
  :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
 
 (add-hygenic-one-shot-hook
  :name "restore-desktop"
- :function #'tychoish/desktop-read-init
- :hook (if (daemonp)
-	   'server-after-make-frame-hook
-	 'window-setup-hook))
+ :function (tychoish/desktop-read-init)
+ :hook after-first-frame-created)
+
+(add-hygenic-one-shot-hook
+ :name "emacs-lockfile-setup"
+ :function (if (equal "solo" tychoish/emacs-instance-id)
+	       (tychoish/set-up-ephemeral-instance-file-locks)
+	     (tychoish/set-up-named-instance-file-locks))
+ :depth 50
+ :hook after-first-frame-created)
 
 (add-hygenic-one-shot-hook
  :name "emacs-instance-persistence"
- :function #'tychoish/set-up-emacs-instance-persistence
- :hook (if (daemonp)
-	   'server-after-make-frame-hook
-	 'window-setup-hook))
+ :function (tychoish/set-up-emacs-instance-persistence)
+ :depth 75
+ :hook after-first-frame-created)
 
 (add-hygenic-one-shot-hook
  :name "enable-modes"
- :function #'tychoish/init-late-enable-modes
+ :function (tychoish/init-late-enable-modes)
  :hook (prog-mode-hook text-mode-hook))
 
 (add-hygenic-one-shot-hook
  :name "ssh-agent"
- :function #'tychoish/set-up-ssh-agent
+ :function (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (add-hook 'emacs-startup-hook #'tychoish/init-late-disable-modes)
@@ -551,6 +556,29 @@
     (unless (file-exists-p path)
       (make-directory path))
     (chmod path #o700)))
+
+(defun tychoish/set-up-named-instance-file-locks ()
+  (let ((path (tychoish/conf-state-path "locks/")))
+    (setq lock-file-name-transforms
+          `(("\\`/.*/\\([^/]+\\)\\'" ,(concat path "\\1") t)))
+
+    (unless (file-exists-p path)
+      (make-directory path))
+    (chmod path #o700)))
+
+(defun tychoish/set-up-ephemeral-instance-file-locks ()
+  (let* ((run-path (format "/run/user/%d" (user-uid)))
+	 (path (cond
+		((f-when-file-exists run-path))
+		((f-when-file-exists "/var/tmp"))
+		((f-when-file-exists (temporary-file-directory)))))
+	 (solo-lock-path (f-join path (format "emacs-%d" (emacs-pid)))))
+    (setq lock-file-name-transforms
+          `(("\\`/.*/\\([^/]+\\)\\'" ,(concat solo-lock-path "\\1") t)))
+
+    (unless (file-exists-p solo-lock-path)
+      (make-directory solo-lock-path))
+    (chmod solo-lock-path #o700)))
 
 (defun tychoish/set-up-show-whitespace ()
   (setq-local show-trailing-whitespace t))
