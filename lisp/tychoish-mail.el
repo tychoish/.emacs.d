@@ -142,6 +142,7 @@
 (setq mail-specify-envelope-from t)
 (setq mail-user-agent 'mu4e-user-agent)
 (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+
 (setq mail-imenu-generic-expression
       '(("Subject"  "^Subject: *\\(.*\\)" 1)
         ("Cc"       "^C[Cc]: *\\(.*\\)" 1)

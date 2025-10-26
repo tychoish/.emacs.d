@@ -77,7 +77,7 @@
        :local t
        :make-unique t
        :args (compilation-buffer msg)
-       :function (tychoish/compile--post-hook-collection
+       :form (tychoish/compile--post-hook-collection
 		    op-name (buffer-name compilation-buffer) start-at
 		    :process-name "sardis-notify"
 		    :program "sardis"
@@ -181,7 +181,6 @@
     	:directory (or directory project-root-directory default-directory))))
 
     (run-hook-with-args 'tychoish-compilation-candidate-functions project-root-directory directories operation-table)
-    (message "GOTTEN %d -> %d [%s]" (length tychoish-compilation-candidate-functions) (ht-size  operation-table) tychoish-compilation-candidate-functions)
 
     operation-table))
 
@@ -337,6 +336,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 (f-directories-containing-file-with-extension-function "go")
 (f-directories-containing-file-with-extension-function "py")
 (f-directories-containing-file-with-extension-function "rs")
+(f-directories-containing-file-with-extension-function "el")
 
 (f-directories-containing-file-with-extension-function "md")
 (f-directories-containing-file-with-extension-function "txt")
@@ -347,7 +347,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 (defun tychoish--compilation-discover-make-targets (&optional directory)
   (let* ((default-directory (or directory default-directory))
 	 (makefile-report (shell-command-to-string "make --dry-run --print-data-base | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//'")))
-    (message (concat default-directory " >>  " makefile-report))
+
   (unless (s-contains-p "***" makefile-report)
     (->> (split-string makefile-report)
 	 (--map (list (cons 'target it) (cons 'directory default-directory)))))))
@@ -360,29 +360,39 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		(--flat-map
 		 (let* ((directory (alist-get 'directory it))
 			(target (alist-get 'target it))
-			(annotation-directory (f-collapse-homedir directory))
-			(is-current-directory (string-equal default-directory directory))
-			(command-template (or (when is-current-directory (format "make %%s%s" target))
-					      (format "make %%s-C %s %s" directory target)))
-			(annotation-template (or (when is-current-directory (format "run target %s in project root (%s)" target annotation-directory))
-						 (format "run target %s in %s" target  directory))))
-		   (list
-		    (make-compilation-candidate
-		     :command (format command-template "-k ")
-		     :directory directory
-		     :annotation (concat annotation-template ", continuing on error"))
-		    (make-compilation-candidate
-		     :command (format command-template "")
-		     :directory directory
-		     :annotation annotation-template)
-		    (make-compilation-candidate
-		     :command (format command-template "-B ")
-		     :directory directory
-		     :annotation (concat annotation-template ", unconditionally"))
-		    (make-compilation-candidate
-		     :command (format command-template "-k -B ")
-		     :directory directory
-		     :annotation (concat annotation-template ", unconditionally while continuing on error")))))))
+			(is-current-directory (f-equal-p default-directory directory))
+			(is-project-root (f-equal-p project-root-directory directory))
+			(proj-name (f-filename project-root-directory))
+			(short-directory (f-collapse-homedir directory))
+			(annotation-directory (s-shortest
+					       (format "<%s>/%s" proj-name project-root-directory)
+					       (if is-project-root
+						   (format "<%s>" proj-name)
+						   short-directory)))
+			(command-template (if is-current-directory
+					      (format "make %%s%s" target)
+					    (format "make %%s-C %s %s" directory target)))
+			(name-template (if is-current-directory
+					   command-template
+					 (string-replace directory annotation-directory command-template)))
+			(annotation-template (cond
+					      (is-project-root
+					       (format "build target %s in project root (%s)" target short-directory))
+					      (is-current-directory
+					       (format "build target %s in current directory (%s)" target short-directory))
+					      (t
+					       (format "build target %s in %s" annotation-directory)))))
+		   (->> (-- (cons "" "")
+			    (cons "-k " ", continuing on error")
+			    (cons "-B " ", unconditionally")
+			    (cons "-k -B " ", unconditionally while continuing on error"))
+			(--map (let ((flag (car it))
+				     (annotation-suffix (cdr it)))
+				 (make-compilation-candidate
+				  :name (format name-template flag)
+				  :command (format command-template flag)
+				  :directory directory
+				  :annotation (concat annotation-template annotation-suffix)))))))))
 
 (register-compilation-candidates
  :name "minibuffer-shell-commands"
@@ -429,6 +439,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		  :directory project-root-directory
 		  :annotation (format "run %s, from compile buffer %s in the project root (%s) " (car it) (cdr it) project-root-directory)))))
 
+
 (register-compilation-candidates
  :name "go-packages"
  :pipeline (->> (f-directories-containing-file-with-extension-go directories)
@@ -445,24 +456,46 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			      (t (concat prefix dir))))
 			(dir-with-dots (or (when (string-suffix-p "/" dir) (concat dir "..."))
 					   (concat dir "/..."))))
-		   (->> (list (cons "go test -v %s" "run go tests (insert )n verbose mode in %s")
-			      (cons "go test -v -cover %s" "run go tests in verbose mode and collect coverage data in %s")
-			      (cons "go test -v -race %s" "run go tests in verbose mode with the race detector in %s")
-			      (cons "go test -v -cover -race %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
-			      (cons "go test -cover %s" "run go tests while collecting coverage data in %s")
-			      (cons "go test -race %s" "run go tests with the race detector in %s")
-			      (cons "go test -race -cover %s" "run go tests in verbose mode with the race detector AND collect coverage data in %s")
-			      (cons "golint %s" "run golint for %s")
-			      (cons "go test %s" "run go tests in %s")
-			      (cons "go test %s -run=NOOP" "build all sources, including tests in %s")
-			      (cons "go build %s" "build the go package in %s"))
-			(--flat-map (list
-				     (cons (format (car it) dir) (format (cdr it) dir))
-				     (cons (format (car it) dir-with-dots) (concat (format (cdr it) (if (f-equal-p project-root-directory directory) project-root-directory dir))  ", and all subdirectories"))))
-			(--map (make-compilation-candidate
-				:command (car it)
-				:directory directory
-				:annotation (cdr it))))))))
+		   (->> (list dir-with-dots)
+			(--flat-map (let* ((build-path it)
+					   (short-path (f-collapse-homedir it))
+					   (proj-name (f-filename project-root-directory))
+					   (package-path (string-replace project-root-directory "" it))
+					   (proj-path-tag (format "<%s>/%s" proj-name package-path))
+					   (dirname (f-dirname it))
+					   (task-name-suffix (s-shortest short-path proj-path-tag))
+					   (annotation-tag (if (string-suffix-p "..." it)
+							       "(with subdirectories)"
+							    "")))
+				      (->> (list (cons "go test -v"
+						       "run go tests in verbose mode in")
+						 (cons "go test -v -cover"
+						       "run go tests in verbose mode and collect coverage data in")
+						 (cons "go test -v -race"
+						       "run go tests in verbose mode with the race detector in")
+						 (cons "go test -v -cover -race"
+						       "run go tests in verbose mode with the race detector AND collect coverage data in")
+						 (cons "go test -cover"
+						       "run go tests while collecting coverage data in")
+						 (cons "go test -race"
+						       "run go tests with the race detector in")
+						 (cons "go test -race -cover"
+						       "run go tests in verbose mode with the race detector AND collect coverage data in")
+						 (cons "golint"
+						       "run golint for")
+						 (cons "go test"
+						       "run go tests in")
+						 (cons "go test -run=NOOP"
+						       "build all sources, including tests in")
+						 (cons "go build"
+						       "build the go package in"))
+					   (--map (let ((command-prefix (car it))
+							(annotation-prefix (cdr it)))
+						    (make-compilation-candidate
+						     :name (s-join-with-space command-prefix task-name-suffix)
+						     :command (s-join-with-space command-prefix build-path)
+						     :directory dirname
+						     :annotation (s-join-with-space annotation-prefix proj-name "at" short-path annotation-tag))))))))))))
 
 (register-compilation-candidates
  :name "go-files"
@@ -474,19 +507,23 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		       (short-filename (f-collapse-homedir filename))
 		       (basename (f-filename filename)))
 	     (-- (make-compilation-candidate
-		  :name (format "gofumt +extra %s" basename)
+		  :name (format "gofumpt +extra %s" basename)
+		  :directory (f-dirname filename)
 		  :command (format "gofumpt -extra -w %s" filename)
 		  :annotation (format "run gofumpt with non-extra constraints on %s" short-filename))
 		 (make-compilation-candidate
-		  :name (format "gofumt %s" basename)
+		  :name (format "gofumpt %s" basename)
+		  :directory (f-dirname filename)
 		  :command (format "gofumpt -w %s" filename)
 		  :annotation (format "run gofumpt with standard gofmt constraints on %s" short-filename))
 		 (make-compilation-candidate
-		  :name (format "gci %s" basename)
+		  :name (format "gci %s <import sort>" basename)
+		  :directory (f-dirname filename)
 		  :command (format "golangci-lint fmt --enable gci %s" filename)
 		  :annotation (format "sort imports with gci for %s" short-filename))
 		 (make-compilation-candidate
 		  :name (format "meta fmt %s" basename)
+		  :directory (f-dirname filename)
 		  :command (format "golangci-lint fmt %s" filename)
 		  :annotation (format "run meta formatter on %s" short-filename)))))
 

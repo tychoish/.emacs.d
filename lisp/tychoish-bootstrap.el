@@ -480,7 +480,7 @@
 
 (add-hygenic-one-shot-hook
  :name "delight-modeline"
- :function (tychoish/set-up-delightful-mode-lighters)
+ :callable 'tychoish/set-up-delightful-mode-lighters
  :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
 
 (add-hygenic-one-shot-hook

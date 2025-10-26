@@ -36,7 +36,7 @@
 
 (with-gc-suppressed
  (with-file-name-handler-disabled
-  (defvar tychoish/bootstrap-packages '(f s dash ht)
+  (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn)
     "Packages installed with the `--botstrap' CLI flag outside of use-package for performance.")
   (defvar tychoish/eglot-default-server-configuration nil)
   (defvar tychoish/emacs-instance-id nil)

@@ -221,10 +221,66 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;; strings -- helper functions for handling strings
 
-(defun symbol-join (&rest parts)
-  (->> parts
+(defun s-empty-p (str) (and (stringp str) (s-equals-p "" (s-trim str))))
+
+(defun s-join-spc (&rest words)
+  (->> (-filter-s-trim words)
+       (s-join " ")))
+
+(defun -filter-s-trim (strs)
+  (cl-check-type strs list "strs must be list")
+  (->> strs
        (-filter #'stringp)
-       (s-join "-")))
+       (-map #'string-trim)
+       (-remove #'s-empty-p)))
+
+(defun s-or-char-equal (char value)
+  (cl-check-type char character "char must be character type")
+  (cl-check-type char (or string character) "value must be or string")
+
+  (if (stringp value)
+      (string-equal (char-to-string char) value)
+    (char-equal char value)))
+
+(cl-defmacro def-join-str-with (char &optional &key use-jargon-names)
+  (cl-check-type char character "must create join function using the character to join the strings")
+
+  (let* ((name (downcase (cond
+	       ((s-or-char-equal ?- char) (if use-jargon-names "kebab" "hyphen"))
+	       ((s-or-char-equal ?_ char) (if use-jargon-names "snake" "underscore"))
+	       ((s-or-char-equal ?. char) (if use-jargon-names "dot" "period"))
+	       ((s-or-char-equal ?  char) (if use-jargon-names "spc" "space"))
+	       ((s-or-char-equal ?= char) "equal")
+	       ((s-or-char-equal ?+ char) "plus")
+	       ((s-or-char-equal ?| char) "pipe")
+	       ((s-or-char-equal ?> char) "lt")
+	       ((equal char ", ") "comma-space")
+	       ((equal char "; ") "semicolon-space")
+	       ((equal char ">=") "gte")
+	       ((equal char "<=") "lte")
+	       ((equal char "<=") "lte")
+	       ((equal char "__") (if use-jargon "dunder" "double-underscore"))
+	       ((equal char "--") (if use-jargon "ddash" "double-dash"))
+	       ((equal char "=>") (if use-jargon-names "fat-arrow" "double-arrow"))
+	       ((equal char "=>>") "dubble-fat-arrow")
+	       ;; e.g. '(; : )
+	       (t (s-join "-" (s-split " " (char-to-name char)))))))
+	(op-name (concat "s-join-with-" name))
+	(join-with (char-to-string char)))
+
+  `(defun ,(intern op-name) (&rest words)
+     (->> words
+	  (-filter-s-trim)
+	  (s-join ,join-with)))))
+
+(def-join-str-with ?-)
+(def-join-str-with ? )
+(def-join-str-with ?_)
+
+(defun s-shortest (a b)
+  (if (> (length b) (length a))
+      a
+    b))
 
 (defun trimmed-string-or-nil (value)
   (and (stringp value)
@@ -311,6 +367,7 @@ concatenated or joined. This provides a dash.el conforming API for the
 (defalias '-join #'nconc)
 (defalias '-append #'append)
 
+(defalias '-c #'cons)
 (defalias '-l #'list)
 (defalias 'll #'list)
 (defalias '-- #'list)
@@ -497,7 +554,7 @@ of the equality function customization differs slightly."
 (defmacro f-directories-containing-file-function (filename &rest files)
   (let* ((filenames (cons filename files))
 	 (symbol-filename (string-replace "." "-" (downcase filename)))
-	 (pred (intern (symbol-join "f-directory-contains" symbol-filename "file"))))
+	 (pred (intern (s-join-with-hyphen "f-directory-contains" symbol-filename "file"))))
     `(progn
        (defun ,pred (path)
 	 (let ((matching (->> (f-files-in-directory path)
@@ -507,7 +564,7 @@ of the equality function customization differs slightly."
 	   (when matching
 	     (car matching))))
 
-       (defun ,(intern (symbol-join "f-directories-containing-file" symbol-filename)) (path &rest paths)
+       (defun ,(intern (s-join-with-hyphen "f-directories-containing-file" symbol-filename)) (path &rest paths)
 	 (let ((filenames (list ,@filenames))
 	       (paths (cons path paths)))
 	   (->> paths
@@ -558,9 +615,9 @@ of the equality function customization differs slightly."
   (let* ((name (symbol-name value))
 	 (suffix (when local "local"))
 	 (ops (list
-	       `(,(intern (symbol-join "turn-on" name suffix)) t)
-	       `(,(intern (symbol-join "turn-off" name suffix)) nil)
-	       `(,(intern (symbol-join "toggle" name suffix)) (not ,value))))
+	       `(,(intern (s-join-with-hyphen "turn-on" name suffix)) t)
+	       `(,(intern (s-join-with-hyphen "turn-off" name suffix)) nil)
+	       `(,(intern (s-join-with-hyphen "toggle" name suffix)) (not ,value))))
 	 (setter (if local 'setq-local 'setq)))
 
     (when (and keymap (not key))
@@ -598,11 +655,23 @@ of the equality function customization differs slightly."
      ,@body
      map))
 
-(cl-defmacro add-hygenic-one-shot-hook (&key name hook function (args nil) (local nil) (depth 0) (make-unique nil) (cleanup nil))
+(cl-defmacro add-hygenic-one-shot-hook
+    (&key name hook
+	  function form callable
+	  (args nil) (local nil) (depth 0) (make-unique nil) (cleanup nil))
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
-	 (cleanup-symbol (intern (symbol-join "hygenic-one-shot" name (symbol-name unique-tag))))
+	 (cleanup-symbol (intern (s-join-with-hyphen "hygenic-one-shot" name (symbol-name unique-tag))))
 	 hooks)
+
+    (let* ((operations (-- form function callable))
+	   (more-than-one-specified (->> operations
+					 (--map (when it 1))
+					 (-non-nil)
+					 (apply '+)
+					 (eq 3))))
+      (when more-than-one-specified
+	(user-error "must define exactly operation, function, allable.")))
 
     (when (eq hook 'after-first-frame-created)
       (setq hook (if (daemonp)
@@ -630,14 +699,22 @@ of the equality function customization differs slightly."
 	 (with-slow-op-timer
 	  ,(format "<hygenic-hook> %s" name)
 
-	  ,function)
+	  ,(cond (form
+		  `,@form)
+		 (function
+		  function)
+		 (callable
+		  (if args
+		      `(apply ,callable ,args)
+		    `(funcall ,callable)))))
 
 	 ,@(--map
 	    `(remove-hook ',it ',cleanup-symbol ,local)
 	    (--remove (eq 'quote it) hooks))
 
-         ,(when (or make-unique cleanup)
-	    `(unintern ',cleanup-symbol obarray)))
+         ,(if (or make-unique cleanup)
+	     `(unintern ',cleanup-symbol obarray)
+	   t))
 
        ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks)))))
 
@@ -687,6 +764,17 @@ were recompiled."
        (--flat-map (f-entries it #'f-file-p))
        (--filter (f-ext-p it "el"))
        (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
+
+(defmacro merge-predicate-functions (&rest preds)
+  `(lambda (value)
+    (let ((head ,preds)
+	  (predicate ,(car preds))
+	  (val t))
+      (while (and val predicate)
+	(setq val (funcall predicate value)
+	      head (cdr head)
+	      predicate (car head)))
+      val)))
 
 (declare-function package-installed-p "package")
 (declare-function package-desc-p "package")
