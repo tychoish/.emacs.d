@@ -95,6 +95,34 @@
  ("C-M-/" . dabbrev-expand))
 
 (bind-keys
+ ;; these are all from tychoish-common.el
+ ("M-<up>" . move-text-up)
+ ("M-<down>" . move-text-down)
+ :prefix "C-c f"
+ :prefix-map tychoish/display-map
+ ("=" . text-scale-increase)
+ ("-" . text-scale-decrease)
+ ("0" . text-scale-reset)
+ :map tychoish/display-map ;; "C-c f"
+ :prefix "o"
+ :prefix-map tychoish/display-opacity-map
+ ("=" . opacity-increase)
+ ("-" . opacity-decrease)
+ ("0" . opacity-reset))
+
+(bind-keys
+ ;; these are all from tychoish-common.el
+ :prefix "C-c t"
+ :prefix-map tychoish-core-map
+ ("w" . toggle-local-whitespace-cleanup)
+ :map tychoish-core-map ;; "C-c t"
+ :prefix "t"
+ :prefix-map tychoish/theme-map
+ ("r" . disable-all-themes) ;; reset
+ ("d" . tychoish-load-dark-theme)
+ ("l" . tychoish-load-light-theme))
+
+(bind-keys
  :map tychoish-core-map
  ("p" . toggle-electric-pair-inhibition)
  ("e" . toggle-electric-pair-eagerness))

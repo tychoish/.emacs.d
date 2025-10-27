@@ -7,34 +7,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; keybindings
-
-(bind-keys ("M-<up>" . move-text-up)
-           ("M-<down>" . move-text-down)
-	   :prefix "C-c f"
-	   :prefix-map tychoish/display-map
-	   ("=" . text-scale-increase)
-           ("-" . text-scale-decrease)
-           ("0" . text-scale-reset)
-	   :map tychoish/display-map ;; "C-c f"
-	   :prefix "o"
-	   :prefix-map tychoish/display-opacity-map
-           ("=" . opacity-increase)
-           ("-" . opacity-decrease)
-           ("0" . opacity-reset))
-
-(bind-keys :prefix "C-c t"
-	   :prefix-map tychoish-core-map
-           ("w" . toggle-local-whitespace-cleanup)
-	   :map tychoish-core-map ;; "C-c t"
-	   :prefix "t"
-	   :prefix-map tychoish/theme-map
-           ("r" . disable-all-themes) ;; reset
-	   ("d" . tychoish-load-dark-theme)
-	   ("l" . tychoish-load-light-theme))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; id-state -- emacs daemon/instance identification for state config
 
 (defun tychoish-system-name ()
@@ -346,6 +318,10 @@ values using the test function, which defaults to `equal'."
   (let ((-compare-fn (lambda (a b) (funcall test (car a) (car b)))))
     (-distinct cell)))
 
+(cl-defun -distinct-paths (cell)
+  (let ((-compare-fn #'f-equal-p)
+    (-distinct cell))))
+
 (cl-defun -distinct-by-alist-key (key cell &optional &key (test #'equal))
   "Compare a list of alists, and return a new list that contains only the
 alists that have distinct values for a specific key. Compare values using the
@@ -438,7 +414,7 @@ the list.
 
 This is the anaphoric counterpart to `-map-in-place'."
   (declare (debug (def-form form)))
-  `(-map-in-place (lambda (it) (ignore it) ,form) items))
+  `(-map-in-place (lambda (it) (ignore it) ,form) ,items))
 
 (defmacro --in-place (form items)
   "Take a list and replace each element in the list with the result of

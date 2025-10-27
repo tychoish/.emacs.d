@@ -448,57 +448,48 @@ current directory and the project root, and `table' is table of `tychoish--compl
  :name "go-packages"
  :pipeline (->> (f-directories-containing-file-with-extension-go directories)
 		(--flat-map
-		 (let* ((directory it)
-			(prefix (concat "." (f-path-separator)))
+		 (let* ((prefix (concat "." (f-path-separator)))
+			(proj-name (f-filename project-root-directory))
+			(directory it)
 			(dir (if (or (f-equal-p directory project-root-directory)
 				     (f-directory-contains-go-mod-file directory))
 				 "./"
 			       directory))
 			(dir (cond
-			      ((string-prefix-p prefix dir) dir)
-			      ((string-prefix-p (f-path-separator) dir) dir)
-			      (t (concat prefix dir))))
-			(dir-with-dots (or (when (string-suffix-p "/" dir) (concat dir "..."))
-					   (concat dir "/..."))))
-		   (->> (list dir-with-dots)
+			      ((string-prefix-p prefix directory) directory)
+			      ((string-prefix-p (f-path-separator) directory) directory)
+			      (t (concat prefix directory))))
+			(dir-with-dots (f-join dir "..." )))
+		   (->> (list dir-with-dots dir)
 			(--flat-map (let* ((build-path it)
 					   (short-path (f-collapse-homedir it))
-					   (proj-name (f-filename project-root-directory))
-					   (package-path (string-replace project-root-directory "" it))
-					   (proj-path-tag (format "<%s>/%s" proj-name package-path))
-					   (dirname (f-dirname it))
+					   (package-path (string-replace project-root-directory "" build-path))
+					   (proj-path-tag (format "<%s>/%s" proj-name (cond ((f-equal-p build-path project-root-directory) "")
+											    ((equal short-path package-path) "")
+											    (t package-path)
+											  ""
+											package-path)))
 					   (task-name-suffix (s-shortest short-path proj-path-tag))
 					   (annotation-tag (if (string-suffix-p "..." it)
 							       "(with subdirectories)"
 							    "")))
-				      (->> (list (cons "go test -v"
-						       "run go tests in verbose mode in")
-						 (cons "go test -v -cover"
-						       "run go tests in verbose mode and collect coverage data in")
-						 (cons "go test -v -race"
-						       "run go tests in verbose mode with the race detector in")
-						 (cons "go test -v -cover -race"
-						       "run go tests in verbose mode with the race detector AND collect coverage data in")
-						 (cons "go test -cover"
-						       "run go tests while collecting coverage data in")
-						 (cons "go test -race"
-						       "run go tests with the race detector in")
-						 (cons "go test -race -cover"
-						       "run go tests in verbose mode with the race detector AND collect coverage data in")
-						 (cons "golint"
-						       "run golint for")
-						 (cons "go test"
-						       "run go tests in")
-						 (cons "go test -run=NOOP"
-						       "build all sources, including tests in")
-						 (cons "go build"
-						       "build the go package in"))
+				      (->> '(("go test -v"                "run go tests in verbose mode in")
+					     ("go test -v -cover"         "run go tests in verbose mode and collect coverage data in")
+					     ("go test -v -race"          "run go tests in verbose mode with the race detector in")
+					     ("go test -v -cover -race"   "run go tests in verbose mode with the race detector AND collect coverage data in")
+					     ("go test -cover"            "run go tests while collecting coverage data in")
+					     ("go test -race"             "run go tests with the race detector in")
+					     ("go test -race -cover"      "run go tests in verbose mode with the race detector AND collect coverage data in")
+					     ("golint"                    "run golint for")
+					     ("go test"                   "run go tests in")
+					     ("go test -run=NOOP"         "build all sources, including tests in")
+					     ("go build"                  "build the go package in"))
 					   (--map (let ((command-prefix (car it))
-							(annotation-prefix (cdr it)))
+							(annotation-prefix (cadr it)))
 						    (make-compilation-candidate
-						     :name (s-join-with-space command-prefix task-name-suffix)
+						     :name (s-join-with-space command-prefix proj-path-tag)
 						     :command (s-join-with-space command-prefix build-path)
-						     :directory directory
+						     :directory build-path
 						     :annotation (s-join-with-space annotation-prefix proj-name "at" short-path annotation-tag))))))))))))
 
 (register-compilation-candidates
