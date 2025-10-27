@@ -513,11 +513,11 @@
 (add-hygenic-one-shot-hook
  :name "org-install-aux-packages"
  :hook 'org-mode-hook
- :function (tychoish-org--install-auxiliary-packages))
+ :operation #'tychoish-org--install-auxiliary-packages)
 
 (add-hygenic-one-shot-hook
  :name "org-capture [install standard templates]"
  :hook 'emacs-startup-hook
- :function (tychoish-org-setup-standard-capture-templates))
+ :operation #'tychoish-org-setup-standard-capture-templates)
 
 (provide 'tychoish-org)

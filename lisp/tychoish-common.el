@@ -657,21 +657,13 @@ of the equality function customization differs slightly."
 
 (cl-defmacro add-hygenic-one-shot-hook
     (&key name hook
-	  function form callable
+	  function result body form operation
+	  ;; flages and options; with defaults
 	  (args nil) (local nil) (depth 0) (make-unique nil) (cleanup nil))
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
 	 (cleanup-symbol (intern (s-join-with-hyphen "hygenic-one-shot" name (symbol-name unique-tag))))
 	 hooks)
-
-    (let* ((operations (-- form function callable))
-	   (more-than-one-specified (->> operations
-					 (--map (when it 1))
-					 (-non-nil)
-					 (apply '+)
-					 (eq 3))))
-      (when more-than-one-specified
-	(user-error "must define exactly operation, function, allable.")))
 
     (when (eq hook 'after-first-frame-created)
       (setq hook (if (daemonp)
@@ -694,19 +686,34 @@ of the equality function customization differs slightly."
     (unless hooks
       (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
 
+
     `(progn
        (defun ,cleanup-symbol ,args
 	 (with-slow-op-timer
 	  ,(format "<hygenic-hook> %s" name)
 
-	  ,(cond (form
-		  `,@form)
-		 (function
-		  function)
-		 (callable
+	  ,(aif (cond (form
+		  form)
+		(body
+		 `,@body)
+		(result
+		 `,(eval result))
+		(operation
 		  (if args
-		      `(apply ,callable ,args)
-		    `(funcall ,callable)))))
+		      `(apply ,operation ,args)
+		    `(funcall ,operation)))
+		((and (symbolp function) (functionp function))
+		  (if args
+		      `(apply ',function ,args)
+		    `(funcall ',function)))
+		((and (functionp function) (listp function))
+		 function)
+		((symbolp function)
+		 (eval function))
+		((listp function)
+		 function))
+	       it
+	     (user-error "could not resolve the hook function from input for %s" name)))
 
 	 ,@(--map
 	    `(remove-hook ',it ',cleanup-symbol ,local)

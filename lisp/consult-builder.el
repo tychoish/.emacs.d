@@ -83,22 +83,26 @@
 		    :program "sardis"
 		    :args '("notify" "send" msg)))
 
-      (when-let* ((hook (tychoish-compilation-candidate-hook (ht-get candidates candidate-name))))
-      	(add-hygenic-one-shot-hook
-      	 :name (format "post-%s-hook-operation" op-name)
-      	 :hook 'compilation-finish-functions
-      	 :make-unique t
-      	 :local t
-      	 :function (hook)))
+      (when-let* ((candidate (ht-get candidates candidate-name))
+		  (hook (tychoish-compilation-candidate-hook candidate)))
+	(when hook
+      	  (add-hygenic-one-shot-hook
+      	   :name (format "post-%s-hook-operation" op-name)
+      	   :hook 'compilation-finish-functions
+      	   :make-unique t
+      	   :local t
+      	   :function (hook))))
 
-      (if-let* ((op-window (get-buffer-window (current-buffer) (selected-frame))))
-          (select-window op-window)
-	(switch-to-buffer-other-window (current-buffer))))))
+      (let*
+	  ((op-window
+	    (and t
+		 (get-buffer-window (current-buffer) (selected-frame)))))
+	(if op-window (select-window op-window)
+	  (switch-to-buffer-other-window (current-buffer)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; directory selection
-
 (cl-defun consult--select-directory (&optional &key input-dirs (require-match nil))
   "Select a directory from a provided or likely set of `INPUT-DIRS`'."
   (consult--read
@@ -494,7 +498,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 						    (make-compilation-candidate
 						     :name (s-join-with-space command-prefix task-name-suffix)
 						     :command (s-join-with-space command-prefix build-path)
-						     :directory dirname
+						     :directory directory
 						     :annotation (s-join-with-space annotation-prefix proj-name "at" short-path annotation-tag))))))))))))
 
 (register-compilation-candidates

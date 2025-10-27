@@ -176,6 +176,10 @@
  ("n" . xref-go-forward)
  ("o" . xref-find-definitions-other-window))
 
+(defvar-keymap tychoish/robot-gptel-set-default-model-map
+  :name "default model setters"
+  :doc "set default model for gtpel")
+
 (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
 
@@ -480,19 +484,19 @@
 
 (add-hygenic-one-shot-hook
  :name "delight-modeline"
- :callable 'tychoish/set-up-delightful-mode-lighters
+ :operation 'tychoish/set-up-delightful-mode-lighters
  :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
 
 (add-hygenic-one-shot-hook
  :name "restore-desktop"
- :function (tychoish/desktop-read-init)
+ :function tychoish/desktop-read-init
  :hook after-first-frame-created)
 
 (add-hygenic-one-shot-hook
  :name "emacs-lockfile-setup"
- :function (if (equal "solo" tychoish/emacs-instance-id)
+ :form (if (equal "solo" tychoish/emacs-instance-id)
 	       (tychoish/set-up-ephemeral-instance-file-locks)
-	     (tychoish/set-up-named-instance-file-locks))
+	   (tychoish/set-up-named-instance-file-locks))
  :depth 50
  :hook after-first-frame-created)
 
@@ -504,7 +508,7 @@
 
 (add-hygenic-one-shot-hook
  :name "enable-modes"
- :function (tychoish/init-late-enable-modes)
+ :function tychoish/init-late-enable-modes
  :hook (prog-mode-hook text-mode-hook))
 
 (add-hygenic-one-shot-hook
@@ -672,23 +676,32 @@
        (interactive "sName: ")
        (tychoish-create-note-file name :path ,path))))
 
-(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key)
+
+(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key api-key)
   (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
         (default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
     `(progn
        (defun ,local-function-symbol ()
          (interactive)
          (setq-local gptel-model ,model)
-         (setq-local gptel-backend ,backend))
+         ,(when api-key
+            `(setq-local gptel-api-key (fn ,api-key)))
+         (setq-local gptel-backend ,backend)
+         (message "[gptel] set backend to %s for the local buffer" name))
 
        (defun ,default-function-symbol ()
          (interactive)
          (setq-default gptel-model ,model)
-         (setq-default gptel-backend ,backend))
+         ,(when api-key
+            `(setq-default gptel-api-key (fn ,api-key)))
+         (setq-default gptel-backend ,backend)
+         (message "[gptel] set default backend to %s" name))
 
        (bind-keys :map gptel-mode-map
 		  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
-		  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)))))
+		  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
+                  :map tychoish/robot-gptel-set-default-model-map
+		  (,(downcase key) . ,default-function-symbol)))))
 
 (defun tychoish/set-up-aider-env-vars ()
   (when (boundp 'anthropic-api-key)
@@ -807,7 +820,6 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
-
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
