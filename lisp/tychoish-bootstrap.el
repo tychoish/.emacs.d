@@ -214,6 +214,7 @@
 (put 'narrow-to-region 'disabled nil)
 (put 'list-timers 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
+(put 'list-threads 'disabled nil)
 
 (with-eval-after-load "warnings"
  (add-to-list 'warning-suppress-log-types '(frameset)))

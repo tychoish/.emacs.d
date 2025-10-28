@@ -160,3 +160,4 @@
    (tychoish-set-up-user-local-config))))
 
 (provide 'init)
+(put 'list-threads 'disabled nil)

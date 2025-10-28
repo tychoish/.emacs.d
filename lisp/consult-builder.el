@@ -461,36 +461,51 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			      (t (concat prefix directory))))
 			(dir-with-dots (f-join dir "..." )))
 		   (->> (list dir-with-dots dir)
-			(--flat-map (let* ((build-path it)
-					   (short-path (f-collapse-homedir it))
-					   (package-path (string-replace project-root-directory "" build-path))
-					   (proj-path-tag (format "<%s>/%s" proj-name (cond ((f-equal-p build-path project-root-directory) "")
-											    ((equal short-path package-path) "")
-											    (t package-path)
-											  ""
-											package-path)))
-					   (task-name-suffix (s-shortest short-path proj-path-tag))
-					   (annotation-tag (if (string-suffix-p "..." it)
-							       "(with subdirectories)"
-							    "")))
-				      (->> '(("go test -v"                "run go tests in verbose mode in")
-					     ("go test -v -cover"         "run go tests in verbose mode and collect coverage data in")
-					     ("go test -v -race"          "run go tests in verbose mode with the race detector in")
-					     ("go test -v -cover -race"   "run go tests in verbose mode with the race detector AND collect coverage data in")
-					     ("go test -cover"            "run go tests while collecting coverage data in")
-					     ("go test -race"             "run go tests with the race detector in")
-					     ("go test -race -cover"      "run go tests in verbose mode with the race detector AND collect coverage data in")
-					     ("golint"                    "run golint for")
-					     ("go test"                   "run go tests in")
-					     ("go test -run=NOOP"         "build all sources, including tests in")
-					     ("go build"                  "build the go package in"))
-					   (--map (let ((command-prefix (car it))
-							(annotation-prefix (cadr it)))
-						    (make-compilation-candidate
-						     :name (s-join-with-space command-prefix proj-path-tag)
-						     :command (s-join-with-space command-prefix build-path)
-						     :directory build-path
-						     :annotation (s-join-with-space annotation-prefix proj-name "at" short-path annotation-tag))))))))))))
+			(--flat-map
+			 (let* ((build-path it)
+				(short-path (f-collapse-homedir it))
+				(package-path (string-replace project-root-directory "" build-path))
+				(is-recursive (string-suffix-p "..." it))
+				(proj-path-tag (format "<%s>/%s" proj-name (cond ((f-equal-p build-path project-root-directory) "")
+										 ((equal short-path package-path) "")
+										 (t package-path)
+										 ""
+										 package-path)))
+				(proj-path-for-name (format "<%s>/%s" proj-name (if is-recursive " [recursive]" "")))
+				(task-name-suffix (s-shortest short-path proj-path-tag))
+				(annotation-tag (if is-recursive
+						    "(with subdirectories)"
+						  "")))
+			   (-append
+			    (->> '("revive" "reassign" "prealloc" "predeclared" "nosprinthostport" "thelper" "makezero" "importas" "fatcontext" "exptostd" "exhaustruct")
+				 (--map (make-compilation-candidate
+					 :name (format "run lint %s %s" it proj-path-for-name)
+					 :command (format "golangci-lint run --enable-only=%s %s" it build-path)
+					 :directory build-path
+					 :annotation (format "run (only) the %s linter in %s" it short-path))))
+			    (->> '(("go test -v"                "run go tests in verbose mode in")
+				   ("go test -v -cover"         "run go tests in verbose mode and collect coverage data in")
+				   ("go test -v -race"          "run go tests in verbose mode with the race detector in")
+				   ("go test -v -cover -race"   "run go tests in verbose mode with the race detector AND collect coverage data in")
+				   ("go test -cover"            "run go tests while collecting coverage data in")
+				   ("go test -race"             "run go tests with the race detector in")
+				   ("go test -race -cover"      "run go tests in verbose mode with the race detector AND collect coverage data in")
+				   ("go test"                   "run go tests in")
+				   ("go test -run=NOOP"         "build all sources, including tests in")
+				   ("go build"                  "build the go package in"))
+				 (--flat-map
+				  (let ((command-prefix (car it))
+					(annotation-prefix (cadr it)))
+				    (->> '("10s"  "20s" "40s" "1m" "90s" "2m" "4m" "5m" "8m" "")
+					 (--map
+					  (let* ((is-default (equal it ""))
+						 (timeout-arg (unless is-default (concat "--timeout=" it)))
+						 (timeout-name (if is-default "(no timeout)" (format "(timeout %s)" it))))
+					    (make-compilation-candidate
+					     :name (s-join-with-space command-prefix it timeout-name proj-path-for-name)
+					     :command (s-join-with-space command-prefix timeout-arg build-path)
+					     :directory build-path
+					     :annotation (s-join-with-space annotation-prefix proj-name "at" short-path annotation-tag "with" timeout-name))))))))))))))))
 
 (register-compilation-candidates
  :name "go-files"
@@ -526,33 +541,57 @@ current directory and the project root, and `table' is table of `tychoish--compl
  :name "go-modules"
  :pipeline (->> (f-directories-containing-file-go-mod directories)
 		(--flat-map
-		 (list
-		  (make-compilation-candidate
-		   :command "golangci-lint run"
-		   :directory it
-		   :annotation (format "run `golangci-lint' in package %s" (f-filename it)))
-		  (make-compilation-candidate
-		   :command "golangci-lint run --fix"
-		   :directory it
-		   :annotation (format "run `golangci-lint' in package %s with fixing trivial errors" (f-filename it)))
-		  (make-compilation-candidate
-		   :name "go list <pkgs...> | xargs -t go test -race -v"
-		   :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs -t go test -race -v"
-		   :directory it
-		   :annotation (format "crazy go xargs test %s" (f-filename it)))
-		  (make-compilation-candidate
-		   :command "go mod tidy"
-		   :directory it
-		   :annotation (format "run `go mod tidy' in package %s" (f-filename it)))
-		  (make-compilation-candidate
-		   :command "go doc -all"
-		   :directory it
-		   :annotation (format "full go doc for entire package `%s'" (f-filename it)))
-		  (make-compilation-candidate
-		   :command "go doc --"
-		   :name "go doc"
-		   :directory it
-		   :annotation (format "go doc outline for package `%s'" (f-filename it)))))))
+		 (let ((filename (f-filename it))
+		       (directory it))
+		   (-join
+		    (when (f-equal-p directory project-root-directory)
+		      (--
+		       (make-compilation-candidate
+			:name "go <modules...> | xargs go test -race -v"
+			:command "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -v ./...'"
+			:annotation (s-join-with-space "run tests for all modules and submodules in" filename))
+		       (make-compilation-candidate
+			:name "go <modules...> | xargs go test ./... -run=NOOP"
+			:command "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -run=NOOOP' ./..."
+			:annotation (s-join-with-space "build all tests in all modules and submodules within" filename))
+		       (make-compilation-candidate
+			:name "go <modules...> | xargs go build ./..."
+			:command "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go build ./...'"
+			:directory directory
+			:annotation (s-join-with-space "build all modules and submodules within" filename))))
+		    (--
+		     (make-compilation-candidate
+		      :command "golangci-lint run"
+		      :directory directory
+		      :annotation (s-join-with-space "run `golangci-lint' in package" filename))
+		     (make-compilation-candidate
+		      :command "golangci-lint run --fix"
+		      :directory directory
+		      :annotation (s-join-with-space "run `golangci-lint' in package %s with fixing trivial errors" filename))
+		     (make-compilation-candidate
+		      :name "go list <pkgs...> | xargs go test -race -v"
+		      :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose --max-lines=1 go test -race -v"
+		      :directory directory
+		      :annotation (s-join-with-space "run all tests (with the race detector) for all submodules test" filename))
+		     (make-compilation-candidate
+		      :name "go list <pkgs...> | xargs go test -run=NOOP ./..."
+		      :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose --max-lines=1 go test -run=NOOOP"
+		      :directory directory
+		      :annotation (s-join-with-space "build all tests in all packages and sub-packages for" filename))
+		     (make-compilation-candidate
+		      :command "go doc --"
+		      :name "go doc"
+		      :directory directory
+		      :annotation (s-join-with-space "go doc outline for package `%s'" filename))
+		     (make-compilation-candidate
+		      :command "go mod tidy"
+		      :directory directory
+		      :annotation (s-join-with-space "run `go mod tidy' in package" filename))
+		     (make-compilation-candidate
+		      :command "go doc -all"
+		      :directory directory
+		      :annotation (s-join-with-space "full go doc for entire package `%s'" filename))))))
+		(-non-nil)))
 
 (register-compilation-candidates
  :name "py-projects"

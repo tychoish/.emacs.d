@@ -527,11 +527,18 @@ of the equality function customization differs slightly."
      ((f-file-p path) (f-entries (f-dirname path) #'f-file-p))))
    ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
 
+(defun f-recursive-directories-containing (filename &optional path)
+    (->> (f-entries path (lambda (filename) (f-filename-is-p filename "go.mod")) t)
+	 (-map #'f-dirname)))
+
 (defmacro f-directories-containing-file-function (filename &rest files)
   (let* ((filenames (cons filename files))
 	 (symbol-filename (string-replace "." "-" (downcase filename)))
 	 (pred (intern (s-join-with-hyphen "f-directory-contains" symbol-filename "file"))))
     `(progn
+       (defun ,(intern (format "f-filename-is-%s-p" symbol-filename)) (path)
+	 (apply #'or (--map (f-filename-is-p path it) ,filenames)))
+
        (defun ,pred (path)
 	 (let ((matching (->> (f-files-in-directory path)
 			      (--filter (f-equal-p ,filename (f-filename it)))
