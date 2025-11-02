@@ -3,7 +3,9 @@
 (require 'f)
 (require 's)
 (require 'ht)
+(require 'fn)
 (require 'dash)
+(require 'anaphora)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

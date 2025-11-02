@@ -327,7 +327,8 @@ entry of `org-capture-templates'."
         (consult-async-input-throttle 0.05)
         (consult-async-refresh-delay 0.025)
 	(consult-async-min-input 2)
-	(consult--prefix-group nil))
+	(consult--prefix-group nil)
+	(context (or context current-prefix-arg)))
     (ignore consult--prefix-group)
 
     (consult--grep

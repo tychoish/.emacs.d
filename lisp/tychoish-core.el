@@ -850,11 +850,12 @@
 	 :map tychoish/global-org-map
 	 ("j" . consult-org-capture)
 	 ("c" . consult-org-capture)
-	 :map tychoish/ecclectic-rg-map
-         ("r" . consult-rg-project)
+ 	 :map tychoish/ecclectic-rg-map ;; C-c g r
+         ("g" . consult-rg)
          ("s" . consult-rg-pwd)
-         ("p" . consult-rg-project-wizard)
          ("l" . consult-rg-pwd-wizard)
+         ("r" . consult-rg-project)
+         ("p" . consult-rg-project-wizard)
 	 :map tychoish-core-map
          :prefix "b"
 	 :prefix-map tychoish/blogging-map

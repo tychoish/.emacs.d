@@ -66,7 +66,7 @@
  ("C-c C-p" . set-mark-command)
  ("C-c C-r" . rename-buffer)
  ("M-<SPC>" . set-mark-command)
- ;; ("C-c h a" . mark-whole-buffer)
+ ("C-c h a" . mark-whole-buffer)
  ("s-c" . clipboard-kill-ring-save) ;; (CUA/macOS) copy
  ("s-v" . clipboard-yank)           ;; (CUA/macOS) paste
  ("s-x" . clipboard-kill-region)    ;; (CUA/macOS) cut

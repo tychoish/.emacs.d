@@ -2,10 +2,10 @@
 
 (require 'compile)
 
-(require 'dash)
-(require 'ht)
 (require 'f)
 (require 's)
+(require 'ht)
+(require 'dash)
 
 (require 'consult)
 
@@ -120,8 +120,9 @@
   (unless (derived-mode-p 'compilation-mode)
     (user-error "operation is only applicable for COMPILATION-MODE buffers"))
   (let ((directory (or (consult--select-directory
-			:input-dirs (append (list compilation-directory default-directory)
-					    (get-directory-default-candidate-list)))
+			:input-dirs (-distinct (append (list compilation-directory default-directory)
+						       (get-directory-default-candidate-list)
+						       (f-directories (approximate-project-root)))))
 		       compilation-directory
 		       default-directory)))
     (setq-local default-directory directory
@@ -129,18 +130,18 @@
 
 (defun clean-directory-options-for-selection (input)
   "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
-  (when (stringp input)
-    (setq input (list input)))
-  (when (listp input)
+  (when input
     (->> input
 	 (-keep #'trimmed-string-or-nil)
-	 (-map #'expand-file-name)
-	 (-sort #'string-greaterp)
-	 (-distinct))))
+	 (--map (or (when (f-absolute-p it) it)
+		    (expand-file-name it)))
+	 (f-distinct))))
 
-(defun get-directory-parents (start stop)
+(defun get-directory-parents (&optional start stop)
   "Generate list of intermediate paths between `START' and `STOP'."
-  (let* ((stop-path (expand-file-name (string-trim stop)))
+  (let* ((start (or start default-directory))
+	 (stop (or stop "~/"))
+	 (stop-path (expand-file-name (string-trim stop)))
          (current (expand-file-name (string-trim start)))
          (output (list stop-path current)))
     (while (and
@@ -149,20 +150,55 @@
 		(not (string-prefix-p stop-path current))))
       (setq current (file-name-parent-directory current))
       (push current output))
-    (-uniq (-non-nil output))))
+    (->> output
+	 (f-filter-directories '(cannonicalize unique) output))))
 
 (defun get-directory-default-candidate-list ()
   (let ((proj-root (approximate-project-root)))
-    (->> (get-directory-parents default-directory (or proj-root ""))
-	 (-join (list proj-root
-		      (thing-at-point 'filename)
-                      (thing-at-point 'existing-filename)
-		      default-directory
-                      user-emacs-directory
-                      "~/"))
-	 (-filter #'stringp)
-	 (-map #'expand-file-name)
-	 (-distinct))))
+    (--> (get-directory-parents default-directory proj-root)
+	 (-join (list (thing-at-point 'filename)
+			 (thing-at-point 'existing-filename)
+			 default-directory
+			 user-emacs-directory
+			 user-home-directory)
+		it)
+	 (if (or (and (length< it 16)
+		      (not (f-equal-p user-home-directory proj-root)))
+		 current-prefix-arg)
+	     (-join  (f-directories proj-root) it)
+	   it)
+	 (f-filter-directories '(cannonicalize unique) it))))
+
+(defun f-filter-directories (options &rest sequence)
+  (let ((cannonicalize (option-set-p 'cannonicalize options)))
+    (setq sequence (->> (if (stringp (car sequence))
+			    sequence
+			  (car sequence))
+			(-keep #'trimmed-string-or-nil)
+			(--map (or (when (f-absolute-p it) it)
+				   (if cannonicalize
+				       (expand-file-name it)
+				     it)))
+			(--keep (let ((path it))
+				  (cond ((f-file-p path)
+					 (when (f-directory-p (setq path (f-dirname path))) path))
+					((f-directory-p it) it))))))
+
+    (when cannonicalize
+      (setq sequence (-map #'f-slash sequence)))
+
+    (when (option-set-p 'unique options)
+      (setq sequence (f-distinct sequence)))
+
+    (-filter #'f-directory-p sequence)))
+
+(defun f-distinct (sequence)
+  (let ((-compare-fn #'f-equal-p))
+    (-distinct sequence)))
+
+(defun option-set-p (opt options)
+  (or (eq opt options)
+      (and (listp options) (memq opt options))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -171,7 +207,7 @@
 (defun tychoish--get-compilation-candidates (&optional directory command)
  "Generate a sequence of candidate compilation commands based on mode and directory structure."
   (let* ((project-root-directory (approximate-project-root))
-	 directory
+	 (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
 	 (default-directory (or directory default-directory))
          (directories (get-directory-parents default-directory project-root-directory))
          (operation-table (ht-create)))

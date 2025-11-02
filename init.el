@@ -46,8 +46,8 @@
   (defvar local-notes-directory (expand-file-name "~/notes")
     "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
 
-  (defvar user-org-directories nil
-    "Defines additional directories where org files might exist.")
+  (defvar user-org-directories nil "Defines additional directories where org files might exist.")
+  (defvar user-home-directory (expand-file-name "~") "path to the current home directory. cached during init.")
 
   (defvar tychoish-disable-external-notifications nil
     "disable external notification support.")
