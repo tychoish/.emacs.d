@@ -253,25 +253,6 @@
 	 ("x" . #'deadgrep))
   :commands (deadgrep))
 
-(use-package ag
-  :ensure t
-  :bind (:map tychoish/ecclectic-grep-map ;; "C-c g"
-	 :prefix "a"
-	 :prefix-map tychoish/ecclectic-ag-grep-map
-	 ("s" . ag)
-	 ("f" . ag-files)
-	 ("p" . ag-project)
-	 :map tychoish/ecclectic-ag-grep-map
-	 :prefix "d"
-	 :prefix-map tychoish/ecclectic-ag-dired-map
-	 ("f" . ag-dired)
-	 ("p" . ag-project-dired))
-  :init
-  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
-    "a" '("ag-grep" . tychoish/ecclectic-grep-map))
-  :config
-  (setq ag-highlight-search t))
-
 (use-package wgrep
   :ensure t
   :after (grep)
@@ -762,7 +743,8 @@
 
   (consult-customize
    consult-yank-from-kill-ring consult-yank-pop consult-yank-replace
-   :preview-key 'any)
+   :preview-key 'any
+   :sort nil)
 
   (consult-customize consult-find
    :require-match nil
@@ -770,7 +752,9 @@
 		(thing-at-point 'filename)
 		"./"))
 
-  (consult-customize consult-ripgrep consult-git-grep consult-grep consult-ag
+  (consult-customize
+   consult-ripgrep consult-git-grep consult-grep
+   consult-rg consult-rg-project consult-rg-pwd consult-rg-for-thing consult-rg-project-wizard consult-rg-pwd-wizard
    :require-match nil
    :group nil
    :keymap
@@ -807,16 +791,6 @@
 (use-package consult-gh
   :ensure t
   :commands (consult-gh))
-
-(use-package consult-ag
-  :vc (:url "https://github.com/abrochard/consult-ag" :rev "cf740cc")
-  :ensure t
-  :bind (("M-g a" . consult-ag)
-	 :map tychoish/ecclectic-ag-grep-map
-	 ("g" . consult-ag)
-         :map tychoish/consult-mode-map ; "C-c C-."
-         ("a" . consult-ag))
-  :commands (consult-ag))
 
 (use-package consult-yasnippet
   :ensure t
@@ -2185,13 +2159,14 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (which-key-add-keymap-based-replacements 'tychoish/robot-map "i" (cons "monet-map"  monet-command-map)))
 
 (use-package claude-code
-  :ensure t
+  :vc (:url "https://github.com/stevemolitor/claude-code.el" :rev :newest)
   :defines (claude-code-command-map)
   :bind-keymap ("C-c r m" . claude-code-command-map)
   :commands (claude-code-mode)
   :init
   (which-key-add-key-based-replacements "C-c r m" "claude-code-command-map")
   (bind-key "m" 'claude-code-command-map 'tychoish/robot-map)
+  (setq claude-code-terminal-backend 'eat)
   :config
   (which-key-add-keymap-based-replacements 'tychoish/robot-map "m" (cons "claude-code" claude-code-command-map))
   (add-hook 'claude-code-process-environment-functions #'monet-start-server-function))

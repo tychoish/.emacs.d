@@ -1,5 +1,8 @@
 ;;  -*- lexical-binding: t -*-
 
+(eval-when-compile
+  (require 'dash))
+
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")
 
@@ -509,6 +512,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks
+
+(eval-when-compile
+  (require 'tychoish-common))
 
 (add-hygenic-one-shot-hook
  :name "org-install-aux-packages"

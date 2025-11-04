@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t; -*-
+();; -*- lexical-binding: t; -*-
 
 (require 'f)
 (require 's)
@@ -286,6 +286,20 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
    (t
     input)))
 
+(defun number-to-word (num)
+  (cond
+   ((eql num 1) "one")
+   ((eql num 2) "two")
+   ((eql num 3) "three")
+   ((eql num 4) "four")
+   ((eql num 5) "five")
+   ((eql num 6) "six")
+   ((eql num 7) "seven")
+   ((eql num 8) "eight")
+   ((eql num 9) "nine")
+   ((eql num 10) "ten")
+   (:else (user-error "no string form for %d" num))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; lists -- helpers, mostly a-la dash.el
@@ -530,8 +544,8 @@ of the equality function customization differs slightly."
    ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
 
 (defun f-recursive-directories-containing (filename &optional path)
-    (->> (f-entries path (lambda (filename) (f-filename-is-p filename "go.mod")) t)
-	 (-map #'f-dirname)))
+  (->> (f-entries path (lambda (filename) (f-filename-is-p filename "go.mod")) t)
+       (-map #'f-dirname)))
 
 (defmacro f-directories-containing-file-function (filename &rest files)
   (let* ((filenames (cons filename files))
@@ -560,6 +574,18 @@ of the equality function customization differs slightly."
 
 (defun f-collapse-homedir (path)
   (string-replace (expand-file-name "~/") "~/" path))
+
+(defun f-visually-compress-path (num path)
+  (->> (f-split path)
+       (--map (if (length> it num)
+		  (substring it 0 num)
+		it))
+       (--replace-where (string-equal it (f-path-separator)) "")
+       (s-join (f-path-separator))))
+
+(defmacro f-visual-compression-function (num)
+  `(defun ,(intern (concat "f-visually-compress-to-" (number-to-word num))) (path)
+       (f-visually-compress-path ,num path)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -803,12 +829,17 @@ were recompiled."
 
 ;; compile -- compilation mode helpers
 
-(cl-defun tychoish/compile--post-hook-collection (selection buffer-name started-at &optional &key process-name program args (alert-threshold 60) (notification-threshold 300) force-send)
+(cl-defun tychoish/compile--post-hook-collection
+    (selection buffer-name started-at
+	       &optional
+	       &key process-name program args send-when
+	       (alert-threshold 60) (notification-threshold 120))
   (let* ((end-at (current-time))
 	 (duration (time-subtract end-at started-at))
 	 (msg (format "completed %s in %.06fs" selection (float-time duration))))
 
-    (when (or force-send
+    (when (or send-when
+	      (> alert-threshold (float-time (time-since (current-idle-time))))
 	      (and (> (float-time duration) notification-threshold) process-name program args))
       (setq args (append args (list msg)))
 
@@ -818,8 +849,8 @@ were recompiled."
 	     (pa "on-finish" :is (lambda (out) (message "notify process completed [%s] for %s" out selection)))
 	     args))
 
-
-    (when (or force-send
+    (when (or send-when
+	      (> (/ alert-threshold 2) (float-time (time-since (current-idle-time))))
 	      (> alert-threshold (ffloor (float-time duration))))
       (alert
        msg
@@ -834,7 +865,7 @@ were recompiled."
 	  (replace-match ""))
 	(goto-char (point-max))
 	(compilation-insert-annotation
-	 (format "--- %s completed in %.06fs at %s\n\n"
+	 (format "\n--- %s completed in %.06fs at %s\n\n"
 		 selection (float-time duration)
 		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
 	 (setq buffer-read-only t)))))
@@ -1015,16 +1046,37 @@ interactively then remove duplicate items from the `kill-ring'."
         (setq kill-ring (delete-dups new-kill-ring))
       (setq kill-ring new-kill-ring))))
 
-;; (advice-add
-;;  'kill-region :before
-;;  (lambda (inner start end &rest _)
-;;    (apply inner (interactive
-;; 		 (if mark-active
-;; 		     (list start
-;; 			   end)
-;; 		   (list
-;; 		    (line-beginning-position)
-;; 		    (line-beginning-position 2)))))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; process management and collecting shell output
+
+(cl-defstruct p-result
+  "Structure for handling results of external processes."
+  (code -1
+   :documentation "Exit code of process. -1 indicates the process hasn't run or isn't complete"
+   :type integer)
+  (command ""
+   :documentation "String of the shell command"
+   :type string)
+  (output nil
+   :type list
+   :documentation "Output of command")
+  (wrapper '("bash" "-c")
+   :type list
+   :documentation "prefix/wrapper used for command")
+  (directory default-directory
+   :type string
+   :documentation "directory where command was run"))
+
+(defun p-bash-lines-sync (command)
+  (let* (exit-code
+	 (results (process-lines
+		   "bash"
+		   "-c" command)))
+    (make-p-result
+     :code exit-code
+     :command command
+     :output results)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

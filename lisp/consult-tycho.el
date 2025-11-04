@@ -116,9 +116,8 @@ Does nothing if the current post is not in the drafts folder."
 (defun consult-sardis--select-cmd ()
   (let ((table (ht-create)))
 
-    (->> (split-string (shell-command-to-string "sardis cmd --annotate") "\n")
+    (->> (process-lines "sardis" "cmd" "--annotate")
 	 (--map (split-string it "\t" t "[ \s\t\n]"))
-	 (-non-nil)
 	 (--mapc (ht-set table (car it) (cadr it))))
 
     (consult-tycho--read-annotated
@@ -145,11 +144,13 @@ Does nothing if the current post is not in the drafts folder."
        :local t
        :make-unique t
        :args (compilation-buffer message)
-       :function ((tychoish/compile--post-hook-collection
+       :form (tychoish/compile--post-hook-collection
 		   selection op-buffer-name start-at
 		   :process-name "sardis-notify"
 		   :program "sardis"
-		   :args '("notify" "send" message))))
+		   :args '("notify" "send" message)
+		   :send-when (< 30 (float-time (time-since (current-idle-time))))))
+
 
       (save-excursion
         (goto-char (point-min))
@@ -315,7 +316,7 @@ entry of `org-capture-templates'."
 	 :command this-command
 	 :require-match nil
 	 :prompt prompt)
-      (message "skipping context selection because %d" (ht-size selectiongs))
+      (message "skipping context selection because %d" (ht-size selection))
       (car (ht-keys selections)))))
 
 ;;;###autoload

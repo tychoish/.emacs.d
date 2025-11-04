@@ -11,6 +11,34 @@
 
 (require 'tychoish-common)
 
+(f-directories-containing-file-with-extension-function "go")
+(f-directories-containing-file-with-extension-function "py")
+(f-directories-containing-file-with-extension-function "rs")
+(f-directories-containing-file-with-extension-function "el")
+
+(f-directories-containing-file-with-extension-function "md")
+(f-directories-containing-file-with-extension-function "txt")
+(f-directories-containing-file-with-extension-function "rst")
+(f-directories-containing-file-with-extension-function "org")
+(f-directories-containing-file-with-extension-function "mdwn")
+
+(f-directories-containing-file-function "Cargo.toml")
+(f-directories-containing-file-function "go.mod")
+(f-directories-containing-file-function "justfile")
+(f-directories-containing-file-function "makefile" "Makefile" "GNUmakefile")
+(f-directories-containing-file-function "pyproject.toml")
+
+(f-visual-compression-function 1)
+(f-visual-compression-function 2)
+(f-visual-compression-function 3)
+(f-visual-compression-function 4)
+(f-visual-compression-function 5)
+(f-visual-compression-function 6)
+(f-visual-compression-function 7)
+(f-visual-compression-function 8)
+(f-visual-compression-function 9)
+(f-visual-compression-function 10)
+
 (when (boundp 'tychoish-core-map)
   (bind-keys :map 'tychoish-core-map
 	     ("c" . consult-builder)))
@@ -78,10 +106,13 @@
        :make-unique t
        :args (compilation-buffer msg)
        :form (tychoish/compile--post-hook-collection
-		    op-name (buffer-name compilation-buffer) start-at
-		    :process-name "sardis-notify"
-		    :program "sardis"
-		    :args '("notify" "send" msg)))
+	      op-name (buffer-name compilation-buffer) start-at
+	      :process-name "sardis-notify"
+	      :program "sardis"
+	      :args '("notify" "send" msg)
+	      :send-when (or current-prefix-arg
+			     (< 30 (float-time (time-since (current-idle-time))))
+			     (not (get-buffer-window (or compile-buf op-name) t))))))
 
       (when-let* ((candidate (ht-get candidates candidate-name))
 		  (hook (tychoish-compilation-candidate-hook candidate)))
@@ -98,7 +129,7 @@
 	    (and t
 		 (get-buffer-window (current-buffer) (selected-frame)))))
 	(if op-window (select-window op-window)
-	  (switch-to-buffer-other-window (current-buffer)))))))
+	  (switch-to-buffer-other-window (current-buffer))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -204,26 +235,6 @@
 
 ;; tychoish/compile-project implementation
 
-(defun tychoish--get-compilation-candidates (&optional directory command)
- "Generate a sequence of candidate compilation commands based on mode and directory structure."
-  (let* ((project-root-directory (approximate-project-root))
-	 (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
-	 (default-directory (or directory default-directory))
-         (directories (get-directory-parents default-directory project-root-directory))
-         (operation-table (ht-create)))
-
-    (when command
-      (tychoish-cc-add-to-table
-       operation-table
-       (make-compilation-candidate
-    	:command command
-    	:annotation "runtime suggested candidate"
-    	:directory (or directory project-root-directory default-directory))))
-
-    (run-hook-with-args 'tychoish-compilation-candidate-functions project-root-directory directories operation-table)
-
-    operation-table))
-
 ;; this is the inner "select which command to use" for entering a new compile command.
 (defun tychoish--compilation-read-command (&optional command table)
   (let* ((candidates (or table
@@ -256,7 +267,7 @@
 (cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
   "Find "
   (let ((buffer-table (ht-create))
-        (default-names (list "build" "gen" "buf" "compilation" "test" "lint" "check" "benchmark" "run" "push")))
+        (default-names (list "push" "gen" "buf" "benchmark" "check" "compile" "run" "lint" "test" "build")))
     (when name
       (cl-pushnew name default-names :test #'equal))
 
@@ -344,9 +355,9 @@ current directory and the project root, and `table' is table of `tychoish--compl
   (let ((symbol-name (intern (format "tychoish-compilation-candidates-for-%s" name)))
 	(hook-registering-function-name (intern (format "tychoish-compilation-candidate-registrar-for-%s" name))))
     `(progn
-       (defun ,symbol-name (project-root-directory directories operation-table)
+       (defun ,symbol-name (project-root-directory project-name directories operation-table)
 	 ,(format "Build list of `tychoish-compilation-candidate' objects for suggestion in compilation buffers")
-	 (ignore project-root-directory directories operation-table)
+	 (ignore project-root-directory project-name directories operation-table)
 	 (when ,predicate
 	   (add-candidates-to-table
 	    operation-table
@@ -361,78 +372,78 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
 	     (->> hooks (--mapc (add-hook it ',hook-registering-function-name))))))))
 
+(defun tychoish--get-compilation-candidates (&optional directory command)
+ "Generate a sequence of candidate compilation commands based on mode and directory structure."
+  (let* ((project-root-directory (approximate-project-root))
+	 (project-name (f-filename project-root-directory))
+	 (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
+	 (default-directory (or directory default-directory))
+         (directories (get-directory-parents default-directory project-root-directory))
+         (operation-table (ht-create)))
+
+    (when command
+      (tychoish-cc-add-to-table
+       operation-table
+       (make-compilation-candidate
+    	:command command
+    	:annotation "runtime suggested candidate"
+    	:directory (or directory project-root-directory default-directory))))
+
+    (run-hook-with-args
+     'tychoish-compilation-candidate-functions
+        project-root-directory
+	project-name
+	directories
+	operation-table)
+
+    operation-table))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; candidate discovery/generator registration
 
-
-(f-directories-containing-file-function "Cargo.toml")
-(f-directories-containing-file-function "go.mod")
-(f-directories-containing-file-function "justfile")
-(f-directories-containing-file-function "makefile" "Makefile" "GNUmakefile")
-(f-directories-containing-file-function "pyproject.toml")
-
-(f-directories-containing-file-with-extension-function "go")
-(f-directories-containing-file-with-extension-function "py")
-(f-directories-containing-file-with-extension-function "rs")
-(f-directories-containing-file-with-extension-function "el")
-
-(f-directories-containing-file-with-extension-function "md")
-(f-directories-containing-file-with-extension-function "txt")
-(f-directories-containing-file-with-extension-function "rst")
-(f-directories-containing-file-with-extension-function "org")
-(f-directories-containing-file-with-extension-function "mdwn")
-
-(defun tychoish--compilation-discover-make-targets (&optional directory)
-  (let* ((default-directory (or directory default-directory))
-	 (makefile-report (shell-command-to-string "make --dry-run --print-data-base | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//'")))
-
-  (unless (s-contains-p "***" makefile-report)
-    (->> (split-string makefile-report)
-	 (--map (list (cons 'target it) (cons 'directory default-directory)))))))
-
 (register-compilation-candidates
  :name "makefiles"
- :pipeline (->> directories
-		(-flat-map #'f-directories-containing-file-makefile)
-		(-flat-map #'tychoish--compilation-discover-make-targets)
+ :pipeline (->> (f-directories-containing-file-makefile directories)
+		(--flat-map (let* ((default-directory it)
+				   (makefile-report (process-lines "bash" "-c" "make --dry-run --print-data-base | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//'")))
+			      (unless (string-prefix-p "make: ***" (car makefile-report))
+				(->> makefile-report
+				     (--map (let ((target it))
+					      `((target . ,target)
+						(directory . ,default-directory))))
+				     (--filter (and it (alist-get 'directory it) (alist-get 'target it)))))))
 		(--flat-map
 		 (let* ((directory (alist-get 'directory it))
 			(target (alist-get 'target it))
 			(is-current-directory (f-equal-p default-directory directory))
 			(is-project-root (f-equal-p project-root-directory directory))
-			(proj-name (f-filename project-root-directory))
-			(short-directory (f-collapse-homedir directory))
-			(annotation-directory (s-shortest
-					       (format "<%s>/%s" proj-name project-root-directory)
-					       (if is-project-root
-						   (format "<%s>" proj-name)
-						   short-directory)))
+			(display-directory (s-shortest
+					    (format "<%s>/%s" project-name (string-remove-suffix project-root-directory directory))
+					    (if is-project-root
+						(concat "<" project-name ">")
+					      (f-collapse-homedir directory))))
 			(command-template (if is-current-directory
 					      (format "make %%s%s" target)
 					    (format "make %%s-C %s %s" directory target)))
 			(name-template (if is-current-directory
 					   command-template
-					 (string-replace directory annotation-directory command-template)))
+					 (string-replace directory display-directory command-template)))
 			(annotation-template (cond
-					      (is-project-root
-					       (format "build target %s in project root (%s)" target short-directory))
-					      (is-current-directory
-					       (format "build target %s in current directory (%s)" target short-directory))
-					      (t
-					       (format "build target %s in %s" annotation-directory)))))
-		   (->> (-- (cons "" "")
-			    (cons "-k " ", continuing on error")
-			    (cons "-B " ", unconditionally")
-			    (cons "-k -B " ", unconditionally while continuing on error"))
+					      (is-project-root (format "build target %s in project root (%s)" target display-directory))
+					      (is-current-directory (format "build target %s in current directory (%s)" target display-directory))
+					      (t (format "build target %s in %s" target display-directory)))))
+		   (->> '((""         "")
+			  ("-k "      ", continuing on error")
+			  ("-B "      ", unconditionally")
+			  ("-k -B "   ", unconditionally while continuing on error"))
 			(--map (let ((flag (car it))
 				     (annotation-suffix (cdr it)))
 				 (make-compilation-candidate
 				  :name (format name-template flag)
 				  :command (format command-template flag)
 				  :directory directory
-				  :annotation (concat annotation-template annotation-suffix)))))))))
+				  :annotation (s-join-with-space annotation-template annotation-suffix)))))))))
 
 (register-compilation-candidates
  :name "minibuffer-shell-commands"
@@ -460,8 +471,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		   (make-compilation-candidate
 		    :command it
 		    :directory default-directory
-		    :annotation (format "operation from `'shell-command-history' in the current directory (%s)" default-directory)))
-		 )))
+		    :annotation (format "operation from `'shell-command-history' in the current directory (%s)" default-directory))))))
 
 (register-compilation-candidates
  :name "project-compilation-buffer-commands"
@@ -479,36 +489,31 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		  :directory project-root-directory
 		  :annotation (format "run %s, from compile buffer %s in the project root (%s) " (car it) (cdr it) project-root-directory)))))
 
-
 (register-compilation-candidates
  :name "go-packages"
  :pipeline (->> (f-directories-containing-file-with-extension-go directories)
 		(--flat-map
 		 (let* ((prefix (concat "." (f-path-separator)))
-			(proj-name (f-filename project-root-directory))
 			(directory it)
-			(dir (if (or (f-equal-p directory project-root-directory)
-				     (f-directory-contains-go-mod-file directory))
-				 "./"
-			       directory))
 			(dir (cond
+			      ((or (f-equal-p directory project-root-directory) (f-directory-contains-go-mod-file directory)) "./")
 			      ((string-prefix-p prefix directory) directory)
 			      ((string-prefix-p (f-path-separator) directory) directory)
 			      (t (concat prefix directory))))
 			(dir-with-dots (f-join dir "..." )))
-		   (->> (list dir-with-dots dir)
+		   (->> (-l dir-with-dots dir)
 			(--flat-map
 			 (let* ((build-path it)
 				(short-path (f-collapse-homedir it))
 				(package-path (string-replace project-root-directory "" build-path))
 				(is-recursive (string-suffix-p "..." it))
-				(proj-path-tag (format "<%s>/%s" proj-name (cond ((f-equal-p build-path project-root-directory) "")
-										 ((equal short-path package-path) "")
-										 (t package-path)
-										 ""
-										 package-path)))
-				(proj-path-for-name (format "<%s>/%s" proj-name (if is-recursive " [recursive]" "")))
-				(task-name-suffix (s-shortest short-path proj-path-tag))
+				(path-for-project-tag (cond ((f-equal-p build-path project-root-directory) "")
+							    ((equal short-path package-path) "")
+							    (t package-path)))
+				(proj-path-tag (format "<%s>/%s" project-name path-for-project-tag))
+				(proj-path-for-name (s-join-with-space (format "<%s>/%s" project-name
+									       (f-visually-compress-to-four path-for-project-tag)
+									       (if is-recursive " [recursive]" ""))))
 				(annotation-tag (if is-recursive
 						    "(with subdirectories)"
 						  "")))
@@ -528,7 +533,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				   ("go test -race -cover"      "run go tests in verbose mode with the race detector AND collect coverage data in")
 				   ("go test"                   "run go tests in")
 				   ("go test -run=NOOP"         "build all sources, including tests in")
-				   ("go build"                  "build the go package in"))
+				   ("go build"                  "build in"))
 				 (--flat-map
 				  (let ((command-prefix (car it))
 					(annotation-prefix (cadr it)))
@@ -541,7 +546,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 					     :name (s-join-with-space command-prefix it timeout-name proj-path-for-name)
 					     :command (s-join-with-space command-prefix timeout-arg build-path)
 					     :directory build-path
-					     :annotation (s-join-with-space annotation-prefix proj-name "at" short-path annotation-tag "with" timeout-name))))))))))))))))
+					     :annotation (s-join-with-space annotation-prefix project-name "at" short-path annotation-tag "with" timeout-name))))))))))))))))
 
 (register-compilation-candidates
  :name "go-files"
@@ -575,59 +580,43 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
 (register-compilation-candidates
  :name "go-modules"
- :pipeline (->> (f-directories-containing-file-go-mod directories)
+ :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
+	     (->> go-mod-directories
 		(--flat-map
 		 (let ((filename (f-filename it))
 		       (directory it))
-		   (-join
-		    (when (f-equal-p directory project-root-directory)
-		      (--
-		       (make-compilation-candidate
-			:name "go <modules...> | xargs go test -race -v"
-			:command "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -v ./...'"
-			:annotation (s-join-with-space "run tests for all modules and submodules in" filename))
-		       (make-compilation-candidate
-			:name "go <modules...> | xargs go test ./... -run=NOOP"
-			:command "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -run=NOOOP' ./..."
-			:annotation (s-join-with-space "build all tests in all modules and submodules within" filename))
-		       (make-compilation-candidate
-			:name "go <modules...> | xargs go build ./..."
-			:command "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go build ./...'"
-			:directory directory
-			:annotation (s-join-with-space "build all modules and submodules within" filename))))
-		    (--
-		     (make-compilation-candidate
-		      :command "golangci-lint run"
-		      :directory directory
-		      :annotation (s-join-with-space "run `golangci-lint' in package" filename))
-		     (make-compilation-candidate
-		      :command "golangci-lint run --fix"
-		      :directory directory
-		      :annotation (s-join-with-space "run `golangci-lint' in package %s with fixing trivial errors" filename))
-		     (make-compilation-candidate
-		      :name "go list <pkgs...> | xargs go test -race -v"
-		      :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose --max-lines=1 go test -race -v"
-		      :directory directory
-		      :annotation (s-join-with-space "run all tests (with the race detector) for all submodules test" filename))
-		     (make-compilation-candidate
-		      :name "go list <pkgs...> | xargs go test -run=NOOP ./..."
-		      :command "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose --max-lines=1 go test -run=NOOOP"
-		      :directory directory
-		      :annotation (s-join-with-space "build all tests in all packages and sub-packages for" filename))
-		     (make-compilation-candidate
-		      :command "go doc --"
-		      :name "go doc"
-		      :directory directory
-		      :annotation (s-join-with-space "go doc outline for package `%s'" filename))
-		     (make-compilation-candidate
-		      :command "go mod tidy"
-		      :directory directory
-		      :annotation (s-join-with-space "run `go mod tidy' in package" filename))
-		     (make-compilation-candidate
-		      :command "go doc -all"
-		      :directory directory
-		      :annotation (s-join-with-space "full go doc for entire package `%s'" filename))))))
-		(-non-nil)))
+		    (->> '((nil                "golangci-lint run"        "run `golangci-lint' in package")
+			   (nil                "golangci-lint run --fix"  "run `golangci-lint' and fix trivial errors in package")
+			   (nil                "go mod tidy"              "run `go mod tidy' in package")
+			   (nil                "go doc -all"              "go doc for entire package")
+			   ("go doc -outline"  "go doc --"                "go doc outline for package")
+			   ("<pkgs...> | xargs go test -race -v"
+			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -v"
+			        "run all tests (with the race detector) for all submodules test")
+			   ("<pkgs...> | xargs go test -run=NOOP ./..."
+			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -run=NOOP"
+				"build all tests in all packages and sub-packages for"))
+			 (-append
+			  (when (or (eql 1 (length go-mod-directories))
+				    (f-equal-p directory project-root-directory))
+			    '(("<modules> | xargs go test -race -v"
+			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -v ./...'"
+				   "run tests for all modules and submodules in")
+			      ("<modules> | xargs go test -run=NNOP ./..."
+			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -run=NOOP ./...'"
+				   "run tests for all modules and submodules in")
+			      ("<modules> | xargs go build ./..."
+			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go build ./...'"
+				   "run tests for all modules and submodules in"))))
+			 (-non-nil)
+			 (--map (let ((name (if (car it) (car it) (cadr it)))
+				      (command (cadr it))
+				      (annotation (caddr it)))
+				  (make-compilation-candidate
+				   :name name
+				   :command command
+				   :directory directory
+				   :annotation (s-join-with-space annotation filename))))))))))
 
 (register-compilation-candidates
  :name "py-projects"
