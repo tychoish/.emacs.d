@@ -14,14 +14,6 @@
 (setq use-package-compute-statistics t)
 (setq use-package-minimum-reported-time 0.5)
 
-(use-package auto-package-update
-  :ensure t
-  :commands (auto-package-update-maybe auto-package-update-now)
-  :config
-  (setq auto-package-update-delete-old-versions t)
-  (setq auto-package-update-hide-results t)
-  (setq auto-package-update-interval 9001))
-
 (use-package async
   :ensure t
   :defer t
@@ -2146,7 +2138,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets")))
 
 (use-package monet
-  :vc (:url "https://github.com/stevemolitor/monet" :rev :newest)
+  ;; :vc (:url "https://github.com/stevemolitor/monet" :rev :newest)
+  :load-path "elpa/monet"
   :hook (claude-code-mode . monet-mode)
   :defines (monet-command-map)
   :bind-keymap ("C-c r i" . monet-command-map)
@@ -2159,7 +2152,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (which-key-add-keymap-based-replacements 'tychoish/robot-map "i" (cons "monet-map"  monet-command-map)))
 
 (use-package claude-code
-  :vc (:url "https://github.com/stevemolitor/claude-code.el" :rev :newest)
+  ;; :vc (claude-code
+  ;;      :url "https://github.com/stevemolitor/claude-code.el"
+  ;;      :rev :newest)
+  :load-path "elpa/claude-code"
   :defines (claude-code-command-map)
   :bind-keymap ("C-c r m" . claude-code-command-map)
   :commands (claude-code-mode)
@@ -2170,6 +2166,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :config
   (which-key-add-keymap-based-replacements 'tychoish/robot-map "m" (cons "claude-code" claude-code-command-map))
   (add-hook 'claude-code-process-environment-functions #'monet-start-server-function))
+
+(use-package inheritenv
+  :ensure t
+  :after (claude-code))
 
 (use-package eat
   :ensure t
