@@ -186,17 +186,18 @@
 
 (defun get-directory-default-candidate-list ()
   (let ((proj-root (approximate-project-root)))
-    (--> (get-directory-parents default-directory proj-root)
-	 (-join (list (thing-at-point 'filename)
-			 (thing-at-point 'existing-filename)
-			 default-directory
-			 user-emacs-directory
-			 user-home-directory)
-		it)
+    (--> (append
+	  (get-directory-parents default-directory proj-root)
+	  (approximate-project-buffers)
+	  (list (thing-at-point 'filename)
+		      (thing-at-point 'existing-filename)
+		      default-directory
+		      user-emacs-directory
+		      user-home-directory))
 	 (if (or (and (length< it 16)
 		      (not (f-equal-p user-home-directory proj-root)))
 		 current-prefix-arg)
-	     (-join  (f-directories proj-root) it)
+	     (-join (f-directories proj-root) it)
 	   it)
 	 (f-filter-directories '(cannonicalize unique) it))))
 
@@ -378,8 +379,12 @@ current directory and the project root, and `table' is table of `tychoish--compl
 	 (project-name (f-filename project-root-directory))
 	 (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
 	 (default-directory (or directory default-directory))
-         (directories (get-directory-parents default-directory project-root-directory))
-         (operation-table (ht-create)))
+         (directories (->> (approximate-project-buffers)
+			   (-keep #'buffer-directory)
+			   (-append (get-directory-parents default-directory project-root-directory))
+			   (-map #'f-full)
+			   (-distinct)))
+	 (operation-table (ht-create)))
 
     (when command
       (tychoish-cc-add-to-table
@@ -495,13 +500,13 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		(--flat-map
 		 (let* ((prefix (concat "." (f-path-separator)))
 			(directory it)
-			(dir (cond
+			(operation-directory (cond
 			      ((or (f-equal-p directory project-root-directory) (f-directory-contains-go-mod-file directory)) "./")
 			      ((string-prefix-p prefix directory) directory)
 			      ((string-prefix-p (f-path-separator) directory) directory)
 			      (t (concat prefix directory))))
-			(dir-with-dots (f-join dir "..." )))
-		   (->> (-l dir-with-dots dir)
+			(dir-with-dots (f-join operation-directory "..." )))
+		   (->> (-l dir-with-dots operation-directory)
 			(--flat-map
 			 (let* ((build-path it)
 				(short-path (f-collapse-homedir it))
@@ -522,31 +527,36 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				 (--map (make-compilation-candidate
 					 :name (format "run lint %s %s" it proj-path-for-name)
 					 :command (format "golangci-lint run --enable-only=%s %s" it build-path)
-					 :directory build-path
+					 :directory operation-directory
 					 :annotation (format "run (only) the %s linter in %s" it short-path))))
-			    (->> '(("go test -v"                "run go tests in verbose mode in")
-				   ("go test -v -cover"         "run go tests in verbose mode and collect coverage data in")
-				   ("go test -v -race"          "run go tests in verbose mode with the race detector in")
-				   ("go test -v -cover -race"   "run go tests in verbose mode with the race detector AND collect coverage data in")
-				   ("go test -cover"            "run go tests while collecting coverage data in")
-				   ("go test -race"             "run go tests with the race detector in")
-				   ("go test -race -cover"      "run go tests in verbose mode with the race detector AND collect coverage data in")
-				   ("go test"                   "run go tests in")
-				   ("go test -run=NOOP"         "build all sources, including tests in")
-				   ("go build"                  "build in"))
+			    (-- (make-compilation-candidate
+				 :name (s-join-with-space "go build" proj-path-for-name)
+				 :command (s-join-with-space "go build" build-path)
+				 :directory operation-directory
+				 :annotation (s-join-with-space "build in" project-name "at" short-path annotation-tag)))
+			    (->> '(("go test -v"                "verbose mode")
+				   ("go test -v -cover"         "the code coverage collector in verbose mode")
+				   ("go test -v -race"          "the race detector in verbose mode")
+				   ("go test -v -cover -race"   "the race detector and collecting coverage data in verbose mode")
+				   ("go test -cover"            "the code coverage collector")
+				   ("go test -race"             "the race detector")
+				   ("go test -race -cover"      "the race detector and collecting coverage data")
+				   ("go test"                   "default options")
+				   ("go test -run=NOOP"         "building all sources, including tests, without running tests"))
 				 (--flat-map
 				  (let ((command-prefix (car it))
 					(annotation-prefix (cadr it)))
-				    (->> '("10s"  "20s" "40s" "1m" "90s" "2m" "4m" "5m" "8m" "")
-					 (--map
-					  (let* ((is-default (equal it ""))
-						 (timeout-arg (unless is-default (concat "--timeout=" it)))
-						 (timeout-name (if is-default "(no timeout)" (format "(timeout %s)" it))))
-					    (make-compilation-candidate
-					     :name (s-join-with-space command-prefix it timeout-name proj-path-for-name)
-					     :command (s-join-with-space command-prefix timeout-arg build-path)
-					     :directory build-path
-					     :annotation (s-join-with-space annotation-prefix project-name "at" short-path annotation-tag "with" timeout-name))))))))))))))))
+				     (->> '("" "10s" "20s" "30s" "40s" "1m" "90s" "2m" "4m" "8m")
+					  (--map
+					   (let* ((timeout-spec it)
+						  (is-default (equal timeout-spec ""))
+						  (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
+						  (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
+					     (make-compilation-candidate
+					      :name (s-join-with-space command-prefix timeout-spec proj-path-for-name)
+					      :command (s-join-with-space command-prefix timeout-arg build-path)
+					      :directory operation-directory
+					      :annotation (format "run go test in %s with %s and %s" short-path annotation-prefix timeout-name annotation-tag))))))))))))))))
 
 (register-compilation-candidates
  :name "go-files"

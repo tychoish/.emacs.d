@@ -1198,6 +1198,15 @@ Returns the number of buffers killed."
 			   (current-buffer))
     (apply #'run-mode-hooks (--keep (-concat (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
 
+(defun buffer-directory (buf)
+  (when (bufferp buf)
+    (with-current-buffer buf
+      (let ((file-name (buffer-file-name buf)))
+	(cond ((null file-name) nil)
+	      ((f-directory-p file-name) file-name)
+	      ((f-file-p file-name) (f-dirname file-name))
+	      (t default-directory))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; files and notes
@@ -1220,12 +1229,15 @@ Returns the number of buffers killed."
 
 (declare-function project-root "project")
 (declare-function project-current "project")
+(declare-function project-buffers "project")
 
 (declare-function projectile-project-root "projectile")
 (declare-function projectile-project-name "projectile")
+(declare-function projectile-project-buffers "projectile")
 
 (defun approximate-project-root ()
-  (or (when (package-avalible-p 'projectile)
+  (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
+      (when (package-avalible-p 'projectile)
 	(trimmed-string-or-nil (projectile-project-root)))
       (when (and (featurep 'project) (project-current))
 	(project-root (project-current)))
@@ -1238,24 +1250,37 @@ Returns the number of buffers killed."
        (when (project-current) (project-root (project-current)))
        (f-filename (expand-file-name default-directory)))))
 
+(defun approximate-project-buffers ()
+  (or
+   (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
+   (when (package-avalible-p 'projectile) (projectile-project-buffers))
+   (when (and (featurep 'project) (project-current)) (project-buffers))
+   (->> (buffer-list)
+	(--filter
+	 (when-let* ((file-name (buffer-file-name it))
+		     (_ (f-child-of-p file-name default-directory)))
+	   it)))))
+
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (projectile-project-root)))
-  (--keep (with-current-buffer it
-	     (when (and
-		    (derived-mode-p mode)
-		    (file-in-directory-p default-directory directory))
-	       (current-buffer)))
-	  (buffer-list)))
+  (->> (buffer-list)
+       (--keep
+	(with-current-buffer it
+	  (when (and
+		 (derived-mode-p mode)
+		 (file-in-directory-p default-directory directory))
+	    (current-buffer))))))
 
 (cl-defun mode-buffers (&optional (mode major-mode) &key (visiting 'file))
-  (--keep (with-current-buffer it
-	    (when (and (derived-mode-p mode)
-		       (cond ((eq visiting 'read-only) (when buffer-read-only t))
-			     ((eq visiting 'stale) (when-let ((stale (funcall buffer-stale-function it)))
-						     (and stale (not 'fast))))
-			     ((eq visiting 'file) (when buffer-file-name t))
-			     ((eq visiting 'internal) (when (not buffer-file-name) t))
-			     (t t)))
-	      (current-buffer)))
-	  (buffer-list)))
+  (->> (buffer-list)
+       (--keep
+	(with-current-buffer it
+	  (when (and (derived-mode-p mode)
+		     (cond ((eq visiting 'read-only) (when buffer-read-only t))
+			   ((eq visiting 'stale) (when-let ((stale (funcall buffer-stale-function it)))
+						   (and stale (not 'fast))))
+			   ((eq visiting 'file) (when buffer-file-name t))
+			   ((eq visiting 'internal) (when (not buffer-file-name) t))
+			   (t t)))
+	    (current-buffer))))))
 
 (provide 'tychoish-common)
