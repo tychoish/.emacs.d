@@ -460,8 +460,10 @@
 ;; hooks -- functions that run in hooks configured in 'tychoish-core
 
 (defun with-hook-timing (inner &rest args)
-  (with-slow-op-timer (format "hook-runtime-<%s>" args)
-   (apply inner args)))
+  (->> args
+       (--mapc (with-slow-op-timer
+		(format "hook-runtime-<%s>" it)
+		(funcall inner it)))))
 
 (advice-add 'run-hooks :around 'with-hook-timing)
 

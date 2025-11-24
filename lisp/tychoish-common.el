@@ -701,7 +701,7 @@ of the equality function customization differs slightly."
     `(progn
        (defun ,cleanup-symbol ,args
 	 (with-slow-op-timer
-	  ,(format "<hygenic-hook> %s" name)
+	  ,(format "hook-hygenic-<%s>" name)
 
 	  ,(aif (cond (form
 		  form)
@@ -735,7 +735,6 @@ of the equality function customization differs slightly."
 	   t))
 
        ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks)))))
-
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
