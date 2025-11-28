@@ -274,7 +274,6 @@
 
     (--each ;; existing-compilation-buffers-for-project
         (mode-buffers-for-project
-         :directory (approximate-project-root)
          :mode 'compilation-mode)
 
       (with-current-buffer it
@@ -481,8 +480,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 (register-compilation-candidates
  :name "project-compilation-buffer-commands"
  :pipeline (->> (mode-buffers-for-project
-		 :mode 'compilation-mode
-		 :directory project-root-directory)
+		 :mode 'compilation-mode)
 		(--keep
 		 (with-current-buffer it
 		   (let ((key (trimmed-string-or-nil (car compilation-arguments))))
@@ -522,17 +520,18 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				(annotation-tag (if is-recursive
 						    "(with subdirectories)"
 						  "")))
+
 			   (-append
 			    (->> '("revive" "reassign" "prealloc" "predeclared" "nosprinthostport" "thelper" "makezero" "importas" "fatcontext" "exptostd" "exhaustruct")
 				 (--map (make-compilation-candidate
 					 :name (format "run lint %s %s" it proj-path-for-name)
 					 :command (format "golangci-lint run --enable-only=%s %s" it build-path)
-					 :directory operation-directory
+					 :directory directory
 					 :annotation (format "run (only) the %s linter in %s" it short-path))))
 			    (-- (make-compilation-candidate
 				 :name (s-join-with-space "go build" proj-path-for-name)
 				 :command (s-join-with-space "go build" build-path)
-				 :directory operation-directory
+				 :directory directory
 				 :annotation (s-join-with-space "build in" project-name "at" short-path annotation-tag)))
 			    (->> '(("go test -v"                "verbose mode")
 				   ("go test -v -cover"         "the code coverage collector in verbose mode")
@@ -555,7 +554,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 					     (make-compilation-candidate
 					      :name (s-join-with-space command-prefix timeout-spec proj-path-for-name)
 					      :command (s-join-with-space command-prefix timeout-arg build-path)
-					      :directory operation-directory
+					      :directory directory
 					      :annotation (format "run go test in %s with %s and %s" short-path annotation-prefix timeout-name annotation-tag))))))))))))))))
 
 (register-compilation-candidates

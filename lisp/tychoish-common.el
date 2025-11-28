@@ -1081,6 +1081,11 @@ interactively then remove duplicate items from the `kill-ring'."
 
 ;; bulk buffer killing -- kill groups of buffers efficiently
 
+(defun buffer-derived-mode-p (buffer mode)
+  (with-current-buffer buffer
+    (when (derived-mode-p mode)
+      t)))
+
 (defun save-all-buffers ()
   (interactive)
   (save-some-buffers t t))
@@ -1254,32 +1259,26 @@ Returns the number of buffers killed."
    (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
    (when (package-avalible-p 'projectile) (projectile-project-buffers))
    (when (and (featurep 'project) (project-current)) (project-buffers))
-   (->> (buffer-list)
-	(--filter
-	 (when-let* ((file-name (buffer-file-name it))
-		     (_ (f-child-of-p file-name default-directory)))
-	   it)))))
+   (let ((directory (expand-file-name default-directory)))
+     (->> (buffer-list)
+	  (--filter (with-current-buffer it
+		      (file-in-directory-p default-directory directory)))))))
 
-(cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (projectile-project-root)))
-  (->> (buffer-list)
-       (--keep
-	(with-current-buffer it
-	  (when (and
-		 (derived-mode-p mode)
-		 (file-in-directory-p default-directory directory))
-	    (current-buffer))))))
+(cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (approximate-project-root)))
+  (->> (approximate-project-buffers)
+       (--filter (buffer-derived-mode-p it mode))))
 
 (cl-defun mode-buffers (&optional (mode major-mode) &key (visiting 'file))
   (->> (buffer-list)
        (--keep
 	(with-current-buffer it
-	  (when (and (derived-mode-p mode)
-		     (cond ((eq visiting 'read-only) (when buffer-read-only t))
-			   ((eq visiting 'stale) (when-let ((stale (funcall buffer-stale-function it)))
-						   (and stale (not 'fast))))
-			   ((eq visiting 'file) (when buffer-file-name t))
-			   ((eq visiting 'internal) (when (not buffer-file-name) t))
-			   (t t)))
+	  (when (or (derived-mode-p mode)
+		    (and ((eq visiting 'read-only) (when buffer-read-only t))
+			  ((eq visiting 'stale) (when-let ((stale (funcall buffer-stale-function it)))
+						  (and stale (not 'fast))))
+			  ((eq visiting 'file) (when buffer-file-name t))
+			  ((eq visiting 'internal) (when (not buffer-file-name) t))
+			  (t t)))
 	    (current-buffer))))))
 
 (provide 'tychoish-common)

@@ -31,7 +31,7 @@
 	  (return-value (progn ,@body))
 	  (duration (time-to-seconds (time-since time))))
      (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-time-threshold))
-       (message "[slow-op]: %s: %.06fs" ,name duration))
+       (message "[op]: %s: %.06fs" ,name duration))
      return-value))
 
 (with-gc-suppressed
@@ -91,7 +91,7 @@
 
   (defun cli/time-reporting ()
     (when (string-prefix-p "--with-slow-op-timing" argi)
-      (message "[slow-op]: enabling reporting")
+      (message "[op]: enabling time reporting")
       (setq tychoish/slow-op-reporting t)))
 
   (add-to-list 'command-line-functions 'cli/resolve-id)
@@ -127,37 +127,33 @@
   (add-hook 'emacs-startup-hook 'tychoish/startup-report-timing 90)
 
   ;; (only) functions and macros used in the rest of the configuration
-  (with-slow-op-timer
-   "<init.el> load tychoish-common"
+  (with-slow-op-timer "<init.el> tychoish-common"
    (require 'tychoish-common)
    (declare-function tychoish/set-up-instance-name "tychoish-common")
    (tychoish/set-up-instance-name))
+
   ;; customized setup and configuration of core emacs and included packages
 
-  (with-slow-op-timer
-   "<init.el> load tychoish-bootstrap"
+  (with-slow-op-timer "<init.el> tychoish-bootstrap"
    (require 'tychoish-bootstrap)
    (setq custom-file (tychoish/conf-state-path "custom.el"))
    'tychoish-bootstrap)
 
   ;; remaining use-package declarations.
-  (with-slow-op-timer
-   "<init.el> load tychoish-core"
+
+  (with-slow-op-timer "<init.el> load tychoish-core"
    (require 'tychoish-core))
 
-  (with-slow-op-timer
-   "<core.el> load tychoish-mail"
+  (with-slow-op-timer "<init.el> tychoish-mail"
    (require 'tychoish-mail))
 
-  (with-slow-op-timer
-   "<core.el> load tychoish-org"
+  (with-slow-op-timer "<core.el> load tychoish-org"
    (require 'tychoish-org))
 
   ;; load the user/*.el files
-  (with-slow-op-timer
-   "<init.el> load all user files"
+
+  (with-slow-op-timer "<init.el> user-files"
    (declare-function tychoish-set-up-user-local-config 'tychoish-bootstrap)
    (tychoish-set-up-user-local-config))))
 
 (provide 'init)
-(put 'list-threads 'disabled nil)

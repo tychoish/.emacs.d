@@ -212,8 +212,8 @@
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
 
 (put 'narrow-to-region 'disabled nil)
-(put 'list-timers 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
+(put 'list-timers 'disabled nil)
 (put 'list-threads 'disabled nil)
 
 (with-eval-after-load "warnings"
@@ -461,9 +461,8 @@
 
 (defun with-hook-timing (inner &rest args)
   (->> args
-       (--mapc (with-slow-op-timer
-		(format "hook-runtime-<%s>" it)
-		(funcall inner it)))))
+   (--mapc (with-slow-op-timer (format "<hook> %s" it)
+	    (funcall inner it)))))
 
 (advice-add 'run-hooks :around 'with-hook-timing)
 
