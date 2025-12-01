@@ -19,19 +19,20 @@
      ,@body))
 
 ;;;###autoload
-(defvar tychoish/slow-op-reporting (or debug-on-error init-file-debug))
-
-(defmacro with-slow-op-timer (name &rest body)
-  "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
-  `(let* ((inhibit-message t)
-	  (time (current-time))
-	  (return-value (progn ,@body))
-	  (duration (time-to-seconds (time-since time))))
-     (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-time-threshold))
-       (message "[op]: %s: %.06fs" ,name duration))
-     return-value))
 
 (with-gc-suppressed
+ (defvar tychoish/slow-op-reporting (or debug-on-error init-file-debug))
+
+ (defmacro with-slow-op-timer (name &rest body)
+   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
+   `(let* ((inhibit-message t)
+	   (time (current-time))
+	   (return-value (progn ,@body))
+	   (duration (time-to-seconds (time-since time))))
+      (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-time-threshold))
+	(message "[op]: %s: %.06fs" ,name duration))
+      return-value))
+
  (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn)
    "Packages installed with the `--botstrap' CLI flag outside of use-package for performance.")
  (defvar tychoish/eglot-default-server-configuration nil)
