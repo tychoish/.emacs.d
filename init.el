@@ -22,6 +22,8 @@
 
 (with-gc-suppressed
  (defvar tychoish/slow-op-reporting (or debug-on-error init-file-debug))
+ (defvar tychoish/slow-op-threshold 0.01)
+
 
  (defmacro with-slow-op-timer (name &rest body)
    "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
@@ -29,7 +31,7 @@
 	   (time (current-time))
 	   (return-value (progn ,@body))
 	   (duration (time-to-seconds (time-since time))))
-      (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-time-threshold))
+      (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-threshold))
 	(message "[op]: %s: %.06fs" ,name duration))
       return-value))
 

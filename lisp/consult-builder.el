@@ -598,14 +598,14 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		(--flat-map
 		 (let ((filename (f-filename it))
 		       (directory it))
-		    (->> '((nil                "golangci-lint run"        "run `golangci-lint' in package")
-			   (nil                "golangci-lint run --fix"  "run `golangci-lint' and fix trivial errors in package")
+		    (->> '(("lint run"         "golangci-lint run"        "run `golangci-lint' in package")
+			   ("lint fix"         "golangci-lint run --fix"  "run `golangci-lint' and fix trivial errors in package")
 			   (nil                "go mod tidy"              "run `go mod tidy' in package")
 			   (nil                "go doc -all"              "go doc for entire package")
 			   ("go doc -outline"  "go doc --"                "go doc outline for package")
 			   ("<pkgs...> | xargs go test -race -v"
 			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -v"
-			        "run all tests (with the race detector) for all submodules test")
+			        "run all tests (with the race detector) for all submodules of")
 			   ("<pkgs...> | xargs go test -run=NOOP ./..."
 			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -run=NOOP"
 				"build all tests in all packages and sub-packages for"))

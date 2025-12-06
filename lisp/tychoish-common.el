@@ -355,8 +355,10 @@ item in a list. The lists that result from the map operation are then
 concatenated or joined. This provides a dash.el conforming API for the
 `mapcan' operation.")
 
-(defalias '-mapc #'mapc)
 (defalias '-join #'nconc)
+(defalias '-reverse #'nreverse)
+
+(defalias '-mapc #'mapc)
 (defalias '-append #'append)
 
 (defalias '-c #'cons)
