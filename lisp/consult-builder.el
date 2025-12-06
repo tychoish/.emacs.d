@@ -504,59 +504,62 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			      ((string-prefix-p prefix directory) directory)
 			      ((string-prefix-p (f-path-separator) directory) directory)
 			      (t (concat prefix directory))))
-			(dir-with-dots (f-join operation-directory "..." )))
-		   (->> (-l dir-with-dots operation-directory)
-			(--flat-map
-			 (let* ((build-path it)
-				(short-path (f-collapse-homedir it))
-				(package-path (string-replace project-root-directory "" build-path))
-				(is-recursive (string-suffix-p "..." it))
-				(path-for-project-tag (cond ((f-equal-p build-path project-root-directory) "")
-							    ((equal short-path package-path) "")
-							    (t package-path)))
-				(proj-path-tag (format "<%s>/%s" project-name path-for-project-tag))
-				(proj-path-for-name (s-join-with-space (format "<%s>/%s" project-name
-									       (f-visually-compress-to-four path-for-project-tag)
-									       (if is-recursive " [recursive]" ""))))
-				(annotation-tag (if is-recursive
-						    "(with subdirectories)"
-						  "")))
-
-			   (-append
-			    (->> '("revive" "reassign" "prealloc" "predeclared" "nosprinthostport" "thelper" "makezero" "importas" "fatcontext" "exptostd" "exhaustruct")
-				 (--map (make-compilation-candidate
-					 :name (format "run lint %s %s" it proj-path-for-name)
-					 :command (format "golangci-lint run --enable-only=%s %s" it build-path)
-					 :directory directory
-					 :annotation (format "run (only) the %s linter in %s" it short-path))))
-			    (-- (make-compilation-candidate
-				 :name (s-join-with-space "go build" proj-path-for-name)
-				 :command (s-join-with-space "go build" build-path)
+			(operation-directory-tree (f-join operation-directory "..." ))
+			(short-path (f-collapse-homedir operation-directory))
+			(package-path (string-replace project-root-directory "" operation-directory))
+			(is-recursive (string-suffix-p "..." it))
+			(path-for-project-tag (cond ((f-equal-p operation-directory project-root-directory) "")
+						    ((equal short-path package-path) "")
+						    (t package-path)))
+			(proj-path-tag (format "<%s>/%s" project-name path-for-project-tag))
+			(proj-path-for-name (s-join-with-space (format "<%s>/%s" project-name
+								       (f-visually-compress-to-four path-for-project-tag))))
+			(proj-path-recursive (f-join proj-path-for-name "...")))
+		   (-append
+		    (->> '("revive" "reassign" "prealloc" "predeclared" "nosprinthostport" "thelper" "makezero" "importas" "fatcontext" "exptostd" "exhaustruct")
+			 (--map (make-compilation-candidate
+				 :name (format "lint %s %s" it proj-path-for-name)
+				 :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
 				 :directory directory
-				 :annotation (s-join-with-space "build in" project-name "at" short-path annotation-tag)))
-			    (->> '(("go test -v"                "verbose mode")
-				   ("go test -v -cover"         "the code coverage collector in verbose mode")
-				   ("go test -v -race"          "the race detector in verbose mode")
-				   ("go test -v -cover -race"   "the race detector and collecting coverage data in verbose mode")
-				   ("go test -cover"            "the code coverage collector")
-				   ("go test -race"             "the race detector")
-				   ("go test -race -cover"      "the race detector and collecting coverage data")
-				   ("go test"                   "default options")
-				   ("go test -run=NOOP"         "building all sources, including tests, without running tests"))
+				 :annotation (format "run (only) the %s linter in %s" it short-path))))
+		    (-- (make-compilation-candidate
+			 :name (s-join-with-space "go build" proj-path-for-name)
+			 :command (s-join-with-space "go build" operation-directory)
+			 :directory directory
+			 :annotation (s-join-with-space "build in" project-name "at" short-path))
+			(make-compilation-candidate
+			 :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
+			 :command (s-join-with-space "go build" operation-directory-tree)
+			 :directory directory
+			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively")))
+		    (->> '(("go test -v"                "verbose mode")
+			   ("go test -v -cover"         "the code coverage collector in verbose mode")
+			   ("go test -v -race"          "the race detector in verbose mode")
+			   ("go test -v -cover -race"   "the race detector and collecting coverage data in verbose mode")
+			   ("go test -cover"            "the code coverage collector")
+			   ("go test -race"             "the race detector")
+			   ("go test -race -cover"      "the race detector and collecting coverage data")
+			   ("go test"                   "default options")
+			   ("go test -run=NOOP"         "building all sources, including tests, without running tests"))
+			 (--flat-map
+			  (let ((command-prefix (car it))
+				(annotation-prefix (cadr it)))
+			    (->> '("" "10s" "20s" "30s" "40s" "1m" "90s" "2m" "4m" "8m")
 				 (--flat-map
-				  (let ((command-prefix (car it))
-					(annotation-prefix (cadr it)))
-				     (->> '("" "10s" "20s" "30s" "40s" "1m" "90s" "2m" "4m" "8m")
-					  (--map
-					   (let* ((timeout-spec it)
-						  (is-default (equal timeout-spec ""))
-						  (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
-						  (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
-					     (make-compilation-candidate
-					      :name (s-join-with-space command-prefix timeout-spec proj-path-for-name)
-					      :command (s-join-with-space command-prefix timeout-arg build-path)
-					      :directory directory
-					      :annotation (format "run go test in %s with %s and %s" short-path annotation-prefix timeout-name annotation-tag))))))))))))))))
+				  (let* ((timeout-spec it)
+					 (is-default (equal timeout-spec ""))
+					 (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
+					 (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
+				    (-- (make-compilation-candidate
+					 :name (s-join-with-space command-prefix timeout-spec proj-path-for-name)
+					 :command (s-join-with-space command-prefix timeout-arg operation-directory)
+					 :directory directory
+					 :annotation (format "run go test in %s with %s and %s" short-path annotation-prefix timeout-name))
+					(make-compilation-candidate
+					 :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
+					 :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
+					 :directory directory
+					 :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name))))))))))))))
 
 (register-compilation-candidates
  :name "go-files"
