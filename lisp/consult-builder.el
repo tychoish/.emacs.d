@@ -43,6 +43,17 @@
   (bind-keys :map 'tychoish-core-map
 	     ("c" . consult-builder)))
 
+(defun tychoish--go-module (&optional directory)
+  (if go-module-path
+      go-module-path
+    (let* ((output (with-default-directory directory
+ 		    (s-trim (shell-command-to-string "go list"))))
+	   (proj-root (approximate-project-root)))
+      (if (or (f-equal-p default-directory directory)
+	      (s-prefix proj-root (f-full default-directory)))
+	  (setq-local go-module-path output)
+	output))))
+
 (defun consult-builder ()
   "Run compile operation selecting compile buffer and commands."
   (interactive)
@@ -531,7 +542,15 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
 			 :command (s-join-with-space "go build" operation-directory-tree)
 			 :directory directory
-			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively")))
+			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively"))
+			(make-compilation-candidate
+			 :name (s-join-with-space "go test -cover -race +report +html" proj-path-for-name)
+			 :directory directory
+			 :command (s-join-with-space
+				   "go test -coverprofile=coverage.out -race" operation-directory ";"
+				   (s-concat "go tool cover -func=coverage.out | sed -r 's%^github.com/\\w+/\\w+/%" project-root-directory "%' | column -t;")
+				   "go tool cover -html=coverage.out -o=coverage-html;")
+			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
 		    (->> '(("go test -v"                "verbose mode")
 			   ("go test -v -cover"         "the code coverage collector in verbose mode")
 			   ("go test -v -race"          "the race detector in verbose mode")
@@ -689,7 +708,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 (if (f-equal-p project-root-directory directory)
 			     (make-compilation-candidate
 			      :directory directory
-			      :command (format "cargo %s" it)
+			      :cTrishulommand (format "cargo %s" it)
 			      :annotation (format "run cargo target '%s' in project root (%s)" it annotation-directory))
 			   (make-compilation-candidate
 			    :directory directory

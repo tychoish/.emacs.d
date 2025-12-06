@@ -355,10 +355,8 @@ item in a list. The lists that result from the map operation are then
 concatenated or joined. This provides a dash.el conforming API for the
 `mapcan' operation.")
 
-(defalias '-join #'nconc)
-(defalias '-reverse #'nreverse)
-
 (defalias '-mapc #'mapc)
+(defalias '-join #'nconc)
 (defalias '-append #'append)
 
 (defalias '-c #'cons)
@@ -624,7 +622,6 @@ of the equality function customization differs slightly."
     `(defun ,function-name nil
        (run-hooks (intern ,hook-name)))))
 
-
 (cl-defmacro create-toggle-functions (value &optional &key local keymap key)
   (let* ((name (symbol-name value))
 	 (suffix (when local "local"))
@@ -644,6 +641,11 @@ of the equality function customization differs slightly."
        ops)
     ,(when keymap
        `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
+
+(defmacro with-default-directory (path &rest body)
+  "Run the body with `default-directory' set to the path provided"
+  `(let ((default-directory ,path))
+     ,@body))
 
 (defmacro with-silence (&rest body)
   "Totally suppress message from either the minibuffer or the *Messages* buffer.."
@@ -704,7 +706,7 @@ of the equality function customization differs slightly."
     `(progn
        (defun ,cleanup-symbol ,args
 	 (with-slow-op-timer
-	  ,(format "hook-hygenic-<%s>" name)
+	  ,(format "<hygenic-hook> %s" name)
 
 	  ,(aif (cond (form
 		  form)
@@ -738,6 +740,7 @@ of the equality function customization differs slightly."
 	   t))
 
        ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks)))))
+
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
@@ -1267,7 +1270,7 @@ Returns the number of buffers killed."
 	  (--filter (with-current-buffer it
 		      (file-in-directory-p default-directory directory)))))))
 
-(cl-defun mode-buffers-for-project (&optional &key (mode major-mode) (directory (approximate-project-root)))
+(cl-defun mode-buffers-for-project (&optional &key (mode major-mode))
   (->> (approximate-project-buffers)
        (--filter (buffer-derived-mode-p it mode))))
 
