@@ -1,4 +1,4 @@
-();; -*- lexical-binding: t; -*-
+;; -*- lexical-binding: t; -*-
 
 (require 'f)
 (require 's)
@@ -621,6 +621,7 @@ of the equality function customization differs slightly."
 	 (function-name (intern (concat "run-hooks-for-" mode-name))))
     `(defun ,function-name nil
        (run-hooks (intern ,hook-name)))))
+
 
 (cl-defmacro create-toggle-functions (value &optional &key local keymap key)
   (let* ((name (symbol-name value))

@@ -465,6 +465,7 @@
 	    (funcall inner it)))))
 
 (advice-add 'run-hooks :around 'with-hook-timing)
+(advice-add 'run-hooks-with-args :around 'with-hook-timing)
 
 (setq default-frame-alist (unless (gui-p) '((background-color . nil))))
 
@@ -850,6 +851,8 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
+
+(create-toggle-functions tychoish/slow-op-reporting)
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

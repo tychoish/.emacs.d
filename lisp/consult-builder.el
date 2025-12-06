@@ -217,7 +217,7 @@
 					((f-directory-p it) it))))))
 
     (when cannonicalize
-      (setq sequence (-map #'f-slash sequence)))
+      (setq sequence (-map #'f-full sequence)))
 
     (when (option-set-p 'unique options)
       (setq sequence (f-distinct sequence)))
@@ -381,6 +381,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
          (directories (->> (approximate-project-buffers)
 			   (-keep #'buffer-directory)
 			   (-append (get-directory-parents default-directory project-root-directory))
+			   (-filter #'f-directory-p)
 			   (-map #'f-full)
 			   (-distinct)))
 	 (operation-table (ht-create)))

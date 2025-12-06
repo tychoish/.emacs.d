@@ -2176,5 +2176,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :after (claude-code)
   :defer t)
 
+(use-package uuidgen
+  :ensure t
+  :defer t)
+
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here
