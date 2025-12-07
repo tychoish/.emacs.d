@@ -644,17 +644,20 @@ of the equality function customization differs slightly."
 
 (defmacro with-default-directory (path &rest body)
   "Run the body with `default-directory' set to the path provided"
+  (declare (indent 1) (debug t))
   `(let ((default-directory ,path))
      ,@body))
 
 (defmacro with-silence (&rest body)
   "Totally suppress message from either the minibuffer or the *Messages* buffer.."
+  (declare (indent 1) (debug t))
   `(let ((inhibit-message t)
          (message-log-max nil))
      ,@body))
 
 (defmacro with-quiet (&rest body)
   "Suppress any messages from appearing in the minibuffer area."
+  (declare (indent 1) (debug t))
   `(let ((inhibit-message t))
      ,@body))
 
@@ -667,6 +670,7 @@ of the equality function customization differs slightly."
 
 (defmacro with-temp-keymap (map &rest body)
   "Create a temporary MAP and return it after evaluating it in the BODY."
+  (declare (indent 1) (debug t))
   `(let ((,map (make-sparse-keymap)))
      ,@body
      map))
@@ -701,7 +705,6 @@ of the equality function customization differs slightly."
 
     (unless hooks
       (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
-
 
     `(progn
        (defun ,cleanup-symbol ,args
@@ -1209,6 +1212,7 @@ Returns the number of buffers killed."
     (apply #'run-mode-hooks (--keep (-concat (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
 
 (defun buffer-directory (buf)
+  "Return the `default-directory' of the provide buffer."
   (when (bufferp buf)
     (with-current-buffer buf
       (let ((file-name (buffer-file-name buf)))
