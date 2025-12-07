@@ -170,12 +170,12 @@
 
 (defun clean-directory-options-for-selection (input)
   "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
-  (when input
-    (->> input
-	 (-keep #'trimmed-string-or-nil)
-	 (--map (or (when (f-absolute-p it) it)
-		    (expand-file-name it)))
-	 (f-distinct))))
+  (->> input
+       (-keep #'trimmed-string-or-nil)
+       (--map (or (when (f-absolute-p it) it)
+		  (expand-file-name it)))
+       (f-distinct)))
+
 
 (defun get-directory-parents (&optional start stop)
   "Generate list of intermediate paths between `START' and `STOP'."
@@ -210,33 +210,6 @@
 	   it)
 	 (f-filter-directories '(cannonicalize unique) it))))
 
-(defun f-filter-directories (options &rest sequence)
-  (let ((cannonicalize (option-set-p 'cannonicalize options)))
-    (setq sequence (->> (if (stringp (car sequence))
-			    sequence
-			  (car sequence))
-			(-keep #'trimmed-string-or-nil)
-			(--map (or (when (f-absolute-p it) it)
-				   (if cannonicalize
-				       (expand-file-name it)
-				     it)))
-			(--keep (let ((path it))
-				  (cond ((f-file-p path)
-					 (when (f-directory-p (setq path (f-dirname path))) path))
-					((f-directory-p it) it))))))
-
-    (when cannonicalize
-      (setq sequence (-map #'f-full sequence)))
-
-    (when (option-set-p 'unique options)
-      (setq sequence (f-distinct sequence)))
-
-    (-filter #'f-directory-p sequence)))
-
-(defun f-distinct (sequence)
-  (let ((-compare-fn #'f-equal-p))
-    (-distinct sequence)))
-
 (defun option-set-p (opt options)
   (or (eq opt options)
       (and (listp options) (memq opt options))))
@@ -252,7 +225,7 @@
          (names (->> candidates
                      (ht-values)
 		     (--map (tychoish-compilation-candidate-name it))
-                     (-sort #'string-lessp)))
+                     (-sort #'string-greaterp)))
          (longest-id (length-of-longest-item names))
          (selection-name
           (consult--read
@@ -309,7 +282,6 @@
 
     buffer-table))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; compilation candidate discovery
@@ -347,7 +319,7 @@
    :documentation "a function to run when the compilation completes"
    :type function)
   (notification-threshold
-   300
+   30
    :documentation "if a command runs longer than this number of seconds, send a notification when the compile completes."
    :type integer))
 
@@ -392,42 +364,43 @@ current directory and the project root, and `table' is table of `tychoish--compl
 (defvar-local tychoish--cached-compilation-candidates nil)
 
 (defun tychoish--get-compilation-candidates (&optional directory command)
- "Generate a sequence of candidate compilation commands based on mode and directory structure."
+  "Generate a sequence of candidate compilation commands based on mode and directory structure."
 
- (when current-prefix-arg
-   (tychoish--compilation-candidate-clear-cache))
+  (when current-prefix-arg
+    (tychoish--compilation-candidate-clear-cache))
 
- (if tychoish--cached-compilation-candidates
-     tychoish--cached-compilation-candidates
-   (let* ((project-root-directory (approximate-project-root))
-	  (project-name (f-filename project-root-directory))
-	  (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
-	  (default-directory (or directory default-directory))
-          (directories (->> (approximate-project-buffers)
-			    (-keep #'buffer-directory)
-			    (-append (get-directory-parents default-directory project-root-directory))
-			    (-filter #'f-directory-p)
-			    (-map #'f-full)
-			    (-distinct)))
-	  (operation-table (ht-create)))
+  (unless tychoish--cached-compilation-candidates
+    (let* ((project-root-directory (approximate-project-root))
+	   (project-name (f-filename project-root-directory))
+	   (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
+	   (default-directory (or directory default-directory))
+           (directories (->> (approximate-project-buffers)
+			     (-keep #'buffer-directory)
+			     (-filter #'f-directory-p)
+			     (-map #'f-full)
+			     (-append (get-directory-parents default-directory project-root-directory))
+			     (-distinct)))
+	   (operation-table (ht-create)))
 
-     (when command
-       (tychoish-cc-add-to-table
-	operation-table
-	(make-compilation-candidate
-	 :name (s-truncate 32 command "...")
-    	 :command command
-    	 :annotation "runtime suggested candidate"
-    	 :directory (or directory project-root-directory default-directory))))
+      (when command
+	(tychoish-cc-add-to-table
+	 operation-table
+	 (make-compilation-candidate
+	  :name (s-truncate 32 command "...")
+    	  :command command
+    	  :annotation "runtime suggested candidate"
+    	  :directory (or directory project-root-directory default-directory))))
 
-     (run-hook-with-args
-      'tychoish-compilation-candidate-functions
-      project-root-directory
-      project-name
-      directories
-      operation-table)
+      (run-hook-with-args
+       'tychoish-compilation-candidate-functions
+       project-root-directory
+       project-name
+       directories
+       operation-table)
 
-     (setq-local tychoish--cached-comilation-candidates operation-table))))
+      (setq-local tychoish--cached-compilation-candidates operation-table)))
+
+  tychoish--cached-compilation-candidates)
 
 (cl-defun compilation-candidate-cache-p (&optional (buffer (current-buffer)))
   (with-current-buffer buffer
@@ -439,13 +412,6 @@ current directory and the project root, and `table' is table of `tychoish--compl
   (->> (buffer-list)
        (-keep #'compilation-candidate-cache-p)
        (-mapc #'tychoish--compilation-candidate-clear-cache)))
-
-(cl-defun compilation-candidate-clear-cache (&optional (buffer (current-buffer)))
-  (interactive)
-  (if current-prefix-arg
-      (compilation-candidate-clear-all-caches)
-    (with-current-buffer it
-      (setq-local tychoish--cached-compilation-candidates nil))))
 
 (cl-defun compilation-candidate-clear-cache (&optional (buffer (current-buffer)))
   (interactive)
@@ -544,7 +510,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 :directory directory
 			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively"))
 			(make-compilation-candidate
-			 :name (s-join-with-space "go test -cover +report +html +race" proj-path-for-name)
+			 :name (s-join-with-space "go test +race +cover +report" proj-path-for-name)
 			 :directory directory
 			 :command (s-join-with-space
 				   "go test -coverprofile=coverage.out -race" operation-directory ";"
@@ -797,7 +763,6 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				  :command command
 				  :directory operation-directory
 				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)))))))))
-
 
 
 (defun tychoish--vale-insert-statistics (buffer _message &key filename)

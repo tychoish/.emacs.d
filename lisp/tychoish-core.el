@@ -1620,8 +1620,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :defines (golangci-lint)
   :after (flycheck go-ts-mode)
+  :commands (flycheck-golangci-lint-setup)
   :config
-  (add-to-list 'flycheck-checkers 'golangci-lint)
   (setq flycheck-go-vet-shadow t)
   (setq flycheck-go-build-install-deps nil)
   (setq flycheck-golangci-lint-fast t)

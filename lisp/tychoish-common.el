@@ -519,6 +519,10 @@ of the equality function customization differs slightly."
   (when (f-exists-p path)
     path))
 
+(defun f-distinct (sequence)
+  (let ((-compare-fn #'f-equal-p))
+    (-distinct sequence)))
+
 (defmacro f-directories-containing-file-with-extension-function (extension)
   (when (s-prefix-p "." extension)
     (setq extension (string-trim-left extension "^\\.")))
@@ -587,6 +591,29 @@ of the equality function customization differs slightly."
   `(defun ,(intern (concat "f-visually-compress-to-" (number-to-word num))) (path)
        (f-visually-compress-path ,num path)))
 
+(defun f-filter-directories (options &rest sequence)
+  (let ((cannonicalize (option-set-p 'cannonicalize options)))
+    (setq sequence (->> (if (stringp (car sequence))
+			    sequence
+			  (car sequence))
+			(-keep #'trimmed-string-or-nil)
+			(--map (or (when (f-absolute-p it) it)
+				   (if cannonicalize
+				       (expand-file-name it)
+				     it)))
+			(--keep (let ((path it))
+				  (cond ((f-file-p path)
+					 (when (f-directory-p (setq path (f-dirname path))) path))
+					((f-directory-p it) it))))))
+
+    (when cannonicalize
+      (setq sequence (-map #'f-full sequence)))
+
+    (when (option-set-p 'unique options)
+      (setq sequence (f-distinct sequence)))
+
+    (-filter #'f-directory-p sequence)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; macros -- helper macros for common operations
@@ -641,6 +668,10 @@ of the equality function customization differs slightly."
        ops)
     ,(when keymap
        `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
+
+(defmacro with-prefix-arg (arg &rest body)
+  `(let ((current-prefix-arg ,arg))
+     ,@body))
 
 (defmacro with-default-directory (path &rest body)
   "Run the body with `default-directory' set to the path provided"
@@ -948,7 +979,6 @@ were recompiled."
   (interactive "nTab width: ")
   (setq-local tab-width num-spaces))
 
-;;;###autoload
 (defun font-lock-show-tabs ()
   "Return a font-lock style keyword for tab characters."
   '(("\t" 0 'trailing-whitespace prepend)))
@@ -963,7 +993,6 @@ were recompiled."
     (remove-hook 'before-save-hook 'whitespace-cleanup)
     (message "turned off whitespace-cleanup for '%s'" (buffer-file-name (current-buffer)))))
 
-;;;###autoload
 (defun font-lock-width-keyword (width)
   "Return a font-lock style keyword for strings beyond WIDTH that use `font-lock-warning-face'."
   `((,(format "^%s\\(.+\\)" (make-string width ?.))
@@ -1077,14 +1106,28 @@ interactively then remove duplicate items from the `kill-ring'."
    :documentation "directory where command was run"))
 
 (defun p-bash-lines-sync (command)
-  (let* (exit-code
-	 (results (process-lines
-		   "bash"
-		   "-c" command)))
-    (make-p-result
-     :code exit-code
-     :command command
-     :output results)))
+  (let ((proc (make-p-result :command command
+			     :wrapper '("bash" "-c"))))
+    (setf (p-result-output proc)
+	  (apply #'process-lines-handling-status
+		 (append
+		  (list
+		   (car (p-result-wrapper proc)) ;; e.g. "bash"
+		   (lambda (code) (setf (p-result-code proc) code))) ;; status-handler
+		  (strings-list (cadr (p-result-wrapper proc)))
+		  (strings-list command))))
+    proc))
+
+(defun strings-list (&rest input &key options)
+  "Try to produce a valid list-of strings. Returning lists of strings, filtering or coercing as needed. "
+  (if (list-of-strings-p input)
+      input
+    (->> input
+	 (--keep (cond
+		  ((stringp it) it)
+		  ((option-set-p 'filter options) nil)
+		  ((option-set-p 'stringify) (format "%s" it))
+		  (t (user-error "no way to handle %s value %s" (type-of it) it)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
