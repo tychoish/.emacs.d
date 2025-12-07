@@ -83,25 +83,14 @@
      (lambda () (let ((filename (buffer-file-name)))
 		  (and filename (file-in-directory-p filename project-root-directory)))))
 
-    (if compile-buf
+    (if (and compile-buf (y-or-n-p "recompile?"))
         (with-current-buffer compile-buf
-          (when (or current-prefix-arg command)
-            (setq compilation-arguments nil))
-
-          (let* ((cc-result (tychoish--compilation-read-command (or command compile-command)))
-		 (selection-name (setq candidate-name (car cc-result)))
-		 (table (setq candidates (cdr cc-result)))
-		 (candidate (ht-get table selection-name))
-		 (compile-command (tychoish-compilation-candidate-command candidate))
-		 (default-directory (or (tychoish-compilation-candidate-directory candidate) default-directory)))
-
-            (recompile current-prefix-arg)))
-
+            (recompile current-prefix-arg))
       (let* ((cc-result (tychoish--compilation-read-command command))
 	     (selection-name (setq candidate-name (car cc-result)))
 	     (table (setq candidates (cdr cc-result)))
 	     (candidate (ht-get table selection-name))
-	     (compile-command (tychoish-compilation-candidate-command candidate))
+	     (compile-command (read-from-minibuffer "edit command => " (tychoish-compilation-candidate-command candidate)))
 	     (default-directory (or (tychoish-compilation-candidate-directory candidate) default-directory)))
 
 	(compilation-start
@@ -117,13 +106,15 @@
        :make-unique t
        :args (compilation-buffer msg)
        :form (tychoish/compile--post-hook-collection
-	      op-name (buffer-name compilation-buffer) start-at
+	      compilation-buffer
+	      msg
+	      start-at
 	      :process-name "sardis-notify"
 	      :program "sardis"
-	      :args `("notify" "send" ,(or msg ""))
+	      :args '("notify" "send")
 	      :send-when (or current-prefix-arg
-			     (< 30 (float-time (time-since (current-idle-time))))
-			     (not (get-buffer-window (or compile-buf op-name) t))))))
+			     (not (get-buffer-window (or compile-buf op-name) t))
+			     (< 10 (float-time (time-since (current-idle-time))))))))
 
       (when-let* ((candidate (ht-get candidates candidate-name))
 		  (hook (tychoish-compilation-candidate-hook candidate)))

@@ -358,6 +358,7 @@ concatenated or joined. This provides a dash.el conforming API for the
 (defalias '-mapc #'mapc)
 (defalias '-join #'nconc)
 (defalias '-append #'append)
+(defalias '-reverse #'nreverse)
 
 (defalias '-c #'cons)
 (defalias '-l #'list)
@@ -707,10 +708,20 @@ of the equality function customization differs slightly."
      map))
 
 (cl-defmacro add-hygenic-one-shot-hook
-    (&key name hook
-	  function result body form operation
-	  ;; flages and options; with defaults
-	  (args nil) (local nil) (depth 0) (make-unique nil) (cleanup nil))
+    (&key
+     name
+     hook
+     function
+     result
+     body
+     form
+     operation
+     ;; flages and options; with defaults
+     (args nil)
+     (local nil)
+     (depth 0)
+     (make-unique nil)
+     (cleanup nil))
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
 	 (cleanup-symbol (intern (s-join-with-hyphen "hygenic-one-shot" name (symbol-name unique-tag))))
@@ -869,34 +880,45 @@ were recompiled."
 ;; compile -- compilation mode helpers
 
 (cl-defun tychoish/compile--post-hook-collection
-    (selection buffer-name started-at
-	       &optional
-	       &key process-name program args send-when
-	       (alert-threshold 60) (notification-threshold 120))
+    (buffer
+     compile-result-message
+     started-at
+     &optional
+     &key
+     process-name
+     program
+     args
+     send-when
+     (alert-threshold 60)
+     (notification-threshold 120))
   (let* ((end-at (current-time))
 	 (duration (time-subtract end-at started-at))
-	 (msg (format "completed %s in %.06fs" selection (float-time duration))))
+	 (compile-result-message (s-trim compile-result-message))
+	 (msg (format "build %s in %.06fs -- %s"
+		      compile-result-message
+		      (float-time duration)
+		      (with-current-buffer buffer
+		        (s-trim (car compilation-arguments))))))
 
     (when (or send-when
 	      (> alert-threshold (float-time (time-since (current-idle-time))))
 	      (and (> (float-time duration) notification-threshold) process-name program args))
-      (setq args (append args (list msg)))
 
       (apply #'async-start-process
 	     (pa "emacs-process-name" :is process-name)
 	     (pa "program" :is program)
-	     (pa "on-finish" :is (lambda (out) (message "notify process completed [%s] for %s" out selection)))
-	     args))
+	     (pa "on-finish" :is (lambda (out) (message "INFO: notify process for %s completed [%s] with %s" (buffer-name buffer) out compile-result-message)))
+	     (-append args (strings-list (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
 
     (when (or send-when
 	      (> (/ alert-threshold 2) (float-time (time-since (current-idle-time))))
 	      (> alert-threshold (ffloor (float-time duration))))
       (alert
        msg
-       :title selection
-       :buffer (get-buffer buffer-name)))
+       :title (format "%s:%s:%s" tychoish/emacs-instance-id (buffer-name buffer) compile-result-message)
+       :buffer buffer))
 
-    (with-current-buffer (get-buffer buffer-name)
+    (with-current-buffer buffer
       (save-excursion
 	(setq buffer-read-only nil)
 	(goto-char (point-min))
@@ -905,9 +927,15 @@ were recompiled."
 	(goto-char (point-max))
 	(compilation-insert-annotation
 	 (format "\n--- %s completed in %.06fs at %s\n\n"
-		 selection (float-time duration)
+		 compile-result-message (float-time duration)
 		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
 	 (setq buffer-read-only t)))))
+
+(defun compilation-finish-functions-reset-all ()
+  (interactive)
+  (->> (mode-buffers 'compilation-mode)
+       (--mapc (with-current-buffer it
+		 (setq-local compilation-finish-functions nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1321,17 +1349,11 @@ Returns the number of buffers killed."
   (->> (approximate-project-buffers)
        (--filter (buffer-derived-mode-p it mode))))
 
-(cl-defun mode-buffers (&optional (mode major-mode) &key (visiting 'file))
+(cl-defun mode-buffers (&optional (mode major-mode))
   (->> (buffer-list)
        (--keep
 	(with-current-buffer it
-	  (when (or (derived-mode-p mode)
-		    (and ((eq visiting 'read-only) (when buffer-read-only t))
-			  ((eq visiting 'stale) (when-let ((stale (funcall buffer-stale-function it)))
-						  (and stale (not 'fast))))
-			  ((eq visiting 'file) (when buffer-file-name t))
-			  ((eq visiting 'internal) (when (not buffer-file-name) t))
-			  (t t)))
+	  (when (derived-mode-p mode)
 	    (current-buffer))))))
 
 (provide 'tychoish-common)

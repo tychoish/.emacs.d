@@ -145,12 +145,13 @@ Does nothing if the current post is not in the drafts folder."
        :make-unique t
        :args (compilation-buffer message)
        :form (tychoish/compile--post-hook-collection
-		   selection op-buffer-name start-at
-		   :process-name "sardis-notify"
-		   :program "sardis"
-		   :args '("notify" "send" message)
-		   :send-when (< 30 (float-time (time-since (current-idle-time))))))
-
+	      (get-buffer op-buffer-name)
+	      selection
+	      start-at
+	      :process-name "sardis-notify"
+	      :program "sardis"
+	      :args '("notify" "send")
+	      :send-when (< 30 (float-time (time-since (current-idle-time))))))
 
       (save-excursion
         (goto-char (point-min))
