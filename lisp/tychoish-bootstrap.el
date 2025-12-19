@@ -43,6 +43,7 @@
 (bind-keys
  ("C-x m" . execute-extended-command)
  ("C-x C-m" . execute-extended-command)
+ ("C-x x c" . system-clipboard-commands)
  ("M-X" . execute-extended-command-for-buffer)
  ("C-x b" . switch-to-buffer) ;; vs consult-buffer
  ("C-x l" . goto-line)

@@ -505,8 +505,8 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 :directory directory
 			 :command (s-join-with-space
 				   "go test -coverprofile=coverage.out -race" operation-directory ";"
-				   (s-concat "go tool cover -func=coverage.out | sed -r 's%^github.com/\\w+/\\w+/%" (f-relative project-root-directory) "%' | column -t;")
-				   "go tool cover -html=coverage.out -o=coverage-html;")
+				   (s-concat "go tool cover -func=coverage.out | sed -r 's%^github.com/.+/.+/%" (f-full (f-relative project-root-directory)) "%' | column -t;")
+				   "go tool cover -html=coverage.out -o=coverage.html;")
 			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
 		    (->> '(("go test -v"                "verbose mode")
 			   ("go test -v -cover"         "the code coverage collector in verbose mode")
