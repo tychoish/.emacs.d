@@ -1328,7 +1328,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :delight
   (go-ts-mode "go.ts")
   (go-mod-ts-mode "go.mod.ts")
-  (go-mode "go.ts")
+  (go-mode "go")
   :mode (("\\.go$" . go-ts-mode)
          ("go.work" . go-mod-ts-mode)
          ("go.mod" . go-mod-ts-mode))
@@ -1336,6 +1336,14 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
     (setq-local fill-column 100))
+
+  (defun tychoish/go-mode-setup-for-buffer (buf)
+    (with-current-buffer buf
+      (tychoish/go-mode-setup)))
+
+  (defun tychoish/go-mode-refresh-current-buffers ()
+    (->> (mode-buffers 'go-ts-mode)
+	 (-mapc #'tychoish/go-mode-setup-for-buffer)))
 
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
@@ -1582,6 +1590,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (setq-local flycheck-help-echo nil))
   (add-hook 'flycheck-mode-hook 'tychoish/flycheck-prefer-eldoc)
   :config
+  (setq-default flycheck-disable-checker '(go-unconvert go-staticcheck go-vet go-build go-test go-gofmt))
   (setq flycheck-keymap-prefix (kbd "C-c f"))
   ;; the order of the following 3 operations is important.
   (define-key flycheck-mode-map flycheck-keymap-prefix nil)
@@ -1819,6 +1828,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     ;; toggle it on and off so that the left-fringe isn't weird.
     (flycheck-eglot-mode -1)
     (flycheck-eglot-mode 1))
+
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
   :config
   (bind-keys :map eglot-mode-map
