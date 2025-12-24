@@ -505,22 +505,18 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 :directory directory
 			 :command (s-join-with-space
 				   "go test -coverprofile=coverage.out -race" operation-directory ";"
-				   (s-concat "go tool cover -func=coverage.out | sed -r 's%^github.com/.+/.+/%" (f-full (f-relative project-root-directory)) "%' | column -t;")
+				   (s-concat "go tool cover -func=coverage.out | sed -r 's%^github.com/.+/%" (f-full (f-relative project-root-directory directory)) "%' | column -t;")
 				   "go tool cover -html=coverage.out -o=coverage.html;")
 			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
 		    (->> '(("go test -v"                "verbose mode")
-			   ("go test -v -cover"         "the code coverage collector in verbose mode")
-			   ("go test -v -race"          "the race detector in verbose mode")
-			   ("go test -v -cover -race"   "the race detector and collecting coverage data in verbose mode")
 			   ("go test -cover"            "the code coverage collector")
 			   ("go test -race"             "the race detector")
-			   ("go test -race -cover"      "the race detector and collecting coverage data")
 			   ("go test"                   "default options")
 			   ("go test -run=NOOP"         "building all sources, including tests, without running tests"))
 			 (--flat-map
 			  (let ((command-prefix (car it))
 				(annotation-prefix (cadr it)))
-			    (->> '("" "10s" "20s" "30s" "40s" "1m" "90s" "2m" "4m" "8m")
+			    (->> '("" "30s" "1m" "2m" "4m")
 				 (--flat-map
 				  (let* ((timeout-spec it)
 					 (is-default (equal timeout-spec ""))
