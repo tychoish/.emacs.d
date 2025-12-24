@@ -2129,7 +2129,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :bind (:map tychoish/robot-map ;; "C-c r"
 	 :prefix "a"
 	 :prefix-map tychoish/robot-aider-map
-	 ("m" . aidermacs-transient-menu))
+	 ("m" . aidermacs-transient-menu)
+	 ("C-m" . execute-extended-aidermacs-command)
+	 ("l" . execute-extended-aidermacs-model-command))
   :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-program "aider")
@@ -2137,9 +2139,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (unless name
       (setq name model))
 
-    (let ((symbol-name (format "aidermacs-use-%s" name)))
-      `(defun ,(intern symobl-name) ()
-	 ,(format "Switch to using `%s' as the default model for aidermacs.")
+    (let ((symbol-name (format "aidermacs-model-use-%s" name)))
+      `(defun ,(intern symbol-name) ()
+	 ,(format "Switch to using `%s' (%s)as the default model for aidermacs." model name)
 	 (interactive)
 	 (setq aidermacs-default-model ,model)
 	 (when (aidermacs-select-buffer-name)
@@ -2150,6 +2152,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (make-aidermacs-model-selection-function "gemini")
   (make-aidermacs-model-selection-function "4" :name "gpt4")
   (make-aidermacs-model-selection-function "4o" :name "gpt4o")
+
+  (make-read-extended-command-for-prefix "aidermacs")
+  (make-read-extended-command-for-prefix "aidermacs-model")
 
   (setq aidermacs-default-model "sonnet")
   (add-to-list 'aidermacs-extra-args "--notifications")

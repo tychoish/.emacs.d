@@ -670,15 +670,34 @@ of the equality function customization differs slightly."
     ,(when keymap
        `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
 
-(defmacro make-read-extended-command-filter-for-command-prefix-predicate (prefix)
-  (unless (trimmed-string-or-nil prefix)
-    (user-error "cannot build predicate function for '%s'" prefix))
-  (let* ((name (format "read-extended-command-filter-%s-prefix-p" prefix))
-	 (symbol (intern name)))
-  `(defun ,symbol (command buffer)
-     (s-prefix-p ,prefix (symbol-name command)))))
+(defun s-collapse-hyphens (str)
+  (replace-regexp-in-string "-\\{3,\\}" "-" str))
 
-(make-read-extended-command-filter-for-command-prefix-predicate "clipboard")
+(defun s-normalize-symbol-name (name)
+  (let* ((sanatized (s-trim (s-collapse-whitespace name)))
+	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) name)))
+    (s-collapse-hyphens canonicalized)))
+
+(defmacro make-read-extended-command-for-prefix (prefix)
+  (unless (setq prefix (trimmed-string-or-nil prefix))
+    (user-error "cannot build predicate function for '%s'" prefix))
+  (setq prefix (s-normalize-symbol-name prefix))
+
+  (let* ((predicate-name (format "read-extended-command-for-%s-prefix-p" prefix))
+	 (predicate-symbol (intern predicate-name))
+	 (user-command-name (format "execute-extended-%s-command" prefix)))
+  `(progn (defun ,predicate-symbol (command buffer)
+	    ,(format "Predicate for `read-extended-command-predicate' to filter commands returning only those that start with the prefix `%s'" prefix)
+	    (s-prefix-p ,prefix (symbol-name command)))
+	  (defun ,(intern user-command-name) ()
+	    ,(format "Read extentend command but filtered for only those beginning with prefix `%s'." prefix)
+	    (interactive)
+	    (let ((read-extended-command-predicate #',predicate-symbol))
+	      (execute-extended-command nil))))))
+
+(make-read-extended-command-for-prefix "clipboard")
+(make-read-extended-command-for-prefix "aidermacs")
+(make-read-extended-command-for-prefix "aidermacs-model")
 
 (defmacro with-prefix-arg (arg &rest body)
   `(let ((current-prefix-arg ,arg))
@@ -1121,11 +1140,6 @@ interactively then remove duplicate items from the `kill-ring'."
         (setq kill-ring (delete-dups new-kill-ring))
       (setq kill-ring new-kill-ring))))
 
-(defun system-clipboard-commands ()
-  (interactive)
-
-  (let ((read-extended-command-predicate #'read-extended-command-filter-clipboard-prefix-p))
-    (execute-extended-command nil)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
