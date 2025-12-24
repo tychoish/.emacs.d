@@ -141,7 +141,7 @@
 (setq mail-signature t)
 (setq mail-specify-envelope-from t)
 (setq mail-user-agent 'mu4e-user-agent)
-(setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+
 
 (setq mail-imenu-generic-expression
       '(("Subject"  "^Subject: *\\(.*\\)" 1)
@@ -161,11 +161,13 @@
 (setq mu4e-sent-folder "/sent")
 (setq mu4e-trash-folder "/trash")
 (setq mu4e-user-agent-string nil)
-(setq mu4e--header-separator mail-header-separator)
 
 (defun tychoish/set-up-message-mode-buffer ()
+  (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+  (setq mu4e--header-separator mail-header-separator)
+  ;; mu4e--compose-setup-completion
   (setq-local completion-at-point-functions
-	      `(,(cape-capf-prefix-length 'mu4e-complete-contact 4)
+	      `(,(cape-capf-prefix-length 'mu4e--compose-complete-contact-field 4)
 		    cape-emoji
 		    cape-dict
 		    yasnippet-capf))

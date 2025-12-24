@@ -1339,6 +1339,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (defun tychoish/go-mode-setup-for-buffer (buf)
     (with-current-buffer buf
+      (setq-local flycheck-disabled-checkers '(go-unconvert go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
       (tychoish/go-mode-setup)))
 
   (defun tychoish/go-mode-refresh-current-buffers ()
@@ -2131,8 +2132,26 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("m" . aidermacs-transient-menu))
   :config
   (setq aidermacs-default-chat-mode 'architect)
+  (setq aidermacs-program "aider")
+  (cl-defmacro make-aidermacs-model-selection-function (model &optional &key name)
+    (unless name
+      (setq name model))
+
+    (let ((symbol-name (format "aidermacs-use-%s" name)))
+      `(defun ,(intern symobl-name) ()
+	 ,(format "Switch to using `%s' as the default model for aidermacs.")
+	 (interactive)
+	 (setq aidermacs-default-model ,model)
+	 (when (aidermacs-select-buffer-name)
+	   (aidermacs-change-model ,model)))))
+
+  (make-aidermacs-model-selection-function "sonnet" :name "claude-sonnet")
+  (make-aidermacs-model-selection-function "haiku" :name "claude-haiku")
+  (make-aidermacs-model-selection-function "gemini")
+  (make-aidermacs-model-selection-function "4" :name "gpt4")
+  (make-aidermacs-model-selection-function "4o" :name "gpt4o")
+
   (setq aidermacs-default-model "sonnet")
-  :config
   (add-to-list 'aidermacs-extra-args "--notifications")
   (add-to-list 'aidermacs-extra-args "--cache-prompts")
   (add-to-list 'aidermacs-extra-args "--cache-keepalive-pings 12")
