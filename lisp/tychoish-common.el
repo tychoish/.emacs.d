@@ -365,6 +365,11 @@ concatenated or joined. This provides a dash.el conforming API for the
 (defalias 'll #'list)
 (defalias '-- #'list)
 
+(defun -sparse-append (&rest items)
+  (->> items
+       (-append)
+       (-non-nil)))
+
 (defun -map-in-place (mapper items)
   "Apply the `mapper' function to every item in the list `items' and
 replace the items in the original list with the results of the function,
@@ -670,14 +675,6 @@ of the equality function customization differs slightly."
     ,(when keymap
        `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
 
-(defun s-collapse-hyphens (str)
-  (replace-regexp-in-string "-\\{3,\\}" "-" str))
-
-(defun s-normalize-symbol-name (name)
-  (let* ((sanatized (s-trim (s-collapse-whitespace name)))
-	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) name)))
-    (s-collapse-hyphens canonicalized)))
-
 (defmacro make-read-extended-command-for-prefix (prefix)
   (unless (setq prefix (trimmed-string-or-nil prefix))
     (user-error "cannot build predicate function for '%s'" prefix))
@@ -695,9 +692,13 @@ of the equality function customization differs slightly."
 	    (let ((read-extended-command-predicate #',predicate-symbol))
 	      (execute-extended-command nil))))))
 
-(make-read-extended-command-for-prefix "clipboard")
-(make-read-extended-command-for-prefix "aidermacs")
-(make-read-extended-command-for-prefix "aidermacs-model")
+(defun s-collapse-hyphens (str)
+  (replace-regexp-in-string "-\\{3,\\}" "-" str))
+
+(defun s-normalize-symbol-name (name)
+  (let* ((sanatized (s-trim (s-collapse-whitespace name)))
+	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) name)))
+    (s-collapse-hyphens canonicalized)))
 
 (defmacro with-prefix-arg (arg &rest body)
   `(let ((current-prefix-arg ,arg))
@@ -814,7 +815,6 @@ of the equality function customization differs slightly."
 	   t))
 
        ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks)))))
-
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
@@ -1141,7 +1141,6 @@ interactively then remove duplicate items from the `kill-ring'."
       (setq kill-ring new-kill-ring))))
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; process management and collecting shell output
@@ -1386,8 +1385,5 @@ Returns the number of buffers killed."
 	(with-current-buffer it
 	  (when (derived-mode-p mode)
 	    (current-buffer))))))
-
-(make-read-extended-command-filter-for-command-prefix-predicate "clipboard")
-
 
 (provide 'tychoish-common)

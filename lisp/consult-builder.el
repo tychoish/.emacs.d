@@ -463,7 +463,10 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
 (register-compilation-candidates
  :name "go-packages"
- :pipeline (->> (f-directories-containing-file-with-extension-go directories)
+ :pipeline (->> (-append
+		 (f-directories-containing-file-with-extension-go directories)
+		 (f-directories-containing-file-go-mod project-root-diectory)
+		 (-- project-root-directory))
 		(--flat-map
 		 (let* ((prefix (concat "." (f-path-separator)))
 			(directory it)
@@ -485,11 +488,14 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			(proj-path-recursive (f-join proj-path-for-name "...")))
 		   (-append
 		    (->> '("revive" "reassign" "prealloc" "predeclared" "nosprinthostport" "thelper" "makezero" "importas" "fatcontext" "exptostd" "exhaustruct")
-			 (--map (make-compilation-candidate
-				 :name (format "lint %s %s" it proj-path-for-name)
-				 :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
-				 :directory directory
-				 :annotation (format "run (only) the %s linter in %s" it short-path))))
+			 (--map
+			  ;; (when (or (f-equal-p directory default-directory)
+			  ;; 	       (f-equal-p directory project-root-directory))
+			  (make-compilation-candidate
+			   :name (format "lint %s %s" it proj-path-for-name)
+			   :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
+			   :directory directory
+			   :annotation (format "run (only) the %s linter in %s" it short-path))))
 		    (-- (make-compilation-candidate
 			 :name (s-join-with-space "go build" proj-path-for-name)
 			 :command (s-join-with-space "go build" operation-directory)

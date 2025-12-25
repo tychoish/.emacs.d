@@ -336,6 +336,12 @@
         tab-mark
         newline-mark))
 
+(make-read-extended-command-for-prefix "clipboard")
+(make-read-extended-command-for-prefix "aidermacs")
+(make-read-extended-command-for-prefix "aidermacs-model")
+(make-read-extended-command-for-prefix "gptel")
+(make-read-extended-command-for-prefix "gptel-set-backend")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; state -- setup desktop/bookmarks/savehist
@@ -708,10 +714,28 @@
        (interactive "sName: ")
        (tychoish-create-note-file name :path ,path))))
 
+(cl-defmacro make-aidermacs-model-selection-function (&optional &key name default-model weak-model editor-model architect-model)
+  "Define a command to switch the aider model settings, including changing the live session."
+  (unless (and name default-model)
+    (user-error "must specify both name (%s) and default-model (%s)" name default-model))
+  (let ((symbol-name (format "aidermacs-model-use-%s" name)))
+    `(defun ,(intern symbol-name) ()
+       ,(format "Switch to using `%s' (%s) as the default model for aidermacs." default-model name)
+       (interactive)
+       (setq aidermacs-default-model ,default-model)
+       (setq aidermacs-architect-model ,(or architect-model default-model))
+       (setq aidermacs-editor-model ,(or editor-model default-model))
+       (setq aidermacs-weak-model ,weak-model)
+       (aidermacs--select-model)
+       (when-let* ((buf (aidermacs-select-buffer-name)))
+	 (with-current-buffer buf
+	   (aidermacs-send-command-with-prefix "/model " (or aidermacs-architect-model aidermacs-default-model))
+	   (aidermacs-send-command-with-prefix "/weak-model " aidermacs-weak-model)
+	   (aidermacs-send-command-with-prefix "/editor-model " aidermacs-editor-model))))))
 
-(cl-defmacro tychoish/gptel-set-up-backend (&key name model backend key api-key)
-  (let ((local-function-symbol (intern (format "tychoish/gptel-set-backend-%s" name)))
-        (default-function-symbol (intern (format "tychoish/gptel-set-default-backend-%s" name))))
+(cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
+  (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
+        (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
     `(progn
        (defun ,local-function-symbol ()
          (interactive)

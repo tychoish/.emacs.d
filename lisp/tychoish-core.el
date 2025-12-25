@@ -2026,46 +2026,46 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :config
   (setq gptel-include-reasoning 'ignore)
 
-  (tychoish/gptel-set-up-backend
+  (make-gptel-set-up-backend-functions
    :name "gemini"
    :key "g"
    :model 'gemini-2.5-pro-preview-06-05
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
-  (tychoish/gptel-set-up-backend
+  (make-gptel-set-up-backend-functions
    :name "copilot"
    :key "c"
    :model 'claude-3.5-sonnet
    :backend (gptel-make-gh-copilot "copilot"))
 
-  (tychoish/gptel-set-up-backend
+  (make-gptel-set-up-backend-functions
    :name "anthropic"
    :key "a"
    :model 'claude-3-5-sonnet-20241022
    :api-key anthropic-api-key
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t))
 
-  (tychoish/gptel-set-up-backend
+  (make-gptel-set-up-backend-functions
    :name "gpt-5"
    :key "s"
    :model 'gpt-5
    :api-key openai-api-key
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
-  (tychoish/gptel-set-up-backend
+  (make-gptel-set-up-backend-functions
    :name "gpt-5-mini"
    :key "m"
-   :model 'gpt-5
+   :model 'gpt-5-mini
    :api-key openai-api-key
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
-  (tychoish/gptel-set-up-backend
-   :name "o4-mini"
+  (make-gptel-set-up-backend-functions
+   :name "o4"
    :key "o"
-   :model 'o4-mini
+   :model 'o4
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
-  (tychoish/gptel-set-up-backend
+  (make-gptel-set-up-backend-functions
    :name "gpt-5-nano"
    :key "n"
    :model 'gpt-5
@@ -2133,45 +2133,77 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("C-m" . execute-extended-aidermacs-command)
 	 ("l" . execute-extended-aidermacs-model-command))
   :config
-  (setq aidermacs-default-chat-mode 'architect)
+  (setq aidermacs-default-chat-mode 'ask)
   (setq aidermacs-program "aider")
-  (cl-defmacro make-aidermacs-model-selection-function (model &optional &key name)
-    (unless name
-      (setq name model))
 
-    (let ((symbol-name (format "aidermacs-model-use-%s" name)))
-      `(defun ,(intern symbol-name) ()
-	 ,(format "Switch to using `%s' (%s)as the default model for aidermacs." model name)
-	 (interactive)
-	 (setq aidermacs-default-model ,model)
-	 (when (aidermacs-select-buffer-name)
-	   (aidermacs-change-model ,model)))))
+  (add-to-list 'aidermacs-extra-args "--notifications")
+  (add-to-list 'aidermacs-extra-args "--cache-prompts")
+  (add-to-list 'aidermacs-extra-args "--cache-keepalive-pings 12")
 
-  (make-aidermacs-model-selection-function "sonnet" :name "claude-sonnet")
-  (make-aidermacs-model-selection-function "haiku" :name "claude-haiku")
-  (make-aidermacs-model-selection-function "gemini")
-  (make-aidermacs-model-selection-function "4" :name "gpt4")
-  (make-aidermacs-model-selection-function "4o" :name "gpt4o")
+  (add-hook 'aidermacs-before-run-backend-hook 'tychoish/set-up-aider-env-vars)
 
   (make-read-extended-command-for-prefix "aidermacs")
   (make-read-extended-command-for-prefix "aidermacs-model")
 
-  (setq aidermacs-default-model "sonnet")
-  (add-to-list 'aidermacs-extra-args "--notifications")
-  (add-to-list 'aidermacs-extra-args "--cache-prompts")
-  (add-to-list 'aidermacs-extra-args "--cache-keepalive-pings 12")
-  (add-hook 'aidermacs-before-run-backend-hook 'tychoish/set-up-aider-env-vars))
+  (make-aidermacs-model-selection-function
+   :name "claude-4"
+   :default-model "anthropic/claude-sonnet-4-5"
+   :architect-model "anthropic/claude-opus-4-5"
+   :weak-model "anthropic/claude-sonnet-4-5"
+   :editor-model "anthropic/claude-haiku-4-5")
 
-(use-package aider
-  :ensure t
-  :bind (:map tychoish/robot-aider-map ;; "C-c r a"
-	 ("a" . aider-transient-menu))
-  :config
-  (tychoish/set-up-aider-env-vars)
-  (add-to-list 'aider-args "--notifications")
-  (add-to-list 'aider-args "--cache-prompts")
-  (add-to-list 'aider-args "--cache-keepalive-pings 12")
-  (add-to-list 'yas-snippet-dirs (f-join (f-dirname (find-library-name "aider")) "snippets")))
+  (make-aidermacs-model-selection-function
+   :name "gpt-4o"
+   :default-model "opeani/gpt-4o"
+   :weak-model "openai/gpt-4-turbo"
+   :editor-model "openai/gpt-4o-mini"
+   :architect-model "openai/gpt-4o")
+
+  (make-aidermacs-model-selection-function
+   :name "gpt-4"
+   :default-model "opeani/gpt-4"
+   :weak-model "opeani/gpt-4-turbo"
+   :editor-model "openai/gpt-4.1-mini"
+   :architect-model "opeani/gpt-4.5-preview")
+
+  (make-aidermacs-model-selection-function
+   :name "gpt-5"
+   :default-model "opeani/gpt-5.2"
+   :weak-model "opeani/gpt-5-nano"
+   :editor-model "openai/gpt-5-mini"
+   :architect-model "opeani/gpt-5.2")
+
+  (make-aidermacs-model-selection-function
+   :name "gemini-2"
+   :default-model "gemini-2.5-pro"
+   :weak-model "gemini-2.5-flash-lite"
+   :editor-model "gemini-2.5-flash"
+   :architect-model "gemini-2.5-pro")
+
+  (make-aidermacs-model-selection-function
+   :name "gemini"
+   :default-model "gemini-pro"
+   :weak-model "gemini-flash-lite-latest"
+   :editor-model "gemini-flash-latest"
+   :architect-model "gemini-pro")
+
+  (make-aidermacs-model-selection-function
+   :name "copilot-gemini"
+   :default-model "github_copilot/gemini-2.5-pro")
+
+  (make-aidermacs-model-selection-function
+   :name "copilot-gpt-4o"
+   :default-model "github_copilot/gpt-4o"
+   :weak-model "gpt_copilot/gpt-4o-mini"
+   :architect-model "github_copilot/gpt-4"
+   :editor-model "github_copilot/gpt-4o")
+
+  (make-aidermacs-model-selection-function
+   :name "copilot-claude"
+   :default-model "github_copilot/claude-sonnet-4.5"
+   :weak-model "gpt_copilot/claude-haiku-4.5"
+   :architect-model "github_copilot/claude-opus-4.5"
+   :editor-model "github_copilot/claude-sonnet-4.5"))
 
 (use-package monet
   ;; :vc (:url "https://github.com/stevemolitor/monet" :rev :newest)
