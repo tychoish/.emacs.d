@@ -354,13 +354,19 @@ current directory and the project root, and `table' is table of `tychoish--compl
 
 (defvar-local tychoish--cached-compilation-candidates nil)
 
+(defvar tychoish--compilation-candidate-cache-always-bypass nil
+  "Disables the compilation candidate cache ('per-buffer)")
+
+(create-toggle-functions tychoish--compilation-candidate-cache-always-bypass)
+
 (defun tychoish--get-compilation-candidates (&optional directory command)
   "Generate a sequence of candidate compilation commands based on mode and directory structure."
 
   (when current-prefix-arg
     (tychoish--compilation-candidate-clear-cache))
 
-  (unless tychoish--cached-compilation-candidates
+  (unless (or tychoish--compilation-candidate-cache-always-bypass
+	      tychoish--cached-compilation-candidates)
     (let* ((project-root-directory (approximate-project-root))
 	   (project-name (f-filename project-root-directory))
 	   (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
@@ -461,11 +467,13 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				  :directory directory
 				  :annotation (s-join-with-space annotation-template annotation-suffix)))))))))
 
+
+
 (register-compilation-candidates
  :name "go-packages"
  :pipeline (->> (-append
 		 (f-directories-containing-file-with-extension-go directories)
-		 (f-directories-containing-file-go-mod project-root-diectory)
+		 (f-directories-containing-file-go-mod project-root-directory)
 		 (-- project-root-directory))
 		(--flat-map
 		 (let* ((prefix (concat "." (f-path-separator)))

@@ -655,8 +655,8 @@ of the equality function customization differs slightly."
     `(defun ,function-name nil
        (run-hooks (intern ,hook-name)))))
 
-(cl-defmacro create-toggle-functions (value &optional &key local keymap key)
-  (let* ((name (symbol-name value))
+(cl-defmacro create-toggle-functions (value &optional &key short-name local keymap key)
+  (let* ((name (or short-name (symbol-name value)))
 	 (suffix (when local "local"))
 	 (ops (list
 	       `(,(intern (s-join-with-hyphen "turn-on" name suffix)) t)
