@@ -2175,17 +2175,25 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'aidermacs-extra-args (concat "--input-history-file=" (tychoish/conf-state-path "aider.input-history.md")) t)
   (add-to-list 'aidermacs-extra-args (concat "--chat-history-file=" (tychoish/conf-state-path "aider.chat-history.md")) t)
   (add-to-list 'aidermacs-extra-args (concat "--model-settings-file=" aidermacs-model-settings-path) t)
+  (add-to-list 'aidermacs-extra-args "--editor-edit-format=udiff")
+  (add-to-list 'aidermacs-extra-args "--edit-format=udiff")
   (add-to-list 'aidermacs-extra-args "--notifications")
-  (add-to-list 'aidermacs-extra-args "--show-diffs")
   (add-to-list 'aidermacs-extra-args "--cache-prompts")
 
   (make-read-extended-command-for-prefix "aidermacs")
   (make-read-extended-command-for-prefix "aidermacs-model")
 
   (make-aidermacs-model-selection-function
-   :name "claude-4"
+   :name "claude-max"
    :default-model "anthropic/claude-sonnet-4-5"
    :architect-model "anthropic/claude-opus-4-5"
+   :weak-model "anthropic/claude-sonnet-4-5"
+   :editor-model "anthropic/claude-haiku-4-5")
+
+  (make-aidermacs-model-selection-function
+   :name "claude-sonnet"
+   :default-model "anthropic/claude-sonnet-4-5"
+   :architect-model "anthropic/claude-sonnet-4-5"
    :weak-model "anthropic/claude-sonnet-4-5"
    :editor-model "anthropic/claude-haiku-4-5")
 
@@ -2226,10 +2234,16 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (make-aidermacs-model-selection-function
    :name "copilot-gemini"
+   :copilot 'use-copilot
    :default-model "github_copilot/gemini-2.5-pro")
 
   (make-aidermacs-model-selection-function
+   :name "gemini-3-flash"
+   :default-model "gemini/gemini-3-flash-preview")
+
+  (make-aidermacs-model-selection-function
    :name "copilot-gpt-4o"
+   :copilot 'use-copilot
    :default-model "github_copilot/gpt-4o"
    :weak-model "github_copilot/gpt-4o-mini"
    :architect-model "github_copilot/gpt-4o"
@@ -2237,7 +2251,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (make-aidermacs-model-selection-function
    :name "copilot-gpt-5"
-   :copilot t
+   :copilot 'use-copilot
    :default-model "github_copilot/gpt-5.2"
    :weak-model "github_copilot/gpt-5-mini"
    :architect-model "github_copilot/gpt-5.2"
