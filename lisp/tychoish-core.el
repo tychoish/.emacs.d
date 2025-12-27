@@ -877,7 +877,7 @@
   :ensure t
   :commands (forge-dispatch forge-configure)
   :config
-  (setq forge-database-file (expand-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name "state" "forge-database.sqlite"))))
+  (setq forge-database-file (expand-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name "forge-database.sqlite"))))
 
 (use-package gist
   :ensure t
@@ -1339,6 +1339,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (defun tychoish/go-mode-setup-for-buffer (buf)
     (with-current-buffer buf
+      (setq-local compilation-error-screen-columns nil)
       (setq-local flycheck-disabled-checkers '(go-unconvert go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
       (tychoish/go-mode-setup)))
 
@@ -1683,6 +1684,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	   (candidates (cdr results))
 	   (command (tychoish-compilation-candidate-command (ht-get candidates name))))
       (read-from-minibuffer "edit command => " command)))
+
+  (add-hook 'compilation-finish-functions #'alert-after-finish-in-background)
+
+  (defun alert-after-finish-in-background (buf str)
+    (when (or (not (get-buffer-window buf 'visible)) (not (frame-focus-state)))
+      (alert str :buffer buf)))
+
+  (setq compilation-max-output-line-length nil)
+  (setq compilation-scroll-output t)
 
   (setq-default compilation-save-buffers-predicate #'approximate-project-root)
   (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
@@ -2133,14 +2143,41 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("C-m" . execute-extended-aidermacs-command)
 	 ("l" . execute-extended-aidermacs-model-command))
   :config
-  (setq aidermacs-default-chat-mode 'ask)
+  (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-program "aider")
 
-  (add-to-list 'aidermacs-extra-args "--notifications")
-  (add-to-list 'aidermacs-extra-args "--cache-prompts")
-  (add-to-list 'aidermacs-extra-args "--cache-keepalive-pings 12")
+  (with-toggle-once tychoish/aider-setup-state
+    (when (boundp 'anthropic-api-key)
+      (setenv "ANTHROPIC_API_KEY" anthropic-api-key)
+      (message "[robots] set environment variable for anthropic"))
 
-  (add-hook 'aidermacs-before-run-backend-hook 'tychoish/set-up-aider-env-vars)
+    (when (boundp 'gemini-api-key)
+      (setenv "GEMINI_API_KEY" gemini-api-key)
+      (message "[robots] set environment variable for gemini"))
+
+    (when (boundp 'openai-api-key)
+      (setenv "OPENAI_API_KEY" openai-api-key)
+      (message "[robots] set environment variable for OpenAI"))
+
+    (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
+		(_ (f-exists-p uv-bin-path))
+		(aider-bin-path (f-join uv-bin-path "aider"))
+		(_ (f-exists-p aider-bin-path))
+		(search-path (getenv "PATH")))
+
+      (unless (s-contains-p uv-bin-path search-path)
+	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
+
+      (add-to-list 'exec-path uv-bin-path)))
+
+  (defvar aidermacs-model-settings-path (f-join user-emacs-directory "aider.model.settings.yml"))
+
+  (add-to-list 'aidermacs-extra-args (concat "--input-history-file=" (tychoish/conf-state-path "aider.input-history.md")) t)
+  (add-to-list 'aidermacs-extra-args (concat "--chat-history-file=" (tychoish/conf-state-path "aider.chat-history.md")) t)
+  (add-to-list 'aidermacs-extra-args (concat "--model-settings-file=" aidermacs-model-settings-path) t)
+  (add-to-list 'aidermacs-extra-args "--notifications")
+  (add-to-list 'aidermacs-extra-args "--show-diffs")
+  (add-to-list 'aidermacs-extra-args "--cache-prompts")
 
   (make-read-extended-command-for-prefix "aidermacs")
   (make-read-extended-command-for-prefix "aidermacs-model")
@@ -2194,16 +2231,33 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (make-aidermacs-model-selection-function
    :name "copilot-gpt-4o"
    :default-model "github_copilot/gpt-4o"
-   :weak-model "gpt_copilot/gpt-4o-mini"
-   :architect-model "github_copilot/gpt-4"
+   :weak-model "github_copilot/gpt-4o-mini"
+   :architect-model "github_copilot/gpt-4o"
    :editor-model "github_copilot/gpt-4o")
 
   (make-aidermacs-model-selection-function
-   :name "copilot-claude"
+   :name "copilot-gpt-5"
+   :copilot t
+   :default-model "github_copilot/gpt-5.2"
+   :weak-model "github_copilot/gpt-5-mini"
+   :architect-model "github_copilot/gpt-5.2"
+   :editor-model "github_copilot/gpt-4o")
+
+  (make-aidermacs-model-selection-function
+   :name "copilot-claude-max"
+   :copilot 'use-copilot
    :default-model "github_copilot/claude-sonnet-4.5"
-   :weak-model "gpt_copilot/claude-haiku-4.5"
+   :weak-model "github_copilot/claude-haiku-4.5"
    :architect-model "github_copilot/claude-opus-4.5"
-   :editor-model "github_copilot/claude-sonnet-4.5"))
+   :editor-model "github_copilot/claude-sonnet-4.5")
+
+  (make-aidermacs-model-selection-function
+   :name "copilot-claude-sonnet"
+   :copilot 'use-copilot
+   :default-model "github_copilot/claude-sonnet-4.5"
+   :architect-model "github_copilot/claude-sonnet-4.5"
+   :editor-model "github_copilot/claude-sonnet-4.5"
+   :weak-model "github_copilot/claude-haiku-4.5"))
 
 (use-package monet
   ;; :vc (:url "https://github.com/stevemolitor/monet" :rev :newest)

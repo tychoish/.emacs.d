@@ -467,8 +467,6 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				  :directory directory
 				  :annotation (s-join-with-space annotation-template annotation-suffix)))))))))
 
-
-
 (register-compilation-candidates
  :name "go-packages"
  :pipeline (->> (-append
@@ -484,6 +482,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			      ((string-prefix-p (f-path-separator) directory) directory)
 			      (t (concat prefix directory))))
 			(operation-directory-tree (f-join operation-directory "..." ))
+			(operation-directory-tree (if (string-equal "..." operation-directory-tree) "./..." operation-directory-tree))
 			(short-path (f-collapse-homedir operation-directory))
 			(package-path (string-replace project-root-directory "" operation-directory))
 			(is-recursive (string-suffix-p "..." it))
@@ -519,8 +518,23 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 :directory directory
 			 :command (s-join-with-space
 				   "go test -coverprofile=coverage.out -race" operation-directory ";"
-				   (s-concat "go tool cover -func=coverage.out | sed -r 's%^github.com/.+/%" (f-full (f-relative project-root-directory directory)) "%' | column -t;")
-				   "go tool cover -html=coverage.out -o=coverage.html;")
+				   "go tool cover -html=coverage.out -o=coverage.html;"
+				   (s-join-with-pipe
+				    "go tool cover -func=coverage.out"
+				    (s-concat "sed -r 's%^github.com/.+/%" (f-full (f-relative project-root-directory directory)) "%'")
+				    "column -t;"))
+			 :annotation (s-join-with-space "collect and report coverage data for" short-path))
+			(make-compilation-candidate
+			 :name (s-join-with-space "go test +race +coverage +gaps" proj-path-for-name)
+			 :directory directory
+			 :command (s-join-with-space
+				   "go test -coverprofile=coverage.out -race" operation-directory ";"
+				   "go tool cover -html=coverage.out -o=coverage.html;"
+				   (s-join-with-pipe
+				    "go tool cover -func=coverage.out"
+				    (s-concat "sed -r 's%^github.com/.+/%" (f-full (f-relative project-root-directory directory)) "%'")
+				    "grep -v '100.0%'"
+				    "column -t;"))
 			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
 		    (->> '(("go test -v"                "verbose mode")
 			   ("go test -cover"            "the code coverage collector")

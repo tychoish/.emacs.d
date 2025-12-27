@@ -714,7 +714,7 @@
        (interactive "sName: ")
        (tychoish-create-note-file name :path ,path))))
 
-(cl-defmacro make-aidermacs-model-selection-function (&optional &key name default-model weak-model editor-model architect-model)
+(cl-defmacro make-aidermacs-model-selection-function (&optional &key name default-model weak-model editor-model architect-model copilot)
   "Define a command to switch the aider model settings, including changing the live session."
   (unless (and name default-model)
     (user-error "must specify both name (%s) and default-model (%s)" name default-model))
@@ -722,16 +722,23 @@
     `(defun ,(intern symbol-name) ()
        ,(format "Switch to using `%s' (%s) as the default model for aidermacs." default-model name)
        (interactive)
+       (if ,copilot
+           (progn
+             (message "setup environment for copilot")
+             (setenv "OPENAI_API_KEY" github-oauth-token)
+             (setenv "OPENAI_API_BASE" "https://api.githubcopilot.com"))
+         (setenv "OPENAI_API_BASE" nil)
+         (setenv "OPENAI_API_KEY" openai-api-key))
        (setq aidermacs-default-model ,default-model)
        (setq aidermacs-architect-model ,(or architect-model default-model))
        (setq aidermacs-editor-model ,(or editor-model default-model))
        (setq aidermacs-weak-model ,weak-model)
-       (aidermacs--select-model)
        (when-let* ((buf (aidermacs-select-buffer-name)))
 	 (with-current-buffer buf
 	   (aidermacs-send-command-with-prefix "/model " (or aidermacs-architect-model aidermacs-default-model))
 	   (aidermacs-send-command-with-prefix "/weak-model " aidermacs-weak-model)
 	   (aidermacs-send-command-with-prefix "/editor-model " aidermacs-editor-model))))))
+
 
 (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
   (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
@@ -758,26 +765,6 @@
 		  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
                   :map tychoish/robot-gptel-set-default-model-map
 		  (,(downcase key) . ,default-function-symbol)))))
-
-(defun tychoish/set-up-aider-env-vars ()
-  (when (boundp 'anthropic-api-key)
-    (setenv "ANTHROPIC_API_KEY" anthropic-api-key))
-
-  (when (boundp 'gemini-api-key)
-    (setenv "GEMINI_API_KEY" gemini-api-key))
-
-  (when (boundp 'openai-api-key)
-    (setenv "OPENAI_API_KEY" openai-api-key))
-
-  (setenv "AIDER_CHAT_HISTORY" (tychoish/conf-state-path "aider.chat-history.md"))
-
-  (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
-	      (_ (f-exists-p uv-bin-path))
-	      (aider-bin-path (f-join uv-bin-path "aider"))
-	      (search-path (getenv "PATH")))
-    (unless (s-contains-p uv-bin-path search-path)
-      (setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
-    (add-to-list 'exec-path uv-bin-path)))
 
 (defun tychoish-set-notes-directory (&optional path)
   (when path
@@ -820,6 +807,10 @@
 ;;; no need for use-package for minimal configurations of packages
 ;;; that are included with emacs by default and that already have
 ;;; appropriate autoloads.
+
+(with-eval-after-load 'compile
+  (add-to-list 'compilation-error-regexp-alist 'go-test)
+  (add-to-list 'compilation-error-regexp-alist-alist '(go-test . ("^\\s-+\\([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t))
 
 (add-hook 'text-mode-hook 'tychoish/set-up-show-whitespace)
 (add-hook 'prog-mode-hook 'tychoish/set-up-show-whitespace)

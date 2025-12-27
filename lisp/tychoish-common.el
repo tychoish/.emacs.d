@@ -195,7 +195,8 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;; strings -- helper functions for handling strings
 
-(defun s-empty-p (str) (and (stringp str) (s-equals-p "" (s-trim str))))
+(defalias 's-equal #'string-equal)
+(defalias 's-empty-p #'string-empty-p)
 
 (defun s-join-spc (&rest words)
   (->> (-filter-s-trim words)
@@ -216,7 +217,7 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
       (string-equal (char-to-string char) value)
     (char-equal char value)))
 
-(cl-defmacro def-join-str-with (char &optional &key use-jargon-names)
+(cl-defmacro def-join-str-with (char &optional &key use-jargon-names space-padding)
   (cl-check-type char character "must create join function using the character to join the strings")
 
   (let* ((name (downcase (cond
@@ -240,7 +241,8 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 	       ;; e.g. '(; : )
 	       (t (s-join "-" (s-split " " (char-to-name char)))))))
 	(op-name (concat "s-join-with-" name))
-	(join-with (char-to-string char)))
+	(padding (if space-padding " " ""))
+	(join-with (concat padding (char-to-string char) padding)))
 
   `(defun ,(intern op-name) (&rest words)
      (->> words
@@ -250,11 +252,20 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (def-join-str-with ?-)
 (def-join-str-with ? )
 (def-join-str-with ?_)
+(def-join-str-with ?| :space-padding t)
 
 (defun s-shortest (a b)
   (if (> (length b) (length a))
       a
     b))
+
+(defun s-collapse-hyphens (str)
+  (replace-regexp-in-string "-\\{3,\\}" "-" str))
+
+(defun s-normalize-symbol-name (name)
+  (let* ((sanatized (s-trim (s-collapse-whitespace name)))
+	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) name)))
+    (s-collapse-hyphens canonicalized)))
 
 (defun trimmed-string-or-nil (value)
   (and (stringp value)
@@ -366,8 +377,9 @@ concatenated or joined. This provides a dash.el conforming API for the
 (defalias '-- #'list)
 
 (defun -sparse-append (&rest items)
+  "Joins elements in a list, omitting all nil values."
   (->> items
-       (-append)
+       (apply #'-append)
        (-non-nil)))
 
 (defun -map-in-place (mapper items)
@@ -692,13 +704,16 @@ of the equality function customization differs slightly."
 	    (let ((read-extended-command-predicate #',predicate-symbol))
 	      (execute-extended-command nil))))))
 
-(defun s-collapse-hyphens (str)
-  (replace-regexp-in-string "-\\{3,\\}" "-" str))
+(defmacro with-toggle-once (name &rest body)
+  (declare (indent 1) (debug t))
 
-(defun s-normalize-symbol-name (name)
-  (let* ((sanatized (s-trim (s-collapse-whitespace name)))
-	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) name)))
-    (s-collapse-hyphens canonicalized)))
+  `(progn
+     (defvar ,name nil
+       "Toggle variable to avoid re-execution of expensive configuration (like setting environment variables.)")
+
+     (unless ,name
+     ,@body
+     (setq ,name t))))
 
 (defmacro with-prefix-arg (arg &rest body)
   `(let ((current-prefix-arg ,arg))
