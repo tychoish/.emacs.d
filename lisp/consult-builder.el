@@ -521,7 +521,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				   "go tool cover -html=coverage.out -o=coverage.html;"
 				   (s-join-with-pipe
 				    "go tool cover -func=coverage.out"
-				    (s-concat "sed -r 's%^github.com/.+/%" (f-full (f-relative project-root-directory directory)) "%'")
+				    (s-concat "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\"")
 				    "column -t;"))
 			 :annotation (s-join-with-space "collect and report coverage data for" short-path))
 			(make-compilation-candidate
@@ -532,7 +532,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				   "go tool cover -html=coverage.out -o=coverage.html;"
 				   (s-join-with-pipe
 				    "go tool cover -func=coverage.out"
-				    (s-concat "sed -r 's%^github.com/.+/%" (f-full (f-relative project-root-directory directory)) "%'")
+				    (s-concat "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\"")
 				    "grep -v '100.0%'"
 				    "column -t;"))
 			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))

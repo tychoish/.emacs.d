@@ -811,19 +811,15 @@
 (with-eval-after-load 'compile
   (add-to-list 'compilation-error-regexp-alist 'go-test)
   (add-to-list 'compilation-error-regexp-alist 'go-panic)
-  (add-to-list 'compilation-error-regexp-alist 'go-test-cover-func)
 
   (setq compilation-error-regexp-alist-alist ; first remove the standard conf; it's not good.
         (remove 'go-panic (remove 'go-test compilation-error-regexp-alist-alist)))
 
   (add-to-list 'compilation-error-regexp-alist-alist
-               ;; '(go-test . ("^\\s-+\\([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t) ;; the standard, it works (ish)
-               '(go-test . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):.*$" 1 2)))
+               ;; '(go-test . ("^\\s-+\\k([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t) ;; the standard, it works (ish)
+               '(go-test . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2)))
   (add-to-list 'compilation-error-regexp-alist-alist
-               '(go-panic . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\)[[:space:]].*$" 1 2)))
-  (add-to-list 'compilation-error-regexp-alist-alist
-               ;; '(go-test-cover-func . ("^\(.*\.\w+\)/\w+/\([^ \t\n]+.go\):\([0-9]+\):[ \t\n]+\(.*\)[ \t\n]+\([0-9.]+%\)$" 2 3 nil nil)) t)
-               '(go-test-cover-func . ("^[_a-zA-Z.][_a-zA-Z0-9./]*/\\([_a-zA-Z./][_a-zA-Z0-9./]*.go\\):\\([0-9]+\\):[[:space:]]+.*%$" 1 2)) t))
+               '(go-panic . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2))))
 
 (add-hook 'text-mode-hook 'tychoish/set-up-show-whitespace)
 (add-hook 'prog-mode-hook 'tychoish/set-up-show-whitespace)
