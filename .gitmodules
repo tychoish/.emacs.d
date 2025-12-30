@@ -4,3 +4,6 @@
 [submodule "external/consult-mu"]
 	path = external/consult-mu
 	url = https://github.com/armindarvish/consult-mu.git
+[submodule "external/efrit"]
+	path = external/efrit
+	url = https://github.com/steveyegge/efrit.git
