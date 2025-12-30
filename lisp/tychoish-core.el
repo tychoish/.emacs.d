@@ -2312,6 +2312,53 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :after (claude-code)
   :defer t)
 
+(use-package efrit
+  :load-path "external/efrit/lisp"
+  :commands (efrit efrit)
+  :bind (:map tychoish/robot-map
+	 :prefix "e"
+	 :prefix-map tychoish/robot-efrit-map
+	 ("c" . efrit-chat)
+	 ("s" . efrit-streamlined-send)
+	 ("d" . efrit-do)
+	 ("a" . efrit-agent)
+	 ("h" . efrit-help)
+	 ("p" . efrit-do-show-progress)
+	 ("q" . efrit-remote-queue-start)
+	 ("r" . efrit-remote-queue-status)
+	 ("x" . efrit-remote-queue-stop)
+	 ("m" . execute-extended-efrit-command))
+  :config
+  (make-read-extended-command-for-prefix "efrit")
+  (defun tychoish/get-anthropic-api-key ()
+    (or (when (boundp 'anthropic-api-key) anthropic-api-key)
+	(unless tychoish/aider-setup-state
+	  (or (tychoish/aider-setup-state) nil))
+	(awhen (trimmed-string-or-nil (getenv "ANTHROPIC_API_KEY")) it)
+        (when-let* ((auth-info (car (auth-source-search :host efrit-api-auth-source-host
+                                                          :user efrit-api-auth-source-user
+                                                          :require '(:secret))))
+                    (secret (when auth-info (plist-get auth-info :secret)))
+		    (_ (and secret (functionp secret))))
+          (funcall secret))))
+
+  ;; Max tokens per response
+  (setq efrit-max-tokens 4096)
+
+  ;; Data directory
+  (setq efrit-data-directory (tychoish/conf-state-path "efrit"))
+  (unless (f-exists-p efrit-data-directory)
+    (make-directory efrit-data-directory t))
+
+  ;; Enable debug logging
+  (setq efrit-log-level 'debug)
+
+  (setq efrit-tools-eval-timeout 15)
+
+  ;; Progress buffer configuration
+  (setq efrit-do-show-progress-buffer t)  ; Show progress buffer automatically
+  (setq efrit-do-queue-max-size 8))      ; Max commands to queue
+
 (use-package uuidgen
   :ensure t
   :defer t)

@@ -52,6 +52,8 @@
 	  tychoish/conf-state-directory-name
 	  (tychoish-get-config-file-prefix name)))
 
+
+
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
@@ -706,14 +708,18 @@ of the equality function customization differs slightly."
 
 (defmacro with-toggle-once (name &rest body)
   (declare (indent 1) (debug t))
+  (let ((operation (or (when (symbolp name) name)
+		       (when (stringp name) (intern name))))
+	(toggle (intern (s-join-with-hyphen (symbol-name name) "toggle-state"))))
 
   `(progn
-     (defvar ,name nil
+     (defvar ,toggle nil
        "Toggle variable to avoid re-execution of expensive configuration (like setting environment variables.)")
 
-     (unless ,name
-     ,@body
-     (setq ,name t))))
+     (defun ,operation ()
+       (unless ,toggle
+	 ,@body
+	 (setq ,toggle t))))))
 
 (defmacro with-prefix-arg (arg &rest body)
   `(let ((current-prefix-arg ,arg))
