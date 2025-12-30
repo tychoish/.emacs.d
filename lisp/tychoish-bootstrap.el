@@ -337,10 +337,6 @@
         newline-mark))
 
 (make-read-extended-command-for-prefix "clipboard")
-(make-read-extended-command-for-prefix "aidermacs")
-(make-read-extended-command-for-prefix "aidermacs-model")
-(make-read-extended-command-for-prefix "gptel")
-(make-read-extended-command-for-prefix "gptel-set-backend")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -745,20 +741,22 @@
         (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
     `(progn
        (defun ,local-function-symbol ()
+         ,(format "Set LLM backend for the current buffer to `%s'" (symbol-name model))
          (interactive)
          (setq-local gptel-model ,model)
          ,(when api-key
             `(setq-local gptel-api-key (fn ,api-key)))
          (setq-local gptel-backend ,backend)
-         (message "[gptel] set backend to %s for the local buffer" name))
+         (message "[gptel] set backend to %s for the local buffer" ,name))
 
        (defun ,default-function-symbol ()
+         ,(format "Set the default LLM backend for the current session to `%s'" (symbol-name model))
          (interactive)
          (setq-default gptel-model ,model)
          ,(when api-key
             `(setq-default gptel-api-key (fn ,api-key)))
          (setq-default gptel-backend ,backend)
-         (message "[gptel] set default backend to %s" name))
+         (message "[gptel] set default backend to %s" ,name))
 
        (bind-keys :map gptel-mode-map
 		  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)

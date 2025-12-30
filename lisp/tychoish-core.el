@@ -2025,6 +2025,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 :prefix-map tychoish/robot-gptel-map
 	 ("g" . gptel)
          ("r" . gptel-rewrite)
+         ("b" . execute-extended-gptel-set-backend-command)
+	 ("m" . execute-extended-gptel-command)
          :map gptel-mode-map
 	 ("C-c m" . gptel-menu))
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
@@ -2033,13 +2035,42 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defvar gemini-api-key nil)
   (defvar anthropic-api-key nil)
   (defvar openai-api-key nil)
+
+  (make-read-extended-command-for-prefix "gptel")
+  (make-read-extended-command-for-prefix "gptel-set-backend")
   :config
   (setq gptel-include-reasoning 'ignore)
 
   (make-gptel-set-up-backend-functions
-   :name "gemini"
+   :name "claude-sonnet-4-5"
+   :api-key anthropic-api-key
+   :model 'claude-sonnet-4-5-20250929
+   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
+   :key "s")
+
+  (make-gptel-set-up-backend-functions
+   :name "claude-haiku-4-5"
+   :model 'claude-haiku-4-5-20251001
+   :api-key anthropic-api-key
+   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
+   :key "s")
+
+  (make-gptel-set-up-backend-functions
+   :name "gemini-pro-latest"
    :key "g"
-   :model 'gemini-2.5-pro-preview-06-05
+   :model 'gemini-flash-lite-latest
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
+
+  (make-gptel-set-up-backend-functions
+   :name "gemini-flash"
+   :key "f"
+   :model 'gemini-flash-lite-latest
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
+
+  (make-gptel-set-up-backend-functions
+   :name "gemini-flash-lite"
+   :key "l"
+   :model 'gemini-flash-lite-latest
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
@@ -2047,13 +2078,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :key "c"
    :model 'claude-3.5-sonnet
    :backend (gptel-make-gh-copilot "copilot"))
-
-  (make-gptel-set-up-backend-functions
-   :name "anthropic"
-   :key "a"
-   :model 'claude-3-5-sonnet-20241022
-   :api-key anthropic-api-key
-   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5"
@@ -2142,6 +2166,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("m" . aidermacs-transient-menu)
 	 ("C-m" . execute-extended-aidermacs-command)
 	 ("l" . execute-extended-aidermacs-model-command))
+  :init
+  (make-read-extended-command-for-prefix "aidermacs")
+  (make-read-extended-command-for-prefix "aidermacs-model")
   :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-program "aider")

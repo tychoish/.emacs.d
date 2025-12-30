@@ -53,7 +53,6 @@
 	  (tychoish-get-config-file-prefix name)))
 
 
-
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
