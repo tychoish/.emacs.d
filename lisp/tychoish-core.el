@@ -2044,13 +2044,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (make-gptel-set-up-backend-functions
    :name "claude-sonnet-4-5"
    :api-key anthropic-api-key
-   :model 'claude-sonnet-4-5-20250929
+   :model claude-sonnet-4-5-20250929
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
    :key "s")
 
   (make-gptel-set-up-backend-functions
    :name "claude-haiku-4-5"
-   :model 'claude-haiku-4-5-20251001
+   :model claude-haiku-4-5-20251001
    :api-key anthropic-api-key
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
    :key "s")
@@ -2058,51 +2058,58 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (make-gptel-set-up-backend-functions
    :name "gemini-pro-latest"
    :key "g"
-   :model 'gemini-flash-lite-latest
+   :model gemini-flash-lite-latest
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "gemini-flash"
    :key "f"
-   :model 'gemini-flash-lite-latest
+   :model gemini-flash-lite-latest
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "gemini-flash-lite"
    :key "l"
-   :model 'gemini-flash-lite-latest
+   :model gemini-flash-lite-latest
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "copilot"
    :key "c"
-   :model 'claude-3.5-sonnet
+   :model claude-3.5-sonnet
    :backend (gptel-make-gh-copilot "copilot"))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5"
    :key "s"
-   :model 'gpt-5
+   :model gpt-5
    :api-key openai-api-key
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5-mini"
    :key "m"
-   :model 'gpt-5-mini
+   :model gpt-5-mini
    :api-key openai-api-key
-   :backend (gptel-make-openai "openai" :key openai-api-key))
-
-  (make-gptel-set-up-backend-functions
-   :name "o4"
-   :key "o"
-   :model 'o4
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5-nano"
    :key "n"
-   :model 'gpt-5
+   :model gpt-5-nano
+   :api-key openai-api-key
+   :backend (gptel-make-openai "openai" :key openai-api-key))
+
+  (make-gptel-set-up-backend-functions
+   :name "gpt-4o"
+   :key "o"
+   :model gpt-4o
+   :backend (gptel-make-openai "openai" :key openai-api-key))
+
+  (make-gptel-set-up-backend-functions
+   :name "gpt-4o-mini"
+   :key "l"
+   :model gpt-4o-mini
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (require 'gptel-integrations))
