@@ -688,22 +688,30 @@ of the equality function customization differs slightly."
     ,(when keymap
        `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
 
-(defmacro make-read-extended-command-for-prefix (prefix)
+(cl-defmacro make-read-extended-command-for-prefix (prefix &optional &key bind-map bind-key key-alias)
   (unless (setq prefix (trimmed-string-or-nil prefix))
     (user-error "cannot build predicate function for '%s'" prefix))
   (setq prefix (s-normalize-symbol-name prefix))
 
   (let* ((predicate-name (format "read-extended-command-for-%s-prefix-p" prefix))
 	 (predicate-symbol (intern predicate-name))
-	 (user-command-name (format "execute-extended-%s-command" prefix)))
+	 (user-command-name (format "execute-extended-%s-command" prefix))
+	 (user-command-symbol (intern user-command-name)))
   `(progn (defun ,predicate-symbol (command buffer)
 	    ,(format "Predicate for `read-extended-command-predicate' to filter commands returning only those that start with the prefix `%s'" prefix)
 	    (s-prefix-p ,prefix (symbol-name command)))
-	  (defun ,(intern user-command-name) ()
+	  (defun ,user-command-symbol ()
 	    ,(format "Read extentend command but filtered for only those beginning with prefix `%s'." prefix)
 	    (interactive)
 	    (let ((read-extended-command-predicate #',predicate-symbol))
-	      (execute-extended-command nil))))))
+	      (execute-extended-command nil)))
+	  ,(when bind-key
+	     `(progn 
+		(bind-keys
+		 ,@(when bind-map `(:map ,bind-map))
+		 (,bind-key . ,user-command-symbol))
+		,(when key-alias
+		   `(which-key-add-keymap-based-replacements ,(or bind-map global-map) ,bind-key ,key-alias)))))))
 
 (defmacro with-toggle-once (name &rest body)
   (declare (indent 1) (debug t))

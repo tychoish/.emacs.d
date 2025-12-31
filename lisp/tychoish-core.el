@@ -1340,10 +1340,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defun tychoish/go-mode-setup-for-buffer (buf)
     (with-current-buffer buf
       (setq-local compilation-error-screen-columns nil)
-      (setq-local flycheck-disabled-checkers '(go-unconvert go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
+      (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
       (tychoish/go-mode-setup)))
 
-  (defun tychoish/go-mode-refresh-current-buffers ()
+  (defun go-mode-set-up-all-buffers ()
+    (interactive)
     (->> (mode-buffers 'go-ts-mode)
 	 (-mapc #'tychoish/go-mode-setup-for-buffer)))
 
@@ -1592,7 +1593,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (setq-local flycheck-help-echo nil))
   (add-hook 'flycheck-mode-hook 'tychoish/flycheck-prefer-eldoc)
   :config
-  (setq-default flycheck-disable-checker '(go-unconvert go-staticcheck go-vet go-build go-test go-gofmt))
+  (setq-default flycheck-disable-checker '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt))
   (setq flycheck-keymap-prefix (kbd "C-c f"))
   ;; the order of the following 3 operations is important.
   (define-key flycheck-mode-map flycheck-keymap-prefix nil)
@@ -2024,11 +2025,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 :prefix "g"
 	 :prefix-map tychoish/robot-gptel-map
 	 ("g" . gptel)
-         ("r" . gptel-rewrite)
-         ("b" . execute-extended-gptel-set-backend-command)
-	 ("m" . execute-extended-gptel-command)
-         :map gptel-mode-map
-	 ("C-c m" . gptel-menu))
+         ("r" . gptel-rewrite))
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands gptel
   :init
@@ -2036,80 +2033,93 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defvar anthropic-api-key nil)
   (defvar openai-api-key nil)
 
-  (make-read-extended-command-for-prefix "gptel")
-  (make-read-extended-command-for-prefix "gptel-set-backend")
+  (make-read-extended-command-for-prefix
+   "gptel"
+   :bind-map tychoish/robot-gptel-map
+   :bind-key "m"
+   :key-alias "gptel-commands")
+
+  (make-read-extended-command-for-prefix
+   "gptel-set-backend"
+   :bind-map tychoish/robot-gptel-map
+   :bind-key "b"
+   :key-alias "gptel-set-backend")
   :config
+  (bind-keys
+   :map gptel-mode-map
+   ("C-c m" . gptel-menu))
+
   (setq gptel-include-reasoning 'ignore)
 
   (make-gptel-set-up-backend-functions
    :name "claude-sonnet-4-5"
    :api-key anthropic-api-key
-   :model claude-sonnet-4-5-20250929
+   :model 'claude-sonnet-4-5-20250929
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
    :key "s")
 
   (make-gptel-set-up-backend-functions
    :name "claude-haiku-4-5"
-   :model claude-haiku-4-5-20251001
+   :model 'claude-haiku-4-5-20251001
    :api-key anthropic-api-key
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :key "s")
+   :key "h")
 
   (make-gptel-set-up-backend-functions
    :name "gemini-pro-latest"
    :key "g"
-   :model gemini-flash-lite-latest
+   :model 'gemini-flash-lite-latest
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "gemini-flash"
    :key "f"
-   :model gemini-flash-lite-latest
+   :model 'gemini-flash-lite-latest
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "gemini-flash-lite"
    :key "l"
-   :model gemini-flash-lite-latest
+   :model 'gemini-flash-lite-latest
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "copilot"
    :key "c"
-   :model claude-3.5-sonnet
+   :model 'claude-3.5-sonnet
    :backend (gptel-make-gh-copilot "copilot"))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5"
    :key "s"
-   :model gpt-5
+   :model 'gpt-5
    :api-key openai-api-key
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5-mini"
    :key "m"
-   :model gpt-5-mini
+   :model 'gpt-5-mini
    :api-key openai-api-key
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5-nano"
    :key "n"
-   :model gpt-5-nano
+   :model 'gpt-5-nano
    :api-key openai-api-key
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-4o"
    :key "o"
-   :model gpt-4o
+   :model 'gpt-4o
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-4o-mini"
    :key "l"
-   :model gpt-4o-mini
+   :model 'gpt-4o-mini
    :backend (gptel-make-openai "openai" :key openai-api-key))
 
   (require 'gptel-integrations))

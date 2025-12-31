@@ -513,6 +513,18 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 :command (s-join-with-space "go build" operation-directory-tree)
 			 :directory directory
 			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively"))
+
+			(make-compilation-candidate
+			 :name (s-join-with-space "go build +tests" (f-join proj-path-for-name "..."))
+			 :command (s-join-with-space "go test -run=NOOP" operation-directory-tree)
+			 :directory directory
+			 :annotation (s-join-with-space "build in (including tests) for" project-name "at" short-path "recursively"))
+			(make-compilation-candidate
+			 :name (s-join-with-space "go build +tests" proj-path-for-name)
+			 :command (s-join-with-space "go test -run=NOOP" operation-directory)
+			 :directory directory
+			 :annotation (s-join-with-space "build (including tests) for " project-name "at" short-path))
+
 			(make-compilation-candidate
 			 :name (s-join-with-space "go test +race +cover +report" proj-path-for-name)
 			 :directory directory
@@ -536,15 +548,15 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				    "grep -v '100.0%'"
 				    "column -t;"))
 			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
+		    ;; explode with timeout options
 		    (->> '(("go test -v"                "verbose mode")
 			   ("go test -cover"            "the code coverage collector")
 			   ("go test -race"             "the race detector")
-			   ("go test"                   "default options")
-			   ("go test -run=NOOP"         "building all sources, including tests, without running tests"))
+			   ("go test"                   "default options"))
 			 (--flat-map
 			  (let ((command-prefix (car it))
 				(annotation-prefix (cadr it)))
-			    (->> '("" "30s" "1m" "2m" "4m")
+			    (->> '("" "30s" "1m" "2m30s" "5m")
 				 (--flat-map
 				  (let* ((timeout-spec it)
 					 (is-default (equal timeout-spec ""))
@@ -603,22 +615,27 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			   (nil                "go mod tidy"              "run `go mod tidy' in package")
 			   (nil                "go doc -all"              "go doc for entire package")
 			   ("go doc -outline"  "go doc --"                "go doc outline for package")
-			   ("<pkgs...> | xargs go test -race -v"
+			   ("<pkgs> | xargs go test +race +verbose"
 			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -v"
 			        "run all tests (with the race detector) for all submodules of")
-			   ("<pkgs...> | xargs go test -run=NOOP ./..."
+
+			   ("<pkgs> | xargs go test +race +coverage"
+			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -v"
+			        "run all tests (with the race detector) for all submodules of")
+
+			   ("<pkgs> | xargs go build +test ./..."
 			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -run=NOOP"
 				"build all tests in all packages and sub-packages for"))
 			 (-append
 			  (when (or (eql 1 (length go-mod-directories))
 				    (f-equal-p directory project-root-directory))
-			    '(("<modules> | xargs go test -race -v"
+			    '(("<mod> | xargs go test -race -v"
 			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -v ./...'"
 				   "run tests for all modules and submodules in")
-			      ("<modules> | xargs go test -run=NNOP ./..."
+			      ("<mod> | xargs go test -run=NNOP ./..."
 			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -run=NOOP ./...'"
 				   "run tests for all modules and submodules in")
-			      ("<modules> | xargs go build ./..."
+			      ("<mod> | xargs go build ./..."
 			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go build ./...'"
 				   "run tests for all modules and submodules in"))))
 			 (-non-nil)

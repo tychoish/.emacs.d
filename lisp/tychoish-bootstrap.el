@@ -741,7 +741,7 @@
         (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
     `(progn
        (defun ,local-function-symbol ()
-         ,(format "Set LLM backend for the current buffer to `%s'" (symbol-name model))
+         ,(format "Set LLM backend for the current buffer to `%s'" model)
          (interactive)
          (setq-local gptel-model ,model)
          ,(when api-key
@@ -750,7 +750,7 @@
          (message "[gptel] set backend to %s for the local buffer" ,name))
 
        (defun ,default-function-symbol ()
-         ,(format "Set the default LLM backend for the current session to `%s'" (symbol-name model))
+         ,(format "Set the default LLM backend for the current session to `%s'" model)
          (interactive)
          (setq-default gptel-model ,model)
          ,(when api-key
