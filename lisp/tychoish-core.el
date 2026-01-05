@@ -1347,7 +1347,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
     (->> (mode-buffers 'go-ts-mode)
 	 (-mapc #'tychoish/go-mode-setup-for-buffer)))
-
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
   (add-to-list 'tychoish/eglot-default-server-configuration

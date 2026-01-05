@@ -6,6 +6,7 @@
 (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
 
 (autoload 'consult-mu "consult-mu")
+(autoload 'mu4e-update-index "mu4e-update")
 
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-new "mu4e-compose")
@@ -141,7 +142,6 @@
 (setq mail-signature t)
 (setq mail-specify-envelope-from t)
 (setq mail-user-agent 'mu4e-user-agent)
-
 
 (setq mail-imenu-generic-expression
       '(("Subject"  "^Subject: *\\(.*\\)" 1)
