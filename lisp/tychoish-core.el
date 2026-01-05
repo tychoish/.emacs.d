@@ -2344,6 +2344,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (bind-key "m" 'claude-code-command-map 'tychoish/robot-map)
   (setq claude-code-terminal-backend 'eat)
   :config
+  (make-read-extended-command-for-prefix
+   "claude-code"
+   :bind-map claude-code-command-map
+   :bind-key ";"
+   :key-alias "claude-code-commands")
+
   (which-key-add-keymap-based-replacements 'tychoish/robot-map "m" (cons "claude-code" claude-code-command-map))
   (add-hook 'claude-code-process-environment-functions #'monet-start-server-function))
 
