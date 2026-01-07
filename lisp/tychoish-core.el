@@ -2014,23 +2014,29 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
              google-gemini-list-models
              google-gemini-model-info))
 
+
 (use-package gptel
   :ensure t
   :vc (:url "https://github.com/karthink/gptel" :rev newest)
-  :bind (:prefix "C-c r"
-	 :prefix-map tychoish/robot-map
-	 ("g" . gptel)
-	 :map tychoish/robot-map
-	 :prefix "g"
-	 :prefix-map tychoish/robot-gptel-map
-	 ("g" . gptel)
-         ("r" . gptel-rewrite))
+  :bind ()
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands gptel
   :init
   (defvar gemini-api-key nil)
   (defvar anthropic-api-key nil)
   (defvar openai-api-key nil)
+
+  (bind-keys
+   :prefix "C-c r"
+   :prefix-map tychoish/robot-map
+   ("g" . gptel))
+
+  (bind-keys
+   :map tychoish/robot-map
+   :prefix "g"
+   :prefix-map tychoish/robot-gptel-map
+   ("g" . gptel)
+   ("r" . gptel-rewrite))
 
   (make-read-extended-command-for-prefix
    "gptel"
