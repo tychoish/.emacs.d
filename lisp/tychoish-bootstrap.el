@@ -210,17 +210,23 @@
   :doc "top level map for AI and adjacent tooling")
 
 (defvar-keymap tychoish/robot-gptel-map
-  :name "default model setters"
-  :doc "set default model for gtpel")
+  :name "gptel custom tools"
+  :doc "custom gptel mappings")
 
 (defvar-keymap tychoish/robot-gptel-set-default-model-map
   :name "default model setters"
   :doc "set default model for gtpel")
 
+(define-prefix-command 'tychoish/robot-map 'tychoish/robot-map "robots")
+(define-prefix-command 'tychoish/robot-gptel-map 'tychoish/robot-gptel-map "gptel robots")
+(define-prefix-command 'tychoish/robot-gptel-set-default-model-map 'tychoish/robot-gptel-set-default-model-map "gptel model")
+
 (bind-keys
  ("C-c r" . tychoish/robot-map)
  :map tychoish/robot-map
- ("g" . tychoish/robot-gptel-map))
+ ("g" . tychoish/robot-gptel-map)
+ :map tychoish/robot-gptel-map
+ ("m" . tychoish/robot-gptel-set-default-model-map))
 
 (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
@@ -556,7 +562,7 @@
 (add-hygenic-one-shot-hook
  :name "enable-modes"
  :function tychoish/init-late-enable-modes
- :hook (prog-mode-hook text-mode-hook))
+ :hook '(prog-mode-hook text-mode-hook))
 
 (add-hygenic-one-shot-hook
  :name "ssh-agent"
@@ -565,7 +571,7 @@
 
 (add-hook 'emacs-startup-hook #'tychoish/init-late-disable-modes)
 (add-hook 'after-init-hook #'tychoish/init-late-set-up-theme)
-(add-hook 'auto-save-mode-hook 'tychoish/set-up-auto-save)
+(add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
 
 (defun tychoish--load-user-file (feat)
   (with-slow-op-timer
