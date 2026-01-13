@@ -205,6 +205,10 @@
  ("n" . xref-go-forward)
  ("o" . xref-find-definitions-other-window))
 
+(defvar-keymap tychoish/robot-map
+  :name "robot tools"
+  :doc "top level map for AI and adjacent tooling")
+
 (defvar-keymap tychoish/robot-gptel-map
   :name "default model setters"
   :doc "set default model for gtpel")
@@ -212,6 +216,11 @@
 (defvar-keymap tychoish/robot-gptel-set-default-model-map
   :name "default model setters"
   :doc "set default model for gtpel")
+
+(bind-keys
+ ("C-c r" . tychoish/robot-map)
+ :map tychoish/robot-map
+ ("g" . tychoish/robot-gptel-map))
 
 (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))

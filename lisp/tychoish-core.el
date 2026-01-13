@@ -2018,17 +2018,14 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :vc (:url "https://github.com/karthink/gptel" :rev newest)
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
-  :commands gptel
+  :commands (gptel gptel-rewrite)
   :init
   (defvar gemini-api-key nil)
   (defvar anthropic-api-key nil)
   (defvar openai-api-key nil)
 
   (bind-keys
-   :prefix "C-c r"
-   :prefix-map tychoish/robot-map
-   :prefix "g"
-   :prefix-map tychoish/robot-gptel-map
+   :map tychoish/robot-gptel-map
    ("g" . gptel)
    ("r" . gptel-rewrite))
 
@@ -2322,14 +2319,23 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :load-path "elpa/monet"
   :hook (claude-code-mode . monet-mode)
   :defines (monet-command-map)
-  :bind-keymap ("C-c r i" . monet-command-map)
   :commands (monet-start-server monet-start-server-function monet-mode)
   :init
   (setq monet-prefix-key nil)
-  (which-key-add-key-based-replacements "C-c r i" "monet-command-map")
-  (bind-key "i" 'monet-command-map 'tychoish/robot-map)
+
+  (autoload 'monet-command-map "monet")
+
+  (bind-keys
+   :map tychoish/robot-map
+   ("i" . monet-command-map))
+
+  (which-key-add-key-based-replacements
+    "C-c r i" "monet-command-map")
+
   :config
-  (which-key-add-keymap-based-replacements 'tychoish/robot-map "i" (cons "monet-map"  monet-command-map)))
+  (which-key-add-keymap-based-replacements
+    'tychoish/robot-map
+    "i" (cons "monet-map"  monet-command-map)))
 
 (use-package claude-code
   ;; :vc (claude-code
@@ -2337,11 +2343,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   ;;      :rev :newest)
   :load-path "elpa/claude-code"
   :defines (claude-code-command-map)
-  :bind-keymap ("C-c r m" . claude-code-command-map)
   :commands (claude-code-mode)
   :init
+  (bind-keys
+   :map tychoish/robot-map
+   ("m" . claude-code-command-map))
+
   (which-key-add-key-based-replacements "C-c r m" "claude-code-command-map")
-  (bind-key "m" 'claude-code-command-map 'tychoish/robot-map)
   (setq claude-code-terminal-backend 'eat)
   :config
   (make-read-extended-command-for-prefix
