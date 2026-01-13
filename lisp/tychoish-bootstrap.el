@@ -205,6 +205,10 @@
  ("n" . xref-go-forward)
  ("o" . xref-find-definitions-other-window))
 
+(defvar-keymap tychoish/robot-gptel-map
+  :name "default model setters"
+  :doc "set default model for gtpel")
+
 (defvar-keymap tychoish/robot-gptel-set-default-model-map
   :name "default model setters"
   :doc "set default model for gtpel")

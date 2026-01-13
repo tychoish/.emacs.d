@@ -161,6 +161,8 @@
 (setq mu4e-sent-folder "/sent")
 (setq mu4e-trash-folder "/trash")
 (setq mu4e-user-agent-string nil)
+(setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+(setq mu4e--header-separator mail-header-separator)
 
 (defun tychoish/set-up-message-mode-buffer ()
   (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
@@ -372,6 +374,8 @@
 	 (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
 	 (setq mu4e-mu-home (f-join maildir ".mu"))
 	 (setq message-auto-save-directory (f-join maildir "drafts"))
+	 (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+	 (setq mu4e--header-separator mail-header-separator)
 
 	 (let ((signature-kind (tychoish/mail-account-signature-kind conf))
 	       (signature (tychoish/mail-account-signature conf))
@@ -407,6 +411,8 @@
 		 (replace-match new-from))))
 
            (setq mu4e-get-mail-command (tychoish/mail-account-fetchmail conf))
+
+	   (mu4e 'background)
 
            (message (format "mail: configured address [%s]" address)))))))
 

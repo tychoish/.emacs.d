@@ -416,22 +416,6 @@
   :ensure t
   :after yasnippet)
 
-(use-package prescient
-  :ensure t
-  :commands (prescient-persist-mode)
-  :init
-  (add-hygenic-one-shot-hook
-   :name "prescient"
-   :operation 'prescient-persist-mode
-   :hook '(vertico-mode-hook corfu-mode-hook))
-  :config
-  (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
-  (setq prescient-sort-full-matches-first t)
-  (setq prescient-completion-highlight-matches t)
-  (setq prescient-sort-length-enable nil)
-  (setq completion-preview-sort-function #'prescient-completion-sort)
-  (setq prescient-save-file (tychoish/conf-state-path "prescient.el")))
-
 (use-package vertico
   :ensure t
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
@@ -463,6 +447,22 @@
 	       '("\\`execute-extended-command"
                  (vertico-flat-annotate . t)
                  (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
+
+(use-package prescient
+  :ensure t
+  :commands (prescient-persist-mode)
+  :init
+  (add-hygenic-one-shot-hook
+   :name "prescient"
+   :operation 'prescient-persist-mode
+   :hook '(vertico-mode-hook corfu-mode-hook))
+  :config
+  (setq prescient-completion-highlight-matches t)
+  (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
+  (setq prescient-save-file (tychoish/conf-state-path "prescient.el"))
+  (setq prescient-sort-full-matches-first t)
+  (setq prescient-sort-length-enable nil)
+  (setq completion-preview-sort-function #'prescient-completion-sort))
 
 (use-package vertico-prescient
   :ensure t
@@ -614,7 +614,6 @@
    :name "nerd-icons-completion"
    :operation #'nerd-icons-completion-mode
    :hook '(corfu-mode-hook vertico-mode-hook)))
-
 
 (use-package consult
   :ensure t
@@ -2018,7 +2017,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package gptel
   :ensure t
   :vc (:url "https://github.com/karthink/gptel" :rev newest)
-  :bind ()
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands gptel
   :init
@@ -2029,10 +2027,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (bind-keys
    :prefix "C-c r"
    :prefix-map tychoish/robot-map
-   ("g" . gptel))
-
-  (bind-keys
-   :map tychoish/robot-map
    :prefix "g"
    :prefix-map tychoish/robot-gptel-map
    ("g" . gptel)
@@ -2049,6 +2043,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :bind-map tychoish/robot-gptel-map
    :bind-key "b"
    :key-alias "gptel-set-backend")
+
   :config
   (bind-keys
    :map gptel-mode-map
