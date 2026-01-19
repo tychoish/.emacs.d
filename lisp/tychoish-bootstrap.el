@@ -491,6 +491,17 @@
 
 (setq default-frame-alist (unless (gui-p) '((background-color . nil))))
 
+(defun tychoish/init-force-relaod ()
+  (load "tychoish-common.el")
+  (load "tychoish-bootstrap.el")
+  (load "tychoish-core.el")
+  (load "tychoish-mail.el")
+  (load "tychoish-mail.el")
+  (tychoish/init-late-disable-modes)
+  (tychoish/init-late-enable-modes)
+  (tychoish/init-late-set-up-theme)
+  (tychoish-set-up-user-local-config))
+
 (defun tychoish/init-late-disable-modes ()
   (with-slow-op-timer
    "<bootstrap.el> after-init [disable modes]"

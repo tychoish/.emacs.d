@@ -441,7 +441,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			(is-current-directory (f-equal-p default-directory directory))
 			(is-project-root (f-equal-p project-root-directory directory))
 			(display-directory (s-shortest
-					    (format "<%s>/%s" project-name (string-remove-suffix project-root-directory directory))
+					    (string-remove-suffix project-root-directory directory)
 					    (if is-project-root
 						(concat "<" project-name ">")
 					      (f-collapse-homedir directory))))
@@ -556,7 +556,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 (--flat-map
 			  (let ((command-prefix (car it))
 				(annotation-prefix (cadr it)))
-			    (->> '("" "30s" "1m" "2m30s" "5m")
+			    (->> '("" "10s" "30s" "1m" "2m30s")
 				 (--flat-map
 				  (let* ((timeout-spec it)
 					 (is-default (equal timeout-spec ""))
