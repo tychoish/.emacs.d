@@ -1334,34 +1334,37 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :init
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
-    (setq-local fill-column 100))
+    (setq-local fill-column 100)
+    (setq-local compilation-error-screen-columns nil)
+    (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint)))
 
   (defun tychoish/go-mode-setup-for-buffer (buf)
     (with-current-buffer buf
-      (setq-local compilation-error-screen-columns nil)
-      (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
       (tychoish/go-mode-setup)))
 
   (defun go-mode-set-up-all-buffers ()
     (interactive)
     (->> (mode-buffers 'go-ts-mode)
 	 (-mapc #'tychoish/go-mode-setup-for-buffer)))
+
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
   (add-to-list 'tychoish/eglot-default-server-configuration
                 '(:gopls :gofumpt t
                          :usePlaceholders :json-false
-                         :hoverKind "FullDocumentation"
+                         :hoverKind "SynopsisDocumentation"
                          :analyses (:unreachable t
                                     :unusedvariable t)
                          :hints (:parameterNames :json-false
                                  :ignoredError t
+                                 :constantValues t
                                  :compositeLiteralTypes :json-false
                                  :compositeLiteralFields :json-false
                                  :rangeVariableTypes :json-false
                                  :functionTypeParameters :json-false)))
 
   (add-hook 'go-ts-mode-hook 'tychoish/go-mode-setup)
+  (add-hook 'go-mode-hook 'tychoish/go-mode-setup)
   :config
   (let ((current-path (getenv "PATH"))
         (gopath (getenv "GOPATH")))
@@ -1845,14 +1848,25 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	     :prefix "C-c l"
 	     :prefix-map tychoish/eglot-map
              ("r" . eglot-rename)
+             ("s" . eglot-code-action-quickfix)
              ("f" . eglot-format)
              ("a" . eglot-code-actions)
              ("o" . eglot-code-action-organize-imports)
-             ;; ("i" . eglot-code-action-inline)
-             ;; ("c" . eglot-call-type-hierarchy)
-             ;; ("t" . eglot-show-type-hierarchy)
-             ("e" . eglot-code-action-extract)
+             ("i" . eglot-code-action-inline)
+	     ("s" . eglot-code-action-quickfix)
              ("w" . eglot-code-action-rewrite))
+
+  (make-read-extended-command-for-prefix
+   "eglot"
+   :bind-map tychoish/eglot-map
+   :bind-key "e"
+   :key-alias "eglot-commands")
+
+  (make-read-extended-command-for-prefix
+   "xref"
+   :bind-map tychoish/ide-map
+   :bind-key "x"
+   :key-alias "xref-commands")
 
   (setq eglot-menu-string "eg")
 
