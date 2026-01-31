@@ -54,8 +54,6 @@
  ;; ("C-x C-u w" . upcase-word)
  ;; ("C-x C-u t" . upcase-initials-region)
  ;; ("C-x C-u r" . upcase-region)
- ("C-x C-d" . dired)
- ("C-x d" . dired)
  ("C-x C-n" . count-words)
  ("C-c i" . indent-region)
  ("C-c c" . comment-region)

@@ -838,9 +838,11 @@
 
 (use-package revbufs
   :ensure t
-  :bind (:prefix "C-c b"
+  :bind (("C-x x a" . revbufs)
+	 :prefix "C-c b"
 	 :prefix-map tychoish/buffer-control-map
-	 ("r" . revbufs))
+	 ("r" . revbufs)
+	 ("b" . revert-buffer-quick))
   :commands (revbufs)
   :config
   (bind-key "C-k" 'revbufs-kill 'revbufs-mode-map)
@@ -1574,7 +1576,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package docker
   :ensure t
   :commands (docker)
-  :bind ("C-c C-c" . docker))
+  :bind (("C-x d" . docker)
+	 ("C-c d d" . docker)
+	 ("C-x C-d" . execute-extended-docker-command))
+  :init
+  (make-read-extended-command-for-prefix "docker")
+  :config
+  (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2275,16 +2283,16 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (make-aidermacs-model-selection-function
    :name "gemini-2"
-   :default-model "gemini-2.5-pro"
-   :weak-model "gemini-2.5-flash-lite"
-   :editor-model "gemini-2.5-flash"
-   :architect-model "gemini-2.5-pro")
+   :default-model "gemini/gemini-2.5-pro"
+   :weak-model "gemini/gemini-2.5-flash-lite"
+   :editor-model "gemini/gemini-2.5-flash"
+   :architect-model "gemini/gemini-2.5-pro")
 
   (make-aidermacs-model-selection-function
    :name "gemini"
    :default-model "gemini-pro"
-   :weak-model "gemini-flash-lite-latest"
-   :editor-model "gemini-flash-latest"
+   :weak-model "gemini/gemini-flash-latest"
+   :editor-model "gemini/gemini-flash-latest"
    :architect-model "gemini-pro")
 
   (make-aidermacs-model-selection-function
