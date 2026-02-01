@@ -111,7 +111,7 @@
    (t
     input)))
 
-(defun number-to-word (num)
+(defun s-number-word (num)
   (cond
    ((eql num 1) "one")
    ((eql num 2) "two")
@@ -442,7 +442,7 @@ of the equality function customization differs slightly."
        (s-join (f-path-separator))))
 
 (defmacro f-visual-compression-function (num)
-  `(defun ,(intern (concat "f-visually-compress-to-" (number-to-word num))) (path)
+  `(defun ,(intern (concat "f-visually-compress-to-" (s-number-word num))) (path)
        (f-visually-compress-path ,num path)))
 
 (defun f-filter-directories (options &rest sequence)
