@@ -31,7 +31,7 @@
       (string-equal (char-to-string char) value)
     (char-equal char value)))
 
-(cl-defmacro def-join-str-with (char &optional &key use-jargon-names space-padding)
+(cl-defmacro s-define-join-string-function (char &optional &key use-jargon-names space-padding)
   (cl-check-type char character "must create join function using the character to join the strings")
 
   (let* ((name (downcase (cond
@@ -54,19 +54,22 @@
 	       ((equal char "=>>") "dubble-fat-arrow")
 	       ;; e.g. '(; : )
 	       (t (s-join "-" (s-split " " (char-to-name char)))))))
-	(op-name (concat "s-join-with-" name))
-	(padding (if space-padding " " ""))
-	(join-with (concat padding (char-to-string char) padding)))
+	 (op-name (concat "s-join-with-" name))
+	 (padding (if space-padding " " ""))
+	 (join-with (concat padding (char-to-string char) padding)))
 
   `(defun ,(intern op-name) (&rest words)
      (->> words
 	  (-filter-s-trim)
 	  (s-join ,join-with)))))
 
-(def-join-str-with ?-)
-(def-join-str-with ? )
-(def-join-str-with ?_)
-(def-join-str-with ?| :space-padding t)
+(s-define-join-string-function ?-)
+(s-define-join-string-function ? )
+(s-define-join-string-function ?_)
+(s-define-join-string-function ?- :use-jargon-names t)
+(s-define-join-string-function ?  :use-jargon-names t)
+(s-define-join-string-function ?_ :use-jargon-names t)
+(s-define-join-string-function ?| :space-padding t)
 
 (defun s-shortest (a b)
   (if (> (length b) (length a))
