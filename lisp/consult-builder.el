@@ -162,7 +162,7 @@
 (defun clean-directory-options-for-selection (input)
   "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
   (->> input
-       (-keep #'trimmed-string-or-nil)
+       (-keep #'s-trimmed-or-nil)
        (--map (or (when (f-absolute-p it) it)
 		  (expand-file-name it)))
        (f-distinct)))
@@ -781,7 +781,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		 :mode 'compilation-mode)
 		(--keep
 		 (with-current-buffer it
-		   (when-let* ((command (trimmed-string-or-nil (car compilation-arguments))))
+		   (when-let* ((command (s-trimmed-or-nil (car compilation-arguments))))
 		     (cons command it))))
 		(--flat-map
 		 (let ((command (car it))

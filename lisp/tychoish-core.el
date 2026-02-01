@@ -1301,10 +1301,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 ;; programming major-modes
 
-(use-package yaml-ts-mode
+(use-package yaml-mode
   :ensure t
-  :mode (("\\.yaml$" . yaml-ts-mode)
-	 ("\\.yml$" . yaml-ts-mode))
+  :mode (("\\.yaml$" . yaml-mode)
+	 ("\\.yml$" . yaml-mode))
   :init
   (add-to-list 'tychoish/eglot-default-server-configuration
                 '((:yaml (:format
@@ -1317,12 +1317,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                           :hover t
                           :completion t))))
   :config
-  (add-hook 'yaml-ts-mode-hook (tychoish/set-tab-width 2)))
+  (add-hook 'yaml-mode-hook (tychoish/set-tab-width 2)))
 
 (use-package yaml-pro
   :ensure t
-  :commands (yaml-pro-ts-mode)
-  :hook (yaml-ts-mode . yaml-pro-ts-mode))
+  :commands (yaml-pro-mode)
+  :hook (yaml-mode . yaml-pro-mode))
 
 (use-package go-ts-mode
   :ensure nil
@@ -2414,7 +2414,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (or (when (boundp 'anthropic-api-key) anthropic-api-key)
 	(unless tychoish/aider-setup-state
 	  (or (tychoish/aider-setup-state) nil))
-	(awhen (trimmed-string-or-nil (getenv "ANTHROPIC_API_KEY")) it)
+	(awhen (s-trimmed-or-nil (getenv "ANTHROPIC_API_KEY")) it)
         (when-let* ((auth-info (car (auth-source-search :host efrit-api-auth-source-host
                                                           :user efrit-api-auth-source-user
                                                           :require '(:secret))))

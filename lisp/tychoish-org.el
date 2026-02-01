@@ -312,7 +312,7 @@
 ;;;###autoload
 (cl-defun tychoish/org-capture-add-routine-templates (&key name
 							   (key "")
-							   (path (concat (make-filename-slug name) ".org")))
+							   (path (concat (f-make-slug name) ".org")))
 
   (when (string-equal "r" key)
     (user-error "cannot define routine (loops) %s org-capture-templates with key `r'" name))
@@ -464,7 +464,7 @@
 
   (setq path (if path
 		 (f-expand path)
-	       (concat (make-filename-slug name) ".org")))
+	       (concat (f-make-slug name) ".org")))
 
   (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
 

@@ -35,6 +35,7 @@
 
 (require 'f)
 (require 's)
+(require 'fn)
 (require 'ht)
 (require 'dash)
 
@@ -800,7 +801,7 @@
   (setq org-agenda-files (->> (list org-directory user-org-directories)
                               (-flatten)
                               (-map #'expand-file-name)
-                              (-keep #'trimmed-string-or-nil)
+                              (-keep #'s-trimmed-or-nil)
                               (-distinct)))
   (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
   (setq org-default-notes-file (f-join org-directory "records.org"))

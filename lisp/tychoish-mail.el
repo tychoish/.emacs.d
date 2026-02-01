@@ -232,7 +232,7 @@
 						  ;; we could do more validation here, but it's probably more trouble
 						  ;; than it's worth.
 						  (t (f-expand maildir))))
-                                   (signature (setq signature (and (when (trimmed-string-or-nil signature)
+                                   (signature (setq signature (and (when (s-trimmed-or-nil signature)
                                                                      (cond ((eq signature-kind 'signature-directory)
                                                                             (f-join maildir ".sig"))
                                                                            ((eq signature-kind 'signature-file)

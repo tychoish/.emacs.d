@@ -52,7 +52,7 @@
 (defun tychoish-blog-create-post (title)
   "Create a new file for a post of with the specified TITLE."
   (interactive "sPost Title: ")
-  (let* ((slug (make-filename-slug title))
+  (let* ((slug (f-make-slug title))
          (draft-fn (f-join tychoish-blog-path (concat slug "-" tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
@@ -65,7 +65,7 @@
 (defun tychoish-create-note-file (title &optional &key path)
   "Create a new file for a post of with the specified TITLE."
   (interactive "sName: ")
-  (let* ((slug (make-filename-slug title))
+  (let* ((slug (f-make-slug title))
          (datetime (format-time-string "%Y-%02m-%02d"))
          (draft-fn (f-join (or path
 			       (consult--select-directory))
@@ -254,7 +254,7 @@ entry of `org-capture-templates'."
   "Return the initial text for a query, processing `INITIAL' as needed."
   ;; if the string is empty or only whitespace, it's undefined,
   ;; otherwise use it.
-  (or (trimmed-string-or-nil initial)
+  (or (s-trimmed-or-nil initial)
       ;; with the prefix argument, ask the user
       (when (or current-prefix-arg context)
         (consult-tycho--select-context-for-operation
@@ -267,7 +267,7 @@ entry of `org-capture-templates'."
 
     (->> (or (when (listp seed) seed)
              (when (stringp seed) (list seed)))
-         (-keep #'trimmed-string-or-nil)
+         (-keep #'s-trimmed-or-nil)
          (--filter (length> it 64))
          (--mapc (ht-set table it "user provided input (seed)")))
 
@@ -277,7 +277,7 @@ entry of `org-capture-templates'."
                      (--map (cons 'prog-mode it))))
          (--keep (when (derived-mode-p (car it))
                    (when-let* ((content (thing-at-point (cdr it)))
-                               (content (trimmed-string-or-nil content))
+                               (content (s-trimmed-or-nil content))
                                (content (substring-no-properties content)))
                      (cons content it))))
          (--filter (< (length (car it)) 64))
@@ -286,11 +286,11 @@ entry of `org-capture-templates'."
     (when-let* ((mark-pos (mark))
                 (start (or (region-beginning) (min (point) mark-pos)))
                 (end (or (region-end) (max mark-pos (point))))
-                (selection (trimmed-string-or-nil (buffer-substring-no-properties start end)))
+                (selection (s-trimmed-or-nil (buffer-substring-no-properties start end)))
                 (is-oversized (< (length selection) 32)))
       (ht-set table selection (format "current selection <%s>" (current-buffer))))
 
-    (when-let* ((line (trimmed-string-or-nil (thing-at-point 'line)))
+    (when-let* ((line (s-trimmed-or-nil (thing-at-point 'line)))
 		(line (substring-no-properties line))
 		(is-oversized (< (length line) 32)))
       (ht-set table line (format "current line <%s>" (buffer-name))))
@@ -298,7 +298,7 @@ entry of `org-capture-templates'."
     (let ((count 0))
       (->> kill-ring
            (-map #'substring-no-properties)
-           (-keep #'trimmed-string-or-nil)
+           (-keep #'s-trimmed-or-nil)
            (--filter (< (length it) 64))
            (-take 10)
            (--mapc (ht-set table it (format "kill ring [idx=%d]" (cl-incf count))))))
@@ -339,7 +339,7 @@ entry of `org-capture-templates'."
      ;; builder
      #'consult--ripgrep-make-builder
      ;; directory
-     (or (trimmed-string-or-nil dir)
+     (or (s-trimmed-or-nil dir)
 	 (consult--select-directory)
 	 (approximate-project-root))
      ;; initial
