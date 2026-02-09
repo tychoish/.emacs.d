@@ -2250,59 +2250,73 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :name "claude-max"
    :default-model "anthropic/claude-sonnet-4-5"
    :architect-model "anthropic/claude-opus-4-5"
-   :weak-model "anthropic/claude-sonnet-4-5"
-   :editor-model "anthropic/claude-haiku-4-5")
+   :weak-model "anthropic/claude-haiku-4-5"
+   :editor-model "anthropic/claude-sonnet-4-5")
 
   (make-aidermacs-model-selection-function
    :name "claude-sonnet"
    :default-model "anthropic/claude-sonnet-4-5"
    :architect-model "anthropic/claude-sonnet-4-5"
-   :weak-model "anthropic/claude-sonnet-4-5"
-   :editor-model "anthropic/claude-haiku-4-5")
+   :weak-model "anthropic/claude-haiku-4-5"
+   :editor-model "anthropic/claude-sonnet-4-5")
 
   (make-aidermacs-model-selection-function
    :name "gpt-4o"
    :default-model "opeani/gpt-4o"
-   :weak-model "openai/gpt-4-turbo"
-   :editor-model "openai/gpt-4o-mini"
+   :weak-model "openai/gpt-4o-mini"
+   :editor-model "openai/gpt-4o"
    :architect-model "openai/gpt-4o")
 
   (make-aidermacs-model-selection-function
-   :name "gpt-4"
-   :default-model "opeani/gpt-4"
-   :weak-model "opeani/gpt-4-turbo"
-   :editor-model "openai/gpt-4.1-mini"
-   :architect-model "opeani/gpt-4.5-preview")
+   :name "gpt-5"
+   :default-model "opeani/gpt-5.mini"
+   :weak-model "opeani/gpt-5-nano"
+   :editor-model "openai/gpt-5-mini"
+   :architect-model "opeani/gpt-5-mini")
 
   (make-aidermacs-model-selection-function
-   :name "gpt-5"
-   :default-model "opeani/gpt-5.2"
+   :name "gpt-5++"
+   :default-model "opeani/gpt-5.mini"
    :weak-model "opeani/gpt-5-nano"
    :editor-model "openai/gpt-5-mini"
    :architect-model "opeani/gpt-5.2")
 
   (make-aidermacs-model-selection-function
-   :name "gemini-2"
-   :default-model "gemini/gemini-2.5-pro"
+   :name "gemini-2.5++"
+   :default-model "gemini/gemini-2.5-flash"
    :weak-model "gemini/gemini-2.5-flash-lite"
    :editor-model "gemini/gemini-2.5-flash"
    :architect-model "gemini/gemini-2.5-pro")
 
   (make-aidermacs-model-selection-function
-   :name "gemini"
-   :default-model "gemini-pro"
+   :name "gemini-2.5-flash"
+   :default-model "gemini/gemini-2.5-flash"
+   :weak-model "gemini/gemini-2.5-flash-lite"
+   :editor-model "gemini/gemini-2.5-flash"
+   :architect-model "gemini/gemini-2.5-flash")
+
+  (make-aidermacs-model-selection-function
+   :name "gemini++"
+   :default-model "gemini-flash"
    :weak-model "gemini/gemini-flash-latest"
    :editor-model "gemini/gemini-flash-latest"
    :architect-model "gemini-pro")
 
   (make-aidermacs-model-selection-function
-   :name "copilot-gemini"
-   :copilot 'use-copilot
-   :default-model "github_copilot/gemini-2.5-pro")
+   :name "gemini-flash"
+   :default-model "gemini-flash"
+   :weak-model "gemini/gemini-flash-latest"
+   :editor-model "gemini/gemini-flash-latest"
+   :architect-model "gemini-flash")
 
   (make-aidermacs-model-selection-function
    :name "gemini-3-flash"
    :default-model "gemini/gemini-3-flash-preview")
+
+  (make-aidermacs-model-selection-function
+   :name "copilot-gemini-pro"
+   :copilot 'use-copilot
+   :default-model "github_copilot/gemini-2.5-pro")
 
   (make-aidermacs-model-selection-function
    :name "copilot-gpt-4o"
@@ -2313,28 +2327,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :editor-model "github_copilot/gpt-4o")
 
   (make-aidermacs-model-selection-function
-   :name "copilot-gpt-5"
+   :name "copilot-gpt-4++"
    :copilot 'use-copilot
-   :default-model "github_copilot/gpt-5.2"
-   :weak-model "github_copilot/gpt-5-mini"
-   :architect-model "github_copilot/gpt-5.2"
-   :editor-model "github_copilot/gpt-4o")
-
-  (make-aidermacs-model-selection-function
-   :name "copilot-claude-max"
-   :copilot 'use-copilot
-   :default-model "github_copilot/claude-sonnet-4.5"
-   :weak-model "github_copilot/claude-haiku-4.5"
-   :architect-model "github_copilot/claude-opus-4.5"
-   :editor-model "github_copilot/claude-sonnet-4.5")
-
-  (make-aidermacs-model-selection-function
-   :name "copilot-claude-sonnet"
-   :copilot 'use-copilot
-   :default-model "github_copilot/claude-sonnet-4.5"
-   :architect-model "github_copilot/claude-sonnet-4.5"
-   :editor-model "github_copilot/claude-sonnet-4.5"
-   :weak-model "github_copilot/claude-haiku-4.5"))
+   :default-model "github_copilot/gpt-4o"
+   :weak-model "github_copilot/gpt-4o-mini"
+   :architect-model "github_copilot/gpt-4.1"
+   :editor-model "github_copilot/gpt-4o"))
 
 (use-package monet
   ;; :vc (:url "https://github.com/stevemolitor/monet" :rev :newest)
