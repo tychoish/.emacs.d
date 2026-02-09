@@ -119,8 +119,9 @@
              ("d" . tychoish-org-mark-done-and-archive)
              ("e" . org-cycle-force-archived)
              ("t" . org-archive-set-tag)
-             ("s" . org-archive-to-archive-sibling))
+             ("s" . org-archive-to-archive-sibling)))
 
+(with-eval-after-load 'org
   (with-eval-after-load 'consult
     (bind-keys :map tychoish/org-mode-personal-map
                ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)

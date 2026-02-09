@@ -2226,7 +2226,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
 
       (add-to-list 'exec-path uv-bin-path)))
-
+  (tychoish/aider-setup-state)
   (defvar aidermacs-model-settings-path (f-join user-emacs-directory "aider.model.settings.yml"))
 
   (add-to-list 'aidermacs-extra-args (concat "--input-history-file=" (tychoish/conf-state-path "aider.input-history.md")) t)
