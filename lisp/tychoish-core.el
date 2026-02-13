@@ -807,7 +807,7 @@
 
 (use-package consult-tycho
   :bind (("M-g r" . consult-rg)
-	 :map tychoish-core-map
+	 :map tychoish/core-map
 	 ("r" . consult-sardis-run)
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
          ("d" . consult-rg-pwd)
@@ -821,7 +821,7 @@
          ("l" . consult-rg-pwd-wizard)
          ("r" . consult-rg-project)
          ("p" . consult-rg-project-wizard)
-	 :map tychoish-core-map
+	 :map tychoish/core-map
          :prefix "b"
 	 :prefix-map tychoish/blogging-map
 	 ("m" . tychoish-insert-date)
@@ -1570,7 +1570,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package journalctl-mode
   :ensure t
-  :bind (:map tychoish-core-map
+  :bind (:map tychoish/core-map
 	 ("j" . journalctl)))
 
 (use-package docker
@@ -1650,7 +1650,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
-  :bind (:map tychoish-core-map
+  :bind (:map tychoish/core-map
 	 ("c" . tychoish-compile)
 	 :map compilation-mode-map
 	 ("C" . compile))
@@ -2070,76 +2070,54 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (setq gptel-include-reasoning 'ignore)
 
-  (make-gptel-set-up-backend-functions
-   :name "claude-sonnet-4-5"
-   :api-key anthropic-api-key
+  (make-gptel-set-up-backend-functions :name "claude-sonnet-4-5" :key "s"
+   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
    :model 'claude-sonnet-4-5-20250929
-   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :key "s")
+   :api-key anthropic-api-key)
 
-  (make-gptel-set-up-backend-functions
-   :name "claude-haiku-4-5"
+  (make-gptel-set-up-backend-functions :name "claude-haiku-4-5":key "h"
+   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
    :model 'claude-haiku-4-5-20251001
-   :api-key anthropic-api-key
-   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :key "h")
+   :api-key anthropic-api-key)
 
-  (make-gptel-set-up-backend-functions
-   :name "gemini-pro-latest"
-   :key "g"
-   :model 'gemini-flash-lite-latest
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
+  (make-gptel-set-up-backend-functions :name "gemini-pro-latest" :key "g"
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+   :model 'gemini-flash-lite-latest)
 
-  (make-gptel-set-up-backend-functions
-   :name "gemini-flash"
-   :key "f"
-   :model 'gemini-flash-lite-latest
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
+  (make-gptel-set-up-backend-functions :name "gemini-flash" :key "f"
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+   :model 'gemini-flash-lite-latest)
 
-  (make-gptel-set-up-backend-functions
-   :name "gemini-flash-lite"
-   :key "l"
-   :model 'gemini-flash-lite-latest
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
+  (make-gptel-set-up-backend-functions :name "gemini-flash-lite" :key "l"
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+   :model 'gemini-flash-lite-latest)
 
-  (make-gptel-set-up-backend-functions
-   :name "copilot"
-   :key "c"
-   :model 'claude-3.5-sonnet
-   :backend (gptel-make-gh-copilot "copilot"))
+  (make-gptel-set-up-backend-functions :name "copilot" :key "c"
+   :backend (gptel-make-gh-copilot "copilot")
+   :model 'claude-3.5-sonnet)
 
-  (make-gptel-set-up-backend-functions
-   :name "gpt-5"
-   :key "s"
+  (make-gptel-set-up-backend-functions :name "gpt-5" :key "s"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-5
-   :api-key openai-api-key
-   :backend (gptel-make-openai "openai" :key openai-api-key))
+   :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions
-   :name "gpt-5-mini"
-   :key "m"
+  (make-gptel-set-up-backend-functions :name "gpt-5-mini" :key "m"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-5-mini
-   :api-key openai-api-key
-   :backend (gptel-make-openai "openai" :key openai-api-key))
+   :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions
-   :name "gpt-5-nano"
-   :key "n"
+  (make-gptel-set-up-backend-functions :name "gpt-5-nano" :key "n"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-5-nano
-   :api-key openai-api-key
-   :backend (gptel-make-openai "openai" :key openai-api-key))
+   :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions
-   :name "gpt-4o"
-   :key "o"
-   :model 'gpt-4o
-   :backend (gptel-make-openai "openai" :key openai-api-key))
+  (make-gptel-set-up-backend-functions :name "gpt-4o" :key "o"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
+   :model 'gpt-4o)
 
-  (make-gptel-set-up-backend-functions
-   :name "gpt-4o-mini"
-   :key "l"
-   :model 'gpt-4o-mini
-   :backend (gptel-make-openai "openai" :key openai-api-key))
+  (make-gptel-set-up-backend-functions :name "gpt-4o-mini" :key "l"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
+   :model 'gpt-4o-mini)
 
   (require 'gptel-integrations))
 
@@ -2156,7 +2134,23 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (require 'mcp-hub)
   (add-to-list 'mcp-hub-servers '("time" . (:command "uvx" :args ("mcp-server-time"))))
   (add-to-list 'mcp-hub-servers '("fetch" . (:command "uvx" :args ("mcp-server-fetch"))))
-  (add-to-list 'mcp-hub-servers '("git" . (:command "uvx" :args ("mcp-server-git")))))
+
+  (add-to-list 'mcp-hub-servers '("godoc" . (:command "godoc-mcp-server")))
+  (add-to-list 'mcp-hub-servers '("awsdoc" . (:command "awslabs.aws-documentation-mcp-server")))
+
+  (add-to-list 'mcp-hub-servers `("lsp-mcp-gopls" . (:command "npx" :args ("tritlo/lsp-mcp" "golang" ,(executable-find "gopls") ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid))))))
+  (add-to-list 'mcp-hub-servers `("lsp-mcp-rust" . (:command "npx" :args ("tritlo/lsp-mcp" "rust" ,(executable-find "rust-analyzer")))))
+  (add-to-list 'mcp-hub-servers `("lsp-mcp-bash" . (:command "npx" :args ("tritlo/lsp-mcp" "bash" ,(executable-find "bash-language-server" "server")))))
+  (add-to-list 'mcp-hub-servers `("lsp-mcp-yaml" . (:command "npx" :args ("tritlo/lsp-mcp" "yaml" ,(executable-find "yaml-language-server" "--stdio")))))
+
+  (add-to-list 'mcp-hub-servers '("git" . (:command "uvx" :args ("mcp-server-git"))))
+  (add-to-list 'mcp-hub-servers '("rg" . (:command "npx" :args ("-y" "mcp-ripgrep@latest"))))
+
+  (add-to-list 'mcp-hub-servers '("linear" . (:command "npx" :args ("-y" "mcp-remote" "https://mcp.linear.app/mcp"))))
+  (add-to-list 'mcp-hub-servers '("github" . (:command "npx" :args ("-y" "mcp-remote" "https://api.githubcopilot.com/mcp"))))
+  (add-to-list 'mcp-hub-servers '("notion" . (:command "npx" :args ("-y" "mcp-remote" "https://mcp.notion.com/mcp"))))
+  (add-to-list 'mcp-hub-servers '("google-workspace" . (:command "uvx" :args ("workspace-mcp"))))
+)
 
 (use-package copilot
   :ensure t
@@ -2246,149 +2240,102 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (make-read-extended-command-for-prefix "aidermacs")
   (make-read-extended-command-for-prefix "aidermacs-model")
 
-  (make-aidermacs-model-selection-function
-   :name "claude-max"
+  (make-aidermacs-model-selection-function :name "claude-max"
    :default-model "anthropic/claude-sonnet-4-5"
-   :architect-model "anthropic/claude-opus-4-5"
-   :weak-model "anthropic/claude-haiku-4-5"
-   :editor-model "anthropic/claude-sonnet-4-5")
+   :architect-model "anthropic/claude-opus-4-5")
 
-  (make-aidermacs-model-selection-function
-   :name "claude-sonnet"
+  (make-aidermacs-model-selection-function :name "claude-sonnet"
    :default-model "anthropic/claude-sonnet-4-5"
-   :architect-model "anthropic/claude-sonnet-4-5"
-   :weak-model "anthropic/claude-haiku-4-5"
-   :editor-model "anthropic/claude-sonnet-4-5")
+   :weak-model "anthropic/claude-haiku-4-5")
 
-  (make-aidermacs-model-selection-function
-   :name "gpt-4o"
-   :default-model "opeani/gpt-4o"
-   :weak-model "openai/gpt-4o-mini"
-   :editor-model "openai/gpt-4o"
+  (make-aidermacs-model-selection-function :name "gpt-4o"
+   :default-model "opeani/gpt-4o-mini"
    :architect-model "openai/gpt-4o")
 
-  (make-aidermacs-model-selection-function
-   :name "gpt-5"
-   :default-model "opeani/gpt-5.mini"
-   :weak-model "opeani/gpt-5-nano"
-   :editor-model "openai/gpt-5-mini"
-   :architect-model "opeani/gpt-5-mini")
+  (make-aidermacs-model-selection-function :name "gpt-4"
+   :default-model "opeani/gpt-4o"
+   :weak-model "opeani/gpt-4o-mini"
+   :architect-model "opeani/gpt-4.5-preview")
 
-  (make-aidermacs-model-selection-function
-   :name "gpt-5++"
-   :default-model "opeani/gpt-5.mini"
-   :weak-model "opeani/gpt-5-nano"
-   :editor-model "openai/gpt-5-mini"
-   :architect-model "opeani/gpt-5.2")
+  (make-aidermacs-model-selection-function :name "gpt-5"
+   :default-model "opeani/gpt-5"
+   :architect-model "opeani/gpt-5.2"
+   :weak-model "opeani/gpt-5-nano")
 
-  (make-aidermacs-model-selection-function
-   :name "gemini-2.5++"
+  (make-aidermacs-model-selection-function :name "gpt-5"
+   :default-model "opeani/gpt-5-mini"
+   :weak-model "opeani/gpt-5-nano")
+
+  (make-aidermacs-model-selection-function :name "gemini-2"
    :default-model "gemini/gemini-2.5-flash"
-   :weak-model "gemini/gemini-2.5-flash-lite"
-   :editor-model "gemini/gemini-2.5-flash"
-   :architect-model "gemini/gemini-2.5-pro")
+   :architect-model "gemini/gemini-2.5-pro"
+   :weak-model "gemini/gemini-2.5-flash-lite")
 
-  (make-aidermacs-model-selection-function
-   :name "gemini-2.5-flash"
-   :default-model "gemini/gemini-2.5-flash"
-   :weak-model "gemini/gemini-2.5-flash-lite"
-   :editor-model "gemini/gemini-2.5-flash"
-   :architect-model "gemini/gemini-2.5-flash")
+  (make-aidermacs-model-selection-function :name "gemini"
+   :default-model "gemini/gemini-flash-latest"
+   :architect-model "gemini/gemini-pro")
 
-  (make-aidermacs-model-selection-function
-   :name "gemini++"
-   :default-model "gemini-flash"
-   :weak-model "gemini/gemini-flash-latest"
-   :editor-model "gemini/gemini-flash-latest"
-   :architect-model "gemini-pro")
-
-  (make-aidermacs-model-selection-function
-   :name "gemini-flash"
-   :default-model "gemini-flash"
-   :weak-model "gemini/gemini-flash-latest"
-   :editor-model "gemini/gemini-flash-latest"
-   :architect-model "gemini-flash")
-
-  (make-aidermacs-model-selection-function
-   :name "gemini-3-flash"
+  (make-aidermacs-model-selection-function :name "gemini-3-flash"
    :default-model "gemini/gemini-3-flash-preview")
 
-  (make-aidermacs-model-selection-function
-   :name "copilot-gemini-pro"
-   :copilot 'use-copilot
+  (make-aidermacs-model-selection-function :name "copilot-gemini" :copilot 'use-copilot
    :default-model "github_copilot/gemini-2.5-pro")
 
-  (make-aidermacs-model-selection-function
-   :name "copilot-gpt-4o"
-   :copilot 'use-copilot
-   :default-model "github_copilot/gpt-4o"
-   :weak-model "github_copilot/gpt-4o-mini"
-   :architect-model "github_copilot/gpt-4o"
-   :editor-model "github_copilot/gpt-4o")
+  (make-aidermacs-model-selection-function :name "copilot-gpt-4o" :copilot 'use-copilot
+   :default-model "github_copilot/gpt-4o-mini"
+   :architect-model "github_copilot/gpt-4o")
 
-  (make-aidermacs-model-selection-function
-   :name "copilot-gpt-4++"
-   :copilot 'use-copilot
-   :default-model "github_copilot/gpt-4o"
-   :weak-model "github_copilot/gpt-4o-mini"
-   :architect-model "github_copilot/gpt-4.1"
-   :editor-model "github_copilot/gpt-4o"))
+  (make-aidermacs-model-selection-function :name "copilot-gpt-5" :copilot 'use-copilot
+   :default-model "github_copilot/gpt-5-mini"
+   :architect-model "github_copilot/gpt-5.2"
+   :weak-model "github_copilot/gpt-5-nano")
 
-(use-package monet
-  ;; :vc (:url "https://github.com/stevemolitor/monet" :rev :newest)
-  :load-path "elpa/monet"
-  :hook (claude-code-mode . monet-mode)
-  :defines (monet-command-map)
-  :commands (monet-start-server monet-start-server-function monet-mode)
-  :init
-  (setq monet-prefix-key nil)
+  (make-aidermacs-model-selection-function :name "copilot-claude" :copilot 'use-copilot
+   :default-model "github_copilot/claude-sonnet-4.5"
+   :architect-model "github_copilot/claude-opus-4.5"
+   :weak-model "github_copilot/claude-haiku-4.5")
 
-  (autoload 'monet-command-map "monet")
+  (make-aidermacs-model-selection-function :name "copilot-claude-sonnet" :copilot 'use-copilot
+   :default-model "github_copilot/claude-sonnet-4.5"
+   :weak-model "github_copilot/claude-haiku-4.5"))
 
-  (bind-keys
-   :map tychoish/robot-map
-   ("i" . monet-command-map))
-
-  (which-key-add-key-based-replacements
-    "C-c r i" "monet-command-map")
-
+(use-package claude-code-ide
+  :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
+  :bind (:map tychoish/robot-map ;; "C-c r"
+         :prefix "i"
+	 :prefix-map tychoish/robot-claude-code-ide-map
+	 ("x" . execute-extended-claude-code-command)
+	 ("m" . claude-code-ide-menu)
+	 ("s" . claude-code-ide)
+	 ("l" . claude-code-ide-list-sessions)
+	 ("t" . claude-code-ide-toggle)
+	 ("b" . claude-code-ide-switch-to-buffer)
+	 ("k" . claude-code-ide-stop)
+	 ("s" . claude-code-ide-continue)
+	 ("e" . claude-code-ide-send-escape))
+  :commands (claude-code-ide)
   :config
-  (which-key-add-keymap-based-replacements
-    'tychoish/robot-map
-    "i" (cons "monet-map"  monet-command-map)))
-
-(use-package claude-code
-  ;; :vc (claude-code
-  ;;      :url "https://github.com/stevemolitor/claude-code.el"
-  ;;      :rev :newest)
-  :load-path "elpa/claude-code"
-  :defines (claude-code-command-map)
-  :commands (claude-code-mode)
-  :init
-  (bind-keys
-   :map tychoish/robot-map
-   ("m" . claude-code-command-map))
-
-  (which-key-add-key-based-replacements "C-c r m" "claude-code-command-map")
-  (setq claude-code-terminal-backend 'eat)
-  :config
+  (setq claude-code-ide-diagnostics-backend 'flycheck)
+  (setq claude-code-ide-terminal-backend 'eat)
   (make-read-extended-command-for-prefix
-   "claude-code"
-   :bind-map claude-code-command-map
-   :bind-key ";"
-   :key-alias "claude-code-commands")
+   "claude-code-ide"
+   :key-alias "claude-code-ide-commands")
 
-  (which-key-add-keymap-based-replacements 'tychoish/robot-map "m" (cons "claude-code" claude-code-command-map))
-  (add-hook 'claude-code-process-environment-functions #'monet-start-server-function))
-
-(use-package inheritenv
-  :ensure t
-  :after (claude-code))
+  (claude-code-ide-emacs-tools-setup))
 
 (use-package eat
   :ensure t
-  :after (claude-code)
-  :defer t)
+  :bind (:map tychoish/shell-map
+	 :prefix "e"
+	 :prefix-map tychoish/shell-eat-map
+	 ("e" . eat)
+	 ("o" . eat-other-window)
+	 ("p" . eat-project)
+	 ("P" . eat-project-other-window)
+	 ("x" . execute-extended-eat-command))
+  :commands (eat eat-project eat-other-window eat-project-other-window)
+  :init
+  (make-read-extended-command-for-prefix "eat"))
 
 (use-package efrit
   :load-path "external/efrit/lisp"
@@ -2421,7 +2368,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
           (funcall secret))))
 
   ;; Max tokens per response
-  (setq efrit-max-tokens 4096)
+  (setq efrit-max-tokens 2048)
 
   ;; Data directory
   (setq efrit-data-directory (tychoish/conf-state-path "efrit"))

@@ -74,7 +74,6 @@
  ("C-z" . undo)
  ("C-w" . kill-region)
  ("C-<tab>" . completion-at-point)
- ("C-c s e" . eshell)
  ("M-h" . windmove-left)
  ("M-j" . windmove-down)
  ("M-k" . windmove-up)
@@ -113,9 +112,10 @@
 (bind-keys
  ;; these are all from tychoish-common.el
  :prefix "C-c t"
- :prefix-map tychoish-core-map
+ :prefix-map tychoish/core-map
  ("w" . toggle-local-whitespace-cleanup)
- :map tychoish-core-map ;; "C-c t"
+ ("k" . execute-extended-clipboard-command)
+ :map tychoish/core-map ;; "C-c t"
  :prefix "t"
  :prefix-map tychoish/theme-map
  ("r" . disable-all-themes) ;; reset
@@ -123,7 +123,7 @@
  ("l" . tychoish-load-light-theme))
 
 (bind-keys
- :map tychoish-core-map
+ :map tychoish/core-map
  ("p" . toggle-electric-pair-inhibition)
  ("e" . toggle-electric-pair-eagerness))
 
@@ -204,6 +204,11 @@
  ("n" . xref-go-forward)
  ("o" . xref-find-definitions-other-window))
 
+(bind-keys
+ :prefix "C-c s"
+ :prefix-map tychoish/shell-map
+ ("m" . eshell))
+
 (defvar-keymap tychoish/robot-map
   :name "robot tools"
   :doc "top level map for AI and adjacent tooling")
@@ -230,6 +235,7 @@
 (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
 
+(put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
 (put 'list-timers 'disabled nil)
@@ -315,6 +321,7 @@
 (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
 
 (setq package-user-dir (concat user-emacs-directory "elpa"))
+(setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell")))
 
 (setq lpr-add-switches "-T ''")
 
@@ -399,11 +406,10 @@
   (unless (equal "solo" tychoish/emacs-instance-id)
     ;; TODO This should get a better runtime/feature flag (and have
     ;; a list of instance names that are epehemral)
-    (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
+    (setq desktop-dirname (f-join user-emacs-diretory tychoish/conf-state-directory-name))
     (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
     (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
-
     (if (daemonp)
         (progn
           (setq desktop-restore-frames t)

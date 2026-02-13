@@ -39,8 +39,8 @@
 (f-visual-compression-function 9)
 (f-visual-compression-function 10)
 
-(when (boundp 'tychoish-core-map)
-  (bind-keys :map 'tychoish-core-map
+(when (boundp 'tychoish/core-map)
+  (bind-keys :map 'tychoish/core-map
 	     ("c" . consult-builder)))
 
 (defun tychoish--go-module (&optional directory)
