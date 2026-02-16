@@ -501,10 +501,12 @@
   (load "tychoish-bootstrap.el")
   (load "tychoish-core.el")
   (load "tychoish-mail.el")
-  (load "tychoish-mail.el")
+  (load "tychoish-org.el")
   (tychoish/init-late-disable-modes)
   (tychoish/init-late-enable-modes)
-  (tychoish/init-late-set-up-theme)
+  (tychoish/init-late-set-up-naming)
+  (tychoish/ensure-default-font)
+  (tychoish/ensure-light-theme)
   (tychoish-set-up-user-local-config))
 
 (defun tychoish/init-late-disable-modes ()
@@ -516,13 +518,11 @@
    (indent-tabs-mode -1)
    (menu-bar-mode -1)))
 
-(defun tychoish/init-late-set-up-theme ()
+(defun tychoish/init-late-set-up-naming ()
   (with-slow-op-timer
    "<bootstrap.el> after-init [theme setup]"
     (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
-    (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))
-    (tychoish/ensure-light-theme)
-    (tychoish/ensure-default-font)))
+    (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))))
 
 (defun tychoish/init-late-enable-modes ()
   (with-slow-op-timer
@@ -551,42 +551,41 @@
    (delight 'visual-line-mode " wr")
    (delight 'fundamental-mode "fun")))
 
-(add-hygenic-one-shot-hook
- :name "delight-modeline"
- :operation 'tychoish/set-up-delightful-mode-lighters
+(add-hygenic-one-shot-hook :name "delight-modeline"
+ :function tychoish/set-up-delightful-mode-lighters
  :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
 
-(add-hygenic-one-shot-hook
- :name "restore-desktop"
+(add-hygenic-one-shot-hook :name "restore-desktop"
  :function tychoish/desktop-read-init
  :hook after-first-frame-created)
 
-(add-hygenic-one-shot-hook
- :name "emacs-lockfile-setup"
- :form (if (equal "solo" tychoish/emacs-instance-id)
+(add-hygenic-one-shot-hook :name "emacs-lockfile-setup"
+ :form (progn
+         (tychoish/init-late-set-up-naming)
+         (if (equal "solo" tychoish/emacs-instance-id)
 	       (tychoish/set-up-ephemeral-instance-file-locks)
-	   (tychoish/set-up-named-instance-file-locks))
- :depth 50
- :hook after-first-frame-created)
+	   (tychoish/set-up-named-instance-file-locks)))
+ :hook emacs-startup-hook)
 
-(add-hygenic-one-shot-hook
- :name "emacs-instance-persistence"
+(add-hygenic-one-shot-hook :name "emacs-instance-persistence"
  :function (tychoish/set-up-emacs-instance-persistence)
  :depth 75
  :hook after-first-frame-created)
 
-(add-hygenic-one-shot-hook
- :name "enable-modes"
+(add-hygenic-one-shot-hook :name "disable-modes"
+ :function tychoish/init-late-disable-modes
+ :hook emacs-startup-hook)
+
+(add-hygenic-one-shot-hook :name "enable-modes"
  :function tychoish/init-late-enable-modes
  :hook '(prog-mode-hook text-mode-hook))
 
-(add-hygenic-one-shot-hook
- :name "ssh-agent"
+(add-hygenic-one-shot-hook :name "ssh-agent"
  :function (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
-(add-hook 'emacs-startup-hook #'tychoish/init-late-disable-modes)
-(add-hook 'after-init-hook #'tychoish/init-late-set-up-theme)
+(add-hook 'emacs-startup-hook #'tychoish/ensure-default-font)
+(add-hook 'window-setup-hook #'tychoish/ensure-light-theme)
 (add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
 
 (defun tychoish--load-user-file (feat)

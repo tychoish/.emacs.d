@@ -517,13 +517,11 @@
 (eval-when-compile
   (require 'tychoish-common))
 
-(add-hygenic-one-shot-hook
- :name "org-install-aux-packages"
+(add-hygenic-one-shot-hook :name "org-install-aux-packages"
  :hook 'org-mode-hook
  :operation #'tychoish-org--install-auxiliary-packages)
 
-(add-hygenic-one-shot-hook
- :name "org-capture [install standard templates]"
+(add-hygenic-one-shot-hook :name "org-capture [install standard templates]"
  :hook 'emacs-startup-hook
  :operation #'tychoish-org-setup-standard-capture-templates)
 

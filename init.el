@@ -7,52 +7,19 @@
 
 ;;; Code:
 
-(defmacro with-gc-suppressed (&rest body)
-  `(progn
-     (let ((gc-cons-threshold 800000000000000))
-       ,@body)
-     (let ((garbage-collection-messages t))
-       (garbage-collect))))
-
-(defmacro with-file-name-handler-disabled (&rest body)
-  `(let ((file-name-handler-alist nil))
-     ,@body))
-
-;;;###autoload
-
 (with-gc-suppressed
- (defvar tychoish/slow-op-reporting (or debug-on-error init-file-debug))
- (defvar tychoish/slow-op-threshold 0.01)
+ (defvar tychoish/startup-complete-time nil "Timestamp reflecting when the instance' startup process actually completed.")
+ (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn) "Packages installed with the `--botstrap' CLI flag outside of use-package; for performance.")
+ (defvar tychoish/eglot-default-server-configuration nil "Define eglot Server configuration variable early for use later.")
 
- (defmacro with-slow-op-timer (name &rest body)
-   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
-   `(let* ((inhibit-message t)
-	   (time (current-time))
-	   (return-value (progn ,@body))
-	   (duration (time-to-seconds (time-since time))))
-      (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-threshold))
-	(message "[op]: %s: %.06fs" ,name duration))
-      return-value))
+ (defvar tychoish/emacs-instance-id nil "Name of emacs instance. `work', `personal', and `hud' are common long lived instances; other ephemeral ones may be useful.")
+ (defvar cli/instance-id  nil "cli specified daemon/instance name")
 
- (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn)
-   "Packages installed with the `--botstrap' CLI flag outside of use-package for performance.")
- (defvar tychoish/eglot-default-server-configuration nil)
- (defvar tychoish/emacs-instance-id nil)
- (defvar tychoish/startup-complete-time nil)
- (defvar cli/instance-id  nil)
-
- (defvar local-notes-directory (expand-file-name "~/notes")
-   "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
-
+ (defvar local-notes-directory (expand-file-name "~/notes") "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
  (defvar user-org-directories nil "Defines additional directories where org files might exist.")
  (defvar user-home-directory (expand-file-name "~") "path to the current home directory. cached during init.")
 
- (defvar tychoish-disable-external-notifications nil
-   "disable external notification support.")
-
- (when (string-match "NATIVE_COMP" system-configuration-features)
-   (setq native-comp-jit-compilation t)
-   (setq native-compile-prune-cache t))
+ (defvar tychoish-disable-external-notifications nil "disable external notification support.")
 
  (setq initial-major-mode 'fundamental-mode)
  (setq initial-scratch-message nil)
@@ -87,14 +54,8 @@
 	   (package-upgrade pkg)))
        (message "bootstrap complete: installed %S; restart emacs without `--bootstrap'" installed))))
 
- (defun cli/time-reporting ()
-   (when (string-prefix-p "--with-slow-op-timing" argi)
-     (message "[op]: enabling time reporting")
-     (setq tychoish/slow-op-reporting t)))
-
  (add-to-list 'command-line-functions 'cli/resolve-id)
  (add-to-list 'command-line-functions 'cli/bootstrap)
- (add-to-list 'command-line-functions 'cli/time-reporting)
 
  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
  (add-to-list 'package-archives '( "jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/") t)
@@ -113,7 +74,6 @@
 		      (float-time (time-since before-init-time)))))
      (message "emacs: %s" msg)
      (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id))))
-
 
  (defun tychoish/startup-mark-complete ()
    (unless tychoish/startup-complete-time

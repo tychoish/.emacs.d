@@ -74,12 +74,9 @@
    :keymap tychoish/theme-map
    :key "i")
 
-  (add-hygenic-one-shot-hook
-   :name "doom-modeline"
+  (add-hygenic-one-shot-hook :name "doom-modeline"
    :function doom-modeline-mode
-   :hook (if (daemonp)
-	     'server-after-make-frame-hook
-	   'window-setup-hook))
+   :hook post-command-hook)
   :config
   (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
   (setq find-file-visit-truename t)
@@ -421,12 +418,13 @@
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
   :commands (vertico-mode)
   :init
-  (add-hygenic-one-shot-hook
-   :name "vertico"
+  (add-hygenic-one-shot-hook :name "vertico-setup"
    :operation 'vertico-mode
-   :hook 'doom-modeline-mode-hook)
+   :hook pre-command-hook)
 
-  (add-hook 'vertico-mode-hook 'vertico-multiform-mode)
+  (add-hygenic-one-shot-hook :name "vertico-multiform"
+   :operation 'vertico-multiform-mode
+   :hook 'vertico-mode-hook)
 
   (setq vertico-resize t)
   (setq vertico-count 25)
@@ -452,8 +450,7 @@
   :ensure t
   :commands (prescient-persist-mode)
   :init
-  (add-hygenic-one-shot-hook
-   :name "prescient"
+  (add-hygenic-one-shot-hook :name "prescient"
    :operation 'prescient-persist-mode
    :hook '(vertico-mode-hook corfu-mode-hook))
   :config
@@ -466,8 +463,11 @@
 
 (use-package vertico-prescient
   :ensure t
-  :hook (vertico-mode . vertico-prescient-mode)
-  :config
+  :after (:any prescient vertico)
+  :init
+  (add-hygenic-one-shot-hook :name "vertico-prescient"
+   :operation 'vertico-prescient-mode
+   :hook vertico-mode-hook)
   (setq vertico-prescient-override-sorting t)
   (setq vertico-prescient-enable-sorting t)
   (setq vertico-prescient-enable-filtering t))
@@ -478,8 +478,7 @@
          ("C-c a" . marginalia-cycle))
   :commands (marginalia-mode)
   :init
-  (add-hygenic-one-shot-hook
-   :name "marginalia"
+  (add-hygenic-one-shot-hook :name "marginalia"
    :function marginalia-mode
    :hook 'minibuffer-setup-hook)
   :config
@@ -603,15 +602,16 @@
 
 (use-package nerd-icons-xref
   :ensure t
-  :hook (nerd-icons-completion-mode . nerd-icons-xref-mode))
+  :after (:any xref nerd-icons-completion eglot)
+  :config
+  (nerd-icons-xref-mode 1))
 
 (use-package nerd-icons-completion
   :ensure t
   :hook ((marginalia-mode . nerd-icons-completion-marginalia-setup))
   :commands (nerd-icons-completion-mode)
   :init
-  (add-hygenic-one-shot-hook
-   :name "nerd-icons-completion"
+  (add-hygenic-one-shot-hook :name "nerd-icons-completion"
    :operation #'nerd-icons-completion-mode
    :hook '(corfu-mode-hook vertico-mode-hook)))
 

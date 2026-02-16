@@ -138,8 +138,7 @@ Does nothing if the current post is not in the drafts folder."
          (op-buffer-name (concat "*" task-id "*")))
 
     (with-current-buffer (get-buffer-create op-buffer-name)
-      (add-hygenic-one-shot-hook
-       :name "task-id"
+      (add-hygenic-one-shot-hook :name "task-id"
        :hook 'compilation-finish-functions
        :local t
        :make-unique t

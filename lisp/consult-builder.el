@@ -99,8 +99,7 @@
 	 (compile-buffer-name op-name))))
 
     (with-current-buffer (or compile-buf op-name)
-      (add-hygenic-one-shot-hook
-       :name (format "%s notification hook" op-name)
+      (add-hygenic-one-shot-hook :name (format "%s notification hook" op-name)
        :hook 'compilation-finish-functions
        :local t
        :make-unique t
@@ -119,8 +118,7 @@
       (when-let* ((candidate (ht-get candidates candidate-name))
 		  (hook (tychoish-compilation-candidate-hook candidate)))
 	(when hook
-      	  (add-hygenic-one-shot-hook
-      	   :name (format "post-%s-hook-operation" op-name)
+      	  (add-hygenic-one-shot-hook :name (format "post-%s-hook-operation" op-name)
       	   :hook 'compilation-finish-functions
       	   :make-unique t
       	   :local t
