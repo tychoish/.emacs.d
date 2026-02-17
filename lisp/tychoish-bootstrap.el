@@ -406,7 +406,7 @@
   (unless (equal "solo" tychoish/emacs-instance-id)
     ;; TODO This should get a better runtime/feature flag (and have
     ;; a list of instance names that are epehemral)
-    (setq desktop-dirname (f-join user-emacs-diretory tychoish/conf-state-directory-name))
+    (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
     (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
     (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))

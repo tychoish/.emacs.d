@@ -7,6 +7,7 @@
 
 ;;; Code:
 
+
 (with-gc-suppressed
  (defvar tychoish/startup-complete-time nil "Timestamp reflecting when the instance' startup process actually completed.")
  (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn) "Packages installed with the `--botstrap' CLI flag outside of use-package; for performance.")
@@ -68,50 +69,56 @@
  (declare-function alert "alert")
 
  (defun tychoish/startup-report-timing ()
-   (let ((msg (format "started (pid=%d) in %s [wall=%s]"
+   (let* ((startup-time (float-time (time-subtract tychoish/startup-complete-time before-init-time)))
+	  (init-time (float-time (time-subtract after-init-time before-init-time)))
+	  (wall-time (float-time (time-since before-init-time)))
+	  (msg (format "started (pid=%d) [user=%s sys=%s wall=%s]"
 		      (emacs-pid)
-		      (emacs-init-time)
-		      (float-time (time-since before-init-time)))))
-     (message "emacs: %s" msg)
+		      startup-time
+		      init-time
+		      wall-time)))
+     (message "[emacs]: <%s> usr init time %s" tychoish/emacs-instance-id startup-time)
+     (message "[emacs]: <%s> sys init time %s" tychoish/emacs-instance-id init-time)
+     (message "[emacs]: <%s> wall clock time %s" tychoish/emacs-instance-id wall-time)
      (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id))))
 
  (defun tychoish/startup-mark-complete ()
    (unless tychoish/startup-complete-time
      (setq tychoish/startup-complete-time (current-time))))
 
- (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 80)
- (add-hook 'emacs-startup-hook 'tychoish/startup-report-timing 90)
+ (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 99)
+ (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
 
  (with-file-name-handler-disabled
   (add-to-list 'load-path (concat user-emacs-directory "lisp"))
   (add-to-list 'load-path (concat user-emacs-directory "user"))
   ;; (only) functions and macros used in the rest of the configuration
-  (with-slow-op-timer "<init.el> tychoish-common"
+  (with-slow-op-timer "<init> tychoish-common"
    (require 'tychoish-common)
    (declare-function tychoish/set-up-instance-name "tychoish-common")
    (tychoish/set-up-instance-name))
 
   ;; customized setup and configuration of core emacs and included packages
 
-  (with-slow-op-timer "<init.el> tychoish-bootstrap"
+  (with-slow-op-timer "<init> tychoish-bootstrap"
    (require 'tychoish-bootstrap)
    (setq custom-file (tychoish/conf-state-path "custom.el"))
    'tychoish-bootstrap)
 
   ;; remaining use-package declarations.
 
-  (with-slow-op-timer "<init.el> load tychoish-core"
+  (with-slow-op-timer "<init> load tychoish-core"
    (require 'tychoish-core))
 
-  (with-slow-op-timer "<init.el> tychoish-mail"
+  (with-slow-op-timer "<init> tychoish-mail"
    (require 'tychoish-mail))
 
-  (with-slow-op-timer "<core.el> load tychoish-org"
+  (with-slow-op-timer "<init> load tychoish-org"
    (require 'tychoish-org))
 
   ;; load the user/*.el files
 
-  (with-slow-op-timer "<init.el> user-files"
+  (with-slow-op-timer "<init> user-files"
    (declare-function tychoish-set-up-user-local-config 'tychoish-bootstrap)
    (tychoish-set-up-user-local-config))))
 

@@ -74,9 +74,12 @@
    :keymap tychoish/theme-map
    :key "i")
 
-  (add-hygenic-one-shot-hook :name "doom-modeline"
+  (add-hygenic-one-shot-hook
+   :name "doom-modeline"
    :function doom-modeline-mode
-   :hook post-command-hook)
+   :hook (if (daemonp)
+	     'server-after-make-frame-hook
+	   'window-setup-hook))
   :config
   (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
   (setq find-file-visit-truename t)
@@ -418,13 +421,12 @@
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
   :commands (vertico-mode)
   :init
-  (add-hygenic-one-shot-hook :name "vertico-setup"
+  (add-hygenic-one-shot-hook
+   :name "vertico"
    :operation 'vertico-mode
-   :hook pre-command-hook)
+   :hook 'doom-modeline-mode-hook)
 
-  (add-hygenic-one-shot-hook :name "vertico-multiform"
-   :operation 'vertico-multiform-mode
-   :hook 'vertico-mode-hook)
+  (add-hook 'vertico-mode-hook 'vertico-multiform-mode)
 
   (setq vertico-resize t)
   (setq vertico-count 25)
@@ -450,7 +452,8 @@
   :ensure t
   :commands (prescient-persist-mode)
   :init
-  (add-hygenic-one-shot-hook :name "prescient"
+  (add-hygenic-one-shot-hook
+   :name "prescient"
    :operation 'prescient-persist-mode
    :hook '(vertico-mode-hook corfu-mode-hook))
   :config
@@ -463,11 +466,8 @@
 
 (use-package vertico-prescient
   :ensure t
-  :after (:any prescient vertico)
-  :init
-  (add-hygenic-one-shot-hook :name "vertico-prescient"
-   :operation 'vertico-prescient-mode
-   :hook vertico-mode-hook)
+  :hook (vertico-mode . vertico-prescient-mode)
+  :config
   (setq vertico-prescient-override-sorting t)
   (setq vertico-prescient-enable-sorting t)
   (setq vertico-prescient-enable-filtering t))
@@ -478,7 +478,8 @@
          ("C-c a" . marginalia-cycle))
   :commands (marginalia-mode)
   :init
-  (add-hygenic-one-shot-hook :name "marginalia"
+  (add-hygenic-one-shot-hook
+   :name "marginalia"
    :function marginalia-mode
    :hook 'minibuffer-setup-hook)
   :config
@@ -602,16 +603,15 @@
 
 (use-package nerd-icons-xref
   :ensure t
-  :after (:any xref nerd-icons-completion eglot)
-  :config
-  (nerd-icons-xref-mode 1))
+  :hook (nerd-icons-completion-mode . nerd-icons-xref-mode))
 
 (use-package nerd-icons-completion
   :ensure t
   :hook ((marginalia-mode . nerd-icons-completion-marginalia-setup))
   :commands (nerd-icons-completion-mode)
   :init
-  (add-hygenic-one-shot-hook :name "nerd-icons-completion"
+  (add-hygenic-one-shot-hook
+   :name "nerd-icons-completion"
    :operation #'nerd-icons-completion-mode
    :hook '(corfu-mode-hook vertico-mode-hook)))
 
@@ -1558,9 +1558,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (slime-autodoc-mode "")
   :mode ("\\.lisp" . lisp-mode)
   :bind (:map tychoish/docs-map
-	 ("c" . hyperspec-lookup))
+         ("c" . hyperspec-lookup)
+	 :map tychoish/ide-map
+	 ("s" . execute-extended-slime-command))
   :commands (slime slime-connect)
   :config
+  (make-read-extended-command-for-prefix "slime"
+   :key-alias "slime-commands")
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
 
@@ -1840,6 +1844,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
          ("k" . eglot-shutdown)
          ("l" . eglot-list-connections)
+	 ("c" . execute-extended-eglot-command)
          ("g" . eglot-forget-pending-continuations))
   :commands (eglot-code-action-rewrite eglot-code-action-extract eglot-code-actions eglot-format eglot-rename eglot-code-action-organize-imports)
   :functions (eglot-alternatives)
@@ -2149,8 +2154,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'mcp-hub-servers '("linear" . (:command "npx" :args ("-y" "mcp-remote" "https://mcp.linear.app/mcp"))))
   (add-to-list 'mcp-hub-servers '("github" . (:command "npx" :args ("-y" "mcp-remote" "https://api.githubcopilot.com/mcp"))))
   (add-to-list 'mcp-hub-servers '("notion" . (:command "npx" :args ("-y" "mcp-remote" "https://mcp.notion.com/mcp"))))
-  (add-to-list 'mcp-hub-servers '("google-workspace" . (:command "uvx" :args ("workspace-mcp"))))
-)
+  (add-to-list 'mcp-hub-servers '("google-workspace" . (:command "uvx" :args ("workspace-mcp")))))
 
 (use-package copilot
   :ensure t
@@ -2304,7 +2308,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :bind (:map tychoish/robot-map ;; "C-c r"
          :prefix "i"
 	 :prefix-map tychoish/robot-claude-code-ide-map
-	 ("x" . execute-extended-claude-code-command)
+	 ("x" . execute-extended-claude-code-ide-command)
 	 ("m" . claude-code-ide-menu)
 	 ("s" . claude-code-ide)
 	 ("l" . claude-code-ide-list-sessions)
@@ -2314,12 +2318,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("s" . claude-code-ide-continue)
 	 ("e" . claude-code-ide-send-escape))
   :commands (claude-code-ide)
+  :init
+  (make-read-extended-command-for-prefix "claude-code-ide"
+   :key-alias "claude-code-ide-commands")
   :config
   (setq claude-code-ide-diagnostics-backend 'flycheck)
   (setq claude-code-ide-terminal-backend 'eat)
-  (make-read-extended-command-for-prefix
-   "claude-code-ide"
-   :key-alias "claude-code-ide-commands")
 
   (claude-code-ide-emacs-tools-setup))
 
@@ -2335,7 +2339,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("x" . execute-extended-eat-command))
   :commands (eat eat-project eat-other-window eat-project-other-window)
   :init
-  (make-read-extended-command-for-prefix "eat"))
+  (make-read-extended-command-for-prefix "eat"
+   :key-alias "eat-commands"))
 
 (use-package efrit
   :load-path "external/efrit/lisp"
@@ -2355,6 +2360,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("m" . execute-extended-efrit-command))
   :config
   (make-read-extended-command-for-prefix "efrit")
+  (require 'efrit-tools)
   (defun tychoish/get-anthropic-api-key ()
     (or (when (boundp 'anthropic-api-key) anthropic-api-key)
 	(unless tychoish/aider-setup-state
@@ -2383,6 +2389,20 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   ;; Progress buffer configuration
   (setq efrit-do-show-progress-buffer t)  ; Show progress buffer automatically
   (setq efrit-do-queue-max-size 8))      ; Max commands to queue
+
+(use-package beads
+  ;; :vc (:url "https://codeberg.org/ctietze/beads.el" :rev :newest)
+  :load-path "elpa/beads"
+  :bind (:map tychoish/robot-map
+         :prefix "b"
+         :prefix-map tychoish/robot-beads-map
+	 ("l" . beads-list)
+	 ("x" . execute-extended-beads-command)
+	 ("n" . beads-create-issue)
+	 ("m" . beads-menu))
+  :init
+  (make-read-extended-command-for-prefix "beads"
+   :key-alias "beads-commands"))
 
 (use-package uuidgen
   :ensure t
