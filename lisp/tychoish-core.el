@@ -65,12 +65,9 @@
 
 (use-package doom-modeline
   :ensure t
-  :commands (doom-modeline-mode
-             tychoish-legacy-mode-line)
-  :defines (doom-modeline-icon)
+  :commands (doom-modeline-mode)
   :init
-  (create-toggle-functions
-   doom-modeline-icon
+  (create-toggle-functions doom-modeline-icon
    :keymap tychoish/theme-map
    :key "i")
 
@@ -1558,13 +1555,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (slime-autodoc-mode "")
   :mode ("\\.lisp" . lisp-mode)
   :bind (:map tychoish/docs-map
-         ("c" . hyperspec-lookup)
-	 :map tychoish/ide-map
-	 ("s" . execute-extended-slime-command))
+         ("c" . hyperspec-lookup))
   :commands (slime slime-connect)
   :config
   (make-read-extended-command-for-prefix "slime"
-   :key-alias "slime-commands")
+   :key-alias "slime-commands"
+   :bind-map tychoish/ide-map
+   :bind-key "s")
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
 
@@ -1584,7 +1581,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("C-c d d" . docker)
 	 ("C-x C-d" . execute-extended-docker-command))
   :init
-  (make-read-extended-command-for-prefix "docker")
+  (make-read-extended-command-for-prefix "docker"
+   :bind-key "C-x C-d"
+   :bind-map global-map
+   :key-alias "docker-commands")
   :config
   (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
@@ -1869,14 +1869,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	     ("s" . eglot-code-action-quickfix)
              ("w" . eglot-code-action-rewrite))
 
-  (make-read-extended-command-for-prefix
-   "eglot"
+  (make-read-extended-command-for-prefix "eglot"
    :bind-map tychoish/eglot-map
    :bind-key "e"
    :key-alias "eglot-commands")
 
-  (make-read-extended-command-for-prefix
-   "xref"
+  (make-read-extended-command-for-prefix "xref"
    :bind-map tychoish/ide-map
    :bind-key "x"
    :key-alias "xref-commands")
@@ -2056,14 +2054,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    ("g" . gptel)
    ("r" . gptel-rewrite))
 
-  (make-read-extended-command-for-prefix
-   "gptel"
+  (make-read-extended-command-for-prefix "gptel"
    :bind-map tychoish/robot-gptel-map
    :bind-key "m"
    :key-alias "gptel-commands")
 
-  (make-read-extended-command-for-prefix
-   "gptel-set-backend"
+  (make-read-extended-command-for-prefix "gptel-set-backend"
    :bind-map tychoish/robot-gptel-map
    :bind-key "b"
    :key-alias "gptel-set-backend")
@@ -2132,18 +2128,27 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
          ("w" . gptel-aibo-summon))
   :commands (gptel-aibo-summon gptel-aibo))
 
+(use-package gptel-agent
+  :ensure t
+  :after (gptel)
+  :commands (gptel-agent))
+
 (use-package mcp
   :ensure t
   :commands (mcp-hub-start-all-servers)
   :config
+  (make-read-extended-command-for-prefix "mcp"
+   :key-alias "mcp-commands"
+   :bind-key "/"
+   :bind-map mcp-hub-mod-map)
   (require 'mcp-hub)
   (add-to-list 'mcp-hub-servers '("time" . (:command "uvx" :args ("mcp-server-time"))))
   (add-to-list 'mcp-hub-servers '("fetch" . (:command "uvx" :args ("mcp-server-fetch"))))
 
-  (add-to-list 'mcp-hub-servers '("godoc" . (:command "godoc-mcp-server")))
+  (add-to-list 'mcp-hub-servers '("godoc" . (:command "godoc-mcpr")))
   (add-to-list 'mcp-hub-servers '("awsdoc" . (:command "awslabs.aws-documentation-mcp-server")))
 
-  (add-to-list 'mcp-hub-servers `("lsp-mcp-gopls" . (:command "npx" :args ("tritlo/lsp-mcp" "golang" ,(executable-find "gopls") ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid))))))
+  (add-to-list 'mcp-hub-servers `("gopls" . (:command "gopls" :args (,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)) "mcp"))))
   (add-to-list 'mcp-hub-servers `("lsp-mcp-rust" . (:command "npx" :args ("tritlo/lsp-mcp" "rust" ,(executable-find "rust-analyzer")))))
   (add-to-list 'mcp-hub-servers `("lsp-mcp-bash" . (:command "npx" :args ("tritlo/lsp-mcp" "bash" ,(executable-find "bash-language-server" "server")))))
   (add-to-list 'mcp-hub-servers `("lsp-mcp-yaml" . (:command "npx" :args ("tritlo/lsp-mcp" "yaml" ,(executable-find "yaml-language-server" "--stdio")))))
@@ -2194,15 +2199,19 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package aidermacs
   :ensure t
-  :bind (:map tychoish/robot-map ;; "C-c r"
-	 :prefix "a"
-	 :prefix-map tychoish/robot-aider-map
-	 ("m" . aidermacs-transient-menu)
-	 ("C-m" . execute-extended-aidermacs-command)
-	 ("l" . execute-extended-aidermacs-model-command))
+  :commands (aidermacs-transient-menu)
   :init
-  (make-read-extended-command-for-prefix "aidermacs")
-  (make-read-extended-command-for-prefix "aidermacs-model")
+  (bind-keys
+   :map tychoish/robot-map
+   :prefix "a"
+   :prefix-map tychoish/robot-aider-map
+   ("m" . aidermacs-transient-menu))
+  (make-read-extended-command-for-prefix "aidermacs"
+   :bind-map tychoish/robot-aider-map
+   :bind-key "x")
+  (make-read-extended-command-for-prefix "aidermacs-model"
+   :bind-map tychoish/robot-aider-map
+   :bind-key "l")
   :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-program "aider")
@@ -2210,15 +2219,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (with-toggle-once tychoish/aider-setup-state
     (when (boundp 'anthropic-api-key)
       (setenv "ANTHROPIC_API_KEY" anthropic-api-key)
-      (message "[robots] set environment variable for anthropic"))
+      (message "[robots]: set environment variable for anthropic"))
 
     (when (boundp 'gemini-api-key)
       (setenv "GEMINI_API_KEY" gemini-api-key)
-      (message "[robots] set environment variable for gemini"))
+      (message "[robots]: set environment variable for gemini"))
 
     (when (boundp 'openai-api-key)
       (setenv "OPENAI_API_KEY" openai-api-key)
-      (message "[robots] set environment variable for OpenAI"))
+      (message "[robots]: set environment variable for OpenAI"))
 
     (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
 		(_ (f-exists-p uv-bin-path))
@@ -2240,9 +2249,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'aidermacs-extra-args "--edit-format=udiff")
   (add-to-list 'aidermacs-extra-args "--notifications")
   (add-to-list 'aidermacs-extra-args "--cache-prompts")
-
-  (make-read-extended-command-for-prefix "aidermacs")
-  (make-read-extended-command-for-prefix "aidermacs-model")
 
   (make-aidermacs-model-selection-function :name "claude-max"
    :default-model "anthropic/claude-sonnet-4-5"
@@ -2305,22 +2311,24 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package claude-code-ide
   :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
-  :bind (:map tychoish/robot-map ;; "C-c r"
-         :prefix "i"
-	 :prefix-map tychoish/robot-claude-code-ide-map
-	 ("x" . execute-extended-claude-code-ide-command)
-	 ("m" . claude-code-ide-menu)
-	 ("s" . claude-code-ide)
+  :bind (:map tychoish/robot-claude-code-ide-map
 	 ("l" . claude-code-ide-list-sessions)
 	 ("t" . claude-code-ide-toggle)
 	 ("b" . claude-code-ide-switch-to-buffer)
 	 ("k" . claude-code-ide-stop)
 	 ("s" . claude-code-ide-continue)
 	 ("e" . claude-code-ide-send-escape))
-  :commands (claude-code-ide)
+  :commands (claude-code-ide claude-code-ide-menu)
   :init
+  (bind-keys
+   :map tychoish/robot-map
+   :prefix "i"
+   :prefix-map tychoish/robot-claude-code-ide-map
+   ("m" . claude-code-ide-menu)
+   ("c" . claude-code-ide))
   (make-read-extended-command-for-prefix "claude-code-ide"
-   :key-alias "claude-code-ide-commands")
+   :bind-map tychoish/robot-claude-code-ide-map
+   :bind-key "x")
   :config
   (setq claude-code-ide-diagnostics-backend 'flycheck)
   (setq claude-code-ide-terminal-backend 'eat)
@@ -2329,37 +2337,45 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package eat
   :ensure t
-  :bind (:map tychoish/shell-map
-	 :prefix "e"
-	 :prefix-map tychoish/shell-eat-map
-	 ("e" . eat)
-	 ("o" . eat-other-window)
-	 ("p" . eat-project)
-	 ("P" . eat-project-other-window)
-	 ("x" . execute-extended-eat-command))
   :commands (eat eat-project eat-other-window eat-project-other-window)
   :init
+  (bind-keys
+   :map tychoish/shell-map
+   :prefix "e"
+   :prefix-map tychoish/shell-eat-map
+   ("e" . eat)
+   ("o" . eat-other-window)
+   ("p" . eat-project)
+   ("P" . eat-project-other-window))
+
   (make-read-extended-command-for-prefix "eat"
-   :key-alias "eat-commands"))
+   :bind-map tychoish/shell-eat-map
+   :bind-key "x"))
 
 (use-package efrit
   :load-path "external/efrit/lisp"
-  :commands (efrit efrit)
   :bind (:map tychoish/robot-map
 	 :prefix "e"
 	 :prefix-map tychoish/robot-efrit-map
-	 ("c" . efrit-chat)
 	 ("s" . efrit-streamlined-send)
-	 ("d" . efrit-do)
-	 ("a" . efrit-agent)
-	 ("h" . efrit-help)
 	 ("p" . efrit-do-show-progress)
 	 ("q" . efrit-remote-queue-start)
 	 ("r" . efrit-remote-queue-status)
-	 ("x" . efrit-remote-queue-stop)
-	 ("m" . execute-extended-efrit-command))
+	 ("x" . efrit-remote-queue-stop))
+  :commands (efrit-chat efrit-do efrit-agent efrit-help)
+  :init
+  (bind-keys
+   :map tychoish/robot-map
+   :prefix "e"
+   :prefix-map tychoish/robot-efrit-map
+   ("c" . efrit-chat)
+   ("d" . efrit-do)
+   ("a" . efrit-agent)
+   ("h" . efrit-help))
+  (make-read-extended-command-for-prefix "efrit"
+   :bind-map tychoish/robot-efrit-map
+   :bind-key "m")
   :config
-  (make-read-extended-command-for-prefix "efrit")
   (require 'efrit-tools)
   (defun tychoish/get-anthropic-api-key ()
     (or (when (boundp 'anthropic-api-key) anthropic-api-key)
@@ -2393,16 +2409,18 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package beads
   ;; :vc (:url "https://codeberg.org/ctietze/beads.el" :rev :newest)
   :load-path "elpa/beads"
-  :bind (:map tychoish/robot-map
-         :prefix "b"
-         :prefix-map tychoish/robot-beads-map
-	 ("l" . beads-list)
-	 ("x" . execute-extended-beads-command)
-	 ("n" . beads-create-issue)
-	 ("m" . beads-menu))
+  :commands (beads-list beads-menu beads-create-issue)
   :init
+  (bind-keys
+   :map tychoish/robot-map
+   :prefix "b"
+   :prefix-map tychoish/robot-beads-map
+   ("l" . beads-list)
+   ("n" . beads-create-issue)
+   ("m" . beads-menu))
   (make-read-extended-command-for-prefix "beads"
-   :key-alias "beads-commands"))
+   :bind-map tychoish/robot-beads-map
+   :bind-key "x"))
 
 (use-package uuidgen
   :ensure t

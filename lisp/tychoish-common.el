@@ -245,6 +245,9 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 (cl-defmacro make-read-extended-command-for-prefix (prefix &optional &key bind-map bind-key key-alias)
   (unless (setq prefix (s-trimmed-or-nil prefix))
     (user-error "cannot build predicate function for '%s'" prefix))
+  (unless key-alias
+    (setq key-alias (s-join-with-kebab prefix "commands")))
+
   (setq prefix (s-normalize-symbol-name prefix))
 
   (let* ((predicate-name (format "read-extended-command-for-%s-prefix-p" prefix))
@@ -263,10 +266,10 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
        ,(when bind-key
 	  `(progn
 	     (bind-keys
-	      ,@(when bind-map `(:map ,bind-map))
+	      :map ,(or bind-map 'global-map)
 	      (,bind-key . ,user-command-symbol))
 	     ,(when key-alias
-		`(which-key-add-keymap-based-replacements ,(or bind-map global-map) ,bind-key ,key-alias)))))))
+		`(which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias)))))))
 
 (defmacro with-toggle-once (name &rest body)
   (declare (indent 1) (debug t))

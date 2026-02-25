@@ -44,7 +44,6 @@
 (bind-keys
  ("C-x m" . execute-extended-command)
  ("C-x C-m" . execute-extended-command)
- ("C-x x c" . execute-extended-clipboard-command)
  ("M-X" . execute-extended-command-for-buffer)
  ("C-x b" . switch-to-buffer) ;; vs consult-buffer
  ("C-x l" . goto-line)
@@ -361,7 +360,8 @@
         tab-mark
         newline-mark))
 
-(make-read-extended-command-for-prefix "clipboard")
+(make-read-extended-command-for-prefix  "clipboard"
+ :bind-key "C-x x c")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
