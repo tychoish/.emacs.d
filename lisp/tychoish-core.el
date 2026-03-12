@@ -852,12 +852,18 @@
 
 (use-package magit
   :ensure t
-  :bind (:prefix "C-x g"
-	 :prefix-map tychoish/magit-map
-	 ("s" . magit-status)
-         ("f" . magit-branch)
-         ("b" . magit-blame))
-  :commands (magit-toplevel)
+  :commands (magit-toplevel magit-status magit-branch magit-blame)
+  :init
+  (bind-keys
+   :prefix "C-x g"
+   :prefix-map tychoish/magit-map
+   ("s" . magit-status)
+   ("f" . magit-branch)
+   ("b" . magit-blame))
+  (make-read-extended-command-for-prefix "magit"
+   :bind-map tychoish/magit-map
+   :bind-key "x")
+
   :config
   (setq vc-follow-symlinks t)
   (setq version-control t)
@@ -865,17 +871,62 @@
   (setq magit-module-sections-nested nil)
   (magit-auto-revert-mode -1)
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
-  (add-to-list 'magit-status-sections-hook 'magit-insert-modules t))
+  (add-to-list 'magit-status-sections-hook 'magit-insert-modules t)
+
+  (bind-keys
+   :map magit-mode-map
+   :prefix "/"
+   :prefix-map magit-command-mode-map
+   ("x" . execute-extended-magit-command)
+   ("m" . execute-extended-smerge-command))
+
+  (which-key-add-keymap-based-replacements 'magit-command-mode-map "m" "(s)merge-commands")
+  (which-key-add-keymap-based-replacements 'magit-command-mode-map "x" "magit-commands"))
+
+(use-package smerge-mode
+  :init
+  (defun smerge-kill-and-vc-next-conflict ()
+    "Kills the current conflict option and moves to the next conflict, potentially in another file."
+    (interactive)
+    (smerge-kill-current)
+    (smerge-vc-next-conflict))
+
+  (bind-keys
+   :map tychoish/magit-map
+   :prefix "m"
+   :prefix-map tychoish/smerge-map
+   ("n" . smerge-vc-next-conflict)
+   ("k" . smerge-kill-current)
+   ("s" . smerge-start-session)
+   ("r" . tychoish/smerge-kill-and-next)
+   ("t" . smerge-keep-current))
+
+  (make-read-extended-command-for-prefix "smerge"
+   :bind-map tychoish/smerge-map
+   :bind-key "x"))
 
 (use-package emacsql
   :ensure t
   :defer t)
 
+(use-package ghub
+  :ensure t
+  :defer t)
+
 (use-package forge
   :ensure t
+  :after (ghub magit)
   :commands (forge-dispatch forge-configure)
   :config
-  (setq forge-database-file (expand-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name "forge-database.sqlite"))))
+  (setq forge-database-file (expand-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name "forge-database.sqlite")))
+  (make-read-extended-command-for-prefix  "forge"
+   :bind-map tychoish/magit-map
+   :bind-key "r")
+
+  (bind-keys
+   :map magit-command-mode-map
+   ("r" . execute-extended-forge-command))
+  (which-key-add-keymap-based-replacements 'magit-command-mode-map "r" "forge-commands"))
 
 (use-package gist
   :ensure t
@@ -1578,14 +1629,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :commands (docker)
   :bind (("C-x d" . docker)
-	 ("C-c d d" . docker)
-	 ("C-x C-d" . execute-extended-docker-command))
-  :init
+	 ("C-c d d" . docker))
+  :config
   (make-read-extended-command-for-prefix "docker"
    :bind-key "C-x C-d"
-   :bind-map global-map
-   :key-alias "docker-commands")
-  :config
+   :bind-map global-map)
   (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2137,11 +2185,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :commands (mcp-hub-start-all-servers)
   :config
+  (require 'mcp-hub)
   (make-read-extended-command-for-prefix "mcp"
    :key-alias "mcp-commands"
    :bind-key "/"
-   :bind-map mcp-hub-mod-map)
-  (require 'mcp-hub)
+   :bind-map mcp-hub-mode-map)
   (add-to-list 'mcp-hub-servers '("time" . (:command "uvx" :args ("mcp-server-time"))))
   (add-to-list 'mcp-hub-servers '("fetch" . (:command "uvx" :args ("mcp-server-fetch"))))
 

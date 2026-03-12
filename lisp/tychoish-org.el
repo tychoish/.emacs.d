@@ -451,12 +451,14 @@
 ;; registration helpers
 
 ;;;###autoload
-(cl-defun tychoish-org-add-project-file-capture-templates (&key name (path nil) (key ""))
+(cl-defun tychoish-org-add-project-file-capture-templates (&key name (path nil) (key "") (agenda nil))
   "Defines a set of capture mode templates for adding notes and tasks to a file."
 
   (unless (and (boundp 'org-capture-templates) org-capture-templates)
     (tychoish-org-reset-capture-templates))
 
+  (when (and agenda (not (-contains-p (org-agenda-files) (f-full path))))
+    (add-to-list 'org-agenda-files path))
   (when (not (equal "" key))
     (when (s-contains? key "jntr")
       (error "org-capture prefix key '%s' for '%s' contains well-known prefix" key path))
@@ -466,6 +468,10 @@
   (setq path (if path
 		 (f-expand path)
 	       (concat (f-make-slug name) ".org")))
+
+  (setq name (if name
+		 name
+	       (f-base "/home/tychoish/garen/org/planner.org")))
 
   (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
 
