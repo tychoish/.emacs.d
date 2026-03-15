@@ -243,8 +243,6 @@ entry of `org-capture-templates'."
   (interactive)
   (org-capture nil "c"))
 
-(add-hook 'org-capture-mode-hook #'consult-org--setup-template)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: increment-grep

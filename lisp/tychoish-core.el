@@ -867,11 +867,10 @@
   :config
   (setq vc-follow-symlinks t)
   (setq version-control t)
-  (setq magit-auto-revert-mode nil)
   (setq magit-module-sections-nested nil)
-  (magit-auto-revert-mode -1)
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
-  (add-to-list 'magit-status-sections-hook 'magit-insert-modules t)
+  (add-hook 'magit-status-sections-hook 'magit-insert-worktrees)
+  (add-hook 'magit-status-sections-hook 'magit-insert-modules)
 
   (bind-keys
    :map magit-mode-map
@@ -905,13 +904,19 @@
    :bind-map tychoish/smerge-map
    :bind-key "x"))
 
+
 (use-package emacsql
   :ensure t
   :defer t)
 
+<<<<<<< HEAD
 (use-package ghub
   :ensure t
   :defer t)
+
+(use-package sqlite-mode-extras
+  :ensure t
+  :hook ((sqlite-mode . sqlite-extras-minor-mode)))
 
 (use-package forge
   :ensure t
@@ -2380,6 +2385,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :config
   (setq claude-code-ide-diagnostics-backend 'flycheck)
   (setq claude-code-ide-terminal-backend 'eat)
+  (setq claude-code-ide-prevent-reflow-glitch t)
+  (setq claude-code-ide-terminal-initialization-delay 0.2)
+  (setq claude-code-ide-eat-preserve-position t)
 
   (claude-code-ide-emacs-tools-setup))
 
