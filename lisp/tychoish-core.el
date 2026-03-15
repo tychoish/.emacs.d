@@ -904,12 +904,10 @@
    :bind-map tychoish/smerge-map
    :bind-key "x"))
 
-
 (use-package emacsql
   :ensure t
   :defer t)
 
-<<<<<<< HEAD
 (use-package ghub
   :ensure t
   :defer t)
