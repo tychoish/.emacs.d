@@ -77,9 +77,9 @@
 		      startup-time
 		      init-time
 		      wall-time)))
-     (message "[emacs]: <%s> usr init time %s" tychoish/emacs-instance-id startup-time)
-     (message "[emacs]: <%s> sys init time %s" tychoish/emacs-instance-id init-time)
-     (message "[emacs]: <%s> wall clock time %s" tychoish/emacs-instance-id wall-time)
+     (message "[emacs]: <%s> wall time %s" tychoish/emacs-instance-id wall-time)
+     (message "[emacs]: <%s> user time %s" tychoish/emacs-instance-id startup-time)
+     (message "[emacs]: <%s> init time %s" tychoish/emacs-instance-id init-time)
      (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id))))
 
  (defun tychoish/startup-mark-complete ()
