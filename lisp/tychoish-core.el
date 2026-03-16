@@ -809,9 +809,6 @@
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
          ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
-	 :map tychoish/global-org-map
-	 ("j" . consult-org-capture)
-	 ("c" . consult-org-capture)
  	 :map tychoish/ecclectic-rg-map ;; C-c g r
          ("g" . consult-rg)
          ("s" . consult-rg-pwd)
@@ -829,9 +826,7 @@
              consult-rg
 	     consult-tycho--read-annotated
 	     tychoish-define-project-notes
-	     get-directory-parents
-             consult-org-capture
-             consult-org-capture-target))
+	     get-directory-parents))
 
 (use-package revbufs
   :ensure t

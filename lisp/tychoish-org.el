@@ -74,6 +74,8 @@
 (bind-keys :map tychoish/global-org-map
 	   ("f" . org-agenda-files-open)
 	   ("r" . org-agenda-files-reload)
+	   ("j" . consult-org-capture)
+	   ("c" . consult-org-capture)
 	   :map tychoish/org-link-mode-map
            ("a" . org-annotate-file))
 
@@ -121,6 +123,8 @@
              ("t" . org-archive-set-tag)
              ("s" . org-archive-to-archive-sibling)))
 
+
+
 (with-eval-after-load 'org
   (with-eval-after-load 'consult
     (bind-keys :map tychoish/org-mode-personal-map
@@ -135,8 +139,7 @@
 
 (with-eval-after-load 'consult-tycho
   (bind-keys :map tychoish/org-mode-capture-map
-	     ("j" . consult-org-capture)
-	     ("h" . consult-org-capture-target)))
+	     ("j" . consult-org-capture)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -270,6 +273,43 @@
 
 (defun tychoish/org-use-speed-commands ()
     (and (looking-at org-outline-regexp) (looking-back "^\**" nil)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; consult-tycho: org-capture
+
+;;;###autoload
+(defun consult-org-capture ()
+  "Select a capture template interactively."
+  (interactive)
+  ;; TODO remove this hack so that things are loaded in time
+
+  (let ((table (ht-create)))
+    (->> org-capture-templates
+	 (--filter (< 3 (length it)))
+	 (--mapc (ht-set table
+			(nth 1 it)
+			(cons
+			 (format "[%s]%s<%s> '%s'"
+				 (nth 0 it)
+				 (prefix-padding-for-annotation (nth 0 it) 0)
+				 (f-filename (cadr (nth 3 it)))
+				 (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 it)))))
+			 (nth 0 it)))))
+    (let* ((keys (ht-keys table))
+	   (longest (length-of-longest-item keys))
+	   (capture-template-key
+	    (consult--read
+	     keys
+	     :prompt "org-capture => "
+	     :annotate (lambda (candidate) (concat (prefix-padding-for-annotation candidate longest) (car (ht-get table candidate))))
+	     :lookup (lambda (selection _candidates &rest _) (cdr (ht-get table selection)))
+	     :category 'org-capture
+                         :require-match nil
+	     :command 'consult-org-capture
+             :history '(:input consult-org--capture-history))))
+
+      (org-capture nil capture-template-key))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

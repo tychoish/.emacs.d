@@ -335,12 +335,18 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
      ;; flages and options; with defaults
      (args nil)
      (local nil)
+     (persist nil)
+     (count 1)
      (depth 0)
      (make-unique nil)
      (cleanup nil))
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
-	 (cleanup-symbol (intern (s-join-with-hyphen "hygenic-one-shot" name (symbol-name unique-tag))))
+	 (count-tag (cond (persist "perpeutal")
+			  ((not (numberp count)) (user-error "must specify hook limited count as a number %d" count))
+			  ((eq count 1) "one-shot")
+			  (:else (format "run-%d-times" count))))
+	 (cleanup-symbol (intern (s-join-with-hyphen "hygenic" count-tag name (symbol-name unique-tag))))
 	 hooks)
 
     (when (eq hook 'after-first-frame-created)
@@ -365,42 +371,50 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
       (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
 
     `(progn
-       (defun ,cleanup-symbol ,args
-	 (with-slow-op-timer
-	  ,(format "<hygenic-hook> %s" name)
+       (let ((count ,count)
+	     (run-count 0))
+	 (cl-flet ((counter-increment (lambda () (cl-incf run-count)))
+		   (counter-expired (lambda () (or ,persist (>= run-count count)))))
 
-	  ,(aif (cond (form
-		  form)
-		(body
-		 `,@body)
-		(result
-		 `,(eval result))
-		(operation
-		  (if args
-		      `(apply ,operation ,args)
-		    `(funcall ,operation)))
-		((and (symbolp function) (functionp function))
-		  (if args
-		      `(apply ',function ,args)
-		    `(funcall ',function)))
-		((and (functionp function) (listp function))
-		 function)
-		((symbolp function)
-		 (eval function))
-		((listp function)
-		 function))
-	       it
-	     (user-error "could not resolve the hook function from input for %s" name)))
+	   (defun ,cleanup-symbol ,args
+	     (with-slow-op-timer
+	      ,(format "<hygenic-hook> %s" name)
 
-	 ,@(--map
-	    `(remove-hook ',it ',cleanup-symbol ,local)
-	    (--remove (eq 'quote it) hooks))
+	      ,(aif (cond (form
+			   form)
+			  (body
+			   `,@body)
+			  (result
+			   `,(eval result))
+			  (operation
+			   (if args
+			       `(apply ,operation ,args)
+			     `(funcall ,operation)))
+			  ((and (symbolp function) (functionp function))
+			   (if args
+			       `(apply ',function ,args)
+			     `(funcall ',function)))
+			  ((and (functionp function) (listp function))
+			   function)
+			  ((symbolp function)
+			   (eval function))
+			  ((listp function)
+			   function))
+		   it
+		 (user-error "could not resolve the hook function from input for %s" name))
 
-         ,(if (or make-unique cleanup)
-	     `(unintern ',cleanup-symbol obarray)
-	   t))
+	      (counter-increment)
 
-       ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks)))))
+	      (when (counter-expired)
+		,@(--map
+		   `(remove-hook ',it ',cleanup-symbol ,local)
+		   (--remove (eq 'quote it) hooks))
+
+		,(if (or make-unique cleanup)
+		     `(unintern ',cleanup-symbol obarray)
+		   t)))))
+
+	 ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks))))))
 
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
@@ -799,6 +813,28 @@ interactively then remove duplicate items from the `kill-ring'."
   (->> (buffer-list)
        (--select (with-current-buffer it (eq major-mode mode)))
        (mapc #'kill-buffer)))
+
+(defun kill-buffers-in-directory (&optional directory)
+  "Kill all buffers in `directory'. When not defined, a directory can be selected interactively."
+  (interactive)
+
+  (unless directory
+    (setq directory (consult--select-directory)))
+
+  (let ((killed (->> (buffer-list)
+		     (--filter (buffer-file-name it))
+		     (--select (f-ancestor-of-p directory (buffer-file-name it)))
+		     (--map (cons (buffer-file-name it) (kill-buffer it)))
+		     (--filter (cdr it))
+		     (--keep (car it))
+		     (-unwind)
+		     (-non-nil)
+		     (--map (f-collapse-homedir it)))))
+
+    (if (called-interactively-p 'any)
+	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (s-join ", " killed))
+      killed)))
+
 
 (defun buffers-matching-project (thing)
   (cond
