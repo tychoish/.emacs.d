@@ -319,6 +319,7 @@
 (setq eldoc-echo-area-prefer-doc-buffer nil)
 (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
 
+(setq package-install-upgrade-built-in t)
 (setq package-user-dir (concat user-emacs-directory "elpa"))
 (setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell")))
 

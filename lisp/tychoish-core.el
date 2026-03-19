@@ -742,7 +742,7 @@
 
   (consult-customize
    consult-ripgrep consult-git-grep consult-grep
-   consult-rg consult-rg-project consult-rg-pwd consult-rg-for-thing consult-rg-project-wizard consult-rg-pwd-wizard
+   consult-rg consult-rg-project consult-rg-pwd consult-rg-project-wizard consult-rg-pwd-wizard
    :require-match nil
    :group nil
    :keymap
@@ -858,7 +858,6 @@
   (make-read-extended-command-for-prefix "magit"
    :bind-map tychoish/magit-map
    :bind-key "x")
-
   :config
   (setq vc-follow-symlinks t)
   (setq version-control t)
@@ -875,7 +874,13 @@
    ("m" . execute-extended-smerge-command))
 
   (which-key-add-keymap-based-replacements 'magit-command-mode-map "m" "(s)merge-commands")
-  (which-key-add-keymap-based-replacements 'magit-command-mode-map "x" "magit-commands"))
+  (which-key-add-keymap-based-replacements 'magit-command-mode-map "x" "magit-commands")
+
+  (let* ((dir (package-desc-dir (package-get-descriptor 'transient)))
+	 (path (f-join dir "transient.el")))
+    (if (f-exists-p path)
+	(load-file path)
+      (message "could not force-load %s" path))))
 
 (use-package smerge-mode
   :init
@@ -2356,7 +2361,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :weak-model "github_copilot/claude-haiku-4.5"))
 
 (use-package claude-code-ide
-  :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
+  :load-path "elpa/claude-code-ide"
+  ;; :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
   :bind (:map tychoish/robot-claude-code-ide-map
 	 ("l" . claude-code-ide-list-sessions)
 	 ("t" . claude-code-ide-toggle)
@@ -2381,6 +2387,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq claude-code-ide-prevent-reflow-glitch t)
   (setq claude-code-ide-terminal-initialization-delay 0.2)
   (setq claude-code-ide-eat-preserve-position t)
+  (setq claude-code-ide-vterm-anti-flicker t)
 
   (claude-code-ide-emacs-tools-setup))
 
