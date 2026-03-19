@@ -821,23 +821,23 @@
 	 ("m" . tychoish-insert-date)
          ("p" . tychoish-blog-publish-post)
          ("n" . tychoish-blog-create-post)
-         ("d" . tychoish-blog-open-drafts-dired))
-  :commands (consult-rg-for-thing
-             consult-rg
-	     consult-tycho--read-annotated
-	     tychoish-define-project-notes
-	     get-directory-parents))
+         ("d" . tychoish-blog-open-drafts-dired)))
 
 (use-package revbufs
   :ensure t
   :bind (("C-x x a" . revbufs)
 	 :prefix "C-c b"
 	 :prefix-map tychoish/buffer-control-map
+	 ("h" . bury-buffer)
 	 ("r" . revbufs)
 	 ("b" . revert-buffer-quick))
   :commands (revbufs)
   :config
-  (bind-key "C-k" 'revbufs-kill 'revbufs-mode-map)
+  (bind-keys
+   :map revbufs-mode-map
+   ("C-k" . revbufs-kill)
+   ("q" . bury-buffer))
+
   (defalias 'revbufs-kill
    (kmacro "C-f C-f C-f C-k")))
 
@@ -2377,12 +2377,27 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :bind-key "x")
   :config
   (setq claude-code-ide-diagnostics-backend 'flycheck)
-  (setq claude-code-ide-terminal-backend 'eat)
+  (setq claude-code-ide-terminal-backend 'vterm)
   (setq claude-code-ide-prevent-reflow-glitch t)
   (setq claude-code-ide-terminal-initialization-delay 0.2)
   (setq claude-code-ide-eat-preserve-position t)
 
   (claude-code-ide-emacs-tools-setup))
+
+(use-package vterm
+  :ensure t
+  :defer t
+  :init
+  (bind-keys
+   :map tychoish/shell-map
+   :prefix "v"
+   :prefix-map tychoish/shell-vterm-map
+   ("v" . vterm)
+   ("e" . vterm-send-escape))
+  
+  (make-read-extended-command-for-prefix "vterm"
+   :bind-key "m"
+   :bind-map tychoish/shell-vterm-map))
 
 (use-package eat
   :ensure t
@@ -2399,7 +2414,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (make-read-extended-command-for-prefix "eat"
    :bind-map tychoish/shell-eat-map
-   :bind-key "x"))
+   :bind-key "m"))
 
 (use-package efrit
   :load-path "external/efrit/lisp"
