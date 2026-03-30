@@ -44,7 +44,7 @@
 
  (defun cli/bootstrap ()
    (when (string-prefix-p "--bootstrap" argi)
-     (let ((packages '(f s dash ht))
+     (let ((packages '(f s dash ht cond-let))
 	   installed)
        (dolist (pkg packages)
 	 (if (package-installed-p pkg)

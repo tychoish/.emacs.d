@@ -490,7 +490,6 @@
   :config
   (setq embark-prompter #'embark-keymap-prompter)
   ;; (prefix-help-command #'embark-prefix-help-command)
-  ;; (eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
   (setq embark-quit-after-action '((kill-buffer . nil)))
   :config
   (add-to-list 'vertico-multiform-categories '(embark-keybinding grid))
@@ -774,7 +773,13 @@
   :after (eglot)
   :bind (:map tychoish/docs-map
          ("a" . consult-eglot-symbols))
-  :commands (consult-eglot-symbols))
+  :commands (consult-eglot-symbols)
+  :config
+  (consult-customize
+   consult-eglot-symbols
+   :initial (or (thing-at-point 'symbol)
+		(thing-at-point 'defun)
+		(thing-at-point 'sexp))))
 
 (use-package consult-gh
   :ensure t
@@ -1403,18 +1408,19 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
   (add-to-list 'tychoish/eglot-default-server-configuration
-                '(:gopls :gofumpt t
-                         :usePlaceholders :json-false
-                         :hoverKind "SynopsisDocumentation"
-                         :analyses (:unreachable t
-                                    :unusedvariable t)
-                         :hints (:parameterNames :json-false
-                                 :ignoredError t
-                                 :constantValues t
-                                 :compositeLiteralTypes :json-false
-                                 :compositeLiteralFields :json-false
-                                 :rangeVariableTypes :json-false
-                                 :functionTypeParameters :json-false)))
+               '(:gopls :gofumpt t
+                        :usePlaceholders :json-false
+                        :hoverKind "FullDocumentation"
+			:linkTarget "pkg.go.dev"
+                        :analyses (:unreachable t
+				   :unusedvariable t)
+                        :hints (:parameterNames :json-false
+				:ignoredError t
+				:constantValues t
+				:compositeLiteralTypes :json-false
+				:compositeLiteralFields :json-false
+				:rangeVariableTypes :json-false
+				:functionTypeParameters :json-false)))
 
   (add-hook 'go-ts-mode-hook 'tychoish/go-mode-setup)
   (add-hook 'go-mode-hook 'tychoish/go-mode-setup)
@@ -1874,8 +1880,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
            typescript-ts-mode
 	   go-ts-mode
 	   go-mod-ts-mode
-	   yaml-ts-mode
 	   rust-mode
+	   yaml-mode
 	   rust-ts-mode
 	   rustic-mode
 	   c++-ts-mode
@@ -1901,23 +1907,23 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :functions (eglot-alternatives)
   :init
   (defun tychoish/eglot-ensure-hook ()
-    (setq-local eldoc-docuemntation-stratedgy 'eldoc-documentation-compose-eagerly)
     ;; toggle it on and off so that the left-fringe isn't weird.
     (flycheck-eglot-mode -1)
     (flycheck-eglot-mode 1))
 
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
   :config
+
   (bind-keys :map eglot-mode-map
 	     :prefix "C-c l"
 	     :prefix-map tychoish/eglot-map
+	     ("t" . consult-eglot-symbols)
+             ("i" . eglot-code-action-inline)
              ("r" . eglot-rename)
-             ("s" . eglot-code-action-quickfix)
              ("f" . eglot-format)
              ("a" . eglot-code-actions)
              ("o" . eglot-code-action-organize-imports)
-             ("i" . eglot-code-action-inline)
-	     ("s" . eglot-code-action-quickfix)
+	     ("q" . eglot-code-action-quickfix)
              ("w" . eglot-code-action-rewrite))
 
   (make-read-extended-command-for-prefix "eglot"
@@ -2122,14 +2128,19 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (setq gptel-include-reasoning 'ignore)
 
-  (make-gptel-set-up-backend-functions :name "claude-sonnet-4-5" :key "s"
-   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :model 'claude-sonnet-4-5-20250929
+  (make-gptel-set-up-backend-functions :name "claude-opus-4-6" :key "s"
+   :backend (gptel-make-anthropic "claude-opus" :key anthropic-api-key :stream t)
+   :model 'claude-opus-4-6
+   :api-key anthropic-api-key)
+
+  (make-gptel-set-up-backend-functions :name "claude-sonnet-4-6" :key "s"
+   :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
+   :model 'claude-sonnet-4-6
    :api-key anthropic-api-key)
 
   (make-gptel-set-up-backend-functions :name "claude-haiku-4-5":key "h"
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :model 'claude-haiku-4-5-20251001
+   :model 'claude-haiku-4-6
    :api-key anthropic-api-key)
 
   (make-gptel-set-up-backend-functions :name "gemini-pro-latest" :key "g"
@@ -2171,6 +2182,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-4o-mini)
 
+  (gptel-set-backend-default-claude-sonnet-4-6)
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
@@ -2235,7 +2247,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'copilot-major-mode-alist '("c-ts-mode" . "c"))
   (add-to-list 'copilot-major-mode-alist '("c++-ts-mode" . "cpp"))
   (add-to-list 'copilot-major-mode-alist '("python-ts-mode" . "python"))
-  (add-to-list 'copilot-major-mode-alist '("yaml-ts-mode" . "yaml"))
+  (add-to-list 'copilot-major-mode-alist '("yaml-mode" . "yaml"))
   (add-to-list 'copilot-major-mode-alist '("bash-ts-mode" . "shellscript")))
 
 (use-package copilot-chat
@@ -2401,7 +2413,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :prefix-map tychoish/shell-vterm-map
    ("v" . vterm)
    ("e" . vterm-send-escape))
-  
+
   (make-read-extended-command-for-prefix "vterm"
    :bind-key "m"
    :bind-map tychoish/shell-vterm-map))

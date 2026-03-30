@@ -252,6 +252,7 @@
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
+(setq tooltip-resize-echo-area t)
 
 (setq truncate-lines t)
 (setq use-dialog-box nil)
@@ -317,7 +318,9 @@
 (setq eldoc-minor-mode-string "")
 (setq eldoc-echo-area-use-multiline-p t)
 (setq eldoc-echo-area-prefer-doc-buffer nil)
-(setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
+(setq eldoc-documentation-strategy #'eldoc-documentation-compose)
+(setq eldoc-echo-area-display-truncation-message nil)
+(setq max-mini-window-height 0.5)
 
 (setq package-install-upgrade-built-in t)
 (setq package-user-dir (concat user-emacs-directory "elpa"))
