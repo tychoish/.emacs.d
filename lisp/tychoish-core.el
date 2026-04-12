@@ -2109,7 +2109,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (bind-keys
    :map tychoish/robot-gptel-map
    ("g" . gptel)
-   ("r" . gptel-rewrite))
+   ("r" . gptel-rewrite)
+   ("m" . gptel-menu))
 
   (make-read-extended-command-for-prefix "gptel"
    :bind-map tychoish/robot-gptel-map
@@ -2194,7 +2195,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package gptel-agent
   :ensure t
   :after (gptel)
-  :commands (gptel-agent))
+  :commands (gptel-agent)
+  :init
+  (bind-keys
+   :map tychoish/robot-gptel-map
+   ("a" . gptel-agent)))
 
 (use-package mcp
   :ensure t
