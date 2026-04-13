@@ -888,6 +888,7 @@
       (message "could not force-load %s" path))))
 
 (use-package smerge-mode
+  :after (magit)
   :init
   (defun smerge-kill-and-vc-next-conflict ()
     "Kills the current conflict option and moves to the next conflict, potentially in another file."
@@ -1993,6 +1994,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (flycheck-add-next-checker 'eglot-check 'go-gofmt))
 
 (use-package treesit
+  :defer t
   :mode (("\\.sh\\'" . bash-ts-mode)
          ("\\.bash\\'" . bash-ts-mode)
          ("\\.bashrc\\'" . bash-ts-mode)

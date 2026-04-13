@@ -123,3 +123,4 @@
    (tychoish-set-up-user-local-config))))
 
 (provide 'init)
+(put 'upcase-region 'disabled nil)
