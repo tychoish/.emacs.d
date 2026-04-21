@@ -1919,10 +1919,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	     :prefix "C-c l"
 	     :prefix-map tychoish/eglot-map
 	     ("t" . consult-eglot-symbols)
-             ("i" . eglot-code-action-inline)
              ("r" . eglot-rename)
-             ("f" . eglot-format)
              ("a" . eglot-code-actions)
+             ("i" . eglot-code-action-inline)
+             ("f" . eglot-format-buffer)
              ("o" . eglot-code-action-organize-imports)
 	     ("q" . eglot-code-action-quickfix)
              ("w" . eglot-code-action-rewrite))
@@ -1945,8 +1945,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'eglot-stay-out-of 'flymake)
   (add-to-list 'eglot-stay-out-of 'company)
 
-  (add-hook 'before-save-hook 'eglot-organize-imports 10)
-  (add-hook 'before-save-hook 'eglot-format-for-hook -10)
+  (add-hook 'before-save-hook 'eglot-format-for-hook nil t)
+  (add-hook 'before-save-hook 'eglot-organize-imports nil t)
 
   (add-to-list 'eglot-server-programs
                `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
@@ -1964,12 +1964,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 		       ("ccls")))))
 
   (setq-default eglot-workspace-configuration tychoish/eglot-default-server-configuration)
-
-  (defun eglot-organize-imports ()
-    (interactive)
-    (when (eglot-managed-p)
-      (with-demoted-errors "WARN (`eglot-organize-imports'): %S"
-        (eglot-code-actions nil nil "source.organizeImports" t))))
 
   (defun eglot-code-action-inline ()
     (interactive)
@@ -2402,7 +2396,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    :bind-key "x")
   :config
   (setq claude-code-ide-diagnostics-backend 'flycheck)
-  (setq claude-code-ide-terminal-backend 'vterm)
+  (setq claude-code-ide-terminal-backend 'eat)
   (setq claude-code-ide-prevent-reflow-glitch t)
   (setq claude-code-ide-terminal-initialization-delay 0.2)
   (setq claude-code-ide-eat-preserve-position t)
