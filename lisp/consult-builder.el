@@ -423,6 +423,60 @@ current directory and the project root, and `table' is table of `tychoish--compl
 ;; candidate discovery/generator registration
 
 (register-compilation-candidates
+ :name "current-buffer-text-file"
+ :predicate (when (and (buffer-file-name)
+		       (derived-mode-p '(org-mode markdown-mode rst-mode)))
+ 	      (save-buffer) t)
+ :pipeline (let ((filename (buffer-file-name)))
+	     (-- (make-compilation-candidate
+		  :directory default-directory
+		  :command (format "vale --output=line %s" filename)
+		  :name (format "vale check %s" (f-collapse-homedir filename))
+		  :annotation "find errors in the current file"
+		  :hook (lambda (buffer msg) (with-current-buffer buffer (tychoish--vale-insert-statistics filename))))
+		 (make-compilation-candidate
+		  :directory default-directory
+		  :command (format "vale --ls-metrics %s" filename)
+		  :name (format "vale report %s" (f-collapse-homedir filename))
+		  :annotation "report statics about the current file"))))
+
+(register-compilation-candidates
+ :name "minibuffer-shell-commands"
+ :pipeline (->> (-join (--map (cons it "minibuffer-history") (minibuffer-default-add-shell-commands))
+			(--map (cons it "shell-command-history") shell-command-history))
+		(--map
+		 (let ((command (car it))
+		       (source (cdr it))
+		       (annotation-tag (if (string-equal default-directory project-root-directory) "project root" "working directory")))
+		   (make-compilation-candidate
+		    :name (s-truncate 32 command "...")
+		    :command command
+		    :directory project-root-directory
+		    :annotation (format "operation from `%s' in the %s (%s)" source annotation-tag default-directory))))))
+
+(register-compilation-candidates
+ :name "project-compilation-buffer-commands"
+ :pipeline (->> (mode-buffers-for-project
+		 :mode 'compilation-mode)
+		(--keep
+		 (with-current-buffer it
+		   (when-let* ((command (s-trimmed-or-nil (car compilation-arguments))))
+		     (cons command it))))
+		(--flat-map
+		 (let ((command (car it))
+		       (buf (cdr it)))
+		   (->> (-- project-root-directory (buffer-directory buf) default-directory)
+			(-distinct)
+			(-non-nil)
+			(--map (let ((operation-directory it))
+				 (make-compilation-candidate
+				  :name (format "rerun from %s [%s]"  buf (f-visually-compress-to-four operation-directory))
+				  :command command
+				  :directory operation-directory
+				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)))))))))
+
+
+(register-compilation-candidates
  :name "makefiles"
  :pipeline (->> (f-directories-containing-file-makefile directories)
 		(--flat-map (let* ((default-directory it)
@@ -492,15 +546,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 								       (f-visually-compress-to-four path-for-project-tag))))
 			(proj-path-recursive (f-join proj-path-for-name "...")))
 		   (-append
-		    (->> '("revive" "reassign" "prealloc" "predeclared" "nosprinthostport" "thelper" "makezero" "importas" "fatcontext" "exptostd" "exhaustruct")
-			 (--map
-			  ;; (when (or (f-equal-p directory default-directory)
-			  ;; 	       (f-equal-p directory project-root-directory))
-			  (make-compilation-candidate
-			   :name (format "lint %s %s" it proj-path-for-name)
-			   :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
-			   :directory directory
-			   :annotation (format "run (only) the %s linter in %s" it short-path))))
+		    (-reverse 
 		    (-- (make-compilation-candidate
 			 :name (s-join-with-space "go build" proj-path-for-name)
 			 :command (s-join-with-space "go build" operation-directory)
@@ -522,7 +568,6 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 :command (s-join-with-space "go test -run=NOOP" operation-directory)
 			 :directory directory
 			 :annotation (s-join-with-space "build (including tests) for " project-name "at" short-path))
-
 			(make-compilation-candidate
 			 :name (s-join-with-space "go test +race +cover +report" proj-path-for-name)
 			 :directory directory
@@ -545,7 +590,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				    (s-concat "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\"")
 				    "grep -v '100.0%'"
 				    "column -t;"))
-			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
+			 :annotation (s-join-with-space "collect and report coverage data for" short-path))))
 		    ;; explode with timeout options
 		    (->> '(("go test -v"                "verbose mode")
 			   ("go test -cover"            "the code coverage collector")
@@ -569,7 +614,16 @@ current directory and the project root, and `table' is table of `tychoish--compl
 					 :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
 					 :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
 					 :directory directory
-					 :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name))))))))))))))
+					 :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name)))))))))
+		    (->> '("revive" "makezero" "exhaustruct")
+			 (--map
+			  ;; (when (or (f-equal-p directory default-directory)
+			  ;; 	       (f-equal-p directory project-root-directory))
+			  (make-compilation-candidate
+			   :name (format "lint %s %s" it proj-path-for-name)
+			   :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
+			   :directory directory
+			   :annotation (format "run (only) the %s linter in %s" it short-path)))))))))
 
 (register-compilation-candidates
  :name "go-files"
@@ -740,59 +794,6 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				:directory directory
 				:command (format "just %s" it)
 				:annotation (format "exec justfile target %s in %s" it annotation-directory))))))))
-
-(register-compilation-candidates
- :name "current-buffer-text-file"
- :predicate (when (and (buffer-file-name)
-		       (derived-mode-p '(org-mode markdown-mode rst-mode)))
- 	      (save-buffer) t)
- :pipeline (let ((filename (buffer-file-name)))
-	     (-- (make-compilation-candidate
-		  :directory default-directory
-		  :command (format "vale --output=line %s" filename)
-		  :name (format "vale check %s" (f-collapse-homedir filename))
-		  :annotation "find errors in the current file"
-		  :hook (lambda (buffer msg) (with-current-buffer buffer (tychoish--vale-insert-statistics filename))))
-		 (make-compilation-candidate
-		  :directory default-directory
-		  :command (format "vale --ls-metrics %s" filename)
-		  :name (format "vale report %s" (f-collapse-homedir filename))
-		  :annotation "report statics about the current file"))))
-
-(register-compilation-candidates
- :name "minibuffer-shell-commands"
- :pipeline (->> (-join (--map (cons it "minibuffer-history") (minibuffer-default-add-shell-commands))
-			(--map (cons it "shell-command-history") shell-command-history))
-		(--map
-		 (let ((command (car it))
-		       (source (cdr it))
-		       (annotation-tag (if (string-equal default-directory project-root-directory) "project root" "working directory")))
-		   (make-compilation-candidate
-		    :name (s-truncate 32 command "...")
-		    :command command
-		    :directory project-root-directory
-		    :annotation (format "operation from `%s' in the %s (%s)" source annotation-tag default-directory))))))
-
-(register-compilation-candidates
- :name "project-compilation-buffer-commands"
- :pipeline (->> (mode-buffers-for-project
-		 :mode 'compilation-mode)
-		(--keep
-		 (with-current-buffer it
-		   (when-let* ((command (s-trimmed-or-nil (car compilation-arguments))))
-		     (cons command it))))
-		(--flat-map
-		 (let ((command (car it))
-		       (buf (cdr it)))
-		   (->> (-- project-root-directory (buffer-directory buf) default-directory)
-			(-distinct)
-			(-non-nil)
-			(--map (let ((operation-directory it))
-				 (make-compilation-candidate
-				  :name (format "rerun from %s [%s]"  buf (f-visually-compress-to-four operation-directory))
-				  :command command
-				  :directory operation-directory
-				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)))))))))
 
 
 (defun tychoish--vale-insert-statistics (buffer _message &key filename)
