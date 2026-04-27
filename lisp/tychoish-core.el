@@ -1005,8 +1005,8 @@
   :bind (:map telega-prefix-map
          :prefix "d"
          :prefix-map tychoish/telega-buffer-management-map
-         ("h" . tychoish/telega-bury-chat-buffers)
-         ("k" . tychoish/telega-kill-chat-buffers)
+         ("h" . telega-bury-chat-buffers)
+         ("k" . telega-kill-chat-buffers)
          :map telega-chat-mode-map
          ("C-c C-f" . telega-chat-buffer-auto-fill)
          :map telega-root-mode-map
@@ -1021,6 +1021,10 @@
   :init
   (which-key-add-key-based-replacements "C-c n" "telega-prefix")
   (which-key-add-key-based-replacements "C-c v" "telega-prefix")
+  (make-read-extended-command-for-prefix "telega"
+   :bind-map telega-prefix-map
+   :bind-key "x"
+   :key-alias "telega-commands")
   :config
   (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
   (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
@@ -1155,7 +1159,7 @@
       (when (eq major-mode 'telega-chat-mode)
         t)))
 
-  (defun tychoish/telega-bury-chat-buffers ()
+  (defun telega-bury-chat-buffers ()
     "iterates through all currently visable frames and windows and changes
 all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
@@ -1177,11 +1181,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                :title (format "emacs.%s.telega" tychoish/emacs-instance-id)
                :persistent t))))
 
-  (defun tychoish/telega-kill-chat-buffers ()
+  (defun telega-kill-chat-buffers ()
     (interactive)
     (kill-buffers-matching-mode 'telega-chat-mode))
 
-  (defun tychoish/telega-force-kill ()
+  (defun telega-force-kill ()
     (interactive)
     (telega-kill t))
 
