@@ -43,6 +43,9 @@
 (autoload 'org-rst-export-as-rst "ox-rst")
 (autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
 
+(autoload 'consult-org-capture "tychoish-org")
+(autoload 'consult--read "consult")
+
 (autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
 (autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
 (autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
@@ -71,13 +74,14 @@
 
 ;; key bindings
 
-(bind-keys :map tychoish/global-org-map
-	   ("f" . org-agenda-files-open)
-	   ("r" . org-agenda-files-reload)
-	   ("j" . consult-org-capture)
-	   ("c" . consult-org-capture)
-	   :map tychoish/org-link-mode-map
-           ("a" . org-annotate-file))
+(bind-keys
+ :map tychoish/global-org-map
+ ("f" . org-agenda-files-open)
+ ("r" . org-agenda-files-reload)
+ ("j" . consult-org-capture)
+ ("c" . consult-org-capture)
+ :map tychoish/org-link-mode-map
+ ("a" . org-annotate-file))
 
 (defvar-keymap tychoish/org-gist-map
   :name "org-gist"
@@ -86,60 +90,66 @@
   "g" #'org-gist-export-public-gist)
 
 (with-eval-after-load 'org
-  (bind-keys :map org-mode-map
-             ("C-c l o" . org-link-open-from-string)
-             ("C-c C-p" . set-mark-command)
-             ("M-TAB" . org-cycle)
-             ("C-M-TAB" . org-cycle-force-archived)
-             :map org-mode-map
-             :prefix "C-c o"
-             :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
-             ("a" . org-agenda)
-             ("k" . org-capture)
-	     ("f" . org-agenda-files-open)
-             ("t" . org-set-tags-command)
-             ("n" . org-narrow-to-subtree)
-             ("w" . widen)
-             ("p" . org-insert-property-drawer)
-             ("w" . org-refile)
-             ("d" . tychoish-org-date-now)
-             ("C-s" . org-save-all-org-buffers)
-             ;; ("i" . org-ctags-create-tags)
-	     ;; ("g" . tychoish/org-gist-map)
-             :map tychoish/org-mode-personal-map
-             :prefix "c"
-             :prefix-map tychoish/org-mode-capture-map
-             ("c" . org-capture)
-             ("p" . org-capture-goto-last-stored)
-             ("l" . org-capture-goto-last-stored)
-             ("t" . org-capture-goto-target)
-             ("r" . org-capture-refile)
-             ("w" . org-capture-refile)
-             :map tychoish/org-mode-personal-map
-             :prefix "f"
-             :prefix-map tychoish/org-mode-personal-archive-map
-             ("d" . tychoish-org-mark-done-and-archive)
-             ("e" . org-cycle-force-archived)
-             ("t" . org-archive-set-tag)
-             ("s" . org-archive-to-archive-sibling)))
-
-
+  (bind-keys
+   :map org-mode-map
+   ("C-c l o" . org-link-open-from-string)
+   ("C-c C-p" . set-mark-command)
+   ("M-TAB" . org-cycle)
+   ("C-M-TAB" . org-cycle-force-archived)
+   ("C-c C-w" . whitespace-cleanup)
+   :map org-mode-map
+   :prefix "C-c o"
+   :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
+   ("a" . org-agenda)
+   ("k" . org-capture)
+   ("f" . org-agenda-files-open)
+   ("t" . org-set-tags-command)
+   ("n" . org-narrow-to-subtree)
+   ("w" . widen)
+   ("p" . org-insert-property-drawer)
+   ("w" . org-refile)
+   ("d" . tychoish-org-date-now)
+   ("C-s" . org-save-all-org-buffers)
+   ;; ("i" . org-ctags-create-tags)
+   ;; ("g" . tychoish/org-gist-map)
+   :map tychoish/org-mode-personal-map
+   :prefix "c"
+   :prefix-map tychoish/org-mode-capture-map
+   ("c" . consult-org-capture)
+   ("m" . org-capture)
+   ("p" . org-capture-goto-last-stored)
+   ("l" . org-capture-goto-last-stored)
+   ("t" . org-capture-goto-target)
+   ("r" . org-capture-refile)
+   ("w" . org-capture-refile)
+   :map tychoish/org-mode-personal-map
+   :prefix "f"
+   :prefix-map tychoish/org-mode-personal-archive-map
+   ("d" . tychoish-org-mark-done-and-archive)
+   ("e" . org-cycle-force-archived)
+   ("t" . org-archive-set-tag)
+   ("s" . org-archive-to-archive-sibling)
+   ("a" . org-archive-done-tasks-to-archive-sibling)
+   ("f" . org-archive-done-tasks-to-archive-file)))
 
 (with-eval-after-load 'org
   (with-eval-after-load 'consult
-    (bind-keys :map tychoish/org-mode-personal-map
-               ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)
-               ("s" . consult-org-agenda))))        ;; Alternative: consult-org-heading (for jump))
+    (bind-keys
+     :map tychoish/org-mode-personal-map
+     ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)
+     ("s" . consult-org-agenda))))
 
 
 (with-eval-after-load 'org-agenda
-  (bind-keys :map org-agenda-mode-map
-	     ("C-l" . org-agenda-open-link)
-	     ("M-c" . org-agenda-goto-calendar)))
+  (bind-keys
+   :map org-agenda-mode-map
+   ("C-l" . org-agenda-open-link)
+   ("M-c" . org-agenda-goto-calendar)))
 
 (with-eval-after-load 'consult-tycho
-  (bind-keys :map tychoish/org-mode-capture-map
-	     ("j" . consult-org-capture)))
+  (bind-keys
+   :map tychoish/org-mode-capture-map
+   ("j" . consult-org-capture)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -274,6 +284,64 @@
 (defun tychoish/org-use-speed-commands ()
     (and (looking-at org-outline-regexp) (looking-back "^\**" nil)))
 
+(defvar tychoish-org-project-tags '("PROJECT" "EPIC")
+  "Tags that suppress their children from all agenda views.
+A heading carrying any of these tags acts as a project boundary: its
+descendant entries are hidden from agenda while the heading itself stays
+visible.  Changes take effect after the next agenda rebuild.")
+
+(defun tychoish-org-skip-child-of-project-tag ()
+  "Skip the current entry if any ancestor carries a project grouping tag.
+Returns the end-of-subtree position to skip past, or nil to keep the entry.
+The tagged ancestor itself is never skipped — only its descendants are.
+Intended for `org-agenda-skip-function-global'."
+  (save-excursion
+    (let (skip)
+      (while (and (not skip) (org-up-heading-safe))
+        (when (seq-intersection tychoish-org-project-tags
+                                (org-get-tags nil t))
+          (setq skip (save-excursion (org-end-of-subtree t) (point)))))
+      skip)))
+
+(defun tychoish-org-done-state-match ()
+  "Return an org-map-entries match string for all completed todo states.
+Derives the set from `org-todo-keywords-1' (buffer-local when set) and
+falls back to `org-done-keywords' which org populates from the keyword
+sequences after the \"|\" separator."
+  (let ((done-states (or (and (boundp 'org-done-keywords) org-done-keywords)
+                         '("DONE"))))
+    (concat "/" (mapconcat #'identity done-states "|"))))
+
+(defun tychoish-org-archive-completed-tasks (archive-fn label)
+  "Collect all completed tasks in scope and archive each with ARCHIVE-FN.
+Scope is the current subtree when point is inside a heading, else the
+full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
+\(directly or inherited).  Reports count with LABEL in the echo area."
+  (let ((scope (if (org-before-first-heading-p) 'file 'tree))
+        markers)
+    (org-map-entries
+     (lambda () (push (point-marker) markers))
+     (tychoish-org-done-state-match)
+     scope
+     'archive)
+    (let ((count (length markers)))
+      (dolist (marker markers)
+        (with-current-buffer (marker-buffer marker)
+          (goto-char marker)
+          (funcall archive-fn)
+          (set-marker marker nil)))
+      (message "Archived %d completed task(s)%s" count label))))
+
+(defun org-archive-done-tasks-to-archive-sibling ()
+  "Archive all completed tasks in scope to the archive sibling heading."
+  (interactive)
+  (tychoish-org-archive-completed-tasks #'org-archive-to-archive-sibling ""))
+
+(defun org-archive-done-tasks-to-archive-file ()
+  "Archive all completed tasks in scope to the org archive file."
+  (interactive)
+  (tychoish-org-archive-completed-tasks #'org-archive-subtree " to file"))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: org-capture
@@ -315,8 +383,11 @@
 
 ;; org-agenda
 
+(setq org-agenda-skip-function-global #'tychoish-org-skip-child-of-project-tag)
+
 (setq org-agenda-custom-commands
-      '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED")))
+      '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
+         ((org-agenda-skip-function-global nil)))))
 
 (setq org-agenda-include-diary nil)
 (setq org-agenda-block-separator nil)

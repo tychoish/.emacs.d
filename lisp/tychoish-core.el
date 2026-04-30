@@ -833,6 +833,9 @@
   :bind (("C-x x a" . revbufs)
 	 :prefix "C-c b"
 	 :prefix-map tychoish/buffer-control-map
+	 ("k" . kill-this-buffer)
+	 ("d" . kill-buffers-in-directory)
+	 ("m" . kill-buffers-matching-mode)
 	 ("h" . bury-buffer)
 	 ("r" . revbufs)
 	 ("b" . revert-buffer-quick))

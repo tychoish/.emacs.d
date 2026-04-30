@@ -892,7 +892,7 @@
 (add-to-list 'auto-mode-alist '("\\.zsh$'" . sh-mode))
 (add-to-list 'auto-mode-alist '("\\.zshrc$'" . sh-mode))
 (add-to-list 'auto-mode-alist '("\\.bash_profile$'" . sh-mode))
-(add-to-list 'auto-mode-alist '(".*mutt.*"  message-mode))
+(add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
 (with-eval-after-load "em-cmpl"
   (add-hook 'eshell-mode 'eshell-cmpl-initialize))
@@ -901,9 +901,9 @@
   (bind-keys
    :map comint-mode-map
    ("M-n" . comint-next-input)
-   ("M-p" . 'comint-previous-input)
+   ("M-p" . comint-previous-input)
    ([down] . comint-next-matching-input-from-input)
-   ([up] . 'comint-previous-matching-input-from-input)))
+   ([up] . comint-previous-matching-input-from-input)))
 
 (with-eval-after-load 'dabbrev
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
