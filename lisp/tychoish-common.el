@@ -1,7 +1,7 @@
   ;; -*- lexical-binding: t; -*-
 
-(require 'anaphora)
 (require 'xlib)
+(require 'anaphora)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -189,22 +189,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; macros -- helper macros for common operations
-
-(defmacro disabled (&rest body)
-  `(unless 'disabled
-     ,@body))
-
-(defmacro cape-capf-wrapper (wrapper inner)
-  (when inner
-    (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
-	   (wrapper-name (symbol-name wrapper))
-	   (capf-name (symbol-name inner))
-	   (name (format "%s-<%s>" capf-name wrapper-name ))
-	   (symb (intern name)))
-      `(defun ,symb ()
-	 (funcall ',wrapper ',inner)))))
-
 (defmacro tychoish/set-tab-width (num)
   (unless (integerp num)
     (signal 'wrong-type-argument num))
@@ -215,239 +199,12 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
     `(defun ,generated-name ()
        (set-tab-width ,num))))
 
-(defmacro create-run-hooks-function-for (mode)
-  (let* ((mode-name (symbol-name mode))
-	 (hook-name (concat mode-name "-hook"))
-	 (function-name (intern (concat "run-hooks-for-" mode-name))))
-    `(defun ,function-name nil
-       (run-hooks (intern ,hook-name)))))
-
-(cl-defmacro create-toggle-functions (value &optional &key short-name local keymap key)
-  (let* ((name (or short-name (symbol-name value)))
-	 (suffix (when local "local"))
-	 (ops (list
-	       `(,(intern (s-join-with-hyphen "turn-on" name suffix)) t)
-	       `(,(intern (s-join-with-hyphen "turn-off" name suffix)) nil)
-	       `(,(intern (s-join-with-hyphen "toggle" name suffix)) (not ,value))))
-	 (setter (if local 'setq-local 'setq)))
-
-    (when (and keymap (not key))
-      (user-error "must define both keymap and a key"))
-
-    `(progn
-       ,@(--map `(defun ,(car it) ()
-		 (interactive)
-		 (,setter ,value ,(cadr it)))
-       ops)
-    ,(when keymap
-       `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
-
-(cl-defmacro make-read-extended-command-for-prefix (prefix &optional &key bind-map bind-key key-alias)
-  (unless (setq prefix (s-trimmed-or-nil prefix))
-    (user-error "cannot build predicate function for '%s'" prefix))
-  (unless key-alias
-    (setq key-alias (s-join-with-kebab prefix "commands")))
-
-  (setq prefix (s-normalize-symbol-name prefix))
-
-  (let* ((predicate-name (format "read-extended-command-for-%s-prefix-p" prefix))
-	 (predicate-symbol (intern predicate-name))
-	 (user-command-name (format "execute-extended-%s-command" prefix))
-	 (user-command-symbol (intern user-command-name)))
-    `(progn
-       (defun ,predicate-symbol (command buffer)
-	 ,(format "Predicate for `read-extended-command-predicate' to filter commands returning only those that start with the prefix `%s'" prefix)
-	 (s-prefix-p ,prefix (symbol-name command)))
-       (defun ,user-command-symbol ()
-	 ,(format "Read extentend command but filtered for only those beginning with prefix `%s'." prefix)
-	 (interactive)
-	 (let ((read-extended-command-predicate #',predicate-symbol))
-	   (execute-extended-command nil)))
-       ,(when bind-key
-	  `(progn
-	     (bind-keys
-	      :map ,(or bind-map 'global-map)
-	      (,bind-key . ,user-command-symbol))
-	     ,(when key-alias
-		`(which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias)))))))
-
-(defmacro with-toggle-once (name &rest body)
-  (declare (indent 1) (debug t))
-  (let ((operation (or (when (symbolp name) name)
-		       (when (stringp name) (intern name))))
-	(toggle (intern (s-join-with-hyphen (symbol-name name) "toggle-state"))))
-
-  `(progn
-     (defvar ,toggle nil
-       "Toggle variable to avoid re-execution of expensive configuration (like setting environment variables.)")
-
-     (defun ,operation ()
-       (unless ,toggle
-	 ,@body
-	 (setq ,toggle t))))))
-
-(defmacro with-prefix-arg (arg &rest body)
-  `(let ((current-prefix-arg ,arg))
-     ,@body))
-
-(defmacro with-default-directory (path &rest body)
-  "Run the body with `default-directory' set to the path provided"
-  (declare (indent 1) (debug t))
-  `(let ((default-directory ,path))
-     ,@body))
-
-(defmacro with-silence (&rest body)
-  "Totally suppress message from either the minibuffer or the *Messages* buffer.."
-  (declare (indent 1) (debug t))
-  `(let ((inhibit-message t)
-         (message-log-max nil))
-     ,@body))
-
-(defmacro with-quiet (&rest body)
-  "Suppress any messages from appearing in the minibuffer area."
-  (declare (indent 1) (debug t))
-  `(let ((inhibit-message t))
-     ,@body))
-
-(defmacro with-force-write (&rest body)
-  (declare (indent 1) (debug t))
-  `(progn
-     (setq buffer-read-only nil)
-     ,@body
-     (setq buffer-read-only t)))
-
-(defmacro with-temp-keymap (map &rest body)
-  "Create a temporary MAP and return it after evaluating it in the BODY."
-  (declare (indent 1) (debug t))
-  `(let ((,map (make-sparse-keymap)))
-     ,@body
-     map))
-
-(cl-defmacro add-hygenic-one-shot-hook
-    (&key
-     name
-     hook
-     function
-     result
-     body
-     form
-     operation
-     ;; flages and options; with defaults
-     (args nil)
-     (local nil)
-     (persist nil)
-     (count 1)
-     (depth 0)
-     (make-unique nil)
-     (cleanup nil))
-  (let* ((unique-tag (or (when make-unique (gensym "hook-"))
-			 (make-symbol "hook")))
-	 (count-tag (cond (persist "perpeutal")
-			  ((not (numberp count)) (user-error "must specify hook limited count as a number %d" count))
-			  ((eq count 1) "one-shot")
-			  (:else (format "run-%d-times" count))))
-	 (cleanup-symbol (intern (s-join-with-hyphen "hygenic" count-tag name (symbol-name unique-tag))))
-	 hooks)
-
-    (when (eq hook 'after-first-frame-created)
-      (setq hook (if (daemonp)
-		     'server-after-make-frame-hook
-		   'window-setup-hook)))
-
-    (when (functionp hook)
-      (setq hook (funcall hook)))
-
-    (when (symbolp hook)
-      (setq hooks (list hook)))
-
-    (when (listp hook)
-      (if (null (-remove #'symbolp hook))
-	  (setq hooks hook)
-	(setq hooks (eval hook)))
-      (if (symbolp hooks)
-	  (setq hooks (list hooks))))
-
-    (unless hooks
-      (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
-
-    `(progn
-       (let ((count ,count)
-	     (run-count 0))
-	 (cl-flet ((counter-increment (lambda () (cl-incf run-count)))
-		   (counter-expired (lambda () (or ,persist (>= run-count count)))))
-
-	   (defun ,cleanup-symbol ,args
-	     (with-slow-op-timer
-	      ,(format "<hygenic-hook> %s" name)
-
-	      ,(aif (cond (form
-			   form)
-			  (body
-			   `,@body)
-			  (result
-			   `,(eval result))
-			  (operation
-			   (if args
-			       `(apply ,operation ,args)
-			     `(funcall ,operation)))
-			  ((and (symbolp function) (functionp function))
-			   (if args
-			       `(apply ',function ,args)
-			     `(funcall ',function)))
-			  ((and (functionp function) (listp function))
-			   function)
-			  ((symbolp function)
-			   (eval function))
-			  ((listp function)
-			   function))
-		   it
-		 (user-error "could not resolve the hook function from input for %s" name))
-
-	      (counter-increment)
-
-	      (when (counter-expired)
-		,@(--map
-		   `(remove-hook ',it ',cleanup-symbol ,local)
-		   (--remove (eq 'quote it) hooks))
-
-		,(if (or make-unique cleanup)
-		     `(unintern ',cleanup-symbol obarray)
-		   t)))))
-
-	 ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks))))))
-
 (cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
   (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
     `(progn
        (add-hook 'emacs-startup-hook ',operation ,depth)
        (defun ,operation ()
 	 (setq ,variable (current-time))))))
-
-(cl-defmacro setq-when-nil (variable value &optional &key local)
-  (unless (boundp variable)
-    (user-error "can only `set-when-nil' with variables that are already defined."))
-
-  `(unless ,variable
-     ,(let ((setter (if local 'setq-local 'setq))
-	    (resolved-value (if (functionp value) (funcall value) value)))
-	`(,setter ,variable ,resolved-value))))
-
-(defmacro with-timer (name &rest body)
-  "Report on NAME and the time taken to execute BODY."
-  `(let ((time (current-time)))
-     ,@body
-     (message "%s: %.06fs" ,name (float-time (time-since time)))))
-
-(defun compile-buffer-name (name)
-  `(lambda (&optional _) ,name))
-
-(defalias 'pa 'pos-arg)
-
-(defmacro pos-arg (name &key is)
-  "Allow positional arguments to have annotated call-sites."
-  (unless (or (stringp name) (symbolp name))
-    (user-error "cannot annotate a positional arg without a name"))
-  is)
 
 (defun byte-compile-all-user-emacs-files ()
   "Recompile all most relevant emacs lisp files in the current
@@ -462,16 +219,6 @@ were recompiled."
        (--filter (f-ext-p it "el"))
        (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
 
-(defmacro merge-predicate-functions (&rest preds)
-  `(lambda (value)
-    (let ((head ,preds)
-	  (predicate ,(car preds))
-	  (val t))
-      (while (and val predicate)
-	(setq val (funcall predicate value)
-	      head (cdr head)
-	      predicate (car head)))
-      val)))
 
 (declare-function package-installed-p "package")
 (declare-function package-desc-p "package")
@@ -503,68 +250,6 @@ were recompiled."
 (defun package-install-async (pkgs)
   (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
   (async-package-operation 'install pkgs))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; compile -- compilation mode helpers
-
-(cl-defun tychoish/compile--post-hook-collection
-    (buffer
-     compile-result-message
-     started-at
-     &optional
-     &key
-     process-name
-     program
-     args
-     send-when
-     (alert-threshold 60)
-     (notification-threshold 120))
-  (let* ((end-at (current-time))
-	 (duration (time-subtract end-at started-at))
-	 (compile-result-message (s-trim compile-result-message))
-	 (msg (format "build %s in %.06fs -- %s"
-		      compile-result-message
-		      (float-time duration)
-		      (with-current-buffer buffer
-		        (s-trim (car compilation-arguments))))))
-
-    (when (or send-when
-	      (> alert-threshold (float-time (time-since (current-idle-time))))
-	      (and (> (float-time duration) notification-threshold) process-name program args))
-
-      (apply #'async-start-process
-	     (pa "emacs-process-name" :is process-name)
-	     (pa "program" :is program)
-	     (pa "on-finish" :is (lambda (out) (message "INFO: notify process for %s completed [%s] with %s" (buffer-name buffer) out compile-result-message)))
-	     (-append args (strings-list (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
-
-    (when (or send-when
-	      (> (/ alert-threshold 2) (float-time (time-since (current-idle-time))))
-	      (> alert-threshold (ffloor (float-time duration))))
-      (alert
-       msg
-       :title (format "%s:%s:%s" tychoish/emacs-instance-id (buffer-name buffer) compile-result-message)
-       :buffer buffer))
-
-    (with-current-buffer buffer
-      (save-excursion
-	(setq buffer-read-only nil)
-	(goto-char (point-min))
-	(unless (eq (point-min) (re-search-forward "\\(^Compilation.*\n$\\|\n{2,}\\)"))
-	  (replace-match ""))
-	(goto-char (point-max))
-	(compilation-insert-annotation
-	 (format "\n--- %s completed in %.06fs at %s\n\n"
-		 compile-result-message (float-time duration)
-		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
-	 (setq buffer-read-only t)))))
-
-(defun compilation-finish-functions-reset-all ()
-  (interactive)
-  (->> (mode-buffers 'compilation-mode)
-       (--mapc (with-current-buffer it
-		 (setq-local compilation-finish-functions nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

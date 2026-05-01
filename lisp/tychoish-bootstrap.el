@@ -39,7 +39,14 @@
 (require 'ht)
 (require 'dash)
 
+(eval-when-compile
+  (require 'xlib))
+
+(require 'tychoish-common)
+
 (declare-function browse-url-chrome "browse-url")
+
+(tychoish/set-up-instance-name)
 
 (bind-keys
  ("C-x m" . execute-extended-command)
@@ -556,15 +563,15 @@
    (delight 'visual-line-mode " wr")
    (delight 'fundamental-mode "fun")))
 
-(add-hygenic-one-shot-hook :name "delight-modeline"
+(add-one-shot-hook :name "delight-modeline"
  :function tychoish/set-up-delightful-mode-lighters
  :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
 
-(add-hygenic-one-shot-hook :name "restore-desktop"
+(add-one-shot-hook :name "restore-desktop"
  :function tychoish/desktop-read-init
  :hook after-first-frame-created)
 
-(add-hygenic-one-shot-hook :name "emacs-lockfile-setup"
+(add-one-shot-hook :name "emacs-lockfile-setup"
  :form (progn
          (tychoish/init-late-set-up-naming)
          (if (equal "solo" tychoish/emacs-instance-id)
@@ -572,20 +579,20 @@
 	   (tychoish/set-up-named-instance-file-locks)))
  :hook emacs-startup-hook)
 
-(add-hygenic-one-shot-hook :name "emacs-instance-persistence"
+(add-one-shot-hook :name "emacs-instance-persistence"
  :function (tychoish/set-up-emacs-instance-persistence)
  :depth 75
  :hook after-first-frame-created)
 
-(add-hygenic-one-shot-hook :name "disable-modes"
+(add-one-shot-hook :name "disable-modes"
  :function tychoish/init-late-disable-modes
  :hook emacs-startup-hook)
 
-(add-hygenic-one-shot-hook :name "enable-modes"
+(add-one-shot-hook :name "enable-modes"
  :function tychoish/init-late-enable-modes
  :hook '(prog-mode-hook text-mode-hook))
 
-(add-hygenic-one-shot-hook :name "ssh-agent"
+(add-one-shot-hook :name "ssh-agent"
  :function (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
@@ -774,7 +781,6 @@
 	   (aidermacs-send-command-with-prefix "/weak-model " aidermacs-weak-model)
 	   (aidermacs-send-command-with-prefix "/editor-model " aidermacs-editor-model))))))
 
-
 (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
   (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
         (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
@@ -914,7 +920,7 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
-(create-toggle-functions tychoish/slow-op-reporting)
+(create-toggle-functions slow-op-reporting)
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

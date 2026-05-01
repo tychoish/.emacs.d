@@ -71,7 +71,7 @@
    :keymap tychoish/theme-map
    :key "i")
 
-  (add-hygenic-one-shot-hook
+  (add-one-shot-hook
    :name "doom-modeline"
    :function doom-modeline-mode
    :hook (if (daemonp)
@@ -309,6 +309,16 @@
   (declare-function capf-wordfreq-avalible-p "tychoish-core")
   (declare-function cape-capf-inside-code "cape")
 
+  (defmacro cape-capf-wrapper (wrapper inner)
+    (when inner
+      (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
+	     (wrapper-name (symbol-name wrapper))
+	     (capf-name (symbol-name inner))
+	     (name (format "%s-<%s>" capf-name wrapper-name ))
+	     (symb (intern name)))
+	`(defun ,symb ()
+	   (funcall ',wrapper ',inner)))))
+
   (defun tychoish/maybe-capf-dict ()
     (and (boundp 'cape-dict-file) (f-exists-p cape-dict-file) #'cape-dict))
 
@@ -418,7 +428,7 @@
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
   :commands (vertico-mode)
   :init
-  (add-hygenic-one-shot-hook
+  (add-one-shot-hook
    :name "vertico"
    :operation 'vertico-mode
    :hook 'doom-modeline-mode-hook)
@@ -449,7 +459,7 @@
   :ensure t
   :commands (prescient-persist-mode)
   :init
-  (add-hygenic-one-shot-hook
+  (add-one-shot-hook
    :name "prescient"
    :operation 'prescient-persist-mode
    :hook '(vertico-mode-hook corfu-mode-hook))
@@ -475,7 +485,7 @@
          ("C-c a" . marginalia-cycle))
   :commands (marginalia-mode)
   :init
-  (add-hygenic-one-shot-hook
+  (add-one-shot-hook
    :name "marginalia"
    :function marginalia-mode
    :hook 'minibuffer-setup-hook)
@@ -606,7 +616,7 @@
   :hook ((marginalia-mode . nerd-icons-completion-marginalia-setup))
   :commands (nerd-icons-completion-mode)
   :init
-  (add-hygenic-one-shot-hook
+  (add-one-shot-hook
    :name "nerd-icons-completion"
    :operation #'nerd-icons-completion-mode
    :hook '(corfu-mode-hook vertico-mode-hook)))
@@ -667,7 +677,7 @@
          ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
          ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
          ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-         ("M-s L" . consult-line-multi))            ;; needed by consult-line to detect isearch
+         ("M-s L" . consult-line-multi))           ;; needed by consult-line to detect isearch
   :bind (:prefix "C-c C-;"
          :prefix-map tychoish/consult-mode-map
          ("h" . consult-history))
@@ -809,8 +819,6 @@
 
 (use-package consult-tycho
   :bind (("M-g r" . consult-rg)
-	 :map tychoish/core-map
-	 ("r" . consult-sardis-run)
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
          ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
@@ -1422,6 +1430,10 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 			:linkTarget "pkg.go.dev"
                         :analyses (:unreachable t
 				   :unusedvariable t)
+                        :codelenses (:test t
+				     :tidy t
+				     :upgradeDependency t
+				     :generate t)
                         :hints (:parameterNames :json-false
 				:ignoredError t
 				:constantValues t
@@ -1922,17 +1934,19 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
   :config
 
-  (bind-keys :map eglot-mode-map
-	     :prefix "C-c l"
-	     :prefix-map tychoish/eglot-map
-	     ("t" . consult-eglot-symbols)
-             ("r" . eglot-rename)
-             ("a" . eglot-code-actions)
-             ("i" . eglot-code-action-inline)
-             ("f" . eglot-format-buffer)
-             ("o" . eglot-code-action-organize-imports)
-	     ("q" . eglot-code-action-quickfix)
-             ("w" . eglot-code-action-rewrite))
+  (bind-keys
+   :map eglot-mode-map
+   :prefix "C-c l"
+   :prefix-map tychoish/eglot-map
+   ("s" . consult-eglot-symbols)
+   ("r" . eglot-rename)
+   ("a" . eglot-code-actions)
+   ("i" . eglot-code-action-inline)
+   ("f" . eglot-format-buffer)
+   ("o" . eglot-code-action-organize-imports)
+   ("q" . eglot-code-action-quickfix)
+   ("w" . eglot-code-action-rewrite)
+   ("u" . eglot-update-workspace))
 
   (make-read-extended-command-for-prefix "eglot"
    :bind-map tychoish/eglot-map
@@ -1972,6 +1986,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (setq-default eglot-workspace-configuration tychoish/eglot-default-server-configuration)
 
+  (defun eglot-update-workspace ()
+    "Push updated workspace configuration to the current eglot server.
+Useful after changing `eglot-workspace-configuration' or
+`tychoish/eglot-default-server-configuration' without restarting eglot."
+    (interactive)
+    (eglot-signal-didChangeConfiguration (eglot--current-server-or-lose)))
+
   (defun eglot-code-action-inline ()
     (interactive)
     (when (eglot-managed-p)
@@ -1993,6 +2014,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'flycheck-checkers 'eglot-check)
   (setq flycheck-eglot-enable-diagnostic-tags nil)
   (flycheck-add-next-checker 'eglot-check 'go-gofmt))
+
+(use-package eglot-test-at-point
+  :after (eglot)
+  :bind (:map eglot-mode-map)
+  :commands (eglot-test-at-point)
+  :init
+  (bind-keys
+   :map tychoish/eglot-map
+   ("t" . eglot-test-at-point)))
 
 (use-package treesit
   :defer t
@@ -2028,9 +2058,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
   (add-to-list 'major-mode-remap-alist '(c-or-c++-mode . c-or-c++-ts-mode))
   :config
-  (add-hook 'js-ts-mode-hook (create-run-hooks-function-for js-mode))
-  (add-hook 'c-ts-mode-hook (create-run-hooks-function-for c-mode))
-  (add-hook 'c++-ts-mode-hook (create-run-hooks-function-for c++-mode))
+  (add-hook 'js-ts-mode-hook (make-run-hooks-function-for js-mode))
+  (add-hook 'c-ts-mode-hook (make-run-hooks-function-for c-mode))
+  (add-hook 'c++-ts-mode-hook (make-run-hooks-function-for c++-mode))
 
   (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100))
   (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))

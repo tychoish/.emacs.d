@@ -1,9 +1,51 @@
-;; -*- lexical-binding: t; -*-
+;;; xlib.el --- extended utility library -*- lexical-binding: t -*-
 
+;; Author: tychoish
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "28.1") (cl-lib "1.0") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19") (anaphora "1.0") (bind-key "2.4"))
+
+;;; Commentary:
+
+;; Extensions and additions for f.el, s.el, ht.el, and dash.el, plus
+;; utility macros for hooks, timers, and annotations to improve code
+;; ergonomics and clarity.
+
+;;; Code:
+
+(require 'cl-lib)
 (require 'f)
 (require 's)
 (require 'ht)
 (require 'dash)
+(require 'anaphora)
+(require 'bind-key)
+
+(declare-function which-key-add-keymap-based-replacements "which-key")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; slow-op -- reporting for operation timing
+
+(defvar slow-op-reporting (or debug-on-error init-file-debug))
+(defvar slow-op-threshold 0.01)
+
+(defmacro with-slow-op-timer (name &rest body)
+  "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
+  (declare (indent 1) (debug t))
+  `(let* ((inhibit-message t)
+	  (time (current-time))
+	  (return-value (progn ,@body))
+	  (duration (time-to-seconds (time-since time))))
+     (when (and slow-op-reporting (> duration slow-op-threshold))
+       (message "[op]: %s: %.06fs" ,name duration))
+     return-value))
+
+(defun cli/time-reporting ()
+  (when (string-prefix-p "--with-slow-op-timing" argi)
+    (message "[op]: enabling time reporting")
+    (setq slow-op-reporting t)))
+
+(add-to-list 'command-line-functions 'cli/time-reporting)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -471,4 +513,249 @@ of the equality function customization differs slightly."
 
     (-filter #'f-directory-p sequence)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; options
+
+(defun option-set-p (opt options)
+  "Return non-nil if OPT is present in OPTIONS.
+OPTIONS may be a single symbol or a list of symbols."
+  (or (eq opt options)
+      (and (listp options) (memq opt options))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; utility macros
+
+(defmacro disabled (&rest body)
+  `(unless 'disabled
+     ,@body))
+
+(defmacro with-force-write (&rest body)
+  (declare (indent 1) (debug t))
+  `(progn
+     (setq buffer-read-only nil)
+     ,@body
+     (setq buffer-read-only t)))
+
+(defmacro pos-arg (name &key is)
+  "Allow positional arguments to have annotated call-sites."
+  (declare (indent 1) (debug t))
+  (unless (or (stringp name) (symbolp name))
+    (user-error "cannot annotate a positional arg without a name"))
+  is)
+
+(defalias 'pa 'pos-arg)
+
+(cl-defmacro add-one-shot-hook
+    (&key name hook function result body form operation
+     ;; flags and options; with defaults
+     (args nil) (local nil) (persist nil) (count 1) (depth 0) (make-unique nil) (cleanup nil))
+  (let* ((unique-tag (or (when make-unique (gensym "hook-"))
+			 (make-symbol "hook")))
+	 (count-tag (cond (persist "perpeutal")
+			  ((not (numberp count)) (user-error "must specify hook limited count as a number %d" count))
+			  ((eq count 1) "one-shot")
+			  (:else (format "run-%d-times" count))))
+	 (cleanup-symbol (intern (s-join-with-hyphen "one-shot" count-tag name (symbol-name unique-tag))))
+	 hooks)
+
+    (when (eq hook 'after-first-frame-created)
+      (setq hook (if (daemonp)
+		     'server-after-make-frame-hook
+		   'window-setup-hook)))
+
+    (when (functionp hook)
+      (setq hook (funcall hook)))
+
+    (when (symbolp hook)
+      (setq hooks (list hook)))
+
+    (when (listp hook)
+      (if (null (-remove #'symbolp hook))
+	  (setq hooks hook)
+	(setq hooks (eval hook)))
+      (if (symbolp hooks)
+	  (setq hooks (list hooks))))
+
+    (unless hooks
+      (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
+
+    `(progn
+       (let ((count ,count)
+	     (run-count 0))
+	 (cl-flet ((counter-increment (lambda () (cl-incf run-count)))
+		   (counter-expired (lambda () (or ,persist (>= run-count count)))))
+
+	   (defun ,cleanup-symbol ,args
+	     (with-slow-op-timer
+	      ,(format "<one-shot-hook> %s" name)
+
+	      ,(aif (cond (form
+			   form)
+			  (body
+			   `,@body)
+			  (result
+			   `,(eval result))
+			  (operation
+			   (if args
+			       `(apply ,operation ,args)
+			     `(funcall ,operation)))
+			  ((and (symbolp function) (functionp function))
+			   (if args
+			       `(apply ',function ,args)
+			     `(funcall ',function)))
+			  ((and (functionp function) (listp function))
+			   function)
+			  ((symbolp function)
+			   (eval function))
+			  ((listp function)
+			   function))
+		   it
+		 (user-error "could not resolve the hook function from input for %s" name))
+
+	      (counter-increment)
+
+	      (when (counter-expired)
+		,@(--map
+		   `(remove-hook ',it ',cleanup-symbol ,local)
+		   (--remove (eq 'quote it) hooks))
+
+		,(if (or make-unique cleanup)
+		     `(unintern ',cleanup-symbol obarray)
+		   t)))))
+
+	 ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks))))))
+
+(defmacro make-run-hooks-function-for (mode)
+  (let* ((mode-name (symbol-name mode))
+	 (hook-name (concat mode-name "-hook"))
+	 (function-name (intern (concat "run-hooks-for-" mode-name))))
+    `(defun ,function-name nil
+       (run-hooks (intern ,hook-name)))))
+
+(cl-defmacro create-toggle-functions (value &optional &key short-name local keymap key)
+  (let* ((name (or short-name (symbol-name value)))
+	 (suffix (when local "local"))
+	 (ops (list
+	       `(,(intern (s-join-with-hyphen "turn-on" name suffix)) t)
+	       `(,(intern (s-join-with-hyphen "turn-off" name suffix)) nil)
+	       `(,(intern (s-join-with-hyphen "toggle" name suffix)) (not ,value))))
+	 (setter (if local 'setq-local 'setq)))
+
+    (when (and keymap (not key))
+      (user-error "must define both keymap and a key"))
+
+    `(progn
+       ,@(--map `(defun ,(car it) ()
+		 (interactive)
+		 (,setter ,value ,(cadr it)))
+       ops)
+    ,(when keymap
+       `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
+
+(cl-defmacro make-read-extended-command-for-prefix (prefix &optional &key bind-map bind-key key-alias)
+  (unless (setq prefix (s-trimmed-or-nil prefix))
+    (user-error "cannot build predicate function for '%s'" prefix))
+  (unless key-alias
+    (setq key-alias (s-join-with-kebab prefix "commands")))
+
+  (setq prefix (s-normalize-symbol-name prefix))
+
+  (let* ((predicate-name (format "read-extended-command-for-%s-prefix-p" prefix))
+	 (predicate-symbol (intern predicate-name))
+	 (user-command-name (format "execute-extended-%s-command" prefix))
+	 (user-command-symbol (intern user-command-name)))
+    `(progn
+       (defun ,predicate-symbol (command buffer)
+	 ,(format "Predicate for `read-extended-command-predicate' to filter commands returning only those that start with the prefix `%s'" prefix)
+	 (s-prefix-p ,prefix (symbol-name command)))
+       (defun ,user-command-symbol ()
+	 ,(format "Read extentend command but filtered for only those beginning with prefix `%s'." prefix)
+	 (interactive)
+	 (let ((read-extended-command-predicate #',predicate-symbol))
+	   (execute-extended-command nil)))
+       ,(when bind-key
+	  `(progn
+	     (bind-keys
+	      :map ,(or bind-map 'global-map)
+	      (,bind-key . ,user-command-symbol))
+	     ,(when key-alias
+		`(which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias)))))))
+
+(defmacro with-toggle-once (name &rest body)
+  (declare (indent 1) (debug t))
+  (let ((operation (or (when (symbolp name) name)
+		       (when (stringp name) (intern name))))
+	(toggle (intern (s-join-with-hyphen (symbol-name name) "toggle-state"))))
+
+  `(progn
+     (defvar ,toggle nil
+       "Toggle variable to avoid re-execution of expensive configuration (like setting environment variables.)")
+
+     (defun ,operation ()
+       (unless ,toggle
+	 ,@body
+	 (setq ,toggle t))))))
+
+(defmacro with-prefix-arg (arg &rest body)
+  `(let ((current-prefix-arg ,arg))
+     ,@body))
+
+(defmacro with-default-directory (path &rest body)
+  "Run the body with `default-directory' set to the path provided"
+  (declare (indent 1) (debug t))
+  `(let ((default-directory ,path))
+     ,@body))
+
+(defmacro with-silence (&rest body)
+  "Totally suppress message from either the minibuffer or the *Messages* buffer.."
+  (declare (indent 1) (debug t))
+  `(let ((inhibit-message t)
+         (message-log-max nil))
+     ,@body))
+
+(defmacro with-quiet (&rest body)
+  "Suppress any messages from appearing in the minibuffer area."
+  (declare (indent 1) (debug t))
+  `(let ((inhibit-message t))
+     ,@body))
+
+(defmacro with-temp-keymap (map &rest body)
+  "Create a temporary MAP and return it after evaluating it in the BODY."
+  (declare (indent 1) (debug t))
+  `(let ((,map (make-sparse-keymap)))
+     ,@body
+     map))
+
+(cl-defmacro setq-when-nil (variable value &optional &key local)
+  (unless (boundp variable)
+    (user-error "can only `set-when-nil' with variables that are already defined."))
+
+  `(unless ,variable
+     ,(let ((setter (if local 'setq-local 'setq))
+	    (resolved-value (if (functionp value) (funcall value) value)))
+	`(,setter ,variable ,resolved-value))))
+
+(defmacro with-timer (name &rest body)
+  "Report on NAME and the time taken to execute BODY."
+  `(let ((time (current-time)))
+     ,@body
+     (message "%s: %.06fs" ,name (float-time (time-since time)))))
+
+(defun compile-buffer-name (name)
+  `(lambda (&optional _) ,name))
+
+(defmacro merge-predicate-functions (&rest preds)
+  `(lambda (value)
+    (let ((head ,preds)
+	  (predicate ,(car preds))
+	  (val t))
+      (while (and val predicate)
+	(setq val (funcall predicate value)
+	      head (cdr head)
+	      predicate (car head)))
+      val)))
+
 (provide 'xlib)
+;;; xlib.el ends here

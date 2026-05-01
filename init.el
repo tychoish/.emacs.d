@@ -7,7 +7,6 @@
 
 ;;; Code:
 
-
 (with-gc-suppressed
  (defvar tychoish/startup-complete-time nil "Timestamp reflecting when the instance' startup process actually completed.")
  (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn) "Packages installed with the `--botstrap' CLI flag outside of use-package; for performance.")
@@ -90,15 +89,10 @@
  (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
 
  (with-file-name-handler-disabled
-  (add-to-list 'load-path (concat user-emacs-directory "lisp"))
-  (add-to-list 'load-path (concat user-emacs-directory "user"))
-  ;; (only) functions and macros used in the rest of the configuration
-  (with-slow-op-timer "<init> tychoish-common"
-   (require 'tychoish-common)
-   (declare-function tychoish/set-up-instance-name "tychoish-common")
-   (tychoish/set-up-instance-name))
-
-  ;; customized setup and configuration of core emacs and included packages
+  (eval-when-compile
+    (add-to-list 'load-path (concat user-emacs-directory "lisp"))
+    (add-to-list 'load-path (concat user-emacs-directory "user"))
+    (require 'xlib))
 
   (with-slow-op-timer "<init> tychoish-bootstrap"
    (require 'tychoish-bootstrap)
@@ -106,7 +100,6 @@
    'tychoish-bootstrap)
 
   ;; remaining use-package declarations.
-
   (with-slow-op-timer "<init> load tychoish-core"
    (require 'tychoish-core))
 
@@ -117,10 +110,8 @@
    (require 'tychoish-org))
 
   ;; load the user/*.el files
-
   (with-slow-op-timer "<init> user-files"
    (declare-function tychoish-set-up-user-local-config 'tychoish-bootstrap)
    (tychoish-set-up-user-local-config))))
 
 (provide 'init)
-(put 'upcase-region 'disabled nil)

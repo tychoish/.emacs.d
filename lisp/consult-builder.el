@@ -59,6 +59,64 @@
   (interactive)
   (tychoish/compile-project))
 
+(cl-defun tychoish/compile--post-hook-collection
+    (buffer
+     compile-result-message
+     started-at
+     &optional
+     &key
+     process-name
+     program
+     args
+     send-when
+     (alert-threshold 60)
+     (notification-threshold 120))
+  (let* ((end-at (current-time))
+	 (duration (time-subtract end-at started-at))
+	 (compile-result-message (s-trim compile-result-message))
+	 (msg (format "build %s in %.06fs -- %s"
+		      compile-result-message
+		      (float-time duration)
+		      (with-current-buffer buffer
+		        (s-trim (car compilation-arguments))))))
+
+    (when (or send-when
+	      (> alert-threshold (float-time (time-since (current-idle-time))))
+	      (and (> (float-time duration) notification-threshold) process-name program args))
+
+      (apply #'async-start-process
+	     (pa "emacs-process-name" :is process-name)
+	     (pa "program" :is program)
+	     (pa "on-finish" :is (lambda (out) (message "INFO: notify process for %s completed [%s] with %s" (buffer-name buffer) out compile-result-message)))
+	     (-append args (strings-list (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
+
+    (when (or send-when
+	      (> (/ alert-threshold 2) (float-time (time-since (current-idle-time))))
+	      (> alert-threshold (ffloor (float-time duration))))
+      (alert
+       msg
+       :title (format "%s:%s:%s" tychoish/emacs-instance-id (buffer-name buffer) compile-result-message)
+       :buffer buffer))
+
+    (with-current-buffer buffer
+      (save-excursion
+	(setq buffer-read-only nil)
+	(goto-char (point-min))
+	(unless (eq (point-min) (re-search-forward "\\(^Compilation.*\n$\\|\n{2,}\\)"))
+	  (replace-match ""))
+	(goto-char (point-max))
+	(compilation-insert-annotation
+	 (format "\n--- %s completed in %.06fs at %s\n\n"
+		 compile-result-message (float-time duration)
+		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
+	 (setq buffer-read-only t)))))
+
+(defun compilation-finish-functions-reset-all ()
+  (interactive)
+  (->> (mode-buffers 'compilation-mode)
+       (--mapc (with-current-buffer it
+		 (setq-local compilation-finish-functions nil)))))
+
 ;;;###autoload
 (defun tychoish/compile-project (&optional name command)
   (let* ((compilation-buffer-candidates (project-compilation-buffers :name name))
@@ -77,7 +135,7 @@
 	 candidate-name)
 
     (save-some-buffers
-     ;; save with now questions:
+     ;; save now questions:
      t
      ;; only consider files (nil)
      (lambda () (let ((filename (buffer-file-name)))
@@ -99,7 +157,7 @@
 	 (compile-buffer-name op-name))))
 
     (with-current-buffer (or compile-buf op-name)
-      (add-hygenic-one-shot-hook :name (format "%s notification hook" op-name)
+      (add-one-shot-hook :name (format "%s notification hook" op-name)
        :hook 'compilation-finish-functions
        :local t
        :make-unique t
@@ -118,7 +176,7 @@
       (when-let* ((candidate (ht-get candidates candidate-name))
 		  (hook (tychoish-compilation-candidate-hook candidate)))
 	(when hook
-      	  (add-hygenic-one-shot-hook :name (format "post-%s-hook-operation" op-name)
+      	  (add-one-shot-hook :name (format "post-%s-hook-operation" op-name)
       	   :hook 'compilation-finish-functions
       	   :make-unique t
       	   :local t
@@ -165,7 +223,6 @@
 		  (expand-file-name it)))
        (f-distinct)))
 
-
 (defun get-directory-parents (&optional start stop)
   "Generate list of intermediate paths between `START' and `STOP'."
   (let* ((start (or start default-directory))
@@ -198,10 +255,6 @@
 	     (-join (f-directories proj-root) it)
 	   it)
 	 (f-filter-directories '(cannonicalize unique) it))))
-
-(defun option-set-p (opt options)
-  (or (eq opt options)
-      (and (listp options) (memq opt options))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -470,7 +523,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			(-non-nil)
 			(--map (let ((operation-directory it))
 				 (make-compilation-candidate
-				  :name (format "rerun from %s [%s]"  buf (f-visually-compress-to-four operation-directory))
+				  :name (format "rerun from %s [%s]"  buf (f-visually-compress-to-five operation-directory))
 				  :command command
 				  :directory operation-directory
 				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)))))))))
@@ -525,6 +578,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		 (f-directories-containing-file-with-extension-go directories)
 		 (f-directories-containing-file-go-mod project-root-directory)
 		 (-- project-root-directory))
+		(-uniq)
 		(--flat-map
 		 (let* ((prefix (concat "." (f-path-separator)))
 			(directory it)
@@ -543,42 +597,19 @@ current directory and the project root, and `table' is table of `tychoish--compl
 						    (t package-path)))
 			(proj-path-tag (format "<%s>/%s" project-name path-for-project-tag))
 			(proj-path-for-name (s-join-with-space (format "<%s>/%s" project-name
-								       (f-visually-compress-to-four path-for-project-tag))))
+								       (f-visually-compress-to-five path-for-project-tag))))
 			(proj-path-recursive (f-join proj-path-for-name "...")))
 		   (-append
-		    (-reverse 
 		    (-- (make-compilation-candidate
-			 :name (s-join-with-space "go build" proj-path-for-name)
-			 :command (s-join-with-space "go build" operation-directory)
-			 :directory directory
-			 :annotation (s-join-with-space "build in" project-name "at" short-path))
-			(make-compilation-candidate
 			 :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
 			 :command (s-join-with-space "go build" operation-directory-tree)
 			 :directory directory
 			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively"))
-
 			(make-compilation-candidate
 			 :name (s-join-with-space "go build +tests" (f-join proj-path-for-name "..."))
 			 :command (s-join-with-space "go test -run=NOOP" operation-directory-tree)
 			 :directory directory
 			 :annotation (s-join-with-space "build in (including tests) for" project-name "at" short-path "recursively"))
-			(make-compilation-candidate
-			 :name (s-join-with-space "go build +tests" proj-path-for-name)
-			 :command (s-join-with-space "go test -run=NOOP" operation-directory)
-			 :directory directory
-			 :annotation (s-join-with-space "build (including tests) for " project-name "at" short-path))
-			(make-compilation-candidate
-			 :name (s-join-with-space "go test +race +cover +report" proj-path-for-name)
-			 :directory directory
-			 :command (s-join-with-space
-				   "go test -coverprofile=coverage.out -race" operation-directory ";"
-				   "go tool cover -html=coverage.out -o=coverage.html;"
-				   (s-join-with-pipe
-				    "go tool cover -func=coverage.out"
-				    (s-concat "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\"")
-				    "column -t;"))
-			 :annotation (s-join-with-space "collect and report coverage data for" short-path))
 			(make-compilation-candidate
 			 :name (s-join-with-space "go test +race +coverage +gaps" proj-path-for-name)
 			 :directory directory
@@ -590,40 +621,34 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				    (s-concat "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\"")
 				    "grep -v '100.0%'"
 				    "column -t;"))
-			 :annotation (s-join-with-space "collect and report coverage data for" short-path))))
-		    ;; explode with timeout options
-		    (->> '(("go test -v"                "verbose mode")
-			   ("go test -cover"            "the code coverage collector")
-			   ("go test -race"             "the race detector")
-			   ("go test"                   "default options"))
-			 (--flat-map
-			  (let ((command-prefix (car it))
-				(annotation-prefix (cadr it)))
-			    (->> '("" "10s" "30s" "1m" "2m30s")
-				 (--flat-map
-				  (let* ((timeout-spec it)
-					 (is-default (equal timeout-spec ""))
-					 (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
-					 (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
-				    (-- (make-compilation-candidate
-					 :name (s-join-with-space command-prefix timeout-spec proj-path-for-name)
-					 :command (s-join-with-space command-prefix timeout-arg operation-directory)
-					 :directory directory
-					 :annotation (format "run go test in %s with %s and %s" short-path annotation-prefix timeout-name))
-					(make-compilation-candidate
-					 :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
-					 :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
-					 :directory directory
-					 :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name)))))))))
-		    (->> '("revive" "makezero" "exhaustruct")
-			 (--map
-			  ;; (when (or (f-equal-p directory default-directory)
-			  ;; 	       (f-equal-p directory project-root-directory))
-			  (make-compilation-candidate
-			   :name (format "lint %s %s" it proj-path-for-name)
-			   :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
-			   :directory directory
-			   :annotation (format "run (only) the %s linter in %s" it short-path)))))))))
+			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
+		     (->> '(("go test -cover"            "the code coverage collector")
+			    ("go test -race"             "the race detector")
+			    ("go test"                   "default options"))
+			  (--flat-map
+			   (let ((command-prefix (car it))
+				 (annotation-prefix (cadr it)))
+			     ;; explode with timeout options
+			     (->> '("10s" "30s" "1m")
+				  (--map
+				   (let* ((timeout-spec it)
+					  (is-default (equal timeout-spec ""))
+					  (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
+					  (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
+				     (make-compilation-candidate
+				      :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
+				      :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
+				      :directory directory
+				      :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name))))))))
+		     (->> '("revive" "makezero" "exhaustruct")
+			  (--map
+			   ;; (when (or (f-equal-p directory default-directory)
+			   ;; 	       (f-equal-p directory project-root-directory))
+			   (make-compilation-candidate
+			    :name (format "lint %s %s" it proj-path-for-name)
+			    :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
+			    :directory directory
+			    :annotation (format "run (only) the %s linter in %s" it short-path)))))))))
 
 (register-compilation-candidates
  :name "go-files"
@@ -655,6 +680,41 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		  :command (format "golangci-lint fmt %s" filename)
 		  :annotation (format "run meta formatter on %s" short-filename)))))
 
+
+(register-compilation-candidates
+ :name "go-test-file"
+ :hooks '(go-ts-mode-hook go-mode-hook)
+ :pipeline
+ (when-let* ((filename  (buffer-file-name))
+             (_         (derived-mode-p '(go-mode go-ts-mode)))
+             (_         (string-suffix-p "_test.go" filename))
+             (directory (f-dirname filename))
+             (basename  (f-filename filename))
+             (short-path (f-collapse-homedir directory))
+             (test-names (tychoish/go-test-names-in-buffer)))
+   (->> test-names
+        (--flat-map
+         (let* ((test-name (car it))
+                (is-bench  (eq (cdr it) 'benchmark))
+                (run-flags (if is-bench
+                               (format "-bench=^%s$ -run=^$" test-name)
+                             (format "-run=^%s$" test-name)))
+                (type-name (if is-bench "benchmark" "test")))
+           (->> '(("" "")
+                  ("-race" "+race"))
+                (--flat-map
+                 (let ((race-flag  (car it))
+                       (race-label (cadr it)))
+		   (->> '("" "10s" "30s" "1m")
+			(--flat-map
+			 (let ((timeout-flag (format "-timeout=%s" it))
+			       (timeout-label it))
+                           (make-compilation-candidate
+                            :name       (s-join-with-space "go test -v" race-label timeout-label test-name basename)
+                            :command    (s-join-with-space "go test -v" race-flag timeout-flag run-flags ".")
+                            :directory  directory
+                            :annotation (format "run %s %s in %s" type-name test-name short-path)))))))))))))
+
 (register-compilation-candidates
  :name "go-modules"
  :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
@@ -667,29 +727,20 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			   (nil                "go mod tidy"              "run `go mod tidy' in package")
 			   (nil                "go doc -all"              "go doc for entire package")
 			   ("go doc -outline"  "go doc --"                "go doc outline for package")
-			   ("<pkgs> | xargs go test +race +verbose"
-			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -v"
-			        "run all tests (with the race detector) for all submodules of")
-
 			   ("<pkgs> | xargs go test +race +coverage"
-			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -v"
+			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -cover"
 			        "run all tests (with the race detector) for all submodules of")
-
 			   ("<pkgs> | xargs go build +test ./..."
-			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -run=NOOP"
+			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go build"
 				"build all tests in all packages and sub-packages for"))
 			 (-append
-			  (when (or (eql 1 (length go-mod-directories))
-				    (f-equal-p directory project-root-directory))
-			    '(("<mod> | xargs go test -race -v"
-			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -v ./...'"
-				   "run tests for all modules and submodules in")
-			      ("<mod> | xargs go test -run=NNOP ./..."
-			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -run=NOOP ./...'"
+			  (unless (eql 1 (length go-mod-directories))
+			    '(("<mod> | xargs go test -race"
+			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -cover ./...'"
 				   "run tests for all modules and submodules in")
 			      ("<mod> | xargs go build ./..."
 			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go build ./...'"
-				   "run tests for all modules and submodules in"))))
+				   "run builds for all modules and submodules in"))))
 			 (-non-nil)
 			 (--map (let ((name (if (car it) (car it) (cadr it)))
 				      (command (cadr it))

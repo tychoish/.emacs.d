@@ -1,5 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
+(require 'xlib)
 (require 'mu4e-autoloads)
 
 (declare-function f-join "f")
@@ -18,7 +19,7 @@
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 
-(declare-function consult-tycho--read-annotated "consult-tycho")
+(require 'annotated-completing-read)
 (declare-function cape-capf-prefix-length "cape")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
@@ -313,11 +314,10 @@
 		    " -- CURRENT"
 		  ""))))
 	    tychoish/mail-accounts-table)
-	   (consult-tycho--read-annotated
+	   (annotated-completing-read
 	    table
 	    :prompt "mail-account => "
 	    :require-match nil
-	    :command 'tychoish-mail-select-account
 	    :category 'consult-mu))))
 
   (let ((select-account-operation (intern account-id)))

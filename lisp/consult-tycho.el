@@ -35,6 +35,7 @@
 
 (require 'tychoish-common)
 (require 'consult-builder)
+(require 'annotated-completing-read)
 
 (eval-when-compile
   (require 'yasnippet))
@@ -109,69 +110,6 @@ Does nothing if the current post is not in the drafts folder."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; sardis (command runner/orchestrator)
-
-(defalias 'sardis-run 'consult-sardis-run)
-
-(defun consult-sardis--select-cmd ()
-  (let ((table (ht-create)))
-
-    (->> (process-lines "sardis" "cmd" "--annotate")
-	 (--map (split-string it "\t" t "[ \s\t\n]"))
-	 (--mapc (ht-set table (car it) (cadr it))))
-
-    (consult-tycho--read-annotated
-     table
-     :prompt "sards.cmds => "
-     :require-match nil
-     :command 'consult-sardis
-     :category 'tychoish/sardis-cmds)))
-
-(defun consult-sardis-run (&optional sardis-command)
-  "select and run a sardis command in a compile buffer"
-  (interactive)
-  (let* ((selection (or sardis-command
-			(consult-sardis--select-cmd)))
-         ;; setup the environment
-         (start-at (current-time))
-         (task-id (format "sardis-cmd-%s" selection))
-         (op-buffer-name (concat "*" task-id "*")))
-
-    (with-current-buffer (get-buffer-create op-buffer-name)
-      (add-hygenic-one-shot-hook :name "task-id"
-       :hook 'compilation-finish-functions
-       :local t
-       :make-unique t
-       :args (compilation-buffer message)
-       :form (tychoish/compile--post-hook-collection
-	      (get-buffer op-buffer-name)
-	      selection
-	      start-at
-	      :process-name "sardis-notify"
-	      :program "sardis"
-	      :args '("notify" "send")
-	      :send-when (< 30 (float-time (time-since (current-idle-time))))))
-
-      (save-excursion
-        (goto-char (point-min))
-	(with-force-write
-	    (if (zerop (buffer-size))
-		(compilation-insert-annotation (format "# %s\n\n" selection))
-	      (compilation-insert-annotation "\n"))
-
-          (compilation-insert-annotation
-	   (format "--- [%s] -- %s --\n" selection (format-time-string "%Y-%m-%d %H:%M:%S" start-at)))))
-
-    (compilation-start
-     (concat "sardis cmd " selection)
-     (pa "mode" :is nil)
-     (compile-buffer-name op-buffer-name)
-     (pa "highlight-regexp" :is nil)
-     (pa "continue" :is nil)))))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; consult-tycho: increment-grep
 
 (defun consult-tycho--resolve-initial-grep (prompt prompt-annotation initial &key context)
@@ -236,9 +174,8 @@ Does nothing if the current post is not in the drafts folder."
 	 (prompt (or prompt "grep =>>")))
 
     (if (> (ht-size selections) 1)
-	(consult-tycho--read-annotated
+	(annotated-completing-read
 	 selections
-	 :command this-command
 	 :require-match nil
 	 :prompt prompt)
       (message "skipping context selection because %d" (ht-size selection))
@@ -304,24 +241,6 @@ Does nothing if the current post is not in the drafts folder."
   ;; (let ((base-directory (f-base default-directory)))
   (interactive "P")
   (consult-rg-project initial :context t))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; consult-tycho: helpers for working with consult
-
-;;;###autoload
-(cl-defun consult-tycho--read-annotated (table &key (prompt "=> ") require-match category (command this-command))
-  (unless (ht-p table)
-    (user-error "must specify annotated table as a hashmap of options to annotations"))
-
-  (let ((longest (length-of-longest-item (ht-keys table))))
-    (consult--read
-     table
-     :prompt prompt
-     :require-match require-match
-     :command command
-     :annotate (lambda (candidate) (concat (prefix-padding-for-annotation candidate longest) (ht-get table candidate)))
-     :category category)))
 
 (provide 'consult-tycho)
 ;;; consult-tycho.el ends here
