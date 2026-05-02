@@ -23,11 +23,17 @@
 ;; Provides `annotated-completing-read', a wrapper around `completing-read'
 ;; that accepts a hash table of candidates to annotations and surfaces them
 ;; as aligned completion metadata understood by vertico, marginalia, and embark.
+;;
+;; Also provides `completing-read-context-from-point', a context-aware
+;; selection interface that populates candidates from thing-at-point, the
+;; active region, the current line, and the kill ring.
 
 ;;; Code:
 
 (require 'cl-lib)
+(require 'dash)
 (require 'ht)
+(require 's)
 (require 'xlib)
 
 (defvar annotated-completing-read-history (ht-create)
@@ -108,6 +114,67 @@ Signals `user-error' if TABLE is not a hash table."
           (completing-read prompt collection nil require-match initial-input hist-sym)
         (ht-set! annotated-completing-read-history hist-key
                  (symbol-value hist-sym))))))
+
+(defun completing-read--context-candidates (&optional seed)
+  "Build an annotated hash table of candidates from the current context.
+SEED is a string or list of strings to include as explicit candidates."
+  (let ((table (ht-create)))
+
+    (->> (cond ((listp seed) seed)
+               ((stringp seed) (list seed)))
+         (-keep #'s-trimmed-or-nil)
+         (--filter (< (length it) 128))
+         (--mapc (ht-set table it "seed")))
+
+    (->> (-concat (--map (cons 'text-mode it) '(word email url sentence))
+                  (--map (cons 'prog-mode it) '(symbol word sexp defun)))
+         (--keep (when (derived-mode-p (car it))
+                   (when-let* ((val (thing-at-point (cdr it)))
+                               (val (s-trimmed-or-nil val))
+                               (val (substring-no-properties val))
+                               (_ (< (length val) 64)))
+                     (cons val (format "%s at point" (cdr it))))))
+         (--mapc (ht-set table (car it) (cdr it))))
+
+    (when (use-region-p)
+      (when-let* ((sel (buffer-substring-no-properties (region-beginning) (region-end)))
+                  (sel (s-trimmed-or-nil sel))
+                  (_ (< (length sel) 128)))
+        (ht-set table sel (format "region · %s" (buffer-name)))))
+
+    (when-let* ((line (thing-at-point 'line))
+                (line (s-trimmed-or-nil (substring-no-properties line)))
+                (_ (< (length line) 128)))
+      (ht-set table line (format "line · %s" (buffer-name))))
+
+    (let ((idx 0))
+      (->> kill-ring
+           (-map #'substring-no-properties)
+           (-keep #'s-trimmed-or-nil)
+           (--filter (< (length it) 128))
+           (-take 10)
+           (--mapc (ht-set table it (format "kill-ring [%d]" (cl-incf idx))))))
+
+    table))
+
+(defun completing-read-context-from-point (&optional prompt seed &key history)
+  "Select a string from context-aware candidates with PROMPT.
+Candidates are drawn from thing-at-point, the active region, the current
+line, the kill ring, and any explicit SEED strings.  SEED may be a string
+or a list of strings.
+
+HISTORY is a symbol passed to `annotated-completing-read' to scope the
+per-command history; defaults to `this-command', giving each calling
+command its own isolated history."
+  (let* ((cmd (or history this-command 'completing-read-context-from-point))
+         (candidates (completing-read--context-candidates seed)))
+    (if (> (ht-size candidates) 0)
+        (annotated-completing-read
+         candidates
+         :require-match nil
+         :prompt (or prompt "context: ")
+         :history cmd)
+      "")))
 
 (provide 'annotated-completing-read)
 ;;; annotated-completing-read.el ends here

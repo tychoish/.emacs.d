@@ -189,7 +189,17 @@
 
 (use-package ripgrep
   :ensure t
-  :bind (:map tychoish/ecclectic-grep-map ;; "C-c g"
+  :bind (("M-g r" . consult-rg)
+	 :map tychoish/consult-mode-map ;; "C-c C-;"
+         ("d" . consult-rg-pwd)
+	 ("r" . consult-rg)
+ 	 :map tychoish/ecclectic-rg-map ;; C-c g r
+         ("g" . consult-rg)
+         ("s" . consult-rg-pwd)
+         ("l" . consult-rg-pwd-wizard)
+         ("r" . consult-rg-project)
+         ("p" . consult-rg-project-wizard)
+	 :map tychoish/ecclectic-grep-map ;; "C-c g"
          :prefix "r"
          :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
          ("d" . tychoish-rg)
@@ -207,6 +217,54 @@
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
 
+;;;###autoload
+(defun consult-rg (&optional dir initial &key context)
+  "Start an iterative rg session. DIR and INITIAL integrate with the consult-grep API."
+  (interactive "P")
+  (let ((context (or context current-prefix-arg)))
+    (consult-ripgrep
+     (or (s-trimmed-or-nil dir)
+	 (builder--select-directory)
+	 (approximate-project-root))
+     (if (and (or context (not initial)) (not (eq context 'override)))
+	 (completing-read-context-from-point "rg(init): ")
+       initial))))
+
+;;;###autoload
+(defun consult-rg-project (&optional initial &key context)
+  "Start an iterative rg session in the project root, if possible, falling back as necessary."
+  (interactive "P")
+  (consult-rg
+   (or (approximate-project-root) (builder--select-directory))
+   initial
+   :context (or context current-prefix-arg 'override)))
+
+;;;###autoload
+(defun consult-rg-pwd (&optional initial &key context)
+  "Start an iterative rg session for the current directory."
+  ;; (let ((base-directory (f-base default-directory)))
+  (interactive "P")
+
+  (consult-rg
+   (or default-directory (builder--select-directory))
+   initial
+   :context (or context current-prefix-arg 'override)))
+
+;;;###autoload
+(defun consult-rg-pwd-wizard (&optional initial)
+  "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
+  ;; (let ((base-directory (f-base default-directory)))
+  (interactive "P")
+  (consult-rg-pwd initial :context t))
+
+;;;###autoload
+(defun consult-rg-project-wizard (&optional initial)
+  "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
+  ;; (let ((base-directory (f-base default-directory)))
+  (interactive "P")
+  (consult-rg-project initial :context t))
+
+
   (defun consult-rg-compile (&optional initial)
     (interactive "P")
     (let ((default-directory (builder--select-directory)))
@@ -217,7 +275,7 @@
     (let ((compilation-buffer-name-function (compile-buffer-name (format "*%s-rg*" (approximate-project-name)))))
       (ripgrep-regexp
        (annotated-completing-read
-	(consult-tycho--context-base-list ripgrep-regexp-history)
+	(completing-read--context-candidates ripgrep-regexp-history)
 	:prompt (format "[%s]<rg>: " default-directory)
 	:initial-input regexp
 	:history 'ripgrep-regexp-history
@@ -748,6 +806,13 @@
 		(thing-at-point 'filename)
 		"./"))
 
+  (consult-customize consult-ripgrep
+   :prompt "rg: "
+   :async-input-debounce 0.025
+   :async-input-throttle 0.05
+   :async-refresh-delay 0.025
+   :async-min-input 2)
+
   (consult-customize
    consult-ripgrep consult-git-grep consult-grep
    consult-rg consult-rg-project consult-rg-pwd consult-rg-project-wizard consult-rg-pwd-wizard
@@ -817,17 +882,7 @@
 	     builder-compile-project))
 
 (use-package consult-tycho
-  :bind (("M-g r" . consult-rg)
-	 :map tychoish/consult-mode-map ;; "C-c C-;"
-         ("d" . consult-rg-pwd)
-	 ("r" . consult-rg)
- 	 :map tychoish/ecclectic-rg-map ;; C-c g r
-         ("g" . consult-rg)
-         ("s" . consult-rg-pwd)
-         ("l" . consult-rg-pwd-wizard)
-         ("r" . consult-rg-project)
-         ("p" . consult-rg-project-wizard)
-	 :map tychoish/core-map
+  :bind (:map tychoish/core-map
          :prefix "b"
 	 :prefix-map tychoish/blogging-map
 	 ("m" . tychoish-insert-date)

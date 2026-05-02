@@ -247,5 +247,274 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
         (should (member "aleph" matches))
         (should-not (member "beta" matches))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read--context-candidates: return type and seeds
+
+(ert-deftest annotated-completing-read/candidates-returns-hash-table ()
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (should (hash-table-p (completing-read--context-candidates))))))
+
+(ert-deftest annotated-completing-read/candidates-seed-string-included ()
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (should (ht-contains-p (completing-read--context-candidates "hello") "hello")))))
+
+(ert-deftest annotated-completing-read/candidates-seed-annotation ()
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (should (equal "seed" (ht-get (completing-read--context-candidates "hello") "hello"))))))
+
+(ert-deftest annotated-completing-read/candidates-seed-list ()
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (let ((tbl (completing-read--context-candidates '("foo" "bar"))))
+        (should (ht-contains-p tbl "foo"))
+        (should (ht-contains-p tbl "bar"))))))
+
+(ert-deftest annotated-completing-read/candidates-seed-too-long-excluded ()
+  "Seeds >= 128 characters are excluded."
+  (let ((kill-ring nil)
+        (long-seed (make-string 130 ?x)))
+    (with-temp-buffer
+      (should-not (ht-contains-p (completing-read--context-candidates long-seed) long-seed)))))
+
+(ert-deftest annotated-completing-read/candidates-empty-seed-excluded ()
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (should-not (ht-contains-p (completing-read--context-candidates "") "")))))
+
+(ert-deftest annotated-completing-read/candidates-whitespace-seed-excluded ()
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (let ((tbl (completing-read--context-candidates "   ")))
+        (should-not (ht-contains-p tbl ""))
+        (should-not (ht-contains-p tbl "   "))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read--context-candidates: kill ring
+
+(ert-deftest annotated-completing-read/candidates-kill-ring-included ()
+  (let ((kill-ring (list "from-kill-ring")))
+    (with-temp-buffer
+      (should (ht-contains-p (completing-read--context-candidates) "from-kill-ring")))))
+
+(ert-deftest annotated-completing-read/candidates-kill-ring-annotation-format ()
+  "Kill ring entries are annotated as kill-ring [N] starting at index 1."
+  (let ((kill-ring (list "first-item")))
+    (with-temp-buffer
+      (should (equal "kill-ring [1]" (ht-get (completing-read--context-candidates) "first-item"))))))
+
+(ert-deftest annotated-completing-read/candidates-kill-ring-limited-to-ten ()
+  "At most 10 kill ring entries are included."
+  (let ((kill-ring (mapcar (lambda (n) (format "kill-%02d" n)) (number-sequence 1 15))))
+    (with-temp-buffer
+      (let* ((tbl (completing-read--context-candidates))
+             (kill-keys (cl-remove-if-not (lambda (k) (string-prefix-p "kill-" k))
+                                          (ht-keys tbl))))
+        (should (<= (length kill-keys) 10))))))
+
+(ert-deftest annotated-completing-read/candidates-kill-ring-long-item-excluded ()
+  "Kill ring items >= 128 characters are excluded."
+  (let ((kill-ring (list (make-string 130 ?k))))
+    (with-temp-buffer
+      (should (= 0 (ht-size (completing-read--context-candidates)))))))
+
+(ert-deftest annotated-completing-read/candidates-kill-ring-whitespace-excluded ()
+  (let ((kill-ring (list "   " "\t\n")))
+    (with-temp-buffer
+      (should (= 0 (ht-size (completing-read--context-candidates)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read--context-candidates: region
+
+(ert-deftest annotated-completing-read/candidates-region-included ()
+  "Active region content is included as a candidate."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (insert "selected text")
+      (cl-letf (((symbol-function 'use-region-p) (lambda () t))
+                ((symbol-function 'region-beginning) (lambda () 1))
+                ((symbol-function 'region-end) (lambda () (point-max))))
+        (should (ht-contains-p (completing-read--context-candidates) "selected text"))))))
+
+(ert-deftest annotated-completing-read/candidates-region-annotation-format ()
+  "Region annotation contains both 'region' and the buffer name."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (rename-buffer "my-test-buf" t)
+      ;; Insert longer line so line candidate != region candidate, preventing overwrite.
+      (insert "prefix region content suffix")
+      (cl-letf (((symbol-function 'use-region-p) (lambda () t))
+                ((symbol-function 'region-beginning) (lambda () 8))
+                ((symbol-function 'region-end) (lambda () 22)))
+        ;; positions 8–22 = "region content" (14 chars)
+        (let ((annotation (ht-get (completing-read--context-candidates) "region content")))
+          (should (string-match-p "region" annotation))
+          (should (string-match-p "my-test-buf" annotation)))))))
+
+(ert-deftest annotated-completing-read/candidates-region-excluded-when-inactive ()
+  "When use-region-p is nil no region candidate is added."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (insert "some text")
+      (cl-letf (((symbol-function 'use-region-p) (lambda () nil)))
+        (let* ((tbl (completing-read--context-candidates))
+               (annotation (ht-get tbl "some text")))
+          (should-not (and annotation (string-match-p "region" annotation))))))))
+
+(ert-deftest annotated-completing-read/candidates-region-too-long-excluded ()
+  "Region content >= 128 characters is excluded."
+  (let ((kill-ring nil)
+        (long-text (make-string 130 ?r)))
+    (with-temp-buffer
+      (insert long-text)
+      (cl-letf (((symbol-function 'use-region-p) (lambda () t))
+                ((symbol-function 'region-beginning) (lambda () 1))
+                ((symbol-function 'region-end) (lambda () (point-max))))
+        (should-not (ht-contains-p (completing-read--context-candidates) long-text))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read--context-candidates: current line
+
+(ert-deftest annotated-completing-read/candidates-line-included ()
+  "The current line is included as a candidate."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (insert "current line text")
+      (goto-char (point-min))
+      (should (ht-contains-p (completing-read--context-candidates) "current line text")))))
+
+(ert-deftest annotated-completing-read/candidates-line-annotation-format ()
+  "Line annotation contains both 'line' and the buffer name."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (rename-buffer "line-test-buf" t)
+      (insert "my line")
+      (goto-char (point-min))
+      (let ((annotation (ht-get (completing-read--context-candidates) "my line")))
+        (should (string-match-p "line" annotation))
+        (should (string-match-p "line-test-buf" annotation))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read--context-candidates: thing at point
+
+(ert-deftest annotated-completing-read/candidates-thing-at-point-in-prog-mode ()
+  "Symbols at point in prog-mode buffers are included."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (emacs-lisp-mode)
+      (insert "my-symbol")
+      (goto-char 5)
+      (should (ht-contains-p (completing-read--context-candidates) "my-symbol")))))
+
+(ert-deftest annotated-completing-read/candidates-thing-at-point-annotation ()
+  "thing-at-point candidates carry an 'at point' annotation."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (emacs-lisp-mode)
+      ;; Surround the word so the line candidate differs from the symbol.
+      (insert "prefix my-func suffix")
+      (goto-char 12)  ; inside "my-func"
+      (let ((annotation (ht-get (completing-read--context-candidates) "my-func")))
+        (should (stringp annotation))
+        (should (string-match-p "at point" annotation))))))
+
+(ert-deftest annotated-completing-read/candidates-thing-not-added-in-fundamental-mode ()
+  "fundamental-mode produces no 'at point' candidates."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      (insert "someword")
+      (goto-char 4)
+      (let* ((tbl (completing-read--context-candidates))
+             (annotation (ht-get tbl "someword")))
+        (should-not (and annotation (string-match-p "at point" annotation)))))))
+
+(ert-deftest annotated-completing-read/candidates-thing-too-long-excluded ()
+  "thing-at-point values with length >= 64 are excluded from at-point candidates."
+  (let ((kill-ring nil)
+        (long-word (make-string 65 ?w)))
+    (with-temp-buffer
+      (emacs-lisp-mode)
+      (insert long-word)
+      (goto-char 1)
+      (let ((annotation (ht-get (completing-read--context-candidates) long-word)))
+        ;; may appear as a line candidate, but must not be annotated as at-point
+        (should-not (and annotation (string-match-p "at point" annotation)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read-context-from-point
+
+(ert-deftest annotated-completing-read/context-from-point-returns-string ()
+  (let ((kill-ring (list "candidate")))
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'annotated-completing-read)
+                 (lambda (_tbl &rest _) "candidate")))
+        (should (stringp (completing-read-context-from-point)))))))
+
+(ert-deftest annotated-completing-read/context-from-point-returns-selection ()
+  (let ((kill-ring (list "chosen")))
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'annotated-completing-read)
+                 (lambda (_tbl &rest _) "chosen")))
+        (should (equal "chosen" (completing-read-context-from-point)))))))
+
+(ert-deftest annotated-completing-read/context-from-point-passes-prompt ()
+  "The PROMPT argument is forwarded to annotated-completing-read."
+  (let ((kill-ring (list "item"))
+        received-prompt)
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'annotated-completing-read)
+                 (lambda (_tbl &rest args)
+                   (setq received-prompt (plist-get args :prompt))
+                   "item")))
+        (completing-read-context-from-point "my prompt: ")
+        (should (equal "my prompt: " received-prompt))))))
+
+(ert-deftest annotated-completing-read/context-from-point-history-defaults-to-this-command ()
+  "When :history is unspecified, this-command is used as the history key."
+  (let ((kill-ring (list "item"))
+        received-history)
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'annotated-completing-read)
+                 (lambda (_tbl &rest args)
+                   (setq received-history (plist-get args :history))
+                   "item")))
+        (let ((this-command 'my-calling-command))
+          (completing-read-context-from-point))
+        (should (eq 'my-calling-command received-history))))))
+
+(ert-deftest annotated-completing-read/context-from-point-explicit-history-key ()
+  "An explicit :history symbol is forwarded to annotated-completing-read."
+  (let ((kill-ring (list "item"))
+        received-history)
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'annotated-completing-read)
+                 (lambda (_tbl &rest args)
+                   (setq received-history (plist-get args :history))
+                   "item")))
+        (completing-read-context-from-point nil nil :history 'my-history)
+        (should (eq 'my-history received-history))))))
+
+(ert-deftest annotated-completing-read/context-from-point-seed-in-candidates ()
+  "The SEED argument produces candidates annotated as 'seed'."
+  (let ((kill-ring nil)
+        received-table)
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'annotated-completing-read)
+                 (lambda (tbl &rest _)
+                   (setq received-table tbl)
+                   "myseed")))
+        (completing-read-context-from-point nil "myseed")
+        (should (ht-contains-p received-table "myseed"))
+        (should (equal "seed" (ht-get received-table "myseed")))))))
+
+(ert-deftest annotated-completing-read/context-from-point-empty-returns-empty-string ()
+  "Returns \"\" without prompting when no candidates are available."
+  (let ((kill-ring nil))
+    (with-temp-buffer
+      ;; fundamental-mode, empty buffer, no kill ring, no region
+      (should (equal "" (completing-read-context-from-point))))))
+
 (provide 'test-annotated-completing-read)
 ;;; test-annotated-completing-read.el ends here

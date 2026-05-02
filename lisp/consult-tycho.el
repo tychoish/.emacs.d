@@ -25,17 +25,9 @@
 
 ;;; Code:
 
-(require 'dash)
-(require 'ht)
-(require 's)
 (require 'f)
 
-(require 'consult)
-(require 'consult-org)
-
-(require 'tychoish-common)
 (require 'builder)
-(require 'annotated-completing-read)
 
 (eval-when-compile
   (require 'yasnippet))
@@ -107,140 +99,6 @@ Does nothing if the current post is not in the drafts folder."
   "Open a dired buffer for the drafts folder."
   (interactive)
   (find-file (expand-file-name tychoish-blog-path)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; consult-tycho: increment-grep
-
-(defun consult-tycho--resolve-initial-grep (prompt prompt-annotation initial &key context)
-  "Return the initial text for a query, processing `INITIAL' as needed."
-  ;; if the string is empty or only whitespace, it's undefined,
-  ;; otherwise use it.
-  (or (s-trimmed-or-nil initial)
-      ;; with the prefix argument, ask the user
-      (when (or current-prefix-arg context)
-        (consult-tycho--select-context-for-operation
-         (format "%s<init:%s>: " prompt prompt-annotation)))
-      ;; otherwise, provide the empty string...
-      ""))
-
-(defun consult-tycho--context-base-list (&optional seed)
-  (let ((table (ht-create)))
-
-    (->> (or (when (listp seed) seed)
-             (when (stringp seed) (list seed)))
-         (-keep #'s-trimmed-or-nil)
-         (--filter (length> it 64))
-         (--mapc (ht-set table it "user provided input (seed)")))
-
-    (->> (-join (->> '(word email url sentence)
-                     (--map (cons 'text-mode it)))
-                (->> '(symbol word sexp defun)
-                     (--map (cons 'prog-mode it))))
-         (--keep (when (derived-mode-p (car it))
-                   (when-let* ((content (thing-at-point (cdr it)))
-                               (content (s-trimmed-or-nil content))
-                               (content (substring-no-properties content)))
-                     (cons content it))))
-         (--filter (< (length (car it)) 64))
-         (--mapc (ht-set table (car it) (format "%s at point (%ss)" (cddr it) (cadr it)))))
-
-    (when-let* ((mark-pos (mark))
-                (start (or (region-beginning) (min (point) mark-pos)))
-                (end (or (region-end) (max mark-pos (point))))
-                (selection (s-trimmed-or-nil (buffer-substring-no-properties start end)))
-                (is-oversized (< (length selection) 32)))
-      (ht-set table selection (format "current selection <%s>" (current-buffer))))
-
-    (when-let* ((line (s-trimmed-or-nil (thing-at-point 'line)))
-		(line (substring-no-properties line))
-		(is-oversized (< (length line) 32)))
-      (ht-set table line (format "current line <%s>" (buffer-name))))
-
-    (let ((count 0))
-      (->> kill-ring
-           (-map #'substring-no-properties)
-           (-keep #'s-trimmed-or-nil)
-           (--filter (< (length it) 64))
-           (-take 10)
-           (--mapc (ht-set table it (format "kill ring [idx=%d]" (cl-incf count))))))
-
-    table))
-
-(defun consult-tycho--select-context-for-operation (&optional prompt seed-list)
-  "Pick string to use as context in a follow up operation."
-  (let* ((this-command this-command)
-         (selections (consult-tycho--context-base-list seed-list))
-	 (prompt (or prompt "grep =>>")))
-
-    (if (> (ht-size selections) 1)
-	(annotated-completing-read
-	 selections
-	 :require-match nil
-	 :prompt prompt)
-      (message "skipping context selection because %d" (ht-size selection))
-      (car (ht-keys selections)))))
-
-;;;###autoload
-(defun consult-rg (&optional dir initial &key context)
-  "Start and iterative rg session. DIR and INITIAL integrate with the consult-grep API."
-  (interactive "P")
-  ;; `consult--directory-prompt' --> '(prompt paths <default>-dir)
-  (let ((consult-async-input-debounce 0.025)
-        (consult-async-input-throttle 0.05)
-        (consult-async-refresh-delay 0.025)
-	(consult-async-min-input 2)
-	(consult--prefix-group nil)
-	(context (or context current-prefix-arg)))
-    (ignore consult--prefix-group)
-
-    (consult--grep
-     ;; prompt
-     "rg"
-     ;; builder
-     #'consult--ripgrep-make-builder
-     ;; directory
-     (or (s-trimmed-or-nil dir)
-	 (builder--select-directory)
-	 (approximate-project-root))
-     ;; initial
-     (if (and (or context (not initial)) (not (eq context 'override)))
-	 (consult-tycho--select-context-for-operation (format "rg(init) =>> "))
-       initial))))
-
-;;;###autoload
-(defun consult-rg-project (&optional initial &key context)
-  "Start an iterative rg session in the project root, if possible, falling back as necessary."
-  (interactive "P")
-  (consult-rg
-   (or (approximate-project-root) (builder--select-directory))
-   initial
-   :context (or context current-prefix-arg 'override)))
-
-;;;###autoload
-(defun consult-rg-pwd (&optional initial &key context)
-  "Start an iterative rg session for the current directory."
-  ;; (let ((base-directory (f-base default-directory)))
-  (interactive "P")
-
-  (consult-rg
-   (or default-directory (builder--select-directory))
-   initial
-   :context (or context current-prefix-arg 'override)))
-
-;;;###autoload
-(defun consult-rg-pwd-wizard (&optional initial)
-  "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
-  ;; (let ((base-directory (f-base default-directory)))
-  (interactive "P")
-  (consult-rg-pwd initial :context t))
-
-;;;###autoload
-(defun consult-rg-project-wizard (&optional initial)
-  "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
-  ;; (let ((base-directory (f-base default-directory)))
-  (interactive "P")
-  (consult-rg-project initial :context t))
 
 (provide 'consult-tycho)
 ;;; consult-tycho.el ends here
