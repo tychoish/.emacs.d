@@ -1,4 +1,13 @@
-;; -*- lexical-binding: t -*-
+;;; builder.el --- compilation buffer and command runner -*- lexical-binding: t -*-
+
+;; Author: tychoish
+
+;;; Commentary:
+
+;; Interactive compilation buffer selection, command discovery, and
+;; candidate registration for project-aware compile workflows.
+
+;;; Code:
 
 (require 'compile)
 
@@ -7,7 +16,7 @@
 (require 'ht)
 (require 'dash)
 
-(require 'consult)
+(require 'annotated-completing-read)
 
 (require 'tychoish-common)
 
@@ -40,35 +49,27 @@
 (f-visual-compression-function 10)
 
 (when (boundp 'tychoish/core-map)
-  (bind-keys :map 'tychoish/core-map
-	     ("c" . consult-builder)))
+  (bind-keys :map tychoish/core-map
+	     ("c" . builder)))
 
-(defun tychoish--go-module (&optional directory)
+(defun builder--go-module (&optional directory)
   (if go-module-path
       go-module-path
     (let* ((output (with-default-directory directory
- 		    (s-trim (shell-command-to-string "go list"))))
+		     (s-trim (shell-command-to-string "go list"))))
 	   (proj-root (approximate-project-root)))
       (if (or (f-equal-p default-directory directory)
-	      (s-prefix proj-root (f-full default-directory)))
+	      (s-prefix-p proj-root (f-full default-directory)))
 	  (setq-local go-module-path output)
 	output))))
 
-(defun consult-builder ()
+(defun builder ()
   "Run compile operation selecting compile buffer and commands."
   (interactive)
-  (tychoish/compile-project))
+  (builder-compile-project))
 
-(cl-defun tychoish/compile--post-hook-collection
-    (buffer
-     compile-result-message
-     started-at
-     &optional
-     &key
-     process-name
-     program
-     args
-     send-when
+(cl-defun builder--compile-post-hook
+    (buffer compile-result-message started-at &optional &key process-name program args send-when
      (alert-threshold 60)
      (notification-threshold 120))
   (let* ((end-at (current-time))
@@ -111,23 +112,19 @@
 		 (format-time-string "%Y-%m-%d %H:%M:%S" end-at)))
 	 (setq buffer-read-only t)))))
 
-(defun compilation-finish-functions-reset-all ()
+(defun builder-reset-finish-hooks ()
   (interactive)
   (->> (mode-buffers 'compilation-mode)
        (--mapc (with-current-buffer it
 		 (setq-local compilation-finish-functions nil)))))
 
 ;;;###autoload
-(defun tychoish/compile-project (&optional name command)
-  (let* ((compilation-buffer-candidates (project-compilation-buffers :name name))
-         (longest-key (length-of-longest-item (ht-keys compilation-buffer-candidates)))
-         (op-name (consult--read
-                   (ht-keys compilation-buffer-candidates)
+(defun builder-compile-project (&optional name command)
+  (let* ((compilation-buffer-candidates (builder--project-compilation-buffers :name name))
+         (op-name (annotated-completing-read
+                   compilation-buffer-candidates
                    :prompt "compilation buffer => "
-                   :require-match nil
-                   :annotate (lambda (key)
-			       (concat (prefix-padding-for-annotation key longest-key)
-                                       (ht-get compilation-buffer-candidates key)))))
+                   :require-match nil))
          (compile-buf (get-buffer op-name))
 	 (project-root-directory (approximate-project-root))
 	 (start-at (current-time))
@@ -135,25 +132,23 @@
 	 candidate-name)
 
     (save-some-buffers
-     ;; save now questions:
      t
-     ;; only consider files (nil)
      (lambda () (let ((filename (buffer-file-name)))
 		  (and filename (file-in-directory-p filename project-root-directory)))))
 
     (if (and compile-buf (y-or-n-p "recompile?"))
         (with-current-buffer compile-buf
             (recompile current-prefix-arg))
-      (let* ((cc-result (tychoish--compilation-read-command command))
+      (let* ((cc-result (builder--read-command command))
 	     (selection-name (setq candidate-name (car cc-result)))
 	     (table (setq candidates (cdr cc-result)))
 	     (candidate (ht-get table selection-name))
-	     (compile-command (read-from-minibuffer "edit command => " (tychoish-compilation-candidate-command candidate)))
-	     (default-directory (or (tychoish-compilation-candidate-directory candidate) default-directory)))
+	     (compile-command (read-from-minibuffer "edit command => " (builder-candidate-command candidate)))
+	     (default-directory (or (builder-candidate-directory candidate) default-directory)))
 
 	(compilation-start
-	 compile-command                    ;; the command
-	 'compilation-mode                  ;; the default
+	 compile-command
+	 'compilation-mode
 	 (compile-buffer-name op-name))))
 
     (with-current-buffer (or compile-buf op-name)
@@ -162,7 +157,7 @@
        :local t
        :make-unique t
        :args (compilation-buffer msg)
-       :form (tychoish/compile--post-hook-collection
+       :form (builder--compile-post-hook
 	      compilation-buffer
 	      msg
 	      start-at
@@ -171,60 +166,70 @@
 	      :args '("notify" "send")
 	      :send-when (or current-prefix-arg
 			     (not (get-buffer-window (or compile-buf op-name) t))
-			     (< 10 (float-time (time-since (current-idle-time))))))))
+			     (< 10 (float-time (time-since (current-idle-time)))))))
 
       (when-let* ((candidate (ht-get candidates candidate-name))
-		  (hook (tychoish-compilation-candidate-hook candidate)))
+		  (hook (builder-candidate-hook candidate)))
 	(when hook
-      	  (add-one-shot-hook :name (format "post-%s-hook-operation" op-name)
-      	   :hook 'compilation-finish-functions
-      	   :make-unique t
-      	   :local t
-      	   :function (hook))))
+	  (add-one-shot-hook :name (format "post-%s-hook-operation" op-name)
+	   :hook 'compilation-finish-functions
+	   :make-unique t
+	   :local t
+	   :function (hook))))
 
       (let* ((op-window
 	      (and t (get-buffer-window (current-buffer) (selected-frame)))))
 	(if op-window (select-window op-window)
-	  (switch-to-buffer-other-window (current-buffer))))))
+	  (switch-to-buffer-other-window (current-buffer)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; directory selection
-(cl-defun consult--select-directory (&optional &key input-dirs (require-match nil))
-  "Select a directory from a provided or likely set of `INPUT-DIRS`'."
-  (consult--read
-   (or (clean-directory-options-for-selection input-dirs)
-       (get-directory-default-candidate-list))
-   :sort nil
-   :command this-command
-   :require-match require-match
-   :prompt "in directory =>> "))
+
+(cl-defun builder--select-directory (&optional &key input-dirs (require-match nil))
+  "Select a directory from a provided or likely set of `INPUT-DIRS'."
+  (let* ((dirs (or (builder--clean-directory-options input-dirs)
+                   (builder--directory-default-candidates)))
+         (project-root (approximate-project-root))
+         (tbl (ht-create)))
+    (--each dirs
+      (ht-set tbl it
+              (cond
+               ((f-equal-p it default-directory) "current directory")
+               ((f-equal-p it project-root)      "project root")
+               ((f-ancestor-p it default-directory) "parent")
+               ((f-ancestor-p default-directory it) "child")
+               ((f-equal-p (f-parent it) (f-parent default-directory)) "sibling")
+               (t ""))))
+    (annotated-completing-read tbl
+                               :prompt "in directory =>> "
+                               :require-match require-match)))
 
 ;;;###autoload
-(defun compilation-buffer-change-directory ()
+(defun builder-change-directory ()
   "Change the directory for the current compilation buffer."
   (interactive)
   (unless (derived-mode-p 'compilation-mode)
     (user-error "operation is only applicable for COMPILATION-MODE buffers"))
-  (let ((directory (or (consult--select-directory
+  (let ((directory (or (builder--select-directory
 			:input-dirs (-distinct (append (list compilation-directory default-directory)
-						       (get-directory-default-candidate-list)
+						       (builder--directory-default-candidates)
 						       (f-directories (approximate-project-root)))))
 		       compilation-directory
 		       default-directory)))
     (setq-local default-directory directory
 		compilation-directory directory)))
 
-(defun clean-directory-options-for-selection (input)
-  "Process `INPUT' list removing: duplicates, nils, and empty or whitespace elements."
+(defun builder--clean-directory-options (input)
+  "Process INPUT list removing duplicates, nils, and empty or whitespace elements."
   (->> input
        (-keep #'s-trimmed-or-nil)
        (--map (or (when (f-absolute-p it) it)
 		  (expand-file-name it)))
        (f-distinct)))
 
-(defun get-directory-parents (&optional start stop)
-  "Generate list of intermediate paths between `START' and `STOP'."
+(defun builder--directory-parents (&optional start stop)
+  "Generate list of intermediate paths between START and STOP."
   (let* ((start (or start default-directory))
 	 (stop (or stop "~/"))
 	 (stop-path (expand-file-name (string-trim stop)))
@@ -237,12 +242,12 @@
       (setq current (file-name-parent-directory current))
       (push current output))
     (->> output
-	 (f-filter-directories '(cannonicalize unique) output))))
+	 (f-filter-directories '(cannonicalize unique)))))
 
-(defun get-directory-default-candidate-list ()
+(defun builder--directory-default-candidates ()
   (let ((proj-root (approximate-project-root)))
     (--> (append
-	  (get-directory-parents default-directory proj-root)
+	  (builder--directory-parents default-directory proj-root)
 	  (approximate-project-buffers)
 	  (list (thing-at-point 'filename)
 		      (thing-at-point 'existing-filename)
@@ -258,48 +263,42 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; tychoish/compile-project implementation
+;; builder-compile-project implementation
 
-;; this is the inner "select which command to use" for entering a new compile command.
-(defun tychoish--compilation-read-command (&optional command table)
+(defun builder--read-command (&optional command table)
   (let* ((candidates (or table
-			 (tychoish--get-compilation-candidates default-directory command)))
-         (names (->> candidates
-                     (ht-values)
-		     (--map (tychoish-compilation-candidate-name it))
-                     (-sort #'string-greaterp)))
-         (longest-id (length-of-longest-item names))
+			 (builder--get-candidates default-directory command)))
+         (annotation-table (let ((tbl (ht-create)))
+                             (ht-each (lambda (name cand)
+                                        (ht-set tbl name (builder-candidate-annotation cand)))
+                                      candidates)
+                             tbl))
          (selection-name
-          (consult--read
-           names
+          (annotated-completing-read
+           annotation-table
            :prompt "compile command => "
-           :command this-command
-           :history 'compile-history
-           :annotate (lambda (key) (format "%s%s" (prefix-padding-for-annotation key longest-id)
-                                           (tychoish-compilation-candidate-annotation (ht-get candidates key))))))
+           :require-match nil
+           :history 'compile-history))
 	 (candidate (ht-get candidates selection-name))
 	 (operation-name (if candidate
-			     (tychoish-compilation-candidate-name candidate)
-			   (tychoish-cc-add-to-table
+			     (builder-candidate-name candidate)
+			   (builder--add-candidate
 			    candidates
-			    (make-compilation-candidate
+			    (make-builder-candidate
 			     :command selection-name
 			     :directory default-directory
 			     :annotation "user input"))
 			   selection-name)))
     (cons operation-name candidates)))
 
-(cl-defun project-compilation-buffers (&optional &key name (project (approximate-project-name)))
-  "Find "
+(cl-defun builder--project-compilation-buffers (&optional &key name (project (approximate-project-name)))
+  "Return a hash table of candidate compilation buffer names for PROJECT."
   (let ((buffer-table (ht-create))
         (default-names (list "push" "gen" "buf" "benchmark" "check" "compile" "run" "lint" "test" "build")))
     (when name
       (cl-pushnew name default-names :test #'equal))
 
-    (--each ;; existing-compilation-buffers-for-project
-        (mode-buffers-for-project
-         :mode 'compilation-mode)
-
+    (--each (mode-buffers-for-project :mode 'compilation-mode)
       (with-current-buffer it
         (ht-set
          buffer-table
@@ -310,7 +309,7 @@
                  (buffer-line-count)
                  (string-trim (or (car compilation-arguments) ""))))))
 
-    (--each default-names ;; default-compilation-buffer-names-for-project
+    (--each default-names
       (let ((name (format "*%s-%s*" project it)))
         (if (ht-contains-p buffer-table name)
             (ht-set
@@ -326,11 +325,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; compilation candidate discovery
+;; compilation candidate struct and table operations
 
-(cl-defstruct (tychoish-compilation-candidate
-               (:constructor nil) ;; disable default
-               (:constructor make-compilation-candidate
+(cl-defstruct (builder-candidate
+               (:constructor nil)
+               (:constructor make-builder-candidate
 			     (&key command
 				   (name (s-truncate 32 command "..."))
 				   (directory default-directory)
@@ -339,7 +338,7 @@
 						 command))
 				   hook
 				   notification-threshold)))
-  "Structure for compilation candidates"
+  "Structure for compilation candidates."
   (name
    "build"
    :documentation "name of command, default to using the command"
@@ -354,7 +353,7 @@
    :type string)
   (annotation
    "compilation command"
-   :documentation "description of command, used for marginalia annotations."
+   :documentation "description of command, used for annotations."
    :type string)
   (hook
    nil
@@ -365,135 +364,130 @@
    :documentation "if a command runs longer than this number of seconds, send a notification when the compile completes."
    :type integer))
 
-(defun tychoish-cc-add-to-table (table candidate)
-  (ht-set table (tychoish-compilation-candidate-name candidate) candidate))
+(defun builder--add-candidate (table candidate)
+  (ht-set table (builder-candidate-name candidate) candidate))
 
-(defun add-candidates-to-table (table candidates)
+(defun builder--add-candidates (table candidates)
   (->> candidates
-       (-filter #'tychoish-compilation-candidate-p)
-       (--mapc (tychoish-cc-add-to-table table it))))
+       (-filter #'builder-candidate-p)
+       (--mapc (builder--add-candidate table it))))
 
-(defvar tychoish-compilation-candidate-functions nil
-  "A List of functions that populate a table of possible completion commands
-
-All functions are called with (PROJECT-ROOT-DIRECTORY DIRECTORIES TABLE)
-as arguments where the `project-root-directory' is the root of the
-current project, `directories' are all of the directories between the
-current directory and the project root, and `table' is table of `tychoish--completion-candiate' objects.")
+(defvar builder-candidate-functions nil
+  "List of functions that populate a table of possible compilation commands.
+All functions are called with (PROJECT-ROOT-DIRECTORY PROJECT-NAME DIRECTORIES TABLE)
+where TABLE is a hash of `builder-candidate' objects.")
 
 ;;;###autoload
-(cl-defmacro register-compilation-candidates (&key name (predicate t) (hooks nil) pipeline)
-  (let ((symbol-name (intern (format "tychoish-compilation-candidates-for-%s" name)))
-	(hook-registering-function-name (intern (format "tychoish-compilation-candidate-registrar-for-%s" name))))
+(cl-defmacro builder-register-candidates (&key name (predicate t) (hooks nil) pipeline)
+  (let ((symbol-name (intern (format "builder-candidates-for-%s" name)))
+	(hook-registering-function-name (intern (format "builder-candidate-registrar-for-%s" name))))
     `(progn
        (defun ,symbol-name (project-root-directory project-name directories operation-table)
-	 ,(format "Build list of `tychoish-compilation-candidate' objects for suggestion in compilation buffers")
+	 ,(format "Build list of `builder-candidate' objects for suggestion in compilation buffers.")
 	 (ignore project-root-directory project-name directories operation-table)
 	 (when ,predicate
-	   (add-candidates-to-table
+	   (builder--add-candidates
 	    operation-table
 	    ,pipeline))
 	 t)
 
        ,(if (eql 0 (length hooks))
-	    `(add-hook 'tychoish-compilation-candidate-functions #',symbol-name)
+	    `(add-hook 'builder-candidate-functions #',symbol-name)
 	  `(let ((hooks ,hooks))
 	     (defun ,hook-registering-function-name ()
-	       (add-hook 'tychoish-compilation-candidate-functions #',symbol-name 0 t))
+	       (add-hook 'builder-candidate-functions #',symbol-name 0 t))
 
 	     (->> hooks (--mapc (add-hook it ',hook-registering-function-name))))))))
 
-(defvar-local tychoish--cached-compilation-candidates nil)
+(defvar-local builder--cached-candidates nil)
 
-(defvar tychoish--compilation-candidate-cache-always-bypass nil
-  "Disables the compilation candidate cache ('per-buffer)")
+(defvar builder--cache-bypass nil
+  "Disables the compilation candidate cache (per-buffer).")
 
-(create-toggle-functions tychoish--compilation-candidate-cache-always-bypass)
+(create-toggle-functions builder--cache-bypass)
 
-(defun tychoish--get-compilation-candidates (&optional directory command)
-  "Generate a sequence of candidate compilation commands based on mode and directory structure."
-
+(defun builder--get-candidates (&optional directory command)
+  "Generate candidate compilation commands based on mode and directory structure."
   (when current-prefix-arg
-    (tychoish--compilation-candidate-clear-cache))
+    (builder--clear-candidate-cache))
 
-  (unless (or tychoish--compilation-candidate-cache-always-bypass
-	      tychoish--cached-compilation-candidates)
+  (unless (or builder--cache-bypass
+	      builder--cached-candidates)
     (let* ((project-root-directory (approximate-project-root))
 	   (project-name (f-filename project-root-directory))
-	   (directory (when (boundp 'directory) directory)) ;;  maybe this should be a macro
+	   (directory (when (boundp 'directory) directory))
 	   (default-directory (or directory default-directory))
            (directories (->> (approximate-project-buffers)
 			     (-keep #'buffer-directory)
 			     (-filter #'f-directory-p)
 			     (-map #'f-full)
-			     (-append (get-directory-parents default-directory project-root-directory))
+			     (-append (builder--directory-parents default-directory project-root-directory))
 			     (-distinct)))
 	   (operation-table (ht-create)))
 
       (when command
-	(tychoish-cc-add-to-table
+	(builder--add-candidate
 	 operation-table
-	 (make-compilation-candidate
+	 (make-builder-candidate
 	  :name (s-truncate 32 command "...")
-    	  :command command
-    	  :annotation "runtime suggested candidate"
-    	  :directory (or directory project-root-directory default-directory))))
+	  :command command
+	  :annotation "runtime suggested candidate"
+	  :directory (or directory project-root-directory default-directory))))
 
       (run-hook-with-args
-       'tychoish-compilation-candidate-functions
+       'builder-candidate-functions
        project-root-directory
        project-name
        directories
        operation-table)
 
-      (setq-local tychoish--cached-compilation-candidates operation-table)))
+      (setq-local builder--cached-candidates operation-table)))
 
-  tychoish--cached-compilation-candidates)
+  builder--cached-candidates)
 
-(cl-defun compilation-candidate-cache-p (&optional (buffer (current-buffer)))
+(cl-defun builder--candidate-cache-p (&optional (buffer (current-buffer)))
   (with-current-buffer buffer
-    (when tychoish--cached-compilation-candidates
-      t)))
+    (when builder--cached-candidates t)))
 
-(defun compilation-candidate-clear-all-caches ()
+(defun builder-clear-all-caches ()
   (interactive)
   (->> (buffer-list)
-       (-keep #'compilation-candidate-cache-p)
-       (-mapc #'tychoish--compilation-candidate-clear-cache)))
+       (-keep #'builder--candidate-cache-p)
+       (-mapc #'builder--clear-candidate-cache)))
 
-(cl-defun compilation-candidate-clear-cache (&optional (buffer (current-buffer)))
+(cl-defun builder-clear-cache (&optional (buffer (current-buffer)))
   (interactive)
   (if current-prefix-arg
-      (compilation-candidate-clear-all-caches)
-    (tychoish--compilation-candidate-clear-cache buffer)))
+      (builder-clear-all-caches)
+    (builder--clear-candidate-cache buffer)))
 
-(cl-defun tychoish--compilation-candidate-clear-cache (&optional (buffer (current-buffer)))
-  (with-current-buffer it
-    (setq-local tychoish--cached-compilation-candidates nil)))
+(cl-defun builder--clear-candidate-cache (&optional (buffer (current-buffer)))
+  (with-current-buffer buffer
+    (setq-local builder--cached-candidates nil)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; candidate discovery/generator registration
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "current-buffer-text-file"
  :predicate (when (and (buffer-file-name)
 		       (derived-mode-p '(org-mode markdown-mode rst-mode)))
- 	      (save-buffer) t)
+	      (save-buffer) t)
  :pipeline (let ((filename (buffer-file-name)))
-	     (-- (make-compilation-candidate
+	     (-- (make-builder-candidate
 		  :directory default-directory
 		  :command (format "vale --output=line %s" filename)
 		  :name (format "vale check %s" (f-collapse-homedir filename))
 		  :annotation "find errors in the current file"
-		  :hook (lambda (buffer msg) (with-current-buffer buffer (tychoish--vale-insert-statistics filename))))
-		 (make-compilation-candidate
+		  :hook (lambda (buffer msg) (builder--vale-insert-statistics buffer msg :filename filename)))
+		 (make-builder-candidate
 		  :directory default-directory
 		  :command (format "vale --ls-metrics %s" filename)
 		  :name (format "vale report %s" (f-collapse-homedir filename))
-		  :annotation "report statics about the current file"))))
+		  :annotation "report statistics about the current file"))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "minibuffer-shell-commands"
  :pipeline (->> (-join (--map (cons it "minibuffer-history") (minibuffer-default-add-shell-commands))
 			(--map (cons it "shell-command-history") shell-command-history))
@@ -501,13 +495,13 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		 (let ((command (car it))
 		       (source (cdr it))
 		       (annotation-tag (if (string-equal default-directory project-root-directory) "project root" "working directory")))
-		   (make-compilation-candidate
+		   (make-builder-candidate
 		    :name (s-truncate 32 command "...")
 		    :command command
 		    :directory project-root-directory
 		    :annotation (format "operation from `%s' in the %s (%s)" source annotation-tag default-directory))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "project-compilation-buffer-commands"
  :pipeline (->> (mode-buffers-for-project
 		 :mode 'compilation-mode)
@@ -522,14 +516,13 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			(-distinct)
 			(-non-nil)
 			(--map (let ((operation-directory it))
-				 (make-compilation-candidate
-				  :name (format "rerun from %s [%s]"  buf (f-visually-compress-to-five operation-directory))
+				 (make-builder-candidate
+				  :name (format "rerun from %s [%s]" buf (f-visually-compress-to-five operation-directory))
 				  :command command
 				  :directory operation-directory
 				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)))))))))
 
-
-(register-compilation-candidates
+(builder-register-candidates
  :name "makefiles"
  :pipeline (->> (f-directories-containing-file-makefile directories)
 		(--flat-map (let* ((default-directory it)
@@ -566,13 +559,13 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			  ("-k -B "   ", unconditionally while continuing on error"))
 			(--map (let ((flag (car it))
 				     (annotation-suffix (cdr it)))
-				 (make-compilation-candidate
+				 (make-builder-candidate
 				  :name (format name-template flag)
 				  :command (format command-template flag)
 				  :directory directory
 				  :annotation (s-join-with-space annotation-template annotation-suffix)))))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "go-packages"
  :pipeline (->> (-append
 		 (f-directories-containing-file-with-extension-go directories)
@@ -587,7 +580,7 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			      ((string-prefix-p prefix directory) directory)
 			      ((string-prefix-p (f-path-separator) directory) directory)
 			      (t (concat prefix directory))))
-			(operation-directory-tree (f-join operation-directory "..." ))
+			(operation-directory-tree (f-join operation-directory "..."))
 			(operation-directory-tree (if (string-equal "..." operation-directory-tree) "./..." operation-directory-tree))
 			(short-path (f-collapse-homedir operation-directory))
 			(package-path (string-replace project-root-directory "" operation-directory))
@@ -600,17 +593,17 @@ current directory and the project root, and `table' is table of `tychoish--compl
 								       (f-visually-compress-to-five path-for-project-tag))))
 			(proj-path-recursive (f-join proj-path-for-name "...")))
 		   (-append
-		    (-- (make-compilation-candidate
+		    (-- (make-builder-candidate
 			 :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
 			 :command (s-join-with-space "go build" operation-directory-tree)
 			 :directory directory
 			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively"))
-			(make-compilation-candidate
+			(make-builder-candidate
 			 :name (s-join-with-space "go build +tests" (f-join proj-path-for-name "..."))
 			 :command (s-join-with-space "go test -run=NOOP" operation-directory-tree)
 			 :directory directory
 			 :annotation (s-join-with-space "build in (including tests) for" project-name "at" short-path "recursively"))
-			(make-compilation-candidate
+			(make-builder-candidate
 			 :name (s-join-with-space "go test +race +coverage +gaps" proj-path-for-name)
 			 :directory directory
 			 :command (s-join-with-space
@@ -622,35 +615,32 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				    "grep -v '100.0%'"
 				    "column -t;"))
 			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
-		     (->> '(("go test -cover"            "the code coverage collector")
-			    ("go test -race"             "the race detector")
-			    ("go test"                   "default options"))
-			  (--flat-map
-			   (let ((command-prefix (car it))
-				 (annotation-prefix (cadr it)))
-			     ;; explode with timeout options
-			     (->> '("10s" "30s" "1m")
-				  (--map
-				   (let* ((timeout-spec it)
-					  (is-default (equal timeout-spec ""))
-					  (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
-					  (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
-				     (make-compilation-candidate
-				      :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
-				      :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
-				      :directory directory
-				      :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name))))))))
-		     (->> '("revive" "makezero" "exhaustruct")
-			  (--map
-			   ;; (when (or (f-equal-p directory default-directory)
-			   ;; 	       (f-equal-p directory project-root-directory))
-			   (make-compilation-candidate
-			    :name (format "lint %s %s" it proj-path-for-name)
-			    :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
-			    :directory directory
-			    :annotation (format "run (only) the %s linter in %s" it short-path)))))))))
+		    (->> '(("go test -cover"  "the code coverage collector")
+			   ("go test -race"   "the race detector")
+			   ("go test"         "default options"))
+			 (--flat-map
+			  (let ((command-prefix (car it))
+				(annotation-prefix (cadr it)))
+			    (->> '("10s" "30s" "1m")
+				 (--map
+				  (let* ((timeout-spec it)
+					 (is-default (equal timeout-spec ""))
+					 (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
+					 (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
+				    (make-builder-candidate
+				     :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
+				     :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
+				     :directory directory
+				     :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name))))))))
+		    (->> '("revive" "makezero" "exhaustruct")
+			 (--map
+			  (make-builder-candidate
+			   :name (format "lint %s %s" it proj-path-for-name)
+			   :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
+			   :directory directory
+			   :annotation (format "run (only) the %s linter in %s" it short-path)))))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "go-files"
  :pipeline (when-let* ((filename (if (and (buffer-file-name) (derived-mode-p '(go-mode go-ts-mode)))
 				     (buffer-file-name)
@@ -659,29 +649,28 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		       (is-golang (f-ext-p filename "go"))
 		       (short-filename (f-collapse-homedir filename))
 		       (basename (f-filename filename)))
-	     (-- (make-compilation-candidate
+	     (-- (make-builder-candidate
 		  :name (format "gofumpt +extra %s" basename)
 		  :directory (f-dirname filename)
 		  :command (format "gofumpt -extra -w %s" filename)
 		  :annotation (format "run gofumpt with non-extra constraints on %s" short-filename))
-		 (make-compilation-candidate
+		 (make-builder-candidate
 		  :name (format "gofumpt %s" basename)
 		  :directory (f-dirname filename)
 		  :command (format "gofumpt -w %s" filename)
 		  :annotation (format "run gofumpt with standard gofmt constraints on %s" short-filename))
-		 (make-compilation-candidate
+		 (make-builder-candidate
 		  :name (format "gci %s <import sort>" basename)
 		  :directory (f-dirname filename)
 		  :command (format "golangci-lint fmt --enable gci %s" filename)
 		  :annotation (format "sort imports with gci for %s" short-filename))
-		 (make-compilation-candidate
+		 (make-builder-candidate
 		  :name (format "meta fmt %s" basename)
 		  :directory (f-dirname filename)
 		  :command (format "golangci-lint fmt %s" filename)
 		  :annotation (format "run meta formatter on %s" short-filename)))))
 
-
-(register-compilation-candidates
+(builder-register-candidates
  :name "go-test-file"
  :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline
@@ -709,13 +698,13 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			(--flat-map
 			 (let ((timeout-flag (format "-timeout=%s" it))
 			       (timeout-label it))
-                           (make-compilation-candidate
+                           (make-builder-candidate
                             :name       (s-join-with-space "go test -v" race-label timeout-label test-name basename)
                             :command    (s-join-with-space "go test -v" race-flag timeout-flag run-flags ".")
                             :directory  directory
                             :annotation (format "run %s %s in %s" type-name test-name short-path)))))))))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "go-modules"
  :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
 	     (->> go-mod-directories
@@ -745,60 +734,60 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			 (--map (let ((name (if (car it) (car it) (cadr it)))
 				      (command (cadr it))
 				      (annotation (caddr it)))
-				  (make-compilation-candidate
+				  (make-builder-candidate
 				   :name name
 				   :command command
 				   :directory directory
 				   :annotation (s-join-with-space annotation filename))))))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "py-projects"
  :pipeline (->> (f-directories-containing-file-pyproject-toml directories)
 		(--flat-map
 		 (list
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :command "ruff check"
 		   :directory it
 		   :annotation (format "run `ruff check' in package %s" it))
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :name "ruff check fix"
 		   :command "ruff check --fix --show-fixes"
 		   :directory it
 		   :annotation (format "run `ruff check' and automatically fix lint violations in package %s" it))
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :name "ruff check fix +unsafe"
 		   :command "ruff check --fix --unsafe-fixes --show-fixes"
 		   :directory it
 		   :annotation (format "render all unsafe fixes (which may modify the intent of the code) in package %s" it))
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :name "ruff format"
 		   :command "ruff format --respect-gitignore"
 		   :directory it
 		   :annotation (format "run `ruff format' in package %s" it))
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :command "ruff analyze"
 		   :directory it
 		   :annotation (format "run `ruff analyze' in package %s" it))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "python"
  :pipeline (->> (f-directories-containing-file-with-extension-py directories)
 		(--flat-map
 		 (list
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :command (format "black %s" it)
 		   :directory it
 		   :annotation (format "run `black' in the directory %s" it))
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :command (format "isort %s" it)
 		   :directory it
 		   :annotation (format "run `isort' in the directory %s" it))
-		  (make-compilation-candidate
+		  (make-builder-candidate
 		   :command (format "isort --force-single-line-imports %s" it)
 		   :directory it
 		   :annotation (format "run `isort' in the directory %s (single line imports)" it))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "rust-project"
  :pipeline (->> (f-directories-containing-file-cargo-toml directories)
 		(--flat-map
@@ -807,11 +796,11 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		   (->> '("build" "check" "test" "fix" "fmt" "clippy" "clippy --fix")
 			(--map
 			 (if (f-equal-p project-root-directory directory)
-			     (make-compilation-candidate
+			     (make-builder-candidate
 			      :directory directory
-			      :cTrishulommand (format "cargo %s" it)
+			      :command (format "cargo %s" it)
 			      :annotation (format "run cargo target '%s' in project root (%s)" it annotation-directory))
-			   (make-compilation-candidate
+			   (make-builder-candidate
 			    :directory directory
 			    :name (format "cargo %s <%s>" it (f-base directory))
 			    :command (format "cd %s; cargo %s" directory it)
@@ -822,16 +811,16 @@ current directory and the project root, and `table' is table of `tychoish--compl
 		     (->> '("libs" "bins" "examples" "tests" "benches" "all-targets")
 			  (--flat-map
 			   (list
-			    (make-compilation-candidate
+			    (make-builder-candidate
 			     :directory project-root-directory
 			     :command (concat "cargo build --" it)
 			     :annotation (format "build %s in project root (%s)" it annotation-directory))
-			    (make-compilation-candidate
+			    (make-builder-candidate
 			     :directory project-root-directory
 			     :command (concat "cargo check --" it)
 			     :annotation (format "run static analysis %s in project root (%s)" it annotation-directory))))))))))
 
-(register-compilation-candidates
+(builder-register-candidates
  :name "justfile"
  :pipeline (->> (f-directories-containing-file-justfile directories)
 		(--flat-map
@@ -841,13 +830,12 @@ current directory and the project root, and `table' is table of `tychoish--compl
 				    (output (shell-command-to-string "just --summary"))
 				    (candidates (split-string output)))
 			  candidates)
-			(--map (make-compilation-candidate
+			(--map (make-builder-candidate
 				:directory directory
 				:command (format "just %s" it)
 				:annotation (format "exec justfile target %s in %s" it annotation-directory))))))))
 
-
-(defun tychoish--vale-insert-statistics (buffer _message &key filename)
+(defun builder--vale-insert-statistics (buffer _message &key filename)
   (interactive)
   (let* ((table (json-parse-string (shell-command-to-string (format "vale ls-metrics --output=line %s" filename))))
 	 (longest-key (length-of-longest-item (ht-keys table))))
@@ -859,4 +847,5 @@ current directory and the project root, and `table' is table of `tychoish--compl
 			      value)))
 	    table)))
 
-(provide 'consult-builder)
+(provide 'builder)
+;;; builder.el ends here

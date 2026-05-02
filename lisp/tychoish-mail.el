@@ -1,6 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'xlib)
+(require 'annotated-completing-read)
 (require 'mu4e-autoloads)
 
 (declare-function f-join "f")
@@ -191,23 +192,20 @@
   "Select `consult-mu' initial query from mu4e-bookmarks."
   (interactive)
   (let* ((bookmarks (ht-create #'equal))
-	 (_ (mapc (lambda (bookmark) (setf (ht-get bookmarks (plist-get bookmark :name)) bookmark)) mu4e-bookmarks))
-	 (longest-id (length-of-longest-item (ht-keys bookmarks)))
-	 (selection (consult--read
-		     bookmarks
-		     :prompt "mu4e query =>> "
-		     :annotate (lambda (candidate)
-				 (let* ((bookmark (ht-get bookmarks candidate))
-					(key (plist-get bookmark :key))
-					(query (plist-get bookmark :query)))
-
-				   (marginalia--fields
-				    (:left (char-to-string key)
-					   :format (format "%s(b%%s)" (prefix-padding-for-annotation candidate longest-id))
-					   :face 'marginalia-key)
-				    (query
-				     :format (format "query: \"%s\"" query)
-				     :face 'marginalia-value)))))))
+         (_ (mapc (lambda (bm) (setf (ht-get bookmarks (plist-get bm :name)) bm))
+                  mu4e-bookmarks))
+         (annotation-table (let ((tbl (ht-create)))
+                              (ht-each (lambda (name bm)
+                                         (ht-set tbl name
+                                                 (format "[%s] %s"
+                                                         (char-to-string (plist-get bm :key))
+                                                         (plist-get bm :query))))
+                                       bookmarks)
+                              tbl))
+         (selection (annotated-completing-read
+                     annotation-table
+                     :prompt "mu4e query =>> "
+                     :category 'consult-mu)))
     (consult-mu (plist-get (ht-get bookmarks selection) :query))))
 
 (defun tychoish/consult-mu-headers-template ()

@@ -209,19 +209,18 @@
 
   (defun consult-rg-compile (&optional initial)
     (interactive "P")
-    (let ((default-directory (consult--select-directory)))
+    (let ((default-directory (builder--select-directory)))
       (tychoish-rg initial)))
 
   (defun tychoish-rg (regexp)
     (interactive "P")
     (let ((compilation-buffer-name-function (compile-buffer-name (format "*%s-rg*" (approximate-project-name)))))
       (ripgrep-regexp
-       (consult--read
+       (annotated-completing-read
 	(consult-tycho--context-base-list ripgrep-regexp-history)
 	:prompt (format "[%s]<rg>: " default-directory)
-	:command this-command
-	:initial regexp
-	:history ripgrep-regexp-history
+	:initial-input regexp
+	:history 'ripgrep-regexp-history
 	:require-match nil)
        default-directory)))
 
@@ -807,15 +806,15 @@
   :ensure t ; only need to install it, embark loads it after consult if found
   :hook (embark-collect-mode . consult-preview-at-point-mode))
 
-(use-package consult-builder
+(use-package builder
   :after (compile)
   :bind (:map compilation-mode-map
-         ("d" . compilation-buffer-change-directory))
-  :commands (consult--select-directory
-	     make-compilation-candidate
-	     register-compilation-candidates
-	     tychoish--compilation-read-command
-	     tychoish/compile-project))
+         ("d" . builder-change-directory))
+  :commands (builder--select-directory
+	     make-builder-candidate
+	     builder-register-candidates
+	     builder--read-command
+	     builder-compile-project))
 
 (use-package consult-tycho
   :bind (("M-g r" . consult-rg)
@@ -1591,7 +1590,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 (use-package just-mode
   :ensure t
-  :after (consult-builder)
+  :after (builder)
   :mode (("justfile" . just-mode)
          ("Justfile" . just-mode)
          ("\\.just%" . just-mode)))
@@ -1749,7 +1748,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defun tychoish-compile ()
     "Run compile operation selecting compile buffer and commands."
     (interactive)
-    (tychoish/compile-project))
+    (builder-compile-project))
 
   (defun tychoish-compile-project-super-lint ()
     (interactive)
@@ -1763,7 +1762,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                           "RUN_LOCAL=true"))
            (optstr (format "-e %s" (s-join " -e " options)))
            (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
-      (tychoish/compile-project "super-lint" command-string)))
+      (builder-compile-project "super-lint" command-string)))
 
   (with-eval-after-load 'rust-mode
     (require 'rust-compile))
@@ -1773,7 +1772,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	   (results (tychoish--compilation-read-command command))
 	   (name (car results))
 	   (candidates (cdr results))
-	   (command (tychoish-compilation-candidate-command (ht-get candidates name))))
+	   (command (builder-candidate-command (ht-get candidates name))))
       (read-from-minibuffer "edit command => " command)))
 
   (add-hook 'compilation-finish-functions #'alert-after-finish-in-background)

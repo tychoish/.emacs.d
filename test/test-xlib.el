@@ -627,22 +627,22 @@
 
 (ert-deftest xlib/add-one-shot-hook-runs-once ()
   (setq xlib--test-hook-var nil)
-  (let ((count 0))
+  (let ((fire-count 0))
     (add-one-shot-hook
      :name "xlib-test-count"
      :hook 'xlib--test-hook-var
-     :form (cl-incf count))
+     :form (cl-incf fire-count))
     (run-hooks 'xlib--test-hook-var)
     (run-hooks 'xlib--test-hook-var)
     (run-hooks 'xlib--test-hook-var)
-    (should (= 1 count))))
+    (should (= 1 fire-count))))
 
 (ert-deftest xlib/add-one-shot-hook-removes-itself-after-firing ()
   (setq xlib--test-hook-var nil)
   (add-one-shot-hook
    :name "xlib-test-removal"
    :hook 'xlib--test-hook-var
-   :form nil)
+   :form t)
   (should xlib--test-hook-var)
   (run-hooks 'xlib--test-hook-var)
   (should-not xlib--test-hook-var))
@@ -652,23 +652,23 @@
   (add-one-shot-hook
    :name "xlib-test-add"
    :hook 'xlib--test-hook-var
-   :form nil)
+   :form t)
   (should xlib--test-hook-var))
 
 (ert-deftest xlib/add-one-shot-hook-persist-runs-every-time ()
   (setq xlib--test-hook-var nil)
-  (let ((count 0))
+  (let ((fire-count 0))
     (add-one-shot-hook
      :name "xlib-test-persist"
      :hook 'xlib--test-hook-var
      :persist t
-     :form (cl-incf count))
+     :form (cl-incf fire-count))
     (run-hooks 'xlib--test-hook-var)
     (run-hooks 'xlib--test-hook-var)
     (run-hooks 'xlib--test-hook-var)
     ;; clean up
     (setq xlib--test-hook-var nil)
-    (should (= 3 count))))
+    (should (= 3 fire-count))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; f extensions (pure/path functions only — no fs I/O)

@@ -114,7 +114,7 @@
 (s-define-join-string-function ?| :space-padding t)
 
 (defun s-shortest (a b)
-  (if (> (length b) (length a))
+  (if (>= (length b) (length a))
       a
     b))
 
@@ -533,9 +533,10 @@ OPTIONS may be a single symbol or a list of symbols."
 
 (defmacro with-force-write (&rest body)
   (declare (indent 1) (debug t))
-  `(progn
-     (setq buffer-read-only nil)
-     ,@body
+  `(prog1
+       (progn
+         (setq buffer-read-only nil)
+         ,@body)
      (setq buffer-read-only t)))
 
 (defmacro pos-arg (name &key is)
@@ -585,7 +586,7 @@ OPTIONS may be a single symbol or a list of symbols."
        (let ((count ,count)
 	     (run-count 0))
 	 (cl-flet ((counter-increment (lambda () (cl-incf run-count)))
-		   (counter-expired (lambda () (or ,persist (>= run-count count)))))
+		   (counter-expired (lambda () (and (not ,persist) (>= run-count count)))))
 
 	   (defun ,cleanup-symbol ,args
 	     (with-slow-op-timer

@@ -35,11 +35,6 @@
 Keys are symbols — typically `this-command' at call time — and values are
 the standard Emacs history lists accumulated by `completing-read'.")
 
-(defvar annotated-completing-read--history-cell nil
-  "Temporary per-call history list threaded through `completing-read'.
-`completing-read' mutates a named special variable; this one is pre-loaded
-from `annotated-completing-read-history' and written back after each call.")
-
 (cl-defun annotated-completing-read (table &key (prompt "=> ") require-match category history group-name group-display initial-input)
   "Read a candidate from TABLE with aligned per-candidate annotations.
 TABLE is any Emacs hash table (`ht' or plain `make-hash-table') mapping
@@ -107,13 +102,12 @@ Signals `user-error' if TABLE is not a hash table."
                               ,@(when category `((category . ,category)))
                               ,@(when group-fn `((group-function . ,group-fn))))
                           (complete-with-action action (ht-keys table) str pred)))))
-    (let ((annotated-completing-read--history-cell
-           (ht-get annotated-completing-read-history hist-key)))
+    (let ((hist-sym (make-symbol "history-cell")))
+      (set hist-sym (ht-get annotated-completing-read-history hist-key))
       (prog1
-          (completing-read prompt collection nil require-match initial-input
-                           'annotated-completing-read--history-cell)
+          (completing-read prompt collection nil require-match initial-input hist-sym)
         (ht-set! annotated-completing-read-history hist-key
-                 annotated-completing-read--history-cell)))))
+                 (symbol-value hist-sym))))))
 
 (provide 'annotated-completing-read)
 ;;; annotated-completing-read.el ends here

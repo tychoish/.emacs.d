@@ -34,7 +34,7 @@
 (require 'consult-org)
 
 (require 'tychoish-common)
-(require 'consult-builder)
+(require 'builder)
 (require 'annotated-completing-read)
 
 (eval-when-compile
@@ -69,7 +69,7 @@
   (let* ((slug (f-make-slug title))
          (datetime (format-time-string "%Y-%02m-%02d"))
          (draft-fn (f-join (or path
-			       (consult--select-directory))
+			       (builder--select-directory))
 			   (concat datetime "." slug "." tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
@@ -201,7 +201,7 @@ Does nothing if the current post is not in the drafts folder."
      #'consult--ripgrep-make-builder
      ;; directory
      (or (s-trimmed-or-nil dir)
-	 (consult--select-directory)
+	 (builder--select-directory)
 	 (approximate-project-root))
      ;; initial
      (if (and (or context (not initial)) (not (eq context 'override)))
@@ -213,7 +213,7 @@ Does nothing if the current post is not in the drafts folder."
   "Start an iterative rg session in the project root, if possible, falling back as necessary."
   (interactive "P")
   (consult-rg
-   (or (approximate-project-root) (consult--select-directory))
+   (or (approximate-project-root) (builder--select-directory))
    initial
    :context (or context current-prefix-arg 'override)))
 
@@ -224,7 +224,7 @@ Does nothing if the current post is not in the drafts folder."
   (interactive "P")
 
   (consult-rg
-   (or default-directory (consult--select-directory))
+   (or default-directory (builder--select-directory))
    initial
    :context (or context current-prefix-arg 'override)))
 

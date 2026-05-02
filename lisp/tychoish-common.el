@@ -2,6 +2,7 @@
 
 (require 'xlib)
 (require 'anaphora)
+(declare-function builder--select-directory "builder")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -504,7 +505,7 @@ interactively then remove duplicate items from the `kill-ring'."
   (interactive)
 
   (unless directory
-    (setq directory (consult--select-directory)))
+    (setq directory (builder--select-directory)))
 
   (let ((killed (->> (buffer-list)
 		     (--filter (buffer-file-name it))

@@ -44,7 +44,7 @@
 (autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
 
 (autoload 'consult-org-capture "tychoish-org")
-(autoload 'consult--read "consult")
+(autoload 'annotated-completing-read "annotated-completing-read")
 
 (autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
 (autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
@@ -350,34 +350,25 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 (defun consult-org-capture ()
   "Select a capture template interactively."
   (interactive)
-  ;; TODO remove this hack so that things are loaded in time
-
-  (let ((table (ht-create)))
-    (->> org-capture-templates
-	 (--filter (< 3 (length it)))
-	 (--mapc (ht-set table
-			(nth 1 it)
-			(cons
-			 (format "[%s]%s<%s> '%s'"
-				 (nth 0 it)
-				 (prefix-padding-for-annotation (nth 0 it) 0)
-				 (f-filename (cadr (nth 3 it)))
-				 (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 it)))))
-			 (nth 0 it)))))
-    (let* ((keys (ht-keys table))
-	   (longest (length-of-longest-item keys))
-	   (capture-template-key
-	    (consult--read
-	     keys
-	     :prompt "org-capture => "
-	     :annotate (lambda (candidate) (concat (prefix-padding-for-annotation candidate longest) (car (ht-get table candidate))))
-	     :lookup (lambda (selection _candidates &rest _) (cdr (ht-get table selection)))
-	     :category 'org-capture
-                         :require-match nil
-	     :command 'consult-org-capture
-             :history '(:input consult-org--capture-history))))
-
-      (org-capture nil capture-template-key))))
+  (let* ((key-table        (ht-create))
+         (annotation-table (ht-create))
+         (_ (->> org-capture-templates
+                 (--filter (< 3 (length it)))
+                 (--each
+                  (let ((key-char    (nth 0 it))
+                        (description (nth 1 it))
+                        (file        (f-filename (cadr (nth 3 it))))
+                        (template    (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 it))))))
+                    (ht-set key-table description key-char)
+                    (ht-set annotation-table description
+                            (format "[%s] <%s> '%s'" key-char file template))))))
+         (selection (annotated-completing-read
+                     annotation-table
+                     :prompt "org-capture => "
+                     :category 'org-capture
+                     :require-match nil))
+         (capture-template-key (ht-get key-table selection)))
+    (org-capture nil capture-template-key)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
