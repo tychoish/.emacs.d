@@ -605,7 +605,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
      :path org-filename)))
 
 ;; org capture templates definitions
-(defun tychoish-org-setup-standard-capture-templates ()
+(defun tychoish-org--setup-standard-capture-templates ()
   (tychoish/org-capture-add-note-templates
    :name "scratch"
    :path "records.org")
@@ -625,12 +625,14 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 (eval-when-compile
   (require 'tychoish-common))
 
-(add-one-shot-hook :name "org-install-aux-packages"
+(add-one-shot-hook
+ :name "org-install-aux-packages"
  :hook 'org-mode-hook
  :operation #'tychoish-org--install-auxiliary-packages)
 
-(add-one-shot-hook :name "org-capture [install standard templates]"
+(add-one-shot-hook
+ :name "org-capture [install standard templates]"
  :hook 'emacs-startup-hook
- :operation #'tychoish-org-setup-standard-capture-templates)
+ :operation #'tychoish-org--setup-standard-capture-templates)
 
 (provide 'tychoish-org)

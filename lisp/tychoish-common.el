@@ -23,7 +23,7 @@
 (defun tychoish/resolve-instance-id ()
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (or tychoish-cache--resolved-instance-id
-	(setq tychoish-cache/resolved-instance-id
+	(setq tychoish-cache--resolved-instance-id
 	      (let ((daemon (daemonp)))
 		(or (when (eq daemon t) "primary")
 		    daemon
@@ -495,8 +495,7 @@ interactively then remove duplicate items from the `kill-ring'."
 
 (defun buffers-matching-mode (mode)
   (->> (buffer-list)
-       (--select (with-current-buffer it (eq major-mode mode)))
-       (mapc #'kill-buffer)))
+       (--select (with-current-buffer it (eq major-mode mode)))))
 
 (defun kill-buffers-in-directory (&optional directory)
   "Kill all buffers in `directory'. When not defined, a directory can be selected interactively."
@@ -553,7 +552,7 @@ each buffer, unless NO-ASK is non-nil."
 		      (-non-nil))))
 
     (if (called-interactively-p 'any)
-	(message "killed %d buffers matching '%S'" (length length) (s-join ", " killed))
+	(message "killed %d buffers matching '%S'" (length killed) (s-join ", " killed))
       killed)))
 
 (defconst reference-source-paths

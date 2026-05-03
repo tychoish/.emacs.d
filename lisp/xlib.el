@@ -90,8 +90,8 @@
 	       ((equal char ">=") "gte")
 	       ((equal char "<=") "lte")
 	       ((equal char "<=") "lte")
-	       ((equal char "__") (if use-jargon "dunder" "double-underscore"))
-	       ((equal char "--") (if use-jargon "ddash" "double-dash"))
+	       ((equal char "__") (if use-jargon-names "dunder" "double-underscore"))
+	       ((equal char "--") (if use-jargon-names "ddash" "double-dash"))
 	       ((equal char "=>") (if use-jargon-names "fat-arrow" "double-arrow"))
 	       ((equal char "=>>") "dubble-fat-arrow")
 	       ;; e.g. '(; : )
@@ -123,7 +123,7 @@
 
 (defun s-normalize-symbol-name (name)
   (let* ((sanatized (s-trim (s-collapse-whitespace name)))
-	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) name)))
+	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) sanatized)))
     (s-collapse-hyphens canonicalized)))
 
 (defun s-trimmed-or-nil (value)
@@ -209,8 +209,8 @@ values using the test function, which defaults to `equal'."
     (-distinct cell)))
 
 (cl-defun -distinct-paths (cell)
-  (let ((-compare-fn #'f-equal-p)
-    (-distinct cell))))
+  (let ((-compare-fn #'f-equal-p))
+    (-distinct cell)))
 
 (cl-defun -distinct-by-alist-key (key cell &optional &key (test #'equal))
   "Compare a list of alists, and return a new list that contains only the
@@ -440,7 +440,7 @@ of the equality function customization differs slightly."
    ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
 
 (defun f-recursive-directories-containing (filename &optional path)
-  (->> (f-entries path (lambda (filename) (f-filename-is-p filename "go.mod")) t)
+  (->> (f-entries path (lambda (f) (f-filename-is-p f filename)) t)
        (-map #'f-dirname)))
 
 (defmacro f-directories-containing-file-function (filename &rest files)

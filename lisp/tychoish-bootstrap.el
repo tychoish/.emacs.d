@@ -304,7 +304,6 @@
 
 (setq next-line-add-newlines nil)
 (setq undo-auto-current-boundary-timer t)
-(setq read-file-name-completion-ignore-case t)
 
 (setq select-enable-primary nil)
 (setq select-enable-clipboard nil)
@@ -392,7 +391,6 @@
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
   (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
-  (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
   (setq tramp-persistency-file-name (tychoish/conf-state-path "tramp.el"))
 
@@ -410,7 +408,7 @@
     (when (or (> 40 (random 100))
               (< 150 (float-time (time-since desktop/last-save-time))))
       (desktop-save desktop-dirname)
-      (setq desktop/time-since-last-save (current-time)))))
+      (setq desktop/last-save-time (current-time)))))
 
 (defun tychoish/desktop-read-init ()
   ;; only read the desktop if we're not in the "solo" (no ID) emacs
@@ -876,28 +874,28 @@
 (add-hook 'LaTeX-mode-hook 'visual-line-mode)
 (add-hook 'LaTeX-mode-hook 'turn-off-auto-fill)
 
-(add-to-list 'auto-mode-alist '("\\.tex'" . LaTeX-mode))
+(add-to-list 'auto-mode-alist '("\\.tex\\'" . LaTeX-mode))
 
-(add-to-list 'auto-mode-alist '("\\.el$'" . emacs-lisp-mode))
+(add-to-list 'auto-mode-alist '("\\.el\\'" . emacs-lisp-mode))
 
 (add-to-list 'auto-mode-alist '("makefile" . makefile-mode))
 (add-to-list 'auto-mode-alist '("Makefile" . makefile-mode))
-(add-to-list 'auto-mode-alist '("\\.mk$'" . makefile-mode))
+(add-to-list 'auto-mode-alist '("\\.mk\\'" . makefile-mode))
 
-(add-to-list 'auto-mode-alist '("\\.service$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.timer$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.target$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.mount$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.automount$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.slice$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.socket$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.path$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.conf$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.org$'" . org-mode))
+(add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.timer\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.target\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.mount\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.automount\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.slice\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.socket\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.conf\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
 
-(add-to-list 'auto-mode-alist '("\\.zsh$'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.zshrc$'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.bash_profile$'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.zsh\\'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.zshrc\\'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.bash_profile\\'" . sh-mode))
 (add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
 (with-eval-after-load "em-cmpl"
