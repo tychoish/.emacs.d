@@ -137,7 +137,7 @@
        value))
 
 (defun s-contains-whitespace-p (value)
-  "Return t when `VALUE' is a string with non-whitespace content and nil otherwise."
+  "Return t when `VALUE' is a string consisting entirely of whitespace, nil otherwise."
   (and (stringp value)
        (string-empty-p (string-trim value))))
 
@@ -322,14 +322,7 @@ a destructive operation.
 
 This is the anaphoric counterpart to `-in-place'."
   (declare (debug (def-form form)))
-  `(-in-place (lambda (it) (ignore it) ,form) items)
-  `(let ((head ,items)
-	 (count 0))
-     (while head
-       (setf (car head) (funcall #'(lambda (it) (ignore it) ,form) (car head)))
-       (setq head (cdr head))
-       (setq count (+ 1 count)))
-     count))
+  `(-in-place (lambda (it) (ignore it) ,form) ,items))
 
 (defmacro --map-uniq (form input)
   "Apply `FORM' to every item in the input list, available as `it', and
@@ -723,13 +716,8 @@ OPTIONS may be a single symbol or a list of symbols."
      map))
 
 (cl-defmacro setq-when-nil (variable value &optional &key local)
-  (unless (boundp variable)
-    (user-error "can only `set-when-nil' with variables that are already defined."))
-
   `(unless ,variable
-     ,(let ((setter (if local 'setq-local 'setq))
-	    (resolved-value (if (functionp value) (funcall value) value)))
-	`(,setter ,variable ,resolved-value))))
+     (,(if local 'setq-local 'setq) ,variable ,value)))
 
 (defmacro with-timer (name &rest body)
   "Report on NAME and the time taken to execute BODY."
@@ -768,9 +756,7 @@ OPTIONS may be a single symbol or a list of symbols."
 
 (defun approximate-project-root ()
   "Return the current project root, falling back to `default-directory'."
-  (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile)))
-        (require 'projectile) nil)
-      (when (package-avalible-p 'projectile)
+  (or (when (package-avalible-p 'projectile)
         (s-trimmed-or-nil (projectile-project-root)))
       (when (and (featurep 'project) (project-current))
         (project-root (project-current)))
@@ -779,18 +765,18 @@ OPTIONS may be a single symbol or a list of symbols."
 (defun approximate-project-name ()
   "Return the current project name, falling back to the directory basename."
   (s-trim-non-word-chars
-   (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile)))
-         (require 'projectile) nil)
-       (when (featurep 'projectile) (projectile-project-name))
-       (when (project-current) (project-root (project-current)))
+   (or (when (package-avalible-p 'projectile)
+         (projectile-project-name))
+       (when (project-current)
+         (project-root (project-current)))
        (f-filename (expand-file-name default-directory)))))
 
 (defun approximate-project-buffers ()
   "Return buffers belonging to the current project."
-  (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile)))
-        (require 'projectile) nil)
-      (when (package-avalible-p 'projectile) (projectile-project-buffers))
-      (when (and (featurep 'project) (project-current)) (project-buffers (project-current)))
+  (or (when (package-avalible-p 'projectile)
+        (projectile-project-buffers))
+      (when (and (featurep 'project) (project-current))
+        (project-buffers (project-current)))
       (let ((directory (expand-file-name default-directory)))
         (->> (buffer-list)
              (--filter (with-current-buffer it

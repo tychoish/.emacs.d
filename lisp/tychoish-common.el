@@ -66,10 +66,6 @@ This combines the host name and the dameon name."
 		      (reverse)
 		      (-non-nil))))
 
-(defun tychoish-get-config-file-path (name)
-  "Return an absolute path for NAME in the configuration directory.
-The is unique to the system and daemon instance."
-  (f-expand (f-join user-emacs-directory (tychoish-get-config-file-prefix name))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

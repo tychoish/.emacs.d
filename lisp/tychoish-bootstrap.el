@@ -579,7 +579,7 @@
  :hook emacs-startup-hook)
 
 (add-one-shot-hook :name "emacs-instance-persistence"
- :function (tychoish/set-up-emacs-instance-persistence)
+ :form (tychoish/set-up-emacs-instance-persistence)
  :depth 75
  :hook after-first-frame-created)
 
@@ -592,7 +592,7 @@
  :hook '(prog-mode-hook text-mode-hook))
 
 (add-one-shot-hook :name "ssh-agent"
- :function (tychoish/set-up-ssh-agent)
+ :form (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (add-hook 'emacs-startup-hook #'tychoish/ensure-default-font)
