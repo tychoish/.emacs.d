@@ -1,71 +1,4 @@
-  ;; -*- lexical-binding: t; -*-
-
-(require 'xlib)
-(require 'anaphora)
-(require 'annotated-completing-read)
-
-(require 'builder)
-
-(eval-when-compile
-  (require 'yasnippet))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; id-state -- emacs daemon/instance identification for state config
-
-(defun tychoish-system-name ()
-  (interactive)
-  (message "system: %s" (system-name)))
-
-(defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
-
-(defvar-local tychoish-cache--resolved-instance-id nil)
-(defun tychoish/resolve-instance-id ()
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (or tychoish-cache--resolved-instance-id
-	(setq tychoish-cache--resolved-instance-id
-	      (let ((daemon (daemonp)))
-		(or (when (eq daemon t) "primary")
-		    daemon
-		    cli/instance-id
-		    tychoish/emacs-instance-id
-		    "solo"))))))
-
-(defun tychoish/set-up-instance-name ()
-  (unless tychoish/emacs-instance-id
-    (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))))
-
-(defvar-local tychoish-cache--conf-emacs-host-and-instance nil)
-(defun tychoish/conf-emacs-host-and-instance ()
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (or tychoish-cache--conf-emacs-host-and-instance
-	(setq-local tychoish-cache--conf-emacs-host-and-instance
-	      (list
-	       (if (eq system-type 'darwin)
-		   (car (s-split "\\." (system-name)))
-		 (system-name))
-	       (or tychoish/emacs-instance-id
-		   (tychoish/resolve-instance-id)))))))
-
-(defconst tychoish/conf-state-directory-name "state")
-
-(defun tychoish/conf-state-path (name)
-  (f-join user-emacs-directory
-	  tychoish/conf-state-directory-name
-	  (tychoish-get-config-file-prefix name)))
-
-(defun tychoish-get-config-file-prefix (name)
-  "Build a config file basename, for NAME.
-This combines the host name and the dameon name."
-  (s-join "-" (->> (tychoish/conf-emacs-host-and-instance)
-		      (reverse)
-		      (-concat (-l (when (or (equal "root" user-login-name)
-					     (f-symlink-p user-emacs-directory))
-				     user-login-name)
-				   name))
-		      (reverse)
-		      (-non-nil))))
-
+;; -*- lexical-binding: t; -*-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -93,11 +26,6 @@ This combines the host name and the dameon name."
 ;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
 
 (bind-key "C-g" 'tychoish/super-abort-minibuffers minibuffer-local-map)
-
-(defun gui-p ()
-  "Return t when the current session is or may be a GUI session."
-  (when (or (daemonp) (window-system))
-    t))
 
 (defun contextual-menubar (&optional frame)
   "Display the menubar in FRAME (default: selected frame) if on a graphical display, but hide it if in terminal."
@@ -452,20 +380,9 @@ interactively then remove duplicate items from the `kill-ring'."
 		  (list
 		   (car (p-result-wrapper proc)) ;; e.g. "bash"
 		   (lambda (code) (setf (p-result-code proc) code))) ;; status-handler
-		  (strings-list (cadr (p-result-wrapper proc)))
-		  (strings-list command))))
+		  (-strings (cadr (p-result-wrapper proc)))
+		  (-strings command))))
     proc))
-
-(defun strings-list (&rest input &key options)
-  "Try to produce a valid list-of strings. Returning lists of strings, filtering or coercing as needed. "
-  (if (list-of-strings-p input)
-      input
-    (->> input
-	 (--keep (cond
-		  ((stringp it) it)
-		  ((option-set-p 'filter options) nil)
-		  ((option-set-p 'stringify) (format "%s" it))
-		  (t (user-error "no way to handle %s value %s" (type-of it) it)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -695,24 +612,5 @@ Does nothing if the current post is not in the drafts folder."
   "Open a dired buffer for the drafts folder."
   (interactive)
   (find-file (expand-file-name tychoish-blog-path)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; project -- tools for managing groups of buffers and files by project
-
-(declare-function project-root "project")
-(declare-function project-current "project")
-(declare-function project-buffers "project")
-
-(cl-defun mode-buffers-for-project (&optional &key (mode major-mode))
-  (->> (approximate-project-buffers)
-       (--filter (buffer-derived-mode-p it mode))))
-
-(cl-defun mode-buffers (&optional (mode major-mode))
-  (->> (buffer-list)
-       (--keep
-	(with-current-buffer it
-	  (when (derived-mode-p mode)
-	    (current-buffer))))))
 
 (provide 'tychoish-common)

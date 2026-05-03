@@ -1,7 +1,5 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'xlib)
-(require 'annotated-completing-read)
 (require 'mu4e-autoloads)
 
 (declare-function f-join "f")

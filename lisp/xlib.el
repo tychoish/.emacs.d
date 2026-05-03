@@ -240,6 +240,21 @@ concatenated or joined. This provides a dash.el conforming API for the
 (defalias 'll #'list)
 (defalias '-- #'list)
 
+(defun -strings (&rest input &key options)
+  "Coerce INPUT into a flat list of strings.
+If all elements are already strings, returns INPUT as-is.
+Non-string elements are dropped when the `filter' option is set,
+stringified with `format' when `stringify' is set, and signal a
+`user-error' otherwise."
+  (if (-all? #'stringp input)
+      input
+    (->> input
+	 (--keep (cond
+		  ((stringp it) it)
+		  ((option-set-p 'filter options) nil)
+		  ((option-set-p 'stringify options) (format "%s" it))
+		  (t (user-error "no way to handle %s value %s" (type-of it) it)))))))
+
 (defun -sparse-append (&rest items)
   "Joins elements in a list, omitting all nil values."
   (->> items
@@ -743,9 +758,24 @@ OPTIONS may be a single symbol or a list of symbols."
 
 ;; project context -- lightweight wrappers over projectile / project.el
 
-(declare-function projectile-project-root    "projectile")
-(declare-function projectile-project-name    "projectile")
+(declare-function projectile-project-root "projectile")
+(declare-function projectile-project-name "projectile")
 (declare-function projectile-project-buffers "projectile")
+
+(declare-function project-root "project")
+(declare-function project-current "project")
+(declare-function project-buffers "project")
+
+(cl-defun mode-buffers-for-project (&optional &key (mode major-mode))
+  (->> (approximate-project-buffers)
+       (--filter (buffer-derived-mode-p it mode))))
+
+(cl-defun mode-buffers (&optional (mode major-mode))
+  (->> (buffer-list)
+       (--keep
+	(with-current-buffer it
+	  (when (derived-mode-p mode)
+	    (current-buffer))))))
 
 (defun package-avalible-p (name)
   "Return non-nil if package NAME is installed and can be loaded."
@@ -779,8 +809,9 @@ OPTIONS may be a single symbol or a list of symbols."
         (project-buffers (project-current)))
       (let ((directory (expand-file-name default-directory)))
         (->> (buffer-list)
-             (--filter (with-current-buffer it
-                         (file-in-directory-p default-directory directory)))))))
+             (--filter
+	      (with-current-buffer it
+                (file-in-directory-p default-directory directory)))))))
 
 (provide 'xlib)
 ;;; xlib.el ends here

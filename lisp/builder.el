@@ -16,9 +16,9 @@
 (require 'ht)
 (require 'dash)
 
+(require 'xlib)
 (require 'annotated-completing-read)
-
-(require 'tychoish-common)
+(require 'eglot-test-at-point)
 
 (f-directories-containing-file-with-extension-function "go")
 (f-directories-containing-file-with-extension-function "py")
@@ -89,7 +89,7 @@
 	     (pa "emacs-process-name" :is process-name)
 	     (pa "program" :is program)
 	     (pa "on-finish" :is (lambda (out) (message "INFO: notify process for %s completed [%s] with %s" (buffer-name buffer) out compile-result-message)))
-	     (-append args (strings-list (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
+	     (-append args (-strings (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
 
     (when (or send-when
 	      (> (/ alert-threshold 2) (float-time (time-since (current-idle-time))))
@@ -618,7 +618,7 @@ where TABLE is a hash of `builder-candidate' objects.")
              (directory (f-dirname filename))
              (basename  (f-filename filename))
              (short-path (f-collapse-homedir directory))
-             (test-names (tychoish/go-test-names-in-buffer)))
+             (test-names (elgot-test-at-point--go-names-in-buffer)))
    (->> test-names
         (--flat-map
          (let* ((test-name (car it))

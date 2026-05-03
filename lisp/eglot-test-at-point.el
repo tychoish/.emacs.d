@@ -189,7 +189,7 @@ to be set buffer-locally."
   (interactive)
   (unless eglot-test-at-point-run-command-fn
     (user-error "no test runner configured for %s" major-mode))
-  (let* ((test-name (or (tychoish/test-name-at-point)
+  (let* ((test-name (or (eglot-test-name-at-point)
                         (user-error "no test found at point")))
          (directory    (f-dirname (buffer-file-name)))
          (project-name (f-filename (directory-file-name (approximate-project-root))))

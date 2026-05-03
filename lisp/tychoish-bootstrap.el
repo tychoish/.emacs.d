@@ -39,14 +39,7 @@
 (require 'ht)
 (require 'dash)
 
-(eval-when-compile
-  (require 'xlib))
-
-(require 'tychoish-common)
-
 (declare-function browse-url-chrome "browse-url")
-
-(tychoish/set-up-instance-name)
 
 (bind-keys
  ("C-x m" . execute-extended-command)
@@ -215,28 +208,15 @@
  :prefix-map tychoish/shell-map
  ("m" . eshell))
 
-(defvar-keymap tychoish/robot-map
-  :name "robot tools"
-  :doc "top level map for AI and adjacent tooling")
-
-(defvar-keymap tychoish/robot-gptel-map
-  :name "gptel custom tools"
-  :doc "custom gptel mappings")
-
-(defvar-keymap tychoish/robot-gptel-set-default-model-map
-  :name "default model setters"
-  :doc "set default model for gtpel")
-
-(define-prefix-command 'tychoish/robot-map 'tychoish/robot-map "robots")
-(define-prefix-command 'tychoish/robot-gptel-map 'tychoish/robot-gptel-map "gptel robots")
-(define-prefix-command 'tychoish/robot-gptel-set-default-model-map 'tychoish/robot-gptel-set-default-model-map "gptel model")
-
 (bind-keys
- ("C-c r" . tychoish/robot-map)
+ :prefix "C-c r"
+ :prefix-map tychoish/robot-map
  :map tychoish/robot-map
- ("g" . tychoish/robot-gptel-map)
+ :prefix "g"
+ :prefix-map tychoish/robot-gptel-map
  :map tychoish/robot-gptel-map
- ("m" . tychoish/robot-gptel-set-default-model-map))
+ :prefix "m"
+ :prefix-map tychoish/robot-gptel-set-default-model-map)
 
 (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
   "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
@@ -331,7 +311,6 @@
 
 (setq package-install-upgrade-built-in t)
 (setq package-user-dir (concat user-emacs-directory "elpa"))
-(setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell")))
 
 (setq lpr-add-switches "-T ''")
 
@@ -373,6 +352,70 @@
 
 (make-read-extended-command-for-prefix  "clipboard"
  :bind-key "C-x x c")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; id-state -- emacs daemon/instance identification for state config
+
+(defun gui-p ()
+  "Return t when the current session is or may be a GUI session."
+  (when (or (daemonp) (window-system))
+    t))
+
+(defun tychoish-system-name ()
+  (interactive)
+  (message "system: %s" (system-name)))
+
+(defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
+
+(defvar-local tychoish-cache--resolved-instance-id nil)
+(defun tychoish/resolve-instance-id ()
+  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
+    (or tychoish-cache--resolved-instance-id
+	(setq tychoish-cache--resolved-instance-id
+	      (let ((daemon (daemonp)))
+		(or (when (eq daemon t) "primary")
+		    daemon
+		    cli/instance-id
+		    tychoish/emacs-instance-id
+		    "solo"))))))
+
+(defun tychoish/set-up-instance-name ()
+  (unless tychoish/emacs-instance-id
+    (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))))
+
+(defvar-local tychoish-cache--conf-emacs-host-and-instance nil)
+(defun tychoish/conf-emacs-host-and-instance ()
+  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
+    (or tychoish-cache--conf-emacs-host-and-instance
+	(setq-local tychoish-cache--conf-emacs-host-and-instance
+	      (list
+	       (if (eq system-type 'darwin)
+		   (car (s-split "\\." (system-name)))
+		 (system-name))
+	       (or tychoish/emacs-instance-id
+		   (tychoish/resolve-instance-id)))))))
+
+(defconst tychoish/conf-state-directory-name "state")
+
+(defun tychoish/conf-state-path (name)
+  (f-join user-emacs-directory
+	  tychoish/conf-state-directory-name
+	  (tychoish-get-config-file-prefix name)))
+
+(defun tychoish-get-config-file-prefix (name)
+  "Build a config file basename, for NAME.
+This combines the host name and the dameon name."
+  (s-join "-" (->> (tychoish/conf-emacs-host-and-instance)
+		      (reverse)
+		      (-concat (-l (when (or (equal "root" user-login-name)
+					     (f-symlink-p user-emacs-directory))
+				     user-login-name)
+				   name))
+		      (reverse)
+		      (-non-nil))))
+
+(setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
