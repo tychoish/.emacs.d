@@ -505,6 +505,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "go-packages"
+ :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline (->> (-append
 		 (f-directories-containing-file-with-extension-go directories)
 		 (f-directories-containing-file-go-mod project-root-directory)
@@ -580,6 +581,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "go-files"
+ :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline (when-let* ((filename (if (and (buffer-file-name) (derived-mode-p '(go-mode go-ts-mode)))
 				     (buffer-file-name)
 				   (thing-at-point 'filename)))
@@ -644,6 +646,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "go-modules"
+ :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
 	     (->> go-mod-directories
 		(--flat-map
@@ -680,6 +683,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "py-projects"
+ :hooks '(python-mode-hook python-ts-mode-hook)
  :pipeline (->> (f-directories-containing-file-pyproject-toml directories)
 		(--flat-map
 		 (list
@@ -709,6 +713,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "python"
+ :hooks '(python-mode-hook python-ts-mode-hook)
  :pipeline (->> (f-directories-containing-file-with-extension-py directories)
 		(--flat-map
 		 (list
@@ -727,6 +732,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "rust-project"
+ :hooks '(rust-mode-hook rust-ts-mode-hook)
  :pipeline (->> (f-directories-containing-file-cargo-toml directories)
 		(--flat-map
 		 (let ((annotation-directory (f-collapse-homedir it))
@@ -779,6 +785,88 @@ where TABLE is a hash of `builder-candidate' objects.")
     (insert (format "\nstatistics for %s" (propertize (f-collapse-homedir filename) 'face 'italic)))
     (ht-map (lambda (key value) (insert (format "\n%s:%s" (propertize key 'face 'bold) value)))
 	    table)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; emacs-lisp -- static analysis and linting targets
+
+(defun builder--el-files-in-directory (directory)
+  "Return a list of .el files in DIRECTORY, excluding byte-compiled .elc files."
+  (->> (f-entries directory #'f-file-p)
+       (--filter (f-ext-p it "el"))))
+
+(builder-register-candidates
+ :name "emacs-lisp-file"
+ :hooks '(emacs-lisp-mode-hook)
+ :pipeline
+ (when-let* ((filename (buffer-file-name))
+             (_ (derived-mode-p 'emacs-lisp-mode))
+             (short-name (f-collapse-homedir filename))
+             (basename (f-filename filename))
+             (directory (f-dirname filename))
+             (load-path-args (s-join " " (--map (format "-L %s" it)
+                                                (-filter #'f-directory-p load-path)))))
+   (-- (make-builder-candidate
+        :name (format "byte-compile %s" basename)
+        :command (format "emacs --batch %s -f batch-byte-compile %s" load-path-args filename)
+        :directory directory
+        :annotation (format "byte-compile %s" short-name))
+       (make-builder-candidate
+        :name (format "relint %s" basename)
+        :command (format "emacs --batch %s --eval \"(require 'relint)\" -f relint-batch %s" load-path-args filename)
+        :directory directory
+        :annotation (format "check regexps in %s" short-name))
+       (make-builder-candidate
+        :name (format "package-lint %s" basename)
+        :command (format "emacs --batch %s --eval \"(require 'package-lint)\" -f package-lint-batch-and-exit %s" load-path-args filename)
+        :directory directory
+        :annotation (format "lint package metadata in %s" short-name))
+       (make-builder-candidate
+        :name (format "elisp-lint %s" basename)
+        :command (format "emacs --batch %s --eval \"(require 'elisp-lint)\" -f elisp-lint-files-batch %s" load-path-args filename)
+        :directory directory
+        :annotation (format "run elisp-lint on %s" short-name))
+       (make-builder-candidate
+        :name (format "elsa %s" basename)
+        :command (format "emacs --batch %s --eval \"(require 'elsa)\" -f elsa-run %s" load-path-args filename)
+        :directory directory
+        :annotation (format "run elsa type analysis on %s" short-name)))))
+
+(builder-register-candidates
+ :name "emacs-lisp-project"
+ :hooks '(emacs-lisp-mode-hook)
+ :pipeline
+ (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
+             (el-files (builder--el-files-in-directory project-root-directory))
+             (_ el-files)
+             (load-path-args (s-join " " (--map (format "-L %s" it)
+                                                (-filter #'f-directory-p load-path))))
+             (file-args (s-join " " el-files)))
+   (-- (make-builder-candidate
+        :name (format "byte-compile <%s>" project-name)
+        :command (format "emacs --batch %s -f batch-byte-compile %s" load-path-args file-args)
+        :directory project-root-directory
+        :annotation (format "byte-compile all .el files in %s" project-name))
+       (make-builder-candidate
+        :name (format "relint <%s>" project-name)
+        :command (format "emacs --batch %s --eval \"(require 'relint)\" -f relint-batch %s" load-path-args file-args)
+        :directory project-root-directory
+        :annotation (format "check regexps across all .el files in %s" project-name))
+       (make-builder-candidate
+        :name (format "package-lint <%s>" project-name)
+        :command (format "emacs --batch %s --eval \"(require 'package-lint)\" -f package-lint-batch-and-exit %s" load-path-args file-args)
+        :directory project-root-directory
+        :annotation (format "lint package metadata across all .el files in %s" project-name))
+       (make-builder-candidate
+        :name (format "elisp-lint <%s>" project-name)
+        :command (format "emacs --batch %s --eval \"(require 'elisp-lint)\" -f elisp-lint-files-batch %s" load-path-args file-args)
+        :directory project-root-directory
+        :annotation (format "run elisp-lint across all .el files in %s" project-name))
+       (make-builder-candidate
+        :name (format "elsa <%s>" project-name)
+        :command (format "emacs --batch %s --eval \"(require 'elsa)\" -f elsa-run %s" load-path-args file-args)
+        :directory project-root-directory
+        :annotation (format "run elsa type analysis across all .el files in %s" project-name)))))
 
 (provide 'builder)
 ;;; builder.el ends here
