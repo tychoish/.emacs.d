@@ -282,7 +282,7 @@
     t))
 
 (defun tychoish/org-use-speed-commands ()
-    (and (looking-at org-outline-regexp) (looking-back "^\**" nil)))
+    (and (looking-at org-outline-regexp) (looking-back "^\\**" nil)))
 
 (defvar tychoish-org-project-tags '("PROJECT" "EPIC")
   "Tags that suppress their children from all agenda views.

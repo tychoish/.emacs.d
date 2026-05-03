@@ -718,7 +718,7 @@ This combines the host name and the dameon name."
 (defun kill-eldoc-and-help-buffers ()
   "Kills all eldoc and help buffers"
   (interactive)
-  (kill-matching-buffers "\*Help\\*\\|*eldoc.*\\*" nil t))
+  (kill-matching-buffers "\\*Help\\*\\|\\*eldoc.*\\*" nil t))
 
 (defun increase-window-up () (interactive) (enlarge-window 1 nil))
 (defun increase-window-down () (interactive) (enlarge-window -1 nil))

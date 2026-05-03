@@ -239,7 +239,7 @@ command its own isolated history."
 (defun completing-read--directory-entry-counts (dir)
   "Return a brief annotation with subdirectory and file counts for DIR."
   (condition-case nil
-      (let* ((entries (directory-files dir t "^[^.]"))
+      (let* ((entries (directory-files dir t "\\`[^.]"))
              (n-dirs  (cl-count-if #'file-directory-p entries))
              (n-files (- (length entries) n-dirs)))
         (format "%d dirs, %d files" n-dirs n-files))
