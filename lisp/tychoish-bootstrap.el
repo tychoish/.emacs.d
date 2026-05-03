@@ -428,16 +428,17 @@
       (setq desktop-restore-eager t)
       (setq desktop-load-locked-desktop nil))
 
+    (require 'desktop)
+
     (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
       (with-gc-suppressed
        (with-file-name-handler-disabled
 	(with-silence (desktop-read)))))
 
-    (require 'desktop)
     (setq desktop-save t)
     (setq desktop/last-save-time (current-time))
 
-    (add-hook 'after-save-hook 'tychoish/desktop-save)
+    (run-with-idle-timer 120 t #'tychoish/desktop-save)
 
     (add-to-list 'desktop-globals-to-save 'register-alist)
     (add-to-list 'desktop-globals-to-save 'file-name-history)

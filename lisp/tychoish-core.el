@@ -11,7 +11,7 @@
 
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
-(setq use-package-compute-statistics t)
+(setq use-package-compute-statistics (or debug-on-error init-file-debug))
 (setq use-package-minimum-reported-time 0.5)
 
 (use-package async
