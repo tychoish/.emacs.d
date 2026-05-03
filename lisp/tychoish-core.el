@@ -224,7 +224,7 @@
   (let ((context (or context current-prefix-arg)))
     (consult-ripgrep
      (or (s-trimmed-or-nil dir)
-	 (builder--select-directory)
+	 (completing-read-directory)
 	 (approximate-project-root))
      (if (and (or context (not initial)) (not (eq context 'override)))
 	 (completing-read-context-from-point "rg(init): ")
@@ -235,7 +235,8 @@
   "Start an iterative rg session in the project root, if possible, falling back as necessary."
   (interactive "P")
   (consult-rg
-   (or (approximate-project-root) (builder--select-directory))
+   (or (approximate-project-root)
+       (completing-read-directory))
    initial
    :context (or context current-prefix-arg 'override)))
 
@@ -246,7 +247,7 @@
   (interactive "P")
 
   (consult-rg
-   (or default-directory (builder--select-directory))
+   (or default-directory (completing-read-directory))
    initial
    :context (or context current-prefix-arg 'override)))
 
@@ -267,7 +268,7 @@
 
   (defun consult-rg-compile (&optional initial)
     (interactive "P")
-    (let ((default-directory (builder--select-directory)))
+    (let ((default-directory (completing-read-directory)))
       (tychoish-rg initial)))
 
   (defun tychoish-rg (regexp)
@@ -875,7 +876,7 @@
   :after (compile)
   :bind (:map compilation-mode-map
          ("d" . builder-change-directory))
-  :commands (builder--select-directory
+  :commands (completing-read-directory
 	     make-builder-candidate
 	     builder-register-candidates
 	     builder--read-command

@@ -516,5 +516,278 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       ;; fundamental-mode, empty buffer, no kill ring, no region
       (should (equal "" (completing-read-context-from-point))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; annotated-completing-read--length-of-longest
+
+(ert-deftest annotated-completing-read/length-of-longest-basic ()
+  (should (= 5 (annotated-completing-read--length-of-longest '("ab" "hello" "hi")))))
+
+(ert-deftest annotated-completing-read/length-of-longest-single-element ()
+  (should (= 3 (annotated-completing-read--length-of-longest '("foo")))))
+
+(ert-deftest annotated-completing-read/length-of-longest-all-same-length ()
+  (should (= 3 (annotated-completing-read--length-of-longest '("foo" "bar" "baz")))))
+
+(ert-deftest annotated-completing-read/length-of-longest-empty-string ()
+  (should (= 0 (annotated-completing-read--length-of-longest '("")))))
+
+(ert-deftest annotated-completing-read/length-of-longest-empty-list ()
+  (should (= 0 (annotated-completing-read--length-of-longest '()))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; annotated-completing-read--prefix-padding
+;; Formula: (abs (+ 4 (- longest (length key))))
+
+(ert-deftest annotated-completing-read/prefix-padding-key-shorter-than-longest ()
+  ;; key="foo" len=3, longest=10 → abs(4 + (10-3)) = 11 spaces
+  (let ((pad (annotated-completing-read--prefix-padding "foo" 10)))
+    (should (stringp pad))
+    (should (= 11 (length pad)))
+    (should (string-match-p "^ +$" pad))))
+
+(ert-deftest annotated-completing-read/prefix-padding-key-equals-longest ()
+  ;; key="foo" len=3, longest=3 → abs(4 + 0) = 4 spaces
+  (should (= 4 (length (annotated-completing-read--prefix-padding "foo" 3)))))
+
+(ert-deftest annotated-completing-read/prefix-padding-key-longer-than-longest ()
+  ;; key="foobar" len=6, longest=3 → abs(4 + (3-6)) = abs(1) = 1 space
+  (should (= 1 (length (annotated-completing-read--prefix-padding "foobar" 3)))))
+
+(ert-deftest annotated-completing-read/prefix-padding-returns-spaces ()
+  (should (equal "    " (annotated-completing-read--prefix-padding "foo" 3))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read--directory-clean
+
+(ert-deftest annotated-completing-read/directory-clean-removes-nil ()
+  "Nil entries in the input are removed."
+  (let ((result (completing-read--directory-clean (list "/tmp/" nil "/usr/"))))
+    (should-not (member nil result))))
+
+(ert-deftest annotated-completing-read/directory-clean-removes-empty ()
+  "Empty-string entries are removed."
+  (let ((result (completing-read--directory-clean (list "/tmp/" "" "/usr/"))))
+    (should-not (member "" result))))
+
+(ert-deftest annotated-completing-read/directory-clean-removes-whitespace-only ()
+  "Whitespace-only entries are removed."
+  (let ((result (completing-read--directory-clean (list "/tmp/" "   " "/usr/"))))
+    (should (cl-every (lambda (d) (not (string-blank-p d))) result))))
+
+(ert-deftest annotated-completing-read/directory-clean-keeps-valid ()
+  "Valid absolute paths survive cleaning."
+  (let ((result (completing-read--directory-clean (list "/tmp/" "/usr/"))))
+    (should (member "/tmp/" result))
+    (should (member "/usr/" result))))
+
+(ert-deftest annotated-completing-read/directory-clean-empty-input ()
+  "Empty input list returns nil."
+  (should (null (completing-read--directory-clean nil))))
+
+(ert-deftest annotated-completing-read/directory-clean-all-nil ()
+  "All-nil input returns nil."
+  (should (null (completing-read--directory-clean (list nil nil nil)))))
+
+(ert-deftest annotated-completing-read/directory-clean-deduplicates ()
+  "Duplicate paths are removed."
+  (let ((result (completing-read--directory-clean (list "/tmp/" "/tmp/" "/usr/"))))
+    (should (= (length result) (length (cl-remove-duplicates result :test #'equal))))))
+
+(ert-deftest annotated-completing-read/directory-clean-expands-relative ()
+  "Relative paths are expanded to absolute paths."
+  (let* ((default-directory "/tmp/")
+         (result (completing-read--directory-clean (list "subdir"))))
+    (should (cl-every #'f-absolute-p result))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read--directory-parents
+
+(defmacro acr-directory-test--with-temp-tree (root-var dirs &rest body)
+  "Bind ROOT-VAR to a temp directory, create DIRS under it, run BODY, clean up."
+  (declare (indent 2))
+  `(let ((,root-var (file-name-as-directory (make-temp-file "acr-dir-test" t))))
+     (unwind-protect
+         (progn
+           (dolist (d (list ,@dirs))
+             (make-directory (expand-file-name d ,root-var) t))
+           ,@body)
+       (delete-directory ,root-var t))))
+
+(ert-deftest annotated-completing-read/directory-parents-includes-start ()
+  "The starting directory appears in the output."
+  (acr-directory-test--with-temp-tree root ("a/b/c")
+    (let* ((start (file-name-as-directory (expand-file-name "a/b/c" root)))
+           (result (completing-read--directory-parents start root)))
+      (should (cl-some (lambda (d) (f-equal-p d start)) result)))))
+
+(ert-deftest annotated-completing-read/directory-parents-includes-stop ()
+  "The stop directory appears in the output."
+  (acr-directory-test--with-temp-tree root ("a/b")
+    (let* ((start (file-name-as-directory (expand-file-name "a/b" root)))
+           (result (completing-read--directory-parents start root)))
+      (should (cl-some (lambda (d) (f-equal-p d root)) result)))))
+
+(ert-deftest annotated-completing-read/directory-parents-returns-list ()
+  "The function returns a list."
+  (let ((result (completing-read--directory-parents (expand-file-name "~/") (expand-file-name "~/"))))
+    (should (listp result))))
+
+(ert-deftest annotated-completing-read/directory-parents-start-equals-stop ()
+  "When start and stop are the same, at most one entry is returned."
+  (let* ((dir (file-name-as-directory temporary-file-directory))
+         (result (completing-read--directory-parents dir dir)))
+    (should (listp result))
+    (should (<= (length result) 1))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; completing-read-directory annotation labels
+
+(ert-deftest annotated-completing-read/directory-labels-current ()
+  "The current directory is labelled 'current directory'."
+  (let* ((dir (expand-file-name "/tmp/"))
+         (default-directory dir))
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () dir))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (tbl &rest _)
+                 (should (equal "current directory" (ht-get tbl dir)))
+                 dir)))
+      (completing-read-directory :candidates (list dir)))))
+
+(ert-deftest annotated-completing-read/directory-labels-project-root ()
+  "A directory matching the project root is labelled 'project root'."
+  (let* ((root (expand-file-name "/tmp/project/"))
+         (other (expand-file-name "/tmp/other/"))
+         (default-directory other))
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () root))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (tbl &rest _)
+                 (should (equal "project root" (ht-get tbl root)))
+                 root)))
+      (completing-read-directory :candidates (list root)))))
+
+(ert-deftest annotated-completing-read/directory-labels-parent ()
+  "A directory that is an ancestor of the current dir is labelled 'parent'."
+  (let* ((parent (expand-file-name "/tmp/"))
+         (child (expand-file-name "/tmp/sub/"))
+         (default-directory child))
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () parent))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (tbl &rest _)
+                 (should (member (ht-get tbl parent) '("project root" "parent")))
+                 parent)))
+      (completing-read-directory :candidates (list parent)))))
+
+(ert-deftest annotated-completing-read/directory-prompt-forwarded ()
+  "The :prompt keyword is forwarded to annotated-completing-read."
+  (let* ((dir (expand-file-name "/tmp/"))
+         (default-directory dir)
+         received-prompt)
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () dir))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (_tbl &rest args)
+                 (setq received-prompt (plist-get args :prompt))
+                 dir)))
+      (completing-read-directory :candidates (list dir) :prompt "pick: ")
+      (should (equal "pick: " received-prompt)))))
+
+(ert-deftest annotated-completing-read/directory-candidates-override ()
+  "When :candidates is provided, default candidates are not computed."
+  (let* ((dir (expand-file-name "/tmp/"))
+         (default-directory dir)
+         received-table)
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () dir))
+              ((symbol-function 'completing-read--directory-default-candidates)
+               (lambda () (error "should not be called")))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (tbl &rest _)
+                 (setq received-table tbl)
+                 dir)))
+      (completing-read-directory :candidates (list dir))
+      (should (ht-contains-p received-table dir)))))
+
+(ert-deftest annotated-completing-read/directory-no-groups-below-threshold ()
+  "No :group-name is passed when there are 8 or fewer candidates."
+  (let* ((dirs (--map (format "/tmp/dir%d/" it) (number-sequence 1 8)))
+         (default-directory "/tmp/dir1/")
+         received-group-name)
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () "/tmp/dir1/"))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (_tbl &rest args)
+                 (setq received-group-name (plist-get args :group-name))
+                 "/tmp/dir1/")))
+      (completing-read-directory :candidates dirs)
+      (should (null received-group-name)))))
+
+(ert-deftest annotated-completing-read/directory-groups-above-threshold ()
+  ":group-name is a function when there are more than 8 candidates."
+  (let* ((dirs (--map (format "/tmp/dir%d/" it) (number-sequence 1 9)))
+         (default-directory "/tmp/dir1/")
+         received-group-name)
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () "/tmp/dir1/"))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (_tbl &rest args)
+                 (setq received-group-name (plist-get args :group-name))
+                 "/tmp/dir1/")))
+      (completing-read-directory :candidates dirs)
+      (should (functionp received-group-name)))))
+
+(ert-deftest annotated-completing-read/directory-group-labels ()
+  "The group function returns the relationship label directly."
+  (let* ((root "/tmp/project/")
+         (current "/tmp/project/src/")
+         (parent "/tmp/")
+         (child "/tmp/project/src/sub/")
+         (sibling "/tmp/project/lib/")
+         (other "/home/user/")
+         (dirs (list root current parent child sibling other
+                     "/a/" "/b/" "/c/"))  ; pad to >8
+         (default-directory current)
+         received-group-fn)
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () root))
+              ((symbol-function 'completing-read--directory-entry-counts) (lambda (_) ""))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (_tbl &rest args)
+                 (setq received-group-fn (plist-get args :group-name))
+                 current)))
+      (completing-read-directory :candidates dirs)
+      (should (functionp received-group-fn))
+      (should (equal "current directory" (funcall received-group-fn current)))
+      (should (equal "project root"      (funcall received-group-fn root)))
+      (should (equal "child"             (funcall received-group-fn child)))
+      (should (equal "parent"            (funcall received-group-fn parent)))
+      (should (equal "other"             (funcall received-group-fn other))))))
+
+(ert-deftest annotated-completing-read/directory-grouped-annotation-is-counts ()
+  "When grouped, the table passed to annotated-completing-read contains entry counts."
+  (let* ((dirs (--map (format "/tmp/dir%d/" it) (number-sequence 1 9)))
+         (default-directory "/tmp/dir1/")
+         received-table)
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () "/tmp/dir1/"))
+              ((symbol-function 'completing-read--directory-entry-counts)
+               (lambda (d) (format "counts:%s" d)))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (tbl &rest _)
+                 (setq received-table tbl)
+                 "/tmp/dir1/")))
+      (completing-read-directory :candidates dirs)
+      (should (ht-p received-table))
+      (should (string-prefix-p "counts:" (ht-get received-table "/tmp/dir1/"))))))
+
+(ert-deftest annotated-completing-read/directory-ungrouped-annotation-is-relationship ()
+  "When not grouped (<=8 items), the table contains relationship labels."
+  (let* ((root "/tmp/project/")
+         (current "/tmp/project/src/")
+         (dirs (list root current "/a/" "/b/"))
+         (default-directory current)
+         received-table)
+    (cl-letf (((symbol-function 'approximate-project-root) (lambda () root))
+              ((symbol-function 'annotated-completing-read)
+               (lambda (tbl &rest _)
+                 (setq received-table tbl)
+                 current)))
+      (completing-read-directory :candidates dirs)
+      (should (equal "project root"      (ht-get received-table root)))
+      (should (equal "current directory" (ht-get received-table current))))))
+
 (provide 'test-annotated-completing-read)
 ;;; test-annotated-completing-read.el ends here

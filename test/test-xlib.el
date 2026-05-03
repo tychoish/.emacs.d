@@ -167,26 +167,6 @@
   (should-not (s-contains-whitespace-p nil))
   (should-not (s-contains-whitespace-p 42)))
 
-;;; prefix-padding-for-annotation
-;; Formula: (abs (+ 4 (- longest (length key))))
-
-(ert-deftest xlib/prefix-padding-for-annotation-key-shorter-than-longest ()
-  ;; key="foo" len=3, longest=10 → abs(4 + (10-3)) = 11 spaces
-  (let ((pad (prefix-padding-for-annotation "foo" 10)))
-    (should (stringp pad))
-    (should (= 11 (length pad)))
-    (should (string-match-p "^ +$" pad))))
-
-(ert-deftest xlib/prefix-padding-for-annotation-key-equals-longest ()
-  ;; key="foo" len=3, longest=3 → abs(4 + 0) = 4 spaces
-  (should (= 4 (length (prefix-padding-for-annotation "foo" 3)))))
-
-(ert-deftest xlib/prefix-padding-for-annotation-key-longer-than-longest ()
-  ;; key="foobar" len=6, longest=3 → abs(4 + (3-6)) = abs(1) = 1 space
-  (should (= 1 (length (prefix-padding-for-annotation "foobar" 3)))))
-
-(ert-deftest xlib/prefix-padding-for-annotation-returns-spaces ()
-  (should (equal "    " (prefix-padding-for-annotation "foo" 3))))
 
 ;;; s-default
 
@@ -287,17 +267,6 @@
 (ert-deftest xlib/smaller-negative-numbers ()
   (should (= -5 (smaller -1 -5))))
 
-(ert-deftest xlib/length-of-longest-item-basic ()
-  (should (= 5 (length-of-longest-item '("ab" "hello" "hi")))))
-
-(ert-deftest xlib/length-of-longest-item-single-element ()
-  (should (= 3 (length-of-longest-item '("foo")))))
-
-(ert-deftest xlib/length-of-longest-item-all-same-length ()
-  (should (= 3 (length-of-longest-item '("foo" "bar" "baz")))))
-
-(ert-deftest xlib/length-of-longest-item-empty-strings ()
-  (should (= 0 (length-of-longest-item '("")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Dash extensions
@@ -724,6 +693,84 @@
   (let ((result (f-visually-compress-path 10 "/tmp/foo")))
     (should (string-match-p "tmp" result))
     (should (string-match-p "foo" result))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; package-avalible-p
+
+(ert-deftest xlib/package-avalible-p-returns-t-for-loaded-feature ()
+  (provide 'xlib-test-fake-feature)
+  (should (package-avalible-p 'xlib-test-fake-feature)))
+
+(ert-deftest xlib/package-avalible-p-returns-nil-for-unknown-package ()
+  (should-not (package-avalible-p 'xlib-test-nonexistent-package-zzz)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; approximate-project-root
+
+(ert-deftest xlib/approximate-project-root-returns-string ()
+  (should (stringp (approximate-project-root))))
+
+(ert-deftest xlib/approximate-project-root-returns-absolute-path ()
+  (should (f-absolute-p (approximate-project-root))))
+
+(ert-deftest xlib/approximate-project-root-fallback-is-default-directory ()
+  "When no project backend is active the result is default-directory."
+  (let ((default-directory temporary-file-directory))
+    (cl-letf (((symbol-function 'package-avalible-p) (lambda (_) nil))
+              ((symbol-function 'package-installed-p) (lambda (_) nil))
+              ((symbol-function 'project-current) (lambda (&rest _) nil)))
+      (should (f-equal-p (expand-file-name temporary-file-directory)
+                         (approximate-project-root))))))
+
+(ert-deftest xlib/approximate-project-root-uses-project-el-when-available ()
+  "When project.el reports a root it is returned."
+  (let* ((expected "/tmp/fake-project/"))
+    (cl-letf (((symbol-function 'package-avalible-p) (lambda (_) nil))
+              ((symbol-function 'package-installed-p) (lambda (_) nil))
+              ((symbol-function 'featurep)
+               (lambda (sym &rest _)
+                 (if (eq sym 'project) t (featurep sym))))
+              ((symbol-function 'project-current) (lambda (&rest _) t))
+              ((symbol-function 'project-root) (lambda (_) expected)))
+      (should (equal expected (approximate-project-root))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; approximate-project-name
+
+(ert-deftest xlib/approximate-project-name-returns-string ()
+  (should (stringp (approximate-project-name))))
+
+(ert-deftest xlib/approximate-project-name-non-empty ()
+  (should (< 0 (length (approximate-project-name)))))
+
+(ert-deftest xlib/approximate-project-name-fallback-is-directory-basename ()
+  "When no project backend is active the result derives from default-directory."
+  (let ((default-directory "/tmp/my-project/"))
+    (cl-letf (((symbol-function 'package-installed-p) (lambda (_) nil))
+              ((symbol-function 'featurep)
+               (lambda (sym &rest _)
+                 (if (eq sym 'projectile) nil (featurep sym))))
+              ((symbol-function 'project-current) (lambda (&rest _) nil)))
+      (should (equal "my-project" (approximate-project-name))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; approximate-project-buffers
+
+(ert-deftest xlib/approximate-project-buffers-returns-list ()
+  (should (listp (approximate-project-buffers))))
+
+(ert-deftest xlib/approximate-project-buffers-contains-only-buffers ()
+  (dolist (b (approximate-project-buffers))
+    (should (bufferp b))))
+
+(ert-deftest xlib/approximate-project-buffers-fallback-includes-current ()
+  "When no project backend is active, the fallback includes the current buffer."
+  (with-temp-buffer
+    (let ((buf (current-buffer)))
+      (cl-letf (((symbol-function 'package-avalible-p) (lambda (_) nil))
+                ((symbol-function 'package-installed-p) (lambda (_) nil))
+                ((symbol-function 'project-current) (lambda (&rest _) nil)))
+        (should (memq buf (approximate-project-buffers)))))))
 
 (provide 'test-xlib)
 ;;; test-xlib.el ends here

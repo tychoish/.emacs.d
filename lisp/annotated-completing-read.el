@@ -36,6 +36,12 @@
 (require 's)
 (require 'xlib)
 
+(defun annotated-completing-read--length-of-longest (items)
+  (apply #'max 0 (mapcar #'length items)))
+
+(defun annotated-completing-read--prefix-padding (key longest)
+  (make-string (abs (+ 4 (- longest (length key)))) ?\s))
+
 (defvar annotated-completing-read-history (ht-create)
   "Hash table mapping command symbols to per-command minibuffer history lists.
 Keys are symbols — typically `this-command' at call time — and values are
@@ -89,9 +95,9 @@ Signals `user-error' if TABLE is not a hash table."
     (user-error "TABLE must be a hash table mapping candidates to annotations"))
   (let* ((prompt      (if (string-suffix-p " " prompt) prompt (concat prompt " ")))
          (hist-key    (or history this-command 'annotated-completing-read))
-         (longest     (length-of-longest-item (ht-keys table)))
+         (longest     (annotated-completing-read--length-of-longest (ht-keys table)))
          (annotate-fn (lambda (candidate)
-                        (concat (prefix-padding-for-annotation candidate longest)
+                        (concat (annotated-completing-read--prefix-padding candidate longest)
                                 (ht-get table candidate))))
          (name-fn     (cond ((functionp group-name) group-name)
                             (group-name (lambda (_candidate) group-name))))
@@ -175,6 +181,107 @@ command its own isolated history."
          :prompt (or prompt "context: ")
          :history cmd)
       "")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; directory selection
+
+(defun completing-read--directory-clean (dirs)
+  "Normalise DIRS: expand relative paths, drop nil/blank, deduplicate."
+  (->> dirs
+       (-keep #'s-trimmed-or-nil)
+       (--map (or (when (f-absolute-p it) it)
+                  (expand-file-name it)))
+       (f-distinct)))
+
+(defun completing-read--directory-parents (&optional start stop)
+  "Return intermediate directory paths walking up from START to STOP."
+  (let* ((start (or start default-directory))
+         (stop (or stop "~/"))
+         (stop-path (expand-file-name (string-trim stop)))
+         (current (expand-file-name (string-trim start)))
+         (output (list stop-path current)))
+    (while (and
+            current
+            (or (not (string= current stop-path))
+                (not (string-prefix-p stop-path current))))
+      (setq current (file-name-parent-directory current))
+      (push current output))
+    (->> output
+         (f-filter-directories '(cannonicalize unique)))))
+
+(defun completing-read--directory-default-candidates ()
+  "Assemble context-aware directory candidates from project, buffers, and point."
+  (let* ((proj-root (approximate-project-root))
+         (home (expand-file-name "~/"))
+         (proj-bufs (->> (approximate-project-buffers)
+                         (--keep (when (bufferp it)
+                                   (with-current-buffer it
+                                     (when-let* ((f (buffer-file-name it)))
+                                       (cond ((f-directory-p f) f)
+                                             ((f-file-p f) (f-dirname f))
+                                             (t default-directory)))))))))
+    (--> (append
+          (completing-read--directory-parents default-directory proj-root)
+          proj-bufs
+          (list (thing-at-point 'filename)
+                (thing-at-point 'existing-filename)
+                default-directory
+                user-emacs-directory
+                home))
+         (if (or (and (length< it 16)
+                      (not (f-equal-p home proj-root)))
+                 current-prefix-arg)
+             (-join (f-directories proj-root) it)
+           it)
+         (f-filter-directories '(cannonicalize unique) it))))
+
+(defun completing-read--directory-entry-counts (dir)
+  "Return a brief annotation with subdirectory and file counts for DIR."
+  (condition-case nil
+      (let* ((entries (directory-files dir t "^[^.]"))
+             (n-dirs  (cl-count-if #'file-directory-p entries))
+             (n-files (- (length entries) n-dirs)))
+        (format "%d dirs, %d files" n-dirs n-files))
+    (error "")))
+
+;;;###autoload
+(cl-defun completing-read-directory (&optional &key candidates prompt require-match)
+  "Select a directory with annotated completion.
+CANDIDATES is an explicit list of directory paths; if nil, a context-aware
+list is computed from the project root, open buffers, and `thing-at-point'.
+PROMPT defaults to \"directory: \".  REQUIRE-MATCH is passed through to
+`annotated-completing-read'.
+
+With 8 or fewer candidates the annotation shows the directory's relationship
+to the current directory (\"parent\", \"project root\", etc.).  With more
+than 8 candidates candidates are grouped by that relationship label and the
+annotation shows entry counts instead."
+  (let* ((dirs (or (completing-read--directory-clean candidates)
+                   (completing-read--directory-default-candidates)))
+         (project-root (approximate-project-root))
+         (relationship (ht-create)))
+    (--each dirs
+      (ht-set relationship it
+              (cond
+               ((f-equal-p it default-directory) "current directory")
+               ((f-equal-p it project-root) "project root")
+               ((f-ancestor-of-p it default-directory) "parent")
+               ((f-ancestor-of-p default-directory it) "child")
+               ((f-equal-p (f-parent it) (f-parent default-directory)) "sibling")
+               (t ""))))
+    (if (> (ht-size relationship) 8)
+        (let ((counts (ht-create)))
+          (--each dirs (ht-set counts it (completing-read--directory-entry-counts it)))
+          (annotated-completing-read counts
+           :prompt (or prompt "directory: ")
+           :require-match require-match
+           :group-name (lambda (c)
+                         (let ((r (ht-get relationship c "")))
+                           (if (string-empty-p r) "other" r)))))
+      (annotated-completing-read relationship
+       :prompt (or prompt "directory: ")
+       :require-match require-match))))
 
 (provide 'annotated-completing-read)
 ;;; annotated-completing-read.el ends here

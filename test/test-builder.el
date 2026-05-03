@@ -147,89 +147,6 @@
     (should (= 0 (ht-size tbl)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; builder--clean-directory-options
-
-(ert-deftest builder-test/clean-directory-options-removes-nil ()
-  "Nil entries in the input are removed."
-  (let ((result (builder--clean-directory-options (list "/tmp/" nil "/usr/"))))
-    (should-not (member nil result))))
-
-(ert-deftest builder-test/clean-directory-options-removes-empty ()
-  "Empty-string entries are removed."
-  (let ((result (builder--clean-directory-options (list "/tmp/" "" "/usr/"))))
-    (should-not (member "" result))))
-
-(ert-deftest builder-test/clean-directory-options-removes-whitespace-only ()
-  "Whitespace-only entries are removed."
-  (let ((result (builder--clean-directory-options (list "/tmp/" "   " "/usr/"))))
-    (should (cl-every (lambda (d) (not (string-blank-p d))) result))))
-
-(ert-deftest builder-test/clean-directory-options-keeps-valid ()
-  "Valid absolute paths survive cleaning."
-  (let ((result (builder--clean-directory-options (list "/tmp/" "/usr/"))))
-    (should (member "/tmp/" result))
-    (should (member "/usr/" result))))
-
-(ert-deftest builder-test/clean-directory-options-empty-input ()
-  "Empty input list returns nil."
-  (should (null (builder--clean-directory-options nil))))
-
-(ert-deftest builder-test/clean-directory-options-all-nil ()
-  "All-nil input returns nil."
-  (should (null (builder--clean-directory-options (list nil nil nil)))))
-
-(ert-deftest builder-test/clean-directory-options-deduplicates ()
-  "Duplicate paths are removed."
-  (let ((result (builder--clean-directory-options (list "/tmp/" "/tmp/" "/usr/"))))
-    (should (= (length result) (length (cl-remove-duplicates result :test #'equal))))))
-
-(ert-deftest builder-test/clean-directory-options-expands-relative ()
-  "Relative paths are expanded to absolute paths."
-  (let* ((default-directory "/tmp/")
-         (result (builder--clean-directory-options (list "subdir"))))
-    (should (cl-every #'f-absolute-p result))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; builder--directory-parents
-
-(defmacro builder-test--with-temp-tree (root-var dirs &rest body)
-  "Bind ROOT-VAR to a temp directory, create DIRS under it, run BODY, clean up."
-  (declare (indent 2))
-  `(let ((,root-var (file-name-as-directory (make-temp-file "builder-test" t))))
-     (unwind-protect
-         (progn
-           (dolist (d (list ,@dirs))
-             (make-directory (expand-file-name d ,root-var) t))
-           ,@body)
-       (delete-directory ,root-var t))))
-
-(ert-deftest builder-test/directory-parents-includes-start ()
-  "The starting directory appears in the output."
-  (builder-test--with-temp-tree root ("a/b/c")
-    (let* ((start (file-name-as-directory (expand-file-name "a/b/c" root)))
-           (result (builder--directory-parents start root)))
-      (should (cl-some (lambda (d) (f-equal-p d start)) result)))))
-
-(ert-deftest builder-test/directory-parents-includes-stop ()
-  "The stop directory appears in the output."
-  (builder-test--with-temp-tree root ("a/b")
-    (let* ((start (file-name-as-directory (expand-file-name "a/b" root)))
-           (result (builder--directory-parents start root)))
-      (should (cl-some (lambda (d) (f-equal-p d root)) result)))))
-
-(ert-deftest builder-test/directory-parents-returns-list ()
-  "The function returns a list (possibly nil)."
-  (let ((result (builder--directory-parents (expand-file-name "~/") (expand-file-name "~/"))))
-    (should (listp result))))
-
-(ert-deftest builder-test/directory-parents-start-equals-stop ()
-  "When start and stop are the same, at most one entry is returned."
-  (let* ((dir (file-name-as-directory temporary-file-directory))
-         (result (builder--directory-parents dir dir)))
-    (should (listp result))
-    (should (<= (length result) 1))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder--project-compilation-buffers
 
 (ert-deftest builder-test/project-compilation-buffers-returns-hash ()
@@ -378,45 +295,6 @@ the selected name and the candidate table."
         (should (consp result))
         (should (equal "custom-cmd" (car result)))
         (should (ht-contains-p (cdr result) "custom-cmd"))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; builder--select-directory annotation labels
-
-(ert-deftest builder-test/select-directory-labels-current ()
-  "The current directory is labelled 'current directory'."
-  (let* ((dir (expand-file-name "/tmp/"))
-         (default-directory dir))
-    (cl-letf (((symbol-function 'approximate-project-root) (lambda () dir))
-              ((symbol-function 'annotated-completing-read)
-               (lambda (tbl &rest _)
-                 (should (equal "current directory" (ht-get tbl dir)))
-                 dir)))
-      (builder--select-directory :input-dirs (list dir)))))
-
-(ert-deftest builder-test/select-directory-labels-project-root ()
-  "A directory matching the project root is labelled 'project root'."
-  (let* ((root (expand-file-name "/tmp/project/"))
-         (other (expand-file-name "/tmp/other/"))
-         (default-directory other))
-    (cl-letf (((symbol-function 'approximate-project-root) (lambda () root))
-              ((symbol-function 'annotated-completing-read)
-               (lambda (tbl &rest _)
-                 (should (equal "project root" (ht-get tbl root)))
-                 root)))
-      (builder--select-directory :input-dirs (list root)))))
-
-(ert-deftest builder-test/select-directory-labels-parent ()
-  "A directory that is an ancestor of the current dir is labelled 'parent'."
-  (let* ((parent (expand-file-name "/tmp/"))
-         (child (expand-file-name "/tmp/sub/"))
-         (default-directory child))
-    (cl-letf (((symbol-function 'approximate-project-root) (lambda () parent))
-              ((symbol-function 'annotated-completing-read)
-               (lambda (tbl &rest _)
-                 ;; parent is both project-root and ancestor — "project root" wins
-                 (should (member (ht-get tbl parent) '("project root" "parent")))
-                 parent)))
-      (builder--select-directory :input-dirs (list parent)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder-reset-finish-hooks

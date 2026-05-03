@@ -182,84 +182,22 @@
 	(if op-window (select-window op-window)
 	  (switch-to-buffer-other-window (current-buffer)))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; directory selection
-
-(cl-defun builder--select-directory (&optional &key input-dirs (require-match nil))
-  "Select a directory from a provided or likely set of `INPUT-DIRS'."
-  (let* ((dirs (or (builder--clean-directory-options input-dirs)
-                   (builder--directory-default-candidates)))
-         (project-root (approximate-project-root))
-         (tbl (ht-create)))
-    (--each dirs
-      (ht-set tbl it
-              (cond
-               ((f-equal-p it default-directory) "current directory")
-               ((f-equal-p it project-root)      "project root")
-               ((f-ancestor-p it default-directory) "parent")
-               ((f-ancestor-p default-directory it) "child")
-               ((f-equal-p (f-parent it) (f-parent default-directory)) "sibling")
-               (t ""))))
-    (annotated-completing-read tbl
-                               :prompt "in directory =>> "
-                               :require-match require-match)))
-
 ;;;###autoload
 (defun builder-change-directory ()
   "Change the directory for the current compilation buffer."
   (interactive)
   (unless (derived-mode-p 'compilation-mode)
     (user-error "operation is only applicable for COMPILATION-MODE buffers"))
-  (let ((directory (or (builder--select-directory
-			:input-dirs (-distinct (append (list compilation-directory default-directory)
-						       (builder--directory-default-candidates)
-						       (f-directories (approximate-project-root)))))
-		       compilation-directory
-		       default-directory)))
+  (let ((directory (or (completing-read-directory
+                        :candidates (-distinct
+                                     (append (list compilation-directory default-directory)
+                                             (completing-read--directory-default-candidates)
+                                             (f-directories (approximate-project-root))))
+                        :prompt "in directory =>> ")
+                       compilation-directory
+                       default-directory)))
     (setq-local default-directory directory
-		compilation-directory directory)))
-
-(defun builder--clean-directory-options (input)
-  "Process INPUT list removing duplicates, nils, and empty or whitespace elements."
-  (->> input
-       (-keep #'s-trimmed-or-nil)
-       (--map (or (when (f-absolute-p it) it)
-		  (expand-file-name it)))
-       (f-distinct)))
-
-(defun builder--directory-parents (&optional start stop)
-  "Generate list of intermediate paths between START and STOP."
-  (let* ((start (or start default-directory))
-	 (stop (or stop "~/"))
-	 (stop-path (expand-file-name (string-trim stop)))
-         (current (expand-file-name (string-trim start)))
-         (output (list stop-path current)))
-    (while (and
-	    current
-	    (or (not (string= current stop-path))
-		(not (string-prefix-p stop-path current))))
-      (setq current (file-name-parent-directory current))
-      (push current output))
-    (->> output
-	 (f-filter-directories '(cannonicalize unique)))))
-
-(defun builder--directory-default-candidates ()
-  (let ((proj-root (approximate-project-root)))
-    (--> (append
-	  (builder--directory-parents default-directory proj-root)
-	  (approximate-project-buffers)
-	  (list (thing-at-point 'filename)
-		      (thing-at-point 'existing-filename)
-		      default-directory
-		      user-emacs-directory
-		      user-home-directory))
-	 (if (or (and (length< it 16)
-		      (not (f-equal-p user-home-directory proj-root)))
-		 current-prefix-arg)
-	     (-join (f-directories proj-root) it)
-	   it)
-	 (f-filter-directories '(cannonicalize unique) it))))
+                compilation-directory directory)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -421,7 +359,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 			     (-keep #'buffer-directory)
 			     (-filter #'f-directory-p)
 			     (-map #'f-full)
-			     (-append (builder--directory-parents default-directory project-root-directory))
+			     (-append (completing-read--directory-parents default-directory project-root-directory))
 			     (-distinct)))
 	   (operation-table (ht-create)))
 
@@ -837,14 +775,9 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (defun builder--vale-insert-statistics (buffer _message &key filename)
   (interactive)
-  (let* ((table (json-parse-string (shell-command-to-string (format "vale ls-metrics --output=line %s" filename))))
-	 (longest-key (length-of-longest-item (ht-keys table))))
+  (let* ((table (json-parse-string (shell-command-to-string (format "vale ls-metrics --output=line %s" filename)))))
     (insert (format "\nstatistics for %s" (propertize (f-collapse-homedir filename) 'face 'italic)))
-    (ht-map (lambda (key value)
-	      (insert (format "\n%s:%s%s"
-			      (propertize key 'face 'bold)
-			      (prefix-padding-for-annotation key longest-key)
-			      value)))
+    (ht-map (lambda (key value) (insert (format "\n%s:%s" (propertize key 'face 'bold) value)))
 	    table)))
 
 (provide 'builder)

@@ -2,7 +2,12 @@
 
 (require 'xlib)
 (require 'anaphora)
-(declare-function builder--select-directory "builder")
+(require 'annotated-completing-read)
+
+(require 'builder)
+
+(eval-when-compile
+  (require 'yasnippet))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -220,15 +225,8 @@ were recompiled."
        (--filter (f-ext-p it "el"))
        (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
 
-
 (declare-function package-installed-p "package")
 (declare-function package-desc-p "package")
-
-(defun package-avalible-p (name)
-  (or (featurep name)
-      (when (package-installed-p name)
-	(require name)
-	t)))
 
 (autoload 'async-package-do-action "async-package")
 
@@ -505,7 +503,7 @@ interactively then remove duplicate items from the `kill-ring'."
   (interactive)
 
   (unless directory
-    (setq directory (builder--select-directory)))
+    (setq directory (completing-read-directory)))
 
   (let ((killed (->> (buffer-list)
 		     (--filter (buffer-file-name it))
@@ -639,6 +637,70 @@ Returns the number of buffers killed."
   (interactive)
   (insert (format-time-string "%Y-%m-%d")))
 
+(defvar tychoish-blog-path (expand-file-name "~/blog")
+  "Path to the blog's project directory.")
+
+(defvar tychoish-blog-extension ".md"
+  "File extension for the blog files.")
+
+(defun tychoish-blog-create-post (title)
+  "Create a new file for a post of with the specified TITLE."
+  (interactive "sPost Title: ")
+  (let* ((slug (f-make-slug title))
+         (draft-fn (f-join tychoish-blog-path (concat slug "-" tychoish-blog-extension))))
+    (if (file-exists-p draft-fn)
+        (find-file draft-fn)
+      (kill-new title)
+      (find-file draft-fn)
+      (yas-expand-snippet
+       (yas-lookup-snippet "hugo")))
+    (message "working on post: %s" draft-fn)))
+
+(defun tychoish-create-note-file (title &optional &key path)
+  "Create a new file for a post of with the specified TITLE."
+  (interactive "sName: ")
+  (let* ((slug (f-make-slug title))
+         (datetime (format-time-string "%Y-%02m-%02d"))
+         (draft-fn (f-join (or path
+			       (completing-read-directory))
+			   (concat datetime "." slug "." tychoish-blog-extension))))
+    (if (file-exists-p draft-fn)
+        (find-file draft-fn)
+      (find-file draft-fn)
+      (insert (concat "# " title))
+      (goto-char (point-max))
+      (whitespace-cleanup)
+      (insert "\n"))
+    (message "new note: %s" draft-fn)))
+
+(defun tychoish-blog-publish-post ()
+  "Move the blog post in the current buffer to the publication location.
+Does nothing if the current post is not in the drafts folder."
+  (interactive)
+    (let* ((publish-directory (f-join tychoish-blog-path "content" "post"))
+           (original-file-name (buffer-file-name (current-buffer)))
+           (published-file-name (f-join publish-directory (file-name-nondirectory original-file-name)))
+           (current-point (point)))
+      (cond
+       ((not (equal (file-name-extension original-file-name t) tychoish-blog-extension))
+        (message "post %s has incorrect extension" original-file-name))
+       ((buffer-modified-p)
+        (message "file %s is modified. please save before publishing" original-file-name))
+       ((file-exists-p published-file-name)
+        (message "published file exists with same name. not publishing"))
+       (t
+        (message "publishing: %s" published-file-name)
+        (rename-file original-file-name published-file-name)
+        (kill-buffer nil)
+        (find-file published-file-name)
+        (set-window-point (selected-window) current-point)
+        (message "published %s to %s" original-file-name publish-directory)))))
+
+(defun tychoish-blog-open-drafts-dired ()
+  "Open a dired buffer for the drafts folder."
+  (interactive)
+  (find-file (expand-file-name tychoish-blog-path)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; project -- tools for managing groups of buffers and files by project
@@ -646,35 +708,6 @@ Returns the number of buffers killed."
 (declare-function project-root "project")
 (declare-function project-current "project")
 (declare-function project-buffers "project")
-
-(declare-function projectile-project-root "projectile")
-(declare-function projectile-project-name "projectile")
-(declare-function projectile-project-buffers "projectile")
-
-(defun approximate-project-root ()
-  (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
-      (when (package-avalible-p 'projectile)
-	(s-trimmed-or-nil (projectile-project-root)))
-      (when (and (featurep 'project) (project-current))
-	(project-root (project-current)))
-      (expand-file-name default-directory)))
-
-(defun approximate-project-name ()
-  (s-trim-non-word-chars
-   (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
-       (when (featurep 'projectile) (projectile-project-name))
-       (when (project-current) (project-root (project-current)))
-       (f-filename (expand-file-name default-directory)))))
-
-(defun approximate-project-buffers ()
-  (or
-   (when (and (package-installed-p 'projectile) (not (featurep 'projectile))) (require 'projectile) nil)
-   (when (package-avalible-p 'projectile) (projectile-project-buffers))
-   (when (and (featurep 'project) (project-current)) (project-buffers))
-   (let ((directory (expand-file-name default-directory)))
-     (->> (buffer-list)
-	  (--filter (with-current-buffer it
-		      (file-in-directory-p default-directory directory)))))))
 
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode))
   (->> (approximate-project-buffers)

@@ -141,8 +141,6 @@
   (and (stringp value)
        (string-empty-p (string-trim value))))
 
-(defun prefix-padding-for-annotation (key longest)
-  (make-string (abs (+ 4 (- longest (length key)))) ? ))
 
 (defun s-default (default input)
   "Return the DEFAULT value if the INPUT is empty or nil."
@@ -198,11 +196,6 @@
       first
     second))
 
-(defun length-of-longest-item (items)
-  "Return the length of the longest item in the list ITEMS."
-  (->> items
-       (-map #'length)
-       (-reduce #'larger)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -757,6 +750,51 @@ OPTIONS may be a single symbol or a list of symbols."
 	      head (cdr head)
 	      predicate (car head)))
       val)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; project context -- lightweight wrappers over projectile / project.el
+
+(declare-function projectile-project-root    "projectile")
+(declare-function projectile-project-name    "projectile")
+(declare-function projectile-project-buffers "projectile")
+
+(defun package-avalible-p (name)
+  "Return non-nil if package NAME is installed and can be loaded."
+  (or (featurep name)
+      (when (package-installed-p name)
+        (require name)
+        t)))
+
+(defun approximate-project-root ()
+  "Return the current project root, falling back to `default-directory'."
+  (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile)))
+        (require 'projectile) nil)
+      (when (package-avalible-p 'projectile)
+        (s-trimmed-or-nil (projectile-project-root)))
+      (when (and (featurep 'project) (project-current))
+        (project-root (project-current)))
+      (expand-file-name default-directory)))
+
+(defun approximate-project-name ()
+  "Return the current project name, falling back to the directory basename."
+  (s-trim-non-word-chars
+   (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile)))
+         (require 'projectile) nil)
+       (when (featurep 'projectile) (projectile-project-name))
+       (when (project-current) (project-root (project-current)))
+       (f-filename (expand-file-name default-directory)))))
+
+(defun approximate-project-buffers ()
+  "Return buffers belonging to the current project."
+  (or (when (and (package-installed-p 'projectile) (not (featurep 'projectile)))
+        (require 'projectile) nil)
+      (when (package-avalible-p 'projectile) (projectile-project-buffers))
+      (when (and (featurep 'project) (project-current)) (project-buffers (project-current)))
+      (let ((directory (expand-file-name default-directory)))
+        (->> (buffer-list)
+             (--filter (with-current-buffer it
+                         (file-in-directory-p default-directory directory)))))))
 
 (provide 'xlib)
 ;;; xlib.el ends here
