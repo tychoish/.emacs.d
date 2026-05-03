@@ -193,18 +193,17 @@
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
          ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
- 	 :map tychoish/ecclectic-rg-map ;; C-c g r
-         ("g" . consult-rg)
-         ("s" . consult-rg-pwd)
-         ("l" . consult-rg-pwd-wizard)
-         ("r" . consult-rg-project)
-         ("p" . consult-rg-project-wizard)
 	 :map tychoish/ecclectic-grep-map ;; "C-c g"
          :prefix "r"
          :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
          ("d" . tychoish-rg)
          ("c" . consult-rg-compile)
          ("m" . tychoish-find-merges)
+         ("g" . consult-rg)
+         ("s" . consult-rg-pwd)
+         ("l" . consult-rg-pwd-wizard)
+         ("r" . consult-rg-project)
+         ("p" . consult-rg-project-wizard)
          :map tychoish/ecclectic-grep-project-map
          ("r" . consult-rg-compile)
          ("p" . tychoish-rg-repo))
@@ -217,58 +216,52 @@
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
 
-;;;###autoload
-(defun consult-rg (&optional dir initial &key context)
-  "Start an iterative rg session. DIR and INITIAL integrate with the consult-grep API."
-  (interactive "P")
-  (let ((context (or context current-prefix-arg)))
-    (consult-ripgrep
-     (or (s-trimmed-or-nil dir)
-	 (completing-read-directory)
-	 (approximate-project-root))
-     (if (and (or context (not initial)) (not (eq context 'override)))
-	 (completing-read-context-from-point "rg(init): ")
-       initial))))
+  (defun consult-rg (&optional dir initial &key context)
+    "Start an iterative rg session. DIR and INITIAL integrate with the consult-grep API."
+    (interactive "P")
+    (let ((context (or context current-prefix-arg)))
+      (consult-ripgrep
+       (or (s-trimmed-or-nil dir)
+	   (annotated-completing-read-directory)
+	   (approximate-project-root))
+       (if (and (or context (not initial)) (not (eq context 'override)))
+	   (annotated-completing-read-context-from-point "rg(init): ")
+	 initial))))
 
-;;;###autoload
-(defun consult-rg-project (&optional initial &key context)
-  "Start an iterative rg session in the project root, if possible, falling back as necessary."
-  (interactive "P")
-  (consult-rg
-   (or (approximate-project-root)
-       (completing-read-directory))
-   initial
-   :context (or context current-prefix-arg 'override)))
+  (defun consult-rg-project (&optional initial &key context)
+    "Start an iterative rg session in the project root, if possible, falling back as necessary."
+    (interactive "P")
+    (consult-rg
+     (or (approximate-project-root)
+	 (annotated-completing-read-directory))
+     initial
+     :context (or context current-prefix-arg 'override)))
 
-;;;###autoload
-(defun consult-rg-pwd (&optional initial &key context)
-  "Start an iterative rg session for the current directory."
-  ;; (let ((base-directory (f-base default-directory)))
-  (interactive "P")
+  (defun consult-rg-pwd (&optional initial &key context)
+    "Start an iterative rg session for the current directory."
+    ;; (let ((base-directory (f-base default-directory)))
+    (interactive "P")
 
-  (consult-rg
-   (or default-directory (completing-read-directory))
-   initial
-   :context (or context current-prefix-arg 'override)))
+    (consult-rg
+     (or default-directory (annotated-completing-read-directory))
+     initial
+     :context (or context current-prefix-arg 'override)))
 
-;;;###autoload
-(defun consult-rg-pwd-wizard (&optional initial)
-  "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
-  ;; (let ((base-directory (f-base default-directory)))
-  (interactive "P")
-  (consult-rg-pwd initial :context t))
+  (defun consult-rg-pwd-wizard (&optional initial)
+    "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
+    ;; (let ((base-directory (f-base default-directory)))
+    (interactive "P")
+    (consult-rg-pwd initial :context t))
 
-;;;###autoload
-(defun consult-rg-project-wizard (&optional initial)
-  "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
-  ;; (let ((base-directory (f-base default-directory)))
-  (interactive "P")
-  (consult-rg-project initial :context t))
-
+  (defun consult-rg-project-wizard (&optional initial)
+    "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
+    ;; (let ((base-directory (f-base default-directory)))
+    (interactive "P")
+    (consult-rg-project initial :context t))
 
   (defun consult-rg-compile (&optional initial)
     (interactive "P")
-    (let ((default-directory (completing-read-directory)))
+    (let ((default-directory (annotated-completing-read-directory)))
       (tychoish-rg initial)))
 
   (defun tychoish-rg (regexp)
@@ -276,7 +269,7 @@
     (let ((compilation-buffer-name-function (compile-buffer-name (format "*%s-rg*" (approximate-project-name)))))
       (ripgrep-regexp
        (annotated-completing-read
-	(completing-read--context-candidates ripgrep-regexp-history)
+	(annotated-completing-read--context-candidates ripgrep-regexp-history)
 	:prompt (format "[%s]<rg>: " default-directory)
 	:initial-input regexp
 	:history 'ripgrep-regexp-history
@@ -829,7 +822,7 @@
 	 :map tychoish/consult-mode-map
 	 ("c" . consult-flycheck)
 	 :map flycheck-command-map
-	 ("\;" . consult-flycheck)))
+	 (";" . consult-flycheck)))
 
 (use-package consult-flyspell
   :ensure t
@@ -876,20 +869,11 @@
   :after (compile)
   :bind (:map compilation-mode-map
          ("d" . builder-change-directory))
-  :commands (completing-read-directory
+  :commands (annotated-completing-read-directory
 	     make-builder-candidate
 	     builder-register-candidates
 	     builder--read-command
 	     builder-compile-project))
-
-(use-package consult-tycho
-  :bind (:map tychoish/core-map
-         :prefix "b"
-	 :prefix-map tychoish/blogging-map
-	 ("m" . tychoish-insert-date)
-         ("p" . tychoish-blog-publish-post)
-         ("n" . tychoish-blog-create-post)
-         ("d" . tychoish-blog-open-drafts-dired)))
 
 (use-package revbufs
   :ensure t
@@ -1942,9 +1926,23 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; language server protocol (lsp) [eglot] + treesitter
-;;
+;; emacs lisp static analysis
+
+(use-package relint
+  :ensure t
+  :commands (relint-file relint-directory relint-current-buffer))
+
+(use-package package-lint
+  :ensure t
+  :commands (package-lint-current-buffer package-lint-batch-and-exit))
+
+(use-package elisp-lint
+  :ensure t
+  :commands (elisp-lint-file))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; language server protocol (lsp) [eglot] + treesitter
 
 (use-package eglot
   :ensure nil

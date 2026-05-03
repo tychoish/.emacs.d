@@ -26,6 +26,7 @@
 
 ;; slow-op -- reporting for operation timing
 
+(defvar init-file-debug nil)
 (defvar slow-op-reporting (or debug-on-error init-file-debug))
 (defvar slow-op-threshold 0.01)
 

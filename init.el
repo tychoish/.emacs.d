@@ -8,18 +8,28 @@
 ;;; Code:
 
 (with-gc-suppressed
- (defvar tychoish/startup-complete-time nil "Timestamp reflecting when the instance' startup process actually completed.")
- (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn) "Packages installed with the `--botstrap' CLI flag outside of use-package; for performance.")
- (defvar tychoish/eglot-default-server-configuration nil "Define eglot Server configuration variable early for use later.")
+ (defvar tychoish/startup-complete-time nil
+   "Timestamp reflecting when the instance' startup process actually completed.")
+ (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn)
+   "Packages installed with the `--botstrap' CLI flag outside of use-package.")
+ (defvar tychoish/eglot-default-server-configuration nil
+   "Define eglot Server configuration variable early for use later.")
 
- (defvar tychoish/emacs-instance-id nil "Name of emacs instance. `work', `personal', and `hud' are common long lived instances; other ephemeral ones may be useful.")
- (defvar cli/instance-id  nil "cli specified daemon/instance name")
+ (defvar tychoish/emacs-instance-id nil
+   "Name of emacs instance. `work', `personal', and `hud' are common long
+lived instances. Other ephemeral instance names ones may be useful.")
+ (defvar cli/instance-id  nil
+   "cli specified daemon/instance name")
 
- (defvar local-notes-directory (expand-file-name "~/notes") "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
- (defvar user-org-directories nil "Defines additional directories where org files might exist.")
- (defvar user-home-directory (expand-file-name "~") "path to the current home directory. cached during init.")
+ (defvar local-notes-directory (expand-file-name "~/notes")
+   "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
+ (defvar user-org-directories nil
+   "Defines additional directories where org files might exist.")
+ (defvar user-home-directory (expand-file-name "~")
+   "path to the current home directory. cached during init.")
 
- (defvar tychoish-disable-external-notifications nil "disable external notification support.")
+ (defvar tychoish-disable-external-notifications nil
+   "disable external notification support.")
 
  (setq initial-major-mode 'fundamental-mode)
  (setq initial-scratch-message nil)
@@ -96,6 +106,7 @@
 
   (with-slow-op-timer "<init> tychoish-bootstrap"
    (require 'tychoish-bootstrap)
+   (declare-function tychoish/conf-state-path "tychoish-bootstrap")
    (setq custom-file (tychoish/conf-state-path "custom.el"))
    'tychoish-bootstrap)
 

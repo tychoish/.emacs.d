@@ -188,10 +188,10 @@
   (interactive)
   (unless (derived-mode-p 'compilation-mode)
     (user-error "operation is only applicable for COMPILATION-MODE buffers"))
-  (let ((directory (or (completing-read-directory
+  (let ((directory (or (annotated-completing-read-directory
                         :candidates (-distinct
                                      (append (list compilation-directory default-directory)
-                                             (completing-read--directory-default-candidates)
+                                             (annotated-completing-read--directory-default-candidates)
                                              (f-directories (approximate-project-root))))
                         :prompt "in directory =>> ")
                        compilation-directory
@@ -359,7 +359,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 			     (-keep #'buffer-directory)
 			     (-filter #'f-directory-p)
 			     (-map #'f-full)
-			     (-append (completing-read--directory-parents default-directory project-root-directory))
+			     (-append (annotated-completing-read--directory-parents default-directory project-root-directory))
 			     (-distinct)))
 	   (operation-table (ht-create)))
 

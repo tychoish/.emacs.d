@@ -115,6 +115,13 @@
  ("w" . toggle-local-whitespace-cleanup)
  ("k" . execute-extended-clipboard-command)
  :map tychoish/core-map ;; "C-c t"
+ :prefix "b"
+ :prefix-map tychoish/blogging-map
+ ("m" . tychoish-insert-date)
+ ("p" . tychoish-blog-publish-post)
+ ("n" . tychoish-blog-create-post)
+ ("d" . tychoish-blog-open-drafts-dired)
+ :map tychoish/core-map ;; "C-c t"
  :prefix "t"
  :prefix-map tychoish/theme-map
  ("r" . disable-all-themes) ;; reset
@@ -575,6 +582,7 @@ This combines the host name and the dameon name."
 (defun tychoish/init-late-set-up-naming ()
   (with-slow-op-timer
    "<bootstrap.el> after-init [theme setup]"
+    (tychoish/set-up-instance-name)
     (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
     (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))))
 

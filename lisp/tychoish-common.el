@@ -415,7 +415,7 @@ interactively then remove duplicate items from the `kill-ring'."
   (interactive)
 
   (unless directory
-    (setq directory (completing-read-directory)))
+    (setq directory (annotated-completing-read-directory)))
 
   (let ((killed (->> (buffer-list)
 		     (--filter (buffer-file-name it))
@@ -574,7 +574,7 @@ Returns the number of buffers killed."
   (let* ((slug (f-make-slug title))
          (datetime (format-time-string "%Y-%02m-%02d"))
          (draft-fn (f-join (or path
-			       (completing-read-directory))
+			       (annotated-completing-read-directory))
 			   (concat datetime "." slug "." tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)

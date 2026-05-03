@@ -1,7 +1,11 @@
-;;; annotated-completing-read.el --- completing-read with aligned annotations -*- lexical-binding: t -*-
+;;; annotated-completing-read.el --- Completing-read with aligned annotations -*- lexical-binding: t -*-
 
 ;; Author: sam kleinman
 ;; Maintainer: tychoish
+;; Version: 0.1
+;; Package-Requires: ((emacs "29.1") (dash "2.19") (ht "2.3") (s "1.12") (f "0.20"))
+;; Keywords: convenience, matching
+;; URL: https://github.com/tychoish/dot-emacs
 
 ;; This file is not part of GNU Emacs
 
@@ -24,7 +28,7 @@
 ;; that accepts a hash table of candidates to annotations and surfaces them
 ;; as aligned completion metadata understood by vertico, marginalia, and embark.
 ;;
-;; Also provides `completing-read-context-from-point', a context-aware
+;; Also provides `annotated-completing-read-context-from-point', a context-aware
 ;; selection interface that populates candidates from thing-at-point, the
 ;; active region, the current line, and the kill ring.
 
@@ -121,7 +125,7 @@ Signals `user-error' if TABLE is not a hash table."
         (ht-set! annotated-completing-read-history hist-key
                  (symbol-value hist-sym))))))
 
-(defun completing-read--context-candidates (&optional seed)
+(defun annotated-completing-read--context-candidates (&optional seed)
   "Build an annotated hash table of candidates from the current context.
 SEED is a string or list of strings to include as explicit candidates."
   (let ((table (ht-create)))
@@ -163,7 +167,7 @@ SEED is a string or list of strings to include as explicit candidates."
 
     table))
 
-(defun completing-read-context-from-point (&optional prompt seed &key history)
+(defun annotated-completing-read-context-from-point (&optional prompt seed &key history)
   "Select a string from context-aware candidates with PROMPT.
 Candidates are drawn from thing-at-point, the active region, the current
 line, the kill ring, and any explicit SEED strings.  SEED may be a string
@@ -172,8 +176,8 @@ or a list of strings.
 HISTORY is a symbol passed to `annotated-completing-read' to scope the
 per-command history; defaults to `this-command', giving each calling
 command its own isolated history."
-  (let* ((cmd (or history this-command 'completing-read-context-from-point))
-         (candidates (completing-read--context-candidates seed)))
+  (let* ((cmd (or history this-command 'annotated-completing-read-context-from-point))
+         (candidates (annotated-completing-read--context-candidates seed)))
     (if (> (ht-size candidates) 0)
         (annotated-completing-read
          candidates
@@ -186,7 +190,7 @@ command its own isolated history."
 
 ;; directory selection
 
-(defun completing-read--directory-clean (dirs)
+(defun annotated-completing-read--directory-clean (dirs)
   "Normalise DIRS: expand relative paths, drop nil/blank, deduplicate."
   (->> dirs
        (-keep #'s-trimmed-or-nil)
@@ -194,7 +198,7 @@ command its own isolated history."
                   (expand-file-name it)))
        (f-distinct)))
 
-(defun completing-read--directory-parents (&optional start stop)
+(defun annotated-completing-read--directory-parents (&optional start stop)
   "Return intermediate directory paths walking up from START to STOP."
   (let* ((start (or start default-directory))
          (stop (or stop "~/"))
@@ -210,7 +214,7 @@ command its own isolated history."
     (->> output
          (f-filter-directories '(cannonicalize unique)))))
 
-(defun completing-read--directory-default-candidates ()
+(defun annotated-completing-read--directory-default-candidates ()
   "Assemble context-aware directory candidates from project, buffers, and point."
   (let* ((proj-root (approximate-project-root))
          (home (expand-file-name "~/"))
@@ -222,7 +226,7 @@ command its own isolated history."
                                              ((f-file-p f) (f-dirname f))
                                              (t default-directory)))))))))
     (--> (append
-          (completing-read--directory-parents default-directory proj-root)
+          (annotated-completing-read--directory-parents default-directory proj-root)
           proj-bufs
           (list (thing-at-point 'filename)
                 (thing-at-point 'existing-filename)
@@ -236,7 +240,7 @@ command its own isolated history."
            it)
          (f-filter-directories '(cannonicalize unique) it))))
 
-(defun completing-read--directory-entry-counts (dir)
+(defun annotated-completing-read--directory-entry-counts (dir)
   "Return a brief annotation with subdirectory and file counts for DIR."
   (condition-case nil
       (let* ((entries (directory-files dir t "\\`[^.]"))
@@ -246,7 +250,7 @@ command its own isolated history."
     (error "")))
 
 ;;;###autoload
-(cl-defun completing-read-directory (&optional &key candidates prompt require-match)
+(cl-defun annotated-completing-read-directory (&optional &key candidates prompt require-match)
   "Select a directory with annotated completion.
 CANDIDATES is an explicit list of directory paths; if nil, a context-aware
 list is computed from the project root, open buffers, and `thing-at-point'.
@@ -257,8 +261,8 @@ With 8 or fewer candidates the annotation shows the directory's relationship
 to the current directory (\"parent\", \"project root\", etc.).  With more
 than 8 candidates candidates are grouped by that relationship label and the
 annotation shows entry counts instead."
-  (let* ((dirs (or (completing-read--directory-clean candidates)
-                   (completing-read--directory-default-candidates)))
+  (let* ((dirs (or (annotated-completing-read--directory-clean candidates)
+                   (annotated-completing-read--directory-default-candidates)))
          (project-root (approximate-project-root))
          (relationship (ht-create)))
     (--each dirs
@@ -272,7 +276,7 @@ annotation shows entry counts instead."
                (t ""))))
     (if (> (ht-size relationship) 8)
         (let ((counts (ht-create)))
-          (--each dirs (ht-set counts it (completing-read--directory-entry-counts it)))
+          (--each dirs (ht-set counts it (annotated-completing-read--directory-entry-counts it)))
           (annotated-completing-read counts
            :prompt (or prompt "directory: ")
            :require-match require-match
