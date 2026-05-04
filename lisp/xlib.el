@@ -2,7 +2,24 @@
 
 ;; Author: tychoish
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "28.1") (cl-lib "1.0") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19") (anaphora "1.0") (bind-key "2.4"))
+;; Package-Requires: ((emacs "30.1") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19") (bind-key "2.4"))
+;; Keywords: extensions utility
+;; URL: https://github.com/tychoish/xlib.el
+
+;; This file is not part of GNU Emacs
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -17,9 +34,9 @@
 (require 's)
 (require 'ht)
 (require 'dash)
-(require 'anaphora)
-(require 'bind-key)
 
+(declare-function bind-key "bind-key")
+(declare-function bind-keys "bind-key")
 (declare-function which-key-add-keymap-based-replacements "which-key")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -40,13 +57,6 @@
      (when (and slow-op-reporting (> duration slow-op-threshold))
        (message "[op]: %s: %.06fs" ,name duration))
      return-value))
-
-(defun cli/time-reporting ()
-  (when (string-prefix-p "--with-slow-op-timing" argi)
-    (message "[op]: enabling time reporting")
-    (setq slow-op-reporting t)))
-
-(add-to-list 'command-line-functions 'cli/time-reporting)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -515,6 +525,17 @@ of the equality function customization differs slightly."
 
     (-filter #'f-directory-p sequence)))
 
+(f-visual-compression-function 1)
+(f-visual-compression-function 2)
+(f-visual-compression-function 3)
+(f-visual-compression-function 4)
+(f-visual-compression-function 5)
+(f-visual-compression-function 6)
+(f-visual-compression-function 7)
+(f-visual-compression-function 8)
+(f-visual-compression-function 9)
+(f-visual-compression-function 10)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; options
@@ -594,28 +615,27 @@ OPTIONS may be a single symbol or a list of symbols."
 	     (with-slow-op-timer
 	      ,(format "<one-shot-hook> %s" name)
 
-	      ,(aif (cond (form
-			   form)
-			  (body
-			   `,@body)
-			  (result
-			   `,(eval result))
-			  (operation
-			   (if args
-			       `(apply ,operation ,args)
-			     `(funcall ,operation)))
-			  ((and (symbolp function) (functionp function))
-			   (if args
-			       `(apply ',function ,args)
-			     `(funcall ',function)))
-			  ((and (functionp function) (listp function))
-			   function)
-			  ((symbolp function)
-			   (eval function))
-			  ((listp function)
-			   function))
-		   it
-		 (user-error "could not resolve the hook function from input for %s" name))
+	      ,(or (cond (form
+			  form)
+			 (body
+			  `,@body)
+			 (result
+			  `,(eval result))
+			 (operation
+			  (if args
+			      `(apply ,operation ,args)
+			    `(funcall ,operation)))
+			 ((and (symbolp function) (functionp function))
+			  (if args
+			      `(apply ',function ,args)
+			    `(funcall ',function)))
+			 ((and (functionp function) (listp function))
+			  function)
+			 ((symbolp function)
+			  (eval function))
+			 ((listp function)
+			  function))
+		  (user-error "could not resolve the hook function from input for %s" name))
 
 	      (counter-increment)
 

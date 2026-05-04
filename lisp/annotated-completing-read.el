@@ -51,7 +51,7 @@
 Keys are symbols — typically `this-command' at call time — and values are
 the standard Emacs history lists accumulated by `completing-read'.")
 
-(cl-defun annotated-completing-read (table &key (prompt "=> ") require-match category history group-name group-display initial-input)
+(cl-defun annotated-completing-read (table &key (prompt "=> ") require-match category history group-name group-display initial-input sort-fn)
   "Read a candidate from TABLE with aligned per-candidate annotations.
 TABLE is any Emacs hash table (`ht' or plain `make-hash-table') mapping
 candidate strings to annotation strings.  Column alignment is computed
@@ -94,6 +94,10 @@ completion metadata entry expected by vertico and other UIs.
 
 INITIAL-INPUT is an optional string pre-filled into the minibuffer.
 
+SORT-FN is an optional function (LIST-OF-STRINGS) => LIST-OF-STRINGS that
+reorders candidates before display.  Surfaced as `display-sort-function' in
+completion metadata, so vertico and other UIs apply it before rendering.
+
 Signals `user-error' if TABLE is not a hash table."
   (unless (hash-table-p table)
     (user-error "TABLE must be a hash table mapping candidates to annotations"))
@@ -116,7 +120,8 @@ Signals `user-error' if TABLE is not a hash table."
                             `(metadata
                               (annotation-function . ,annotate-fn)
                               ,@(when category `((category . ,category)))
-                              ,@(when group-fn `((group-function . ,group-fn))))
+                              ,@(when group-fn `((group-function . ,group-fn)))
+                              ,@(when sort-fn `((display-sort-function . ,sort-fn))))
                           (complete-with-action action (ht-keys table) str pred)))))
     (let ((hist-sym (make-symbol "history-cell")))
       (set hist-sym (ht-get annotated-completing-read-history hist-key))

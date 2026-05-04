@@ -194,6 +194,34 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       (annotated-completing-read table :group-display #'upcase)
       (should (null (alist-get 'group-function (acr-metadata captured-collection)))))))
 
+;;; sort-fn / display-sort-function
+
+(ert-deftest annotated-completing-read/sort-fn-absent-by-default ()
+  "`display-sort-function' is not in metadata when :sort-fn is omitted."
+  (let ((table (ht ("a" "ann"))))
+    (acr-with-mock table "a"
+      (annotated-completing-read table)
+      (should (null (alist-get 'display-sort-function (acr-metadata captured-collection)))))))
+
+(ert-deftest annotated-completing-read/sort-fn-surfaces-as-display-sort-function ()
+  "The function passed as :sort-fn appears as `display-sort-function' in metadata."
+  (let* ((table (ht ("a" "ann")))
+         (my-sort (lambda (items) (sort (copy-sequence items) #'string<))))
+    (acr-with-mock table "a"
+      (annotated-completing-read table :sort-fn my-sort)
+      (should (eq my-sort
+                  (alist-get 'display-sort-function (acr-metadata captured-collection)))))))
+
+(ert-deftest annotated-completing-read/sort-fn-reorders-candidates ()
+  "Calling the `display-sort-function' from metadata applies the sort."
+  (let* ((table (ht ("z" "last") ("a" "first")))
+         (my-sort (lambda (items) (sort (copy-sequence items) #'string<))))
+    (acr-with-mock table "a"
+      (annotated-completing-read table :sort-fn my-sort)
+      (let* ((dsf (alist-get 'display-sort-function (acr-metadata captured-collection)))
+             (result (funcall dsf '("z" "a"))))
+        (should (equal '("a" "z") result))))))
+
 ;;; require-match / arbitrary input
 
 (ert-deftest annotated-completing-read/arbitrary-input-returned-verbatim ()
@@ -248,27 +276,27 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
         (should-not (member "beta" matches))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read--context-candidates: return type and seeds
+;; annotated-completing-read--context-candidates: return type and seeds
 
 (ert-deftest annotated-completing-read/candidates-returns-hash-table ()
   (let ((kill-ring nil))
     (with-temp-buffer
-      (should (hash-table-p (completing-read--context-candidates))))))
+      (should (hash-table-p (annotated-completing-read--context-candidates))))))
 
 (ert-deftest annotated-completing-read/candidates-seed-string-included ()
   (let ((kill-ring nil))
     (with-temp-buffer
-      (should (ht-contains-p (completing-read--context-candidates "hello") "hello")))))
+      (should (ht-contains-p (annotated-completing-read--context-candidates "hello") "hello")))))
 
 (ert-deftest annotated-completing-read/candidates-seed-annotation ()
   (let ((kill-ring nil))
     (with-temp-buffer
-      (should (equal "seed" (ht-get (completing-read--context-candidates "hello") "hello"))))))
+      (should (equal "seed" (ht-get (annotated-completing-read--context-candidates "hello") "hello"))))))
 
 (ert-deftest annotated-completing-read/candidates-seed-list ()
   (let ((kill-ring nil))
     (with-temp-buffer
-      (let ((tbl (completing-read--context-candidates '("foo" "bar"))))
+      (let ((tbl (annotated-completing-read--context-candidates '("foo" "bar"))))
         (should (ht-contains-p tbl "foo"))
         (should (ht-contains-p tbl "bar"))))))
 
@@ -277,39 +305,39 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
   (let ((kill-ring nil)
         (long-seed (make-string 130 ?x)))
     (with-temp-buffer
-      (should-not (ht-contains-p (completing-read--context-candidates long-seed) long-seed)))))
+      (should-not (ht-contains-p (annotated-completing-read--context-candidates long-seed) long-seed)))))
 
 (ert-deftest annotated-completing-read/candidates-empty-seed-excluded ()
   (let ((kill-ring nil))
     (with-temp-buffer
-      (should-not (ht-contains-p (completing-read--context-candidates "") "")))))
+      (should-not (ht-contains-p (annotated-completing-read--context-candidates "") "")))))
 
 (ert-deftest annotated-completing-read/candidates-whitespace-seed-excluded ()
   (let ((kill-ring nil))
     (with-temp-buffer
-      (let ((tbl (completing-read--context-candidates "   ")))
+      (let ((tbl (annotated-completing-read--context-candidates "   ")))
         (should-not (ht-contains-p tbl ""))
         (should-not (ht-contains-p tbl "   "))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read--context-candidates: kill ring
+;; annotated-completing-read--context-candidates: kill ring
 
 (ert-deftest annotated-completing-read/candidates-kill-ring-included ()
   (let ((kill-ring (list "from-kill-ring")))
     (with-temp-buffer
-      (should (ht-contains-p (completing-read--context-candidates) "from-kill-ring")))))
+      (should (ht-contains-p (annotated-completing-read--context-candidates) "from-kill-ring")))))
 
 (ert-deftest annotated-completing-read/candidates-kill-ring-annotation-format ()
   "Kill ring entries are annotated as kill-ring [N] starting at index 1."
   (let ((kill-ring (list "first-item")))
     (with-temp-buffer
-      (should (equal "kill-ring [1]" (ht-get (completing-read--context-candidates) "first-item"))))))
+      (should (equal "kill-ring [1]" (ht-get (annotated-completing-read--context-candidates) "first-item"))))))
 
 (ert-deftest annotated-completing-read/candidates-kill-ring-limited-to-ten ()
   "At most 10 kill ring entries are included."
   (let ((kill-ring (mapcar (lambda (n) (format "kill-%02d" n)) (number-sequence 1 15))))
     (with-temp-buffer
-      (let* ((tbl (completing-read--context-candidates))
+      (let* ((tbl (annotated-completing-read--context-candidates))
              (kill-keys (cl-remove-if-not (lambda (k) (string-prefix-p "kill-" k))
                                           (ht-keys tbl))))
         (should (<= (length kill-keys) 10))))))
@@ -318,15 +346,15 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
   "Kill ring items >= 128 characters are excluded."
   (let ((kill-ring (list (make-string 130 ?k))))
     (with-temp-buffer
-      (should (= 0 (ht-size (completing-read--context-candidates)))))))
+      (should (= 0 (ht-size (annotated-completing-read--context-candidates)))))))
 
 (ert-deftest annotated-completing-read/candidates-kill-ring-whitespace-excluded ()
   (let ((kill-ring (list "   " "\t\n")))
     (with-temp-buffer
-      (should (= 0 (ht-size (completing-read--context-candidates)))))))
+      (should (= 0 (ht-size (annotated-completing-read--context-candidates)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read--context-candidates: region
+;; annotated-completing-read--context-candidates: region
 
 (ert-deftest annotated-completing-read/candidates-region-included ()
   "Active region content is included as a candidate."
@@ -336,7 +364,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       (cl-letf (((symbol-function 'use-region-p) (lambda () t))
                 ((symbol-function 'region-beginning) (lambda () 1))
                 ((symbol-function 'region-end) (lambda () (point-max))))
-        (should (ht-contains-p (completing-read--context-candidates) "selected text"))))))
+        (should (ht-contains-p (annotated-completing-read--context-candidates) "selected text"))))))
 
 (ert-deftest annotated-completing-read/candidates-region-annotation-format ()
   "Region annotation contains both 'region' and the buffer name."
@@ -349,7 +377,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                 ((symbol-function 'region-beginning) (lambda () 8))
                 ((symbol-function 'region-end) (lambda () 22)))
         ;; positions 8–22 = "region content" (14 chars)
-        (let ((annotation (ht-get (completing-read--context-candidates) "region content")))
+        (let ((annotation (ht-get (annotated-completing-read--context-candidates) "region content")))
           (should (string-match-p "region" annotation))
           (should (string-match-p "my-test-buf" annotation)))))))
 
@@ -359,7 +387,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
     (with-temp-buffer
       (insert "some text")
       (cl-letf (((symbol-function 'use-region-p) (lambda () nil)))
-        (let* ((tbl (completing-read--context-candidates))
+        (let* ((tbl (annotated-completing-read--context-candidates))
                (annotation (ht-get tbl "some text")))
           (should-not (and annotation (string-match-p "region" annotation))))))))
 
@@ -372,10 +400,10 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       (cl-letf (((symbol-function 'use-region-p) (lambda () t))
                 ((symbol-function 'region-beginning) (lambda () 1))
                 ((symbol-function 'region-end) (lambda () (point-max))))
-        (should-not (ht-contains-p (completing-read--context-candidates) long-text))))))
+        (should-not (ht-contains-p (annotated-completing-read--context-candidates) long-text))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read--context-candidates: current line
+;; annotated-completing-read--context-candidates: current line
 
 (ert-deftest annotated-completing-read/candidates-line-included ()
   "The current line is included as a candidate."
@@ -383,7 +411,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
     (with-temp-buffer
       (insert "current line text")
       (goto-char (point-min))
-      (should (ht-contains-p (completing-read--context-candidates) "current line text")))))
+      (should (ht-contains-p (annotated-completing-read--context-candidates) "current line text")))))
 
 (ert-deftest annotated-completing-read/candidates-line-annotation-format ()
   "Line annotation contains both 'line' and the buffer name."
@@ -392,12 +420,12 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       (rename-buffer "line-test-buf" t)
       (insert "my line")
       (goto-char (point-min))
-      (let ((annotation (ht-get (completing-read--context-candidates) "my line")))
+      (let ((annotation (ht-get (annotated-completing-read--context-candidates) "my line")))
         (should (string-match-p "line" annotation))
         (should (string-match-p "line-test-buf" annotation))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read--context-candidates: thing at point
+;; annotated-completing-read--context-candidates: thing at point
 
 (ert-deftest annotated-completing-read/candidates-thing-at-point-in-prog-mode ()
   "Symbols at point in prog-mode buffers are included."
@@ -406,7 +434,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       (emacs-lisp-mode)
       (insert "my-symbol")
       (goto-char 5)
-      (should (ht-contains-p (completing-read--context-candidates) "my-symbol")))))
+      (should (ht-contains-p (annotated-completing-read--context-candidates) "my-symbol")))))
 
 (ert-deftest annotated-completing-read/candidates-thing-at-point-annotation ()
   "thing-at-point candidates carry an 'at point' annotation."
@@ -416,7 +444,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       ;; Surround the word so the line candidate differs from the symbol.
       (insert "prefix my-func suffix")
       (goto-char 12)  ; inside "my-func"
-      (let ((annotation (ht-get (completing-read--context-candidates) "my-func")))
+      (let ((annotation (ht-get (annotated-completing-read--context-candidates) "my-func")))
         (should (stringp annotation))
         (should (string-match-p "at point" annotation))))))
 
@@ -426,7 +454,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
     (with-temp-buffer
       (insert "someword")
       (goto-char 4)
-      (let* ((tbl (completing-read--context-candidates))
+      (let* ((tbl (annotated-completing-read--context-candidates))
              (annotation (ht-get tbl "someword")))
         (should-not (and annotation (string-match-p "at point" annotation)))))))
 
@@ -438,26 +466,26 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
       (emacs-lisp-mode)
       (insert long-word)
       (goto-char 1)
-      (let ((annotation (ht-get (completing-read--context-candidates) long-word)))
+      (let ((annotation (ht-get (annotated-completing-read--context-candidates) long-word)))
         ;; may appear as a line candidate, but must not be annotated as at-point
         (should-not (and annotation (string-match-p "at point" annotation)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read-context-from-point
+;; annotated-completing-read-context-from-point
 
 (ert-deftest annotated-completing-read/context-from-point-returns-string ()
   (let ((kill-ring (list "candidate")))
     (with-temp-buffer
       (cl-letf (((symbol-function 'annotated-completing-read)
                  (lambda (_tbl &rest _) "candidate")))
-        (should (stringp (completing-read-context-from-point)))))))
+        (should (stringp (annotated-completing-read-context-from-point)))))))
 
 (ert-deftest annotated-completing-read/context-from-point-returns-selection ()
   (let ((kill-ring (list "chosen")))
     (with-temp-buffer
       (cl-letf (((symbol-function 'annotated-completing-read)
                  (lambda (_tbl &rest _) "chosen")))
-        (should (equal "chosen" (completing-read-context-from-point)))))))
+        (should (equal "chosen" (annotated-completing-read-context-from-point)))))))
 
 (ert-deftest annotated-completing-read/context-from-point-passes-prompt ()
   "The PROMPT argument is forwarded to annotated-completing-read."
@@ -468,7 +496,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                  (lambda (_tbl &rest args)
                    (setq received-prompt (plist-get args :prompt))
                    "item")))
-        (completing-read-context-from-point "my prompt: ")
+        (annotated-completing-read-context-from-point "my prompt: ")
         (should (equal "my prompt: " received-prompt))))))
 
 (ert-deftest annotated-completing-read/context-from-point-history-defaults-to-this-command ()
@@ -481,7 +509,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                    (setq received-history (plist-get args :history))
                    "item")))
         (let ((this-command 'my-calling-command))
-          (completing-read-context-from-point))
+          (annotated-completing-read-context-from-point))
         (should (eq 'my-calling-command received-history))))))
 
 (ert-deftest annotated-completing-read/context-from-point-explicit-history-key ()
@@ -493,7 +521,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                  (lambda (_tbl &rest args)
                    (setq received-history (plist-get args :history))
                    "item")))
-        (completing-read-context-from-point nil nil :history 'my-history)
+        (annotated-completing-read-context-from-point nil nil :history 'my-history)
         (should (eq 'my-history received-history))))))
 
 (ert-deftest annotated-completing-read/context-from-point-seed-in-candidates ()
@@ -505,7 +533,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                  (lambda (tbl &rest _)
                    (setq received-table tbl)
                    "myseed")))
-        (completing-read-context-from-point nil "myseed")
+        (annotated-completing-read-context-from-point nil "myseed")
         (should (ht-contains-p received-table "myseed"))
         (should (equal "seed" (ht-get received-table "myseed")))))))
 
@@ -514,7 +542,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
   (let ((kill-ring nil))
     (with-temp-buffer
       ;; fundamental-mode, empty buffer, no kill ring, no region
-      (should (equal "" (completing-read-context-from-point))))))
+      (should (equal "" (annotated-completing-read-context-from-point))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; annotated-completing-read--length-of-longest
@@ -557,50 +585,50 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
   (should (equal "    " (annotated-completing-read--prefix-padding "foo" 3))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read--directory-clean
+;; annotated-completing-read--directory-clean
 
 (ert-deftest annotated-completing-read/directory-clean-removes-nil ()
   "Nil entries in the input are removed."
-  (let ((result (completing-read--directory-clean (list "/tmp/" nil "/usr/"))))
+  (let ((result (annotated-completing-read--directory-clean (list "/tmp/" nil "/usr/"))))
     (should-not (member nil result))))
 
 (ert-deftest annotated-completing-read/directory-clean-removes-empty ()
   "Empty-string entries are removed."
-  (let ((result (completing-read--directory-clean (list "/tmp/" "" "/usr/"))))
+  (let ((result (annotated-completing-read--directory-clean (list "/tmp/" "" "/usr/"))))
     (should-not (member "" result))))
 
 (ert-deftest annotated-completing-read/directory-clean-removes-whitespace-only ()
   "Whitespace-only entries are removed."
-  (let ((result (completing-read--directory-clean (list "/tmp/" "   " "/usr/"))))
+  (let ((result (annotated-completing-read--directory-clean (list "/tmp/" "   " "/usr/"))))
     (should (cl-every (lambda (d) (not (string-blank-p d))) result))))
 
 (ert-deftest annotated-completing-read/directory-clean-keeps-valid ()
   "Valid absolute paths survive cleaning."
-  (let ((result (completing-read--directory-clean (list "/tmp/" "/usr/"))))
+  (let ((result (annotated-completing-read--directory-clean (list "/tmp/" "/usr/"))))
     (should (member "/tmp/" result))
     (should (member "/usr/" result))))
 
 (ert-deftest annotated-completing-read/directory-clean-empty-input ()
   "Empty input list returns nil."
-  (should (null (completing-read--directory-clean nil))))
+  (should (null (annotated-completing-read--directory-clean nil))))
 
 (ert-deftest annotated-completing-read/directory-clean-all-nil ()
   "All-nil input returns nil."
-  (should (null (completing-read--directory-clean (list nil nil nil)))))
+  (should (null (annotated-completing-read--directory-clean (list nil nil nil)))))
 
 (ert-deftest annotated-completing-read/directory-clean-deduplicates ()
   "Duplicate paths are removed."
-  (let ((result (completing-read--directory-clean (list "/tmp/" "/tmp/" "/usr/"))))
+  (let ((result (annotated-completing-read--directory-clean (list "/tmp/" "/tmp/" "/usr/"))))
     (should (= (length result) (length (cl-remove-duplicates result :test #'equal))))))
 
 (ert-deftest annotated-completing-read/directory-clean-expands-relative ()
   "Relative paths are expanded to absolute paths."
   (let* ((default-directory "/tmp/")
-         (result (completing-read--directory-clean (list "subdir"))))
+         (result (annotated-completing-read--directory-clean (list "subdir"))))
     (should (cl-every #'f-absolute-p result))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read--directory-parents
+;; annotated-completing-read--directory-parents
 
 (defmacro acr-directory-test--with-temp-tree (root-var dirs &rest body)
   "Bind ROOT-VAR to a temp directory, create DIRS under it, run BODY, clean up."
@@ -617,30 +645,30 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
   "The starting directory appears in the output."
   (acr-directory-test--with-temp-tree root ("a/b/c")
     (let* ((start (file-name-as-directory (expand-file-name "a/b/c" root)))
-           (result (completing-read--directory-parents start root)))
+           (result (annotated-completing-read--directory-parents start root)))
       (should (cl-some (lambda (d) (f-equal-p d start)) result)))))
 
 (ert-deftest annotated-completing-read/directory-parents-includes-stop ()
   "The stop directory appears in the output."
   (acr-directory-test--with-temp-tree root ("a/b")
     (let* ((start (file-name-as-directory (expand-file-name "a/b" root)))
-           (result (completing-read--directory-parents start root)))
+           (result (annotated-completing-read--directory-parents start root)))
       (should (cl-some (lambda (d) (f-equal-p d root)) result)))))
 
 (ert-deftest annotated-completing-read/directory-parents-returns-list ()
   "The function returns a list."
-  (let ((result (completing-read--directory-parents (expand-file-name "~/") (expand-file-name "~/"))))
+  (let ((result (annotated-completing-read--directory-parents (expand-file-name "~/") (expand-file-name "~/"))))
     (should (listp result))))
 
 (ert-deftest annotated-completing-read/directory-parents-start-equals-stop ()
   "When start and stop are the same, at most one entry is returned."
   (let* ((dir (file-name-as-directory temporary-file-directory))
-         (result (completing-read--directory-parents dir dir)))
+         (result (annotated-completing-read--directory-parents dir dir)))
     (should (listp result))
     (should (<= (length result) 1))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; completing-read-directory annotation labels
+;; annotated-completing-read-directory annotation labels
 
 (ert-deftest annotated-completing-read/directory-labels-current ()
   "The current directory is labelled 'current directory'."
@@ -651,7 +679,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                (lambda (tbl &rest _)
                  (should (equal "current directory" (ht-get tbl dir)))
                  dir)))
-      (completing-read-directory :candidates (list dir)))))
+      (annotated-completing-read-directory :candidates (list dir)))))
 
 (ert-deftest annotated-completing-read/directory-labels-project-root ()
   "A directory matching the project root is labelled 'project root'."
@@ -663,7 +691,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                (lambda (tbl &rest _)
                  (should (equal "project root" (ht-get tbl root)))
                  root)))
-      (completing-read-directory :candidates (list root)))))
+      (annotated-completing-read-directory :candidates (list root)))))
 
 (ert-deftest annotated-completing-read/directory-labels-parent ()
   "A directory that is an ancestor of the current dir is labelled 'parent'."
@@ -675,7 +703,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                (lambda (tbl &rest _)
                  (should (member (ht-get tbl parent) '("project root" "parent")))
                  parent)))
-      (completing-read-directory :candidates (list parent)))))
+      (annotated-completing-read-directory :candidates (list parent)))))
 
 (ert-deftest annotated-completing-read/directory-prompt-forwarded ()
   "The :prompt keyword is forwarded to annotated-completing-read."
@@ -687,7 +715,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                (lambda (_tbl &rest args)
                  (setq received-prompt (plist-get args :prompt))
                  dir)))
-      (completing-read-directory :candidates (list dir) :prompt "pick: ")
+      (annotated-completing-read-directory :candidates (list dir) :prompt "pick: ")
       (should (equal "pick: " received-prompt)))))
 
 (ert-deftest annotated-completing-read/directory-candidates-override ()
@@ -696,13 +724,13 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
          (default-directory dir)
          received-table)
     (cl-letf (((symbol-function 'approximate-project-root) (lambda () dir))
-              ((symbol-function 'completing-read--directory-default-candidates)
+              ((symbol-function 'annotated-completing-read--directory-default-candidates)
                (lambda () (error "should not be called")))
               ((symbol-function 'annotated-completing-read)
                (lambda (tbl &rest _)
                  (setq received-table tbl)
                  dir)))
-      (completing-read-directory :candidates (list dir))
+      (annotated-completing-read-directory :candidates (list dir))
       (should (ht-contains-p received-table dir)))))
 
 (ert-deftest annotated-completing-read/directory-no-groups-below-threshold ()
@@ -715,7 +743,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                (lambda (_tbl &rest args)
                  (setq received-group-name (plist-get args :group-name))
                  "/tmp/dir1/")))
-      (completing-read-directory :candidates dirs)
+      (annotated-completing-read-directory :candidates dirs)
       (should (null received-group-name)))))
 
 (ert-deftest annotated-completing-read/directory-groups-above-threshold ()
@@ -728,7 +756,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                (lambda (_tbl &rest args)
                  (setq received-group-name (plist-get args :group-name))
                  "/tmp/dir1/")))
-      (completing-read-directory :candidates dirs)
+      (annotated-completing-read-directory :candidates dirs)
       (should (functionp received-group-name)))))
 
 (ert-deftest annotated-completing-read/directory-group-labels ()
@@ -744,12 +772,12 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
          (default-directory current)
          received-group-fn)
     (cl-letf (((symbol-function 'approximate-project-root) (lambda () root))
-              ((symbol-function 'completing-read--directory-entry-counts) (lambda (_) ""))
+              ((symbol-function 'annotated-completing-read--directory-entry-counts) (lambda (_) ""))
               ((symbol-function 'annotated-completing-read)
                (lambda (_tbl &rest args)
                  (setq received-group-fn (plist-get args :group-name))
                  current)))
-      (completing-read-directory :candidates dirs)
+      (annotated-completing-read-directory :candidates dirs)
       (should (functionp received-group-fn))
       (should (equal "current directory" (funcall received-group-fn current)))
       (should (equal "project root"      (funcall received-group-fn root)))
@@ -763,13 +791,13 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
          (default-directory "/tmp/dir1/")
          received-table)
     (cl-letf (((symbol-function 'approximate-project-root) (lambda () "/tmp/dir1/"))
-              ((symbol-function 'completing-read--directory-entry-counts)
+              ((symbol-function 'annotated-completing-read--directory-entry-counts)
                (lambda (d) (format "counts:%s" d)))
               ((symbol-function 'annotated-completing-read)
                (lambda (tbl &rest _)
                  (setq received-table tbl)
                  "/tmp/dir1/")))
-      (completing-read-directory :candidates dirs)
+      (annotated-completing-read-directory :candidates dirs)
       (should (ht-p received-table))
       (should (string-prefix-p "counts:" (ht-get received-table "/tmp/dir1/"))))))
 
@@ -785,7 +813,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                (lambda (tbl &rest _)
                  (setq received-table tbl)
                  current)))
-      (completing-read-directory :candidates dirs)
+      (annotated-completing-read-directory :candidates dirs)
       (should (equal "project root"      (ht-get received-table root)))
       (should (equal "current directory" (ht-get received-table current))))))
 

@@ -240,33 +240,206 @@
     (should (ht-contains-p tbl "c3"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; builder--candidate-cache-p / builder--clear-candidate-cache / builder-clear-cache
+;; builder-candidate :priority slot
+
+(ert-deftest builder-test/candidate-default-priority ()
+  "Default :priority is 2."
+  (let ((c (make-builder-candidate :command "make")))
+    (should (= 2 (builder-candidate-priority c)))))
+
+(ert-deftest builder-test/candidate-explicit-priority ()
+  "Explicit :priority is stored verbatim."
+  (let ((c (make-builder-candidate :command "vale --output=line f.org" :priority 0)))
+    (should (= 0 (builder-candidate-priority c)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; builder--candidate-priority
+
+(ert-deftest builder-test/candidate-priority-from-table ()
+  "Returns the candidate's priority when the name is in the table."
+  (let ((tbl (ht-create))
+        (c (make-builder-candidate :command "make" :name "build" :priority 1)))
+    (ht-set tbl "build" c)
+    (should (= 1 (builder--candidate-priority tbl "build")))))
+
+(ert-deftest builder-test/candidate-priority-default-when-missing ()
+  "Returns 2 for names not present in the table."
+  (should (= 2 (builder--candidate-priority (ht-create) "unknown"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; builder--make-sort-fn
+
+(ert-deftest builder-test/make-sort-fn-returns-function ()
+  "`builder--make-sort-fn' returns a callable function."
+  (should (functionp (builder--make-sort-fn (ht-create) 'test-key))))
+
+(ert-deftest builder-test/make-sort-fn-history-before-non-history ()
+  "Items present in history sort before items not in history."
+  (let* ((annotated-completing-read-history (ht-create))
+         (tbl (ht-create)))
+    (ht-set tbl "fresh" (make-builder-candidate :command "x" :name "fresh" :priority 2))
+    (ht-set tbl "prior" (make-builder-candidate :command "y" :name "prior" :priority 2))
+    (ht-set annotated-completing-read-history 'h '("prior"))
+    (let ((sorted (funcall (builder--make-sort-fn tbl 'h) '("fresh" "prior"))))
+      (should (equal "prior" (car sorted))))))
+
+(ert-deftest builder-test/make-sort-fn-history-recency-order ()
+  "More recent history entries (lower index) sort before older ones."
+  (let* ((annotated-completing-read-history (ht-create))
+         (tbl (ht-create)))
+    (ht-set tbl "a" (make-builder-candidate :command "a" :name "a" :priority 2))
+    (ht-set tbl "b" (make-builder-candidate :command "b" :name "b" :priority 2))
+    ;; history list: index 0 = most recent = "a", index 1 = "b"
+    (ht-set annotated-completing-read-history 'h '("a" "b"))
+    (let ((sorted (funcall (builder--make-sort-fn tbl 'h) '("b" "a"))))
+      (should (equal "a" (car sorted))))))
+
+(ert-deftest builder-test/make-sort-fn-priority-order-among-non-history ()
+  "Lower priority number sorts first among items not in history."
+  (let* ((annotated-completing-read-history (ht-create))
+         (tbl (ht-create)))
+    (ht-set tbl "tier0" (make-builder-candidate :command "a" :name "tier0" :priority 0))
+    (ht-set tbl "tier2" (make-builder-candidate :command "b" :name "tier2" :priority 2))
+    (ht-set tbl "tier3" (make-builder-candidate :command "c" :name "tier3" :priority 3))
+    (let ((sorted (funcall (builder--make-sort-fn tbl 'empty) '("tier3" "tier2" "tier0"))))
+      (should (equal "tier0" (car sorted)))
+      (should (equal "tier3" (car (last sorted)))))))
+
+(ert-deftest builder-test/make-sort-fn-length-tiebreaker ()
+  "Among same-priority non-history items, shorter key sorts first."
+  (let* ((annotated-completing-read-history (ht-create))
+         (tbl (ht-create)))
+    (ht-set tbl "short" (make-builder-candidate :command "x" :name "short" :priority 2))
+    (ht-set tbl "longer-name" (make-builder-candidate :command "y" :name "longer-name" :priority 2))
+    (let ((sorted (funcall (builder--make-sort-fn tbl 'empty) '("longer-name" "short"))))
+      (should (equal "short" (car sorted))))))
+
+(ert-deftest builder-test/make-sort-fn-does-not-mutate-input ()
+  "The input list is not mutated (uses copy-sequence internally)."
+  (let* ((annotated-completing-read-history (ht-create))
+         (tbl (ht-create))
+         (input (list "b" "a")))
+    (ht-set tbl "a" (make-builder-candidate :command "a" :name "a"))
+    (ht-set tbl "b" (make-builder-candidate :command "b" :name "b"))
+    (funcall (builder--make-sort-fn tbl 'empty) input)
+    (should (equal "b" (car input)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; builder-add-candidates
+
+(ert-deftest builder-test/add-candidates-registers-fn ()
+  "`builder-add-candidates' adds the function to `builder-candidate-functions'."
+  (let ((builder-candidate-functions nil))
+    (defun builder-test--gen-reg (root name dirs table)
+      (ignore root name dirs table) t)
+    (builder-add-candidates #'builder-test--gen-reg)
+    (should (memq #'builder-test--gen-reg builder-candidate-functions))))
+
+(ert-deftest builder-test/add-candidates-multiple-independent ()
+  "Multiple `builder-add-candidates' calls each register independently."
+  (let ((builder-candidate-functions nil))
+    (defun builder-test--gen-x (root name dirs table) (ignore root name dirs table) t)
+    (defun builder-test--gen-y (root name dirs table) (ignore root name dirs table) t)
+    (builder-add-candidates #'builder-test--gen-x)
+    (builder-add-candidates #'builder-test--gen-y)
+    (should (memq #'builder-test--gen-x builder-candidate-functions))
+    (should (memq #'builder-test--gen-y builder-candidate-functions))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; buffer-local candidate cache
 
 (ert-deftest builder-test/candidate-cache-p-false-when-empty ()
-  "`builder--candidate-cache-p' returns nil when cache is empty."
+  "`builder--candidate-cache-p' returns nil when buffer has no cached candidates."
   (with-temp-buffer
     (setq-local builder--cached-candidates nil)
     (should-not (builder--candidate-cache-p (current-buffer)))))
 
 (ert-deftest builder-test/candidate-cache-p-true-when-set ()
-  "`builder--candidate-cache-p' returns t when cache is populated."
+  "`builder--candidate-cache-p' returns t when buffer has cached candidates."
   (with-temp-buffer
     (setq-local builder--cached-candidates (ht-create))
     (should (builder--candidate-cache-p (current-buffer)))))
 
-(ert-deftest builder-test/clear-candidate-cache-resets-cache ()
-  "`builder--clear-candidate-cache' sets the cache to nil."
+(ert-deftest builder-test/clear-candidate-cache-removes-entry ()
+  "`builder--clear-candidate-cache' clears cached candidates for the buffer."
   (with-temp-buffer
     (setq-local builder--cached-candidates (ht-create))
     (builder--clear-candidate-cache (current-buffer))
-    (should (null builder--cached-candidates))))
+    (should-not (buffer-local-value 'builder--cached-candidates (current-buffer)))))
 
-(ert-deftest builder-test/clear-candidate-cache-default-buffer ()
-  "Default buffer argument clears the current buffer's cache."
+(ert-deftest builder-test/clear-candidate-cache-leaves-other-buffers ()
+  "Clearing cache in one buffer does not affect another buffer's cache."
+  (let ((buf-a (generate-new-buffer " *builder-test-a*"))
+        (buf-b (generate-new-buffer " *builder-test-b*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf-a
+            (setq-local builder--cached-candidates (ht-create)))
+          (with-current-buffer buf-b
+            (setq-local builder--cached-candidates (ht-create)))
+          (builder--clear-candidate-cache buf-a)
+          (should-not (buffer-local-value 'builder--cached-candidates buf-a))
+          (should (buffer-local-value 'builder--cached-candidates buf-b)))
+      (kill-buffer buf-a)
+      (kill-buffer buf-b))))
+
+(ert-deftest builder-test/clear-all-caches-clears-all-buffers ()
+  "`builder-clear-all-caches' clears cached candidates in every buffer that has them."
+  (let ((buf-a (generate-new-buffer " *builder-test-a*"))
+        (buf-b (generate-new-buffer " *builder-test-b*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf-a
+            (setq-local builder--cached-candidates (ht-create)))
+          (with-current-buffer buf-b
+            (setq-local builder--cached-candidates (ht-create)))
+          (builder-clear-all-caches)
+          (should-not (buffer-local-value 'builder--cached-candidates buf-a))
+          (should-not (buffer-local-value 'builder--cached-candidates buf-b)))
+      (kill-buffer buf-a)
+      (kill-buffer buf-b))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; builder--buffer-ran-command-p / builder--buffer-for-command
+
+(ert-deftest builder-test/buffer-ran-command-p-true-when-matches ()
+  "Returns t when `compilation-arguments' matches the command."
   (with-temp-buffer
-    (setq-local builder--cached-candidates (ht-create))
-    (builder--clear-candidate-cache)
-    (should (null builder--cached-candidates))))
+    (setq-local compilation-arguments '("make test"))
+    (should (builder--buffer-ran-command-p (current-buffer) "make test"))))
+
+(ert-deftest builder-test/buffer-ran-command-p-false-when-different ()
+  "Returns nil when `compilation-arguments' holds a different command."
+  (with-temp-buffer
+    (setq-local compilation-arguments '("make build"))
+    (should-not (builder--buffer-ran-command-p (current-buffer) "make test"))))
+
+(ert-deftest builder-test/buffer-ran-command-p-trims-whitespace ()
+  "Leading/trailing whitespace is ignored in the comparison."
+  (with-temp-buffer
+    (setq-local compilation-arguments '("  make test  "))
+    (should (builder--buffer-ran-command-p (current-buffer) "make test"))))
+
+(ert-deftest builder-test/buffer-ran-command-p-nil-args ()
+  "Returns nil when `compilation-arguments' is nil."
+  (with-temp-buffer
+    (setq-local compilation-arguments nil)
+    (should-not (builder--buffer-ran-command-p (current-buffer) "make test"))))
+
+(ert-deftest builder-test/buffer-for-command-nil-when-no-match ()
+  "`builder--buffer-for-command' returns nil when no buffer ran the command."
+  (cl-letf (((symbol-function 'mode-buffers-for-project) (lambda (&rest _) nil)))
+    (should (null (builder--buffer-for-command "make test")))))
+
+(ert-deftest builder-test/buffer-for-command-returns-name-of-matching-buffer ()
+  "Returns the buffer name when a compilation buffer ran the command."
+  (with-temp-buffer
+    (let ((buf (current-buffer)))
+      (rename-buffer "*test-compile*" t)
+      (setq-local compilation-arguments '("cargo test"))
+      (cl-letf (((symbol-function 'mode-buffers-for-project)
+                 (lambda (&rest _) (list buf))))
+        (should (equal "*test-compile*" (builder--buffer-for-command "cargo test")))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder--read-command (unit: table construction path)

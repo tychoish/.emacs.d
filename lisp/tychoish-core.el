@@ -868,7 +868,9 @@
 (use-package builder
   :after (compile)
   :bind (:map compilation-mode-map
-         ("d" . builder-change-directory))
+         ("d" . builder-change-directory)
+	 :map tychoish/core-map
+	 ("c" . builder))
   :commands (annotated-completing-read-directory
 	     make-builder-candidate
 	     builder-register-candidates

@@ -64,6 +64,12 @@ lived instances. Other ephemeral instance names ones may be useful.")
 	   (package-upgrade pkg)))
        (message "bootstrap complete: installed %S; restart emacs without `--bootstrap'" installed))))
 
+ (defun cli/time-reporting ()
+   (when (string-prefix-p "--with-slow-op-timing" argi)
+     (message "[op]: enabling time reporting")
+     (setq slow-op-reporting t)))
+
+ (add-to-list 'command-line-functions 'cli/time-reporting)
  (add-to-list 'command-line-functions 'cli/resolve-id)
  (add-to-list 'command-line-functions 'cli/bootstrap)
 

@@ -37,21 +37,6 @@
 (f-directories-containing-file-function "makefile" "Makefile" "GNUmakefile")
 (f-directories-containing-file-function "pyproject.toml")
 
-(f-visual-compression-function 1)
-(f-visual-compression-function 2)
-(f-visual-compression-function 3)
-(f-visual-compression-function 4)
-(f-visual-compression-function 5)
-(f-visual-compression-function 6)
-(f-visual-compression-function 7)
-(f-visual-compression-function 8)
-(f-visual-compression-function 9)
-(f-visual-compression-function 10)
-
-(when (boundp 'tychoish/core-map)
-  (bind-keys :map tychoish/core-map
-	     ("c" . builder)))
-
 (defun builder--go-module (&optional directory)
   (if go-module-path
       go-module-path
@@ -118,69 +103,87 @@
        (--mapc (with-current-buffer it
 		 (setq-local compilation-finish-functions nil)))))
 
+(defun builder--buffer-for-command (command)
+  "Return the name of a project compilation buffer that last ran COMMAND, or nil."
+  (when-let* ((buf (->> (mode-buffers-for-project :mode 'compilation-mode)
+			(--first (with-current-buffer it
+				   (string-equal (s-trim (or (car compilation-arguments) ""))
+						 (s-trim command)))))))
+    (buffer-name buf)))
+
+(defun builder--buffer-ran-command-p (buffer command)
+  "Return non-nil if BUFFER last ran COMMAND."
+  (with-current-buffer buffer
+    (string-equal (s-trim (or (car compilation-arguments) ""))
+		  (s-trim command))))
+
 ;;;###autoload
 (defun builder-compile-project (&optional name command)
-  (let* ((compilation-buffer-candidates (builder--project-compilation-buffers :name name))
-         (op-name (annotated-completing-read
-                   compilation-buffer-candidates
-                   :prompt "compilation buffer => "
-                   :require-match nil))
-         (compile-buf (get-buffer op-name))
-	 (project-root-directory (approximate-project-root))
+  (let* ((project-root-directory (approximate-project-root))
 	 (start-at (current-time))
-	 candidates
-	 candidate-name)
+	 ;; Step 1: select and confirm command
+	 (cc-result (builder--read-command command))
+	 (candidate-name (car cc-result))
+	 (candidates (cdr cc-result))
+	 (candidate (ht-get candidates candidate-name))
+	 (compile-command (read-from-minibuffer "edit command => " (builder-candidate-command candidate)))
+	 (op-default-directory (or (builder-candidate-directory candidate) default-directory))
+	 ;; Step 2: select buffer, pre-seeding the one that last ran this command
+	 (prior-buf-name (builder--buffer-for-command compile-command))
+	 (compilation-buffer-candidates (builder--project-compilation-buffers :name name))
+	 (op-name (annotated-completing-read
+		   compilation-buffer-candidates
+		   :prompt "compilation buffer => "
+		   :require-match nil
+		   :initial-input prior-buf-name))
+	 (compile-buf (get-buffer op-name)))
 
     (save-some-buffers
      t
      (lambda () (let ((filename (buffer-file-name)))
 		  (and filename (file-in-directory-p filename project-root-directory)))))
 
-    (if (and compile-buf (y-or-n-p "recompile?"))
-        (with-current-buffer compile-buf
-            (recompile current-prefix-arg))
-      (let* ((cc-result (builder--read-command command))
-	     (selection-name (setq candidate-name (car cc-result)))
-	     (table (setq candidates (cdr cc-result)))
-	     (candidate (ht-get table selection-name))
-	     (compile-command (read-from-minibuffer "edit command => " (builder-candidate-command candidate)))
-	     (default-directory (or (builder-candidate-directory candidate) default-directory)))
+    ;; Step 3: recompile if buffer already ran this command; prefix arg forces new compilation
+    (let ((active-buf
+	   (if (and compile-buf
+		    (not current-prefix-arg)
+		    (builder--buffer-ran-command-p compile-buf compile-command))
+	       (progn (with-current-buffer compile-buf (recompile)) compile-buf)
+	     (let ((default-directory op-default-directory))
+	       (compilation-start
+		compile-command
+		'compilation-mode
+		(compile-buffer-name op-name))))))
 
-	(compilation-start
-	 compile-command
-	 'compilation-mode
-	 (compile-buffer-name op-name))))
+      (with-current-buffer active-buf
+	(add-one-shot-hook :name (format "%s notification hook" op-name)
+	 :hook 'compilation-finish-functions
+	 :local t
+	 :make-unique t
+	 :args (compilation-buffer msg)
+	 :form (builder--compile-post-hook
+		compilation-buffer
+		msg
+		start-at
+		:process-name "sardis-notify"
+		:program "sardis"
+		:args '("notify" "send")
+		:send-when (or current-prefix-arg
+			       (not (get-buffer-window active-buf t))
+			       (< 10 (float-time (time-since (current-idle-time)))))))
 
-    (with-current-buffer (or compile-buf op-name)
-      (add-one-shot-hook :name (format "%s notification hook" op-name)
-       :hook 'compilation-finish-functions
-       :local t
-       :make-unique t
-       :args (compilation-buffer msg)
-       :form (builder--compile-post-hook
-	      compilation-buffer
-	      msg
-	      start-at
-	      :process-name "sardis-notify"
-	      :program "sardis"
-	      :args '("notify" "send")
-	      :send-when (or current-prefix-arg
-			     (not (get-buffer-window (or compile-buf op-name) t))
-			     (< 10 (float-time (time-since (current-idle-time)))))))
+	(when-let* ((candidate (ht-get candidates candidate-name))
+		    (hook (builder-candidate-hook candidate)))
+	  (when hook
+	    (add-one-shot-hook :name (format "post-%s-hook-operation" op-name)
+	     :hook 'compilation-finish-functions
+	     :make-unique t
+	     :local t
+	     :function (hook))))
 
-      (when-let* ((candidate (ht-get candidates candidate-name))
-		  (hook (builder-candidate-hook candidate)))
-	(when hook
-	  (add-one-shot-hook :name (format "post-%s-hook-operation" op-name)
-	   :hook 'compilation-finish-functions
-	   :make-unique t
-	   :local t
-	   :function (hook))))
-
-      (let* ((op-window
-	      (and t (get-buffer-window (current-buffer) (selected-frame)))))
-	(if op-window (select-window op-window)
-	  (switch-to-buffer-other-window (current-buffer)))))))
+	(let ((op-window (get-buffer-window (current-buffer) (selected-frame))))
+	  (if op-window (select-window op-window)
+	    (switch-to-buffer-other-window (current-buffer))))))))
 
 ;;;###autoload
 (defun builder-change-directory ()
@@ -203,6 +206,35 @@
 
 ;; builder-compile-project implementation
 
+(defun builder--candidate-priority (candidates name)
+  "Return the priority of candidate NAME in CANDIDATES, defaulting to 2."
+  (or (when-let* ((c (ht-get candidates name)))
+	(builder-candidate-priority c))
+      2))
+
+(defun builder--make-sort-fn (candidates history-key)
+  "Return a display-sort-function for `annotated-completing-read'.
+Candidates that appear in HISTORY-KEY's history list (stored in
+`annotated-completing-read-history') sort first by recency (lowest index =
+most recent).  Candidates not in history are then ordered by structural
+priority from CANDIDATES, with key length as a final tiebreaker."
+  (lambda (items)
+    (let* ((hist (ht-get annotated-completing-read-history history-key))
+           (hist-rank (lambda (name)
+                        (or (cl-position name hist :test #'equal)
+                            most-positive-fixnum))))
+      (sort (copy-sequence items)
+        (lambda (a b)
+          (let ((ha (funcall hist-rank a))
+                (hb (funcall hist-rank b)))
+            (cond
+             ((< ha hb) t)
+             ((> ha hb) nil)
+             (t (let ((pa (builder--candidate-priority candidates a))
+                      (pb (builder--candidate-priority candidates b)))
+                  (or (< pa pb)
+                      (and (= pa pb) (< (length a) (length b)))))))))))))
+
 (defun builder--read-command (&optional command table)
   (let* ((candidates (or table
 			 (builder--get-candidates default-directory command)))
@@ -216,7 +248,8 @@
            annotation-table
            :prompt "compile command => "
            :require-match nil
-           :history 'compile-history))
+           :history 'compile-history
+           :sort-fn (builder--make-sort-fn candidates 'compile-history)))
 	 (candidate (ht-get candidates selection-name))
 	 (operation-name (if candidate
 			     (builder-candidate-name candidate)
@@ -275,7 +308,8 @@
 						   (format "'%s' in %s" command (f-abbrev directory))
 						 command))
 				   hook
-				   notification-threshold)))
+				   notification-threshold
+				   (priority 2))))
   "Structure for compilation candidates."
   (name
    "build"
@@ -300,6 +334,10 @@
   (notification-threshold
    30
    :documentation "if a command runs longer than this number of seconds, send a notification when the compile completes."
+   :type integer)
+  (priority
+   2
+   :documentation "display sort priority: 0=current-file, 1=rerun, 2=project, 3=history (lower = higher priority)"
    :type integer))
 
 (defun builder--add-candidate (table candidate)
@@ -312,16 +350,52 @@
 
 (defvar builder-candidate-functions nil
   "List of functions that populate a table of possible compilation commands.
-All functions are called with (PROJECT-ROOT-DIRECTORY PROJECT-NAME DIRECTORIES TABLE)
-where TABLE is a hash of `builder-candidate' objects.")
+Each function is called with four arguments:
+  PROJECT-ROOT-DIRECTORY — absolute path to the project root.
+  PROJECT-NAME           — short name of the project (directory basename).
+  DIRECTORIES            — list of directories derived from open project
+                           buffers; this is what drives language-specific
+                           discovery (e.g. finding go.mod or Cargo.toml files
+                           near files the user actually has open).
+  TABLE                  — a `ht' hash table of `builder-candidate' objects;
+                           functions should call `builder--add-candidates' to
+                           populate it and return t.")
+
+(defun builder-add-candidates (fn)
+  "Register FN as a candidate generator on `builder-candidate-functions'.
+FN is called with (ROOT NAME DIRS TABLE): ROOT is the project root path, NAME
+is the project name, DIRS is the set of open-buffer directories that drives
+language-specific discovery, and TABLE is a `ht' of `builder-candidate'
+objects.  FN should call `builder--add-candidates' to populate TABLE and
+return t.
+
+This is the plain-function alternative to `builder-register-candidates'.
+Use it when you have a plain `defun' and do not need predicate filtering,
+named-symbol generation, or mode-hook scoping."
+  (add-hook 'builder-candidate-functions fn))
 
 ;;;###autoload
 (cl-defmacro builder-register-candidates (&key name (predicate t) (hooks nil) pipeline)
+  "Define a named candidate generator and register it on `builder-candidate-functions'.
+NAME is used to derive the generated function symbol
+`builder-candidates-for-NAME'.  PREDICATE gates execution (default t).
+PIPELINE is an expression that evaluates to a list of `builder-candidate'
+objects; it runs inside the generated function with PROJECT-ROOT-DIRECTORY,
+PROJECT-NAME, DIRECTORIES, and OPERATION-TABLE bound.
+
+When HOOKS is nil the generator is registered globally via
+`builder-add-candidates'.  When HOOKS is a list of hook symbols the generator
+is registered buffer-locally when any of those hooks fires, so candidates only
+appear for buffers of the relevant major mode.
+
+For simple cases that do not need predicate filtering or mode scoping, prefer
+the plain-function API: write a `defun' with the four-argument protocol and
+call `builder-add-candidates'."
   (let ((symbol-name (intern (format "builder-candidates-for-%s" name)))
 	(hook-registering-function-name (intern (format "builder-candidate-registrar-for-%s" name))))
     `(progn
        (defun ,symbol-name (project-root-directory project-name directories operation-table)
-	 ,(format "Build list of `builder-candidate' objects for suggestion in compilation buffers.")
+	 ,(format "Candidate generator for `%s'; see `builder-register-candidates'." name)
 	 (ignore project-root-directory project-name directories operation-table)
 	 (when ,predicate
 	   (builder--add-candidates
@@ -330,7 +404,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 	 t)
 
        ,(if (eql 0 (length hooks))
-	    `(add-hook 'builder-candidate-functions #',symbol-name)
+	    `(builder-add-candidates #',symbol-name)
 	  `(let ((hooks ,hooks))
 	     (defun ,hook-registering-function-name ()
 	       (add-hook 'builder-candidate-functions #',symbol-name 0 t))
@@ -353,7 +427,6 @@ where TABLE is a hash of `builder-candidate' objects.")
 	      builder--cached-candidates)
     (let* ((project-root-directory (approximate-project-root))
 	   (project-name (f-filename project-root-directory))
-	   (directory (when (boundp 'directory) directory))
 	   (default-directory (or directory default-directory))
            (directories (->> (approximate-project-buffers)
 			     (-keep #'buffer-directory)
@@ -390,7 +463,7 @@ where TABLE is a hash of `builder-candidate' objects.")
 (defun builder-clear-all-caches ()
   (interactive)
   (->> (buffer-list)
-       (-keep #'builder--candidate-cache-p)
+       (--filter (builder--candidate-cache-p it))
        (-mapc #'builder--clear-candidate-cache)))
 
 (cl-defun builder-clear-cache (&optional (buffer (current-buffer)))
@@ -418,12 +491,14 @@ where TABLE is a hash of `builder-candidate' objects.")
 		  :command (format "vale --output=line %s" filename)
 		  :name (format "vale check %s" (f-collapse-homedir filename))
 		  :annotation "find errors in the current file"
+		  :priority 0
 		  :hook (lambda (buffer msg) (builder--vale-insert-statistics buffer msg :filename filename)))
 		 (make-builder-candidate
 		  :directory default-directory
 		  :command (format "vale --ls-metrics %s" filename)
 		  :name (format "vale report %s" (f-collapse-homedir filename))
-		  :annotation "report statistics about the current file"))))
+		  :annotation "report statistics about the current file"
+		  :priority 0))))
 
 (builder-register-candidates
  :name "minibuffer-shell-commands"
@@ -437,7 +512,8 @@ where TABLE is a hash of `builder-candidate' objects.")
 		    :name (s-truncate 32 command "...")
 		    :command command
 		    :directory project-root-directory
-		    :annotation (format "operation from `%s' in the %s (%s)" source annotation-tag default-directory))))))
+		    :annotation (format "operation from `%s' in the %s (%s)" source annotation-tag default-directory)
+		    :priority 3)))))
 
 (builder-register-candidates
  :name "project-compilation-buffer-commands"
@@ -458,7 +534,8 @@ where TABLE is a hash of `builder-candidate' objects.")
 				  :name (format "rerun from %s [%s]" buf (f-visually-compress-to-five operation-directory))
 				  :command command
 				  :directory operation-directory
-				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)))))))))
+				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)
+				  :priority 1))))))))
 
 (builder-register-candidates
  :name "makefiles"
@@ -505,11 +582,10 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "go-packages"
- :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline (->> (-append
 		 (f-directories-containing-file-with-extension-go directories)
-		 (f-directories-containing-file-go-mod project-root-directory)
-		 (-- project-root-directory))
+		 (f-directories-containing-file-go-mod project-root-directory))
+		(-non-nil)
 		(-uniq)
 		(--flat-map
 		 (let* ((prefix (concat "." (f-path-separator)))
@@ -581,7 +657,6 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "go-files"
- :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline (when-let* ((filename (if (and (buffer-file-name) (derived-mode-p '(go-mode go-ts-mode)))
 				     (buffer-file-name)
 				   (thing-at-point 'filename)))
@@ -593,26 +668,29 @@ where TABLE is a hash of `builder-candidate' objects.")
 		  :name (format "gofumpt +extra %s" basename)
 		  :directory (f-dirname filename)
 		  :command (format "gofumpt -extra -w %s" filename)
-		  :annotation (format "run gofumpt with non-extra constraints on %s" short-filename))
+		  :annotation (format "run gofumpt with non-extra constraints on %s" short-filename)
+		  :priority 0)
 		 (make-builder-candidate
 		  :name (format "gofumpt %s" basename)
 		  :directory (f-dirname filename)
 		  :command (format "gofumpt -w %s" filename)
-		  :annotation (format "run gofumpt with standard gofmt constraints on %s" short-filename))
+		  :annotation (format "run gofumpt with standard gofmt constraints on %s" short-filename)
+		  :priority 0)
 		 (make-builder-candidate
 		  :name (format "gci %s <import sort>" basename)
 		  :directory (f-dirname filename)
 		  :command (format "golangci-lint fmt --enable gci %s" filename)
-		  :annotation (format "sort imports with gci for %s" short-filename))
+		  :annotation (format "sort imports with gci for %s" short-filename)
+		  :priority 0)
 		 (make-builder-candidate
 		  :name (format "meta fmt %s" basename)
 		  :directory (f-dirname filename)
 		  :command (format "golangci-lint fmt %s" filename)
-		  :annotation (format "run meta formatter on %s" short-filename)))))
+		  :annotation (format "run meta formatter on %s" short-filename)
+		  :priority 0))))
 
 (builder-register-candidates
  :name "go-test-file"
- :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline
  (when-let* ((filename  (buffer-file-name))
              (_         (derived-mode-p '(go-mode go-ts-mode)))
@@ -642,11 +720,11 @@ where TABLE is a hash of `builder-candidate' objects.")
                             :name       (s-join-with-space "go test -v" race-label timeout-label test-name basename)
                             :command    (s-join-with-space "go test -v" race-flag timeout-flag run-flags ".")
                             :directory  directory
-                            :annotation (format "run %s %s in %s" type-name test-name short-path)))))))))))))
+                            :annotation (format "run %s %s in %s" type-name test-name short-path)
+                            :priority   0))))))))))))
 
 (builder-register-candidates
  :name "go-modules"
- :hooks '(go-ts-mode-hook go-mode-hook)
  :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
 	     (->> go-mod-directories
 		(--flat-map
@@ -683,7 +761,6 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "py-projects"
- :hooks '(python-mode-hook python-ts-mode-hook)
  :pipeline (->> (f-directories-containing-file-pyproject-toml directories)
 		(--flat-map
 		 (list
@@ -713,7 +790,6 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "python"
- :hooks '(python-mode-hook python-ts-mode-hook)
  :pipeline (->> (f-directories-containing-file-with-extension-py directories)
 		(--flat-map
 		 (list
@@ -732,7 +808,6 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "rust-project"
- :hooks '(rust-mode-hook rust-ts-mode-hook)
  :pipeline (->> (f-directories-containing-file-cargo-toml directories)
 		(--flat-map
 		 (let ((annotation-directory (f-collapse-homedir it))
@@ -797,7 +872,6 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "emacs-lisp-file"
- :hooks '(emacs-lisp-mode-hook)
  :pipeline
  (when-let* ((filename (buffer-file-name))
              (_ (derived-mode-p 'emacs-lisp-mode))
@@ -834,7 +908,6 @@ where TABLE is a hash of `builder-candidate' objects.")
 
 (builder-register-candidates
  :name "emacs-lisp-project"
- :hooks '(emacs-lisp-mode-hook)
  :pipeline
  (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
              (el-files (builder--el-files-in-directory project-root-directory))
