@@ -1327,7 +1327,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (add-hook 'markdown-mode-hook 'turn-on-soft-wrap)
-  (add-hook 'markdown-mode-hook (lambda () (setq imenu-generic-expression markdown-imenu-generic-expression)))
+  (defun tychoish/markdown-setup-imenu ()
+    (setq imenu-generic-expression markdown-imenu-generic-expression))
+  (add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)
   :config
   (if (eq system-type 'darwin)
       (setq markdown-command "/usr/local/bin/mmd --nosmart")

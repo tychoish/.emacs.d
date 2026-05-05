@@ -618,11 +618,13 @@ This combines the host name and the dameon name."
 
 (add-one-shot-hook :name "delight-modeline"
  :function tychoish/set-up-delightful-mode-lighters
- :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
+ :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook)
+ :idle-timer 0.2)
 
 (add-one-shot-hook :name "restore-desktop"
  :function tychoish/desktop-read-init
- :hook after-first-frame-created)
+ :hook after-first-frame-created
+ :idle-timer 0.2)
 
 (add-one-shot-hook :name "emacs-lockfile-setup"
  :form (progn
@@ -635,18 +637,23 @@ This combines the host name and the dameon name."
 (add-one-shot-hook :name "emacs-instance-persistence"
  :form (tychoish/set-up-emacs-instance-persistence)
  :depth 75
- :hook after-first-frame-created)
+ :hook after-first-frame-created
+ :idle-timer 0.5)
 
 
 (add-one-shot-hook :name "enable-modes"
  :function tychoish/init-late-enable-modes
- :hook 'emacs-startup-hook)
+ :hook 'emacs-startup-hook
+ :idle-timer 0.3)
 
 (add-one-shot-hook :name "ssh-agent"
  :form (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
-(add-hook 'emacs-startup-hook #'tychoish/ensure-default-font)
+(add-one-shot-hook :name "ensure-default-font"
+ :function tychoish/ensure-default-font
+ :hook 'emacs-startup-hook
+ :idle-timer 0.1)
 (add-hook 'emacs-startup-hook #'tychoish/ensure-light-theme)
 (add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
 
@@ -861,7 +868,9 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 	(font-cell (assoc 'font default-frame-alist)))
     (if font-cell
 	(setcdr font-cell new-font-name)
-      (add-to-list 'default-frame-alist (cons 'font new-font-name))))
+      (add-to-list 'default-frame-alist (cons 'font new-font-name)))
+    (when (display-graphic-p)
+      (set-frame-font new-font-name nil t)))
   (assoc 'font default-frame-alist))
 
 (defun tychoish/ensure-font (font-face-name size)

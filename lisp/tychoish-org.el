@@ -631,6 +631,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 (add-one-shot-hook
  :name "org-capture [install standard templates]"
  :hook 'emacs-startup-hook
- :operation #'tychoish-org--setup-standard-capture-templates)
+ :operation #'tychoish-org--setup-standard-capture-templates
+ :idle-timer 1.0)
 
 (provide 'tychoish-org)

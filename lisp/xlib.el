@@ -576,7 +576,7 @@ OPTIONS may be a single symbol or a list of symbols."
 (cl-defmacro add-one-shot-hook
     (&key name hook function result body form operation
      ;; flags and options; with defaults
-     (args nil) (local nil) (persist nil) (count 1) (depth 0) (make-unique nil) (cleanup nil))
+     (args nil) (local nil) (persist nil) (count 1) (depth 0) (make-unique nil) (cleanup nil) (idle-timer nil))
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
 	 (count-tag (cond (persist "perpeutal")
@@ -607,50 +607,62 @@ OPTIONS may be a single symbol or a list of symbols."
     (unless hooks
       (user-error "must have a symbol, list of symbols or form that evaluates to same for hook [%S]" hooks))
 
-    `(progn
-       (let ((count ,count)
-	     (run-count 0))
-	 (cl-flet ((counter-increment (lambda () (cl-incf run-count)))
-		   (counter-expired (lambda () (and (not ,persist) (>= run-count count)))))
+    (let* ((timer-name (format "<one-shot-hook> %s" name))
+	   (filtered-hooks (--remove (eq 'quote it) hooks))
+	   (resolved-form
+	    (or (cond (form
+		       form)
+		      (body
+		       `,@body)
+		      (result
+		       `,(eval result))
+		      (operation
+		       (if args
+			   `(apply ,operation ,args)
+			 `(funcall ,operation)))
+		      ((and (symbolp function) (functionp function))
+		       (if args
+			   `(apply ',function ,args)
+			 `(funcall ',function)))
+		      ((and (functionp function) (listp function))
+		       function)
+		      ((symbolp function)
+		       (if args
+			   `(apply ',function ,args)
+			 `(funcall ',function)))
+		      ((listp function)
+		       function))
+		(user-error "could not resolve the hook function from input for %s" name)))
+	   (remove-hook-forms
+	    (--map `(remove-hook ',it ',cleanup-symbol ,local) filtered-hooks))
+	   (cleanup-expr
+	    (if (or make-unique cleanup)
+		`(unintern ',cleanup-symbol obarray)
+	      t)))
 
-	   (defun ,cleanup-symbol ,args
-	     (with-slow-op-timer
-	      ,(format "<one-shot-hook> %s" name)
+      `(progn
+	 (let ((count ,count)
+	       (run-count 0))
+	   (cl-flet ((counter-increment (lambda () (cl-incf run-count)))
+		     (counter-expired (lambda () (and (not ,persist) (>= run-count count)))))
 
-	      ,(or (cond (form
-			  form)
-			 (body
-			  `,@body)
-			 (result
-			  `,(eval result))
-			 (operation
-			  (if args
-			      `(apply ,operation ,args)
-			    `(funcall ,operation)))
-			 ((and (symbolp function) (functionp function))
-			  (if args
-			      `(apply ',function ,args)
-			    `(funcall ',function)))
-			 ((and (functionp function) (listp function))
-			  function)
-			 ((symbolp function)
-			  (eval function))
-			 ((listp function)
-			  function))
-		  (user-error "could not resolve the hook function from input for %s" name))
+	     (defun ,cleanup-symbol ,args
+	       ,@(if idle-timer
+		     `((run-with-idle-timer ,idle-timer nil
+			 (lambda ()
+			   (with-slow-op-timer ,timer-name ,resolved-form)))
+		       (counter-increment)
+		       (when (counter-expired)
+			 ,@remove-hook-forms
+			 ,cleanup-expr))
+		   `((with-slow-op-timer ,timer-name
+		       ,resolved-form
+		       (counter-increment)
+		       (when (counter-expired)
+			 ,@remove-hook-forms
+			 ,cleanup-expr))))))
 
-	      (counter-increment)
-
-	      (when (counter-expired)
-		,@(--map
-		   `(remove-hook ',it ',cleanup-symbol ,local)
-		   (--remove (eq 'quote it) hooks))
-
-		,(if (or make-unique cleanup)
-		     `(unintern ',cleanup-symbol obarray)
-		   t)))))
-
-	 ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) (--remove (eq 'quote it) hooks))))))
+	   ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) filtered-hooks))))))
 
 (defmacro make-run-hooks-function-for (mode)
   (let* ((mode-name (symbol-name mode))
