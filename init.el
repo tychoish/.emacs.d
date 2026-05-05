@@ -116,9 +116,6 @@ lived instances. Other ephemeral instance names ones may be useful.")
    (setq custom-file (tychoish/conf-state-path "custom.el"))
    'tychoish-bootstrap)
 
-  (with-slow-op-timer "<init> tychoish-common"
-    (require 'tychoish-common))
-
   ;; remaining use-package declarations.
   (with-slow-op-timer "<init> load tychoish-core"
    (require 'tychoish-core))
@@ -135,3 +132,4 @@ lived instances. Other ephemeral instance names ones may be useful.")
    (tychoish-set-up-user-local-config))))
 
 (provide 'init)
+

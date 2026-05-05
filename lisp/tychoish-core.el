@@ -1930,17 +1930,17 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 ;;
 ;; emacs lisp static analysis
 
-(use-package relint
-  :ensure t
-  :commands (relint-file relint-directory relint-current-buffer))
+;; (use-package relint
+;;   :ensure t
+;;   :commands (relint-file relint-directory relint-current-buffer))
 
-(use-package package-lint
-  :ensure t
-  :commands (package-lint-current-buffer package-lint-batch-and-exit))
+;; (use-package package-lint
+;;   :ensure t
+;;   :commands (package-lint-current-buffer package-lint-batch-and-exit))
 
-(use-package elisp-lint
-  :ensure t
-  :commands (elisp-lint-file))
+;; (use-package elisp-lint
+;;   :ensure t
+;;   :commands (elisp-lint-file))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

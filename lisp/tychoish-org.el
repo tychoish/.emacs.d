@@ -622,9 +622,6 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 
 ;; hooks
 
-(eval-when-compile
-  (require 'tychoish-common))
-
 (add-one-shot-hook
  :name "org-install-aux-packages"
  :hook 'org-mode-hook
