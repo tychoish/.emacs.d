@@ -73,7 +73,7 @@
 
   (add-one-shot-hook
    :name "doom-modeline"
-   :function doom-modeline-mode
+   :form (run-with-idle-timer 0.1 nil #'doom-modeline-mode 1)
    :hook (if (daemonp)
 	     'server-after-make-frame-hook
 	   'window-setup-hook))

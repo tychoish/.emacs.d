@@ -652,7 +652,7 @@ This combines the host name and the dameon name."
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (add-hook 'emacs-startup-hook #'tychoish/ensure-default-font)
-(add-hook 'window-setup-hook #'tychoish/ensure-light-theme)
+(add-hook 'emacs-startup-hook #'tychoish/ensure-light-theme)
 (add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
 
 (defun tychoish--load-user-file (feat)
