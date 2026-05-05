@@ -600,6 +600,7 @@ This combines the host name and the dameon name."
     (xterm-mouse-mode 1)
     (electric-pair-mode 1)
     (which-key-mode 1)
+    (menu-bar-mode -1)
     (with-silence
       (repeat-mode 1))))
 
@@ -617,19 +618,19 @@ This combines the host name and the dameon name."
     (delight 'visual-line-mode " wr")
     (delight 'fundamental-mode "fun")))
 
-(add-one-shot-hook 
+(add-one-shot-hook
  :name "delight-modeline"
  :function tychoish/set-up-delightful-mode-lighters
  :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook)
  :idle-timer 0.2)
 
-(add-one-shot-hook 
+(add-one-shot-hook
  :name "restore-desktop"
  :function tychoish/desktop-read-init
  :hook after-first-frame-created
  :idle-timer 0.2)
 
-(add-one-shot-hook 
+(add-one-shot-hook
  :name "emacs-lockfile-setup"
  :form (progn
          (tychoish/init-late-set-up-naming)
