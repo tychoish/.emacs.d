@@ -586,7 +586,8 @@ OPTIONS may be a single symbol or a list of symbols."
 	 (cleanup-symbol (intern (s-join-with-hyphen "one-shot" count-tag name (symbol-name unique-tag))))
 	 hooks)
 
-    (when (eq hook 'after-first-frame-created)
+    (when (or (eq hook 'after-first-frame-created)
+              (equal hook '(quote after-first-frame-created)))
       (setq hook (if (daemonp)
 		     'server-after-make-frame-hook
 		   'window-setup-hook)))

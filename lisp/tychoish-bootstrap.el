@@ -660,7 +660,7 @@ This combines the host name and the dameon name."
 (add-one-shot-hook
  :name "ensure-default-font"
  :function tychoish/ensure-default-font
- :hook 'emacs-startup-hook
+ :hook after-first-frame-created
  :idle-timer 0.1)
 
 (add-hook 'emacs-startup-hook #'tychoish/ensure-light-theme)
