@@ -227,8 +227,9 @@
  :prefix "m"
  :prefix-map tychoish/robot-gptel-set-default-model-map)
 
-(which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
-  "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
+(with-eval-after-load 'which-key
+  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
+    "p" '("project-grep" . tychoish/ecclectic-grep-project-map)))
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
@@ -243,7 +244,7 @@
 (setq ad-redefinition-action 'accept)
 
 (setq fringe-mode 0)
-(setq ring-bell-function (lambda () nil))
+(setq ring-bell-function #'ignore)
 (setq font-lock-support-mode 'jit-lock-mode)
 (setq jit-lock-stealth-time nil)
 (setq jit-lock-defer-time 0.2)
@@ -424,7 +425,8 @@ This combines the host name and the dameon name."
 		      (reverse)
 		      (-non-nil))))
 
-(setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell")))
+(with-eval-after-load 'eshell
+  (setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -579,10 +581,6 @@ This combines the host name and the dameon name."
   (tychoish/ensure-light-theme)
   (tychoish-set-up-user-local-config))
 
-(defun tychoish/init-late-disable-modes ()
-  (with-slow-op-timer
-   "<bootstrap.el> after-init [disable modes]"
-   (indent-tabs-mode -1)))
 
 (defun tychoish/init-late-set-up-naming ()
   (with-slow-op-timer
@@ -639,13 +637,10 @@ This combines the host name and the dameon name."
  :depth 75
  :hook after-first-frame-created)
 
-(add-one-shot-hook :name "disable-modes"
- :function tychoish/init-late-disable-modes
- :hook emacs-startup-hook)
 
 (add-one-shot-hook :name "enable-modes"
  :function tychoish/init-late-enable-modes
- :hook '(prog-mode-hook text-mode-hook))
+ :hook 'emacs-startup-hook)
 
 (add-one-shot-hook :name "ssh-agent"
  :form (tychoish/set-up-ssh-agent)

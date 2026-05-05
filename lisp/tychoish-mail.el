@@ -19,6 +19,7 @@
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 
 (autoload 'annotated-completing-read "annotated-completing-read")
+(autoload 'annotated-completing-read-directory "annotated-completing-read")
 (declare-function cape-capf-prefix-length "cape")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
@@ -50,7 +51,6 @@
 (setq consult-mu-saved-searches-async '("#flag:unread"))
 
 (with-eval-after-load 'consult-mu
-  (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
   (with-slow-op-timer
    "<mail.el> consult-mu extensions"
    (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/extras/"))

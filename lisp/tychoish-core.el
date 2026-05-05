@@ -44,11 +44,12 @@
     (add-to-list 'custom-theme-load-path theme-directory)
     (add-to-list 'load-path theme-directory))
 
-  (setq modus-themes-deuteranopia t)
-  (setq modus-themes-common-palette-overrides
-        '((border-mode-line-active bg-mode-line-active)
-          (border-mode-line-inactive bg-mode-line-inactive)
-          (message-separator bg-main))))
+  (with-eval-after-load 'modus-themes
+    (setq modus-themes-deuteranopia t)
+    (setq modus-themes-common-palette-overrides
+          '((border-mode-line-active bg-mode-line-active)
+            (border-mode-line-inactive bg-mode-line-inactive)
+            (message-separator bg-main)))))
 
 ;; (use-package modus-themes-exporter
 ;;   :after modus-themes
@@ -2021,8 +2022,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'eglot-stay-out-of 'flymake)
   (add-to-list 'eglot-stay-out-of 'company)
 
-  (add-hook 'before-save-hook 'eglot-format-for-hook nil t)
-  (add-hook 'before-save-hook 'eglot-organize-imports nil t)
+  (defun tychoish/eglot-before-save-hook ()
+    (add-hook 'before-save-hook #'eglot-format-for-hook nil t)
+    (add-hook 'before-save-hook #'eglot-organize-imports nil t))
+
+  (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-before-save-hook)
 
   (add-to-list 'eglot-server-programs
                `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
