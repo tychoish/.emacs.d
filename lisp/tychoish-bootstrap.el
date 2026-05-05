@@ -800,7 +800,6 @@ were recompiled."
 (defun frame-unset-background-for-tty (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
   (unless (display-graphic-p frame)
-    (set-background-color "unspecified-bg")
     (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
 
 (defun current-frame-unset-background-for-tty ()
