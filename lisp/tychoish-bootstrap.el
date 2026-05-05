@@ -561,8 +561,9 @@ This combines the host name and the dameon name."
    (--mapc (with-slow-op-timer (format "<hook> %s" it)
 	    (funcall inner it)))))
 
-(advice-add 'run-hooks :around 'with-hook-timing)
-(advice-add 'run-hooks-with-args :around 'with-hook-timing)
+(when slow-op-reporting
+  (advice-add 'run-hooks :around 'with-hook-timing)
+  (advice-add 'run-hooks-with-args :around 'with-hook-timing))
 
 (setq default-frame-alist (unless (gui-p) '((background-color . nil))))
 

@@ -155,60 +155,60 @@
 
 ;; configuration
 
-;; org-faces
-(setq org-todo-keyword-faces
-      '(("TODO" . org-warning)
-        ("INPROGRESS" . "orange")
-        ("INCOMPLETE" . "orange")
-        ("SCHEDULED" . "green")
-        ("BACKLOG" . (:foreground "orange" :weight bold))
-        ("PROJECT" . (:foreground "blue" :weight bold))))
+(with-eval-after-load 'org
+  ;; org-faces
+  (setq org-todo-keyword-faces
+        '(("TODO" . org-warning)
+          ("INPROGRESS" . "orange")
+          ("INCOMPLETE" . "orange")
+          ("SCHEDULED" . "green")
+          ("BACKLOG" . (:foreground "orange" :weight bold))
+          ("PROJECT" . (:foreground "blue" :weight bold))))
 
-;; org.el
-(setq org-todo-keywords
-      '((sequence "TODO(t)" "|" "DONE(d!)")
-        (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
-(setq org-tag-alist
-      '((:startgroup . nil)
-        ("inbox" . ?i)
-        ("backlog" . ?b)
-        (:endgroup . nil)
-        (:startgroup . nil)
-        ("@desk" . ?d)
-        ("@personal" . ?p)
-        ("@work" . ?w)
-        (:endgroup . nil)))
+  ;; org.el
+  (setq org-todo-keywords
+        '((sequence "TODO(t)" "|" "DONE(d!)")
+          (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
+  (setq org-tag-alist
+        '((:startgroup . nil)
+          ("inbox" . ?i)
+          ("backlog" . ?b)
+          (:endgroup . nil)
+          (:startgroup . nil)
+          ("@desk" . ?d)
+          ("@personal" . ?p)
+          ("@work" . ?w)
+          (:endgroup . nil)))
 
-;; org.el
-(setq org-CUA-compatible t)
-(setq org-tags-column -70)
-(setq org-enforce-todo-checkbox-dependencies t)
-(setq org-enforce-todo-dependencies t)
-(setq org-fast-tag-selection-include-todo t)
-(setq org-fontify-done-headline t)
-(setq org-footnote-auto-label nil)
-(setq org-footnote-define-inline nil)
-(setq org-footnote-section nil)
-(setq org-log-into-drawer t)
-(setq org-provide-todo-statistics t)
-(setq org-reverse-note-order t)
-(setq org-startup-folded 'content)
-(setq org-startup-indented nil)
-(setq org-tags-exclude-from-inheritance '("project"))
-(setq org-track-ordered-property-with-tag t)
-(setq org-use-fast-tag-selection 'auto)
-(setq org-use-fast-todo-selection 'auto)
+  (setq org-CUA-compatible t)
+  (setq org-tags-column -70)
+  (setq org-enforce-todo-checkbox-dependencies t)
+  (setq org-enforce-todo-dependencies t)
+  (setq org-fast-tag-selection-include-todo t)
+  (setq org-fontify-done-headline t)
+  (setq org-footnote-auto-label nil)
+  (setq org-footnote-define-inline nil)
+  (setq org-footnote-section nil)
+  (setq org-log-into-drawer t)
+  (setq org-provide-todo-statistics t)
+  (setq org-reverse-note-order t)
+  (setq org-startup-folded 'content)
+  (setq org-startup-indented nil)
+  (setq org-tags-exclude-from-inheritance '("project"))
+  (setq org-track-ordered-property-with-tag t)
+  (setq org-use-fast-tag-selection 'auto)
+  (setq org-use-fast-todo-selection 'auto)
 
-;; org-refile.el
-(setq org-outline-path-complete-in-steps nil)
-(setq org-refile-allow-creating-parent-nodes 'confirm)
-(setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
-(setq org-refile-use-outline-path 'file)
+  ;; org-refile.el
+  (setq org-outline-path-complete-in-steps nil)
+  (setq org-refile-allow-creating-parent-nodes 'confirm)
+  (setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
+  (setq org-refile-use-outline-path 'file)
 
-;; org-keys.el
-(setq org-replace-disputed-keys t)
-(setq org-return-follows-link t)
-(setq org-use-speed-commands #'tychoish/org-use-speed-commands)
+  ;; org-keys.el
+  (setq org-replace-disputed-keys t)
+  (setq org-return-follows-link t)
+  (setq org-use-speed-commands #'tychoish/org-use-speed-commands))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -374,28 +374,29 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 
 ;; org-agenda
 
-(setq org-agenda-skip-function-global #'tychoish-org-skip-child-of-project-tag)
+(with-eval-after-load 'org-agenda
+  (setq org-agenda-skip-function-global #'tychoish-org-skip-child-of-project-tag)
 
-(setq org-agenda-custom-commands
-      '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
-         ((org-agenda-skip-function-global nil)))))
+  (setq org-agenda-custom-commands
+        '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
+           ((org-agenda-skip-function-global nil)))))
 
-(setq org-agenda-include-diary nil)
-(setq org-agenda-block-separator nil)
-(setq org-agenda-columns-add-appointments-to-effort-sum t)
-(setq org-agenda-compact-blocks t)
-(setq org-agenda-default-appointment-duration 60)
-(setq org-agenda-inhibit-startup nil)
-(setq org-agenda-mouse-1-follows-link t)
-(setq org-agenda-use-time-grid t)
-(setq org-agenda-skip-deadline-if-done nil)
-(setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
-(setq org-agenda-skip-scheduled-if-done t)
-(setq org-agenda-skip-unavailable-files t)
-(setq org-agenda-skip-timestamp-if-done t)
-(setq org-agenda-todo-ignore-deadlines t)
-(setq org-agenda-todo-ignore-scheduled t)
-(setq org-agenda-start-on-weekday nil)
+  (setq org-agenda-include-diary nil)
+  (setq org-agenda-block-separator nil)
+  (setq org-agenda-columns-add-appointments-to-effort-sum t)
+  (setq org-agenda-compact-blocks t)
+  (setq org-agenda-default-appointment-duration 60)
+  (setq org-agenda-inhibit-startup nil)
+  (setq org-agenda-mouse-1-follows-link t)
+  (setq org-agenda-use-time-grid t)
+  (setq org-agenda-skip-deadline-if-done nil)
+  (setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
+  (setq org-agenda-skip-scheduled-if-done t)
+  (setq org-agenda-skip-unavailable-files t)
+  (setq org-agenda-skip-timestamp-if-done t)
+  (setq org-agenda-todo-ignore-deadlines t)
+  (setq org-agenda-todo-ignore-scheduled t)
+  (setq org-agenda-start-on-weekday nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

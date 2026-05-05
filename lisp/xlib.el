@@ -50,13 +50,15 @@
 (defmacro with-slow-op-timer (name &rest body)
   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
   (declare (indent 1) (debug t))
-  `(let* ((inhibit-message t)
-	  (time (current-time))
-	  (return-value (progn ,@body))
-	  (duration (time-to-seconds (time-since time))))
-     (when (and slow-op-reporting (> duration slow-op-threshold))
-       (message "[op]: %s: %.06fs" ,name duration))
-     return-value))
+  `(if (not slow-op-reporting)
+       (progn ,@body)
+     (let* ((inhibit-message t)
+	    (time (current-time))
+	    (return-value (progn ,@body))
+	    (duration (time-to-seconds (time-since time))))
+       (when (> duration slow-op-threshold)
+	 (message "[op]: %s: %.06fs" ,name duration))
+       return-value)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -799,11 +801,8 @@ OPTIONS may be a single symbol or a list of symbols."
 	    (current-buffer))))))
 
 (defun package-avalible-p (name)
-  "Return non-nil if package NAME is installed and can be loaded."
-  (or (featurep name)
-      (when (package-installed-p name)
-        (require name)
-        t)))
+  "Return non-nil if package NAME is currently loaded."
+  (featurep name))
 
 (defun approximate-project-root ()
   "Return the current project root, falling back to `default-directory'."

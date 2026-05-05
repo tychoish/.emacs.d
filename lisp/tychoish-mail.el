@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'mu4e-autoloads)
+(require 'mu4e-autoloads nil t)
 
 (declare-function f-join "f")
 (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
@@ -18,7 +18,7 @@
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 
-(require 'annotated-completing-read)
+(autoload 'annotated-completing-read "annotated-completing-read")
 (declare-function cape-capf-prefix-length "cape")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
