@@ -567,8 +567,6 @@ This combines the host name and the dameon name."
   (advice-add 'run-hooks :around 'with-hook-timing)
   (advice-add 'run-hooks-with-args :around 'with-hook-timing))
 
-(setq default-frame-alist (unless (gui-p) '((background-color . nil))))
-
 (defun tychoish/init-force-relaod ()
   (load "tychoish-bootstrap.el")
   (load "tychoish-core.el")
@@ -600,9 +598,12 @@ This combines the host name and the dameon name."
     (xterm-mouse-mode 1)
     (electric-pair-mode 1)
     (which-key-mode 1)
-    (menu-bar-mode -1)
+
     (with-silence
       (repeat-mode 1))))
+
+(unless (gui-p)
+  (push '(background-color . nil) default-frame-alist))
 
 (defun tychoish/set-up-delightful-mode-lighters ()
   (with-slow-op-timer
