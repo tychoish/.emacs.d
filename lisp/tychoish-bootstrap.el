@@ -239,7 +239,7 @@
 (put 'list-threads 'disabled nil)
 
 (with-eval-after-load "warnings"
- (add-to-list 'warning-suppress-log-types '(frameset)))
+  (add-to-list 'warning-suppress-log-types '(frameset)))
 
 (setq ad-redefinition-action 'accept)
 
@@ -361,7 +361,7 @@
         newline-mark))
 
 (make-read-extended-command-for-prefix  "clipboard"
- :bind-key "C-x x c")
+                                        :bind-key "C-x x c")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -399,12 +399,12 @@
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (or tychoish-cache--conf-emacs-host-and-instance
 	(setq-local tychoish-cache--conf-emacs-host-and-instance
-	      (list
-	       (if (eq system-type 'darwin)
-		   (car (s-split "\\." (system-name)))
-		 (system-name))
-	       (or tychoish/emacs-instance-id
-		   (tychoish/resolve-instance-id)))))))
+	            (list
+	             (if (eq system-type 'darwin)
+		         (car (s-split "\\." (system-name)))
+		       (system-name))
+	             (or tychoish/emacs-instance-id
+		         (tychoish/resolve-instance-id)))))))
 
 (defconst tychoish/conf-state-directory-name "state")
 
@@ -417,13 +417,13 @@
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
   (s-join "-" (->> (tychoish/conf-emacs-host-and-instance)
-		      (reverse)
-		      (-concat (-l (when (or (equal "root" user-login-name)
-					     (f-symlink-p user-emacs-directory))
-				     user-login-name)
-				   name))
-		      (reverse)
-		      (-non-nil))))
+		   (reverse)
+		   (-concat (-l (when (or (equal "root" user-login-name)
+					  (f-symlink-p user-emacs-directory))
+				  user-login-name)
+				name))
+		   (reverse)
+		   (-non-nil))))
 
 (with-eval-after-load 'eshell
   (setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))
@@ -436,8 +436,8 @@ This combines the host name and the dameon name."
 
 (defun tychoish/set-up-emacs-instance-persistence ()
   (with-silence
-   (recentf-mode 1)
-   (savehist-mode 1))
+    (recentf-mode 1)
+    (savehist-mode 1))
 
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" 'consult-recent-file 'global-map))
@@ -538,7 +538,7 @@ This combines the host name and the dameon name."
 (advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
 
 (defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
-    "Hacky fix to resolve issue with native comp."
+  "Hacky fix to resolve issue with native comp."
   ;; https://emacs.stackexchange.com/questions/82010/why-is-emacs-recompiling-some-packages-on-every-startup
   (let* ((naive-elc-file (file-name-with-extension file "elc"))
          (elc-file (replace-regexp-in-string "\\.el\\.elc$" ".elc" naive-elc-file)))
@@ -560,8 +560,8 @@ This combines the host name and the dameon name."
 
 (defun with-hook-timing (inner &rest args)
   (->> args
-   (--mapc (with-slow-op-timer (format "<hook> %s" it)
-	    (funcall inner it)))))
+       (--mapc (with-slow-op-timer (format "<hook> %s" it)
+	         (funcall inner it)))))
 
 (when slow-op-reporting
   (advice-add 'run-hooks :around 'with-hook-timing)
@@ -584,83 +584,91 @@ This combines the host name and the dameon name."
 
 (defun tychoish/init-late-set-up-naming ()
   (with-slow-op-timer
-   "<bootstrap.el> after-init [theme setup]"
+    "<bootstrap.el> after-init [theme setup]"
     (tychoish/set-up-instance-name)
     (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
     (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))))
 
 (defun tychoish/init-late-enable-modes ()
   (with-slow-op-timer
-   "<bootstrap.el> after-init [enable-modes]"
-   (global-auto-revert-mode 1)
-   (column-number-mode 1)
-   (delete-selection-mode 1)
-   (winner-mode 1)
-   (transient-mark-mode 1)
-   (xterm-mouse-mode 1)
-   (electric-pair-mode 1)
-   (which-key-mode 1)
-   (repeat-mode 1)))
+    "<bootstrap.el> after-init [enable-modes]"
+    (global-auto-revert-mode 1)
+    (column-number-mode 1)
+    (delete-selection-mode 1)
+    (winner-mode 1)
+    (transient-mark-mode 1)
+    (xterm-mouse-mode 1)
+    (electric-pair-mode 1)
+    (which-key-mode 1)
+    (with-silence
+      (repeat-mode 1))))
 
 (defun tychoish/set-up-delightful-mode-lighters ()
   (with-slow-op-timer
-   "<bootstrap.el> after-init [delight]"
-   (delight 'org-mode "org")
-   (delight 'org-agenda-mode "agenda")
-   (delight 'auto-revert-mode)
-   (delight 'eldoc-mode)
-   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
-   (delight 'auto-fill-function " afm")
-   (delight 'overwrite-mode "om")
-   (delight 'refill-mode "rf")
-   (delight 'visual-line-mode " wr")
-   (delight 'fundamental-mode "fun")))
+    "<bootstrap.el> after-init [delight]"
+    (delight 'org-mode "org")
+    (delight 'org-agenda-mode "agenda")
+    (delight 'auto-revert-mode)
+    (delight 'eldoc-mode)
+    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
+    (delight 'auto-fill-function " afm")
+    (delight 'overwrite-mode "om")
+    (delight 'refill-mode "rf")
+    (delight 'visual-line-mode " wr")
+    (delight 'fundamental-mode "fun")))
 
-(add-one-shot-hook :name "delight-modeline"
+(add-one-shot-hook 
+ :name "delight-modeline"
  :function tychoish/set-up-delightful-mode-lighters
  :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook)
  :idle-timer 0.2)
 
-(add-one-shot-hook :name "restore-desktop"
+(add-one-shot-hook 
+ :name "restore-desktop"
  :function tychoish/desktop-read-init
  :hook after-first-frame-created
  :idle-timer 0.2)
 
-(add-one-shot-hook :name "emacs-lockfile-setup"
+(add-one-shot-hook 
+ :name "emacs-lockfile-setup"
  :form (progn
          (tychoish/init-late-set-up-naming)
          (if (equal "solo" tychoish/emacs-instance-id)
-	       (tychoish/set-up-ephemeral-instance-file-locks)
+	     (tychoish/set-up-ephemeral-instance-file-locks)
 	   (tychoish/set-up-named-instance-file-locks)))
  :hook emacs-startup-hook)
 
-(add-one-shot-hook :name "emacs-instance-persistence"
+(add-one-shot-hook
+ :name "emacs-instance-persistence"
  :form (tychoish/set-up-emacs-instance-persistence)
  :depth 75
  :hook after-first-frame-created
  :idle-timer 0.5)
 
-
-(add-one-shot-hook :name "enable-modes"
+(add-one-shot-hook
+ :name "enable-modes"
  :function tychoish/init-late-enable-modes
  :hook 'emacs-startup-hook
  :idle-timer 0.3)
 
-(add-one-shot-hook :name "ssh-agent"
+(add-one-shot-hook
+ :name "ssh-agent"
  :form (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
-(add-one-shot-hook :name "ensure-default-font"
+(add-one-shot-hook
+ :name "ensure-default-font"
  :function tychoish/ensure-default-font
  :hook 'emacs-startup-hook
  :idle-timer 0.1)
+
 (add-hook 'emacs-startup-hook #'tychoish/ensure-light-theme)
 (add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
 
 (defun tychoish--load-user-file (feat)
   (with-slow-op-timer
-   (format "<%s.el> load user directory file" feat)
-   (require feat)))
+    (format "<%s.el> load user directory file" feat)
+    (require feat)))
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
@@ -750,10 +758,10 @@ were recompiled."
   (let* ((ops '(install upgrade 'reinstall))
 	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
 	 (filename (concat (f-join temporary-file-directory
-			   (s-join "-" (list
-					"emacs" tychoish/emacs-instance-id
-					"async-package"
-					(symbol-name op)))) ".log")))
+			           (s-join "-" (list
+					        "emacs" tychoish/emacs-instance-id
+					        "async-package"
+					        (symbol-name op)))) ".log")))
     (unless (member op ops)
       (user-error "%s is not a valid operation %S" op ops))
 
@@ -897,10 +905,10 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (->> (buffer-list)
        (--keep (let* ((buffer it)
 		      (name (buffer-file-name buffer)))
-		(when (and name (not (string-equal name ""))
-			   (or internal-too (/= (aref name 0) ?\s))
-			   (string-match regexp name))
-		  buffer)))))
+		 (when (and name (not (string-equal name ""))
+			    (or internal-too (/= (aref name 0) ?\s))
+			    (string-match regexp name))
+		   buffer)))))
 
 (defun buffers-matching-mode (mode)
   (->> (buffer-list)
@@ -983,12 +991,13 @@ by jump-to-definition."
 (defun kill-buffers-matching-mode (mode)
   "Kill all buffers matching the symbol defined by MODE.
 Returns the number of buffers killed."
-  (interactive (list (intern
-    (completing-read
-     "mode: " ;; prompt
-     obarray  ;; collection
-     (lambda (symbol) (s-ends-with? "-mode" (symbol-name symbol)))
-     t nil nil major-mode))))
+  (interactive
+   (list (intern
+          (completing-read
+           "mode: " ;; prompt
+           obarray  ;; collection
+           (lambda (symbol) (s-ends-with? "-mode" (symbol-name symbol)))
+           t nil nil major-mode))))
   (let* ((buffers (buffers-matching-mode mode))
 	 (count (length buffers)))
     (message "killing all buffers (%d) with mode \"%s\"" count mode)
@@ -1145,10 +1154,10 @@ Returns the number of buffers killed."
 	(wrapping-mode (if auto-fill-function
                            "hard"
                          "soft")))
-  (message "wrapping mode `%s' for %s <%s>"
-	   wrapping-mode
-	   (buffer-local-value 'major-mode buf)
-	   (buffer-name buf))))
+    (message "wrapping mode `%s' for %s <%s>"
+	     wrapping-mode
+	     (buffer-local-value 'major-mode buf)
+	     (buffer-name buf))))
 
 (advice-add 'set-fill-column :around #'ad:set-fill-column-locally)
 
@@ -1263,24 +1272,24 @@ Returns the number of buffers killed."
   "Move the blog post in the current buffer to the publication location.
 Does nothing if the current post is not in the drafts folder."
   (interactive)
-    (let* ((publish-directory (f-join tychoish-blog-path "content" "post"))
-           (original-file-name (buffer-file-name (current-buffer)))
-           (published-file-name (f-join publish-directory (file-name-nondirectory original-file-name)))
-           (current-point (point)))
-      (cond
-       ((not (equal (file-name-extension original-file-name t) tychoish-blog-extension))
-        (message "post %s has incorrect extension" original-file-name))
-       ((buffer-modified-p)
-        (message "file %s is modified. please save before publishing" original-file-name))
-       ((file-exists-p published-file-name)
-        (message "published file exists with same name. not publishing"))
-       (t
-        (message "publishing: %s" published-file-name)
-        (rename-file original-file-name published-file-name)
-        (kill-buffer nil)
-        (find-file published-file-name)
-        (set-window-point (selected-window) current-point)
-        (message "published %s to %s" original-file-name publish-directory)))))
+  (let* ((publish-directory (f-join tychoish-blog-path "content" "post"))
+         (original-file-name (buffer-file-name (current-buffer)))
+         (published-file-name (f-join publish-directory (file-name-nondirectory original-file-name)))
+         (current-point (point)))
+    (cond
+     ((not (equal (file-name-extension original-file-name t) tychoish-blog-extension))
+      (message "post %s has incorrect extension" original-file-name))
+     ((buffer-modified-p)
+      (message "file %s is modified. please save before publishing" original-file-name))
+     ((file-exists-p published-file-name)
+      (message "published file exists with same name. not publishing"))
+     (t
+      (message "publishing: %s" published-file-name)
+      (rename-file original-file-name published-file-name)
+      (kill-buffer nil)
+      (find-file published-file-name)
+      (set-window-point (selected-window) current-point)
+      (message "published %s to %s" original-file-name publish-directory)))))
 
 (defun tychoish-blog-open-drafts-dired ()
   "Open a dired buffer for the drafts folder."

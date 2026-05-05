@@ -49,7 +49,7 @@
 
 (defmacro with-slow-op-timer (name &rest body)
   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   `(if (not slow-op-reporting)
        (progn ,@body)
      (let* ((inhibit-message t)
@@ -90,33 +90,33 @@
   (cl-check-type char character "must create join function using the character to join the strings")
 
   (let* ((name (downcase (cond
-	       ((s-or-char-equal ?- char) (if use-jargon-names "kebab" "hyphen"))
-	       ((s-or-char-equal ?_ char) (if use-jargon-names "snake" "underscore"))
-	       ((s-or-char-equal ?. char) (if use-jargon-names "dot" "period"))
-	       ((s-or-char-equal ?  char) (if use-jargon-names "spc" "space"))
-	       ((s-or-char-equal ?= char) "equal")
-	       ((s-or-char-equal ?+ char) "plus")
-	       ((s-or-char-equal ?| char) "pipe")
-	       ((s-or-char-equal ?> char) "lt")
-	       ((equal char ", ") "comma-space")
-	       ((equal char "; ") "semicolon-space")
-	       ((equal char ">=") "gte")
-	       ((equal char "<=") "lte")
-	       ((equal char "<=") "lte")
-	       ((equal char "__") (if use-jargon-names "dunder" "double-underscore"))
-	       ((equal char "--") (if use-jargon-names "ddash" "double-dash"))
-	       ((equal char "=>") (if use-jargon-names "fat-arrow" "double-arrow"))
-	       ((equal char "=>>") "dubble-fat-arrow")
-	       ;; e.g. '(; : )
-	       (t (s-join "-" (s-split " " (char-to-name char)))))))
+			  ((s-or-char-equal ?- char) (if use-jargon-names "kebab" "hyphen"))
+			  ((s-or-char-equal ?_ char) (if use-jargon-names "snake" "underscore"))
+			  ((s-or-char-equal ?. char) (if use-jargon-names "dot" "period"))
+			  ((s-or-char-equal ?  char) (if use-jargon-names "spc" "space"))
+			  ((s-or-char-equal ?= char) "equal")
+			  ((s-or-char-equal ?+ char) "plus")
+			  ((s-or-char-equal ?| char) "pipe")
+			  ((s-or-char-equal ?> char) "lt")
+			  ((equal char ", ") "comma-space")
+			  ((equal char "; ") "semicolon-space")
+			  ((equal char ">=") "gte")
+			  ((equal char "<=") "lte")
+			  ((equal char "<=") "lte")
+			  ((equal char "__") (if use-jargon-names "dunder" "double-underscore"))
+			  ((equal char "--") (if use-jargon-names "ddash" "double-dash"))
+			  ((equal char "=>") (if use-jargon-names "fat-arrow" "double-arrow"))
+			  ((equal char "=>>") "dubble-fat-arrow")
+			  ;; e.g. '(; : )
+			  (t (s-join "-" (s-split " " (char-to-name char)))))))
 	 (op-name (concat "s-join-with-" name))
 	 (padding (if space-padding " " ""))
 	 (join-with (concat padding (char-to-string char) padding)))
 
-  `(defun ,(intern op-name) (&rest words)
-     (->> words
-	  (-filter-s-trim)
-	  (s-join ,join-with)))))
+    `(defun ,(intern op-name) (&rest words)
+       (->> words
+	    (-filter-s-trim)
+	    (s-join ,join-with)))))
 
 (s-define-join-string-function ?-)
 (s-define-join-string-function ? )
@@ -280,10 +280,10 @@ replace the items in the original list with the results of the function,
 returning the list. This is a destructive operation."
   (let ((output items)
 	(head items))
-     (while head
-       (setf (car head) (funcall mapper (car head)))
-       (setq head (cdr head)))
-     output))
+    (while head
+      (setf (car head) (funcall mapper (car head)))
+      (setq head (cdr head)))
+    output))
 
 (defun -in-place (mapper items)
   "Apply the `mapper' function to every item in the list `items' and
@@ -320,7 +320,7 @@ list. This is an anaphoric equivalent to `mapc'. As opposed to `--each'
 and `-each', which return nil, `-mapc' returns the input list.
 
 This is the anaphoric counterpart to `-mapc'."
-  (declare (debug (def-form form)))
+  (declare (indent defun) (debug (def-form form)))
   `(mapc (lambda (it) (ignore it) ,form) ,input-list))
 
 (defmacro --flat-map (form input-list)
@@ -330,7 +330,7 @@ are then concatenated or joined into a single flattened list. This
 provides a dash.el conforming API for the `mapcan' operation.
 
 This is the anaphoric counterpart to `-flat-map'."
-  (declare (debug (def-form form)))
+  (declare (indent defun) (debug (def-form form)))
   `(mapcan (lambda (it) (ignore it) ,form) ,input-list))
 
 (defmacro --map-in-place (form items)
@@ -339,7 +339,7 @@ list, distructively setting the return value of the form to the value in
 the list.
 
 This is the anaphoric counterpart to `-map-in-place'."
-  (declare (debug (def-form form)))
+  (declare (indent defun) (debug (def-form form)))
   `(-map-in-place (lambda (it) (ignore it) ,form) ,items))
 
 (defmacro --in-place (form items)
@@ -349,7 +349,7 @@ in the `FORM' as `it`. Returns the number of items in the list. This is
 a destructive operation.
 
 This is the anaphoric counterpart to `-in-place'."
-  (declare (debug (def-form form)))
+  (declare (indent defun) (debug (def-form form)))
   `(-in-place (lambda (it) (ignore it) ,form) ,items))
 
 (defmacro --map-uniq (form input)
@@ -360,7 +360,7 @@ overridden with the `-compare-fn' dynamic variable.
 
 This is the anaphoric counterpart to -map-unique. Although the handling
 of the equality function customization differs slightly."
-  (declare (debug (def-form form)))
+  (declare (indent defun) (debug (def-form form)))
   `(-map-uniq (lambda (it) (ignore it) ,form) ,input :test (dash--hash-test-fn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -393,7 +393,7 @@ of the equality function customization differs slightly."
 		  (when (symbolp name) name)
 		  (intern (format "%S" name))))
 	(table (or (when (ht-p name) name)
-			 (ht-create test))))
+		   (ht-create test))))
     `(progn
        (defvar ,name ,table
 	 ,(format "Hash table `%s' with named accessor functions." name))
@@ -502,7 +502,7 @@ of the equality function customization differs slightly."
 
 (defmacro f-visual-compression-function (num)
   `(defun ,(intern (concat "f-visually-compress-to-" (s-number-word num))) (path)
-       (f-visually-compress-path ,num path)))
+     (f-visually-compress-path ,num path)))
 
 (defun f-filter-directories (options &rest sequence)
   (let ((cannonicalize (option-set-p 'cannonicalize options)))
@@ -557,7 +557,7 @@ OPTIONS may be a single symbol or a list of symbols."
      ,@body))
 
 (defmacro with-force-write (&rest body)
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   `(prog1
        (progn
          (setq buffer-read-only nil)
@@ -566,7 +566,7 @@ OPTIONS may be a single symbol or a list of symbols."
 
 (defmacro pos-arg (name &key is)
   "Allow positional arguments to have annotated call-sites."
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   (unless (or (stringp name) (symbolp name))
     (user-error "cannot annotate a positional arg without a name"))
   is)
@@ -575,8 +575,8 @@ OPTIONS may be a single symbol or a list of symbols."
 
 (cl-defmacro add-one-shot-hook
     (&key name hook function result body form operation
-     ;; flags and options; with defaults
-     (args nil) (local nil) (persist nil) (count 1) (depth 0) (make-unique nil) (cleanup nil) (idle-timer nil))
+	  ;; flags and options; with defaults
+	  (args nil) (local nil) (persist nil) (count 1) (depth 0) (make-unique nil) (cleanup nil) (idle-timer nil))
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
 	 (count-tag (cond (persist "perpeutal")
@@ -649,8 +649,8 @@ OPTIONS may be a single symbol or a list of symbols."
 	     (defun ,cleanup-symbol ,args
 	       ,@(if idle-timer
 		     `((run-with-idle-timer ,idle-timer nil
-			 (lambda ()
-			   (with-slow-op-timer ,timer-name ,resolved-form)))
+					    (lambda ()
+					      (with-slow-op-timer ,timer-name ,resolved-form)))
 		       (counter-increment)
 		       (when (counter-expired)
 			 ,@remove-hook-forms
@@ -685,11 +685,11 @@ OPTIONS may be a single symbol or a list of symbols."
 
     `(progn
        ,@(--map `(defun ,(car it) ()
-		 (interactive)
-		 (,setter ,value ,(cadr it)))
-       ops)
-    ,(when keymap
-       `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
+		   (interactive)
+		   (,setter ,value ,(cadr it)))
+		ops)
+       ,(when keymap
+	  `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
 
 (cl-defmacro make-read-extended-command-for-prefix (prefix &optional &key bind-map bind-key key-alias)
   (unless (setq prefix (s-trimmed-or-nil prefix))
@@ -721,19 +721,19 @@ OPTIONS may be a single symbol or a list of symbols."
 		`(which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias)))))))
 
 (defmacro with-toggle-once (name &rest body)
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   (let ((operation (or (when (symbolp name) name)
 		       (when (stringp name) (intern name))))
 	(toggle (intern (s-join-with-hyphen (symbol-name name) "toggle-state"))))
 
-  `(progn
-     (defvar ,toggle nil
-       "Toggle variable to avoid re-execution of expensive configuration (like setting environment variables.)")
+    `(progn
+       (defvar ,toggle nil
+	 "Toggle variable to avoid re-execution of expensive configuration (like setting environment variables.)")
 
-     (defun ,operation ()
-       (unless ,toggle
-	 ,@body
-	 (setq ,toggle t))))))
+       (defun ,operation ()
+	 (unless ,toggle
+	   ,@body
+	   (setq ,toggle t))))))
 
 (defmacro with-prefix-arg (arg &rest body)
   `(let ((current-prefix-arg ,arg))
@@ -741,26 +741,26 @@ OPTIONS may be a single symbol or a list of symbols."
 
 (defmacro with-default-directory (path &rest body)
   "Run the body with `default-directory' set to the path provided"
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   `(let ((default-directory ,path))
      ,@body))
 
 (defmacro with-silence (&rest body)
   "Totally suppress message from either the minibuffer or the *Messages* buffer.."
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   `(let ((inhibit-message t)
          (message-log-max nil))
      ,@body))
 
 (defmacro with-quiet (&rest body)
   "Suppress any messages from appearing in the minibuffer area."
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   `(let ((inhibit-message t))
      ,@body))
 
 (defmacro with-temp-keymap (map &rest body)
   "Create a temporary MAP and return it after evaluating it in the BODY."
-  (declare (indent 1) (debug t))
+  (declare (indent defun) (debug t))
   `(let ((,map (make-sparse-keymap)))
      ,@body
      map))
@@ -780,14 +780,14 @@ OPTIONS may be a single symbol or a list of symbols."
 
 (defmacro merge-predicate-functions (&rest preds)
   `(lambda (value)
-    (let ((head ,preds)
-	  (predicate ,(car preds))
-	  (val t))
-      (while (and val predicate)
-	(setq val (funcall predicate value)
-	      head (cdr head)
-	      predicate (car head)))
-      val)))
+     (let ((head ,preds)
+	   (predicate ,(car preds))
+	   (val t))
+       (while (and val predicate)
+	 (setq val (funcall predicate value)
+	       head (cdr head)
+	       predicate (car head)))
+       val)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
