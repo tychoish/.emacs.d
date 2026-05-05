@@ -582,11 +582,7 @@ This combines the host name and the dameon name."
 (defun tychoish/init-late-disable-modes ()
   (with-slow-op-timer
    "<bootstrap.el> after-init [disable modes]"
-   (when (boundp 'scroll-bar-mode)
-     (scroll-bar-mode -1))
-   (tool-bar-mode -1)
-   (indent-tabs-mode -1)
-   (menu-bar-mode -1)))
+   (indent-tabs-mode -1)))
 
 (defun tychoish/init-late-set-up-naming ()
   (with-slow-op-timer

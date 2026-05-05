@@ -11,6 +11,10 @@
 
 (setcar native-comp-eln-load-path (expand-file-name "~/.cache/emacs/eln/"))
 
+(push '(tool-bar-lines . 0) default-frame-alist)
+(push '(menu-bar-lines . 0) default-frame-alist)
+(push '(vertical-scroll-bars . nil) default-frame-alist)
+
 (when (string-match "NATIVE_COMP" system-configuration-features)
   (setq native-comp-jit-compilation t)
   (setq native-compile-prune-cache t))
