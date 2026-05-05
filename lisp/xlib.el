@@ -72,6 +72,8 @@
        (s-join " ")))
 
 (defun -filter-s-trim (strs)
+  "Return STRS with non-strings removed and remaining strings trimmed of whitespace.
+Empty strings and strings that are entirely whitespace are excluded from the result."
   (cl-check-type strs list "strs must be list")
   (->> strs
        (-filter #'stringp)
@@ -79,40 +81,37 @@
        (-remove #'s-empty-p)))
 
 (defun s-or-char-equal (char value)
-  (cl-check-type char character "char must be character type")
-  (cl-check-type char (or string character) "value must be or string")
-
+  "Return t when CHAR equals VALUE, where VALUE may be a character or single-char string."
+  (cl-check-type char  character             "char must be a character")
+  (cl-check-type value (or string character) "value must be a string or character")
   (if (stringp value)
       (string-equal (char-to-string char) value)
     (char-equal char value)))
 
-(cl-defmacro s-define-join-string-function (char &optional &key use-jargon-names space-padding)
-  (cl-check-type char character "must create join function using the character to join the strings")
+(defconst xlib--join-char-names
+  '((?- "hyphen" "kebab")
+    (?_ "underscore" "snake")
+    (?. "period" "dot")
+    (?\s "space" "spc")
+    (?= "equal" "equal")
+    (?+ "plus" "plus")
+    (?| "pipe" "pipe")
+    (?> "gt" "gt"))
+  "Alist of (CHAR canonical-name jargon-name) for `s-define-join-string-function'.")
 
-  (let* ((name (downcase (cond
-			  ((s-or-char-equal ?- char) (if use-jargon-names "kebab" "hyphen"))
-			  ((s-or-char-equal ?_ char) (if use-jargon-names "snake" "underscore"))
-			  ((s-or-char-equal ?. char) (if use-jargon-names "dot" "period"))
-			  ((s-or-char-equal ?  char) (if use-jargon-names "spc" "space"))
-			  ((s-or-char-equal ?= char) "equal")
-			  ((s-or-char-equal ?+ char) "plus")
-			  ((s-or-char-equal ?| char) "pipe")
-			  ((s-or-char-equal ?> char) "lt")
-			  ((equal char ", ") "comma-space")
-			  ((equal char "; ") "semicolon-space")
-			  ((equal char ">=") "gte")
-			  ((equal char "<=") "lte")
-			  ((equal char "<=") "lte")
-			  ((equal char "__") (if use-jargon-names "dunder" "double-underscore"))
-			  ((equal char "--") (if use-jargon-names "ddash" "double-dash"))
-			  ((equal char "=>") (if use-jargon-names "fat-arrow" "double-arrow"))
-			  ((equal char "=>>") "dubble-fat-arrow")
-			  ;; e.g. '(; : )
-			  (t (s-join "-" (s-split " " (char-to-name char)))))))
+(cl-defmacro s-define-join-string-function (char &optional &key use-jargon-names space-padding)
+  "Define a function `s-join-with-NAME' that joins non-empty strings with CHAR as separator.
+NAME is derived from CHAR via `xlib--join-char-names', falling back to the Unicode character
+name. When USE-JARGON-NAMES is non-nil, the alternate jargon name is used (e.g. kebab vs
+hyphen). When SPACE-PADDING is non-nil, the separator is surrounded by spaces."
+  (cl-check-type char character "must create join function using the character to join the strings")
+  (let* ((entry (assoc char xlib--join-char-names))
+         (name (downcase (if entry
+                             (if use-jargon-names (nth 2 entry) (nth 1 entry))
+                           (s-join "-" (s-split " " (char-to-name char))))))
 	 (op-name (concat "s-join-with-" name))
 	 (padding (if space-padding " " ""))
 	 (join-with (concat padding (char-to-string char) padding)))
-
     `(defun ,(intern op-name) (&rest words)
        (->> words
 	    (-filter-s-trim)
@@ -136,7 +135,7 @@
 
 (defun s-normalize-symbol-name (name)
   (let* ((sanatized (s-trim (s-collapse-whitespace name)))
-	 (canonicalized (s-replace-all (--map `(,it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) sanatized)))
+	 (canonicalized (s-replace-all (--map (cons it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) sanatized)))
     (s-collapse-hyphens canonicalized)))
 
 (defun s-trimmed-or-nil (value)
@@ -149,23 +148,21 @@
        (unless (string-empty-p (setq value (string-trim value "\\W+" "\\W+"))) value)
        value))
 
-(defun s-contains-whitespace-p (value)
-  "Return t when `VALUE' is a string consisting entirely of whitespace, nil otherwise."
+(defun s-blank-p (value)
+  "Return t when VALUE is a string that is empty or consists entirely of whitespace.
+Returns nil for non-strings, non-empty strings, and strings with non-whitespace content.
+Use this to guard against blank user input or empty configuration values."
   (and (stringp value)
        (string-empty-p (string-trim value))))
 
+(defalias 's-contains-whitespace-p #'s-blank-p)
+
 
 (defun s-default (default input)
-  "Return the DEFAULT value if the INPUT is empty or nil."
-  (cond
-   ((string-equal default input)
-    default)
-   ((eq input nil)
-    default)
-   ((string-equal input "")
-    default)
-   (t
-    input)))
+  "Return DEFAULT when INPUT is nil or an empty string, otherwise return INPUT."
+  (if (or (null input) (string-equal input ""))
+      default
+    input))
 
 (defun s-number-word (num)
   (cond
@@ -186,7 +183,7 @@
    ((eql num 15) "fifteen")
    ((eql num 16) "sixteen")
    ((eql num 17) "seventeen")
-   ((eql num 18) "eightteen")
+   ((eql num 18) "eighteen")
    ((eql num 19) "nineteen")
    ((eql num 20) "twenty")
    (:else (user-error "no string form for %d" num))))
@@ -222,6 +219,9 @@ values using the test function, which defaults to `equal'."
     (-distinct cell)))
 
 (cl-defun -distinct-paths (cell)
+  "Return CELL with duplicate file paths removed, using `f-equal-p' for comparison.
+Unlike `-distinct', this handles paths that differ only in trailing slashes or
+relative vs. absolute form when the filesystem resolves them to the same location."
   (let ((-compare-fn #'f-equal-p))
     (-distinct cell)))
 
@@ -233,7 +233,8 @@ test function, which defaults to `equal'."
     (-distinct cell)))
 
 (defun -unwind (list)
-  "Flattens a list of lists into a list by collecting items in one list"
+  "Flatten LIST by exactly one level, collecting nested list items into a single list.
+Unlike `-flatten', which recurses fully, `-unwind' only removes one layer of nesting."
   (-flatten-n 1 list))
 
 (defalias '-flat-map #'mapcan
@@ -269,10 +270,8 @@ stringified with `format' when `stringify' is set, and signal a
 		  (t (user-error "no way to handle %s value %s" (type-of it) it)))))))
 
 (defun -sparse-append (&rest items)
-  "Joins elements in a list, omitting all nil values."
-  (->> items
-       (apply #'-append)
-       (-non-nil)))
+  "Append ITEMS and remove all nil values from the concatenated result."
+  (-non-nil (apply #'append items)))
 
 (defun -map-in-place (mapper items)
   "Apply the `mapper' function to every item in the list `items' and
@@ -286,10 +285,9 @@ returning the list. This is a destructive operation."
     output))
 
 (defun -in-place (mapper items)
-  "Apply the `mapper' function to every item in the list `items' and
-replace the items in the original list with the results of the function,
-returning a count of the number of items in the list. This is a
-destructive operation."
+  "Destructively apply MAPPER to every item in ITEMS, replacing each element in place.
+Returns the count of elements processed. Use this when you need the element count rather
+than the list itself; prefer `-map-in-place' when you need the modified list back."
   (let ((head items)
 	(count 0))
     (while head
@@ -378,15 +376,21 @@ of the equality function customization differs slightly."
 
 (defmacro ht-get-function (table)
   (let ((name (symbol-name table)))
-    `(defun ,(format "ht-%s-get" name) (key) (ht-get ,table key))))
+    `(defun ,(intern (format "ht-%s-get" name)) (key)
+       "Get the value for KEY from the named hash table."
+       (ht-get ,table key))))
 
 (defmacro ht-set-function (table)
   (let ((name (symbol-name table)))
-    `(defun ,(format "ht-%s-set" name) (key value) (ht-set ,table key value))))
+    `(defun ,(intern (format "ht-%s-set" name)) (key value)
+       "Set KEY to VALUE in the named hash table, returning VALUE."
+       (ht-set ,table key value))))
 
 (defmacro ht-contains-p-function (table)
   (let ((name (symbol-name table)))
-    `(defun ,(format "ht-%s-contains-p" name) (key) (ht-contains-p ,table key))))
+    `(defun ,(intern (format "ht-%s-contains-p" name)) (key)
+       "Return non-nil if KEY is present in the named hash table."
+       (ht-contains-p ,table key))))
 
 (cl-defmacro define-ht-named-table (name &optional &key (test #'equal))
   (let ((name (or (when (stringp name) (intern name))
@@ -433,6 +437,7 @@ of the equality function customization differs slightly."
     path))
 
 (defun f-distinct (sequence)
+  "Return SEQUENCE with duplicate paths removed using `f-equal-p' for comparison."
   (let ((-compare-fn #'f-equal-p))
     (-distinct sequence)))
 
@@ -461,6 +466,8 @@ of the equality function customization differs slightly."
    ((listp path) (--flat-map (f-entries it #'f-file-p) path))))
 
 (defun f-recursive-directories-containing (filename &optional path)
+  "Return a list of directories under PATH that contain a file named FILENAME.
+Searches recursively. PATH defaults to `default-directory' when nil."
   (->> (f-entries path (lambda (f) (f-filename-is-p f filename)) t)
        (-map #'f-dirname)))
 
@@ -577,6 +584,22 @@ OPTIONS may be a single symbol or a list of symbols."
     (&key name hook function result body form operation
 	  ;; flags and options; with defaults
 	  (args nil) (local nil) (persist nil) (count 1) (depth 0) (make-unique nil) (cleanup nil) (idle-timer nil))
+  "Register a self-removing hook function named NAME on HOOK.
+The hook body is specified via one of: FUNCTION (a symbol or lambda), FORM (an
+expression), BODY (a list of forms), RESULT (evaluated at expansion time), or
+OPERATION (called via funcall/apply with optional ARGS).
+
+After firing COUNT times (default 1) the hook removes itself. Set PERSIST to t
+to keep the hook active indefinitely. When IDLE-TIMER is a number, the body
+runs in an idle timer of that many seconds rather than directly in the hook.
+
+HOOK may be a symbol, a list of symbols, or the special sentinel
+`after-first-frame-created', which routes to `window-setup-hook' in non-daemon
+sessions and `server-after-make-frame-hook' in daemon sessions.
+
+DEPTH controls hook insertion depth (default 0). LOCAL makes the hook
+buffer-local. MAKE-UNIQUE generates an uninterned symbol to avoid name
+collisions. CLEANUP uninterns the generated symbol after the hook fires."
   (let* ((unique-tag (or (when make-unique (gensym "hook-"))
 			 (make-symbol "hook")))
 	 (count-tag (cond (persist "perpeutal")
@@ -760,11 +783,12 @@ OPTIONS may be a single symbol or a list of symbols."
      ,@body))
 
 (defmacro with-temp-keymap (map &rest body)
-  "Create a temporary MAP and return it after evaluating it in the BODY."
+  "Bind MAP to a fresh sparse keymap, evaluate BODY, and return the keymap.
+Use this to build a keymap programmatically and return it in one expression."
   (declare (indent defun) (debug t))
   `(let ((,map (make-sparse-keymap)))
      ,@body
-     map))
+     ,map))
 
 (cl-defmacro setq-when-nil (variable value &optional &key local)
   `(unless ,variable
@@ -777,18 +801,15 @@ OPTIONS may be a single symbol or a list of symbols."
      (message "%s: %.06fs" ,name (float-time (time-since time)))))
 
 (defun compile-buffer-name (name)
-  `(lambda (&optional _) ,name))
+  "Return a function suitable for `compilation-buffer-name-function' that always returns NAME.
+The returned function accepts one optional argument (the compilation mode) and ignores it."
+  (lambda (&optional _) name))
 
 (defmacro merge-predicate-functions (&rest preds)
+  "Return a lambda that applies each predicate in PREDS to its argument with `and'.
+Short-circuits on the first predicate that returns nil, consistent with `and' semantics."
   `(lambda (value)
-     (let ((head ,preds)
-	   (predicate ,(car preds))
-	   (val t))
-       (while (and val predicate)
-	 (setq val (funcall predicate value)
-	       head (cdr head)
-	       predicate (car head)))
-       val)))
+     (and ,@(mapcar (lambda (p) `(funcall #',p value)) preds))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -803,23 +824,30 @@ OPTIONS may be a single symbol or a list of symbols."
 (declare-function project-buffers "project")
 
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode))
+  "Return buffers in the current project whose major mode derives from MODE.
+MODE defaults to `major-mode' of the calling buffer. Uses `approximate-project-buffers'
+to determine project membership."
   (->> (approximate-project-buffers)
        (--filter (buffer-derived-mode-p it mode))))
 
 (cl-defun mode-buffers (&optional (mode major-mode))
+  "Return all live buffers whose major mode derives from MODE.
+MODE defaults to `major-mode' of the calling buffer. Searches across all buffers,
+not just the current project."
   (->> (buffer-list)
        (--keep
 	(with-current-buffer it
 	  (when (derived-mode-p mode)
 	    (current-buffer))))))
 
-(defun package-avalible-p (name)
-  "Return non-nil if package NAME is currently loaded."
+(defun package-available-p (name)
+  "Return non-nil if the feature NAME is currently loaded via `featurep'.
+Use this to guard optional integrations with packages that may not be present."
   (featurep name))
 
 (defun approximate-project-root ()
   "Return the current project root, falling back to `default-directory'."
-  (or (when (package-avalible-p 'projectile)
+  (or (when (package-available-p 'projectile)
         (s-trimmed-or-nil (projectile-project-root)))
       (when (and (featurep 'project) (project-current))
         (project-root (project-current)))
@@ -828,7 +856,7 @@ OPTIONS may be a single symbol or a list of symbols."
 (defun approximate-project-name ()
   "Return the current project name, falling back to the directory basename."
   (s-trim-non-word-chars
-   (or (when (package-avalible-p 'projectile)
+   (or (when (package-available-p 'projectile)
          (projectile-project-name))
        (when (project-current)
          (project-root (project-current)))
@@ -836,7 +864,7 @@ OPTIONS may be a single symbol or a list of symbols."
 
 (defun approximate-project-buffers ()
   "Return buffers belonging to the current project."
-  (or (when (package-avalible-p 'projectile)
+  (or (when (package-available-p 'projectile)
         (projectile-project-buffers))
       (when (and (featurep 'project) (project-current))
         (project-buffers (project-current)))

@@ -146,26 +146,29 @@
 (ert-deftest xlib/s-trim-non-word-chars-non-string-returns-nil ()
   (should-not (s-trim-non-word-chars 42)))
 
-;;; s-contains-whitespace-p
-;; NOTE: despite the docstring, this function returns t when the string
-;; consists ENTIRELY of whitespace (the implementation checks string-empty-p
-;; after trimming), and nil when there is any non-whitespace content.
+;;; s-blank-p (was s-contains-whitespace-p)
 
-(ert-deftest xlib/s-contains-whitespace-p-all-whitespace-returns-t ()
-  (should (s-contains-whitespace-p "   ")))
+(ert-deftest xlib/s-blank-p-all-whitespace-returns-t ()
+  (should (s-blank-p "   ")))
 
-(ert-deftest xlib/s-contains-whitespace-p-empty-string-returns-t ()
-  (should (s-contains-whitespace-p "")))
+(ert-deftest xlib/s-blank-p-empty-string-returns-t ()
+  (should (s-blank-p "")))
 
-(ert-deftest xlib/s-contains-whitespace-p-non-whitespace-returns-nil ()
+(ert-deftest xlib/s-blank-p-non-whitespace-returns-nil ()
+  (should-not (s-blank-p "foo")))
+
+(ert-deftest xlib/s-blank-p-mixed-content-returns-nil ()
+  (should-not (s-blank-p "  foo  ")))
+
+(ert-deftest xlib/s-blank-p-non-string-returns-nil ()
+  (should-not (s-blank-p nil))
+  (should-not (s-blank-p 42)))
+
+(ert-deftest xlib/s-contains-whitespace-p-is-alias-for-s-blank-p ()
+  (should (fboundp 's-contains-whitespace-p))
+  (should (s-contains-whitespace-p ""))
+  (should (s-contains-whitespace-p "  "))
   (should-not (s-contains-whitespace-p "foo")))
-
-(ert-deftest xlib/s-contains-whitespace-p-mixed-content-returns-nil ()
-  (should-not (s-contains-whitespace-p "  foo  ")))
-
-(ert-deftest xlib/s-contains-whitespace-p-non-string-returns-nil ()
-  (should-not (s-contains-whitespace-p nil))
-  (should-not (s-contains-whitespace-p 42)))
 
 
 ;;; s-default
@@ -200,6 +203,28 @@
 (ert-deftest xlib/s-number-word-out-of-range-errors ()
   (should-error (s-number-word 21) :type 'user-error)
   (should-error (s-number-word 100) :type 'user-error))
+
+(ert-deftest xlib/s-number-word-exact-spellings ()
+  (should (equal "one"       (s-number-word 1)))
+  (should (equal "two"       (s-number-word 2)))
+  (should (equal "three"     (s-number-word 3)))
+  (should (equal "four"      (s-number-word 4)))
+  (should (equal "five"      (s-number-word 5)))
+  (should (equal "six"       (s-number-word 6)))
+  (should (equal "seven"     (s-number-word 7)))
+  (should (equal "eight"     (s-number-word 8)))
+  (should (equal "nine"      (s-number-word 9)))
+  (should (equal "ten"       (s-number-word 10)))
+  (should (equal "eleven"    (s-number-word 11)))
+  (should (equal "twelve"    (s-number-word 12)))
+  (should (equal "thirteen"  (s-number-word 13)))
+  (should (equal "fourteen"  (s-number-word 14)))
+  (should (equal "fifteen"   (s-number-word 15)))
+  (should (equal "sixteen"   (s-number-word 16)))
+  (should (equal "seventeen" (s-number-word 17)))
+  (should (equal "eighteen"  (s-number-word 18)))
+  (should (equal "nineteen"  (s-number-word 19)))
+  (should (equal "twenty"    (s-number-word 20))))
 
 ;;; generated join functions
 
@@ -695,14 +720,14 @@
     (should (string-match-p "foo" result))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; package-avalible-p
+;;; package-available-p
 
-(ert-deftest xlib/package-avalible-p-returns-t-for-loaded-feature ()
+(ert-deftest xlib/package-available-p-returns-t-for-loaded-feature ()
   (provide 'xlib-test-fake-feature)
-  (should (package-avalible-p 'xlib-test-fake-feature)))
+  (should (package-available-p 'xlib-test-fake-feature)))
 
-(ert-deftest xlib/package-avalible-p-returns-nil-for-unknown-package ()
-  (should-not (package-avalible-p 'xlib-test-nonexistent-package-zzz)))
+(ert-deftest xlib/package-available-p-returns-nil-for-unknown-package ()
+  (should-not (package-available-p 'xlib-test-nonexistent-package-zzz)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; approximate-project-root
@@ -716,7 +741,7 @@
 (ert-deftest xlib/approximate-project-root-fallback-is-default-directory ()
   "When no project backend is active the result is default-directory."
   (let ((default-directory temporary-file-directory))
-    (cl-letf (((symbol-function 'package-avalible-p) (lambda (_) nil))
+    (cl-letf (((symbol-function 'package-available-p) (lambda (_) nil))
               ((symbol-function 'package-installed-p) (lambda (_) nil))
               ((symbol-function 'project-current) (lambda (&rest _) nil)))
       (should (f-equal-p (expand-file-name temporary-file-directory)
@@ -725,7 +750,7 @@
 (ert-deftest xlib/approximate-project-root-uses-project-el-when-available ()
   "When project.el reports a root it is returned."
   (let* ((expected "/tmp/fake-project/"))
-    (cl-letf (((symbol-function 'package-avalible-p) (lambda (_) nil))
+    (cl-letf (((symbol-function 'package-available-p) (lambda (_) nil))
               ((symbol-function 'package-installed-p) (lambda (_) nil))
               ((symbol-function 'featurep)
                (lambda (sym &rest _)
@@ -767,10 +792,423 @@
   "When no project backend is active, the fallback includes the current buffer."
   (with-temp-buffer
     (let ((buf (current-buffer)))
-      (cl-letf (((symbol-function 'package-avalible-p) (lambda (_) nil))
+      (cl-letf (((symbol-function 'package-available-p) (lambda (_) nil))
                 ((symbol-function 'package-installed-p) (lambda (_) nil))
                 ((symbol-function 'project-current) (lambda (&rest _) nil)))
         (should (memq buf (approximate-project-buffers)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; s-normalize-symbol-name
+
+(ert-deftest xlib/s-normalize-symbol-name-spaces-to-hyphens ()
+  (should (equal "hello-world" (s-normalize-symbol-name "hello world"))))
+
+(ert-deftest xlib/s-normalize-symbol-name-punctuation-to-hyphens ()
+  (should (equal "foo-bar" (s-normalize-symbol-name "foo=bar")))
+  (should (equal "foo-bar" (s-normalize-symbol-name "foo/bar"))))
+
+(ert-deftest xlib/s-normalize-symbol-name-collapses-consecutive-hyphens ()
+  (should (equal "foo-bar" (s-normalize-symbol-name "foo   bar"))))
+
+(ert-deftest xlib/s-normalize-symbol-name-already-normalized ()
+  (should (equal "foo-bar" (s-normalize-symbol-name "foo-bar"))))
+
+(ert-deftest xlib/s-normalize-symbol-name-trims-leading-and-trailing-whitespace ()
+  (should (equal "foo-bar" (s-normalize-symbol-name "  foo bar  "))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; -distinct-paths
+
+(ert-deftest xlib/-distinct-paths-removes-duplicates ()
+  (should (equal 1 (length (-distinct-paths (list "/tmp/foo" "/tmp/foo"))))))
+
+(ert-deftest xlib/-distinct-paths-preserves-unique-paths ()
+  (let ((paths (list "/tmp/foo" "/tmp/bar")))
+    (should (equal 2 (length (-distinct-paths paths))))))
+
+(ert-deftest xlib/-distinct-paths-empty-list ()
+  (should (null (-distinct-paths nil))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; -distinct-by-alist-key
+
+(ert-deftest xlib/-distinct-by-alist-key-removes-duplicate-key-values ()
+  (let ((input '(((name . "a") (val . 1))
+                 ((name . "b") (val . 2))
+                 ((name . "a") (val . 3)))))
+    (should (= 2 (length (-distinct-by-alist-key 'name input))))))
+
+(ert-deftest xlib/-distinct-by-alist-key-preserves-first-occurrence ()
+  (let* ((input '(((name . "a") (val . 1))
+                  ((name . "a") (val . 2))))
+         (result (-distinct-by-alist-key 'name input)))
+    (should (= 1 (alist-get 'val (car result))))))
+
+(ert-deftest xlib/-distinct-by-alist-key-empty-list ()
+  (should (null (-distinct-by-alist-key 'name nil))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; -strings
+
+(ert-deftest xlib/-strings-all-strings-unchanged ()
+  (should (equal '("a" "b") (-strings "a" "b"))))
+
+(ert-deftest xlib/-strings-empty-returns-empty ()
+  (should (null (-strings))))
+
+(ert-deftest xlib/-strings-non-string-signals-user-error ()
+  (should-error (-strings "a" 42) :type 'user-error))
+
+(ert-deftest xlib/-strings-non-string-alone-signals-user-error ()
+  (should-error (-strings 42) :type 'user-error))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; --in-place
+
+(ert-deftest xlib/--in-place-modifies-via-it ()
+  (let ((lst (list 1 2 3)))
+    (--in-place (* it 2) lst)
+    (should (equal '(2 4 6) lst))))
+
+(ert-deftest xlib/--in-place-returns-count ()
+  (let ((lst (list 1 2 3)))
+    (should (= 3 (--in-place it lst)))))
+
+(ert-deftest xlib/--in-place-empty-list-returns-zero ()
+  (should (= 0 (--in-place it nil))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; --map-uniq
+
+(ert-deftest xlib/--map-uniq-removes-duplicates ()
+  (should (equal '(1 2 3) (sort (--map-uniq it '(1 2 2 3 3)) #'<))))
+
+(ert-deftest xlib/--map-uniq-applies-transform ()
+  (let ((result (--map-uniq (upcase it) '("a" "b" "a"))))
+    (should (= 2 (length result)))
+    (should (member "A" result))
+    (should (member "B" result))))
+
+(ert-deftest xlib/--map-uniq-empty-list ()
+  (should (null (--map-uniq it nil))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; define-ht-named-table
+
+(ert-deftest xlib/define-ht-named-table-creates-variable ()
+  (define-ht-named-table xlib--test-ht-table)
+  (should (boundp 'xlib--test-ht-table))
+  (should (ht-p xlib--test-ht-table)))
+
+(ert-deftest xlib/define-ht-named-table-generates-get-function ()
+  (define-ht-named-table xlib--test-ht-get)
+  (should (fboundp 'ht-xlib--test-ht-get-get)))
+
+(ert-deftest xlib/define-ht-named-table-generates-set-function ()
+  (define-ht-named-table xlib--test-ht-set)
+  (should (fboundp 'ht-xlib--test-ht-set-set)))
+
+(ert-deftest xlib/define-ht-named-table-generates-contains-p-function ()
+  (define-ht-named-table xlib--test-ht-contains)
+  (should (fboundp 'ht-xlib--test-ht-contains-contains-p)))
+
+(ert-deftest xlib/define-ht-named-table-set-and-get-roundtrip ()
+  (define-ht-named-table xlib--test-ht-roundtrip)
+  (ht-xlib--test-ht-roundtrip-set "key" "value")
+  (should (equal "value" (ht-xlib--test-ht-roundtrip-get "key"))))
+
+(ert-deftest xlib/define-ht-named-table-contains-p-after-set ()
+  (define-ht-named-table xlib--test-ht-cpset)
+  (should-not (ht-xlib--test-ht-cpset-contains-p "k"))
+  (ht-xlib--test-ht-cpset-set "k" t)
+  (should (ht-xlib--test-ht-cpset-contains-p "k")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; setq-when-nil
+
+(ert-deftest xlib/setq-when-nil-sets-when-nil ()
+  (let ((x nil))
+    (setq-when-nil x 42)
+    (should (= 42 x))))
+
+(ert-deftest xlib/setq-when-nil-does-not-overwrite-non-nil ()
+  (let ((x 99))
+    (setq-when-nil x 42)
+    (should (= 99 x))))
+
+(ert-deftest xlib/setq-when-nil-local-uses-setq-local ()
+  (with-temp-buffer
+    (setq-local default-directory nil)
+    (setq-when-nil default-directory "/tmp/" :local t)
+    (should (equal "/tmp/" default-directory))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; with-temp-keymap
+
+(ert-deftest xlib/with-temp-keymap-returns-keymap ()
+  (should (keymapp (with-temp-keymap km nil))))
+
+(ert-deftest xlib/with-temp-keymap-body-can-bind-keys ()
+  (let ((km (with-temp-keymap km
+              (define-key km (kbd "C-x") #'ignore))))
+    (should (eq #'ignore (lookup-key km (kbd "C-x"))))))
+
+(ert-deftest xlib/with-temp-keymap-is-fresh-each-call ()
+  (let ((km1 (with-temp-keymap km nil))
+        (km2 (with-temp-keymap km nil)))
+    (should-not (eq km1 km2))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; make-run-hooks-function-for
+
+(ert-deftest xlib/make-run-hooks-function-for-defines-function ()
+  (make-run-hooks-function-for xlib--test-mode)
+  (should (fboundp 'run-hooks-for-xlib--test-mode)))
+
+(ert-deftest xlib/make-run-hooks-function-for-runs-hook ()
+  (let ((fired nil))
+    (make-run-hooks-function-for xlib--test-fire-mode)
+    (add-hook 'xlib--test-fire-mode-hook (lambda () (setq fired t)))
+    (run-hooks-for-xlib--test-fire-mode)
+    (should fired)
+    (remove-hook 'xlib--test-fire-mode-hook (lambda () (setq fired t)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; create-toggle-functions
+
+(defvar xlib--test-toggle-flag nil)
+
+(create-toggle-functions xlib--test-toggle-flag)
+
+(ert-deftest xlib/create-toggle-functions-defines-turn-on ()
+  (should (fboundp 'turn-on-xlib--test-toggle-flag)))
+
+(ert-deftest xlib/create-toggle-functions-defines-turn-off ()
+  (should (fboundp 'turn-off-xlib--test-toggle-flag)))
+
+(ert-deftest xlib/create-toggle-functions-defines-toggle ()
+  (should (fboundp 'toggle-xlib--test-toggle-flag)))
+
+(ert-deftest xlib/create-toggle-functions-turn-on-sets-t ()
+  (setq xlib--test-toggle-flag nil)
+  (turn-on-xlib--test-toggle-flag)
+  (should xlib--test-toggle-flag))
+
+(ert-deftest xlib/create-toggle-functions-turn-off-sets-nil ()
+  (setq xlib--test-toggle-flag t)
+  (turn-off-xlib--test-toggle-flag)
+  (should-not xlib--test-toggle-flag))
+
+(ert-deftest xlib/create-toggle-functions-toggle-flips-value ()
+  (setq xlib--test-toggle-flag nil)
+  (toggle-xlib--test-toggle-flag)
+  (should xlib--test-toggle-flag)
+  (toggle-xlib--test-toggle-flag)
+  (should-not xlib--test-toggle-flag))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; make-read-extended-command-for-prefix
+
+(make-read-extended-command-for-prefix "xlib-test")
+
+(ert-deftest xlib/make-read-extended-command-for-prefix-defines-predicate ()
+  (should (fboundp 'read-extended-command-for-xlib-test-prefix-p)))
+
+(ert-deftest xlib/make-read-extended-command-for-prefix-defines-command ()
+  (should (fboundp 'execute-extended-xlib-test-command)))
+
+(ert-deftest xlib/make-read-extended-command-for-prefix-predicate-matches ()
+  (should (read-extended-command-for-xlib-test-prefix-p 'xlib-test-something nil)))
+
+(ert-deftest xlib/make-read-extended-command-for-prefix-predicate-rejects ()
+  (should-not (read-extended-command-for-xlib-test-prefix-p 'other-command nil)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; add-one-shot-hook: extended coverage
+
+(defvar xlib--test-hook-a nil)
+(defvar xlib--test-hook-b nil)
+
+(ert-deftest xlib/add-one-shot-hook-count-2-fires-twice ()
+  (setq xlib--test-hook-var nil)
+  (let ((fire-count 0))
+    (add-one-shot-hook
+     :name "xlib-test-count2"
+     :hook 'xlib--test-hook-var
+     :count 2
+     :form (cl-incf fire-count))
+    (run-hooks 'xlib--test-hook-var)
+    (run-hooks 'xlib--test-hook-var)
+    (run-hooks 'xlib--test-hook-var)
+    (should (= 2 fire-count))))
+
+(ert-deftest xlib/add-one-shot-hook-removes-itself-after-count-2 ()
+  (setq xlib--test-hook-var nil)
+  (add-one-shot-hook
+   :name "xlib-test-removal2"
+   :hook 'xlib--test-hook-var
+   :count 2
+   :form t)
+  (run-hooks 'xlib--test-hook-var)
+  (should xlib--test-hook-var)
+  (run-hooks 'xlib--test-hook-var)
+  (should-not xlib--test-hook-var))
+
+(ert-deftest xlib/add-one-shot-hook-multiple-hooks ()
+  (setq xlib--test-hook-a nil
+        xlib--test-hook-b nil)
+  (let ((fire-count 0))
+    (add-one-shot-hook
+     :name "xlib-test-multi"
+     :hook '(xlib--test-hook-a xlib--test-hook-b)
+     :form (cl-incf fire-count))
+    (run-hooks 'xlib--test-hook-a)
+    (should (= 1 fire-count))
+    ;; hook removed itself from both after one fire
+    (run-hooks 'xlib--test-hook-b)
+    (should (= 1 fire-count))))
+
+(ert-deftest xlib/add-one-shot-hook-after-first-frame-created-routes-to-window-setup ()
+  "In non-daemon mode, after-first-frame-created adds to window-setup-hook.
+The routing is decided at macro-expansion time via (daemonp), so in batch
+non-daemon mode this test verifies the unquoted form adds to window-setup-hook."
+  (let ((before window-setup-hook))
+    (add-one-shot-hook
+     :name "xlib-test-frame-sentinel"
+     :hook after-first-frame-created
+     :form t)
+    (unwind-protect
+        (should (> (length window-setup-hook) (length before)))
+      (setq window-setup-hook before))))
+
+(ert-deftest xlib/add-one-shot-hook-after-first-frame-created-quoted-routes-to-window-setup ()
+  "The quoted form of the sentinel is also routed correctly after the xlib.el fix."
+  (let ((before window-setup-hook))
+    (add-one-shot-hook
+     :name "xlib-test-frame-sentinel-quoted"
+     :hook 'after-first-frame-created
+     :form t)
+    (unwind-protect
+        (should (> (length window-setup-hook) (length before)))
+      (setq window-setup-hook before))))
+
+(ert-deftest xlib/add-one-shot-hook-idle-timer-schedules-timer ()
+  "With :idle-timer, the hook body is deferred via run-with-idle-timer."
+  (setq xlib--test-hook-var nil)
+  (let ((timer-fired nil)
+        (scheduled nil))
+    (cl-letf (((symbol-function 'run-with-idle-timer)
+               (lambda (_delay _repeat fn &rest _args)
+                 (setq scheduled t)
+                 (funcall fn))))
+      (add-one-shot-hook
+       :name "xlib-test-idle"
+       :hook 'xlib--test-hook-var
+       :idle-timer 0.1
+       :form (setq timer-fired t))
+      (run-hooks 'xlib--test-hook-var)
+      (should scheduled)
+      (should timer-fired)
+      (should-not xlib--test-hook-var))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; merge-predicate-functions
+
+(ert-deftest xlib/merge-predicate-functions-all-pass ()
+  (let ((pred (merge-predicate-functions stringp (lambda (v) (> (length v) 2)))))
+    (should (funcall pred "hello"))))
+
+(ert-deftest xlib/merge-predicate-functions-first-fails ()
+  (let ((pred (merge-predicate-functions numberp stringp)))
+    (should-not (funcall pred "not-a-number"))))
+
+(ert-deftest xlib/merge-predicate-functions-second-fails ()
+  (let ((pred (merge-predicate-functions stringp (lambda (v) (> (length v) 10)))))
+    (should-not (funcall pred "short"))))
+
+(ert-deftest xlib/merge-predicate-functions-single-predicate ()
+  (let ((pred (merge-predicate-functions numberp)))
+    (should (funcall pred 42))
+    (should-not (funcall pred "x"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; f extensions: filesystem functions
+
+(ert-deftest xlib/f-mtime-returns-time-value ()
+  (let ((tmp (make-temp-file "xlib-test-mtime-")))
+    (unwind-protect
+        (let ((mtime (f-mtime tmp)))
+          (should mtime)
+          (should (listp mtime)))
+      (delete-file tmp))))
+
+(ert-deftest xlib/f-atime-returns-time-value ()
+  (let ((tmp (make-temp-file "xlib-test-atime-")))
+    (unwind-protect
+        (let ((atime (f-atime tmp)))
+          (should atime)
+          (should (listp atime)))
+      (delete-file tmp))))
+
+(ert-deftest xlib/f-distinct-removes-duplicate-paths ()
+  (should (= 1 (length (f-distinct (list "/tmp/foo" "/tmp/foo"))))))
+
+(ert-deftest xlib/f-distinct-preserves-unique-paths ()
+  (should (= 2 (length (f-distinct (list "/tmp/foo" "/tmp/bar"))))))
+
+(ert-deftest xlib/f-files-in-directory-returns-files ()
+  (let ((dir (make-temp-file "xlib-test-dir-" t)))
+    (unwind-protect
+        (let ((f (expand-file-name "test.el" dir)))
+          (with-temp-file f (insert ""))
+          (let ((files (f-files-in-directory dir)))
+            (should (listp files))
+            (should (= 1 (length files)))
+            (should (string-match-p "test\\.el" (car files)))))
+      (delete-directory dir t))))
+
+(ert-deftest xlib/f-files-in-directory-handles-string-path ()
+  (let ((dir (make-temp-file "xlib-test-dir2-" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "a.el" dir) (insert ""))
+          (should (listp (f-files-in-directory dir))))
+      (delete-directory dir t))))
+
+(ert-deftest xlib/f-recursive-directories-containing-finds-filename ()
+  (let* ((root (make-temp-file "xlib-test-rdc-" t))
+         (sub  (expand-file-name "sub" root)))
+    (unwind-protect
+        (progn
+          (make-directory sub)
+          (with-temp-file (expand-file-name "Makefile" sub) (insert ""))
+          (let ((dirs (f-recursive-directories-containing "Makefile" root)))
+            (should (= 1 (length dirs)))
+            (should (f-equal-p sub (car dirs)))))
+      (delete-directory root t))))
+
+(ert-deftest xlib/f-recursive-directories-containing-empty-when-not-found ()
+  (let ((dir (make-temp-file "xlib-test-rdcempty-" t)))
+    (unwind-protect
+        (should (null (f-recursive-directories-containing "no-such-file" dir)))
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; f-visually-compress-to-N (generated functions)
+
+(ert-deftest xlib/f-visually-compress-to-one-limits-to-1-char ()
+  (let ((result (f-visually-compress-to-one "/home/tychoish/projects/foo")))
+    (dolist (part (split-string result "/"))
+      (should (<= (length part) 1)))))
+
+(ert-deftest xlib/f-visually-compress-to-five-limits-to-5-chars ()
+  (let ((result (f-visually-compress-to-five "/home/tychoish/projects/longname")))
+    (dolist (part (split-string result "/"))
+      (should (<= (length part) 5)))))
+
+(ert-deftest xlib/f-visually-compress-to-ten-preserves-short-components ()
+  (let ((result (f-visually-compress-to-ten "/tmp/foo")))
+    (should (string-match-p "foo" result))))
 
 (provide 'test-xlib)
 ;;; test-xlib.el ends here
