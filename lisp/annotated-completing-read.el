@@ -51,6 +51,7 @@
 Keys are symbols — typically `this-command' at call time — and values are
 the standard Emacs history lists accumulated by `completing-read'.")
 
+;;;###autoload
 (cl-defun annotated-completing-read (table &key (prompt "=> ") require-match category history group-name group-display initial-input sort-fn)
   "Read a candidate from TABLE with aligned per-candidate annotations.
 TABLE is any Emacs hash table (`ht' or plain `make-hash-table') mapping
@@ -172,6 +173,7 @@ SEED is a string or list of strings to include as explicit candidates."
 
     table))
 
+;;;###autoload
 (defun annotated-completing-read-context-from-point (&optional prompt seed &key history)
   "Select a string from context-aware candidates with PROMPT.
 Candidates are drawn from thing-at-point, the active region, the current

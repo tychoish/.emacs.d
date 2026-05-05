@@ -712,8 +712,8 @@ call `builder-add-candidates'."
                 (--flat-map
                  (let ((race-flag  (car it))
                        (race-label (cadr it)))
-		   (->> '("" "10s" "30s" "1m")
-			(--flat-map
+		   (->> '("10s" "30s" "1m")
+			(--map
 			 (let ((timeout-flag (format "-timeout=%s" it))
 			       (timeout-label it))
                            (make-builder-candidate

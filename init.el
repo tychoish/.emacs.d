@@ -132,4 +132,3 @@ lived instances. Other ephemeral instance names ones may be useful.")
    (tychoish-set-up-user-local-config))))
 
 (provide 'init)
-

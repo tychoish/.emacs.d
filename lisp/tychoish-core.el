@@ -190,6 +190,7 @@
 
 (use-package ripgrep
   :ensure t
+  :after (annotated-completing-read)
   :bind (("M-g r" . consult-rg)
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
          ("d" . consult-rg-pwd)
