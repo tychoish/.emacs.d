@@ -366,7 +366,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
          (configure-account-symbol (intern account-name))
 	 (maildir (expand-file-name maildir)))
 
-    (define-key 'tychoish/mail-map (kbd key) configure-account-symbol)
+    (define-key tychoish/mail-map (kbd key) configure-account-symbol)
 
     (ht-set tychoish/mail-accounts-table account-name
             (tychoish/mail-make-account
@@ -429,7 +429,6 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
              (setq message-signature signature)))
 
            (setq user-mail-address address)
-           (setq message-signature-file address)
            (setq user-full-name given-name)
            (setq mu4e-compose-reply-to-address address)
 

@@ -105,7 +105,7 @@
    ("f" . org-agenda-files-open)
    ("t" . org-set-tags-command)
    ("n" . org-narrow-to-subtree)
-   ("w" . widen)
+   ("W" . widen)
    ("p" . org-insert-property-drawer)
    ("w" . org-refile)
    ("d" . tychoish-org-date-now)
@@ -259,11 +259,11 @@
   (interactive)
   (org-gist-export-to-gist 'public))
 
-(defun tychoish-org-date-now (&optional &key short)
+(cl-defun tychoish-org-date-now (&key short)
   (interactive)
   (format-time-string (if short
 			  tychoish/org-date-spec-date
-			tychoish/org-date-spec-datetime) (time-stamp)))
+			tychoish/org-date-spec-datetime) (current-time)))
 
 (defun tychoish-org-mark-done-and-archive ()
   "mark done and move to completed archive sibling"
@@ -528,7 +528,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (let (specs append-item)
 	(unless (string-equal "" key)
 	  (setq append-item t)
-	  (add-to-list 'org-capture-templates (list (concat key "t") (format "%s notes <%s>" name  (f-filename path))))
+	  (add-to-list 'org-capture-templates (list (concat key "n") (format "%s notes <%s>" name  (f-filename path))))
 	  (push (cons (concat "n" key) (cons "%i" "selection")) specs))
 
 	(->> (-join specs

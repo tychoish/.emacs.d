@@ -105,7 +105,7 @@
 (use-package winum
   :ensure t
   :bind (("C-x w n" . winum-select-window-by-number)
-         ("C-x w w" . winumw-mode))
+         ("C-x w w" . winum-mode))
   :commands (winum-mode)
   :config
   (setq winum-auto-setup-mode-line nil)
@@ -154,11 +154,11 @@
   (defun projectile-get-project-roots-for-current-buffers ()
     (->>
      (buffer-list)
-     (--map #'buffer-file-name)
+     (-map #'buffer-file-name)
      (-non-nil)
-     (--map #'f-dirname)
+     (-map #'f-dirname)
      (-sort #'string<)
-     (--map #'projectile-project-root)
+     (-map #'projectile-project-root)
      (-distinct)
      (-non-nil)))
 
@@ -549,7 +549,7 @@
   :ensure t
   :bind (("C-." . embark-act)         ;; pick some comfortable binding
 	 ("C-c H" . embark-bindings) ;; alternative for `describe-bindings'
-	 ("C-;" . embark-dwim))        ;; good alternative: M-.
+	 ("M-;" . embark-dwim))        ;; good alternative: M-.
   :config
   (setq embark-prompter #'embark-keymap-prompter)
   ;; (prefix-help-command #'embark-prefix-help-command)
@@ -598,7 +598,6 @@
              ("M-SPC" . corfu-insert-separator)
              ("C-SPC" . corfu-insert-separator)
              ([backtab] . corfu-insert-separator)
-             ("C-j" . corfu-quick-jump)
              ("C-j" . corfu-quick-jump)
              ("M-d" . corfu-popupinfo-toggle)
              ("C-i" . corfu-popupinfo-toggle)
@@ -698,7 +697,6 @@
          ;; Custom M-# bindings for fast register access
          ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
          ("M-#" . consult-register-load)
-         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
          ("C-M-#" . consult-register)
          ;; Other custom bindings
          ("M-y" . consult-yank-from-kill-ring)                ;; orig. yank-pop
@@ -718,7 +716,6 @@
          ;; Isearch integration
          ("M-s e" . consult-isearch-history)
 	 :map tychoish/completion-map
-	 ("r" . consult-at-point)
 	 ("c" . consult-at-point)
 	 :map tychoish/docs-map
          ("m" . consult-man)
@@ -815,11 +812,11 @@
    :group nil
    :keymap
    (with-temp-keymap map
-     (define-key map (kbd "C-l") #'consult-ripgrep-up-directory))))
+     (define-key map (kbd "C-l") #'consult-ripgrep--up-directory))))
 
 (use-package consult-flycheck
   :ensure t
-  :bind (("M-g f" . flycheck)
+  :bind (("M-g f" . flycheck-mode)
 	 :map tychoish/consult-mode-map
 	 ("c" . consult-flycheck)
 	 :map flycheck-command-map
@@ -860,7 +857,7 @@
   :bind (:map tychoish/consult-mode-map
          ("s" . consult-yasnippet)
 	 :map tychoish/completion-map
-	 ("s" . consult-yasnippet)))
+	 ("y" . consult-yasnippet)))
 
 (use-package embark-consult
   :ensure t ; only need to install it, embark loads it after consult if found
@@ -1032,7 +1029,7 @@
 	     (eq system-type 'darwin)
 	     (not (eq alert-default-style 'osx-notifier)))
 	(setq-default alert-default-style 'osx-notifier)
-      (remove-hook 'server-after-make-frame 'tychoish/darwin-alert-config-for-server)
+      (remove-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server)
       (unintern 'tychoish/darwin-alert-config-for-server obarray))))
 
 (use-package emojify
@@ -1227,8 +1224,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
                 (set-window-buffer window target-buffer)
                 (setq count (+ count 1)))))))
       (unless (zerop count)
-        (alert (format "burried %d telega-chat-%s" 1
-                       (if (= 1 1)
+        (alert (format "burried %d telega-chat-%s" count
+                       (if (= count 1)
                            "buffer"
                          "buffers"))
                :title (format "emacs.%s.telega" tychoish/emacs-instance-id)
@@ -1528,19 +1525,19 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (setq rustic-clippy-arguments "--all --all-features -- --deny warnings")
 
   (let* ((rustup-path (executable-find "rustup"))
-	 (rustup-p (not (string-empty-p rustup-path)))
+	 (rustup-p (and rustup-path (not (string-empty-p rustup-path))))
 	 (rustup-toolchain (if rustup-p "nightly" "stable")))
     (when rustup-p
       (setq rustic-rustfmt-args "+nightly")
-      (setq rustic-analyzer-command '(rustup-path "run" "stable" "rust-analyzer")))
+      (setq rustic-analyzer-command `(,rustup-path "run" "stable" "rust-analyzer")))
 
-  (add-to-list 'tychoish/eglot-default-server-configuration
-	       `((:rust-analyzer :initializationOptions
-                   (:server (:extraEnv (:RUSTUP_TOOLCHAIN ,rustup-toolchain))
-                             :rust (:analyzerTargetDir t)
-                             :cargo (:buildScripts (:enable t :features "all"))
-                             :procMacro (:enable :json-false :attributes (:enable t))
-                             :check (:workspace t))))))
+    (add-to-list 'tychoish/eglot-default-server-configuration
+		 `((:rust-analyzer :initializationOptions
+                    (:server (:extraEnv (:RUSTUP_TOOLCHAIN ,rustup-toolchain))
+                              :rust (:analyzerTargetDir t)
+                              :cargo (:buildScripts (:enable t :features "all"))
+                              :procMacro (:enable :json-false :attributes (:enable t))
+                              :check (:workspace t))))))
 
   (add-to-list 'flycheck-checkers 'rustic-clippy))
 
@@ -1722,7 +1719,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :init
   (defun tychoish/flycheck-prefer-eldoc ()
     (add-hook 'eldoc-documentation-functions #'flycheck-eldoc nil t) ;; local
-    (setq-local eldoc-docuemntation-stratedgy #'eldoc-documentation-compose-eagerly)
+    (setq-local eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
     (setq-local flycheck-display-errors-function nil)
     (setq-local flycheck-help-echo nil))
   (add-hook 'flycheck-mode-hook 'tychoish/flycheck-prefer-eldoc)
@@ -2223,7 +2220,7 @@ Useful after changing `eglot-workspace-configuration' or
 
   (setq gptel-include-reasoning 'ignore)
 
-  (make-gptel-set-up-backend-functions :name "claude-opus-4-6" :key "s"
+  (make-gptel-set-up-backend-functions :name "claude-opus-4-6" :key "o"
    :backend (gptel-make-anthropic "claude-opus" :key anthropic-api-key :stream t)
    :model 'claude-opus-4-6
    :api-key anthropic-api-key)
@@ -2233,9 +2230,9 @@ Useful after changing `eglot-workspace-configuration' or
    :model 'claude-sonnet-4-6
    :api-key anthropic-api-key)
 
-  (make-gptel-set-up-backend-functions :name "claude-haiku-4-5":key "h"
+  (make-gptel-set-up-backend-functions :name "claude-haiku-4-5" :key "h"
    :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :model 'claude-haiku-4-6
+   :model 'claude-haiku-4-5
    :api-key anthropic-api-key)
 
   (make-gptel-set-up-backend-functions :name "gemini-pro-latest" :key "g"
@@ -2254,7 +2251,7 @@ Useful after changing `eglot-workspace-configuration' or
    :backend (gptel-make-gh-copilot "copilot")
    :model 'claude-3.5-sonnet)
 
-  (make-gptel-set-up-backend-functions :name "gpt-5" :key "s"
+  (make-gptel-set-up-backend-functions :name "gpt-5" :key "5"
    :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-5
    :api-key openai-api-key)
@@ -2269,11 +2266,11 @@ Useful after changing `eglot-workspace-configuration' or
    :model 'gpt-5-nano
    :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions :name "gpt-4o" :key "o"
+  (make-gptel-set-up-backend-functions :name "gpt-4o" :key "4"
    :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-4o)
 
-  (make-gptel-set-up-backend-functions :name "gpt-4o-mini" :key "l"
+  (make-gptel-set-up-backend-functions :name "gpt-4o-mini" :key "M"
    :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-4o-mini)
 
@@ -2333,9 +2330,9 @@ Useful after changing `eglot-workspace-configuration' or
 	 :map tychoish/completion-map
 	 ("r" . copilot-complete)
          :map copilot-completion-map
-         ("C-c a" . copilot-acept-completion)
-         ("C-c l" . copilot-acept-completion-by-line)
-         ("C-c w" . copilot-acept-completion-by-word)
+         ("C-c a" . copilot-accept-completion)
+         ("C-c l" . copilot-accept-completion-by-line)
+         ("C-c w" . copilot-accept-completion-by-word)
          ("C-c n" . copilot-next-completion)
          ("C-c p" . copilot-previous-completion)
          ("C-c C-i" . copilot-insert-completion))
@@ -2434,7 +2431,7 @@ Useful after changing `eglot-workspace-configuration' or
    :architect-model "opeani/gpt-5.2"
    :weak-model "opeani/gpt-5-nano")
 
-  (make-aidermacs-model-selection-function :name "gpt-5"
+  (make-aidermacs-model-selection-function :name "gpt-5-mini"
    :default-model "opeani/gpt-5-mini"
    :weak-model "opeani/gpt-5-nano")
 
