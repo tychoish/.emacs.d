@@ -35,10 +35,11 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'xlib)
 (require 'dash)
 (require 'ht)
 (require 's)
-(require 'xlib)
+(require 'f)
 
 (defun annotated-completing-read--length-of-longest (items)
   (apply #'max 0 (mapcar #'length items)))
@@ -102,39 +103,39 @@ completion metadata, so vertico and other UIs apply it before rendering.
 Signals `user-error' if TABLE is not a hash table."
   (unless (hash-table-p table)
     (user-error "TABLE must be a hash table mapping candidates to annotations"))
-  (let* ((prompt      (if (string-suffix-p " " prompt) prompt (concat prompt " ")))
-         (hist-key    (or history this-command 'annotated-completing-read))
-         (longest     (annotated-completing-read--length-of-longest (ht-keys table)))
+  (let* ((prompt (if (string-suffix-p " " prompt) prompt (concat prompt " ")))
+         (hist-key (or history this-command 'annotated-completing-read))
+         (longest (annotated-completing-read--length-of-longest (ht-keys table)))
          (annotate-fn (lambda (candidate)
                         (concat (annotated-completing-read--prefix-padding candidate longest)
                                 (ht-get table candidate))))
-         (name-fn     (cond ((functionp group-name) group-name)
-                            (group-name (lambda (_candidate) group-name))))
-         (display-fn  (or group-display #'identity))
-         (group-fn    (when name-fn
-                        (lambda (candidate transform)
-                          (if transform
-                              (funcall display-fn candidate)
-                            (funcall name-fn candidate)))))
-         (collection  (lambda (str pred action)
-                        (if (eq action 'metadata)
-                            `(metadata
-                              (annotation-function . ,annotate-fn)
-                              ,@(when category `((category . ,category)))
-                              ,@(when group-fn `((group-function . ,group-fn)))
-                              ,@(when sort-fn `((display-sort-function . ,sort-fn))))
-                          (complete-with-action action (ht-keys table) str pred)))))
-    (let ((hist-sym (make-symbol "history-cell")))
-      (set hist-sym (ht-get annotated-completing-read-history hist-key))
-      (prog1
-          (completing-read prompt collection nil require-match initial-input hist-sym)
-        (ht-set! annotated-completing-read-history hist-key
-                 (symbol-value hist-sym))))))
+         (name-fn (cond ((functionp group-name) group-name)
+                        (group-name (lambda (_candidate) group-name))))
+         (display-fn (or group-display #'identity))
+         (group-fn (when name-fn
+                     (lambda (candidate transform)
+                       (if transform
+                           (funcall display-fn candidate)
+                         (funcall name-fn candidate)))))
+         (collection (lambda (str pred action)
+                       (if (eq action 'metadata)
+                           `(metadata
+                             (annotation-function . ,annotate-fn)
+                             ,@(when category `((category . ,category)))
+                             ,@(when group-fn `((group-function . ,group-fn)))
+                             ,@(when sort-fn `((display-sort-function . ,sort-fn))))
+                         (complete-with-action action (ht-keys table) str pred))))
+	 (hist-sym (make-symbol "history-cell")))
+    (set hist-sym (ht-get annotated-completing-read-history hist-key))
+    (prog1
+	(completing-read prompt collection nil require-match initial-input hist-sym)
+      (ht-set! annotated-completing-read-history hist-key (symbol-value hist-sym)))))
 
 (defun annotated-completing-read--context-candidates (&optional seed)
   "Build an annotated hash table of candidates from the current context.
 SEED is a string or list of strings to include as explicit candidates."
-  (let ((table (ht-create)))
+  (let ((table (ht-create))
+	(idx 0))
 
     (->> (cond ((listp seed) seed)
                ((stringp seed) (list seed)))
@@ -144,32 +145,31 @@ SEED is a string or list of strings to include as explicit candidates."
 
     (->> (-concat (--map (cons 'text-mode it) '(word email url sentence))
                   (--map (cons 'prog-mode it) '(symbol word sexp defun)))
-         (--keep (when (derived-mode-p (car it))
-                   (when-let* ((val (thing-at-point (cdr it)))
-                               (val (s-trimmed-or-nil val))
-                               (val (substring-no-properties val))
-                               (_ (< (length val) 64)))
-                     (cons val (format "%s at point" (cdr it))))))
+         (--keep (when-let* ((_ (derived-mode-p (car it)))
+			     (val (thing-at-point (cdr it)))
+                             (val (s-trimmed-or-nil val))
+                             (val (substring-no-properties val))
+                             (_ (< (length val) 64)))
+                   (cons val (format "%s at point" (cdr it)))))
          (--mapc (ht-set table (car it) (cdr it))))
 
-    (when (use-region-p)
-      (when-let* ((sel (buffer-substring-no-properties (region-beginning) (region-end)))
-                  (sel (s-trimmed-or-nil sel))
-                  (_ (< (length sel) 128)))
-        (ht-set table sel (format "region · %s" (buffer-name)))))
+    (when-let* ((_ (use-region-p))
+		(sel (buffer-substring-no-properties (region-beginning) (region-end)))
+                (sel (s-trimmed-or-nil sel))
+                (_ (< (length sel) 128)))
+      (ht-set table sel (format "region · %s" (buffer-name))))
 
     (when-let* ((line (thing-at-point 'line))
                 (line (s-trimmed-or-nil (substring-no-properties line)))
                 (_ (< (length line) 128)))
       (ht-set table line (format "line · %s" (buffer-name))))
 
-    (let ((idx 0))
-      (->> kill-ring
-           (-map #'substring-no-properties)
-           (-keep #'s-trimmed-or-nil)
-           (--filter (< (length it) 128))
-           (-take 10)
-           (--mapc (ht-set table it (format "kill-ring [%d]" (cl-incf idx))))))
+    (->> kill-ring
+         (-map #'substring-no-properties)
+         (-keep #'s-trimmed-or-nil)
+         (--filter (< (length it) 128))
+         (-take 10)
+         (--mapc (ht-set table it (format "kill-ring [%d]" (cl-incf idx)))))
 
     table))
 
@@ -249,12 +249,12 @@ command its own isolated history."
 
 (defun annotated-completing-read--directory-entry-counts (dir)
   "Return a brief annotation with subdirectory and file counts for DIR."
-  (condition-case nil
+  (if (file-accessible-directory-p dir)
       (let* ((entries (directory-files dir t "\\`[^.]"))
              (n-dirs  (cl-count-if #'file-directory-p entries))
              (n-files (- (length entries) n-dirs)))
-        (format "%d dirs, %d files" n-dirs n-files))
-    (error "")))
+	(format "%d dirs, %d files" n-dirs n-files))
+    ""))
 
 ;;;###autoload
 (cl-defun annotated-completing-read-directory (&optional &key candidates prompt require-match)

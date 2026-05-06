@@ -811,7 +811,6 @@
 
   (consult-customize
    consult-ripgrep consult-git-grep consult-grep
-   consult-rg consult-rg-project consult-rg-pwd consult-rg-project-wizard consult-rg-pwd-wizard
    :require-match nil
    :group nil
    :keymap

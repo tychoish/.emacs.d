@@ -354,7 +354,11 @@
 		   (null instances))
 	       (or (member (system-name) systems)
 		   (null systems))))
-      (add-hook 'emacs-startup-hook configure-account-symbol))
+      (add-one-shot-hook
+       :name account-name
+       :function configure-account-symbol
+       :hook 'emacs-startup-hook
+       :idle-timer 0.5))
 
     `(defun ,configure-account-symbol ()
        (interactive)
