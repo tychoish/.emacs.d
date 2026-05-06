@@ -29,10 +29,7 @@
 (bind-keys
  :prefix "C-c m"
  :prefix-map tychoish/mail-map
- ("a" . tychoish-mail-select-account))
-
-(bind-keys
- :map tychoish/mail-map
+ ("a" . tychoish-mail-select-account)
  ("m" . mu4e)
  ("d" . mu4e-search-maildir)
  ("b" . mu4e-search-bookmark)
@@ -100,7 +97,8 @@
    (";" . mu4e-mark-resolve-deferred-marks)))
 
 (with-eval-after-load 'mu4e-view
-  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t))
+  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
+  (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish/mail-unsubscribe) t))
 
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
 (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
@@ -181,6 +179,40 @@
   "Ask whether to reply-to-all or not."
   (interactive)
   (mu4e-compose-reply (yes-or-no-p "Reply to all?")))
+
+(defun tychoish/mail-unsubscribe (msg)
+  "Unsubscribe from a mailing list using the List-Unsubscribe header in MSG.
+For mailto: URIs, opens a compose buffer pre-filled with the unsubscribe
+address, subject, and body.  For https: URIs, opens the URL in a browser."
+  (interactive (list (mu4e-message-at-point)))
+  (let* ((header (or (mu4e-fetch-field msg "List-Unsubscribe")
+                     (user-error "No List-Unsubscribe header found")))
+         (uris (let (result)
+                 (with-temp-buffer
+                   (insert header)
+                   (goto-char (point-min))
+                   (while (re-search-forward "<\\([^>]+\\)>" nil t)
+                     (push (match-string 1) result)))
+                 (nreverse result))))
+    (unless uris
+      (user-error "No unsubscribe URIs in List-Unsubscribe header"))
+    (let ((uri (if (cdr uris)
+                   (completing-read "Unsubscribe via: " uris nil t)
+                 (car uris))))
+      (cond
+       ((string-prefix-p "mailto:" uri)
+        (let* ((rest (substring uri (length "mailto:")))
+               (parts (split-string rest "?"))
+               (to (car parts))
+               (params (when (cadr parts)
+                         (url-parse-query-string (cadr parts))))
+               (subject (cadr (assoc "subject" params)))
+               (body (cadr (assoc "body" params))))
+          (compose-mail to subject)))
+       ((string-match-p "\\`https?://" uri)
+        (browse-url uri))
+       (t
+        (user-error "Unrecognized URI scheme in List-Unsubscribe: %s" uri))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
