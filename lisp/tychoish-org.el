@@ -146,11 +146,6 @@
    ("C-l" . org-agenda-open-link)
    ("M-c" . org-agenda-goto-calendar)))
 
-(with-eval-after-load 'consult-tycho
-  (bind-keys
-   :map tychoish/org-mode-capture-map
-   ("j" . consult-org-capture)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; configuration
@@ -352,16 +347,14 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (interactive)
   (let* ((key-table        (ht-create))
          (annotation-table (ht-create))
-         (_ (->> org-capture-templates
-                 (--filter (< 3 (length it)))
-                 (--each
-                  (let ((key-char    (nth 0 it))
-                        (description (nth 1 it))
-                        (file        (f-filename (cadr (nth 3 it))))
-                        (template    (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 it))))))
-                    (ht-set key-table description key-char)
-                    (ht-set annotation-table description
-                            (format "[%s] <%s> '%s'" key-char file template))))))
+         (_ (--each (--filter (< 3 (length it)) org-capture-templates)
+              (let ((key-char    (nth 0 it))
+                    (description (nth 1 it))
+                    (file        (f-filename (cadr (nth 3 it))))
+                    (template    (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 it))))))
+                (ht-set key-table description key-char)
+                (ht-set annotation-table description
+                        (format "[%s] <%s> '%s'" key-char file template)))))
          (selection (annotated-completing-read
                      annotation-table
                      :prompt "org-capture => "
