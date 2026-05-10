@@ -1077,8 +1077,10 @@
    :key-alias "telega-commands")
   :config
   (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
+  (add-hook 'telega-load-hook 'tychoish/telega-start-idle-bury-timer)
   (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
-  (add-hook 'telega-chat-mode-hook 'tychoish/telega-set-up-chat-mode)
+  (add-hook 'telega-kill-hook 'tychoish/telega-stop-idle-bury-timer)
+  (add-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
 
   (when (eq system-type 'darwin)
     (setq telega-server-libs-prefix "/opt/homebrew")
@@ -1142,10 +1144,18 @@
         (telega-root-next-reaction (point))
         (telega-root-next-unread (point)))))
 
-  (defun tychoish/telega-set-up-chat-mode ()
-    ;; (require 'telega-mnz)
-    ;; (telega-mnz-mode 1)
-    (telega-chat-auto-fill-mode 1))
+  (defvar tychoish/telega-idle-bury-timer nil
+    "Timer that buries telega chat buffers after idle.")
+
+  (defun tychoish/telega-start-idle-bury-timer ()
+    "Start a repeating timer to bury telega chat buffers after 1 hour of idle."
+    (setq tychoish/telega-idle-bury-timer
+          (run-with-idle-timer 3600 t #'telega-bury-chat-buffers)))
+
+  (defun tychoish/telega-stop-idle-bury-timer ()
+    "Stop telega timer."
+    (when tychoish/telega-idle-bury-timer
+      (setq tychoish/telega-idle-bury-timer (cancel-timer tychoish/telega-idle-bury-timer))))
 
   (defun telega-toggle-debug ()
     (interactive)
@@ -1154,60 +1164,10 @@
         (message "telega-debug mode enabled")
       (message "telega-debug mode disabled")))
 
-  (defun telega--chat-observable-p (msg)
-    (let ((chat (telega-msg-chat msg)))
-      (with-telega-chatbuf chat
-        (and (telega-chatbuf--msg-observable-p msg)
-             (not (telega-chatbuf--history-state-get :newer-freezed))))))
-
-  (defun telega-notifications-msg-notify-p (msg)
-    "tychoish's custom override for notificationable"
-    (let* ((chat (telega-msg-chat msg))
-           (title (plist-get chat :title)))
-      (cond
-       ;; chat window is open and viable: skip notify
-       ((telega--chat-observable-p msg)
-        (progn (telega-debug "NOTIFY-CHECK: observed chat [%s], skip notify" title) nil))
-
-       ;; if it's muted: skip notify
-       ((telega-chat-muted-p chat)
-        (progn (telega-debug "NOTIFY-CHECK: muted chat [%s], skip notify" title) nil))
-
-       ;; overly clear, but for groupchats where I am not a member: skip notify
-       ;; after: https://github.com/zevlg/ytelega.el/issues/224
-       ((telega-chat-match-p chat '(and (type basicgroup supergroup channel) (not me-is-member)))
-        (progn (telega-debug "NOTIFY-CHECK: group chat where I am not a member [%s], skip notify" title) nil))
-
-       ;; message I sent (from another device): skip notify
-       ((telega-msg-match-p msg '(sender me))
-        (progn (telega-debug "NOTIFY-CHECK: message I sent [%s], skip notify" title) nil))
-
-       ;; message that is a mention but notification of mentions are
-       ;; disabled: skip notify
-       ((and
-         (plist-get msg :contains_unread_mention)
-         (telega-chat-notification-setting chat :disable_mention_notifications))
-        (progn (telega-debug "NOTIFY-CHECK: contains a mention [%s], notify" title) nil))
-
-       ;; notify for messages in chats that are directly sent to me, including bots
-       ((telega-chat-match-p chat '(or (type private secret bot)))
-        (progn (telega-debug "NOTIFY-CHECK: is DM or BOT [%s], can notify" title) t))
-
-       ;; for things that are a group, and I am a member, notify
-       ((telega-chat-match-p chat 'me-is-member)
-        (progn (telega-debug "NOTIFY-CHECK: member of a group [%s], can notify" title) t))
-
-       ;; nothing has matched, this is probably "cases we haven't
-       ;; explicitly called out above, probably a skip, but should be
-       ;; explict:" notify for now
-       (t
-        (progn (message (format "TELEGA-NOTIFY: unexpected message [%s], notifying anyway" title)) t)))))
-
-  (defun telega-chat-buf-mode-p (buffer)
-    "returns `t' for all chat buffers, and `nil' otherwise"
-    (with-current-buffer buffer
-      (when (eq major-mode 'telega-chat-mode)
-        t)))
+  (defun tychoish/telega-notify-skip-own (orig-fn msg)
+    (and (not (telega-msg-match-p msg '(sender me)))
+         (funcall orig-fn msg)))
+  (advice-add 'telega-notifications-msg-notify-p :around #'tychoish/telega-notify-skip-own)
 
   (defun telega-bury-chat-buffers ()
     "iterates through all currently visable frames and windows and changes
@@ -1219,7 +1179,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
         (dolist (frame (frame-list))
           (dolist (window (window-list frame))
             (let ((buf (window-buffer window)))
-              (when (telega-chat-buf-mode-p buf)
+              (when (eq (buffer-local-value 'major-mode buf) 'telega-chat-mode)
                 (bury-buffer buf)
                 (set-window-buffer window target-buffer)
                 (setq count (+ count 1)))))))
@@ -1255,24 +1215,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 			  (when (bufferp initial-buffer-choice) initial-buffer-choice)
 			  (when (stringp initial-buffer-choice) (get-buffer initial-buffer-choice))
 			  (last-buffer)
-			  (get-buffer "*scratch*"))))
-
-  (defun tychoish/telega-default-root-buffer (toggle)
-    (setq initial-buffer-choice
-          (if toggle
-              #'tychoish/telega-switch-to-root
-             nil))
-    (when (daemonp)
-      (if toggle
-          (add-hook 'server-after-make-frame-hook  #'tychoish/telega-switch-to-root)
-        (remove-hook 'server-after-make-frame-hook #'tychoish/telega-switch-to-root))
-      (message "%sset telega-root as the default buffer for the [%s] daemon" (if toggle "" "un") (daemonp)))
-    toggle)
-
-  (defun tychoish/toggle-root-buffer-default ()
-    (interactive)
-    (let ((toggle (not (eq initial-buffer-choice 'tychoish/telega-switch-to-root))))
-      (tychoish/telega-default-root-buffer toggle))))
+			  (get-buffer "*scratch*")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
