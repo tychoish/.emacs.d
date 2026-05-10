@@ -20,6 +20,14 @@
 (require 'annotated-completing-read)
 (require 'eglot-test-at-point)
 
+(declare-function lm-header "lisp-mnt")
+(declare-function package-build-archive "package-build")
+(defvar package-build-working-dir)
+(defvar package-build-archive-dir)
+(defvar package-build-recipes-dir)
+(defvar package-build-verbose)
+(defvar package-build-releases)
+
 (f-directories-containing-file-with-extension-function "go")
 (f-directories-containing-file-with-extension-function "py")
 (f-directories-containing-file-with-extension-function "rs")
@@ -940,6 +948,193 @@ call `builder-add-candidates'."
         :command (format "emacs --batch %s --eval \"(require 'elsa)\" -f elsa-run %s" load-path-args file-args)
         :directory project-root-directory
         :annotation (format "run elsa type analysis across all .el files in %s" project-name)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; emacs-lisp -- single-file package operations (test/compile/build/clean)
+;;
+;; These commands operate on an "elisp package" rooted at
+;; `approximate-project-root', identified by the convention that the
+;; root contains <NAME>.el where NAME matches the directory name
+;; (with an optional ".el" suffix on the directory itself, as in
+;; "xlib.el/xlib.el"). Tests live under <root>/test/ as test-*.el or
+;; *-test.el. `Package-Requires' on the main file declares dependencies.
+
+(defun builder-elisp-package--name (root)
+  "Return the package name for the elisp project at ROOT.
+Strips a trailing \".el\" from the directory name so a project in
+\"xlib.el/\" packages as \"xlib\"."
+  (let ((basename (f-filename (directory-file-name root))))
+    (if (string-suffix-p ".el" basename)
+        (string-remove-suffix ".el" basename)
+      basename)))
+
+(defun builder-elisp-package--main-file (root)
+  "Return the absolute path to the main .el file under ROOT, or nil.
+Looks for <NAME>.el where NAME comes from `builder-elisp-package--name'."
+  (let ((path (f-join root (concat (builder-elisp-package--name root) ".el"))))
+    (and (f-file-p path) path)))
+
+(defun builder-elisp-package-p (&optional root)
+  "Return non-nil if ROOT looks like an elisp package.
+ROOT defaults to `approximate-project-root'."
+  (and (builder-elisp-package--main-file (or root (approximate-project-root))) t))
+
+(defun builder-elisp-package--source-files (root)
+  "Return the list of top-level .el source files under ROOT (excluding test/)."
+  (->> (f-entries root #'f-file-p)
+       (--filter (f-ext-p it "el"))))
+
+(defun builder-elisp-package--test-files (root)
+  "Return the list of test files under ROOT/test (test-*.el or *-test.el)."
+  (let ((test-dir (f-join root "test")))
+    (when (f-directory-p test-dir)
+      (->> (f-entries test-dir #'f-file-p)
+           (--filter (f-ext-p it "el"))
+           (--filter (let ((name (f-filename it)))
+                       (or (string-prefix-p "test-" name)
+                           (string-suffix-p "-test.el" name))))))))
+
+(defun builder-elisp-package--read-deps (file)
+  "Return list of dep package symbols from FILE's `Package-Requires' header.
+The pseudo-package `emacs' is omitted, since it is not installable."
+  (require 'lisp-mnt)
+  (when (and file (f-file-p file))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (when-let* ((line (lm-header "Package-Requires")))
+        (->> (read line)
+             (--map (car it))
+             (--remove (eq it 'emacs)))))))
+
+(defun builder-elisp-package--require-deps (deps)
+  "Require each symbol in DEPS, signaling a `user-error' if any cannot load.
+Use this from contexts that assume the user's `load-path' already provides them
+\(direct M-x invocation, or batch with `-L' flags pointing into ~/.emacs.d/elpa)."
+  (--each deps
+    (unless (require it nil t)
+      (user-error "elisp-package dependency not on load-path: %s" it))))
+
+;;;###autoload
+(defun builder-elisp-package-test ()
+  "Run ert tests for the elisp package at `approximate-project-root'.
+Loads <root>/<NAME>.el and any test/test-*.el or test/*-test.el files,
+then runs ert. In batch mode exits with the test status; otherwise
+opens the *ert* selector."
+  (interactive)
+  (require 'ert)
+  (let* ((root      (file-name-as-directory (approximate-project-root)))
+         (main-file (builder-elisp-package--main-file root)))
+    (unless main-file
+      (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
+    (builder-elisp-package--require-deps (builder-elisp-package--read-deps main-file))
+    (let* ((test-dir (f-join root "test"))
+           (load-path (-non-nil (-l root (and (f-directory-p test-dir) test-dir) load-path))))
+      (load main-file nil t)
+      (--each (builder-elisp-package--test-files root)
+        (load it nil t)))
+    (if noninteractive
+        (ert-run-tests-batch-and-exit)
+      (ert t))))
+
+;;;###autoload
+(defun builder-elisp-package-compile ()
+  "Byte-compile every top-level .el source file in the elisp package at point.
+In batch mode exits with status 1 if any file fails to compile."
+  (interactive)
+  (let* ((root      (file-name-as-directory (approximate-project-root)))
+         (main-file (builder-elisp-package--main-file root)))
+    (unless main-file
+      (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
+    (builder-elisp-package--require-deps (builder-elisp-package--read-deps main-file))
+    (let* ((load-path (cons root load-path))
+           (failed 0))
+      (--each (builder-elisp-package--source-files root)
+        (unless (byte-compile-file it)
+          (cl-incf failed)))
+      (when noninteractive
+        (kill-emacs (if (zerop failed) 0 1)))
+      (zerop failed))))
+
+;;;###autoload
+(defun builder-elisp-package-build ()
+  "Build an installable .tar via `package-build' for the elisp package at point.
+The recipe is generated at build time and uses a file:// URL pointing at the
+local repository, so the package contents reflect HEAD; uncommitted changes
+are not included. The tarball lands in <root>/build/packages/."
+  (interactive)
+  (require 'package-build)
+  (require 'package-recipe)
+  (let* ((root      (file-name-as-directory (approximate-project-root)))
+         (name      (builder-elisp-package--name root))
+         (main-file (builder-elisp-package--main-file root)))
+    (unless main-file
+      (user-error "no <%s>.el at %s" name root))
+    (unless (f-directory-p (f-join root ".git"))
+      (user-error "package build requires a git repository at %s" root))
+    (unless (zerop (call-process "git" nil nil nil "-C" root
+                                 "rev-parse" "--verify" "HEAD"))
+      (user-error "package build requires at least one commit in %s" root))
+    (let* ((build-root  (f-join root "build"))
+           (working-dir (f-join build-root "working"))
+           (archive-dir (f-join build-root "packages"))
+           (recipes-dir (f-join build-root "recipes"))
+           (recipe-path (f-join recipes-dir name)))
+      (--each (-l build-root working-dir archive-dir recipes-dir)
+        (make-directory it t))
+      (with-temp-file recipe-path
+        (let ((print-quoted t))
+          (prin1 `(,(intern name)
+                   :fetcher git
+                   :url ,(concat "file://" (directory-file-name root))
+                   :files ("*.el"))
+                 (current-buffer)))
+        (insert "\n"))
+      (let ((package-build-working-dir (file-name-as-directory working-dir))
+            (package-build-archive-dir (file-name-as-directory archive-dir))
+            (package-build-recipes-dir (file-name-as-directory recipes-dir))
+            (package-build-verbose t)
+            (package-build-releases nil))
+        (package-build-archive (intern name)))
+      (when noninteractive (kill-emacs 0)))))
+
+;;;###autoload
+(defun builder-elisp-package-clean ()
+  "Remove build artifacts (build/, .cache/, *.elc) for the elisp package at point."
+  (interactive)
+  (let ((root (file-name-as-directory (approximate-project-root))))
+    (--each (list (f-join root "build") (f-join root ".cache"))
+      (when (f-directory-p it)
+        (delete-directory it t)
+        (message "removed %s" it)))
+    (--each (->> (f-entries root #'f-file-p t)
+                 (--filter (f-ext-p it "elc")))
+      (delete-file it)
+      (message "removed %s" it))
+    (when noninteractive (kill-emacs 0))))
+
+(builder-register-candidates
+ :name "emacs-lisp-package"
+ :pipeline
+ (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
+             (_ (builder-elisp-package-p project-root-directory))
+             (display-name (builder-elisp-package--name project-root-directory))
+             (load-path-args (s-join " " (--map (format "-L %s" it)
+                                                (-filter #'f-directory-p load-path)))))
+   (->> '(("test-package"    "builder-elisp-package-test"    "run ert tests for")
+          ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
+          ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
+          ("clean-package"   "builder-elisp-package-clean"   "remove build artifacts of"))
+        (--map
+         (let ((op (car it))
+               (fn (cadr it))
+               (desc (caddr it)))
+           (make-builder-candidate
+            :name (format "%s-<%s>" op display-name)
+            :command (format "emacs --batch %s --eval \"(require 'builder)\" -f %s"
+                             load-path-args fn)
+            :directory project-root-directory
+            :annotation (format "%s elisp package <%s>" desc display-name)))))))
 
 (provide 'builder)
 ;;; builder.el ends here

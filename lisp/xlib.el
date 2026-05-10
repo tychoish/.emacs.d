@@ -1,8 +1,8 @@
-;;; xlib.el --- Extended elsip utility library -*- lexical-binding: t -*-
+;;; xlib.el --- Extended elisp utility library -*- lexical-binding: t -*-
 
 ;; Author: tychoish
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "30.1") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19") (bind-key "2.4"))
+;; Package-Requires: ((emacs "30.1") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19"))
 ;; Keywords: extensions utility
 ;; URL: https://github.com/tychoish/xlib.el
 
@@ -29,7 +29,6 @@
 
 ;;; Code:
 
-(require 'cl-lib)
 (require 'f)
 (require 's)
 (require 'ht)
@@ -39,12 +38,14 @@
 (declare-function bind-keys "bind-key")
 (declare-function which-key-add-keymap-based-replacements "which-key")
 
+(eval-when-compile
+  (require 'cl-lib))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; slow-op -- reporting for operation timing
 
-(defvar init-file-debug nil)
-(defvar slow-op-reporting (or debug-on-error init-file-debug))
+(defvar slow-op-reporting debug-on-error)
 (defvar slow-op-threshold 0.01)
 
 (defmacro with-slow-op-timer (name &rest body)
@@ -67,10 +68,6 @@
 (defalias 's-equal #'string-equal)
 (defalias 's-empty-p #'string-empty-p)
 
-(defun s-join-spc (&rest words)
-  (->> (-filter-s-trim words)
-       (s-join " ")))
-
 (defun -filter-s-trim (strs)
   "Return STRS with non-strings removed and remaining strings trimmed of whitespace.
 Empty strings and strings that are entirely whitespace are excluded from the result."
@@ -88,16 +85,17 @@ Empty strings and strings that are entirely whitespace are excluded from the res
       (string-equal (char-to-string char) value)
     (char-equal char value)))
 
-(defconst xlib--join-char-names
-  '((?- "hyphen" "kebab")
-    (?_ "underscore" "snake")
-    (?. "period" "dot")
-    (?\s "space" "spc")
-    (?= "equal" "equal")
-    (?+ "plus" "plus")
-    (?| "pipe" "pipe")
-    (?> "gt" "gt"))
-  "Alist of (CHAR canonical-name jargon-name) for `s-define-join-string-function'.")
+(eval-and-compile
+  (defconst xlib--join-char-names
+    '((?- "hyphen" "kebab")
+      (?_ "underscore" "snake")
+      (?. "period" "dot")
+      (?\s "space" "spc")
+      (?= "equal" "equal")
+      (?+ "plus" "plus")
+      (?| "pipe" "pipe")
+      (?> "gt" "gt"))
+    "Alist of (CHAR canonical-name jargon-name) for `s-define-join-string-function'."))
 
 (cl-defmacro s-define-join-string-function (char &optional &key use-jargon-names space-padding)
   "Define a function `s-join-with-NAME' that joins non-empty strings with CHAR as separator.
@@ -157,7 +155,6 @@ Use this to guard against blank user input or empty configuration values."
 
 (defalias 's-contains-whitespace-p #'s-blank-p)
 
-
 (defun s-default (default input)
   "Return DEFAULT when INPUT is nil or an empty string, otherwise return INPUT."
   (if (or (null input) (string-equal input ""))
@@ -206,7 +203,6 @@ Use this to guard against blank user input or empty configuration values."
       first
     second))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `dash.el' -- extensions and additons
@@ -252,20 +248,26 @@ concatenated or joined. This provides a dash.el conforming API for the
 (defalias '-c #'cons)
 (defalias '-l #'list)
 
-(defun -strings (&rest input &key options)
-  "Coerce INPUT into a flat list of strings.
-If all elements are already strings, returns INPUT as-is.
-Non-string elements are dropped when the `filter' option is set,
-stringified with `format' when `stringify' is set, and signal a
-`user-error' otherwise."
-  (if (-all? #'stringp input)
-      input
-    (->> input
-	 (--keep (cond
-		  ((stringp it) it)
-		  ((option-set-p 'filter options) nil)
-		  ((option-set-p 'stringify options) (format "%s" it))
-		  (t (user-error "no way to handle %s value %s" (type-of it) it)))))))
+(defun -strings (&rest input)
+  "Return INPUT as a flat list, optionally coercing non-string elements.
+A trailing `:options OPT' pair in INPUT selects how non-strings are handled:
+`filter' drops them, `stringify' formats them with `format'. OPT may be a
+list combining these symbols. When `:options' is not provided or its value
+is nil, INPUT is returned as-is without coercion. A `user-error' is signaled
+only when OPT is some other, unrecognized value."
+  (let* ((idx (cl-position :options input))
+	 (options (and idx (nth (1+ idx) input)))
+	 (input (if idx
+		    (append (cl-subseq input 0 idx)
+			    (cl-subseq input (+ idx 2)))
+		  input)))
+    (cond
+     ((null options) input)
+     ((option-set-p 'filter options)
+      (-filter #'stringp input))
+     ((option-set-p 'stringify options)
+      (--map (if (stringp it) it (format "%s" it)) input))
+     (t (user-error "invalid `:options' value for `-strings': %S" options)))))
 
 (defun -sparse-append (&rest items)
   "Append ITEMS and remove all nil values from the concatenated result."
@@ -390,7 +392,7 @@ of the equality function customization differs slightly."
        "Return non-nil if KEY is present in the named hash table."
        (ht-contains-p ,table key))))
 
-(cl-defmacro define-ht-named-table (name &optional &key (test #'equal))
+(cl-defmacro ht-make-named-table (name &optional &key (test #'equal))
   (let ((name (or (when (stringp name) (intern name))
 		  (when (symbolp name) name)
 		  (intern (format "%S" name))))
@@ -708,6 +710,7 @@ collisions. CLEANUP uninterns the generated symbol after the hook fires."
 	  `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
 
 (cl-defmacro make-read-extended-command-for-prefix (prefix &optional &key bind-map bind-key key-alias)
+  (declare (indent defun))
   (unless (setq prefix (s-trimmed-or-nil prefix))
     (user-error "cannot build predicate function for '%s'" prefix))
   (unless key-alias
@@ -719,15 +722,15 @@ collisions. CLEANUP uninterns the generated symbol after the hook fires."
 	 (predicate-symbol (intern predicate-name))
 	 (user-command-name (format "execute-extended-%s-command" prefix))
 	 (user-command-symbol (intern user-command-name)))
-    `(progn
-       (defun ,predicate-symbol (command buffer)
-	 ,(format "Predicate for `read-extended-command-predicate' to filter commands returning only those that start with the prefix `%s'" prefix)
-	 (s-prefix-p ,prefix (symbol-name command)))
+    `(prog1
        (defun ,user-command-symbol ()
 	 ,(format "Read extentend command but filtered for only those beginning with prefix `%s'." prefix)
 	 (interactive)
 	 (let ((read-extended-command-predicate #',predicate-symbol))
 	   (execute-extended-command nil)))
+       (defun ,predicate-symbol (command buffer)
+	 ,(format "Predicate for `read-extended-command-predicate' to filter commands returning only those that start with the prefix `%s'" prefix)
+	 (s-prefix-p ,prefix (symbol-name command)))
        ,(when bind-key
 	  `(progn
 	     (bind-keys

@@ -11,8 +11,8 @@
 
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
-(setq use-package-compute-statistics (or debug-on-error init-file-debug))
-(setq use-package-minimum-reported-time 0.5)
+;; (setq use-package-compute-statistics t)
+;; (setq use-package-minimum-reported-time 0.5)
 
 (use-package async
   :ensure t
@@ -27,6 +27,10 @@
   :init
   (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
   (add-hook 'dired-mode-hook 'dired-async-mode))
+
+(use-package package-build 
+  :ensure t
+  :defer t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2520,6 +2524,39 @@ Useful after changing `eglot-workspace-configuration' or
   ;; Progress buffer configuration
   (setq efrit-do-show-progress-buffer t)  ; Show progress buffer automatically
   (setq efrit-do-queue-max-size 8))      ; Max commands to queue
+
+(use-package shell-maker
+  :ensure t
+  :config
+  (defalias 'shell-maker-map 'shell-maker-major-mode-map))
+
+(use-package agent-shell
+  :ensure t
+  :after (shell-maker)
+  :init
+  (bind-keys
+   :map tychoish/robot-map
+   :prefix "s"
+   :prefix-map tychoish/robot-agent-shell-map
+   ("o" . agent-shell)
+   ("t" . agent-shell-toggle)
+   ("RET" . agent-shell-submit)
+   ("C-g" . agent-shell-interrupt)
+   ("m" . execute-extended-agent-shell-command)
+   ("r" . agent-shell-rename-buffer)
+   ("b" . agent-shell-jump-to-latest-permission-button-row)
+   :map agent-shell-mode-map
+   ("C-c C-c" . agent-shell-submit)
+   ("C-c C-k" . agent-shell-interrupt))
+
+  (make-read-extended-command-for-prefix "agent-shell"
+   :bind-map tychoish/robot-agent-shell-map
+   :bind-key "m")
+  :config
+  (setq agent-shell-anthropic-authentication
+	(agent-shell-anthropic-make-authentication :login t))
+  (setq agent-shell-anthropic-claude-environment
+      (agent-shell-make-environment-variables :inherit-env t)))
 
 (use-package beads
   ;; :vc (:url "https://codeberg.org/ctietze/beads.el" :rev :newest)

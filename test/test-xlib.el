@@ -835,11 +835,60 @@
 (ert-deftest xlib/-strings-empty-returns-empty ()
   (should (null (-strings))))
 
-(ert-deftest xlib/-strings-non-string-signals-user-error ()
-  (should-error (-strings "a" 42) :type 'user-error))
+(ert-deftest xlib/-strings-non-string-without-options-passes-through ()
+  (should (equal '("a" 42) (-strings "a" 42))))
 
-(ert-deftest xlib/-strings-non-string-alone-signals-user-error ()
-  (should-error (-strings 42) :type 'user-error))
+(ert-deftest xlib/-strings-non-string-alone-passes-through ()
+  (should (equal '(42) (-strings 42))))
+
+(ert-deftest xlib/-strings-mixed-types-without-options-pass-through ()
+  (should (equal '("a" 1 sym ("nested")) (-strings "a" 1 'sym '("nested")))))
+
+(ert-deftest xlib/-strings-options-filter-drops-non-strings ()
+  (should (equal '("a" "b") (-strings "a" 42 "b" :options 'filter))))
+
+(ert-deftest xlib/-strings-options-filter-all-non-strings ()
+  (should (null (-strings 1 2 3 :options 'filter))))
+
+(ert-deftest xlib/-strings-options-stringify-formats-non-strings ()
+  (should (equal '("a" "42" "b") (-strings "a" 42 "b" :options 'stringify))))
+
+(ert-deftest xlib/-strings-options-stringify-symbol ()
+  (should (equal '("foo") (-strings 'foo :options 'stringify))))
+
+(ert-deftest xlib/-strings-options-list-filter ()
+  (should (equal '("a") (-strings "a" 42 :options '(filter)))))
+
+(ert-deftest xlib/-strings-options-list-stringify ()
+  (should (equal '("a" "42") (-strings "a" 42 :options '(stringify)))))
+
+(ert-deftest xlib/-strings-options-filter-precedes-stringify ()
+  (should (equal '("a") (-strings "a" 42 :options '(filter stringify)))))
+
+(ert-deftest xlib/-strings-options-no-effect-when-all-strings ()
+  (should (equal '("a" "b") (-strings "a" "b" :options 'filter)))
+  (should (equal '("a" "b") (-strings "a" "b" :options 'stringify))))
+
+(ert-deftest xlib/-strings-options-nil-passes-through ()
+  (should (equal '("a" "b")  (-strings "a" "b"  :options nil)))
+  (should (equal '("a" 42)   (-strings "a" 42   :options nil)))
+  (should (equal '(42)       (-strings 42       :options nil))))
+
+(ert-deftest xlib/-strings-options-nil-equivalent-to-omitted ()
+  (should (equal (-strings "a" "b") (-strings "a" "b" :options nil)))
+  (should (equal (-strings "a" 42)  (-strings "a" 42  :options nil))))
+
+(ert-deftest xlib/-strings-options-unknown-signals-user-error ()
+  (should-error (-strings "a" 42 :options 'unknown) :type 'user-error)
+  (should-error (-strings "a" 42 :options 99)       :type 'user-error)
+  (should-error (-strings "a" 42 :options "filter") :type 'user-error))
+
+(ert-deftest xlib/-strings-options-unknown-errors-even-when-all-strings ()
+  (should-error (-strings "a" "b" :options 'unknown) :type 'user-error))
+
+(ert-deftest xlib/-strings-options-only ()
+  (should (null (-strings :options 'filter)))
+  (should (null (-strings :options nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; --in-place
@@ -872,32 +921,32 @@
   (should (null (--map-uniq it nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; define-ht-named-table
+;;; ht-make-named-table
 
-(ert-deftest xlib/define-ht-named-table-creates-variable ()
-  (define-ht-named-table xlib--test-ht-table)
+(ert-deftest xlib/ht-make-named-table-creates-variable ()
+  (ht-make-named-table xlib--test-ht-table)
   (should (boundp 'xlib--test-ht-table))
   (should (ht-p xlib--test-ht-table)))
 
-(ert-deftest xlib/define-ht-named-table-generates-get-function ()
-  (define-ht-named-table xlib--test-ht-get)
+(ert-deftest xlib/ht-make-named-table-generates-get-function ()
+  (ht-make-named-table xlib--test-ht-get)
   (should (fboundp 'ht-xlib--test-ht-get-get)))
 
-(ert-deftest xlib/define-ht-named-table-generates-set-function ()
-  (define-ht-named-table xlib--test-ht-set)
+(ert-deftest xlib/ht-make-named-table-generates-set-function ()
+  (ht-make-named-table xlib--test-ht-set)
   (should (fboundp 'ht-xlib--test-ht-set-set)))
 
-(ert-deftest xlib/define-ht-named-table-generates-contains-p-function ()
-  (define-ht-named-table xlib--test-ht-contains)
+(ert-deftest xlib/ht-make-named-table-generates-contains-p-function ()
+  (ht-make-named-table xlib--test-ht-contains)
   (should (fboundp 'ht-xlib--test-ht-contains-contains-p)))
 
-(ert-deftest xlib/define-ht-named-table-set-and-get-roundtrip ()
-  (define-ht-named-table xlib--test-ht-roundtrip)
+(ert-deftest xlib/ht-make-named-table-set-and-get-roundtrip ()
+  (ht-make-named-table xlib--test-ht-roundtrip)
   (ht-xlib--test-ht-roundtrip-set "key" "value")
   (should (equal "value" (ht-xlib--test-ht-roundtrip-get "key"))))
 
-(ert-deftest xlib/define-ht-named-table-contains-p-after-set ()
-  (define-ht-named-table xlib--test-ht-cpset)
+(ert-deftest xlib/ht-make-named-table-contains-p-after-set ()
+  (ht-make-named-table xlib--test-ht-cpset)
   (should-not (ht-xlib--test-ht-cpset-contains-p "k"))
   (ht-xlib--test-ht-cpset-set "k" t)
   (should (ht-xlib--test-ht-cpset-contains-p "k")))
