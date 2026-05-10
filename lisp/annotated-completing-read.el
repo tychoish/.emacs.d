@@ -53,7 +53,8 @@ Keys are symbols — typically `this-command' at call time — and values are
 the standard Emacs history lists accumulated by `completing-read'.")
 
 ;;;###autoload
-(cl-defun annotated-completing-read (table &key (prompt "=> ") require-match category history group-name group-display initial-input sort-fn)
+(cl-defun annotated-completing-read
+    (table &key (prompt "=> ") require-match category history group-name group-display initial-input sort-fn)
   "Read a candidate from TABLE with aligned per-candidate annotations.
 TABLE is any Emacs hash table (`ht' or plain `make-hash-table') mapping
 candidate strings to annotation strings.  Column alignment is computed

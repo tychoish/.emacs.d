@@ -1,4 +1,4 @@
-;;; xlib.el --- extended utility library -*- lexical-binding: t -*-
+;;; xlib.el --- Extended elsip utility library -*- lexical-binding: t -*-
 
 ;; Author: tychoish
 ;; Version: 0.1.0
@@ -251,8 +251,6 @@ concatenated or joined. This provides a dash.el conforming API for the
 
 (defalias '-c #'cons)
 (defalias '-l #'list)
-(defalias 'll #'list)
-(defalias '-- #'list)
 
 (defun -strings (&rest input &key options)
   "Coerce INPUT into a flat list of strings.
@@ -422,13 +420,6 @@ of the equality function customization differs slightly."
     "[^A-Za-z0-9]" "-"
     (string-clean-whitespace s))))
 
-(defmacro f-file-with-ext-p-function (extension)
-  `(defun ,(intern (format "f-%s-file-p" (string-replace "." "" (downcase extension)))) (file)
-     (and (f-file-p file) (f-ext-p file ,extension))))
-
-(defmacro f-filename-is-function (name)
-  `(lambda (filename) (f-filename-is-p filename ,name)))
-
 (defun f-filename-is-p (entry name)
   (f-equal-p (f-filename entry) name))
 
@@ -446,7 +437,8 @@ of the equality function customization differs slightly."
     (setq extension (string-trim-left extension "^\\.")))
 
   `(progn
-     (f-file-with-ext-p-function ,extension)
+     (defun ,(intern (format "f-%s-file-p" (string-replace "." "" (downcase extension)))) (file)
+       (and (f-file-p file) (f-ext-p file ,extension)))
 
      (defun ,(intern (format "f-directories-containing-file-with-extension-%s" (string-replace "." "" (downcase extension)))) (paths)
        (when (stringp paths)

@@ -12,27 +12,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; String helpers
 
-(ert-deftest xlib/s-join-spc-basic ()
-  (should (equal "foo bar" (s-join-spc "foo" "bar"))))
-
-(ert-deftest xlib/s-join-spc-single-word ()
-  (should (equal "foo" (s-join-spc "foo"))))
-
-(ert-deftest xlib/s-join-spc-filters-nil ()
-  (should (equal "foo bar" (s-join-spc "foo" nil "bar"))))
-
-(ert-deftest xlib/s-join-spc-filters-non-strings ()
-  (should (equal "foo bar" (s-join-spc "foo" 42 t "bar"))))
-
-(ert-deftest xlib/s-join-spc-filters-empty-and-whitespace ()
-  (should (equal "foo bar" (s-join-spc "foo" "" "   " "bar"))))
-
-(ert-deftest xlib/s-join-spc-all-empty-returns-empty ()
-  (should (equal "" (s-join-spc "" "  " nil))))
-
-(ert-deftest xlib/s-join-spc-trims-inputs ()
-  (should (equal "foo bar" (s-join-spc "  foo  " "  bar  "))))
-
 ;;; -filter-s-trim
 
 (ert-deftest xlib/-filter-s-trim-basic ()

@@ -486,7 +486,7 @@ call `builder-add-candidates'."
 		       (derived-mode-p '(org-mode markdown-mode rst-mode)))
 	      (save-buffer) t)
  :pipeline (let ((filename (buffer-file-name)))
-	     (-- (make-builder-candidate
+	     (list (make-builder-candidate
 		  :directory default-directory
 		  :command (format "vale --output=line %s" filename)
 		  :name (format "vale check %s" (f-collapse-homedir filename))
@@ -526,7 +526,7 @@ call `builder-add-candidates'."
 		(--flat-map
 		 (let ((command (car it))
 		       (buf (cdr it)))
-		   (->> (-- project-root-directory (buffer-directory buf) default-directory)
+		   (->> (list project-root-directory (buffer-directory buf) default-directory)
 			(-distinct)
 			(-non-nil)
 			(--map (let ((operation-directory it))
@@ -608,7 +608,7 @@ call `builder-add-candidates'."
 								       (f-visually-compress-to-five path-for-project-tag))))
 			(proj-path-recursive (f-join proj-path-for-name "...")))
 		   (-append
-		    (-- (make-builder-candidate
+		    (-l (make-builder-candidate
 			 :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
 			 :command (s-join-with-space "go build" operation-directory-tree)
 			 :directory directory
@@ -664,7 +664,7 @@ call `builder-add-candidates'."
 		       (is-golang (f-ext-p filename "go"))
 		       (short-filename (f-collapse-homedir filename))
 		       (basename (f-filename filename)))
-	     (-- (make-builder-candidate
+	     (-l (make-builder-candidate
 		  :name (format "gofumpt +extra %s" basename)
 		  :directory (f-dirname filename)
 		  :command (format "gofumpt -extra -w %s" filename)
@@ -880,7 +880,7 @@ call `builder-add-candidates'."
              (directory (f-dirname filename))
              (load-path-args (s-join " " (--map (format "-L %s" it)
                                                 (-filter #'f-directory-p load-path)))))
-   (-- (make-builder-candidate
+   (-l (make-builder-candidate
         :name (format "byte-compile %s" basename)
         :command (format "emacs --batch %s -f batch-byte-compile %s" load-path-args filename)
         :directory directory
@@ -915,7 +915,7 @@ call `builder-add-candidates'."
              (load-path-args (s-join " " (--map (format "-L %s" it)
                                                 (-filter #'f-directory-p load-path))))
              (file-args (s-join " " el-files)))
-   (-- (make-builder-candidate
+   (-l (make-builder-candidate
         :name (format "byte-compile <%s>" project-name)
         :command (format "emacs --batch %s -f batch-byte-compile %s" load-path-args file-args)
         :directory project-root-directory
