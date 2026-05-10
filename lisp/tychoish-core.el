@@ -1065,8 +1065,6 @@
   :commands (telega
              telega-chat-mode
              tychoish/telega-switch-to-root
-             tychoish/telega-kill-chat-buffers
-             tychoish/telega-bury-chat-buffers
              tychoish/telega-force-kill)
   :init
   (which-key-add-key-based-replacements "C-c n" "telega-prefix")
@@ -1095,25 +1093,20 @@
   (setq telega-folder-icons-alist nil)
 
   (setq telega-root-view-grouping-other-chats nil)
-  (setq telega-root-view-grouping-alist
-        '(("open" . has-chatbuf)
-          ("personal" chat-list "personal")
-          ("groups" type basicgroup supergroup)))
+  (setq telega-root-view-grouping-alist '(("open" . has-chatbuf)
+					  ("personal" chat-list "personal")
+					  ("groups" type basicgroup supergroup)))
 
   (setq telega-filter-custom-show-folders nil)
-  (setq telega-filter-button-width
-        '(.2 12 16))
-  (setq telega-filters-custom
-        '(("main" main)
-          ("groups" type basicgroup supergroup)
-          ("broadcast" type channel)
-          ("archive" . archive)))
-
+  (setq telega-filter-button-width '(.2 12 16))
+  (setq telega-filters-custom '(("main" main)
+				("groups" type basicgroup supergroup)
+				("broadcast" type channel)
+				("archive" . archive)))
   (setq telega-root-view-top-categories
         '(("Users" . 10) ("Groups" . 10) ("Channels" . 10) ("Bots" . 10)
           ("InlineBots" . 10) ("Calls" . 10)))
-  (setq telega-chat-folders-exclude
-        '("unknowns" "InlineBots" "Calls" "Personal"))
+  (setq telega-chat-folders-exclude '("unknowns" "InlineBots" "Calls" "Personal"))
 
   (setq telega-chat-folders-insexp #'telega-folders-insert-default)
 
