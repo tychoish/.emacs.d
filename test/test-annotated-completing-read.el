@@ -496,7 +496,7 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                  (lambda (_tbl &rest args)
                    (setq received-prompt (plist-get args :prompt))
                    "item")))
-        (annotated-completing-read-context-from-point "my prompt: ")
+        (annotated-completing-read-context-from-point :prompt "my prompt: ")
         (should (equal "my prompt: " received-prompt))))))
 
 (ert-deftest annotated-completing-read/context-from-point-history-defaults-to-this-command ()
@@ -521,7 +521,10 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                  (lambda (_tbl &rest args)
                    (setq received-history (plist-get args :history))
                    "item")))
-        (annotated-completing-read-context-from-point nil nil :history 'my-history)
+        (annotated-completing-read-context-from-point
+	 :prompt nil
+	 :seed nil
+	 :history 'my-history)
         (should (eq 'my-history received-history))))))
 
 (ert-deftest annotated-completing-read/context-from-point-seed-in-candidates ()
@@ -533,7 +536,9 @@ the invariant being tested is that key+padding is constant, not key+padding+valu
                  (lambda (tbl &rest _)
                    (setq received-table tbl)
                    "myseed")))
-        (annotated-completing-read-context-from-point nil "myseed")
+        (annotated-completing-read-context-from-point
+	 :prompt nil
+	 :seed "myseed")
         (should (ht-contains-p received-table "myseed"))
         (should (equal "seed" (ht-get received-table "myseed")))))))
 

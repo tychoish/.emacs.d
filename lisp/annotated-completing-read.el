@@ -175,7 +175,7 @@ SEED is a string or list of strings to include as explicit candidates."
     table))
 
 ;;;###autoload
-(defun annotated-completing-read-context-from-point (&optional prompt seed &key history)
+(defun annotated-completing-read-context-from-point (&optional &key prompt seed initial-input history)
   "Select a string from context-aware candidates with PROMPT.
 Candidates are drawn from thing-at-point, the active region, the current
 line, the kill ring, and any explicit SEED strings.  SEED may be a string
@@ -191,6 +191,7 @@ command its own isolated history."
          candidates
          :require-match nil
          :prompt (or prompt "context: ")
+	 :initial-input initial-input
          :history cmd)
       "")))
 

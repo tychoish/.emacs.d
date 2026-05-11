@@ -202,19 +202,28 @@
 	 :map tychoish/ecclectic-grep-map ;; "C-c g"
          :prefix "r"
          :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
-         ("d" . tychoish-rg)
-         ("c" . consult-rg-compile)
-         ("m" . tychoish-find-merges)
+         ("d" . find-ripgrep)
+         ("c" . find-ripgrep-compile)
+         ("m" . find-merge-conflicts)
          ("g" . consult-rg)
          ("s" . consult-rg-pwd)
          ("l" . consult-rg-pwd-wizard)
          ("r" . consult-rg-project)
          ("p" . consult-rg-project-wizard)
          :map tychoish/ecclectic-grep-project-map
-         ("r" . consult-rg-compile)
-         ("p" . tychoish-rg-repo))
+         ("r" . consult-rg-project)
+         ("p" . find-ripgrep-project))
   :defines (tychoish/ecclectic-rg-map)
-  :commands (tychoish-rg tychoish-rg-repo tychoish-find-merges ripgrep-regexp)
+  :commands (consult-rg
+	     consult-rg-pwd
+	     consult-rg-pwd-wizard
+	     consult-rg-project
+	     consult-rg-project-wizard
+	     find-ripgrep
+	     find-ripgrep-compile
+	     find-ripgrep-project
+	     find-merge-conflicts
+	     ripgrep-regexp)
   :init
   (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
     "r" '("rg-grep" . tychoish/ecclectic-rg-map))
@@ -222,74 +231,97 @@
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
 
-  (defun consult-rg (&optional dir initial &key context)
+  (cl-defun consult-rg (&key directory initial context)
     "Start an iterative rg session. DIR and INITIAL integrate with the consult-grep API."
     (interactive "P")
     (let ((context (or context current-prefix-arg)))
       (consult-ripgrep
-       (or (s-trimmed-or-nil dir)
+       (or (s-trimmed-or-nil directory)
 	   (annotated-completing-read-directory)
 	   (approximate-project-root))
        (if (and (or context (not initial)) (not (eq context 'override)))
-	   (annotated-completing-read-context-from-point "rg(init): ")
+	   (annotated-completing-read-context-from-point
+	    :prompt "rg(init):")
 	 initial))))
 
-  (defun consult-rg-project (&optional initial &key context)
+  (cl-defun consult-rg-project (&optional initial &key context)
     "Start an iterative rg session in the project root, if possible, falling back as necessary."
     (interactive "P")
     (consult-rg
-     (or (approximate-project-root)
-	 (annotated-completing-read-directory))
-     initial
+     :directory (or (approximate-project-root) (annotated-completing-read-directory))
+     :initial initial
      :context (or context current-prefix-arg 'override)))
 
-  (defun consult-rg-pwd (&optional initial &key context)
+  (cl-defun consult-rg-pwd (&optional initial &key context)
     "Start an iterative rg session for the current directory."
     ;; (let ((base-directory (f-base default-directory)))
     (interactive "P")
 
     (consult-rg
-     (or default-directory (annotated-completing-read-directory))
-     initial
+     :directory (or default-directory (annotated-completing-read-directory))
+     :initial initial
      :context (or context current-prefix-arg 'override)))
 
   (defun consult-rg-pwd-wizard (&optional initial)
     "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
-    ;; (let ((base-directory (f-base default-directory)))
     (interactive "P")
-    (consult-rg-pwd initial :context t))
+    (consult-rg-pwd
+     :initial initial
+     :context t))
 
   (defun consult-rg-project-wizard (&optional initial)
     "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
-    ;; (let ((base-directory (f-base default-directory)))
     (interactive "P")
-    (consult-rg-project initial :context t))
+    (consult-rg-project
+     :initial initial
+     :context t))
 
-  (defun consult-rg-compile (&optional initial)
-    (interactive "P")
-    (let ((default-directory (annotated-completing-read-directory)))
-      (tychoish-rg initial)))
+  ;; find-ripgrep -- compilation buffer wrappers
 
-  (defun tychoish-rg (regexp)
-    (interactive "P")
-    (let ((compilation-buffer-name-function (compile-buffer-name (format "*%s-rg*" (approximate-project-name)))))
-      (ripgrep-regexp
-       (annotated-completing-read
-	(annotated-completing-read--context-candidates ripgrep-regexp-history)
-	:prompt (format "[%s]<rg>: " default-directory)
-	:initial-input regexp
-	:history 'ripgrep-regexp-history
-	:require-match nil)
-       default-directory)))
+  (cl-defun ripgrep-compile (&key regexp directory buffer-name)
+    (let ((compilation-buffer-name-function (compile-buffer-name (or buffer-name (format "*%s-rg*" (approximate-project-name))))))
+      (ripgrep-regexp regexp directory)))
 
-  (defun tychoish-rg-repo (&optional regexp)
-    (interactive "P")
-    (let ((default-directory (approximate-project-root)) )
-      (tychoish-rg regexp)))
+  (cl-defun find-ripgrep--resolve-regexp (&key regexp directory)
+    (annotated-completing-read-context-from-point
+     :prompt (format "[%s]<rg>:" directory)
+     :history 'ripgrep-regexp-history
+     :initial-input regexp))
 
-  (defun tychoish-find-merges ()
+  (defun find-ripgrep ()
+    "Run `rg' (ripgrep) from the system in a compile buffer with the provided regular expression."
     (interactive)
-    (ripgrep-regexp "^(=======$|<<<<<<<|>>>>>>>)" (projectile-project-root))))
+    (ripgrep-compile
+     :directory default-directory
+     :buffer-name (format "*%s-rg*" (f-filename default-directory))
+     :regexp (find-ripgrep--resolve-regexp
+	      :directory default-directory)))
+
+  (defun find-ripgrep-compile (&optional initial)
+    (interactive "P")
+    (let ((directory (annotated-completing-read-directory)))
+      (ripgrep-compile
+       :directory directory
+       :buffer-name (format "*%s-rg*" directory)
+       :regexp (find-ripgrep--resolve-regexp
+		:regexp initial
+		:directory directory))))
+
+  (defun find-ripgrep-project ()
+    "Run `rg' from the system at the project root. Output is written to a compile buffer."
+    (interactive)
+    (ripgrep-compile
+     :directory (approximate-project-root)
+     :regexp (find-ripgrep--resolve-regexp
+	      :directory (approximate-project-root))))
+
+  (defun find-merge-conflicts ()
+    "Use ripgrep to identify all merge conflict artifacts"
+    (interactive)
+    (ripgrep-compile
+     :regexp "^(=======$|<<<<<<<|>>>>>>>)"
+     :directory (approximate-project-root)
+     :buffer-name (format "*%s-merge-conflicts*" (approximate-project-name)))))
 
 (use-package deadgrep
   :ensure t
