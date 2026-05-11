@@ -2312,7 +2312,6 @@ Useful after changing `eglot-workspace-configuration' or
              google-gemini-list-models
              google-gemini-model-info))
 
-
 (use-package gptel
   :ensure t
   :vc (:url "https://github.com/karthink/gptel" :rev newest)
@@ -2717,7 +2716,6 @@ Useful after changing `eglot-workspace-configuration' or
   (defalias 'shell-maker-map 'shell-maker-major-mode-map)
   (setq shell-maker-root-path (tychoish/conf-state-path "shell-maker")))
 
-
 (use-package agent-shell
   :ensure t
   :after (shell-maker)
@@ -2905,6 +2903,13 @@ Useful after changing `eglot-workspace-configuration' or
 	      ("," . agent-shell-manager-toggle))
   :config
   (setq agent-shell-manager-side 'bottom))
+
+(use-package agent-shell-workspace
+  :load-path "external/agent-shell-workspace"
+  :after (agent-shell)
+  :commands (agent-shell-workspace-toggle)
+  :bind (:map tychoish/robot-agent-shell-map
+	      ("w" . agent-shell-workspace-toggle)))
 
 (use-package agent-review
   :load-path "external/agent-review"
