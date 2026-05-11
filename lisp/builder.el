@@ -886,31 +886,30 @@ call `builder-add-candidates'."
              (short-name (f-collapse-homedir filename))
              (basename (f-filename filename))
              (directory (f-dirname filename))
-             (load-path-args (s-join " " (--map (format "-L %s" it)
-                                                (-filter #'f-directory-p load-path)))))
+             (lisp-dir (f-join user-emacs-directory "lisp")))
    (-l (make-builder-candidate
         :name (format "byte-compile %s" basename)
-        :command (format "emacs --batch %s -f batch-byte-compile %s" load-path-args filename)
+        :command (format "emacs --batch -L %s -f package-initialize -f batch-byte-compile %s" lisp-dir filename)
         :directory directory
         :annotation (format "byte-compile %s" short-name))
        (make-builder-candidate
         :name (format "relint %s" basename)
-        :command (format "emacs --batch %s --eval \"(require 'relint)\" -f relint-batch %s" load-path-args filename)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'relint)\" -f relint-batch %s" lisp-dir filename)
         :directory directory
         :annotation (format "check regexps in %s" short-name))
        (make-builder-candidate
         :name (format "package-lint %s" basename)
-        :command (format "emacs --batch %s --eval \"(require 'package-lint)\" -f package-lint-batch-and-exit %s" load-path-args filename)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'package-lint)\" -f package-lint-batch-and-exit %s" lisp-dir filename)
         :directory directory
         :annotation (format "lint package metadata in %s" short-name))
        (make-builder-candidate
         :name (format "elisp-lint %s" basename)
-        :command (format "emacs --batch %s --eval \"(require 'elisp-lint)\" -f elisp-lint-files-batch %s" load-path-args filename)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'elisp-lint)\" -f elisp-lint-files-batch %s" lisp-dir filename)
         :directory directory
         :annotation (format "run elisp-lint on %s" short-name))
        (make-builder-candidate
         :name (format "elsa %s" basename)
-        :command (format "emacs --batch %s --eval \"(require 'elsa)\" -f elsa-run %s" load-path-args filename)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'elsa)\" -f elsa-run %s" lisp-dir filename)
         :directory directory
         :annotation (format "run elsa type analysis on %s" short-name)))))
 
@@ -920,32 +919,31 @@ call `builder-add-candidates'."
  (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
              (el-files (builder--el-files-in-directory project-root-directory))
              (_ el-files)
-             (load-path-args (s-join " " (--map (format "-L %s" it)
-                                                (-filter #'f-directory-p load-path))))
-             (file-args (s-join " " el-files)))
+             (file-args (s-join " " el-files))
+             (lisp-dir (f-join user-emacs-directory "lisp")))
    (-l (make-builder-candidate
         :name (format "byte-compile <%s>" project-name)
-        :command (format "emacs --batch %s -f batch-byte-compile %s" load-path-args file-args)
+        :command (format "emacs --batch -L %s -f package-initialize -f batch-byte-compile %s" lisp-dir file-args)
         :directory project-root-directory
         :annotation (format "byte-compile all .el files in %s" project-name))
        (make-builder-candidate
         :name (format "relint <%s>" project-name)
-        :command (format "emacs --batch %s --eval \"(require 'relint)\" -f relint-batch %s" load-path-args file-args)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'relint)\" -f relint-batch %s" lisp-dir file-args)
         :directory project-root-directory
         :annotation (format "check regexps across all .el files in %s" project-name))
        (make-builder-candidate
         :name (format "package-lint <%s>" project-name)
-        :command (format "emacs --batch %s --eval \"(require 'package-lint)\" -f package-lint-batch-and-exit %s" load-path-args file-args)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'package-lint)\" -f package-lint-batch-and-exit %s" lisp-dir file-args)
         :directory project-root-directory
         :annotation (format "lint package metadata across all .el files in %s" project-name))
        (make-builder-candidate
         :name (format "elisp-lint <%s>" project-name)
-        :command (format "emacs --batch %s --eval \"(require 'elisp-lint)\" -f elisp-lint-files-batch %s" load-path-args file-args)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'elisp-lint)\" -f elisp-lint-files-batch %s" lisp-dir file-args)
         :directory project-root-directory
         :annotation (format "run elisp-lint across all .el files in %s" project-name))
        (make-builder-candidate
         :name (format "elsa <%s>" project-name)
-        :command (format "emacs --batch %s --eval \"(require 'elsa)\" -f elsa-run %s" load-path-args file-args)
+        :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'elsa)\" -f elsa-run %s" lisp-dir file-args)
         :directory project-root-directory
         :annotation (format "run elsa type analysis across all .el files in %s" project-name)))))
 
@@ -1095,7 +1093,7 @@ are not included. The tarball lands in <root>/build/packages/."
             (package-build-recipes-dir (file-name-as-directory recipes-dir))
             (package-build-verbose t)
             (package-build-releases nil))
-        (package-build-archive (intern name)))
+        (package-build-archive name))
       (when noninteractive (kill-emacs 0)))))
 
 ;;;###autoload
@@ -1119,8 +1117,7 @@ are not included. The tarball lands in <root>/build/packages/."
  (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
              (_ (builder-elisp-package-p project-root-directory))
              (display-name (builder-elisp-package--name project-root-directory))
-             (load-path-args (s-join " " (--map (format "-L %s" it)
-                                                (-filter #'f-directory-p load-path)))))
+             (lisp-dir (f-join user-emacs-directory "lisp")))
    (->> '(("test-package"    "builder-elisp-package-test"    "run ert tests for")
           ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
           ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
@@ -1131,8 +1128,7 @@ are not included. The tarball lands in <root>/build/packages/."
                (desc (caddr it)))
            (make-builder-candidate
             :name (format "%s-<%s>" op display-name)
-            :command (format "emacs --batch %s --eval \"(require 'builder)\" -f %s"
-                             load-path-args fn)
+            :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" -f %s" lisp-dir fn)
             :directory project-root-directory
             :annotation (format "%s elisp package <%s>" desc display-name)))))))
 

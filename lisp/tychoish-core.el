@@ -30,7 +30,7 @@
 
 (use-package package-build 
   :ensure t
-  :defer t)
+  :commands (package-build-archive package-build-all))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
