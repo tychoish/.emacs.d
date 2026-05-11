@@ -7,3 +7,15 @@
 [submodule "external/efrit"]
 	path = external/efrit
 	url = https://github.com/steveyegge/efrit.git
+[submodule "external/agent-review"]
+	path = external/agent-review
+	url = https://github.com/nineluj/agent-review.git
+[submodule "external/agent-shell-manager"]
+	path = external/agent-shell-manager
+	url = https://github.com/ElleNajt/agent-shell-manager.git
+[submodule "external/agent-shell-notifications"]
+	path = external/agent-shell-notifications
+	url = https://github.com/zackattackz/agent-shell-notifications.git
+[submodule "external/meta-agent-shell"]
+	path = external/meta-agent-shell
+	url = https://github.com/ElleNajt/meta-agent-shell.git

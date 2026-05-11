@@ -27,69 +27,61 @@
           org-depend
           org-habit))
 
-  (org-load-modules-maybe t))
+  (org-load-modules-maybe t)
 
-(autoload 'org-store-link "ol")
-(autoload 'org-insert-link "ol")
-(autoload 'org-annotate-file "org-annotate-file")
+  ;; org-faces
+  (setq org-todo-keyword-faces
+        '(("TODO" . org-warning)
+          ("INPROGRESS" . "orange")
+          ("INCOMPLETE" . "orange")
+          ("SCHEDULED" . "green")
+          ("BACKLOG" . (:foreground "orange" :weight bold))
+          ("PROJECT" . (:foreground "blue" :weight bold))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; org.el
+  (setq org-todo-keywords
+        '((sequence "TODO(t)" "|" "DONE(d!)")
+          (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
+  (setq org-tag-alist
+        '((:startgroup . nil)
+          ("inbox" . ?i)
+          ("backlog" . ?b)
+          (:endgroup . nil)
+          (:startgroup . nil)
+          ("@desk" . ?d)
+          ("@personal" . ?p)
+          ("@work" . ?w)
+          (:endgroup . nil)))
 
-;; org-mode extensions and supporting packages
+  (setq org-tags-column -70)
+  (setq org-enforce-todo-checkbox-dependencies t)
+  (setq org-enforce-todo-dependencies t)
+  (setq org-fast-tag-selection-include-todo t)
+  (setq org-fontify-done-headline t)
+  (setq org-footnote-auto-label nil)
+  (setq org-footnote-define-inline nil)
+  (setq org-footnote-section nil)
+  (setq org-log-into-drawer t)
+  (setq org-provide-todo-statistics t)
+  (setq org-reverse-note-order t)
+  (setq org-startup-folded 'content)
+  (setq org-startup-indented nil)
+  (setq org-tags-exclude-from-inheritance '("project"))
+  (setq org-track-ordered-property-with-tag t)
+  (setq org-use-fast-tag-selection 'auto)
+  (setq org-use-fast-todo-selection 'auto)
 
-(autoload 'toc-org-insert-toc "toc-org")
-(autoload 'org-gist-export-to-gist "ox-gist")
-(autoload 'org-rst-export-to-rst "ox-rst")
-(autoload 'org-rst-export-as-rst "ox-rst")
-(autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
+  ;; org-refile.el
+  (setq org-outline-path-complete-in-steps nil)
+  (setq org-refile-allow-creating-parent-nodes 'confirm)
+  (setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
+  (setq org-refile-use-outline-path 'file)
 
-(autoload 'consult-org-capture "tychoish-org")
-(autoload 'annotated-completing-read "annotated-completing-read")
+  ;; org-keys.el
+  (setq org-replace-disputed-keys t)
+  (setq org-return-follows-link t)
+  (setq org-use-speed-commands #'tychoish/org-use-speed-commands)
 
-(autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
-(autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
-(autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
-(autoload 'org-leanpub-markdown-export-to-markdown "ox-leanpub-markdown")
-(autoload 'org-leanpub-markdown-export-as-markdown "ox-leanpub-markdown")
-
-(defvar tychoish-org--auxiliary-packages
-  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
-  "Supporting org packages that should be installed when org-mode loads the first time.")
-
-(defun tychoish-org--install-auxiliary-packages ()
-  "Install all of the auxiliary packages"
-  "<org.el> install aux packages"
-  (->> tychoish-org--auxiliary-packages
-       (-remove #'package-installed-p)
-       (-map #'package-install-async)
-       (length)))
-
-(with-eval-after-load 'ox-rst
-  (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
-
-(with-eval-after-load 'ox-leanpub
-  (org-leanpub-book-setup-menu-markua))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; key bindings
-
-(bind-keys
- :map tychoish/global-org-map
- ("f" . org-agenda-files-open)
- ("r" . org-agenda-files-reload)
- ("j" . consult-org-capture)
- ("c" . consult-org-capture)
- :map tychoish/org-link-mode-map
- ("a" . org-annotate-file))
-
-(defvar-keymap tychoish/org-gist-map
-  :name "org-gist"
-  :doc "keymap for org-gist commands"
-  "p" #'org-gist-export-private-gist
-  "g" #'org-gist-export-public-gist)
-
-(with-eval-after-load 'org
   (bind-keys
    :map org-mode-map
    ("C-c l o" . org-link-open-from-string)
@@ -130,14 +122,77 @@
    ("t" . org-archive-set-tag)
    ("s" . org-archive-to-archive-sibling)
    ("a" . org-archive-done-tasks-to-archive-sibling)
-   ("f" . org-archive-done-tasks-to-archive-file)))
+   ("f" . org-archive-done-tasks-to-archive-file))
 
-(with-eval-after-load 'org
   (with-eval-after-load 'consult
     (bind-keys
      :map tychoish/org-mode-personal-map
      ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)
      ("s" . consult-org-agenda))))
+
+(autoload 'org-store-link "ol")
+(autoload 'org-insert-link "ol")
+(autoload 'org-annotate-file "org-annotate-file")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; org-mode extensions and supporting packages
+
+(autoload 'toc-org-insert-toc "toc-org")
+(autoload 'org-gist-export-to-gist "ox-gist")
+(autoload 'org-rst-export-to-rst "ox-rst")
+(autoload 'org-rst-export-as-rst "ox-rst")
+(autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
+
+(autoload 'annotated-completing-read "annotated-completing-read")
+
+;; Declared special so the `let'-binding in `tychoish-org-mark-done-and-archive'
+;; takes effect dynamically and the byte compiler doesn't warn about an unused
+;; lexical variable.
+(defvar org-archive-sibling-heading)
+
+(autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
+(autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
+(autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
+(autoload 'org-leanpub-markdown-export-to-markdown "ox-leanpub-markdown")
+(autoload 'org-leanpub-markdown-export-as-markdown "ox-leanpub-markdown")
+
+(defvar tychoish-org--auxiliary-packages
+  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
+  "Supporting org packages that should be installed when org-mode loads the first time.")
+
+(defun tychoish-org--install-auxiliary-packages ()
+  "Install all of the auxiliary packages."
+  (->> tychoish-org--auxiliary-packages
+       (-remove #'package-installed-p)
+       (-map #'package-install-async)
+       (length)))
+
+(with-eval-after-load 'ox-rst
+  (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
+
+(with-eval-after-load 'ox-leanpub
+  (org-leanpub-book-setup-menu-markua))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; key bindings
+
+(bind-keys
+ :map tychoish/global-org-map
+ ("f" . org-agenda-files-open)
+ ("r" . org-agenda-files-reload)
+ ("j" . consult-org-capture)
+ ("c" . consult-org-capture)
+ :map tychoish/org-link-mode-map
+ ("a" . org-annotate-file))
+
+(defvar-keymap tychoish/org-gist-map
+  :name "org-gist"
+  :doc "keymap for org-gist commands"
+  "p" #'org-gist-export-private-gist
+  "g" #'org-gist-export-public-gist)
+
 
 
 (with-eval-after-load 'org-agenda
@@ -145,65 +200,6 @@
    :map org-agenda-mode-map
    ("C-l" . org-agenda-open-link)
    ("M-c" . org-agenda-goto-calendar)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; configuration
-
-(with-eval-after-load 'org
-  ;; org-faces
-  (setq org-todo-keyword-faces
-        '(("TODO" . org-warning)
-          ("INPROGRESS" . "orange")
-          ("INCOMPLETE" . "orange")
-          ("SCHEDULED" . "green")
-          ("BACKLOG" . (:foreground "orange" :weight bold))
-          ("PROJECT" . (:foreground "blue" :weight bold))))
-
-  ;; org.el
-  (setq org-todo-keywords
-        '((sequence "TODO(t)" "|" "DONE(d!)")
-          (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
-  (setq org-tag-alist
-        '((:startgroup . nil)
-          ("inbox" . ?i)
-          ("backlog" . ?b)
-          (:endgroup . nil)
-          (:startgroup . nil)
-          ("@desk" . ?d)
-          ("@personal" . ?p)
-          ("@work" . ?w)
-          (:endgroup . nil)))
-
-  (setq org-CUA-compatible t)
-  (setq org-tags-column -70)
-  (setq org-enforce-todo-checkbox-dependencies t)
-  (setq org-enforce-todo-dependencies t)
-  (setq org-fast-tag-selection-include-todo t)
-  (setq org-fontify-done-headline t)
-  (setq org-footnote-auto-label nil)
-  (setq org-footnote-define-inline nil)
-  (setq org-footnote-section nil)
-  (setq org-log-into-drawer t)
-  (setq org-provide-todo-statistics t)
-  (setq org-reverse-note-order t)
-  (setq org-startup-folded 'content)
-  (setq org-startup-indented nil)
-  (setq org-tags-exclude-from-inheritance '("project"))
-  (setq org-track-ordered-property-with-tag t)
-  (setq org-use-fast-tag-selection 'auto)
-  (setq org-use-fast-todo-selection 'auto)
-
-  ;; org-refile.el
-  (setq org-outline-path-complete-in-steps nil)
-  (setq org-refile-allow-creating-parent-nodes 'confirm)
-  (setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
-  (setq org-refile-use-outline-path 'file)
-
-  ;; org-keys.el
-  (setq org-replace-disputed-keys t)
-  (setq org-return-follows-link t)
-  (setq org-use-speed-commands #'tychoish/org-use-speed-commands))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -219,8 +215,8 @@
   (interactive)
   (let* ((files (->> (org-agenda-files)
 		     (--flat-map (if (f-directory-p it)
-				     (f-glob "*.org" org-directory)
-				   (cons it nil)))
+				     (f-glob "*.org" it)
+				   (list it)))
 		     (--remove (s-suffix-p "archive.org" it))))
 	 (buffers (->> files
 		       (--map (or (get-file-buffer it)
@@ -238,13 +234,12 @@
 		(buffer-file-name)))))
 
 (defun tychoish/background-revbufs-for-hook ()
-  (let ((buf (get-buffer-create "*revbufs*")))
-    (with-current-buffer buf
-      (revbufs)
-      (bury-buffer buf))))
+  "Run `revbufs' without disturbing the current window configuration."
+  (save-window-excursion (revbufs)))
 
 (defun tychoish--add-toc-org-op ()
-  (save-excursion (toc-org-insert-toc)))
+  (when (require 'toc-org nil t)
+    (save-excursion (toc-org-insert-toc))))
 
 (defun org-gist-export-private-gist ()
   (interactive)
@@ -261,16 +256,18 @@
 			tychoish/org-date-spec-datetime) (current-time)))
 
 (defun tychoish-org-mark-done-and-archive ()
-  "mark done and move to completed archive sibling"
+  "Mark the current entry done and archive it under the \"Completed\" sibling."
   (interactive)
-  (org-todo 'done)
   (require 'org-archive)
+  (org-todo 'done)
   (let ((org-archive-sibling-heading "Completed"))
-    (ignore org-archive-sibling-heading)
     (org-archive-to-archive-sibling)))
 
 (defun org-set-weekday-of-timestamp ()
-  "Check if cursor is within a timestamp and compute weekday from numeric date"
+  "Re-normalize the timestamp at point.
+Used to add the weekday to a bare numeric date like <2026-05-10>: the
+`org-timestamp-change' call with a zero delta rewrites the timestamp in
+canonical form, which has the side effect of appending the weekday."
   (interactive)
   (when (org-at-timestamp-p t)
     (org-timestamp-change 0 'year)
@@ -345,23 +342,22 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 (defun consult-org-capture ()
   "Select a capture template interactively."
   (interactive)
-  (let* ((key-table        (ht-create))
-         (annotation-table (ht-create))
-         (_ (--each (--filter (< 3 (length it)) org-capture-templates)
-              (let ((key-char    (nth 0 it))
-                    (description (nth 1 it))
-                    (file        (f-filename (cadr (nth 3 it))))
-                    (template    (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 it))))))
-                (ht-set key-table description key-char)
-                (ht-set annotation-table description
-                        (format "[%s] <%s> '%s'" key-char file template)))))
-         (selection (annotated-completing-read
-                     annotation-table
-                     :prompt "org-capture => "
-                     :category 'org-capture
-                     :require-match nil))
-         (capture-template-key (ht-get key-table selection)))
-    (org-capture nil capture-template-key)))
+  (let ((key-table (ht-create))
+	(annotation-table (ht-create)))
+    (dolist (template (--filter (< 4 (length it)) org-capture-templates))
+      (let ((key-char    (nth 0 template))
+	    (description (nth 1 template))
+	    (file        (f-filename (cadr (nth 3 template))))
+	    (body        (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 template))))))
+	(ht-set key-table description key-char)
+	(ht-set annotation-table description
+		(format "[%s] <%s> '%s'" key-char file body))))
+    (let ((selection (annotated-completing-read
+		      annotation-table
+		      :prompt "org-capture => "
+		      :category 'org-capture
+		      :require-match nil)))
+      (org-capture nil (ht-get key-table selection)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -398,9 +394,6 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 (defvar org-capture-templates nil)
 
 (defun tychoish-org-reset-capture-templates ()
-  (unless (boundp 'org-capture-templates)
-    (defvar org-capture-templates))
-
   (setq org-capture-templates '(("t" "tasks")
                                 ("j" "journal")
                                 ("n" "notes")
@@ -423,7 +416,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
          ("1w" .  "Weekly")
          ("4w" . "Monthly")
          ("12w" . "Quarterly")
-         ("21w" . "Half Yearly")
+         ("26w" . "Half Yearly")
          ("52w" . "Yearly"))
        (--flat-map (let* ((interval (car it))
 			  (heading (cdr it))
@@ -447,102 +440,96 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 		       :kill-buffer t
 		       :empty-lines-after 1))))))
 
-(cl-defun tychoish/org-capture-add-journal-templates (&key name path (key ""))
-  (when (string-equal "j" key)
-    (user-error "cannot define journal %s org-capture-templates with key `j'" name))
+(defun ~title~ ()
+  "Read a title string interactively during `org-capture' template expansion."
+  (read-string "title => "))
 
-  (let (specs append-item
-	      (capture-location (if (equal "" key)
-			      (list 'file+olp+datetree path)
-			    (list 'file+olp+datetree path "Journal"))))
+(cl-defun tychoish/org-capture--add-flat-templates
+    (&key kind char name path key target body-fn first-sub default-subs
+          (prepend t) (time-prompt-suffix nil))
+  "Register a flat set of capture templates of KIND for NAME at PATH.
 
+CHAR is the single-letter kind prefix (\"t\", \"j\", \"n\").  KEY is
+the project prefix; an empty string disables the hierarchical
+\"<key><suffix>\" and shortcut \"<char><key>\" entries.
+
+TARGET is the org-capture target form.  BODY-FN is called with the
+per-template anchor string and returns the template body.
+
+FIRST-SUB is (ANCHOR . DESCRIPTION) for the \"<char><key>\" shortcut,
+added only when KEY is non-empty.
+
+DEFAULT-SUBS is a list of (SUFFIX ANCHOR DESCRIPTION); each becomes a
+\"<key><suffix>\" template.
+
+PREPEND becomes the templates' :prepend value.  When a key sequence
+ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
+  (when (string-equal char key)
+    (user-error "cannot define %s %s org-capture-templates with key `%s'" kind name char))
+  (let (specs append-item)
     (unless (string-equal "" key)
       (setq append-item t)
-      (add-to-list 'org-capture-templates (list (concat key "j") (format "%s journal <%s>" name  (f-filename path))))
-      (push (cons (concat "j" key) (cons "" "<today>")) specs))
+      (add-to-list 'org-capture-templates
+                   (list (concat key char)
+                         (format "%s %s <%s>" name kind (f-filename path))))
+      (push (list (concat char key) (car first-sub) (cdr first-sub)) specs))
+    (dolist (entry (append specs
+                           (--map (cons (concat key (car it)) (cdr it))
+                                  default-subs)))
+      (let* ((key-sequence (nth 0 entry))
+             (template-anchor (nth 1 entry))
+             (description (nth 2 entry))
+             (template (list key-sequence
+                             (format "%s (%s; %s)" kind name description)
+                             'entry target
+                             (funcall body-fn template-anchor)
+                             :prepend prepend
+                             :kill-buffer t
+                             :empty-lines-after 1)))
+        (when (and time-prompt-suffix
+                   (s-suffix-p time-prompt-suffix key-sequence))
+          (setq template (append template (list :time-prompt t))))
+        (add-to-list 'org-capture-templates template append-item)))))
 
-    (->> (-join specs
-		(-l (cons (concat key "jj") (cons "" "<today>"))
-		    (cons (concat key "jp") (cons "" "<date prompt>"))
-		    (cons (concat key "jx") (cons "%x" "X11 buffer"))
-		    (cons (concat key "jl") (cons "%a" "org-link"))
-		    (cons (concat key "jk") (cons "%c" "emacs kill-ring"))))
-	 (reverse)
-	 (--map (let ((key-sequence (car it))
-		      (template-anchor (cadr it))
-		      (description (cddr it)))
-		  (add-to-list
-		   'org-capture-templates
-		   (-l key-sequence (format "journal (%s; %s)" name description)
-		       'entry capture-location
-                       (concat "* %(~title~) <%<%Y-%m-%d %H:%M>>" template-anchor "\n%?")
-                       :prepend nil
-                       :kill-buffer t
-		       :time-prompt (s-suffix-p "jp" key-sequence)
-                       :empty-lines-after 1)
-		   append-item))))))
-
-(defun ~title~ () (consult-tycho--select-context-for-operation "title => "))
+(cl-defun tychoish/org-capture-add-journal-templates (&key name path (key ""))
+  (tychoish/org-capture--add-flat-templates
+   :kind "journal" :char "j" :name name :path path :key key
+   :target (if (string-equal "" key)
+               (list 'file+olp+datetree path)
+             (list 'file+olp+datetree path "Journal"))
+   :body-fn (lambda (anchor)
+              (concat "* %(~title~) <%<%Y-%m-%d %H:%M>>" anchor "\n%?"))
+   :first-sub (cons "" "<today>")
+   :default-subs '(("jj" "" "<today>")
+                   ("jp" "" "<date prompt>")
+                   ("jx" "%x" "X11 buffer")
+                   ("jl" "%a" "org-link")
+                   ("jk" "%c" "emacs kill-ring"))
+   :prepend nil
+   :time-prompt-suffix "jp"))
 
 (cl-defun tychoish/org-capture-add-task-templates (&key name path (key ""))
-  (when (string-equal "t" key)
-    (user-error "cannot define task %s org-capture-templates with key `t'" name))
-
-  (let (specs append-item)
-    (unless (string-equal "" key)
-      (add-to-list 'org-capture-templates (list (concat key "t") (format "%s tasks <%s>" name  (f-filename path))))
-      (push (cons (concat "t" key) (cons "%i" "selection")) specs)
-      (setq append-item t))
-
-    (->> (-join specs
-		(-l (cons (concat key "tt") (cons "%i" "selection"))
-		    (cons (concat key "tx") (cons "%x" "X11 buffer"))
-		    (cons (concat key "tl") (cons "%a" "org-link"))
-		    (cons (concat key "tk") (cons "%c" "emacs kill-ring"))))
-	 (-non-nil)
-	 (--map (let ((key-sequence (car it))
-		      (template-anchor (cadr it))
-		      (description (cddr it)))
-		  (add-to-list
-		   'org-capture-templates
-		   (-l key-sequence (format "tasks (%s; %s)" name description)
-		       'entry
-		       (list 'file+headline path "Tasks")
-                       (concat "* %(~title~)\n" template-anchor "\n%?")
-                       :prepend t
-                       :kill-buffer t
-                       :empty-lines-after 1)
-		   append-item))))))
+  (tychoish/org-capture--add-flat-templates
+   :kind "tasks" :char "t" :name name :path path :key key
+   :target (list 'file+headline path "Tasks")
+   :body-fn (lambda (anchor) (concat "* %(~title~)\n" anchor "\n%?"))
+   :first-sub (cons "%i" "selection")
+   :default-subs '(("tt" "%i" "selection")
+                   ("tx" "%x" "X11 buffer")
+                   ("tl" "%a" "org-link")
+                   ("tk" "%c" "emacs kill-ring"))))
 
 (cl-defun tychoish/org-capture-add-note-templates (&key name path (key ""))
-  (when (string-equal "n" key)
-    (user-error "cannot define notes %s org-capture-templates with key `n'" name))
+  (tychoish/org-capture--add-flat-templates
+   :kind "notes" :char "n" :name name :path path :key key
+   :target (list 'file+headline path "Inbox")
+   :body-fn (lambda (anchor) (concat "* %(~title~)\n" anchor "\n%?"))
+   :first-sub (cons "%i" "selection")
+   :default-subs '(("nn" "%i" "selection")
+                   ("nx" "%x" "X11 buffer")
+                   ("nl" "%a" "org-link")
+                   ("nk" "%c" "emacs kill-ring"))))
 
-  (let (specs append-item)
-	(unless (string-equal "" key)
-	  (setq append-item t)
-	  (add-to-list 'org-capture-templates (list (concat key "n") (format "%s notes <%s>" name  (f-filename path))))
-	  (push (cons (concat "n" key) (cons "%i" "selection")) specs))
-
-	(->> (-join specs
-		    (-l (cons (concat key "nn") (cons "%i" "selection"))
-			(cons (concat key "nx") (cons "%x" "X11 buffer"))
-			(cons (concat key "nl") (cons "%a" "org-link"))
-			(cons (concat key "nk") (cons "%c" "emacs kill-ring"))))
-	     (-non-nil)
-	     (--map (let ((key-sequence (car it))
-			  (template-anchor (cadr it))
-			  (description (cddr it)))
-		      (add-to-list
-		       'org-capture-templates
-		       (-l key-sequence (format "notes (%s; %s)" name description)
-			   'entry
-			   (list 'file+headline path "Inbox")
-			   (concat "* %(~title~)\n" template-anchor "\n%?")
-			   :prepend t
-			   :kill-buffer t
-			   :empty-lines-after 1)
-		       append-item))))))
 
 ;; registration helpers
 
@@ -561,13 +548,12 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
     (when (s-contains? key "xlk")
       (error "org-capture prefix key '%s' for '%s' contains sub-template key" key path)))
 
+  (unless name
+    (setq name "planner"))
+
   (setq path (if path
 		 (f-expand path)
 	       (concat (f-make-slug name) ".org")))
-
-  (setq name (if name
-		 name
-	       (f-base "/home/tychoish/garen/org/planner.org")))
 
   (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
 

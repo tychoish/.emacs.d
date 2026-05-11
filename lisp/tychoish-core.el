@@ -521,20 +521,22 @@
    :operation 'prescient-persist-mode
    :hook '(vertico-mode-hook corfu-mode-hook))
   :config
+  ;; Prescient's own knobs; cross-cutting filter/sort selection is owned
+  ;; by the completion-flavor system below.
   (setq prescient-completion-highlight-matches t)
   (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
   (setq prescient-save-file (tychoish/conf-state-path "prescient.el"))
   (setq prescient-sort-full-matches-first t)
-  (setq prescient-sort-length-enable nil)
-  (setq completion-preview-sort-function #'prescient-completion-sort))
+  (setq prescient-sort-length-enable nil))
 
 (use-package vertico-prescient
   :ensure t
   :hook (vertico-mode . vertico-prescient-mode)
   :config
+  ;; Sort-override stays on so prescient can win when a flavor enables it.
+  ;; Filtering is owned by the completion-flavor system below.
   (setq vertico-prescient-override-sorting t)
-  (setq vertico-prescient-enable-sorting t)
-  (setq vertico-prescient-enable-filtering t))
+  (setq vertico-prescient-enable-sorting t))
 
 (use-package marginalia
   :ensure t
@@ -639,9 +641,161 @@
   :after (prescient)
   :hook (corfu-mode . corfu-prescient-mode)
   :config
+  ;; Same as `vertico-prescient' -- filtering is flavor-owned.
   (setq corfu-prescient-override-sorting t)
-  (setq corfu-prescient-enable-sorting t)
-  (setq corfu-prescient-enable-filtering t))
+  (setq corfu-prescient-enable-sorting t))
+
+(use-package orderless
+  :ensure t
+  :after (vertico)
+  :config
+  ;; Orderless's own behavior knobs only; cross-cutting `completion-styles' and
+  ;; `completion-category-overrides' are owned by the completion-flavor system.
+  (setq orderless-component-separator #'orderless-escapable-split-on-space)
+  (setq orderless-matching-styles
+	'(orderless-literal orderless-prefixes orderless-initialism orderless-regexp)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; completion flavor -- switch between orderless / prescient / hybrid at runtime.
+
+(defvar tychoish/completion-flavor 'hybrid
+  "Currently active completion flavor.
+One of `hybrid', `orderless', `prescient'.  Set by the
+`tychoish/completion-use-*' commands; do not setq directly.")
+
+(defvar tychoish/completion-flavors
+  '((hybrid    tychoish/completion-use-hybrid
+	       "orderless filter + prescient sort (frecency)")
+    (orderless tychoish/completion-use-orderless
+	       "pure orderless filter; default sort, no frecency")
+    (prescient tychoish/completion-use-prescient
+	       "prescient filter + sort (frecency)"))
+  "Alist of (NAME ACTIVATOR DESCRIPTION) for completion flavors.
+ACTIVATOR is the interactive command that installs the flavor.")
+
+(defun tychoish/completion--set-category-overrides (kind)
+  "Set `completion-category-overrides' for KIND (`orderless' or `prescient')."
+  (setq completion-category-overrides
+	(pcase kind
+	  ('orderless '((file         (styles basic partial-completion))
+			(consult-grep (styles basic))
+			(buffer       (styles orderless basic))
+			(command      (styles orderless basic))
+			(symbol       (styles orderless basic))))
+	  ('prescient '((file         (styles basic partial-completion))
+			(consult-grep (styles basic)))))))
+
+(defvar tychoish/completion--applying nil
+  "Re-entry guard for the `tychoish/completion-use-*' functions.
+Cycling `vertico-prescient-mode' / `corfu-prescient-mode' fires their
+mode hooks, which can re-invoke a flavor function (e.g. via the
+startup one-shot hook below).  The guard makes the inner call a no-op.")
+
+(defun tychoish/completion--reload-prescient-mode (mode-symbol)
+  "Cycle MODE-SYMBOL off and back on so it picks up new `*-enable-*' values.
+`vertico-prescient' and `corfu-prescient' read the filtering/sorting flags
+only at mode activation, so changing the variables alone has no effect
+on an already-enabled mode."
+  (when (fboundp mode-symbol)
+    (when (symbol-value mode-symbol)
+      (funcall mode-symbol -1))
+    (funcall mode-symbol 1)))
+
+(defmacro tychoish/completion--with-guard (&rest body)
+  "Run BODY with `tychoish/completion--applying' bound non-nil.
+If already non-nil (we are re-entering from a prescient mode hook),
+BODY is skipped."
+  (declare (indent defun))
+  `(unless tychoish/completion--applying
+     (let ((tychoish/completion--applying t))
+       ,@body)))
+
+(defun tychoish/completion-use-hybrid ()
+  "Install the hybrid flavor: orderless filters, prescient sorts."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(orderless basic))
+    (tychoish/completion--set-category-overrides 'orderless)
+    (when (boundp 'vertico-prescient-enable-filtering)
+      (setq vertico-prescient-enable-filtering nil
+	    vertico-prescient-enable-sorting   t))
+    (when (boundp 'corfu-prescient-enable-filtering)
+      (setq corfu-prescient-enable-filtering nil
+	    corfu-prescient-enable-sorting   t))
+    (setq completion-preview-sort-function #'prescient-completion-sort)
+    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
+    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq tychoish/completion-flavor 'hybrid)
+    (message "completion: orderless filter + prescient sort")))
+
+(defun tychoish/completion-use-orderless ()
+  "Install pure orderless; prescient disabled (no frecency)."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(orderless basic))
+    (tychoish/completion--set-category-overrides 'orderless)
+    (setq completion-preview-sort-function nil)
+    (when (fboundp 'vertico-prescient-mode) (vertico-prescient-mode -1))
+    (when (fboundp 'corfu-prescient-mode)   (corfu-prescient-mode -1))
+    (setq tychoish/completion-flavor 'orderless)
+    (message "completion: pure orderless")))
+
+(defun tychoish/completion-use-prescient ()
+  "Install prescient for both filter and sort; orderless inert."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(basic partial-completion emacs22))
+    (tychoish/completion--set-category-overrides 'prescient)
+    (when (boundp 'vertico-prescient-enable-filtering)
+      (setq vertico-prescient-enable-filtering t
+	    vertico-prescient-enable-sorting   t))
+    (when (boundp 'corfu-prescient-enable-filtering)
+      (setq corfu-prescient-enable-filtering t
+	    corfu-prescient-enable-sorting   t))
+    (setq completion-preview-sort-function #'prescient-completion-sort)
+    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
+    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq tychoish/completion-flavor 'prescient)
+    (message "completion: prescient filter + sort")))
+
+(defun tychoish/completion-toggle-flavor ()
+  "Cycle through `tychoish/completion-flavors' in order."
+  (interactive)
+  (let* ((order (mapcar #'car tychoish/completion-flavors))
+	 (idx (or (-elem-index tychoish/completion-flavor order) -1))
+	 (next (nth (mod (1+ idx) (length order)) order)))
+    (funcall (nth 1 (assq next tychoish/completion-flavors)))))
+
+(defun tychoish/completion-select-flavor ()
+  "Pick a completion flavor via `annotated-completing-read'."
+  (interactive)
+  (let ((table (ht-create)))
+    (dolist (entry tychoish/completion-flavors)
+      (ht-set table (symbol-name (car entry))
+	      (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
+		      (nth 2 entry))))
+    (let* ((name (annotated-completing-read table
+		  :prompt "completion flavor => "
+		  :category 'tychoish-completion-flavor
+		  :require-match t))
+	   (entry (assq (intern name) tychoish/completion-flavors)))
+      (when entry (funcall (nth 1 entry))))))
+
+(bind-keys
+ :map tychoish/completion-map
+ ("f" . tychoish/completion-select-flavor)
+ ("F" . tychoish/completion-toggle-flavor))
+
+;; Install the initial flavor once a prescient package is loaded.  Fires on
+;; whichever of the two minor-mode hooks runs first; the one-shot then
+;; removes itself.  Until this fires the system uses Emacs defaults
+;; (basic completion-styles, no prescient filter), which is acceptable
+;; pre-completion state.
+(add-one-shot-hook
+ :name "completion-flavor-init"
+ :operation #'tychoish/completion-use-hybrid
+ :hook '(vertico-prescient-mode-hook corfu-prescient-mode-hook))
 
 (use-package popon
   :ensure t
@@ -2528,11 +2682,15 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package shell-maker
   :ensure t
   :config
-  (defalias 'shell-maker-map 'shell-maker-major-mode-map))
+  (defalias 'shell-maker-map 'shell-maker-major-mode-map)
+  (setq shell-maker-root-path (tychoish/conf-state-path "shell-maker")))
+
 
 (use-package agent-shell
   :ensure t
   :after (shell-maker)
+  :hook ((agent-shell-mode . corfu-mode)
+	 (agent-shell-mode . agent-shell-corfu-setup))
   :init
   (bind-keys
    :map tychoish/robot-map
@@ -2544,19 +2702,256 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-g" . agent-shell-interrupt)
    ("m" . execute-extended-agent-shell-command)
    ("r" . agent-shell-rename-buffer)
-   ("b" . agent-shell-jump-to-latest-permission-button-row)
-   :map agent-shell-mode-map
-   ("C-c C-c" . agent-shell-submit)
-   ("C-c C-k" . agent-shell-interrupt))
+   ("e" . agent-shell-jump-to-latest-permission-button-row)
+   ("b" . agent-shell-switch-buffer)
+   ("a" . agent-shell-action-menu)
+   ("x" . agent-shell-command-menu))
 
   (make-read-extended-command-for-prefix "agent-shell"
    :bind-map tychoish/robot-agent-shell-map
    :bind-key "m")
   :config
-  (setq agent-shell-anthropic-authentication
-	(agent-shell-anthropic-make-authentication :login t))
-  (setq agent-shell-anthropic-claude-environment
-      (agent-shell-make-environment-variables :inherit-env t)))
+  (bind-keys
+   :map agent-shell-mode-map
+   ("C-c C-c" . agent-shell-submit)
+   ("C-c C-k" . agent-shell-interrupt)
+   ("C-c b" . agent-shell-switch-buffer)
+   ("C-c m" . agent-shell-action-menu)
+   ("C-c x" . agent-shell-command-menu))
+
+  (defvar agent-shell--state)
+  (defvar agent-shell-prose-space-threshold 2
+    "Consecutive whitespace count before point that suppresses corfu auto-popups.")
+
+  (defun agent-shell--prose-context-p ()
+    "Return non-nil when at least `agent-shell-prose-space-threshold' spaces/tabs precede point."
+    (save-excursion
+      (let ((origin (point)))
+	(skip-chars-backward " \t")
+	(>= (- origin (point)) agent-shell-prose-space-threshold))))
+
+  (defun agent-shell-suppress-prose-capf ()
+    "CAPF that blocks completion when in a prose context."
+    (when (agent-shell--prose-context-p)
+      (list (point) (point) nil)))
+
+  (defun agent-shell-corfu-setup ()
+    "Configure corfu auto-completion for agent-shell buffers."
+    (setq-local corfu-auto-prefix 2)
+    (add-hook 'completion-at-point-functions
+	      #'agent-shell-suppress-prose-capf
+	      -90 t))
+
+  (defun agent-shell--format-age (delta)
+    "Format DELTA, a time-value, as a short relative age (e.g. \"3m\", \"2h\")."
+    (let ((s (float-time delta)))
+      (cond ((< s 60) (format "%ds" (truncate s)))
+	    ((< s 3600) (format "%dm" (truncate (/ s 60))))
+	    ((< s 86400) (format "%dh" (truncate (/ s 3600))))
+	    (t (format "%dd" (truncate (/ s 86400)))))))
+
+  (defun agent-shell--buffer-annotation (buf)
+    "Build an annotation string describing the agent-shell BUF."
+    (with-current-buffer buf
+      (let* ((status (agent-shell-status))
+	     (state agent-shell--state)
+	     (used (map-nested-elt state '(:usage :context-used)))
+	     (size (map-nested-elt state '(:usage :context-size)))
+	     (last (map-elt state :last-activity-time))
+	     (cwd (abbreviate-file-name (or default-directory ""))))
+	(s-join " · "
+		(-non-nil
+		 (list (format "[%s]" status)
+		       cwd
+		       (when (and (numberp used) (numberp size) (> size 0))
+			 (format "ctx %.0f%%" (* 100.0 (/ (float used) size))))
+		       (when last
+			 (format "%s ago"
+				 (agent-shell--format-age (time-since last))))))))))
+
+  (defun agent-shell-switch-buffer ()
+    "Switch to an agent-shell buffer with status, cwd, context, and age annotations."
+    (interactive)
+    (require 'agent-shell)
+    (let ((buffers (agent-shell-buffers)))
+      (unless buffers
+	(user-error "no live agent-shell buffers"))
+      (let ((table (ht-create)))
+	(dolist (buf buffers)
+	  (ht-set table (buffer-name buf)
+		  (agent-shell--buffer-annotation buf)))
+	(switch-to-buffer
+	 (annotated-completing-read table
+				    :prompt "agent-shell => "
+				    :category 'agent-shell-buffer
+				    :require-match t)))))
+
+  ;; action menu: common in-buffer operations, surfaced via annotated-completing-read.
+
+  (defvar agent-shell-action-alist
+    '(("submit" . shell-maker-submit)
+      ("interrupt" . agent-shell-interrupt)
+      ("jump to end (prompt)" . end-of-buffer)
+      ("compose in viewport" . agent-shell-prompt-compose)
+      ("goto last interaction" . agent-shell-goto-last-interaction)
+      ("jump to permission row" . agent-shell-jump-to-latest-permission-button-row)
+      ("next permission button" . agent-shell-next-permission-button)
+      ("previous permission button" . agent-shell-previous-permission-button)
+      ("next item" . agent-shell-next-item)
+      ("previous item" . agent-shell-previous-item)
+      ("other buffer (viewport)" . agent-shell-other-buffer)
+      ("switch agent-shell" . agent-shell-switch-buffer)
+      ("send region" . agent-shell-send-region)
+      ("send file" . agent-shell-send-file)
+      ("yank (DWIM)" . agent-shell-yank-dwim)
+      ("queue request" . agent-shell-queue-request)
+      ("resume pending" . agent-shell-resume-pending-requests)
+      ("cycle session mode" . agent-shell-cycle-session-mode)
+      ("set session mode" . agent-shell-set-session-mode)
+      ("set session model" . agent-shell-set-session-model)
+      ("copy session id" . agent-shell-copy-session-id)
+      ("open transcript" . agent-shell-open-transcript))
+    "Alist of (LABEL . COMMAND) for `agent-shell-action-menu'.")
+
+  (defun agent-shell-action-menu ()
+    "Pick a common agent-shell action and run it via `call-interactively'."
+    (interactive)
+    (require 'agent-shell)
+    (let ((table (ht-create)))
+      (dolist (entry agent-shell-action-alist)
+	(let ((cmd (cdr entry)))
+	  (when (commandp cmd)
+	    (ht-set table (car entry)
+		    (or (car (split-string (or (documentation cmd) "") "\n"))
+			(symbol-name cmd))))))
+      (let* ((label (annotated-completing-read table
+					       :prompt "agent-shell action => "
+					       :category 'agent-shell-action
+					       :require-match t))
+	     (cmd   (cdr (assoc label agent-shell-action-alist))))
+	(when (commandp cmd)
+	  (call-interactively cmd)))))
+
+  ;; commands menu: surface the slash-commands the *agent* advertises (via ACP)
+  ;; and insert the chosen one into the shell prompt.
+
+  (defun agent-shell-command-menu ()
+    "Insert one of the agent's advertised `/' commands at the prompt."
+    (interactive)
+    (let* ((shell (agent-shell-shell-buffer))
+	   (commands (with-current-buffer shell
+		       (map-elt agent-shell--state :available-commands))))
+      (unless commands
+	(user-error "no agent slash-commands advertised in %s" (buffer-name shell)))
+      (let ((table (ht-create)))
+	(dolist (c commands)
+	  (ht-set table (map-elt c 'name) (or (map-elt c 'description) "")))
+	(let ((name (annotated-completing-read table
+		     :prompt "agent /command => "
+		     :category 'agent-shell-slash-command
+		     :require-match t)))
+	  (agent-shell-insert :text (concat "/" name " ")
+			      :shell-buffer shell
+			      :submit nil)))))
+
+
+  (defun agent-shell-dot-subdir (subdir)
+    "Resolve SUBDIR under the per-instance agent-shell state path."
+    (f-join (tychoish/conf-state-path "agent-shell") subdir))
+
+  (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
+  (setq agent-shell-anthropic-claude-environment (agent-shell-make-environment-variables :inherit-env t))
+  (setq agent-shell-file-completion-enabled t)
+  (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
+  (setq agent-shell-header-style 'text))
+
+(use-package agent-shell-manager
+  :load-path "external/agent-shell-manager"
+  :after (agent-shell)
+  :commands (agent-shell-manager-toggle)
+  :bind (:map tychoish/robot-agent-shell-map
+	      ("," . agent-shell-manager-toggle))
+  :config
+  (setq agent-shell-manager-side 'bottom))
+
+(use-package agent-review
+  :load-path "external/agent-review"
+  :after (agent-shell)
+  :commands (agent-review)
+  :bind (:map tychoish/robot-agent-shell-map
+	      ("v" . agent-review)))
+
+(use-package agent-shell-notifications
+  :load-path "external/agent-shell-notifications"
+  :after (agent-shell alert)
+  :hook ((agent-shell-mode . agent-shell-notifications-mode)
+	 (agent-shell-viewport-edit-mode . agent-shell-notifications-viewport-edit-mode)
+	 (agent-shell-viewport-view-mode . agent-shell-notifications-viewport-view-mode))
+  :init
+  ;; Pre-set provider/send/close so the package's load-time
+  ;; `agent-shell-notifications-set-provider' call sees them populated and
+  ;; skips `require'ing a backend feature.
+  (defun tychoish/agent-shell-notifications-alert-send (plist)
+    "Send agent-shell notification PLIST through `alert'.
+The originating shell buffer name (injected via
+`tychoish/agent-shell-notifications--add-buffer-name') is appended to the
+title. The plist's `:timeout' is bound to `alert-fade-time' when positive
+so the configured `agent-shell-notifications-timeout' controls how long
+notifications stay visible for alert styles that honor it."
+    (let* ((title (plist-get plist :title))
+	   (body (plist-get plist :body))
+	   (icon (plist-get plist :app-icon))
+	   (timeout (plist-get plist :timeout))
+	   (buf-name (plist-get plist :shell-buffer-name))
+	   (alert-fade-time (if (and (numberp timeout) (> timeout 0))
+				timeout
+			      alert-fade-time)))
+      (alert (or body title "")
+	     :title (if (and buf-name (not (string-empty-p buf-name)))
+			(format "%s <%s>" (or title "agent-shell") buf-name)
+		      (or title "agent-shell"))
+	     :icon icon
+	     :category 'agent-shell
+	     :severity 'normal))
+    nil)
+
+  (defun tychoish/agent-shell-notifications-alert-close (_id)
+    "No-op close: `alert' styles dismiss themselves." nil)
+
+  (defun tychoish/agent-shell-notifications--add-buffer-name (orig type shell-buffer event)
+    "Around-advise `agent-shell-notifications--make-notification-plist'.
+Adds `:shell-buffer-name' to the plist so the send function can include
+the originating shell buffer in the notification title — this is the only
+call-site that has access to SHELL-BUFFER."
+    (append (funcall orig type shell-buffer event)
+	    (list :shell-buffer-name (buffer-name shell-buffer))))
+
+  (setq agent-shell-notifications-provider nil)
+  (setq agent-shell-notifications-send-function #'tychoish/agent-shell-notifications-alert-send)
+  (setq agent-shell-notifications-close-function #'tychoish/agent-shell-notifications-alert-close)
+  (setq agent-shell-notifications-transform-function #'identity)
+  (setq agent-shell-notifications-transform-timeout-function #'identity)
+  :config
+  (advice-add 'agent-shell-notifications--make-notification-plist :around
+	      #'tychoish/agent-shell-notifications--add-buffer-name)
+  (setq agent-shell-notifications-timeout 30))
+
+(use-package meta-agent-shell
+  :load-path "external/meta-agent-shell"
+  :after (agent-shell)
+  :commands (meta-agent-shell-start
+	     meta-agent-shell-jump-to-dispatcher
+	     meta-agent-shell-start-dispatcher
+	     meta-agent-shell-heartbeat-start
+	     meta-agent-shell-heartbeat-stop
+	     meta-agent-shell-big-red-button)
+  :bind (:map tychoish/robot-agent-shell-map
+	      ("M-s" . meta-agent-shell-start)
+	      ("d" . meta-agent-shell-jump-to-dispatcher)
+	      ("!" . meta-agent-shell-big-red-button))
+  :config
+  (setq meta-agent-shell-heartbeat-file	(tychoish/conf-state-path "meta-agent-shell-heartbeat.org"))
+  (setq meta-agent-shell-start-function #'agent-shell))
 
 (use-package beads
   ;; :vc (:url "https://codeberg.org/ctietze/beads.el" :rev :newest)
