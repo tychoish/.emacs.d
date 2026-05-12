@@ -949,14 +949,18 @@ call `builder-add-candidates'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; emacs-lisp -- single-file package operations (test/compile/build/clean)
+;; emacs-lisp -- package operations (test/compile/build/clean)
 ;;
 ;; These commands operate on an "elisp package" rooted at
 ;; `approximate-project-root', identified by the convention that the
 ;; root contains <NAME>.el where NAME matches the directory name
 ;; (with an optional ".el" suffix on the directory itself, as in
-;; "xlib.el/xlib.el"). Tests live under <root>/test/ as test-*.el or
-;; *-test.el. `Package-Requires' on the main file declares dependencies.
+;; "xlib.el/xlib.el"). Multi-file packages are supported: every
+;; top-level .el file is treated as a source (excluding the generated
+;; <NAME>-pkg.el and <NAME>-autoloads.el). Tests live under <root>/test/
+;; as test-*.el or *-test.el. Dependencies come from <NAME>-pkg.el's
+;; `define-package' form when present, otherwise from `Package-Requires'
+;; on the main file.
 
 (defun builder-elisp-package--name (root)
   "Return the package name for the elisp project at ROOT.
@@ -978,10 +982,22 @@ Looks for <NAME>.el where NAME comes from `builder-elisp-package--name'."
 ROOT defaults to `approximate-project-root'."
   (and (builder-elisp-package--main-file (or root (approximate-project-root))) t))
 
+(defun builder-elisp-package--pkg-file (root)
+  "Return absolute path to <NAME>-pkg.el under ROOT, or nil if absent."
+  (let ((path (f-join root (concat (builder-elisp-package--name root) "-pkg.el"))))
+    (and (f-file-p path) path)))
+
 (defun builder-elisp-package--source-files (root)
-  "Return the list of top-level .el source files under ROOT (excluding test/)."
-  (->> (f-entries root #'f-file-p)
-       (--filter (f-ext-p it "el"))))
+  "Return the list of top-level .el source files under ROOT.
+Excludes test/ (not at top level), the generated <NAME>-pkg.el package
+descriptor, and any <NAME>-autoloads.el file — none of which should be
+byte-compiled as ordinary sources."
+  (let* ((name (builder-elisp-package--name root))
+         (skip (list (concat name "-pkg.el")
+                     (concat name "-autoloads.el"))))
+    (->> (f-entries root #'f-file-p)
+         (--filter (f-ext-p it "el"))
+         (--remove (member (f-filename it) skip)))))
 
 (defun builder-elisp-package--test-files (root)
   "Return the list of test files under ROOT/test (test-*.el or *-test.el)."
@@ -993,17 +1009,42 @@ ROOT defaults to `approximate-project-root'."
                        (or (string-prefix-p "test-" name)
                            (string-suffix-p "-test.el" name))))))))
 
-(defun builder-elisp-package--read-deps (file)
-  "Return list of dep package symbols from FILE's `Package-Requires' header.
-The pseudo-package `emacs' is omitted, since it is not installable."
+(defun builder-elisp-package--read-pkg-deps (pkg-file)
+  "Return dep symbols from a multi-file package's <NAME>-pkg.el descriptor.
+Reads the `define-package' form's fourth argument (the requires list).
+The pseudo-package `emacs' is omitted."
+  (with-temp-buffer
+    (insert-file-contents pkg-file)
+    (goto-char (point-min))
+    (let ((form (ignore-errors (read (current-buffer)))))
+      (when (and (consp form) (eq (car form) 'define-package))
+        (let ((reqs (nth 4 form)))
+          (when (and (consp reqs) (eq (car reqs) 'quote))
+            (setq reqs (cadr reqs)))
+          (->> reqs
+               (--map (car it))
+               (--remove (eq it 'emacs))))))))
+
+(defun builder-elisp-package--read-deps (file-or-root)
+  "Return list of dep package symbols for the package at FILE-OR-ROOT.
+If FILE-OR-ROOT is a directory, prefer <NAME>-pkg.el's `define-package'
+requires and fall back to the main file's `Package-Requires' header.
+If it is a file, read `Package-Requires' from that file. The pseudo-
+package `emacs' is omitted, since it is not installable."
   (require 'lisp-mnt)
-  (when (and file (f-file-p file))
+  (cond
+   ((and file-or-root (f-directory-p file-or-root))
+    (or (when-let* ((pkg (builder-elisp-package--pkg-file file-or-root)))
+          (builder-elisp-package--read-pkg-deps pkg))
+        (when-let* ((main (builder-elisp-package--main-file file-or-root)))
+          (builder-elisp-package--read-deps main))))
+   ((and file-or-root (f-file-p file-or-root))
     (with-temp-buffer
-      (insert-file-contents file)
+      (insert-file-contents file-or-root)
       (when-let* ((line (lm-header "Package-Requires")))
         (->> (read line)
              (--map (car it))
-             (--remove (eq it 'emacs)))))))
+             (--remove (eq it 'emacs))))))))
 
 (defun builder-elisp-package--require-deps (deps)
   "Require each symbol in DEPS, signaling a `user-error' if any cannot load.
@@ -1025,10 +1066,13 @@ opens the *ert* selector."
          (main-file (builder-elisp-package--main-file root)))
     (unless main-file
       (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
-    (builder-elisp-package--require-deps (builder-elisp-package--read-deps main-file))
+    (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
     (let* ((test-dir (f-join root "test"))
            (load-path (-non-nil (-l root (and (f-directory-p test-dir) test-dir) load-path))))
       (load main-file nil t)
+      (--each (builder-elisp-package--source-files root)
+        (unless (f-equal-p it main-file)
+          (load it nil t)))
       (--each (builder-elisp-package--test-files root)
         (load it nil t)))
     (if noninteractive
@@ -1044,7 +1088,7 @@ In batch mode exits with status 1 if any file fails to compile."
          (main-file (builder-elisp-package--main-file root)))
     (unless main-file
       (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
-    (builder-elisp-package--require-deps (builder-elisp-package--read-deps main-file))
+    (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
     (let* ((load-path (cons root load-path))
            (failed 0))
       (--each (builder-elisp-package--source-files root)
