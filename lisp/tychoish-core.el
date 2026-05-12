@@ -331,19 +331,17 @@
 
 (use-package deadgrep
   :ensure t
-  :bind (:map tychoish/ecclectic-grep-map
-	      ("d" . #'deadgrep)
-	      :map tychoish/ecclectic-rg-map
-	      ("x" . #'deadgrep))
+  :bind (:map tychoish/ecclectic-rg-map
+	 ("x" . #'deadgrep))
   :commands (deadgrep))
 
 (use-package wgrep
   :ensure t
   :after (grep)
   :bind (:map grep-mode-map
-	      ("r" . wgrep-change-to-wgrep-mode))
+	      ("w" . wgrep-change-to-wgrep-mode))
   :config
-  (setq wgrep-enable-key "r"))
+  (setq wgrep-enable-key "w"))
 
 (use-package google-this
   :ensure t

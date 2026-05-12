@@ -79,20 +79,21 @@
  ("S-<down>" . windmove-down)
  ("S-<right>" . windmove-right)
  ("S-<up>" . windmove-up)
- ("M-H" . increase-window-left)
- ("M-J" . increase-window-down)
- ("M-K" . increase-window-up)
- ("M-L" . increase-window-right)
- ("M-<left>" . increase-window-left)
- ("M-<down>" . increase-window-down)
- ("M-<up>" . increase-window-up)
- ("M-<right>" . increase-window-right)
+ ("s-h" . increase-window-left)
+ ("s-j" . increase-window-down)
+ ("s-k" . increase-window-up)
+ ("s-l" . increase-window-right)
+ ("s-<left>" . increase-window-left)
+ ("s-<down>" . increase-window-down)
+ ("s-<up>" . increase-window-up)
+ ("s-<right>" . increase-window-right)
  ("M-/" . dabbrev-completion)
  ("C-M-/" . dabbrev-expand))
 
 (bind-keys
  :map minibuffer-local-map
- ("C-g" . tychoish/super-abort-minibuffers))
+ ("C-g" . tychoish/super-abort-minibuffers)
+ ("C-l" . backward-kill-word))
 
 (bind-keys
  ;; these are all from tychoish-common.el
@@ -115,7 +116,10 @@
  :prefix "C-c t"
  :prefix-map tychoish/core-map
  ("w" . toggle-local-whitespace-cleanup)
+ ("s" . whitespace-cleanup)
  ("k" . execute-extended-clipboard-command)
+ ("p" . toggle-electric-pair-inhibition)
+ ("e" . toggle-electric-pair-eagerness)
  :map tychoish/core-map ;; "C-c t"
  :prefix "b"
  :prefix-map tychoish/blogging-map
@@ -129,15 +133,6 @@
  ("r" . disable-all-themes) ;; reset
  ("d" . tychoish-load-dark-theme)
  ("l" . tychoish-load-light-theme))
-
-(bind-keys
- :map tychoish/core-map
- ("p" . toggle-electric-pair-inhibition)
- ("e" . toggle-electric-pair-eagerness))
-
-(bind-keys
- :map minibuffer-local-map
- ("C-l" . backward-kill-word))
 
 (bind-keys
  :prefix "C-c d"
@@ -202,7 +197,6 @@
  ("f" . tychoish/completion-select-flavor))
 
 (bind-keys
- :map global-map
  ("M-." . xref-find-definitions)
  :prefix "C-c l"
  :prefix-map tychoish/ide-map
@@ -238,6 +232,11 @@
 (put 'dired-find-alternate-file 'disabled nil)
 (put 'list-timers 'disabled nil)
 (put 'list-threads 'disabled nil)
+
+(with-eval-after-load 'dired
+  (bind-keys
+   :map dired-mode-map
+   ("w" . wdired-change-to-wdired-mode)))
 
 (with-eval-after-load "warnings"
   (add-to-list 'warning-suppress-log-types '(frameset)))
@@ -362,7 +361,7 @@
         newline-mark))
 
 (make-read-extended-command-for-prefix  "clipboard"
-                                        :bind-key "C-x x c")
+ :bind-key "C-x x c")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1608,7 +1607,7 @@ BODY is skipped."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; mcp configuration / setup 
+;; mcp configuration / setup
 
 (defvar tychoish/gopls-mcp-port 38713
   "TCP port for the gopls MCP HTTP endpoint (shared or standalone).")
