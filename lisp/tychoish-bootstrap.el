@@ -1823,6 +1823,71 @@ Reuses any existing live process.  Returns the process or nil on failure."
 (declare-function magit-list-module-paths "magit-submodule")
 (declare-function magit-run-git "magit-process")
 
+(defun tychoish/--git-repo-p (dir)
+  "Return non-nil when DIR is the top of a git working tree.
+Both worktree roots and submodule directories qualify: in either case
+DIR contains a `.git' entry (a directory or a gitlink file)."
+  (file-exists-p (expand-file-name ".git" dir)))
+
+(defun tychoish/--gitmodules-paths (root)
+  "Return submodule paths declared in ROOT/.gitmodules.
+Parses the file directly so this works without magit or git."
+  (let ((path (expand-file-name ".gitmodules" root))
+        out)
+    (when (file-readable-p path)
+      (with-temp-buffer
+        (insert-file-contents path)
+        (goto-char (point-min))
+        (while (re-search-forward "^[ \t]*path[ \t]*=[ \t]*\\(.+?\\)[ \t]*$" nil t)
+          (push (match-string 1) out))))
+    (nreverse out)))
+
+(defun tychoish/--submodule-checked-out-p (root sub)
+  "Return non-nil when submodule SUB under ROOT is checked out."
+  (tychoish/--git-repo-p (expand-file-name sub root)))
+
+(defun tychoish/elpa-uninstalled-submodules ()
+  "Return elpa submodule paths that are registered but not checked out."
+  (let ((elpa-root (expand-file-name "elpa" user-emacs-directory)))
+    (cl-remove-if (lambda (sub) (tychoish/--submodule-checked-out-p elpa-root sub))
+                  (tychoish/--gitmodules-paths elpa-root))))
+
+(defun tychoish/elpa-check-submodules ()
+  "Warn if any elpa submodules are registered but not checked out.
+
+Missing submodules referenced via `:load-path' in `use-package' forms
+otherwise fail silently when their autoloaded hooks fire, e.g. aborting
+the rest of a mode-hook chain.
+
+No-ops when the surrounding state suggests a partial bootstrap rather
+than a real drift:
+- `.emacs.d' exists but is not a git working tree
+- any top-level submodule of `.emacs.d' (notably `elpa') is not checked out
+- `elpa/' exists but is not a git working tree"
+  (interactive)
+  (let* ((emacs-d (expand-file-name user-emacs-directory))
+         (elpa (expand-file-name "elpa" emacs-d)))
+    (unless (or (and (file-directory-p emacs-d)
+                     (not (tychoish/--git-repo-p emacs-d)))
+                (cl-some (lambda (sub)
+                           (not (tychoish/--submodule-checked-out-p emacs-d sub)))
+                         (tychoish/--gitmodules-paths emacs-d))
+                (and (file-directory-p elpa)
+                     (not (tychoish/--git-repo-p elpa))))
+      (when-let ((missing (tychoish/elpa-uninstalled-submodules)))
+        (display-warning
+         'tychoish/elpa
+         (format "uninstalled elpa submodules: %s\nrun: (cd %s && git submodule update --init %s)"
+                 (mapconcat #'identity missing " ")
+                 elpa
+                 (mapconcat #'identity missing " "))
+         :warning)
+        missing))))
+
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (run-with-idle-timer 5 nil #'tychoish/elpa-check-submodules)))
+
 (defun tychoish/elpa-pull-submodules ()
   "Run `git pull origin' in each submodule under `.emacs.d/elpa/'.
 Submodules are enumerated via `magit-list-module-paths' against the
