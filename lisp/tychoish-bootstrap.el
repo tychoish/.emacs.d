@@ -380,13 +380,14 @@
 (defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
 
 (defvar-local tychoish-cache--resolved-instance-id nil)
+
 (defun tychoish/resolve-instance-id ()
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (or tychoish-cache--resolved-instance-id
 	(setq tychoish-cache--resolved-instance-id
 	      (let ((daemon (daemonp)))
 		(or (when (eq daemon t) "primary")
-		    daemon
+		    (and daemon (setenv "EMACS_SERVER_FILE" daemon))
 		    cli/instance-id
 		    tychoish/emacs-instance-id
 		    "solo"))))))
