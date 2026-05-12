@@ -993,6 +993,12 @@
 	(load-file path)
       (message "could not force-load %s" path))))
 
+(use-package magit-gh
+  :ensure t
+  :after magit
+  :config
+  (setq magit-gh-pr-limit 50))
+
 (use-package smerge-mode
   :after (magit)
   :init
