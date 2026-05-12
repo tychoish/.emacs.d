@@ -1,4 +1,4 @@
-;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t -*-
+;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t; no-byte-compile: t -*-
 ;;; Commentary:
 
 ;; Provides my collection of use-package forms and related
@@ -8,6 +8,9 @@
 ;; only loads when called directly or a mode is activated.
 
 ;;; Code:
+
+(eval-when-compile
+  (require 'xlib))
 
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
@@ -28,7 +31,7 @@
   (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
   (add-hook 'dired-mode-hook 'dired-async-mode))
 
-(use-package package-build 
+(use-package package-build
   :ensure t
   :commands (package-build-archive package-build-all))
 
@@ -394,19 +397,20 @@
          ("\\" . cape-tex)
          ("/" . cape-sgml)
          ("u" . cape-rfc1345))
+  :commands (cape-capf-inside-code
+	     cape-capf-inside-comment
+	     cape-capf-inside-string)
   :init
-  (declare-function capf-wordfreq-avalible-p "tychoish-core")
-  (declare-function cape-capf-inside-code "cape")
-
-  (defmacro cape-capf-wrapper (wrapper inner)
-    (when inner
-      (let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
-	     (wrapper-name (symbol-name wrapper))
-	     (capf-name (symbol-name inner))
-	     (name (format "%s-<%s>" capf-name wrapper-name ))
-	     (symb (intern name)))
-	`(defun ,symb ()
-	   (funcall ',wrapper ',inner)))))
+  (eval-and-compile
+    (defmacro cape-capf-wrapper (wrapper inner)
+      (when inner
+	(let* ((wrapper (if (stringp wrapper) (intern wrapper) wrapper))
+	       (wrapper-name (symbol-name wrapper))
+	       (capf-name (symbol-name inner))
+	       (name (format "%s-<%s>" capf-name wrapper-name))
+	       (symb (intern name)))
+	  `(defun ,symb ()
+	     (funcall ',wrapper ',inner))))))
 
   (defun tychoish/maybe-capf-dict ()
     (and (boundp 'cape-dict-file) (f-exists-p cape-dict-file) #'cape-dict))
@@ -435,7 +439,6 @@
 		     (-non-nil))))
 
   (defun tychoish/elisp-capf-setup  ()
-    (require 'cape)
     (setq-local completion-at-point-functions
                 (->> (list #'cape-elisp-symbol
 			   (cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
@@ -472,26 +475,24 @@
 		     (-non-nil)
 		     (-distinct))))
 
-  (defun cape--project-buffers ()
-    (let ((directory (approximate-project-root)))
-      (cape--buffer-list (lambda (buf)
-			   (string-prefix-p directory (buffer-file-name buf))))))
-
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
+
+  (add-hook 'completion-at-point-functions #'cape-rfc1345)
+  (add-hook 'completion-at-point-functions #'cape-emoji)
+  (add-hook 'completion-at-point-functions #'cape-file)
+  (add-hook 'completion-at-point-functions #'cape-history)
+  (add-hook 'completion-at-point-functions (cape-capf-wrapper cape-capf-inside-code cape-keyword))
 
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-capf-setup)
   (add-hook 'emacs-lisp-mode-hook #'tychoish/elisp-capf-setup)
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
   (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup)
-
-  (declare-function yasnippet-capf "yasnippet-capf")
-  (add-hook 'completion-at-point-functions #'yasnippet-capf)
-  (add-hook 'completion-at-point-functions (cape-capf-wrapper cape-capf-inside-code cape-keyword))
-  (add-hook 'completion-at-point-functions #'cape-rfc1345)
-  (add-hook 'completion-at-point-functions #'cape-emoji)
-  (add-hook 'completion-at-point-functions #'cape-file)
-  (add-hook 'completion-at-point-functions #'cape-history))
+  :config
+  (defun cape--project-buffers ()
+    (let ((directory (approximate-project-root)))
+      (cape--buffer-list (lambda (buf)
+			   (string-prefix-p directory (buffer-file-name buf)))))))
 
 (use-package yasnippet
   :ensure t
@@ -506,7 +507,10 @@
   :ensure t
   :bind (:map tychoish/completion-map
          ("s" . yasnippet-capf))
-  :commands (yasnippet-capf))
+  :commands (yasnippet-capf)
+  :init
+  (declare-function yasnippet-capf "yasnippet-capf")
+  (add-hook 'completion-at-point-functions #'yasnippet-capf))
 
 (use-package yasnippet-snippets
   :ensure t
@@ -530,9 +534,10 @@
   :config
   (defvar vertico-multiform-categories nil)
   (defvar vertico-multiform-commands nil)
-  (defmacro tychoish/vertico-disable-sort-for (command)
-    "Disable sorting in vertico rendering."
-    `(add-to-list 'vertico-multiform-categories '(,command (vertico-sort-function . nil))))
+  (eval-and-compile
+    (defmacro tychoish/vertico-disable-sort-for (command)
+      "Disable sorting in vertico rendering."
+      `(add-to-list 'vertico-multiform-categories '(,command (vertico-sort-function . nil)))))
 
   (tychoish/vertico-disable-sort-for yank)
   (tychoish/vertico-disable-sort-for yank-from-kill-ring)
@@ -686,148 +691,6 @@
   (setq orderless-component-separator #'orderless-escapable-split-on-space)
   (setq orderless-matching-styles
 	'(orderless-literal orderless-prefixes orderless-initialism orderless-regexp)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; completion flavor -- switch between orderless / prescient / hybrid at runtime.
-
-(defvar tychoish/completion-flavor 'hybrid
-  "Currently active completion flavor.
-One of `hybrid', `orderless', `prescient'.  Set by the
-`tychoish/completion-use-*' commands; do not setq directly.")
-
-(defvar tychoish/completion-flavors
-  '((hybrid    tychoish/completion-use-hybrid
-	       "orderless filter + prescient sort (frecency)")
-    (orderless tychoish/completion-use-orderless
-	       "pure orderless filter; default sort, no frecency")
-    (prescient tychoish/completion-use-prescient
-	       "prescient filter + sort (frecency)"))
-  "Alist of (NAME ACTIVATOR DESCRIPTION) for completion flavors.
-ACTIVATOR is the interactive command that installs the flavor.")
-
-(defun tychoish/completion--set-category-overrides (kind)
-  "Set `completion-category-overrides' for KIND (`orderless' or `prescient')."
-  (setq completion-category-overrides
-	(pcase kind
-	  ('orderless '((file         (styles basic partial-completion))
-			(consult-grep (styles basic))
-			(buffer       (styles orderless basic))
-			(command      (styles orderless basic))
-			(symbol       (styles orderless basic))))
-	  ('prescient '((file         (styles basic partial-completion))
-			(consult-grep (styles basic)))))))
-
-(defvar tychoish/completion--applying nil
-  "Re-entry guard for the `tychoish/completion-use-*' functions.
-Cycling `vertico-prescient-mode' / `corfu-prescient-mode' fires their
-mode hooks, which can re-invoke a flavor function (e.g. via the
-startup one-shot hook below).  The guard makes the inner call a no-op.")
-
-(defun tychoish/completion--reload-prescient-mode (mode-symbol)
-  "Cycle MODE-SYMBOL off and back on so it picks up new `*-enable-*' values.
-`vertico-prescient' and `corfu-prescient' read the filtering/sorting flags
-only at mode activation, so changing the variables alone has no effect
-on an already-enabled mode."
-  (when (fboundp mode-symbol)
-    (when (symbol-value mode-symbol)
-      (funcall mode-symbol -1))
-    (funcall mode-symbol 1)))
-
-(defmacro tychoish/completion--with-guard (&rest body)
-  "Run BODY with `tychoish/completion--applying' bound non-nil.
-If already non-nil (we are re-entering from a prescient mode hook),
-BODY is skipped."
-  (declare (indent defun))
-  `(unless tychoish/completion--applying
-     (let ((tychoish/completion--applying t))
-       ,@body)))
-
-(defun tychoish/completion-use-hybrid ()
-  "Install the hybrid flavor: orderless filters, prescient sorts."
-  (interactive)
-  (tychoish/completion--with-guard
-    (setq completion-styles '(orderless basic))
-    (tychoish/completion--set-category-overrides 'orderless)
-    (when (boundp 'vertico-prescient-enable-filtering)
-      (setq vertico-prescient-enable-filtering nil
-	    vertico-prescient-enable-sorting   t))
-    (when (boundp 'corfu-prescient-enable-filtering)
-      (setq corfu-prescient-enable-filtering nil
-	    corfu-prescient-enable-sorting   t))
-    (setq completion-preview-sort-function #'prescient-completion-sort)
-    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
-    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
-    (setq tychoish/completion-flavor 'hybrid)
-    (message "completion: orderless filter + prescient sort")))
-
-(defun tychoish/completion-use-orderless ()
-  "Install pure orderless; prescient disabled (no frecency)."
-  (interactive)
-  (tychoish/completion--with-guard
-    (setq completion-styles '(orderless basic))
-    (tychoish/completion--set-category-overrides 'orderless)
-    (setq completion-preview-sort-function nil)
-    (when (fboundp 'vertico-prescient-mode) (vertico-prescient-mode -1))
-    (when (fboundp 'corfu-prescient-mode)   (corfu-prescient-mode -1))
-    (setq tychoish/completion-flavor 'orderless)
-    (message "completion: pure orderless")))
-
-(defun tychoish/completion-use-prescient ()
-  "Install prescient for both filter and sort; orderless inert."
-  (interactive)
-  (tychoish/completion--with-guard
-    (setq completion-styles '(basic partial-completion emacs22))
-    (tychoish/completion--set-category-overrides 'prescient)
-    (when (boundp 'vertico-prescient-enable-filtering)
-      (setq vertico-prescient-enable-filtering t
-	    vertico-prescient-enable-sorting   t))
-    (when (boundp 'corfu-prescient-enable-filtering)
-      (setq corfu-prescient-enable-filtering t
-	    corfu-prescient-enable-sorting   t))
-    (setq completion-preview-sort-function #'prescient-completion-sort)
-    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
-    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
-    (setq tychoish/completion-flavor 'prescient)
-    (message "completion: prescient filter + sort")))
-
-(defun tychoish/completion-toggle-flavor ()
-  "Cycle through `tychoish/completion-flavors' in order."
-  (interactive)
-  (let* ((order (mapcar #'car tychoish/completion-flavors))
-	 (idx (or (-elem-index tychoish/completion-flavor order) -1))
-	 (next (nth (mod (1+ idx) (length order)) order)))
-    (funcall (nth 1 (assq next tychoish/completion-flavors)))))
-
-(defun tychoish/completion-select-flavor ()
-  "Pick a completion flavor via `annotated-completing-read'."
-  (interactive)
-  (let ((table (ht-create)))
-    (dolist (entry tychoish/completion-flavors)
-      (ht-set table (symbol-name (car entry))
-	      (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
-		      (nth 2 entry))))
-    (let* ((name (annotated-completing-read table
-		  :prompt "completion flavor => "
-		  :category 'tychoish-completion-flavor
-		  :require-match t))
-	   (entry (assq (intern name) tychoish/completion-flavors)))
-      (when entry (funcall (nth 1 entry))))))
-
-(bind-keys
- :map tychoish/completion-map
- ("f" . tychoish/completion-select-flavor)
- ("F" . tychoish/completion-toggle-flavor))
-
-;; Install the initial flavor once a prescient package is loaded.  Fires on
-;; whichever of the two minor-mode hooks runs first; the one-shot then
-;; removes itself.  Until this fires the system uses Emacs defaults
-;; (basic completion-styles, no prescient filter), which is acceptable
-;; pre-completion state.
-(add-one-shot-hook
- :name "completion-flavor-init"
- :operation #'tychoish/completion-use-hybrid
- :hook '(vertico-prescient-mode-hook corfu-prescient-mode-hook))
 
 (use-package popon
   :ensure t
@@ -2417,33 +2280,24 @@ Useful after changing `eglot-workspace-configuration' or
    :map tychoish/robot-gptel-map
    ("a" . gptel-agent)))
 
+
 (use-package mcp
   :ensure t
   :commands (mcp-hub-start-all-servers)
   :config
   (require 'mcp-hub)
+  (tychoish/mcp-servers-init)
   (make-read-extended-command-for-prefix "mcp"
    :key-alias "mcp-commands"
    :bind-key "/"
    :bind-map mcp-hub-mode-map)
-  (add-to-list 'mcp-hub-servers '("time" . (:command "uvx" :args ("mcp-server-time"))))
-  (add-to-list 'mcp-hub-servers '("fetch" . (:command "uvx" :args ("mcp-server-fetch"))))
-
-  (add-to-list 'mcp-hub-servers '("godoc" . (:command "godoc-mcpr")))
-  (add-to-list 'mcp-hub-servers '("awsdoc" . (:command "awslabs.aws-documentation-mcp-server")))
-
-  (add-to-list 'mcp-hub-servers `("gopls" . (:command "gopls" :args (,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)) "mcp"))))
-  (add-to-list 'mcp-hub-servers `("lsp-mcp-rust" . (:command "npx" :args ("tritlo/lsp-mcp" "rust" ,(executable-find "rust-analyzer")))))
-  (add-to-list 'mcp-hub-servers `("lsp-mcp-bash" . (:command "npx" :args ("tritlo/lsp-mcp" "bash" ,(executable-find "bash-language-server" "server")))))
-  (add-to-list 'mcp-hub-servers `("lsp-mcp-yaml" . (:command "npx" :args ("tritlo/lsp-mcp" "yaml" ,(executable-find "yaml-language-server" "--stdio")))))
-
-  (add-to-list 'mcp-hub-servers '("git" . (:command "uvx" :args ("mcp-server-git"))))
-  (add-to-list 'mcp-hub-servers '("rg" . (:command "npx" :args ("-y" "mcp-ripgrep@latest"))))
-
-  (add-to-list 'mcp-hub-servers '("linear" . (:command "npx" :args ("-y" "mcp-remote" "https://mcp.linear.app/mcp"))))
-  (add-to-list 'mcp-hub-servers '("github" . (:command "npx" :args ("-y" "mcp-remote" "https://api.githubcopilot.com/mcp"))))
-  (add-to-list 'mcp-hub-servers '("notion" . (:command "npx" :args ("-y" "mcp-remote" "https://mcp.notion.com/mcp"))))
-  (add-to-list 'mcp-hub-servers '("google-workspace" . (:command "uvx" :args ("workspace-mcp")))))
+  (defun tychoish/mcp-hub-refresh ()
+    "Recompute `mcp-hub-servers' from `tychoish/mcp-build-servers'."
+    (setq mcp-hub-servers
+          (mapcar #'tychoish/mcp-spec->hub (tychoish/mcp-build-servers))))
+  (tychoish/mcp-hub-refresh)
+  (advice-add 'mcp-hub-start-all-servers :before
+              (lambda (&rest _) (tychoish/mcp-hub-refresh))))
 
 (use-package copilot
   :ensure t
@@ -2657,7 +2511,7 @@ Useful after changing `eglot-workspace-configuration' or
    :bind-key "m"))
 
 (use-package efrit
-  :load-path "external/efrit/lisp"
+  :load-path "elpa/efrit/lisp"
   :bind (:map tychoish/robot-map
 	 :prefix "e"
 	 :prefix-map tychoish/robot-efrit-map
@@ -2719,6 +2573,8 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package agent-shell
   :ensure t
   :after (shell-maker)
+  :delight ((agent-shell-completion-mode "")
+	    (agent-shell-ui-mode ""))
   :hook ((agent-shell-mode . corfu-mode)
 	 (agent-shell-mode . agent-shell-corfu-setup))
   :init
@@ -2748,6 +2604,8 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-c b" . agent-shell-switch-buffer)
    ("C-c m" . agent-shell-action-menu)
    ("C-c x" . agent-shell-command-menu))
+
+  (tychoish/mcp-servers-init)
 
   (defvar agent-shell--state)
   (defvar agent-shell-prose-space-threshold 2
@@ -2893,10 +2751,17 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-anthropic-claude-environment (agent-shell-make-environment-variables :inherit-env t))
   (setq agent-shell-file-completion-enabled t)
   (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
-  (setq agent-shell-header-style 'text))
+  (setq agent-shell-header-style 'text)
+  (defun tychoish/agent-shell-mcp-refresh ()
+    "Recompute `agent-shell-mcp-servers' from `tychoish/mcp-build-servers'."
+    (setq agent-shell-mcp-servers
+          (mapcar #'tychoish/mcp-spec->acp (tychoish/mcp-build-servers))))
+  (tychoish/agent-shell-mcp-refresh)
+  (advice-add 'agent-shell :before
+              (lambda (&rest _) (tychoish/agent-shell-mcp-refresh))))
 
 (use-package agent-shell-manager
-  :load-path "external/agent-shell-manager"
+  :load-path "elpa/agent-shell-manager"
   :after (agent-shell)
   :commands (agent-shell-manager-toggle)
   :bind (:map tychoish/robot-agent-shell-map
@@ -2905,22 +2770,23 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-manager-side 'bottom))
 
 (use-package agent-shell-workspace
-  :load-path "external/agent-shell-workspace"
+  :load-path "elpa/agent-shell-workspace"
   :after (agent-shell)
   :commands (agent-shell-workspace-toggle)
   :bind (:map tychoish/robot-agent-shell-map
 	      ("w" . agent-shell-workspace-toggle)))
 
 (use-package agent-review
-  :load-path "external/agent-review"
+  :load-path "elpa/agent-review"
   :after (agent-shell)
   :commands (agent-review)
   :bind (:map tychoish/robot-agent-shell-map
 	      ("v" . agent-review)))
 
 (use-package agent-shell-notifications
-  :load-path "external/agent-shell-notifications"
+  :load-path "elpa/agent-shell-notifications"
   :after (agent-shell alert)
+  :delight (agent-shell-notifications-mode "")
   :hook ((agent-shell-mode . agent-shell-notifications-mode)
 	 (agent-shell-viewport-edit-mode . agent-shell-notifications-viewport-edit-mode)
 	 (agent-shell-viewport-view-mode . agent-shell-notifications-viewport-view-mode))
@@ -2974,7 +2840,7 @@ call-site that has access to SHELL-BUFFER."
   (setq agent-shell-notifications-timeout 30))
 
 (use-package meta-agent-shell
-  :load-path "external/meta-agent-shell"
+  :load-path "elpa/meta-agent-shell"
   :after (agent-shell)
   :commands (meta-agent-shell-start
 	     meta-agent-shell-jump-to-dispatcher

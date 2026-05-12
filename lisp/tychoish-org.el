@@ -1,7 +1,8 @@
 ;;  -*- lexical-binding: t -*-
 
 (eval-when-compile
-  (require 'dash))
+  (require 'dash)
+  (require 'xlib))
 
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")

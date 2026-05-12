@@ -56,6 +56,7 @@
 	  (setq-local go-module-path output)
 	output))))
 
+;;;###autoload
 (defun builder ()
   "Run compile operation selecting compile buffer and commands."
   (interactive)
@@ -382,7 +383,6 @@ Use it when you have a plain `defun' and do not need predicate filtering,
 named-symbol generation, or mode-hook scoping."
   (add-hook 'builder-candidate-functions fn))
 
-;;;###autoload
 (cl-defmacro builder-register-candidates (&key name (predicate t) (hooks nil) pipeline)
   "Define a named candidate generator and register it on `builder-candidate-functions'.
 NAME is used to derive the generated function symbol
@@ -706,7 +706,7 @@ call `builder-add-candidates'."
              (directory (f-dirname filename))
              (basename  (f-filename filename))
              (short-path (f-collapse-homedir directory))
-             (test-names (elgot-test-at-point--go-names-in-buffer)))
+             (test-names (eglot-test-at-point--go-names-in-buffer)))
    (->> test-names
         (--flat-map
          (let* ((test-name (car it))
@@ -1110,6 +1110,117 @@ are not included. The tarball lands in <root>/build/packages/."
       (delete-file it)
       (message "removed %s" it))
     (when noninteractive (kill-emacs 0))))
+
+;; package dependency analysis — builds on the private `package--get-deps'
+;; (transitive closure) and `package-desc-reqs' (direct deps from local
+;; metadata) primitives in package.el.  `package--removable-packages' is a
+;; near-cousin but is hard-wired to `package-selected-packages'; these
+;; helpers accept an arbitrary root list.
+
+(defun builder-package--direct-deps (package)
+  "Return the list of direct dependency symbols declared by PACKAGE.
+Reads `Package-Requires' via `package-desc-reqs' on the entry in
+`package-alist'; filters the `emacs' pseudo-dependency.  Returns nil
+when PACKAGE is not installed."
+  (when-let* ((desc (cadr (assq package package-alist))))
+    (->> (package-desc-reqs desc)
+         (mapcar #'car)
+         (--remove (eq it 'emacs)))))
+
+(defun builder-package-deps-map (packages)
+  "Return a hash-table mapping each symbol in PACKAGES to its direct deps.
+Values are lists of dependency symbols read from local package
+metadata.  Packages not present in `package-alist' map to nil."
+  (let ((table (make-hash-table :test 'eq)))
+    (dolist (pkg packages table)
+      (puthash pkg (builder-package--direct-deps pkg) table))))
+
+(defun builder-package-deps-closure (packages)
+  "Return the de-duplicated transitive closure of PACKAGES.
+Includes the roots themselves even when they have no entry in
+`package-alist' (e.g. packages loaded via `:load-path').
+`package--get-deps' filters such roots out of its result because it
+keys off `package-alist'; we union the raw roots back in so closure
+membership is meaningful for non-package.el installs."
+  (-distinct (append (copy-sequence packages)
+                     (package--get-deps (copy-sequence packages)))))
+
+(defvar builder-package-installed-exclude '(archives gnupg)
+  "Directory-name symbols under `package-user-dir' to ignore.
+These are subdirectories created by `package.el' that are not
+packages (archive metadata, gpg keyring).  Consumed by
+`builder-package--installed-on-disk'.")
+
+(defun builder-package--installed-on-disk ()
+  "Return package-name symbols rooted in `package-user-dir'.
+Reads the directory directly so packages without a `package-alist'
+entry are still surfaced.  A trailing `-<digits-and-dots>' version
+suffix (as written by package.el) is stripped so the result is
+comparable with `package-alist' keys."
+  (when (file-directory-p package-user-dir)
+    (->> (directory-files package-user-dir nil "\\`[^.]")
+         (--filter (file-directory-p (expand-file-name it package-user-dir)))
+         (--map (replace-regexp-in-string "-[0-9.]+\\'" "" it))
+         (-map #'intern)
+         (--remove (memq it builder-package-installed-exclude))
+         (-distinct))))
+
+(defun builder-package--declared-use-packages (&optional dir)
+  "Return symbols declared via `use-package' in init source files.
+Walks .el files under DIR (defaults to `user-emacs-directory'/lisp) by
+`read'ing top-level forms and collecting the NAME from every
+(use-package NAME ...) form, including those nested inside top-level
+`progn'/`with-eval-after-load'/`eval-when-compile' wrappers.  Used to
+augment `builder-package-unused' so packages loaded via `:load-path'
+are not misclassified as unused."
+  (let* ((dir (or dir (expand-file-name "lisp" user-emacs-directory)))
+         (declared '())
+         (walk nil))
+    (setq walk
+          (lambda (form)
+            (when (consp form)
+              (cond
+               ((and (eq (car form) 'use-package) (symbolp (cadr form)))
+                (push (cadr form) declared))
+               ((memq (car form) '(progn prog1 prog2 eval-and-compile
+                                        eval-when-compile with-eval-after-load
+                                        when unless if))
+                (dolist (sub (cdr form)) (funcall walk sub)))))))
+    (when (file-directory-p dir)
+      (dolist (file (directory-files-recursively dir "\\.el\\'"))
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (condition-case nil
+              (while t (funcall walk (read (current-buffer))))
+            (end-of-file nil)
+            (invalid-read-syntax nil)))))
+    (-distinct declared)))
+
+;;;###autoload
+(defun builder-package-unused (packages)
+  "Return packages on disk under `package-user-dir' not reachable from PACKAGES.
+The reachable set is `builder-package-deps-closure' of PACKAGES *plus*
+every name declared via `use-package' in user init files (see
+`builder-package--declared-use-packages') — this keeps `:load-path'
+installs out of the unused list.  The installed set comes from
+`builder-package--installed-on-disk'.  Called interactively, defaults
+PACKAGES to `package-selected-packages' and echoes the result."
+  (interactive (list package-selected-packages))
+  (let* ((roots (-distinct (append packages
+                                   (builder-package--declared-use-packages))))
+         (needed (builder-package-deps-closure roots))
+         (unused (->> (builder-package--installed-on-disk)
+                      (--remove (memq it needed))
+                      (-sort (lambda (a b) (string-lessp (symbol-name a)
+                                                        (symbol-name b)))))))
+    (when (called-interactively-p 'interactive)
+      (if unused
+          (message "%d unused under %s: %s"
+                   (length unused) package-user-dir
+                   (mapconcat #'symbol-name unused " "))
+        (message "no unused packages under %s" package-user-dir)))
+    unused))
 
 (builder-register-candidates
  :name "emacs-lisp-package"

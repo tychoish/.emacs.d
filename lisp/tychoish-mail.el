@@ -1,11 +1,16 @@
 ;; -*- lexical-binding: t -*-
 
+(eval-when-compile
+  (require 'xlib))
+
 (require 'mu4e-autoloads nil t)
 
 (declare-function f-join "f")
-(add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
 
-(autoload 'consult-mu "consult-mu")
+(use-package consult-mu
+  :load-path "elpa/consult-mu"
+  :commands (consult-mu))
+
 (autoload 'mu4e-update-index "mu4e-update")
 
 (declare-function mu4e "mu4e")
@@ -50,7 +55,7 @@
 (with-eval-after-load 'consult-mu
   (with-slow-op-timer
    "<mail.el> consult-mu extensions"
-   (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/extras/"))
+   (add-to-list 'load-path (f-join package-user-dir "consult-mu/extras/"))
    (require 'consult-mu-compose)
    (require 'consult-mu-contacts)
    (require 'consult-mu-embark)

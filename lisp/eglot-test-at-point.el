@@ -1,8 +1,10 @@
-;;; eglot-test-at-point.el ### -*- lexical-binding: t -*- ###
-;;; --- 
+;;; eglot-test-at-point.el --- Test discovery for eglot -*- lexical-binding: t -*-
 
 ;; Author: sam kleinman
 ;; Maintainer: tychoish
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "30.1"))
+;; URL: https://github.com/tychoish/eglot-test-at-point
 
 ;; This file is not part of GNU Emacs
 
@@ -42,11 +44,11 @@ Set buffer-locally per language.")
 
 (defvar-local eglot-test-at-point-list-fn nil
   "Function () => ht of NAME -> ANNOTATION for all tests in the current buffer.
-Used by `eglot-run-single-test' to populate the selection menu.")
+Used by `eglot-test-at-point-select' to populate the selection menu.")
 
-(defvar-local elgot-test-at-point-get-name-fn nil
+(defvar-local eglot-test-at-point-get-name-fn nil
   "Optional function () => test-name-string, bypassing code lens discovery.
-When set, `eglot-test-name-at-point' calls this instead of the
+When set, `eglot-test-at-point-name' calls this instead of the
 `textDocument/codeLens' path.  Use for languages whose LSP server supports
 `textDocument/documentSymbol' but not test-running code lenses.")
 
@@ -79,14 +81,14 @@ When set, `eglot-test-name-at-point' calls this instead of the
 (defun eglot-test-at-point-setup-python ()
   "Configure test discovery for Python via pylsp (+ python-lsp-ruff, pylsp-rope).
 pylsp supports `textDocument/documentSymbol' but not test code lenses, so
-`elgot-test-at-point-get-name-fn' is used instead of the codeLens path.
+`eglot-test-at-point-get-name-fn' is used instead of the codeLens path.
 Discovers top-level `test_*' functions (kind 12) and `test_*' methods (kind 6)
 inside `Test*' classes (kind 5).  Runs tests with `python -m pytest'."
   (setq-local
    eglot-test-at-point-command nil
    eglot-test-at-point-name-fn nil
    eglot-test-at-point-run-command-fn (lambda (name) (format "python -m pytest -v %s::%s" (buffer-file-name) name))
-   elgot-test-at-point-get-name-fn #'eglot-test-at-poing--python-name-at-point))
+   eglot-test-at-point-get-name-fn #'eglot-test-at-poing--python-name-at-point))
 
 (defun eglot-test-at-point--python-name-at-point ()
   (when-let* ((server  (eglot-current-server))
@@ -135,7 +137,7 @@ inside `Test*' classes (kind 5).  Runs tests with `python -m pytest'."
 (add-hook 'python-ts-mode-hook #'eglot-test-at-point-setup-python)
 (add-hook 'python-mode-hook #'eglot-test-at-point-setup-python)
 
-(defun elgot-test-at-point--go-names-in-buffer ()
+(defun eglot-test-at-point--go-names-in-buffer ()
   "Return list of (NAME . TYPE) for every test/benchmark in the current Go buffer.
 TYPE is `test' or `benchmark'.  Uses gopls `test' code lenses."
   (when-let* ((server (eglot-current-server))
@@ -152,13 +154,13 @@ TYPE is `test' or `benchmark'.  Uses gopls `test' code lenses."
              nconc (cl-loop for name across (or (plist-get run-args :Tests)      []) collect (cons name 'test))
              nconc (cl-loop for name across (or (plist-get run-args :Benchmarks) []) collect (cons name 'benchmark)))))
 
-(defun eglot-test-name-at-point ()
+(defun eglot-test-at-point-name ()
   "Return the test name at point via LSP, or nil.
-If `elgot-test-at-point-get-name-fn' is set, calls it directly (for languages
+If `eglot-test-at-point-get-name-fn' is set, calls it directly (for languages
 whose server lacks test code lenses).  Otherwise uses `textDocument/codeLens'
 with `eglot-test-at-point-command' and `eglot-test-at-point-name-fn'."
-  (if elgot-test-at-point-get-name-fn
-      (funcall elgot-test-at-point-get-name-fn)
+  (if eglot-test-at-point-get-name-fn
+      (funcall eglot-test-at-point-get-name-fn)
     (when-let* ((cmd-name eglot-test-at-point-command)
                 (name-fn  eglot-test-at-point-name-fn)
                 (server   (eglot-current-server))
@@ -183,13 +185,13 @@ with `eglot-test-at-point-command' and `eglot-test-at-point-name-fn'."
 (defun eglot-test-at-point ()
   "Run the test at point in a dedicated compilation buffer.
 Buffer is named *<project>-test-<directory>*.  Requires
-`eglot-test-at-point-run-command-fn' and either `elgot-test-at-point-get-name-fn'
+`eglot-test-at-point-run-command-fn' and either `eglot-test-at-point-get-name-fn'
 (direct discovery) or the `eglot-test-at-point-*' trio (code lens path)
 to be set buffer-locally."
   (interactive)
   (unless eglot-test-at-point-run-command-fn
     (user-error "no test runner configured for %s" major-mode))
-  (let* ((test-name (or (eglot-test-name-at-point)
+  (let* ((test-name (or (eglot-test-at-point-name)
                         (user-error "no test found at point")))
          (directory    (f-dirname (buffer-file-name)))
          (project-name (f-filename (directory-file-name (approximate-project-root))))
@@ -202,13 +204,13 @@ to be set buffer-locally."
 
 (defun eglot-test-at-point--go-list ()
   "Return ht of NAME -> TYPE-STRING for all tests in the current Go buffer."
-  (when-let* ((pairs (elgot-test-at-point--go-names-in-buffer)))
+  (when-let* ((pairs (eglot-test-at-point--go-names-in-buffer)))
     (let ((table (ht-create)))
       (dolist (pair pairs table)
         (ht-set! table (car pair) (symbol-name (cdr pair)))))))
 
 ;;;###autoload
-(defun eglot-run-single-test ()
+(defun eglot-test-at-point-select ()
   "Select a test from the current buffer and run it in a compilation buffer.
 Uses `annotated-completing-read' for completion with type annotations.
 Buffer is named *<project>-test-<directory>*.  Requires
@@ -231,3 +233,4 @@ to be set buffer-locally."
     (compilation-start command 'compilation-mode (compile-buffer-name buf-name))))
 
 (provide 'eglot-test-at-point)
+;;; eglot-test-at-point.el ends here"

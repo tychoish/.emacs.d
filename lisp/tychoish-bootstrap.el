@@ -198,7 +198,8 @@
  ("TAB" . completion-at-point)
  ("." . completion-at-point)
  ("/" . dabbrev-completion)
- ("p" . completion-at-point))
+ ("p" . completion-at-point)
+ ("f" . tychoish/completion-select-flavor))
 
 (bind-keys
  :map global-map
@@ -663,6 +664,12 @@ This combines the host name and the dameon name."
  :function tychoish/ensure-default-font
  :hook after-first-frame-created
  :idle-timer 0.1)
+
+(add-one-shot-hook
+ :name "completion-flavor-init"
+ :form (with-silence
+	 (tychoish/completion-use-hybrid))
+ :hook '(vertico-prescient-mode-hook corfu-prescient-mode-hook))
 
 (add-hook 'emacs-startup-hook #'tychoish/ensure-light-theme)
 (add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
@@ -1478,6 +1485,262 @@ interactively then remove duplicate items from the `kill-ring'."
   (setq x-alt-keysym 'meta)
   (setq x-super-keysym 'super))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; completion flavor -- switch between orderless / prescient / hybrid at runtime.
+
+(defvar tychoish/completion-flavor 'hybrid
+  "Currently active completion flavor.
+One of `hybrid', `orderless', `prescient'.  Set by the
+`tychoish/completion-use-*' commands; do not setq directly.")
+
+(defvar tychoish/completion-flavors
+  '((hybrid tychoish/completion-use-hybrid
+	    "orderless filter + prescient sort (frecency)")
+    (orderless tychoish/completion-use-orderless
+	       "pure orderless filter; default sort, no frecency")
+    (prescient tychoish/completion-use-prescient
+	       "prescient filter + sort (frecency)"))
+  "Alist of (NAME ACTIVATOR DESCRIPTION) for completion flavors.
+ACTIVATOR is the interactive command that installs the flavor.")
+
+(defvar tychoish/completion--applying nil
+  "Re-entry guard for the `tychoish/completion-use-*' functions.
+Cycling `vertico-prescient-mode' / `corfu-prescient-mode' fires their
+mode hooks, which can re-invoke a flavor function (e.g. via the
+startup one-shot hook below).  The guard makes the inner call a no-op.")
+
+(defun tychoish/completion--set-category-overrides (kind)
+  "Set `completion-category-overrides' for KIND (`orderless' or `prescient')."
+  (setq completion-category-overrides
+	(pcase kind
+	  ('orderless '((file (styles basic partial-completion))
+			(consult-grep (styles basic))
+			(buffer (styles orderless basic))
+			(command (styles orderless basic))
+			(symbol (styles orderless basic))))
+	  ('prescient '((file (styles basic partial-completion))
+			(consult-grep (styles basic)))))))
+
+(defun tychoish/completion--reload-prescient-mode (mode-symbol)
+  "Cycle MODE-SYMBOL off and back on so it picks up new `*-enable-*' values.
+`vertico-prescient' and `corfu-prescient' read the filtering/sorting flags
+only at mode activation, so changing the variables alone has no effect
+on an already-enabled mode."
+  (when (fboundp mode-symbol)
+    (when (symbol-value mode-symbol)
+      (funcall mode-symbol -1))
+    (funcall mode-symbol 1)))
+
+(defmacro tychoish/completion--with-guard (&rest body)
+  "Run BODY with `tychoish/completion--applying' bound non-nil.
+If already non-nil (we are re-entering from a prescient mode hook),
+BODY is skipped."
+  (declare (indent defun))
+  `(unless tychoish/completion--applying
+     (let ((tychoish/completion--applying t))
+       ,@body)))
+
+(defun tychoish/completion-use-hybrid ()
+  "Install the hybrid flavor: orderless filters, prescient sorts."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(orderless basic))
+    (tychoish/completion--set-category-overrides 'orderless)
+    (when (boundp 'vertico-prescient-enable-filtering)
+      (setq vertico-prescient-enable-filtering nil
+	    vertico-prescient-enable-sorting   t))
+    (when (boundp 'corfu-prescient-enable-filtering)
+      (setq corfu-prescient-enable-filtering nil
+	    corfu-prescient-enable-sorting   t))
+    (setq completion-preview-sort-function #'prescient-completion-sort)
+    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
+    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq tychoish/completion-flavor 'hybrid)
+    (message "completion: orderless filter + prescient sort")))
+
+(defun tychoish/completion-use-orderless ()
+  "Install pure orderless; prescient disabled (no frecency)."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(orderless basic))
+    (tychoish/completion--set-category-overrides 'orderless)
+    (setq completion-preview-sort-function nil)
+    (when (fboundp 'vertico-prescient-mode) (vertico-prescient-mode -1))
+    (when (fboundp 'corfu-prescient-mode)   (corfu-prescient-mode -1))
+    (setq tychoish/completion-flavor 'orderless)
+    (message "completion: pure orderless")))
+
+(defun tychoish/completion-use-prescient ()
+  "Install prescient for both filter and sort; orderless inert."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(basic partial-completion emacs22))
+    (tychoish/completion--set-category-overrides 'prescient)
+    (when (boundp 'vertico-prescient-enable-filtering)
+      (setq vertico-prescient-enable-filtering t
+	    vertico-prescient-enable-sorting   t))
+    (when (boundp 'corfu-prescient-enable-filtering)
+      (setq corfu-prescient-enable-filtering t
+	    corfu-prescient-enable-sorting   t))
+    (setq completion-preview-sort-function #'prescient-completion-sort)
+    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
+    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq tychoish/completion-flavor 'prescient)
+    (message "completion: prescient filter + sort")))
+
+(defun tychoish/completion-select-flavor ()
+  "Pick a completion flavor via `annotated-completing-read'."
+  (interactive)
+  (let ((table (ht-create)))
+    (dolist (entry tychoish/completion-flavors)
+      (ht-set table (symbol-name (car entry))
+	      (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
+		      (nth 2 entry))))
+    (let* ((name (annotated-completing-read table
+		  :prompt "completion flavor => "
+		  :category 'tychoish-completion-flavor
+		  :require-match t))
+	   (entry (assq (intern name) tychoish/completion-flavors)))
+      (when entry (funcall (nth 1 entry))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; mcp configuration / setup 
+
+(defvar tychoish/gopls-mcp-port 38713
+  "TCP port for the gopls MCP HTTP endpoint (shared or standalone).")
+
+(defvar tychoish/gopls-mcp-backends '(shared standalone stdio)
+  "Ordered fallback list of gopls MCP backends to try.
+Resolution stops at the first viable backend.  Recognized symbols:
+
+  `shared': connect to a running `gopls serve -mcp.listen=...'
+     daemon (typically managed by systemd).  Viable when
+     something is listening on `tychoish/gopls-mcp-port'.
+  `standalone': spawn (and reuse) a dedicated `gopls mcp -listen=...'
+     process from Emacs.  Viable when `gopls' is on PATH.
+  `stdio': declare a per-client `gopls mcp' stdio command; each
+     MCP client launches its own gopls.  Always viable when
+     `gopls' is on PATH.
+  `auto-remote': declare a stdio entry that runs `gopls -remote=auto
+     mcp', letting gopls's daemon-discovery logic find or
+     spawn the lsp daemon.  Note: as of current gopls, the
+     `mcp' subcommand does not actually consume `-remote',
+     so this behaves the same as `stdio' but is kept as a
+     documented option.
+  `none': disable the gopls entry entirely.")
+
+(defvar tychoish/gopls-mcp--standalone-process nil
+  "Process handle for an Emacs-spawned `gopls mcp -listen' instance.")
+
+(defvar tychoish/mcp-servers nil
+  "Normalized MCP server specs shared by mcp.el and agent-shell.
+Populated lazily by `tychoish/mcp-servers-init' the first time either
+`mcp-hub' or `agent-shell' loads, so PATH lookups don't run at startup.
+The gopls entry is resolved dynamically via `tychoish/gopls-mcp-resolve'
+and prepended by `tychoish/mcp-build-servers'.
+Each entry is a plist with one of:
+  (:name NAME :command CMD :args (ARGS...) [:env ((K . V) ...)])
+  (:name NAME :url URL [:transport http|sse] [:headers ((K . V) ...)])")
+
+(defun tychoish/mcp-servers-init ()
+  "Populate `tychoish/mcp-servers'.  Idempotent; safe to call repeatedly."
+  (unless tychoish/mcp-servers
+    (setq tychoish/mcp-servers
+          `((:name "time" :command "uvx" :args ("mcp-server-time"))
+            (:name "fetch" :command "uvx" :args ("mcp-server-fetch"))
+            (:name "godoc" :command "godoc-mcpr")
+            (:name "awsdoc" :command "awslabs.aws-documentation-mcp-server")
+            (:name "lsp-mcp-rust" :command "npx" :args ("tritlo/lsp-mcp" "rust" ,(executable-find "rust-analyzer")))
+            (:name "lsp-mcp-bash" :command "npx" :args ("tritlo/lsp-mcp" "bash" ,(executable-find "bash-language-server") "start"))
+            (:name "lsp-mcp-yaml" :command "npx" :args ("tritlo/lsp-mcp" "yaml" ,(executable-find "yaml-language-server") "--stdio"))
+            (:name "git" :command "uvx" :args ("mcp-server-git"))
+            (:name "rg" :command "npx" :args ("-y" "mcp-ripgrep@latest"))
+            (:name "linear" :command "npx" :args ("-y" "mcp-remote" "https://mcp.linear.app/mcp"))
+            (:name "github" :command "npx" :args ("-y" "mcp-remote" "https://api.githubcopilot.com/mcp"))
+            (:name "notion" :command "npx" :args ("-y" "mcp-remote" "https://mcp.notion.com/mcp"))
+            (:name "google-workspace" :command "uvx" :args ("workspace-mcp"))))))
+
+(defun tychoish/gopls-mcp--port-alive-p ()
+  "Return non-nil if something is accepting TCP on `tychoish/gopls-mcp-port'."
+  (condition-case nil
+      (let ((proc (make-network-process
+                   :name "gopls-mcp-probe"
+                   :host "127.0.0.1"
+                   :service tychoish/gopls-mcp-port
+                   :nowait nil
+                   :noquery t
+                   :buffer nil)))
+        (delete-process proc)
+        t)
+    (error nil)))
+
+(defun tychoish/gopls-mcp--ensure-standalone ()
+  "Start a standalone `gopls mcp -listen' on `tychoish/gopls-mcp-port'.
+Reuses any existing live process.  Returns the process or nil on failure."
+  (unless (and tychoish/gopls-mcp--standalone-process
+               (process-live-p tychoish/gopls-mcp--standalone-process))
+    (when (executable-find "gopls")
+      (setq tychoish/gopls-mcp--standalone-process
+            (make-process
+             :name "gopls-mcp"
+             :buffer (get-buffer-create " *gopls-mcp*")
+             :command (list "gopls" "mcp"
+                            (format "-listen=127.0.0.1:%d" tychoish/gopls-mcp-port))
+             :noquery t))))
+  tychoish/gopls-mcp--standalone-process)
+
+(defun tychoish/gopls-mcp--resolve-one (backend)
+  "Return a normalized MCP server spec for BACKEND, or nil if not viable."
+  (pcase backend
+    ('none nil)
+    ('shared (when (tychoish/gopls-mcp--port-alive-p)
+	       `(:name "gopls" :url ,(format "http://127.0.0.1:%d" tychoish/gopls-mcp-port) :transport http)))
+    ('standalone (when (tychoish/gopls-mcp--ensure-standalone)
+		   `(:name "gopls" :url ,(format "http://127.0.0.1:%d" tychoish/gopls-mcp-port) :transport http)))
+    ('stdio (when (executable-find "gopls")
+	      `(:name "gopls" :command "gopls" :args ("mcp"))))
+    ('auto-remote (when (executable-find "gopls")
+		    `(:name "gopls" :command "gopls" :args ("-remote=auto" "mcp"))))))
+
+(defun tychoish/gopls-mcp-resolve ()
+  "Resolve a gopls MCP spec by walking `tychoish/gopls-mcp-backends'."
+  (cl-some #'tychoish/gopls-mcp--resolve-one tychoish/gopls-mcp-backends))
+
+(defun tychoish/mcp-build-servers ()
+  "Build the MCP server list with a freshly-resolved gopls entry."
+  (tychoish/mcp-servers-init)
+  (let ((gopls (tychoish/gopls-mcp-resolve)))
+    (if gopls (cons gopls tychoish/mcp-servers) tychoish/mcp-servers)))
+
+(defun tychoish/mcp-spec->hub (spec)
+  "Translate SPEC to a `mcp-hub-servers' alist entry: (NAME . PLIST)."
+  (let* ((name (plist-get spec :name))
+         (url  (plist-get spec :url)))
+    (cons name
+          (if url
+              (list :url url)
+            (let ((plist (list :command (plist-get spec :command))))
+              (when-let* ((args (plist-get spec :args)))
+                (setq plist (plist-put plist :args args)))
+              plist)))))
+
+(defun tychoish/mcp-spec->acp (spec)
+  "Translate SPEC to an `agent-shell-mcp-servers' ACP McpServer alist."
+  (let ((name (plist-get spec :name))
+        (url  (plist-get spec :url)))
+    (if url
+        `((name . ,name)
+          (type . ,(symbol-name (or (plist-get spec :transport) 'http)))
+          (url . ,url)
+          (headers . ,(or (plist-get spec :headers) '())))
+      `((name . ,name)
+        (command . ,(plist-get spec :command))
+        (args . ,(or (plist-get spec :args) '()))
+        (env . ,(or (plist-get spec :env) '()))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; stdlib -- configuration of default/included emacs packages
@@ -1556,6 +1819,41 @@ interactively then remove duplicate items from the `kill-ring'."
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
 (create-toggle-functions slow-op-reporting)
+
+(declare-function magit-list-module-paths "magit-submodule")
+(declare-function magit-run-git "magit-process")
+
+(defun tychoish/elpa-pull-submodules ()
+  "Run `git pull origin' in each submodule under `.emacs.d/elpa/'.
+Submodules are enumerated via `magit-list-module-paths' against the
+elpa repository.  For each one, prompts y/n/a (yes/no/abort).  Pulls
+run synchronously via `magit-run-git'; per-pull output lands in the
+magit process buffer for that submodule."
+  (interactive)
+  (require 'magit-submodule)
+  (require 'magit-process)
+  (let* ((elpa-root (file-name-as-directory
+                     (expand-file-name "elpa" user-emacs-directory)))
+         (default-directory elpa-root)
+         (modules (magit-list-module-paths)))
+    (unless modules
+      (user-error "no submodules registered under %s" elpa-root))
+    (catch 'abort
+      (dolist (sub modules)
+        (pcase (car (read-multiple-choice
+                     (format "pull %s? " sub)
+                     '((?y "yes"   "git pull origin in this submodule")
+                       (?n "no"    "skip this submodule")
+                       (?a "abort" "stop iterating"))))
+          (?a (message "elpa submodule pull aborted")
+              (throw 'abort nil))
+          (?n (message "skip %s" sub))
+          (?y (let ((default-directory
+                     (file-name-as-directory
+                      (expand-file-name sub elpa-root))))
+                (message "pulling %s..." sub)
+                (magit-run-git "pull" "origin"))))))
+    (message "elpa submodule pull complete")))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
