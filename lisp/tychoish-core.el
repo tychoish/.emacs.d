@@ -1,4 +1,7 @@
 ;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t; no-byte-compile: t -*-
+
+;; Package-Requires: ((emacs "30.1"))
+
 ;;; Commentary:
 
 ;; Provides my collection of use-package forms and related
@@ -54,9 +57,9 @@
   (with-eval-after-load 'modus-themes
     (setq modus-themes-deuteranopia t)
     (setq modus-themes-common-palette-overrides
-          '((border-mode-line-active bg-mode-line-active)
-            (border-mode-line-inactive bg-mode-line-inactive)
-            (message-separator bg-main)))))
+	  '((border-mode-line-active bg-mode-line-active)
+	    (border-mode-line-inactive bg-mode-line-inactive)
+	    (message-separator bg-main)))))
 
 ;; (use-package modus-themes-exporter
 ;;   :after modus-themes
@@ -76,8 +79,8 @@
   :commands (doom-modeline-mode)
   :init
   (create-toggle-functions doom-modeline-icon
-   :keymap tychoish/theme-map
-   :key "i")
+			   :keymap tychoish/theme-map
+			   :key "i")
 
   (add-one-shot-hook
    :name "doom-modeline"
@@ -112,7 +115,7 @@
 (use-package winum
   :ensure t
   :bind (("C-x w n" . winum-select-window-by-number)
-         ("C-x w w" . winum-mode))
+	 ("C-x w w" . winum-mode))
   :commands (winum-mode)
   :config
   (setq winum-auto-setup-mode-line nil)
@@ -121,7 +124,7 @@
 (use-package writeroom-mode
   :ensure t
   :bind (:map tychoish/display-map
-	 ("i" . writeroom-mode)))
+	      ("i" . writeroom-mode)))
 
 (use-package page-break-lines
   :ensure t
@@ -140,14 +143,14 @@
   :delight '(:eval (tychoish-projectile-modeline-string))
   :bind-keymap ("C-c p" . projectile-command-map)
   :bind (:map tychoish/ecclectic-grep-project-map
-         ("a" . projectile-ag)
-         ("r" . projectile-ripgrep)
-         ("p" . projectile-grep))
+	      ("a" . projectile-ag)
+	      ("r" . projectile-ripgrep)
+	      ("p" . projectile-grep))
   :commands (projectile-mode
 	     projectile-project-name
-             projectile-project-root
-             projectile-mode-on
-             projectile-save-project-buffers)
+	     projectile-project-root
+	     projectile-mode-on
+	     projectile-save-project-buffers)
   :init
   (which-key-add-key-based-replacements "C-c p" "projectile")
   ;; previously added projectile-mode to the after-init-hook (probably
@@ -156,7 +159,7 @@
   (defun tychoish/save-buffers-in-project-directory (dir)
     (let ((default-directory (expand-file-name dir)))
       (alert (projectile-save-project-buffers)
-             :title (format "emacs<%s> (%s)" tychoish/emacs-instance-id dir))))
+	     :title (format "emacs<%s> (%s)" tychoish/emacs-instance-id dir))))
 
   (defun projectile-get-project-roots-for-current-buffers ()
     (->>
@@ -177,8 +180,8 @@
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
       (if (equal pname "-")
-          ""
-        (concat " p:" pname))))
+	  ""
+	(concat " p:" pname))))
   :config
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep t)
@@ -193,29 +196,29 @@
 (use-package git-grep
   :ensure t
   :bind (:map tychoish/ecclectic-grep-project-map
-         ("g" . git-grep)))
+	      ("g" . git-grep)))
 
 (use-package ripgrep
   :ensure t
   :after (annotated-completing-read)
   :bind (("M-g r" . consult-rg)
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
-         ("d" . consult-rg-pwd)
+	 ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
 	 :map tychoish/ecclectic-grep-map ;; "C-c g"
-         :prefix "r"
-         :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
-         ("d" . find-ripgrep)
-         ("c" . find-ripgrep-compile)
-         ("m" . find-merge-conflicts)
-         ("g" . consult-rg)
-         ("s" . consult-rg-pwd)
-         ("l" . consult-rg-pwd-wizard)
-         ("r" . consult-rg-project)
-         ("p" . consult-rg-project-wizard)
-         :map tychoish/ecclectic-grep-project-map
-         ("r" . consult-rg-project)
-         ("p" . find-ripgrep-project))
+	 :prefix "r"
+	 :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
+	 ("d" . find-ripgrep)
+	 ("c" . find-ripgrep-compile)
+	 ("m" . find-merge-conflicts)
+	 ("g" . consult-rg)
+	 ("s" . consult-rg-pwd)
+	 ("l" . consult-rg-pwd-wizard)
+	 ("r" . consult-rg-project)
+	 ("p" . consult-rg-project-wizard)
+	 :map tychoish/ecclectic-grep-project-map
+	 ("r" . consult-rg-project)
+	 ("p" . find-ripgrep-project))
   :defines (tychoish/ecclectic-rg-map)
   :commands (consult-rg
 	     consult-rg-pwd
@@ -329,16 +332,16 @@
 (use-package deadgrep
   :ensure t
   :bind (:map tychoish/ecclectic-grep-map
-         ("d" . #'deadgrep)
-         :map tychoish/ecclectic-rg-map
-	 ("x" . #'deadgrep))
+	      ("d" . #'deadgrep)
+	      :map tychoish/ecclectic-rg-map
+	      ("x" . #'deadgrep))
   :commands (deadgrep))
 
 (use-package wgrep
   :ensure t
   :after (grep)
   :bind (:map grep-mode-map
-         ("r" . wgrep-change-to-wgrep-mode))
+	      ("r" . wgrep-change-to-wgrep-mode))
   :config
   (setq wgrep-enable-key "r"))
 
@@ -358,11 +361,11 @@
   :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :hook ((isearch-mode) . anzu-mode)
   :bind (:prefix "C-c q"
-	 :prefix-map tychoish/anzu-map
-	 ("r" . anzu-query-replace)
-         ("e" . anzu-query-replace-regexp)
-         :map isearch-mode-map
-         ("C-o" . isearch-occur)))
+		 :prefix-map tychoish/anzu-map
+		 ("r" . anzu-query-replace)
+		 ("e" . anzu-query-replace-regexp)
+		 :map isearch-mode-map
+		 ("C-o" . isearch-occur)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -381,22 +384,22 @@
 (use-package cape
   :ensure t
   :bind (:map tychoish/completion-map ;; "C-c ."
-         ;; this is mostly copy-pasta from cape-mode-map, with tweaks
-         ("t" . complete-tag)
-         ("d" . cape-dabbrev)
-         ("h" . cape-history)
-         ("f" . cape-file)
-         ("n" . cape-elisp-symbol)
-         ("b" . cape-elisp-block)
-         ("a" . cape-abbrev)
-         ("l" . cape-line)
-         ("w" . cape-dict)
-         ("k" . cape-keyword)
-         (":" . cape-emoji)
-         ("e" . cape-emoji)
-         ("\\" . cape-tex)
-         ("/" . cape-sgml)
-         ("u" . cape-rfc1345))
+	      ;; this is mostly copy-pasta from cape-mode-map, with tweaks
+	      ("t" . complete-tag)
+	      ("d" . cape-dabbrev)
+	      ("h" . cape-history)
+	      ("f" . cape-file)
+	      ("n" . cape-elisp-symbol)
+	      ("b" . cape-elisp-block)
+	      ("a" . cape-abbrev)
+	      ("l" . cape-line)
+	      ("w" . cape-dict)
+	      ("k" . cape-keyword)
+	      (":" . cape-emoji)
+	      ("e" . cape-emoji)
+	      ("\\" . cape-tex)
+	      ("/" . cape-sgml)
+	      ("u" . cape-rfc1345))
   :commands (cape-capf-inside-code
 	     cape-capf-inside-comment
 	     cape-capf-inside-string)
@@ -431,16 +434,16 @@
 		(->> (-concat
 		      (tychoish/get-available-word-capfs)
 		      (list #'cape-dabbrev
-			  #'yasnippet-capf
-			  #'cape-rfc1345
-			  #'cape-emoji
-			  #'cape-file))
+			    #'yasnippet-capf
+			    #'cape-rfc1345
+			    #'cape-emoji
+			    #'cape-file))
 		     (-flatten)
 		     (-non-nil))))
 
   (defun tychoish/elisp-capf-setup  ()
     (setq-local completion-at-point-functions
-                (->> (list #'cape-elisp-symbol
+		(->> (list #'cape-elisp-symbol
 			   (cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
 			   #'cape-dabbrev
 			   (cape-capf-wrapper cape-capf-inside-code cape-keyword)
@@ -449,7 +452,7 @@
 				(-map (lambda (in)
 					`(progn
 					   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
-					   (cape-capf-wrapper cape-capf-inside-string ,in)))))
+						 (cape-capf-wrapper cape-capf-inside-string ,in)))))
 				(-map 'eval))
 			   #'cape-emoji)
 		     (-flatten)
@@ -460,20 +463,20 @@
     (interactive) ;; todo remove
     (setq-local completion-category-defaults nil)
     (setq-local completion-at-point-functions
-                (-> (list #'eglot-completion-at-point
+		(-> (list #'eglot-completion-at-point
 			  #'cape-dabbrev
-			   (->> (tychoish/get-available-word-capfs)
-				(-map (lambda (in)
-					`(progn
-					   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
-					   (cape-capf-wrapper cape-capf-inside-string ,in)))))
-				(-map 'eval))
+			  (->> (tychoish/get-available-word-capfs)
+			       (-map (lambda (in)
+				       `(progn
+					  (list (cape-capf-wrapper cape-capf-inside-comment ,in)
+						(cape-capf-wrapper cape-capf-inside-string ,in)))))
+			       (-map 'eval))
 			  #'yasnippet-capf
 			  #'cape-emoji
 			  #'cape-file)
-		     (-flatten)
-		     (-non-nil)
-		     (-distinct))))
+		    (-flatten)
+		    (-non-nil)
+		    (-distinct))))
 
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
@@ -506,7 +509,7 @@
 (use-package yasnippet-capf
   :ensure t
   :bind (:map tychoish/completion-map
-         ("s" . yasnippet-capf))
+	      ("s" . yasnippet-capf))
   :commands (yasnippet-capf)
   :init
   (declare-function yasnippet-capf "yasnippet-capf")
@@ -546,8 +549,8 @@
 
   (add-to-list 'vertico-multiform-commands
 	       '("\\`execute-extended-command"
-                 (vertico-flat-annotate . t)
-                 (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
+		 (vertico-flat-annotate . t)
+		 (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
 
 (use-package prescient
   :ensure t
@@ -578,7 +581,7 @@
 (use-package marginalia
   :ensure t
   :bind (:map minibuffer-local-map
-         ("C-c a" . marginalia-cycle))
+	      ("C-c a" . marginalia-cycle))
   :commands (marginalia-mode)
   :init
   (add-one-shot-hook
@@ -590,9 +593,9 @@
 
 (use-package embark
   :ensure t
-  :bind (("C-." . embark-act)         ;; pick some comfortable binding
+  :bind (("C-." . embark-act)	      ;; pick some comfortable binding
 	 ("C-c H" . embark-bindings) ;; alternative for `describe-bindings'
-	 ("M-;" . embark-dwim))        ;; good alternative: M-.
+	 ("M-;" . embark-dwim))	       ;; good alternative: M-.
   :config
   (setq embark-prompter #'embark-keymap-prompter)
   ;; (prefix-help-command #'embark-prefix-help-command)
@@ -600,19 +603,19 @@
   :config
   (add-to-list 'vertico-multiform-categories '(embark-keybinding grid))
   (add-to-list 'display-buffer-alist
-               '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
-                 nil
-                 (window-parameters (mode-line-format . none)))))
+	       '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+		 nil
+		 (window-parameters (mode-line-format . none)))))
 
 (use-package corfu
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
   :bind (:map tychoish/completion-map
-	 ("m" . corfu-at-point)
-	 ("x" . corfu-at-point))
+	      ("m" . corfu-at-point)
+	      ("x" . corfu-at-point))
   :hook (((prog-mode text-mode) . corfu-mode)
-         ((shell-mode eshell-mode eat-mode) . corfu-mode)
-         (telega-chat-mode . corfu-mode))
+	 ((shell-mode eshell-mode eat-mode) . corfu-mode)
+	 (telega-chat-mode . corfu-mode))
   :init
   (defun tychoish/corfu-text-mode-setup ()
     (setq-local corfu-auto-prefix 2))
@@ -634,19 +637,19 @@
   (add-hook 'corfu-mode-hook 'corfu-popupinfo-mode)
   :config
   (bind-keys :map corfu-map
-             ("C-<tab>" . corfu-quick-complete)
-             ([tab] . corfu-complete)
-             ("<return>" . corfu-insert)
-             ("C-<return>" . corfu-quick-insert)
-             ("M-SPC" . corfu-insert-separator)
-             ("C-SPC" . corfu-insert-separator)
-             ([backtab] . corfu-insert-separator)
-             ("C-j" . corfu-quick-jump)
-             ("M-d" . corfu-popupinfo-toggle)
-             ("C-i" . corfu-popupinfo-toggle)
-             ("M-m" . corfu-move-to-minibuffer)
-             ("C-m" . corfu-move-to-minibuffer)
-             ("M-S-m" . corfu-move-to-minibuffer))
+	     ("C-<tab>" . corfu-quick-complete)
+	     ([tab] . corfu-complete)
+	     ("<return>" . corfu-insert)
+	     ("C-<return>" . corfu-quick-insert)
+	     ("M-SPC" . corfu-insert-separator)
+	     ("C-SPC" . corfu-insert-separator)
+	     ([backtab] . corfu-insert-separator)
+	     ("C-j" . corfu-quick-jump)
+	     ("M-d" . corfu-popupinfo-toggle)
+	     ("C-i" . corfu-popupinfo-toggle)
+	     ("M-m" . corfu-move-to-minibuffer)
+	     ("C-m" . corfu-move-to-minibuffer)
+	     ("M-S-m" . corfu-move-to-minibuffer))
 
   (setq corfu-cycle t)
   (setq corfu-quit-at-boundary t)
@@ -669,9 +672,9 @@
       (`(,beg ,end ,table ,pred ,extras)
        (let ((completion-extra-properties extras)
 	     (this-command 'consult-completion-in-region)
-             completion-cycle-threshold
+	     completion-cycle-threshold
 	     completion-cycling)
-         (consult-completion-in-region beg end table pred))))))
+	 (consult-completion-in-region beg end table pred))))))
 
 (use-package corfu-prescient
   :ensure t
@@ -729,72 +732,72 @@
 (use-package consult
   :ensure t
   :bind (("C-c C-x C-m" . consult-mode-command)
-         ("C-c i" . consult-info)
-         ("C-c C-; m" . consult-kmacro)
-         ("C-c C-x r r" . consult-register)
-         ("C-c C-x r s" . consult-register-store)
-         ("C-c C-x r l" . consult-register-load)
-         ("C-c e" . consult-compile-error)
-         ("C-c C-s" . consult-line)
-         ("C-c f C-f" . consult-find)
-         ;; tychoish/wacky
-         ([remap Info-search] . consult-info)
-         ;; C-x bindings in `ctl-x-map'
-         ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
-         ("C-x C-b" . consult-buffer)            ;; orig. list-buffers
-         ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
-         ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
-         ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
-         ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
-         ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
-         ;; Custom M-# bindings for fast register access
-         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
-         ("M-#" . consult-register-load)
-         ("C-M-#" . consult-register)
-         ;; Other custom bindings
-         ("M-y" . consult-yank-from-kill-ring)                ;; orig. yank-pop
-         ("C-M-I" . consult-imenu-multi)
-         ;; M-g bindings in `goto-map'
-         ("M-g e" . consult-compile-error)
-         ("M-g g" . consult-goto-line)             ;; orig. goto-line
-         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
-         ("M-g m" . consult-mark)
-         ("M-g k" . consult-global-mark)
-         ("M-g i" . consult-imenu)
-         ("M-g s" . consult-line)
-         ("M-i" . consult-imenu)
-         ;; M-s bindings in `search-map'
-         ("M-s d" . consult-find)                  ;; Alternative: consult-find
-         ("M-s c" . consult-locate)
-         ;; Isearch integration
-         ("M-s e" . consult-isearch-history)
+	 ("C-c i" . consult-info)
+	 ("C-c C-; m" . consult-kmacro)
+	 ("C-c C-x r r" . consult-register)
+	 ("C-c C-x r s" . consult-register-store)
+	 ("C-c C-x r l" . consult-register-load)
+	 ("C-c e" . consult-compile-error)
+	 ("C-c C-s" . consult-line)
+	 ("C-c f C-f" . consult-find)
+	 ;; tychoish/wacky
+	 ([remap Info-search] . consult-info)
+	 ;; C-x bindings in `ctl-x-map'
+	 ("C-x M-:" . consult-complex-command)	   ;; orig. repeat-complex-command
+	 ("C-x C-b" . consult-buffer)		 ;; orig. list-buffers
+	 ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+	 ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+	 ("C-x t b" . consult-buffer-other-tab)	   ;; orig. switch-to-buffer-other-tab
+	 ("C-x r b" . consult-bookmark)		   ;; orig. bookmark-jump
+	 ("C-x p b" . consult-project-buffer)	   ;; orig. project-switch-to-buffer
+	 ;; Custom M-# bindings for fast register access
+	 ("M-'" . consult-register-store)	   ;; orig. abbrev-prefix-mark (unrelated)
+	 ("M-#" . consult-register-load)
+	 ("C-M-#" . consult-register)
+	 ;; Other custom bindings
+	 ("M-y" . consult-yank-from-kill-ring)		      ;; orig. yank-pop
+	 ("C-M-I" . consult-imenu-multi)
+	 ;; M-g bindings in `goto-map'
+	 ("M-g e" . consult-compile-error)
+	 ("M-g g" . consult-goto-line)		   ;; orig. goto-line
+	 ("M-g M-g" . consult-goto-line)	   ;; orig. goto-line
+	 ("M-g m" . consult-mark)
+	 ("M-g k" . consult-global-mark)
+	 ("M-g i" . consult-imenu)
+	 ("M-g s" . consult-line)
+	 ("M-i" . consult-imenu)
+	 ;; M-s bindings in `search-map'
+	 ("M-s d" . consult-find)		   ;; Alternative: consult-find
+	 ("M-s c" . consult-locate)
+	 ;; Isearch integration
+	 ("M-s e" . consult-isearch-history)
 	 :map tychoish/completion-map
 	 ("c" . consult-at-point)
 	 :map tychoish/docs-map
-         ("m" . consult-man)
-         ;; Minibuffer history
-         :map minibuffer-local-map
-         ("M-s" . consult-history)                 ;; orig. next-matching-history-element
-         ("M-r" . consult-history)                 ;; orig. previous-matching-history-element
-         :map isearch-mode-map
-         ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
-         ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
-         ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
-         ("M-s L" . consult-line-multi))           ;; needed by consult-line to detect isearch
+	 ("m" . consult-man)
+	 ;; Minibuffer history
+	 :map minibuffer-local-map
+	 ("M-s" . consult-history)		   ;; orig. next-matching-history-element
+	 ("M-r" . consult-history)		   ;; orig. previous-matching-history-element
+	 :map isearch-mode-map
+	 ("M-e" . consult-isearch-history)	   ;; orig. isearch-edit-string
+	 ("M-s e" . consult-isearch-history)	   ;; orig. isearch-edit-string
+	 ("M-s l" . consult-line)		   ;; needed by consult-line to detect isearch
+	 ("M-s L" . consult-line-multi))	   ;; needed by consult-line to detect isearch
   :bind (:prefix "C-c C-;"
-         :prefix-map tychoish/consult-mode-map
-         ("h" . consult-history))
+		 :prefix-map tychoish/consult-mode-map
+		 ("h" . consult-history))
   :bind (:map tychoish/ecclectic-grep-map ;; "C-c g"
-         ("f" . consult-grep)
-	 :map tychoish/ecclectic-grep-map ;; "C-c g"
-	 :prefix "s"
-	 :prefix-map tychoish/consult-search-map
-         ("l" . consult-line)
-         ("m" . consult-line-multi)
-         ("k" . consult-keep-lines)
-         ("f" . consult-focus-lines)
-	 :map tychoish/ecclectic-grep-project-map ;; "C-c g p"
-         ("g" . consult-git-grep))                 ;; for git(?)
+	      ("f" . consult-grep)
+	      :map tychoish/ecclectic-grep-map ;; "C-c g"
+	      :prefix "s"
+	      :prefix-map tychoish/consult-search-map
+	      ("l" . consult-line)
+	      ("m" . consult-line-multi)
+	      ("k" . consult-keep-lines)
+	      ("f" . consult-focus-lines)
+	      :map tychoish/ecclectic-grep-project-map ;; "C-c g p"
+	      ("g" . consult-git-grep))			;; for git(?)
   :hook (completion-list-mode . consult-preview-at-point-mode)
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
@@ -833,12 +836,12 @@
     (interactive)
     (let ((parent-dir (file-name-directory (directory-file-name default-directory))))
       (when parent-dir
-        (run-at-time 0 nil
-                     #'consult-ripgrep
-                     parent-dir
-                     (ignore-errors
-                       (buffer-substring-no-properties
-                        (1+ (minibuffer-prompt-end)) (point-max))))))
+	(run-at-time 0 nil
+		     #'consult-ripgrep
+		     parent-dir
+		     (ignore-errors
+		       (buffer-substring-no-properties
+			(1+ (minibuffer-prompt-end)) (point-max))))))
     (minibuffer-quit-recursive-edit))
 
   (consult-customize
@@ -847,17 +850,17 @@
    :sort nil)
 
   (consult-customize consult-find
-   :require-match nil
-   :initial (or (thing-at-point 'existing-filename)
-		(thing-at-point 'filename)
-		"./"))
+		     :require-match nil
+		     :initial (or (thing-at-point 'existing-filename)
+				  (thing-at-point 'filename)
+				  "./"))
 
   (consult-customize consult-ripgrep
-   :prompt "rg: "
-   :async-input-debounce 0.025
-   :async-input-throttle 0.05
-   :async-refresh-delay 0.025
-   :async-min-input 2)
+		     :prompt "rg: "
+		     :async-input-debounce 0.025
+		     :async-input-throttle 0.05
+		     :async-refresh-delay 0.025
+		     :async-min-input 2)
 
   (consult-customize
    consult-ripgrep consult-git-grep consult-grep
@@ -879,7 +882,7 @@
   :ensure t
   :after (flyspell)
   :bind (:map tychoish/consult-mode-map
-         ("f" . consult-flyspell))
+	      ("f" . consult-flyspell))
   :commands (consult-flyspell flyspell-correct-consult)
   :init
   (defun consult-flyspell--round-trip ()
@@ -891,7 +894,7 @@
   :ensure t
   :after (eglot)
   :bind (:map tychoish/docs-map
-         ("a" . consult-eglot-symbols))
+	      ("a" . consult-eglot-symbols))
   :commands (consult-eglot-symbols)
   :config
   (consult-customize
@@ -908,9 +911,9 @@
   :ensure t
   :after (yasnippet)
   :bind (:map tychoish/consult-mode-map
-         ("s" . consult-yasnippet)
-	 :map tychoish/completion-map
-	 ("y" . consult-yasnippet)))
+	      ("s" . consult-yasnippet)
+	      :map tychoish/completion-map
+	      ("y" . consult-yasnippet)))
 
 (use-package embark-consult
   :ensure t ; only need to install it, embark loads it after consult if found
@@ -919,9 +922,9 @@
 (use-package builder
   :after (compile)
   :bind (:map compilation-mode-map
-         ("d" . builder-change-directory)
-	 :map tychoish/core-map
-	 ("c" . builder))
+	      ("d" . builder-change-directory)
+	      :map tychoish/core-map
+	      ("c" . builder))
   :commands (annotated-completing-read-directory
 	     make-builder-candidate
 	     builder-register-candidates
@@ -947,7 +950,7 @@
    ("q" . bury-buffer))
 
   (defalias 'revbufs-kill
-   (kmacro "C-f C-f C-f C-k")))
+    (kmacro "C-f C-f C-f C-k")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -964,8 +967,8 @@
    ("f" . magit-branch)
    ("b" . magit-blame))
   (make-read-extended-command-for-prefix "magit"
-   :bind-map tychoish/magit-map
-   :bind-key "x")
+    :bind-map tychoish/magit-map
+    :bind-key "x")
   :config
   (setq vc-follow-symlinks t)
   (setq version-control t)
@@ -1010,8 +1013,8 @@
    ("t" . smerge-keep-current))
 
   (make-read-extended-command-for-prefix "smerge"
-   :bind-map tychoish/smerge-map
-   :bind-key "x"))
+    :bind-map tychoish/smerge-map
+    :bind-key "x"))
 
 (use-package emacsql
   :ensure t
@@ -1032,8 +1035,8 @@
   :config
   (setq forge-database-file (expand-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name "forge-database.sqlite")))
   (make-read-extended-command-for-prefix  "forge"
-   :bind-map tychoish/magit-map
-   :bind-key "r")
+    :bind-map tychoish/magit-map
+    :bind-key "r")
 
   (bind-keys
    :map magit-command-mode-map
@@ -1047,7 +1050,7 @@
 (use-package git-link
   :ensure t
   :bind (:map tychoish/magit-map
-	 ("l" . git-link)))
+	      ("l" . git-link)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1072,7 +1075,7 @@
      (t
       (setq-default alert-default-style 'notifier))))
    (alert-libnotify-command
-      (setq-default alert-default-style 'libnotify))
+    (setq-default alert-default-style 'libnotify))
    ((eql system-type 'gnu/linux)
     (setq-default alert-default-style 'notifications))
    (t (setq-default alert-default-style 'message)))
@@ -1104,28 +1107,28 @@
   (telega-chat-auto-fill-mode "")
   :defines (telega-chat-mode-hook)
   :bind-keymap (("C-c v" . telega-prefix-map)
-                ("C-c n" . telega-prefix-map))
+		("C-c n" . telega-prefix-map))
   :bind (:map telega-prefix-map
-         :prefix "d"
-         :prefix-map tychoish/telega-buffer-management-map
-         ("h" . telega-bury-chat-buffers)
-         ("k" . telega-kill-chat-buffers)
-         :map telega-chat-mode-map
-         ("C-c C-f" . telega-chat-buffer-auto-fill)
-         :map telega-root-mode-map
-         ("C-c C-f" . telega-root-buffer-auto-fill)
-         ("<tab>" . telega-root-cycle-next))
+	      :prefix "d"
+	      :prefix-map tychoish/telega-buffer-management-map
+	      ("h" . telega-bury-chat-buffers)
+	      ("k" . telega-kill-chat-buffers)
+	      :map telega-chat-mode-map
+	      ("C-c C-f" . telega-chat-buffer-auto-fill)
+	      :map telega-root-mode-map
+	      ("C-c C-f" . telega-root-buffer-auto-fill)
+	      ("<tab>" . telega-root-cycle-next))
   :commands (telega
-             telega-chat-mode
-             tychoish/telega-switch-to-root
-             tychoish/telega-force-kill)
+	     telega-chat-mode
+	     tychoish/telega-switch-to-root
+	     tychoish/telega-force-kill)
   :init
   (which-key-add-key-based-replacements "C-c n" "telega-prefix")
   (which-key-add-key-based-replacements "C-c v" "telega-prefix")
   (make-read-extended-command-for-prefix "telega"
-   :bind-map telega-prefix-map
-   :bind-key "x"
-   :key-alias "telega-commands")
+    :bind-map telega-prefix-map
+    :bind-key "x"
+    :key-alias "telega-commands")
   :config
   (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
   (add-hook 'telega-load-hook 'tychoish/telega-start-idle-bury-timer)
@@ -1138,7 +1141,7 @@
     (setq-default alert-default-style 'osx-notifier))
 
   (when (eq system-type 'gnu/linux)
-      (setq telega-server-libs-prefix "/usr"))
+    (setq telega-server-libs-prefix "/usr"))
 
   (setq telega-emoji-use-images t)
 
@@ -1157,8 +1160,8 @@
 				("broadcast" type channel)
 				("archive" . archive)))
   (setq telega-root-view-top-categories
-        '(("Users" . 10) ("Groups" . 10) ("Channels" . 10) ("Bots" . 10)
-          ("InlineBots" . 10) ("Calls" . 10)))
+	'(("Users" . 10) ("Groups" . 10) ("Channels" . 10) ("Bots" . 10)
+	  ("InlineBots" . 10) ("Calls" . 10)))
   (setq telega-chat-folders-exclude '("unknowns" "InlineBots" "Calls" "Personal"))
 
   (setq telega-chat-folders-insexp #'telega-folders-insert-default)
@@ -1170,7 +1173,7 @@
   (setq telega-debug nil)
 
   (setq telega-chat--display-buffer-action
-        '((display-buffer-reuse-window display-buffer-use-some-window)))
+	'((display-buffer-reuse-window display-buffer-use-some-window)))
 
   (require 'telega-alert)
   (telega-mode-line-mode 1)
@@ -1183,12 +1186,12 @@
     (interactive (list (telega-chat-at (point))))
 
     (if (telega-chat-match-p chat 'is-forum)
-        (telega-chat-button-toggle-view chat)
+	(telega-chat-button-toggle-view chat)
       (ignore-errors
-        (telega-root-next-important (point))
-        (telega-root-next-mention (point))
-        (telega-root-next-reaction (point))
-        (telega-root-next-unread (point)))))
+	(telega-root-next-important (point))
+	(telega-root-next-mention (point))
+	(telega-root-next-reaction (point))
+	(telega-root-next-unread (point)))))
 
   (defvar tychoish/telega-idle-bury-timer nil
     "Timer that buries telega chat buffers after idle.")
@@ -1196,7 +1199,7 @@
   (defun tychoish/telega-start-idle-bury-timer ()
     "Start a repeating timer to bury telega chat buffers after 1 hour of idle."
     (setq tychoish/telega-idle-bury-timer
-          (run-with-idle-timer 3600 t #'telega-bury-chat-buffers)))
+	  (run-with-idle-timer 3600 t #'telega-bury-chat-buffers)))
 
   (defun tychoish/telega-stop-idle-bury-timer ()
     "Stop telega timer."
@@ -1207,12 +1210,12 @@
     (interactive)
     (setq telega-debug (not telega-debug))
     (if telega-debug
-        (message "telega-debug mode enabled")
+	(message "telega-debug mode enabled")
       (message "telega-debug mode disabled")))
 
   (defun tychoish/telega-notify-skip-own (orig-fn msg)
     (and (not (telega-msg-match-p msg '(sender me)))
-         (funcall orig-fn msg)))
+	 (funcall orig-fn msg)))
   (advice-add 'telega-notifications-msg-notify-p :around #'tychoish/telega-notify-skip-own)
 
   (defun telega-bury-chat-buffers ()
@@ -1220,22 +1223,22 @@
 all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
     (let ((target-buffer (get-buffer "*Telega Root*"))
-          (count 0))
+	  (count 0))
       (when target-buffer
-        (dolist (frame (frame-list))
-          (dolist (window (window-list frame))
-            (let ((buf (window-buffer window)))
-              (when (eq (buffer-local-value 'major-mode buf) 'telega-chat-mode)
-                (bury-buffer buf)
-                (set-window-buffer window target-buffer)
-                (setq count (+ count 1)))))))
+	(dolist (frame (frame-list))
+	  (dolist (window (window-list frame))
+	    (let ((buf (window-buffer window)))
+	      (when (eq (buffer-local-value 'major-mode buf) 'telega-chat-mode)
+		(bury-buffer buf)
+		(set-window-buffer window target-buffer)
+		(setq count (+ count 1)))))))
       (unless (zerop count)
-        (alert (format "burried %d telega-chat-%s" count
-                       (if (= count 1)
-                           "buffer"
-                         "buffers"))
-               :title (format "emacs.%s.telega" tychoish/emacs-instance-id)
-               :persistent t))))
+	(alert (format "burried %d telega-chat-%s" count
+		       (if (= count 1)
+			   "buffer"
+			 "buffers"))
+	       :title (format "emacs.%s.telega" tychoish/emacs-instance-id)
+	       :persistent t))))
 
   (defun telega-kill-chat-buffers ()
     (interactive)
@@ -1270,9 +1273,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package deft
   :ensure t
   :bind (:map tychoish/docs-map
-	 ("o" . deft)
-         ("n" . tychoish-deft-create)
-         ("f" . deft-find-file))
+	      ("o" . deft)
+	      ("n" . tychoish-deft-create)
+	      ("f" . deft-find-file))
   :init
   (defun deft-find-file ()
     (interactive)
@@ -1282,20 +1285,20 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     "Turn a string into a slug."
     (replace-regexp-in-string
      " " "-" (downcase
-              (replace-regexp-in-string
-               "[^A-Za-z0-9 ]" "" s))))
+	      (replace-regexp-in-string
+	       "[^A-Za-z0-9 ]" "" s))))
 
   (defun tychoish-deft-create (title)
     "Create a new deft entry."
     (interactive "sNote Title: ")
     (let ((draft-file (concat deft-directory
-                              (deft-file-make-slug title)
-                              "."
-                              deft-extensions)))
+			      (deft-file-make-slug title)
+			      "."
+			      deft-extensions)))
       (if (file-exists-p draft-file)
-          (find-file draft-file)
-        (find-file draft-file)
-        (insert title))))
+	  (find-file draft-file)
+	(find-file draft-file)
+	(insert title))))
   :config
   (setq deft-extensions '("md" "mdwn" "markdown" "txt" "text" "rst"))
   (setq deft-new-file-format "%Y-%m-%dT.%H%M")
@@ -1322,15 +1325,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (setq markdown-command "/usr/bin/markdown"))
 
   (setq markdown-imenu-generic-expression
-        '(("title"  "^\\(.*\\)[\n]=+$" 1)
-          ("h2-"    "^\\(.*\\)[\n]-+$" 1)
-          ("h1"   "^# \\(.*\\)$" 1)
-          ("h2"   "^## \\(.*\\)$" 1)
-          ("h3"   "^### \\(.*\\)$" 1)
-          ("h4"   "^#### \\(.*\\)$" 1)
-          ("h5"   "^##### \\(.*\\)$" 1)
-          ("h6"   "^###### \\(.*\\)$" 1)
-          ("fn"   "^\\[\\^\\(.*\\)\\]" 1))))
+	'(("title"  "^\\(.*\\)[\n]=+$" 1)
+	  ("h2-"    "^\\(.*\\)[\n]-+$" 1)
+	  ("h1"	  "^# \\(.*\\)$" 1)
+	  ("h2"	  "^## \\(.*\\)$" 1)
+	  ("h3"	  "^### \\(.*\\)$" 1)
+	  ("h4"	  "^#### \\(.*\\)$" 1)
+	  ("h5"	  "^##### \\(.*\\)$" 1)
+	  ("h6"	  "^###### \\(.*\\)$" 1)
+	  ("fn"	  "^\\[\\^\\(.*\\)\\]" 1))))
 
 (use-package fountain-mode
   :ensure t
@@ -1340,7 +1343,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :delight (rst-mode "rst")
   :mode ("\\.rst" . rst-mode)
   :bind (:map rst-mode-map
-	 ("C-c C-t h" . rst-adjust))
+	      ("C-c C-t h" . rst-adjust))
   :init
   (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
   (defun tychoish/set-up-rst-mode ()
@@ -1362,12 +1365,12 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :defer t
   :delight (flyspell-mode " fs")
   :hook ((prog-mode . flyspell-prog-mode)
-         (text-mode . flyspell-mode)
-         (telega-chat-mode . flyspell-mode))
+	 (text-mode . flyspell-mode)
+	 (telega-chat-mode . flyspell-mode))
   :bind (("C-c [" . flyspell-correct-next)
-         ("C-c ]" . flyspell-correct-previous)
-         ("M-$" . flyspell-correct-at-point)
-         ("C-;" . flyspell-correct-previous))
+	 ("C-c ]" . flyspell-correct-previous)
+	 ("M-$" . flyspell-correct-at-point)
+	 ("C-;" . flyspell-correct-previous))
   :commands (flyspell-mode flyspell-prog-mode flyspell-correct-wrapper)
   :config
   (setq ispell-list-command "list")
@@ -1392,8 +1395,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :defer t
   :defines (grammarly-on-message-function-list
-            grammarly-on-open-function-list
-            grammarly-on-close-function-list))
+	    grammarly-on-open-function-list
+	    grammarly-on-close-function-list))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1409,15 +1412,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("\\.yml$" . yaml-mode))
   :init
   (add-to-list 'tychoish/eglot-default-server-configuration
-                '((:yaml (:format
-                          :enable t
-                          :singleQuote :json-false
-                          :bracketSpacing t
-                          :proseWrap "preserve" ;; preserve/always/never
-                          :printWidth 80
-                          :validate t
-                          :hover t
-                          :completion t))))
+	       '((:yaml (:format
+			 :enable t
+			 :singleQuote :json-false
+			 :bracketSpacing t
+			 :proseWrap "preserve" ;; preserve/always/never
+			 :printWidth 80
+			 :validate t
+			 :hover t
+			 :completion t))))
   :config
   (add-hook 'yaml-mode-hook (tychoish/set-tab-width 2)))
 
@@ -1433,8 +1436,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (go-mod-ts-mode "go.mod.ts")
   (go-mode "go")
   :mode (("\\.go$" . go-ts-mode)
-         ("go.work" . go-mod-ts-mode)
-         ("go.mod" . go-mod-ts-mode))
+	 ("go.work" . go-mod-ts-mode)
+	 ("go.mod" . go-mod-ts-mode))
   :init
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
@@ -1454,29 +1457,29 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
   (add-to-list 'tychoish/eglot-default-server-configuration
-               '(:gopls :gofumpt t
-                        :usePlaceholders :json-false
-                        :hoverKind "FullDocumentation"
+	       '(:gopls :gofumpt t
+			:usePlaceholders :json-false
+			:hoverKind "FullDocumentation"
 			:linkTarget "pkg.go.dev"
-                        :analyses (:unreachable t
-				   :unusedvariable t)
-                        :codelenses (:test t
-				     :tidy t
-				     :upgradeDependency t
-				     :generate t)
-                        :hints (:parameterNames :json-false
-				:ignoredError t
-				:constantValues t
-				:compositeLiteralTypes :json-false
-				:compositeLiteralFields :json-false
-				:rangeVariableTypes :json-false
-				:functionTypeParameters :json-false)))
+			:analyses (:unreachable t
+						:unusedvariable t)
+			:codelenses (:test t
+					   :tidy t
+					   :upgradeDependency t
+					   :generate t)
+			:hints (:parameterNames :json-false
+						:ignoredError t
+						:constantValues t
+						:compositeLiteralTypes :json-false
+						:compositeLiteralFields :json-false
+						:rangeVariableTypes :json-false
+						:functionTypeParameters :json-false)))
 
   (add-hook 'go-ts-mode-hook 'tychoish/go-mode-setup)
   (add-hook 'go-mode-hook 'tychoish/go-mode-setup)
   :config
   (let ((current-path (getenv "PATH"))
-        (gopath (getenv "GOPATH")))
+	(gopath (getenv "GOPATH")))
 
     (unless gopath
       (setq gopath (setenv "GOPATH" (expand-file-name "~/go"))))
@@ -1494,8 +1497,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (rustic-mode "rs(x)")
   :after (rust-mode flycheck)
   :mode (("\\.rs$" . rustic-mode)
-         ("\\.rs" . rustic-mode)
-         ("\\.rs\\'" . rustic-mode)
+	 ("\\.rs" . rustic-mode)
+	 ("\\.rs\\'" . rustic-mode)
 	 ("Cargo.lock" . toml-ts-mode))
   :commands (rust-resolve-fmt-path rustic-mode)
   :init
@@ -1522,11 +1525,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
     (add-to-list 'tychoish/eglot-default-server-configuration
 		 `((:rust-analyzer :initializationOptions
-                    (:server (:extraEnv (:RUSTUP_TOOLCHAIN ,rustup-toolchain))
-                              :rust (:analyzerTargetDir t)
-                              :cargo (:buildScripts (:enable t :features "all"))
-                              :procMacro (:enable :json-false :attributes (:enable t))
-                              :check (:workspace t))))))
+				   (:server (:extraEnv (:RUSTUP_TOOLCHAIN ,rustup-toolchain))
+					    :rust (:analyzerTargetDir t)
+					    :cargo (:buildScripts (:enable t :features "all"))
+					    :procMacro (:enable :json-false :attributes (:enable t))
+					    :check (:workspace t))))))
 
   (add-to-list 'flycheck-checkers 'rustic-clippy))
 
@@ -1540,23 +1543,23 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
   (add-hook 'python-ts-mode 'tychoish/python-setup)
   (add-to-list 'tychoish/eglot-default-server-configuration
-               '((:pylsp (:plugins
-                          :black (:enabled t)
-                          :jedi_completion (:enabled t
-					    :fuzzy t
-					    :include_params t)
-                          :ruff (:enabled t
-  			         :formatEnabled t
-				 :lineLength 100
-    			         :format ["I"]
-				 :extendSelect ["I"])
-                          :rope (:enabled t)
-                          :flake8 (:enabled :json-false)
-                          :pycodestyle (:enabled :json-false)
-                          :mccabe (:enabled :json-false)
-                          :autopep8 (:enabled :json-false)
-                          :pyflakes (:enabled :json-false)
-                          :pycodestyle (:enabled :json-false)))))
+	       '((:pylsp (:plugins
+			  :black (:enabled t)
+			  :jedi_completion (:enabled t
+						     :fuzzy t
+						     :include_params t)
+			  :ruff (:enabled t
+					  :formatEnabled t
+					  :lineLength 100
+					  :format ["I"]
+					  :extendSelect ["I"])
+			  :rope (:enabled t)
+			  :flake8 (:enabled :json-false)
+			  :pycodestyle (:enabled :json-false)
+			  :mccabe (:enabled :json-false)
+			  :autopep8 (:enabled :json-false)
+			  :pyflakes (:enabled :json-false)
+			  :pycodestyle (:enabled :json-false)))))
 
   (defun tychoish/python-setup ()
     (setq-local python-indent-offset 4)
@@ -1569,11 +1572,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
     (let (start end bds)
       (if (and transient-mark-mode
-               mark-active)
-          (setq start (region-beginning) end (region-end))
-        (progn
-          (setq bds (bounds-of-thing-at-point 'line))
-          (setq start (car bds) end (cdr bds))))
+	       mark-active)
+	  (setq start (region-beginning) end (region-end))
+	(progn
+	  (setq bds (bounds-of-thing-at-point 'line))
+	  (setq start (car bds) end (cdr bds))))
       (python-indent-shift-left start end))
     (setq deactivate-mark nil))
 
@@ -1581,18 +1584,18 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (interactive)
     (let (start end bds)
       (if (and transient-mark-mode
-               mark-active)
-          (setq start (region-beginning) end (region-end))
-        (progn
-          (setq bds (bounds-of-thing-at-point 'line))
-          (setq start (car bds) end (cdr bds))))
+	       mark-active)
+	  (setq start (region-beginning) end (region-end))
+	(progn
+	  (setq bds (bounds-of-thing-at-point 'line))
+	  (setq start (car bds) end (cdr bds))))
       (python-indent-shift-right start end))
     (setq deactivate-mark nil))
 
   (bind-key "M-<left>" 'balle-python-shift-left python-ts-mode-map)
   (bind-key "M-<right>" 'balle-python-shift-right python-ts-mode-map)
 
-; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
+					; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
@@ -1623,8 +1626,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :after (builder)
   :mode (("justfile" . just-mode)
-         ("Justfile" . just-mode)
-         ("\\.just%" . just-mode)))
+	 ("Justfile" . just-mode)
+	 ("\\.just%" . just-mode)))
 
 (use-package nxml-mode
   :mode (("\\.xml$'". nxml-mode)))
@@ -1632,15 +1635,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package web-mode
   :ensure t
   :mode (("\\.html$" . web-mode)
-         ("\\.htm\\'". web-mode)
-         ("\\.html\\'". web-mode)
-         ("\\.as[cp]x\\'" . web-mode)
-         ("\\.djhtml\\'" . web-mode)
-         ("\\.erb" . web-mode)
-         ("\\.jsp\\'" . web-mode)
-         ("\\.mustache\\'" . web-mode)
-         ("\\.phtml\\'" . web-mode)
-         ("\\.tpl\\.php\\'" . web-mode))
+	 ("\\.htm\\'". web-mode)
+	 ("\\.html\\'". web-mode)
+	 ("\\.as[cp]x\\'" . web-mode)
+	 ("\\.djhtml\\'" . web-mode)
+	 ("\\.erb" . web-mode)
+	 ("\\.jsp\\'" . web-mode)
+	 ("\\.mustache\\'" . web-mode)
+	 ("\\.phtml\\'" . web-mode)
+	 ("\\.tpl\\.php\\'" . web-mode))
   :config
   (setq web-mode-markup-indent-offset 2)
   (setq web-mode-code-indent-offset 2)
@@ -1665,13 +1668,13 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (slime-autodoc-mode "")
   :mode ("\\.lisp" . lisp-mode)
   :bind (:map tychoish/docs-map
-         ("c" . hyperspec-lookup))
+	      ("c" . hyperspec-lookup))
   :commands (slime slime-connect)
   :config
   (make-read-extended-command-for-prefix "slime"
-   :key-alias "slime-commands"
-   :bind-map tychoish/ide-map
-   :bind-key "s")
+    :key-alias "slime-commands"
+    :bind-map tychoish/ide-map
+    :bind-key "s")
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
 
@@ -1682,7 +1685,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package journalctl-mode
   :ensure t
   :bind (:map tychoish/core-map
-	 ("j" . journalctl)))
+	      ("j" . journalctl)))
 
 (use-package docker
   :ensure t
@@ -1691,8 +1694,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	 ("C-c d d" . docker))
   :config
   (make-read-extended-command-for-prefix "docker"
-   :bind-key "C-x C-d"
-   :bind-map global-map)
+    :bind-key "C-x C-d"
+    :bind-map global-map)
   (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1727,18 +1730,18 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
     (when-let ((flycheck-errors (and flycheck-mode (flycheck-overlay-errors-at (point)))))
       (mapc
        (lambda (err)
-         (funcall callback
-                  (format "%s: %s"
-                          (let ((level (flycheck-error-level err)))
-                            (pcase level
-                              ('info (propertize "I" 'face 'flycheck-error-list-info))
-                              ('error (propertize "E" 'face 'flycheck-error-list-error))
-                              ('warning (propertize "W" 'face 'flycheck-error-list-warning))
-                              (_ level)))
-                          (flycheck-error-message err))
-                  :thing (or (flycheck-error-id err)
-                             (flycheck-error-group err))
-                  :face 'font-lock-doc-face))
+	 (funcall callback
+		  (format "%s: %s"
+			  (let ((level (flycheck-error-level err)))
+			    (pcase level
+			      ('info (propertize "I" 'face 'flycheck-error-list-info))
+			      ('error (propertize "E" 'face 'flycheck-error-list-error))
+			      ('warning (propertize "W" 'face 'flycheck-error-list-warning))
+			      (_ level)))
+			  (flycheck-error-message err))
+		  :thing (or (flycheck-error-id err)
+			     (flycheck-error-group err))
+		  :face 'font-lock-doc-face))
        flycheck-errors)))
   (setq flycheck-indication-mode nil)
   (setq flycheck-check-syntax-automatically '(save new-line idle-change idle-buffer-switch))
@@ -1762,9 +1765,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
   :bind (:map tychoish/core-map
-	 ("c" . tychoish-compile)
-	 :map compilation-mode-map
-	 ("C" . compile))
+	      ("c" . tychoish-compile)
+	      :map compilation-mode-map
+	      ("C" . compile))
   :config
   (defun compile-add-error-syntax (name regexp file line &optional col level)
     "Register new compilation error syntax."
@@ -1784,15 +1787,15 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defun tychoish-compile-project-super-lint ()
     (interactive)
     (let* ((project-directory (approximate-project-root))
-           (options (list "VALIDATE_YAML=true"
-                          "VALIDATE_OPENAPI=true"
-                          "VALIDATE_MD=true"
-                          "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
-                          "VALIDATE_ALL_CODEBASE=true"
-                          "LINTER_RULES_PATH=."
-                          "RUN_LOCAL=true"))
-           (optstr (format "-e %s" (s-join " -e " options)))
-           (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
+	   (options (list "VALIDATE_YAML=true"
+			  "VALIDATE_OPENAPI=true"
+			  "VALIDATE_MD=true"
+			  "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
+			  "VALIDATE_ALL_CODEBASE=true"
+			  "LINTER_RULES_PATH=."
+			  "RUN_LOCAL=true"))
+	   (optstr (format "-e %s" (s-join " -e " options)))
+	   (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
       (builder-compile-project "super-lint" command-string)))
 
   (with-eval-after-load 'rust-mode
@@ -1831,7 +1834,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :ensure t
   :defer t
   :after (flycheck flyspell
-  	  (:any org-mode rst-mode markdown-mode message-mode sgml-mode html-mode html-ts-mode))
+		   (:any org-mode rst-mode markdown-mode message-mode sgml-mode html-mode html-ts-mode))
   :defines (c-aspell-dynamic markdow-aspell-dynamic mail-aspell-dynamic html-aspell-dynamic)
   :functions (flycheck-aspell--start-checker flycheck-aspell--parse)
   :config
@@ -1940,8 +1943,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :defines (eglot-mode-map eglot-alternatives)
   :functions (eglot-format-buffer eglot-managed-p eglot-completion-at-point)
   :hook (((js-mode
-           js-ts-mode
-           typescript-ts-mode
+	   js-ts-mode
+	   typescript-ts-mode
 	   go-ts-mode
 	   go-mod-ts-mode
 	   rust-mode
@@ -1955,18 +1958,18 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	   python-ts-mode
 	   go-mode
 	   go-mod-mode
-           bash-ts-mode
-           bash-mode
-           sh-mode) . #'eglot-ensure))
+	   bash-ts-mode
+	   bash-mode
+	   sh-mode) . #'eglot-ensure))
   :bind (:map tychoish/ide-map ;; "C-c l"
-	 :prefix "l"
-	 :prefix-map tychoish/eglot-global-map
-	 ("s" . eglot)
-         ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
-         ("k" . eglot-shutdown)
-         ("l" . eglot-list-connections)
-	 ("c" . execute-extended-eglot-command)
-         ("g" . eglot-forget-pending-continuations))
+	      :prefix "l"
+	      :prefix-map tychoish/eglot-global-map
+	      ("s" . eglot)
+	      ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
+	      ("k" . eglot-shutdown)
+	      ("l" . eglot-list-connections)
+	      ("c" . execute-extended-eglot-command)
+	      ("g" . eglot-forget-pending-continuations))
   :commands (eglot-code-action-rewrite eglot-code-action-extract eglot-code-actions eglot-format eglot-rename eglot-code-action-organize-imports)
   :functions (eglot-alternatives)
   :init
@@ -1993,14 +1996,14 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
    ("u" . eglot-update-workspace))
 
   (make-read-extended-command-for-prefix "eglot"
-   :bind-map tychoish/eglot-map
-   :bind-key "e"
-   :key-alias "eglot-commands")
+    :bind-map tychoish/eglot-map
+    :bind-key "e"
+    :key-alias "eglot-commands")
 
   (make-read-extended-command-for-prefix "xref"
-   :bind-map tychoish/ide-map
-   :bind-key "x"
-   :key-alias "xref-commands")
+    :bind-map tychoish/ide-map
+    :bind-key "x"
+    :key-alias "xref-commands")
 
   (setq eglot-menu-string "eg")
 
@@ -2017,9 +2020,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-before-save-hook)
 
   (add-to-list 'eglot-server-programs
-               `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
-                 . ,(eglot-alternatives
-                     `(("gopls" ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)))
+	       `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
+		 . ,(eglot-alternatives
+		     `(("gopls" ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)))
 		       ("gopls" "-remote=unix;/tmp/gopls.socket")
 		       ("gopls" "-remote=auto")
 		       ("gopls")))))
@@ -2044,7 +2047,7 @@ Useful after changing `eglot-workspace-configuration' or
     (interactive)
     (when (eglot-managed-p)
       (with-demoted-errors "WARN (`eglot-code-action-inline'): %S"
-        (eglot-code-actions nil nil "source.inline" t))))
+	(eglot-code-actions nil nil "source.inline" t))))
 
   (defun eglot-format-for-hook ()
     (interactive)
@@ -2074,26 +2077,26 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package treesit
   :defer t
   :mode (("\\.sh\\'" . bash-ts-mode)
-         ("\\.bash\\'" . bash-ts-mode)
-         ("\\.bashrc\\'" . bash-ts-mode)
-         ("Dockerfile" . dockerfile-ts-mode)
-         ;; -- js/web
-         ("\\.ts\\'" . typescript-ts-mode)
-         ("\\.js\\'" . js-ts-mode)
-         ("\\.tsx\\'" . tsx-ts-mode)
-         ("\\.css\\'" . css-ts-mode)
-         ("\\.json\\'" . json-ts-mode)
-         ("\\.toml\\'" . toml-ts-mode)
-         ;; -- c/c++
-         ("CMakeLists.txt" . cmake-ts-mode)
+	 ("\\.bash\\'" . bash-ts-mode)
+	 ("\\.bashrc\\'" . bash-ts-mode)
+	 ("Dockerfile" . dockerfile-ts-mode)
+	 ;; -- js/web
+	 ("\\.ts\\'" . typescript-ts-mode)
+	 ("\\.js\\'" . js-ts-mode)
+	 ("\\.tsx\\'" . tsx-ts-mode)
+	 ("\\.css\\'" . css-ts-mode)
+	 ("\\.json\\'" . json-ts-mode)
+	 ("\\.toml\\'" . toml-ts-mode)
+	 ;; -- c/c++
+	 ("CMakeLists.txt" . cmake-ts-mode)
 	 ("\\.h\\'" . c-or-c++-mode)
-         ("\\.c\\'" . c-ts-mode)
+	 ("\\.c\\'" . c-ts-mode)
 	 ("\\.cpp\\'" . c++-ts-mode)
-         ("\\.cc\\'" . c++-ts-mode)
-         ("\\.hh\\'" . c++-ts-mode)
-         ("\\.cxx\\'" . c++-ts-mode)
-         ;; -- jvm
-         ("\\.java\\'" . java-ts-mode))
+	 ("\\.cc\\'" . c++-ts-mode)
+	 ("\\.hh\\'" . c++-ts-mode)
+	 ("\\.cxx\\'" . c++-ts-mode)
+	 ;; -- jvm
+	 ("\\.java\\'" . java-ts-mode))
   :init
   (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
@@ -2116,32 +2119,32 @@ Useful after changing `eglot-workspace-configuration' or
   (font-lock-add-keywords 'c++-ts-mode (font-lock-width-keyword 100))
 
   (setq treesit-language-source-alist
-        '((bash "https://github.com/tree-sitter/tree-sitter-bash")
-          (cmake "https://github.com/uyha/tree-sitter-cmake")
-          (c "https://github.com/tree-sitter/tree-sitter-c")
-          (css "https://github.com/tree-sitter/tree-sitter-css")
-          (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
-          (go "https://github.com/tree-sitter/tree-sitter-go")
-          (html "https://github.com/tree-sitter/tree-sitter-html")
-          (java "https://github.com/tree-sitter/tree-sitter-java")
+	'((bash "https://github.com/tree-sitter/tree-sitter-bash")
+	  (cmake "https://github.com/uyha/tree-sitter-cmake")
+	  (c "https://github.com/tree-sitter/tree-sitter-c")
+	  (css "https://github.com/tree-sitter/tree-sitter-css")
+	  (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
+	  (go "https://github.com/tree-sitter/tree-sitter-go")
+	  (html "https://github.com/tree-sitter/tree-sitter-html")
+	  (java "https://github.com/tree-sitter/tree-sitter-java")
 	  (dockerfile "https://github.com/camdencheek/tree-sitter-dockerfile")
-          (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
-          (json "https://github.com/tree-sitter/tree-sitter-json")
-          (python "https://github.com/tree-sitter/tree-sitter-python")
-          (ruby "https://github.com/tree-sitter/tree-sitter-ruby")
-          (rust "https://github.com/tree-sitter/tree-sitter-rust")
-          (toml "https://github.com/tree-sitter/tree-sitter-toml")
-          (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
-          (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
-          (yaml "https://github.com/ikatyang/tree-sitter-yaml")
-          (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")))
+	  (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
+	  (json "https://github.com/tree-sitter/tree-sitter-json")
+	  (python "https://github.com/tree-sitter/tree-sitter-python")
+	  (ruby "https://github.com/tree-sitter/tree-sitter-ruby")
+	  (rust "https://github.com/tree-sitter/tree-sitter-rust")
+	  (toml "https://github.com/tree-sitter/tree-sitter-toml")
+	  (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
+	  (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
+	  (yaml "https://github.com/ikatyang/tree-sitter-yaml")
+	  (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")))
 
   (defun tychoish-background-rebuild-treesit-bindings ()
     (interactive)
     (async-start
      `(lambda ()
-        ,(async-inject-variables "treesit-language-source-alist")
-        (mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
+	,(async-inject-variables "treesit-language-source-alist")
+	(mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
      (lambda (result)
        (message "rebuilt treesit grammars for %s" result)))))
 
@@ -2170,10 +2173,10 @@ Useful after changing `eglot-workspace-configuration' or
   :defer t
   :ensure nil
   :commands (google-gemini-chat-prompt
-             google-gemini-content-prompt
-             google-gemini-count-tokens-prompt
-             google-gemini-list-models
-             google-gemini-model-info))
+	     google-gemini-content-prompt
+	     google-gemini-count-tokens-prompt
+	     google-gemini-list-models
+	     google-gemini-model-info))
 
 (use-package gptel
   :ensure t
@@ -2192,14 +2195,14 @@ Useful after changing `eglot-workspace-configuration' or
    ("m" . gptel-menu))
 
   (make-read-extended-command-for-prefix "gptel"
-   :bind-map tychoish/robot-gptel-map
-   :bind-key "m"
-   :key-alias "gptel-commands")
+    :bind-map tychoish/robot-gptel-map
+    :bind-key "m"
+    :key-alias "gptel-commands")
 
   (make-read-extended-command-for-prefix "gptel-set-backend"
-   :bind-map tychoish/robot-gptel-map
-   :bind-key "b"
-   :key-alias "gptel-set-backend")
+    :bind-map tychoish/robot-gptel-map
+    :bind-key "b"
+    :key-alias "gptel-set-backend")
 
   :config
   (bind-keys
@@ -2209,58 +2212,58 @@ Useful after changing `eglot-workspace-configuration' or
   (setq gptel-include-reasoning 'ignore)
 
   (make-gptel-set-up-backend-functions :name "claude-opus-4-6" :key "o"
-   :backend (gptel-make-anthropic "claude-opus" :key anthropic-api-key :stream t)
-   :model 'claude-opus-4-6
-   :api-key anthropic-api-key)
+				       :backend (gptel-make-anthropic "claude-opus" :key anthropic-api-key :stream t)
+				       :model 'claude-opus-4-6
+				       :api-key anthropic-api-key)
 
   (make-gptel-set-up-backend-functions :name "claude-sonnet-4-6" :key "s"
-   :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
-   :model 'claude-sonnet-4-6
-   :api-key anthropic-api-key)
+				       :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
+				       :model 'claude-sonnet-4-6
+				       :api-key anthropic-api-key)
 
   (make-gptel-set-up-backend-functions :name "claude-haiku-4-5" :key "h"
-   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :model 'claude-haiku-4-5
-   :api-key anthropic-api-key)
+				       :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
+				       :model 'claude-haiku-4-5
+				       :api-key anthropic-api-key)
 
   (make-gptel-set-up-backend-functions :name "gemini-pro-latest" :key "g"
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-   :model 'gemini-flash-lite-latest)
+				       :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+				       :model 'gemini-flash-lite-latest)
 
   (make-gptel-set-up-backend-functions :name "gemini-flash" :key "f"
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-   :model 'gemini-flash-lite-latest)
+				       :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+				       :model 'gemini-flash-lite-latest)
 
   (make-gptel-set-up-backend-functions :name "gemini-flash-lite" :key "l"
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-   :model 'gemini-flash-lite-latest)
+				       :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+				       :model 'gemini-flash-lite-latest)
 
   (make-gptel-set-up-backend-functions :name "copilot" :key "c"
-   :backend (gptel-make-gh-copilot "copilot")
-   :model 'claude-3.5-sonnet)
+				       :backend (gptel-make-gh-copilot "copilot")
+				       :model 'claude-3.5-sonnet)
 
   (make-gptel-set-up-backend-functions :name "gpt-5" :key "5"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-5
-   :api-key openai-api-key)
+				       :backend (gptel-make-openai "openai" :key openai-api-key)
+				       :model 'gpt-5
+				       :api-key openai-api-key)
 
   (make-gptel-set-up-backend-functions :name "gpt-5-mini" :key "m"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-5-mini
-   :api-key openai-api-key)
+				       :backend (gptel-make-openai "openai" :key openai-api-key)
+				       :model 'gpt-5-mini
+				       :api-key openai-api-key)
 
   (make-gptel-set-up-backend-functions :name "gpt-5-nano" :key "n"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-5-nano
-   :api-key openai-api-key)
+				       :backend (gptel-make-openai "openai" :key openai-api-key)
+				       :model 'gpt-5-nano
+				       :api-key openai-api-key)
 
   (make-gptel-set-up-backend-functions :name "gpt-4o" :key "4"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-4o)
+				       :backend (gptel-make-openai "openai" :key openai-api-key)
+				       :model 'gpt-4o)
 
   (make-gptel-set-up-backend-functions :name "gpt-4o-mini" :key "M"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-4o-mini)
+				       :backend (gptel-make-openai "openai" :key openai-api-key)
+				       :model 'gpt-4o-mini)
 
   (gptel-set-backend-default-claude-sonnet-4-6)
   (require 'gptel-integrations))
@@ -2268,7 +2271,7 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package gptel-aibo
   :ensure t
   :bind (:map tychoish/robot-gptel-map
-         ("w" . gptel-aibo-summon))
+	      ("w" . gptel-aibo-summon))
   :commands (gptel-aibo-summon gptel-aibo))
 
 (use-package gptel-agent
@@ -2288,33 +2291,33 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'mcp-hub)
   (tychoish/mcp-servers-init)
   (make-read-extended-command-for-prefix "mcp"
-   :key-alias "mcp-commands"
-   :bind-key "/"
-   :bind-map mcp-hub-mode-map)
+    :key-alias "mcp-commands"
+    :bind-key "/"
+    :bind-map mcp-hub-mode-map)
   (defun tychoish/mcp-hub-refresh ()
     "Recompute `mcp-hub-servers' from `tychoish/mcp-build-servers'."
     (setq mcp-hub-servers
-          (mapcar #'tychoish/mcp-spec->hub (tychoish/mcp-build-servers))))
+	  (mapcar #'tychoish/mcp-spec->hub (tychoish/mcp-build-servers))))
   (tychoish/mcp-hub-refresh)
   (advice-add 'mcp-hub-start-all-servers :before
-              (lambda (&rest _) (tychoish/mcp-hub-refresh))))
+	      (lambda (&rest _) (tychoish/mcp-hub-refresh))))
 
 (use-package copilot
   :ensure t
   :bind (:map tychoish/robot-map ;; "C-c r"
-	 :prefix "c"
-	 :prefix-map tychoish/robot-copilot-map ;; "C-c r c"
-	 ("s" . copilot-complete)
-         ("g" . copilot-clear-overlay)
-	 :map tychoish/completion-map
-	 ("r" . copilot-complete)
-         :map copilot-completion-map
-         ("C-c a" . copilot-accept-completion)
-         ("C-c l" . copilot-accept-completion-by-line)
-         ("C-c w" . copilot-accept-completion-by-word)
-         ("C-c n" . copilot-next-completion)
-         ("C-c p" . copilot-previous-completion)
-         ("C-c C-i" . copilot-insert-completion))
+	      :prefix "c"
+	      :prefix-map tychoish/robot-copilot-map ;; "C-c r c"
+	      ("s" . copilot-complete)
+	      ("g" . copilot-clear-overlay)
+	      :map tychoish/completion-map
+	      ("r" . copilot-complete)
+	      :map copilot-completion-map
+	      ("C-c a" . copilot-accept-completion)
+	      ("C-c l" . copilot-accept-completion-by-line)
+	      ("C-c w" . copilot-accept-completion-by-word)
+	      ("C-c n" . copilot-next-completion)
+	      ("C-c p" . copilot-previous-completion)
+	      ("C-c C-i" . copilot-insert-completion))
   :commands (copilot-login copilot-mode)
   :config
   (add-to-list 'copilot-major-mode-alist '("rustic-mode" . "rust"))
@@ -2328,8 +2331,8 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package copilot-chat
   :ensure t
   :bind (:map tychoish/robot-copilot-map ;; "C-c r c"
-	 ("m" . copilot-chat-transient)
-         ("t" . copilot-chat))
+	      ("m" . copilot-chat-transient)
+	      ("t" . copilot-chat))
   :config
   (setq copilot-chat-frontend 'markdown)
   (setq copilot-chat-follow t)
@@ -2345,11 +2348,11 @@ Useful after changing `eglot-workspace-configuration' or
    :prefix-map tychoish/robot-aider-map
    ("m" . aidermacs-transient-menu))
   (make-read-extended-command-for-prefix "aidermacs"
-   :bind-map tychoish/robot-aider-map
-   :bind-key "x")
+    :bind-map tychoish/robot-aider-map
+    :bind-key "x")
   (make-read-extended-command-for-prefix "aidermacs-model"
-   :bind-map tychoish/robot-aider-map
-   :bind-key "l")
+    :bind-map tychoish/robot-aider-map
+    :bind-key "l")
   :config
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-program "aider")
@@ -2389,74 +2392,74 @@ Useful after changing `eglot-workspace-configuration' or
   (add-to-list 'aidermacs-extra-args "--cache-prompts")
 
   (make-aidermacs-model-selection-function :name "claude-max"
-   :default-model "anthropic/claude-sonnet-4-5"
-   :architect-model "anthropic/claude-opus-4-5")
+					   :default-model "anthropic/claude-sonnet-4-5"
+					   :architect-model "anthropic/claude-opus-4-5")
 
   (make-aidermacs-model-selection-function :name "claude-sonnet"
-   :default-model "anthropic/claude-sonnet-4-5"
-   :weak-model "anthropic/claude-haiku-4-5")
+					   :default-model "anthropic/claude-sonnet-4-5"
+					   :weak-model "anthropic/claude-haiku-4-5")
 
   (make-aidermacs-model-selection-function :name "gpt-4o"
-   :default-model "opeani/gpt-4o-mini"
-   :architect-model "openai/gpt-4o")
+					   :default-model "opeani/gpt-4o-mini"
+					   :architect-model "openai/gpt-4o")
 
   (make-aidermacs-model-selection-function :name "gpt-4"
-   :default-model "opeani/gpt-4o"
-   :weak-model "opeani/gpt-4o-mini"
-   :architect-model "opeani/gpt-4.5-preview")
+					   :default-model "opeani/gpt-4o"
+					   :weak-model "opeani/gpt-4o-mini"
+					   :architect-model "opeani/gpt-4.5-preview")
 
   (make-aidermacs-model-selection-function :name "gpt-5"
-   :default-model "opeani/gpt-5"
-   :architect-model "opeani/gpt-5.2"
-   :weak-model "opeani/gpt-5-nano")
+					   :default-model "opeani/gpt-5"
+					   :architect-model "opeani/gpt-5.2"
+					   :weak-model "opeani/gpt-5-nano")
 
   (make-aidermacs-model-selection-function :name "gpt-5-mini"
-   :default-model "opeani/gpt-5-mini"
-   :weak-model "opeani/gpt-5-nano")
+					   :default-model "opeani/gpt-5-mini"
+					   :weak-model "opeani/gpt-5-nano")
 
   (make-aidermacs-model-selection-function :name "gemini-2"
-   :default-model "gemini/gemini-2.5-flash"
-   :architect-model "gemini/gemini-2.5-pro"
-   :weak-model "gemini/gemini-2.5-flash-lite")
+					   :default-model "gemini/gemini-2.5-flash"
+					   :architect-model "gemini/gemini-2.5-pro"
+					   :weak-model "gemini/gemini-2.5-flash-lite")
 
   (make-aidermacs-model-selection-function :name "gemini"
-   :default-model "gemini/gemini-flash-latest"
-   :architect-model "gemini/gemini-pro")
+					   :default-model "gemini/gemini-flash-latest"
+					   :architect-model "gemini/gemini-pro")
 
   (make-aidermacs-model-selection-function :name "gemini-3-flash"
-   :default-model "gemini/gemini-3-flash-preview")
+					   :default-model "gemini/gemini-3-flash-preview")
 
   (make-aidermacs-model-selection-function :name "copilot-gemini" :copilot 'use-copilot
-   :default-model "github_copilot/gemini-2.5-pro")
+					   :default-model "github_copilot/gemini-2.5-pro")
 
   (make-aidermacs-model-selection-function :name "copilot-gpt-4o" :copilot 'use-copilot
-   :default-model "github_copilot/gpt-4o-mini"
-   :architect-model "github_copilot/gpt-4o")
+					   :default-model "github_copilot/gpt-4o-mini"
+					   :architect-model "github_copilot/gpt-4o")
 
   (make-aidermacs-model-selection-function :name "copilot-gpt-5" :copilot 'use-copilot
-   :default-model "github_copilot/gpt-5-mini"
-   :architect-model "github_copilot/gpt-5.2"
-   :weak-model "github_copilot/gpt-5-nano")
+					   :default-model "github_copilot/gpt-5-mini"
+					   :architect-model "github_copilot/gpt-5.2"
+					   :weak-model "github_copilot/gpt-5-nano")
 
   (make-aidermacs-model-selection-function :name "copilot-claude" :copilot 'use-copilot
-   :default-model "github_copilot/claude-sonnet-4.5"
-   :architect-model "github_copilot/claude-opus-4.5"
-   :weak-model "github_copilot/claude-haiku-4.5")
+					   :default-model "github_copilot/claude-sonnet-4.5"
+					   :architect-model "github_copilot/claude-opus-4.5"
+					   :weak-model "github_copilot/claude-haiku-4.5")
 
   (make-aidermacs-model-selection-function :name "copilot-claude-sonnet" :copilot 'use-copilot
-   :default-model "github_copilot/claude-sonnet-4.5"
-   :weak-model "github_copilot/claude-haiku-4.5"))
+					   :default-model "github_copilot/claude-sonnet-4.5"
+					   :weak-model "github_copilot/claude-haiku-4.5"))
 
 (use-package claude-code-ide
   :load-path "elpa/claude-code-ide"
   ;; :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
   :bind (:map tychoish/robot-claude-code-ide-map
-	 ("l" . claude-code-ide-list-sessions)
-	 ("t" . claude-code-ide-toggle)
-	 ("b" . claude-code-ide-switch-to-buffer)
-	 ("k" . claude-code-ide-stop)
-	 ("s" . claude-code-ide-continue)
-	 ("e" . claude-code-ide-send-escape))
+	      ("l" . claude-code-ide-list-sessions)
+	      ("t" . claude-code-ide-toggle)
+	      ("b" . claude-code-ide-switch-to-buffer)
+	      ("k" . claude-code-ide-stop)
+	      ("s" . claude-code-ide-continue)
+	      ("e" . claude-code-ide-send-escape))
   :commands (claude-code-ide claude-code-ide-menu)
   :init
   (bind-keys
@@ -2466,8 +2469,8 @@ Useful after changing `eglot-workspace-configuration' or
    ("m" . claude-code-ide-menu)
    ("c" . claude-code-ide))
   (make-read-extended-command-for-prefix "claude-code-ide"
-   :bind-map tychoish/robot-claude-code-ide-map
-   :bind-key "x")
+    :bind-map tychoish/robot-claude-code-ide-map
+    :bind-key "x")
   :config
   (setq claude-code-ide-diagnostics-backend 'flycheck)
   (setq claude-code-ide-terminal-backend 'eat)
@@ -2490,8 +2493,8 @@ Useful after changing `eglot-workspace-configuration' or
    ("e" . vterm-send-escape))
 
   (make-read-extended-command-for-prefix "vterm"
-   :bind-key "m"
-   :bind-map tychoish/shell-vterm-map))
+    :bind-key "m"
+    :bind-map tychoish/shell-vterm-map))
 
 (use-package eat
   :ensure t
@@ -2507,19 +2510,19 @@ Useful after changing `eglot-workspace-configuration' or
    ("P" . eat-project-other-window))
 
   (make-read-extended-command-for-prefix "eat"
-   :bind-map tychoish/shell-eat-map
-   :bind-key "m"))
+    :bind-map tychoish/shell-eat-map
+    :bind-key "m"))
 
 (use-package efrit
   :load-path "elpa/efrit/lisp"
   :bind (:map tychoish/robot-map
-	 :prefix "e"
-	 :prefix-map tychoish/robot-efrit-map
-	 ("s" . efrit-streamlined-send)
-	 ("p" . efrit-do-show-progress)
-	 ("q" . efrit-remote-queue-start)
-	 ("r" . efrit-remote-queue-status)
-	 ("x" . efrit-remote-queue-stop))
+	      :prefix "e"
+	      :prefix-map tychoish/robot-efrit-map
+	      ("s" . efrit-streamlined-send)
+	      ("p" . efrit-do-show-progress)
+	      ("q" . efrit-remote-queue-start)
+	      ("r" . efrit-remote-queue-status)
+	      ("x" . efrit-remote-queue-stop))
   :commands (efrit-chat efrit-do efrit-agent efrit-help)
   :init
   (bind-keys
@@ -2531,8 +2534,8 @@ Useful after changing `eglot-workspace-configuration' or
    ("a" . efrit-agent)
    ("h" . efrit-help))
   (make-read-extended-command-for-prefix "efrit"
-   :bind-map tychoish/robot-efrit-map
-   :bind-key "m")
+    :bind-map tychoish/robot-efrit-map
+    :bind-key "m")
   :config
   (require 'efrit-tools)
   (defun tychoish/get-anthropic-api-key ()
@@ -2540,12 +2543,12 @@ Useful after changing `eglot-workspace-configuration' or
 	(unless tychoish/aider-setup-state
 	  (or (tychoish/aider-setup-state) nil))
 	(awhen (s-trimmed-or-nil (getenv "ANTHROPIC_API_KEY")) it)
-        (when-let* ((auth-info (car (auth-source-search :host efrit-api-auth-source-host
-                                                          :user efrit-api-auth-source-user
-                                                          :require '(:secret))))
-                    (secret (when auth-info (plist-get auth-info :secret)))
+	(when-let* ((auth-info (car (auth-source-search :host efrit-api-auth-source-host
+							:user efrit-api-auth-source-user
+							:require '(:secret))))
+		    (secret (when auth-info (plist-get auth-info :secret)))
 		    (_ (and secret (functionp secret))))
-          (funcall secret))))
+	  (funcall secret))))
 
   ;; Max tokens per response
   (setq efrit-max-tokens 2048)
@@ -2562,7 +2565,7 @@ Useful after changing `eglot-workspace-configuration' or
 
   ;; Progress buffer configuration
   (setq efrit-do-show-progress-buffer t)  ; Show progress buffer automatically
-  (setq efrit-do-queue-max-size 8))      ; Max commands to queue
+  (setq efrit-do-queue-max-size 8))	 ; Max commands to queue
 
 (use-package shell-maker
   :ensure t
@@ -2594,8 +2597,8 @@ Useful after changing `eglot-workspace-configuration' or
    ("x" . agent-shell-command-menu))
 
   (make-read-extended-command-for-prefix "agent-shell"
-   :bind-map tychoish/robot-agent-shell-map
-   :bind-key "m")
+    :bind-map tychoish/robot-agent-shell-map
+    :bind-key "m")
   :config
   (bind-keys
    :map agent-shell-mode-map
@@ -2735,9 +2738,9 @@ Useful after changing `eglot-workspace-configuration' or
 	(dolist (c commands)
 	  (ht-set table (map-elt c 'name) (or (map-elt c 'description) "")))
 	(let ((name (annotated-completing-read table
-		     :prompt "agent /command => "
-		     :category 'agent-shell-slash-command
-		     :require-match t)))
+					       :prompt "agent /command => "
+					       :category 'agent-shell-slash-command
+					       :require-match t)))
 	  (agent-shell-insert :text (concat "/" name " ")
 			      :shell-buffer shell
 			      :submit nil)))))
@@ -2755,10 +2758,10 @@ Useful after changing `eglot-workspace-configuration' or
   (defun tychoish/agent-shell-mcp-refresh ()
     "Recompute `agent-shell-mcp-servers' from `tychoish/mcp-build-servers'."
     (setq agent-shell-mcp-servers
-          (mapcar #'tychoish/mcp-spec->acp (tychoish/mcp-build-servers))))
+	  (mapcar #'tychoish/mcp-spec->acp (tychoish/mcp-build-servers))))
   (tychoish/agent-shell-mcp-refresh)
   (advice-add 'agent-shell :before
-              (lambda (&rest _) (tychoish/agent-shell-mcp-refresh))))
+	      (lambda (&rest _) (tychoish/agent-shell-mcp-refresh))))
 
 (use-package agent-shell-manager
   :load-path "elpa/agent-shell-manager"
@@ -2853,7 +2856,7 @@ call-site that has access to SHELL-BUFFER."
 	      ("d" . meta-agent-shell-jump-to-dispatcher)
 	      ("!" . meta-agent-shell-big-red-button))
   :config
-  (setq meta-agent-shell-heartbeat-file	(tychoish/conf-state-path "meta-agent-shell-heartbeat.org"))
+  (setq meta-agent-shell-heartbeat-file (tychoish/conf-state-path "meta-agent-shell-heartbeat.org"))
   (setq meta-agent-shell-start-function #'agent-shell))
 
 (use-package beads
@@ -2869,8 +2872,8 @@ call-site that has access to SHELL-BUFFER."
    ("n" . beads-create-issue)
    ("m" . beads-menu))
   (make-read-extended-command-for-prefix "beads"
-   :bind-map tychoish/robot-beads-map
-   :bind-key "x"))
+    :bind-map tychoish/robot-beads-map
+    :bind-key "x"))
 
 (use-package uuidgen
   :ensure t
