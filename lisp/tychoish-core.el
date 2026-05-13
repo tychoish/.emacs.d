@@ -2611,9 +2611,9 @@ Useful after changing `eglot-workspace-configuration' or
    ("e" . agent-shell-jump-to-latest-permission-button-row)
    ("b" . agent-shell-switch-buffer)
    ("a" . agent-shell-action-menu)
-   ("c" . agent-shell-collapse-menu)
+   ("f" . agent-shell-collapse-menu)
    ("p" . agent-shell-resolve-permission)
-   ("x" . agent-shell-command-menu))
+   ("c" . agent-shell-command-menu))
 
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
@@ -2637,7 +2637,8 @@ Useful after changing `eglot-workspace-configuration' or
   (agent-shell-mode-key "a" agent-shell-action-menu)
   (agent-shell-mode-key "b" agent-shell-switch-buffer)
   (agent-shell-mode-key "x" execute-extended-agent-shell-command)
-  (agent-shell-mode-key "c" agent-shell-collapse-menu)
+  (agent-shell-mode-key "f" agent-shell-collapse-menu)
+  (agent-shell-mode-key "c" agent-shell-command-menu)
   (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
 
   (with-eval-after-load 'agent-shell-viewport
@@ -2693,21 +2694,13 @@ In the output section calls FN interactively; self-inserts KEY at the prompt."
              (call-interactively #',fn)))
          (define-key agent-shell-mode-map (kbd ,key-str) #',name))))
 
-  (defun agent-shell-suppress-prose-capf ()
-    "CAPF that blocks completion unless the token at point starts with `/' or `@'."
-    (let ((word-start (save-excursion
-                        (skip-chars-backward "^ \t\n")
-                        (point))))
-      (unless (memq (char-after word-start) '(?/ ?@))
-        (list (point) (point) nil))))
-
   (defun agent-shell-corfu-setup ()
     "Configure corfu auto-completion for agent-shell buffers."
     (corfu-mode +1)
     (setq-local corfu-auto-prefix 2)
-    (setq-local completion-in-region-function #'corfu--in-region)
-    (remove-hook 'completion-at-point-functions #'comint-completion-at-point t)
-    (add-hook 'completion-at-point-functions #'agent-shell-suppress-prose-capf -90 t))
+    (setq-local completion-at-point-functions
+		(append (remq t completion-at-point-functions)
+			(list #'cape-dabbrev))))
 
   (defun agent-shell--format-age (delta)
     "Format DELTA, a time-value, as a short relative age (e.g. \"3m\", \"2h\")."
@@ -2840,14 +2833,18 @@ When a permission request is pending, permission responses are spliced into the 
   (defun agent-shell-command-menu ()
     "Insert one of the agent's advertised `/' commands at the prompt."
     (interactive)
-    (let* ((shell (agent-shell-shell-buffer))
+    (let* ((shell (or (cond
+		       ((derived-mode-p 'agent-shell-mode) (current-buffer))
+		       ((agent-shell-viewport--shell-buffer)))
+		      (user-error "not in an agent-shell or viewport buffer")))
 	   (commands (with-current-buffer shell
 		       (map-elt agent-shell--state :available-commands)))
 	   (table (ht-create)))
       (unless commands
 	(user-error "no agent slash-commands advertised in %s" (buffer-name shell)))
-      (dolist (c commands)
-	(ht-set table (map-elt c 'name) (or (map-elt c 'description) "")))
+      (seq-do (lambda (c)
+		(ht-set table (map-elt c 'name) (or (map-elt c 'description) "")))
+	      commands)
       (agent-shell-insert :text (concat "/" (annotated-completing-read
 					     table
 					     :prompt "agent /command => "
