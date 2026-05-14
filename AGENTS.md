@@ -172,7 +172,7 @@ Wrap `require` calls and other potentially slow operations with `with-slow-op-ti
 
 ### Avoid advice on hot paths by default
 
-`advice-add` on `run-hooks`, `run-hooks-with-args`, or other frequently-called Emacs internals should only be active during active debugging sessions, not in normal operation. Gate them behind `init-file-debug` or the slow-op CLI flag.
+`advice-add` on `run-hooks`, `run-hooks-with-args`, or other frequently-called Emacs internals should only be active during active debugging sessions, not in normal operation. Gate them behind the slow-op CLI flag.
 
 ### Idle timers over hooks for non-urgent I/O
 

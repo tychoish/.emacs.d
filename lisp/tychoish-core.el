@@ -2644,13 +2644,17 @@ Useful after changing `eglot-workspace-configuration' or
    ("n" . agent-shell-new-shell)
    ("t" . agent-shell-new-worktree-shell)
    ("T" . agent-shell-new-temp-shell)
-   ("q" . agent-shell-queue-enqueue))
+   ("/" . agent-shell-queue-enqueue))
 
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
+  (make-read-extended-command-for-prefix "agent-shell-queue"
+    :bind-map tychoish/robot-agent-shell-map
+    :bind-key "q")
   :config
   (require 'agent-shell-extras)
+  (require 'agent-shell-queue)
   (bind-keys
    :map agent-shell-mode-map
    ("C-c C-c" . agent-shell-submit)
