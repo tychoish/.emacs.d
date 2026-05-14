@@ -37,6 +37,13 @@
 (require 'fn)
 (require 'dash)
 
+(defmacro flex-defun (name args &rest body)
+  "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
+Useful for functions used as hooks or advice targets where callers may pass
+more arguments than the function cares about."
+  (declare (indent defun) (doc-string 3))
+  `(defun ,name ,(append args '(&rest _)) ,@body))
+
 (declare-function browse-url-chrome "browse-url")
 
 (bind-keys
@@ -47,6 +54,7 @@
  ("C-x l" . goto-line)
  ("C-x f" . find-file)
  ("C-x C-f" . find-file)
+ ("C-x C-d" . dired)
  ("C-x h" . help)
  ("C-x C-x" . exchange-point-and-mark)
  ;; ("C-x C-u w" . upcase-word)
@@ -439,6 +447,9 @@ This combines the host name and the dameon name."
   (with-silence
     (recentf-mode 1)
     (savehist-mode 1))
+
+  (with-eval-after-load 'savehist
+    (annotated-completing-read-enable-session-save))
 
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" 'consult-recent-file 'global-map))
@@ -1642,26 +1653,35 @@ Populated lazily by `tychoish/mcp-servers-init' the first time either
 The gopls entry is resolved dynamically via `tychoish/gopls-mcp-resolve'
 and prepended by `tychoish/mcp-build-servers'.
 Each entry is a plist with one of:
-  (:name NAME :command CMD :args (ARGS...) [:env ((K . V) ...)])
-  (:name NAME :url URL [:transport http|sse] [:headers ((K . V) ...)])")
+  (:name NAME :command CMD :args (ARGS...) [:env ((K . V) ...)] [:disabled t])
+  (:name NAME :url URL [:transport http|sse] [:headers ((K . V) ...)] [:disabled t])
+Entries with `:disabled t' are excluded by `tychoish/mcp-build-servers'.")
 
-(defun tychoish/mcp-servers-init ()
-  "Populate `tychoish/mcp-servers'.  Idempotent; safe to call repeatedly."
-  (unless tychoish/mcp-servers
-    (setq tychoish/mcp-servers
-          `((:name "time" :command "uvx" :args ("mcp-server-time"))
-            (:name "fetch" :command "uvx" :args ("mcp-server-fetch"))
-            (:name "godoc" :command "godoc-mcpr")
-            (:name "awsdoc" :command "awslabs.aws-documentation-mcp-server")
-            (:name "lsp-mcp-rust" :command "npx" :args ("tritlo/lsp-mcp" "rust" ,(executable-find "rust-analyzer")))
-            (:name "lsp-mcp-bash" :command "npx" :args ("tritlo/lsp-mcp" "bash" ,(executable-find "bash-language-server") "start"))
-            (:name "lsp-mcp-yaml" :command "npx" :args ("tritlo/lsp-mcp" "yaml" ,(executable-find "yaml-language-server") "--stdio"))
-            (:name "git" :command "uvx" :args ("mcp-server-git"))
-            (:name "rg" :command "npx" :args ("-y" "mcp-ripgrep@latest"))
-            (:name "linear" :command "npx" :args ("-y" "mcp-remote" "https://mcp.linear.app/mcp"))
-            (:name "github" :command "npx" :args ("-y" "mcp-remote" "https://api.githubcopilot.com/mcp"))
-            (:name "notion" :command "npx" :args ("-y" "mcp-remote" "https://mcp.notion.com/mcp"))
-            (:name "google-workspace" :command "uvx" :args ("workspace-mcp"))))))
+(defun tychoish/mcp-servers-init (&optional force)
+  "Populate `tychoish/mcp-servers' if not already set.
+With prefix arg FORCE, reset and repopulate unconditionally."
+  (interactive "P")
+  (when (or force (null tychoish/mcp-servers))
+    (setq tychoish/mcp-servers nil)
+    (push '(:name "git" :command "uvx" :args ("mcp-server-git")) tychoish/mcp-servers)
+    (push '(:name "rg" :command "npx" :args ("-y" "mcp-ripgrep@latest")) tychoish/mcp-servers)
+    (push '(:name "gh" :command "gh" :args ("mcp")) tychoish/mcp-servers)
+
+    ;; (push '(:name "godoc" :command "godoc-mcpr") tychoish/mcp-servers)
+    ;; (push '(:name "time" :command "uvx" :args ("mcp-server-time")) tychoish/mcp-servers)
+    ;; (push '(:name "fetch" :command "uvx" :args ("mcp-server-fetch")) tychoish/mcp-servers)
+    ;; (push '(:name "awsdoc" :command "awslabs.aws-documentation-mcp-server") tychoish/mcp-servers)
+    ;; (push (list :name "lsp-mcp-rust" :command "npx" :args (list "tritlo/lsp-mcp" "rust" (executable-find "rust-analyzer"))) tychoish/mcp-servers)
+    ;; (push (list :name "lsp-mcp-bash" :command "npx" :args (list "tritlo/lsp-mcp" "bash" (executable-find "bash-language-server") "start")) tychoish/mcp-servers)
+    ;; (push (list :name "lsp-mcp-yaml" :command "npx" :args (list "tritlo/lsp-mcp" "yaml" (executable-find "yaml-language-server") "--stdio")) tychoish/mcp-servers)
+    ;; (push '(:name "github" :command "npx" :args ("-y" "mcp-remote" "https://api.githubcopilot.com/mcp")) tychoish/mcp-servers)
+    ;; (push '(:name "linear" :command "npx" :args ("-y" "mcp-remote" "https://mcp.linear.app/mcp")) tychoish/mcp-servers)
+    ;; (push '(:name "notion" :command "npx" :args ("-y" "mcp-remote" "https://mcp.notion.com/mcp")) tychoish/mcp-servers)
+    ;; (push '(:name "google-workspace" :command "uvx" :args ("workspace-mcp")) tychoish/mcp-servers)
+
+    (message "mcp-servers-init: %d servers registered (%d active)"
+             (length tychoish/mcp-servers)
+             (cl-count-if-not (lambda (s) (plist-get s :disabled)) tychoish/mcp-servers))))
 
 (defun tychoish/gopls-mcp--port-alive-p ()
   "Return non-nil if something is accepting TCP on `tychoish/gopls-mcp-port'."
@@ -1710,10 +1730,12 @@ Reuses any existing live process.  Returns the process or nil on failure."
   (cl-some #'tychoish/gopls-mcp--resolve-one tychoish/gopls-mcp-backends))
 
 (defun tychoish/mcp-build-servers ()
-  "Build the MCP server list with a freshly-resolved gopls entry."
+  "Build the active MCP server list with a freshly-resolved gopls entry.
+Servers with `:disabled t' in `tychoish/mcp-servers' are excluded."
   (tychoish/mcp-servers-init)
-  (let ((gopls (tychoish/gopls-mcp-resolve)))
-    (if gopls (cons gopls tychoish/mcp-servers) tychoish/mcp-servers)))
+  (let* ((active (cl-remove-if (lambda (s) (plist-get s :disabled)) tychoish/mcp-servers))
+         (gopls (tychoish/gopls-mcp-resolve)))
+    (if gopls (cons gopls active) active)))
 
 (defun tychoish/mcp-spec->hub (spec)
   "Translate SPEC to a `mcp-hub-servers' alist entry: (NAME . PLIST)."

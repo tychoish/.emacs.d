@@ -206,3 +206,36 @@ When adding a new utility to `xlib.el` or a DSL macro, add at minimum a smoke te
 - After changing `tychoish-bootstrap.el` or `xlib.el`, byte-compile with `M-x byte-compile-all-user-emacs-files` (bound by default) to catch warnings.
 - Removing a keybinding: check all other files for references to the bound command before removing its map entry.
 - The `user/` directory is gitignored. Machine-specific overrides go there, not in the committed files.
+
+---
+
+## Agent development workflow
+
+### Always use emacsclient
+
+Use `emacsclient` for all Emacs operations — byte-compilation, `check-parens`, ERT tests, arbitrary elisp evaluation. Never invoke `emacs` directly.
+
+### Elisp formatting: no alignment padding
+
+Never use extra spaces to align let-binding RHS values or any other elements. Write `(table (ht-create))` not `(table   (ht-create))`. One space after the symbol name, always. Applies to `let`/`let*`, `plist`, `alist`, and all multi-element forms.
+
+### Byte-compilation hygiene
+
+After byte-compiling a file as a correctness check:
+- If the `.elc` did not exist before the compile, delete it afterward.
+- If it already existed, leave it alone.
+
+Byte-compilation is used only to catch errors, not to produce artifacts.
+
+### Reload after changes
+
+After verifying an elisp file compiles cleanly, reload it into the live session:
+
+```
+emacsclient --eval '(load-file "/path/to/file.el")'
+```
+
+Changes don't take effect in the running Emacs until the file is reloaded.
+
+After loading or reloeading `lisp/tychoish-bootstrap.el` ALWAYS reload
+`lisp/tychoish-core.el`.

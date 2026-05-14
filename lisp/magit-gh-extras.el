@@ -24,10 +24,16 @@
 
 (declare-function magit-toplevel "magit-git")
 (declare-function magit-list-local-branch-names "magit-git")
-(declare-function magit-get-upstream-branch "magit-git")
+(declare-function magit-get-current-branch "magit-git")
 (declare-function magit-branch-delete "magit-branch")
 (declare-function magit-gh--repo-dir "magit-gh")
 (declare-function magit-gh--check-gh "magit-gh")
+
+(defvar magit-gh-prune-pr-limit 100
+  "Maximum number of PRs to fetch from GitHub on each incremental scan.")
+
+(defvar magit-gh-prune-cache-dir nil
+  "Directory for per-repo closed-PR cache files, or nil to disable disk caching.")
 
 (defvar-local magit-gh--prune-state nil
   "Buffer-local prune state for the current repo.
@@ -35,27 +41,72 @@ A plist with `:candidates' (alist of (BRANCH . PR-ALIST)) and
 `:marked' (list of branch names selected for batch pruning).
 Lives on a hidden state buffer per repository.")
 
-(defun magit-gh--tracking-branches ()
-  "Return a list of local branches that have an upstream tracking branch."
-  (let (result)
-    (dolist (branch (magit-list-local-branch-names))
-      (when (magit-get-upstream-branch branch)
-	(push branch result)))
-    (nreverse result)))
-
-(defun magit-gh--pr-for-branch (branch)
-  "Return the PR alist for BRANCH from `gh pr list --state all', else nil.
-Matches against `headRefName' as exposed by `gh pr list'."
-  (let* ((default-directory (magit-gh--repo-dir))
-	 (cmd (format "gh pr list --head %s --state all --json number,state,headRefName,title --limit 1"
-		      (shell-quote-argument branch)))
-	 (output (string-trim (shell-command-to-string cmd))))
-    (when (string-prefix-p "[" output)
-      (car (json-parse-string output :array-type 'list :object-type 'alist)))))
-
 (defun magit-gh--pr-closed-p (pr)
   "Return non-nil when PR alist represents a merged or closed PR."
   (member (alist-get 'state pr) '("MERGED" "CLOSED")))
+
+(defun magit-gh--default-branch ()
+  "Return the repository's default branch name, falling back to \"main\"."
+  (let* ((default-directory (magit-gh--repo-dir))
+	 (output (string-trim
+		  (shell-command-to-string
+		   "gh repo view --json defaultBranchRef --jq .defaultBranchRef.name"))))
+    (if (string-empty-p output) "main" output)))
+
+(defun magit-gh--prune-cache-file ()
+  "Return the cache file path for the current repo, or nil when caching is disabled.
+The filename uses the repo's directory basename plus a short hash for uniqueness."
+  (when magit-gh-prune-cache-dir
+    (let* ((dir (magit-gh--repo-dir))
+	   (basename (file-name-nondirectory (directory-file-name dir)))
+	   (short-hash (substring (secure-hash 'sha1 dir) 0 8)))
+      (expand-file-name
+       (format "%s-%s.eld" basename short-hash)
+       magit-gh-prune-cache-dir))))
+
+(defun magit-gh--prune-load-cache ()
+  "Return a hash table of headRefName→PR-alist from the repo's cache file.
+Returns an empty hash table when caching is disabled, no cache exists,
+or the file is unreadable."
+  (let ((table (make-hash-table :test #'equal)))
+    (when-let ((file (magit-gh--prune-cache-file)))
+      (when (file-exists-p file)
+	(condition-case err
+	    (with-temp-buffer
+	      (insert-file-contents file)
+	      (goto-char (point-min))
+	      (dolist (pr (read (current-buffer)))
+		(puthash (alist-get 'headRefName pr) pr table)))
+	  (error (message "magit-gh prune: ignoring unreadable cache: %s" err)))))
+    table))
+
+(defun magit-gh--prune-save-cache (table)
+  "Persist the closed-PR hash TABLE to the repo cache file.
+No-op when `magit-gh-prune-cache-dir' is nil."
+  (when-let ((file (magit-gh--prune-cache-file)))
+    (make-directory magit-gh-prune-cache-dir t)
+    (let (prs)
+      (maphash (lambda (_branch pr) (push pr prs)) table)
+      (with-temp-file file
+	(prin1 prs (current-buffer))))))
+
+(defun magit-gh--fetch-closed-prs (&optional table)
+  "Fetch recent PRs from GitHub, merge closed ones into TABLE, persist and return it.
+TABLE defaults to the on-disk cache for the current repo.
+Uses a single gh call fetching up to `magit-gh-prune-pr-limit' PRs."
+  (let* ((default-directory (magit-gh--repo-dir))
+	 (table (or table (magit-gh--prune-load-cache)))
+	 (cmd (format "gh pr list --state all --limit %d --json number,state,headRefName,title"
+		      magit-gh-prune-pr-limit))
+	 (output (string-trim (shell-command-to-string cmd))))
+    (when (string-prefix-p "[" output)
+      (dolist (pr (json-parse-string output :array-type 'list :object-type 'alist))
+	(when (magit-gh--pr-closed-p pr)
+	  (let ((branch (alist-get 'headRefName pr)))
+	    (unless (gethash branch table)
+	      (puthash branch pr table))))))
+    (magit-gh--prune-save-cache table)
+    table))
 
 (defun magit-gh--prune-state-buffer ()
   "Return the hidden state buffer for the current repo, creating it if absent.
@@ -70,23 +121,31 @@ Errors when not inside a git repository."
 	  (current-buffer)))))
 
 (defun magit-gh--prune-scan ()
-  "Re-scan tracking branches against PR state in the current buffer's repo.
-Updates buffer-local `magit-gh--prune-state'. Stale marked branches
-(branches no longer in the candidate set) are dropped from `:marked'.
-Returns the new candidates alist."
+  "Re-scan all local branches against the closed/merged PR cache.
+Merges fresh GitHub data into the in-memory table stored in `:closed-prs'
+(seeded from disk on first call), persists the result, and rebuilds
+`:candidates'. Excludes the default branch and the currently checked-out
+branch, catching squash-merged branches whose remote tracking ref is gone.
+Stale marked branches are dropped from `:marked'. Returns new candidates."
   (let* ((default-directory (magit-gh--repo-dir))
 	 (prev-marked (plist-get magit-gh--prune-state :marked))
+	 (prev-prs (plist-get magit-gh--prune-state :closed-prs))
+	 (protected (list (magit-gh--default-branch)
+			  (magit-get-current-branch)))
+	 (closed-prs (magit-gh--fetch-closed-prs prev-prs))
 	 (candidates nil))
-    (dolist (branch (magit-gh--tracking-branches))
-      (let ((pr (magit-gh--pr-for-branch branch)))
-	(when (and pr (magit-gh--pr-closed-p pr))
-	  (push (cons branch pr) candidates))))
+    (dolist (branch (magit-list-local-branch-names))
+      (unless (member branch protected)
+	(let ((pr (gethash branch closed-prs)))
+	  (when pr
+	    (push (cons branch pr) candidates)))))
     (setq candidates (nreverse candidates))
     (setq magit-gh--prune-state
 	  (list :candidates candidates
 		:marked (cl-intersection prev-marked
 					 (mapcar #'car candidates)
-					 :test #'equal)))
+					 :test #'equal)
+		:closed-prs closed-prs))
     candidates))
 
 (defun magit-gh--prune-format-annotation (pr)
@@ -146,11 +205,11 @@ yes-to-all for the remainder, `q' terminates the loop."
 			 (format "Delete %s? (y/n/q/!) " branch)
 			 '(?y ?n ?q ?!)))))
 	  (pcase answer
-	    (?y (magit-branch-delete (list branch)) (cl-incf deleted))
+	    (?y (magit-branch-delete (list branch) t) (cl-incf deleted))
 	    (?n (cl-incf skipped))
 	    (?q (setq quit t) (throw 'done nil))
 	    (?! (setq yes-to-all t)
-		(magit-branch-delete (list branch))
+		(magit-branch-delete (list branch) t)
 		(cl-incf deleted))))))
     (with-current-buffer buf (magit-gh--prune-scan))
     (message "magit-gh prune: deleted %d, skipped %d%s"
@@ -243,6 +302,21 @@ menu'. The menu offers:
 		       :category 'magit-gh-prune
 		       :require-match t)))
 	  (magit-gh--prune-dispatch label buf))))))
+
+;;;###autoload
+(defun magit-gh-prune-prefetch ()
+  "Seed the in-memory closed-PR cache from disk for the current repo.
+Makes no GitHub API calls; safe to call on status load.
+Skips silently when caching is disabled, not in a git repo, or the
+in-memory cache is already populated."
+  (when (and magit-gh-prune-cache-dir
+	     (ignore-errors (magit-toplevel)))
+    (let ((buf (magit-gh--prune-state-buffer)))
+      (unless (plist-get (buffer-local-value 'magit-gh--prune-state buf) :closed-prs)
+	(with-current-buffer buf
+	  (let ((table (magit-gh--prune-load-cache)))
+	    (setq magit-gh--prune-state
+		  (plist-put magit-gh--prune-state :closed-prs table))))))))
 
 (provide 'magit-gh-extras)
 

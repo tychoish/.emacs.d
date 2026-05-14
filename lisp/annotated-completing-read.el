@@ -34,23 +34,25 @@
 
 ;;; Code:
 
+;; stdlib packages
 (require 'cl-lib)
-(require 'xlib)
+
+;; external (melpa) packages
 (require 'dash)
 (require 'ht)
 (require 's)
 (require 'f)
+
+(defvar annotated-completing-read-history (ht-create)
+  "Hash table mapping command symbols to per-command minibuffer history lists.
+Keys are symbols — typically `this-command' at call time — and values are
+the standard Emacs history lists accumulated by `completing-read'.")
 
 (defun annotated-completing-read--length-of-longest (items)
   (apply #'max 0 (mapcar #'length items)))
 
 (defun annotated-completing-read--prefix-padding (key longest)
   (make-string (abs (+ 4 (- longest (length key)))) ?\s))
-
-(defvar annotated-completing-read-history (ht-create)
-  "Hash table mapping command symbols to per-command minibuffer history lists.
-Keys are symbols — typically `this-command' at call time — and values are
-the standard Emacs history lists accumulated by `completing-read'.")
 
 ;;;###autoload
 (cl-defun annotated-completing-read
@@ -140,37 +142,46 @@ SEED is a string or list of strings to include as explicit candidates."
 
     (->> (cond ((listp seed) seed)
                ((stringp seed) (list seed)))
-         (-keep #'s-trimmed-or-nil)
+	 (-non-nil)
+	 (-map #'s-trim)
+	 (-remove #'s-empty-p)
          (--filter (< (length it) 128))
-         (--mapc (ht-set table it "seed")))
+         (--each (ht-set table it "seed")))
 
     (->> (-concat (--map (cons 'text-mode it) '(word email url sentence))
                   (--map (cons 'prog-mode it) '(symbol word sexp defun)))
          (--keep (when-let* ((_ (derived-mode-p (car it)))
 			     (val (thing-at-point (cdr it)))
-                             (val (s-trimmed-or-nil val))
+			     (_ val)
+                             (val (s-trim val))
+			     (_ (not (s-empty-p val)))
                              (val (substring-no-properties val))
                              (_ (< (length val) 64)))
                    (cons val (format "%s at point" (cdr it)))))
-         (--mapc (ht-set table (car it) (cdr it))))
+         (--each (ht-set table (car it) (cdr it))))
 
     (when-let* ((_ (use-region-p))
 		(sel (buffer-substring-no-properties (region-beginning) (region-end)))
-                (sel (s-trimmed-or-nil sel))
+                (sel (s-trim sel))
+		(sel (not (s-empty-p sel)))
                 (_ (< (length sel) 128)))
       (ht-set table sel (format "region · %s" (buffer-name))))
 
     (when-let* ((line (thing-at-point 'line))
-                (line (s-trimmed-or-nil (substring-no-properties line)))
+		(line (substring-no-properties line))
+		(line (s-trim line))
+		(line (not (s-empty-p line)))
                 (_ (< (length line) 128)))
       (ht-set table line (format "line · %s" (buffer-name))))
 
     (->> kill-ring
          (-map #'substring-no-properties)
-         (-keep #'s-trimmed-or-nil)
+	 (-non-nil)
+	 (-map #'s-trim)
+	 (-remove #'s-empty-p)
          (--filter (< (length it) 128))
          (-take 10)
-         (--mapc (ht-set table it (format "kill-ring [%d]" (cl-incf idx)))))
+         (--each (ht-set table it (format "kill-ring [%d]" (cl-incf idx)))))
 
     table))
 
@@ -199,13 +210,45 @@ command its own isolated history."
 
 ;; directory selection
 
+(declare-function projectile-project-buffers "projectile")
+(declare-function projectile-project-root "projectile")
+
+(defun annotated-completing-read--project-root ()
+  (or (project-root (project-current))
+      (when (featurep 'projectile) (projectile-project-root))
+      (expand-file-name default-directory)))
+
+(defun annotated-completing-read--project-buffers ()
+  (or (project-buffers (project-current))
+      (when (featurep 'projectile) (projectile-project-buffers))
+      (let ((dir (annotated-completing-read--project-root)))
+	(--filter (with-current-buffer buf
+ 		    (file-in-directory-p (buffer-file-name buf) dir))
+		  (buffer-list)))))
+
+(defun annotated-completing-read--filter-directories (sequence)
+  "Return SEQUENCE filtered to existing directories, canonicalized and deduplicated."
+  (->> sequence
+       (-filter #'stringp)
+       (-map #'string-trim)
+       (-remove #'string-empty-p)
+       (--map (or (when (file-regular-p it)
+		    (file-name-directory it))
+		  it))
+       (-map #'expand-file-name)
+       (-distinct)
+       (-filter #'file-directory-p)))
+
 (defun annotated-completing-read--directory-clean (dirs)
   "Normalise DIRS: expand relative paths, drop nil/blank, deduplicate."
   (->> dirs
-       (-keep #'s-trimmed-or-nil)
-       (--map (or (when (f-absolute-p it) it)
-                  (expand-file-name it)))
-       (f-distinct)))
+       (-non-nil)
+       (-map #'s-trim)
+       (-remove #'s-empty-p)
+       (-map #'f-expand)
+       (-map #'directory-file-name)
+       (-map #'f-canonical)
+       (-distinct)))
 
 (defun annotated-completing-read--directory-parents (&optional start stop)
   "Return intermediate directory paths walking up from START to STOP."
@@ -220,40 +263,49 @@ command its own isolated history."
                 (not (string-prefix-p stop-path current))))
       (setq current (file-name-parent-directory current))
       (push current output))
-    (->> output
-         (f-filter-directories '(cannonicalize unique)))))
+    (annotated-completing-read--filter-directories output)))
 
 (defun annotated-completing-read--directory-default-candidates ()
   "Assemble context-aware directory candidates from project, buffers, and point."
-  (let* ((proj-root (approximate-project-root))
-         (home (expand-file-name "~/"))
-         (proj-bufs (->> (approximate-project-buffers)
-                         (--keep (when (bufferp it)
-                                   (with-current-buffer it
-                                     (when-let* ((f (buffer-file-name it)))
-                                       (cond ((f-directory-p f) f)
-                                             ((f-file-p f) (f-dirname f))
-                                             (t default-directory)))))))))
+  (let* ((proj-root (annotated-completing-read--project-root))
+         (home (expand-file-name "~/")))
+
     (--> (append
+	  ;; includes all paths between the current directory and the
+	  ;; project root (inclusive)
           (annotated-completing-read--directory-parents default-directory proj-root)
-          proj-bufs
+	  ;; includes the directory of every path that has an open buffer.
+	  (->> (annotated-completing-read--project-buffers)
+	       (-map #'buffer-file-name)
+	       (-non-nil)
+	       ;; NOTE: if we have a buffer that's file name is the
+	       ;; project root itself then this puts the parent of the
+	       ;; project root (which the previous item should include)
+	       ;; we run distinct at the end too, so it's fine
+	       (-keep #'file-name-directory)
+	       (-distinct))
+	  ;; a collection of things that __might__ be something the
+	  ;; user is trying for guess
           (list (thing-at-point 'filename)
                 (thing-at-point 'existing-filename)
                 default-directory
                 user-emacs-directory
                 home))
-         (if (or (and (length< it 16)
-                      (not (f-equal-p home proj-root)))
+	 ;; if the list is relatively short, add all of the top level
+	 ;; directories in the project root
+         (if (or (and (length< it 16) (not (f-equal-p home proj-root)))
                  current-prefix-arg)
-             (-join (f-directories proj-root) it)
+             (nconc (f-directories proj-root) it)
            it)
-         (f-filter-directories '(cannonicalize unique) it))))
+	 ;; do one big filter pass to make sure we only give
+	 ;; directories, and things get expanded correctly: 
+         (annotated-completing-read--filter-directories it))))
 
 (defun annotated-completing-read--directory-entry-counts (dir)
   "Return a brief annotation with subdirectory and file counts for DIR."
   (if (file-accessible-directory-p dir)
       (let* ((entries (directory-files dir t "\\`[^.]"))
-             (n-dirs  (cl-count-if #'file-directory-p entries))
+             (n-dirs (cl-count-if #'file-directory-p entries))
              (n-files (- (length entries) n-dirs)))
 	(format "%d dirs, %d files" n-dirs n-files))
     ""))
@@ -272,7 +324,7 @@ than 8 candidates candidates are grouped by that relationship label and the
 annotation shows entry counts instead."
   (let* ((dirs (or (annotated-completing-read--directory-clean candidates)
                    (annotated-completing-read--directory-default-candidates)))
-         (project-root (approximate-project-root))
+	 (project-root (annotated-completing-read--project-root))
          (relationship (ht-create)))
     (--each dirs
       (ht-set relationship it
@@ -295,6 +347,17 @@ annotation shows entry counts instead."
       (annotated-completing-read relationship
        :prompt (or prompt "directory: ")
        :require-match require-match))))
+
+;;;###autoload
+(defun annotated-completing-read-enable-session-save ()
+  "Persist ACR history across sessions via savehist and desktop.
+Call this once after enabling `savehist-mode' or `desktop-save-mode'.
+`annotated-completing-read-history' is a hash table; both mechanisms
+can serialize it in Emacs 28+."
+  (with-eval-after-load 'savehist
+    (add-to-list 'savehist-additional-variables 'annotated-completing-read-history))
+  (with-eval-after-load 'desktop
+    (add-to-list 'desktop-globals-to-save 'annotated-completing-read-history)))
 
 (provide 'annotated-completing-read)
 ;;; annotated-completing-read.el ends here

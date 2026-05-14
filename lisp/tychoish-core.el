@@ -187,7 +187,23 @@
   (setq projectile-use-git-grep t)
   (setq projectile-completion-system 'auto)
   (setq projectile-require-project-root nil)
-  (setq projectile-known-projects-file (tychoish/conf-state-path "projectile-bookmarks.el")))
+  (setq projectile-known-projects-file (tychoish/conf-state-path "projectile-bookmarks.el"))
+  (add-hook 'prog-mode-hook #'projectile-mode)
+  (add-hook 'text-mode-hook #'projectile-mode)
+
+  (defun tychoish/projectile-enable-all-buffers ()
+    "Enable `projectile-mode' in all live buffers."
+    (interactive)
+    (--mapc (with-current-buffer it
+	      (projectile-mode 1))
+      (buffer-list)))
+
+  (defun tychoish/projectile-disable-all-buffers ()
+    "Disable `projectile-mode' in all live buffers."
+    (interactive)
+    (--mapc (with-current-buffer it
+	      (projectile-mode 11))
+      (buffer-list))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1007,6 +1023,10 @@
   :config
   (setq magit-gh-pr-limit 50)
   (require 'magit-gh-extras)
+  (setq magit-gh-prune-cache-dir (tychoish/conf-state-path "magit-gh-prune"))
+  (add-hook 'magit-status-mode-hook
+	    (lambda ()
+	      (run-with-idle-timer 3 nil #'magit-gh-prune-prefetch)))
   (transient-append-suffix 'magit-gh "v"
     '("P" "Prune merged/closed PR branches" magit-gh-prune-merged-branches)))
 
@@ -1707,8 +1727,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 (use-package docker
   :ensure t
   :commands (docker)
-  :bind (("C-x d" . docker)
-	 ("C-c d d" . docker))
+  :bind (("C-c d d" . docker))
   :config
   (make-read-extended-command-for-prefix "docker"
     :bind-key "C-x C-d"
@@ -2311,13 +2330,21 @@ Useful after changing `eglot-workspace-configuration' or
     :key-alias "mcp-commands"
     :bind-key "/"
     :bind-map mcp-hub-mode-map)
-  (defun tychoish/mcp-hub-refresh ()
+  (flex-defun tychoish/mcp-hub-refresh ()
     "Recompute `mcp-hub-servers' from `tychoish/mcp-build-servers'."
     (setq mcp-hub-servers
 	  (mapcar #'tychoish/mcp-spec->hub (tychoish/mcp-build-servers))))
+  (defun tychoish/mcp-hub-skip-disabled (orig-fn name &rest args)
+    "Around advice: refuse to start a server marked :disabled in `tychoish/mcp-servers'."
+    (let ((spec (cl-find name tychoish/mcp-servers
+                         :key (lambda (s) (plist-get s :name))
+                         :test #'equal)))
+      (if (and spec (plist-get spec :disabled))
+          (message "mcp-hub: skipping disabled server %S" name)
+        (apply orig-fn name args))))
   (tychoish/mcp-hub-refresh)
-  (advice-add 'mcp-hub-start-all-servers :before
-	      (lambda (&rest _) (tychoish/mcp-hub-refresh))))
+  (advice-add 'mcp-hub-start-all-servers :before #'tychoish/mcp-hub-refresh)
+  (advice-add 'mcp-hub-start-server :around #'tychoish/mcp-hub-skip-disabled))
 
 (use-package copilot
   :ensure t
@@ -2613,12 +2640,17 @@ Useful after changing `eglot-workspace-configuration' or
    ("a" . agent-shell-action-menu)
    ("f" . agent-shell-collapse-menu)
    ("p" . agent-shell-resolve-permission)
-   ("c" . agent-shell-command-menu))
+   ("c" . agent-shell-command-menu)
+   ("n" . agent-shell-new-shell)
+   ("t" . agent-shell-new-worktree-shell)
+   ("T" . agent-shell-new-temp-shell)
+   ("q" . agent-shell-queue-enqueue))
 
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
   :config
+  (require 'agent-shell-extras)
   (bind-keys
    :map agent-shell-mode-map
    ("C-c C-c" . agent-shell-submit)
@@ -2654,291 +2686,6 @@ Useful after changing `eglot-workspace-configuration' or
 
   (tychoish/mcp-servers-init)
 
-  (defun agent-shell-resolve-permission ()
-    "Resolve a pending permission prompt via `annotated-completing-read'."
-    (interactive)
-    (unless (derived-mode-p 'agent-shell-mode)
-      (user-error "Not in an agent-shell buffer"))
-    (unless (agent-shell--permission-pending-p)
-      (user-error "No pending permission request in this buffer"))
-    (let ((buttons (or (agent-shell--permission-buttons)
-                       (user-error "No permission buttons found in this buffer")))
-          (table (ht-create)))
-      (dolist (b buttons)
-        (ht-set table (car b) (format "pos %d" (cdr b))))
-      (let* ((label (annotated-completing-read table
-                                               :prompt "permission => "
-                                               :category 'agent-shell-permission
-                                               :require-match t))
-             (pos   (cdr (assoc label buttons)))
-             (cmd   (or (and pos (agent-shell--permission-action-at pos))
-                        (user-error "No action attached to permission button"))))
-        (save-excursion
-          (goto-char pos)
-          (call-interactively cmd)))))
-
-  (defmacro agent-shell-mode-key (key fn)
-    "Define `agent-shell-output-key-KEY' and bind it in `agent-shell-mode-map'.
-In the output section calls FN interactively; self-inserts KEY at the prompt."
-    (let* ((key-str (if (stringp key) key (symbol-name key)))
-           (name (intern (concat "agent-shell-output-key-" key-str)))
-           (char (pcase key-str
-                   ("TAB" ?\t)
-                   ((pred (lambda (s) (= 1 (length s)))) (aref key-str 0)))))
-      `(progn
-         (defun ,name ()
-           ,(format "In output: `%s'. Self-insert at prompt." fn)
-           (interactive)
-           (if (shell-maker-point-at-last-prompt-p)
-               ,(if char `(self-insert-command 1 ,char) '(ignore))
-             (call-interactively #',fn)))
-         (define-key agent-shell-mode-map (kbd ,key-str) #',name))))
-
-  (defun agent-shell-corfu-setup ()
-    "Configure corfu auto-completion for agent-shell buffers."
-    (corfu-mode +1)
-    (setq-local corfu-auto-prefix 2)
-    (setq-local completion-at-point-functions
-		(append (remq t completion-at-point-functions)
-			(list #'cape-dabbrev))))
-
-  (defun agent-shell--format-age (delta)
-    "Format DELTA, a time-value, as a short relative age (e.g. \"3m\", \"2h\")."
-    (let ((s (float-time delta)))
-      (cond ((< s 60) (format "%ds" (truncate s)))
-	    ((< s 3600) (format "%dm" (truncate (/ s 60))))
-	    ((< s 86400) (format "%dh" (truncate (/ s 3600))))
-	    (t (format "%dd" (truncate (/ s 86400)))))))
-
-  (defun agent-shell--buffer-annotation (buf)
-    "Build an annotation string describing the agent-shell BUF."
-    (with-current-buffer buf
-      (let* ((status (agent-shell-status))
-	     (state agent-shell--state)
-	     (used (map-nested-elt state '(:usage :context-used)))
-	     (size (map-nested-elt state '(:usage :context-size)))
-	     (last (map-elt state :last-activity-time))
-	     (cwd (abbreviate-file-name (or default-directory ""))))
-	(s-join " · "
-		(-non-nil
-		 (list (format "[%s]" status)
-		       cwd
-		       (when (and (numberp used) (numberp size) (> size 0))
-			 (format "ctx %.0f%%" (* 100.0 (/ (float used) size))))
-		       (when last
-			 (format "%s ago"
-				 (agent-shell--format-age (time-since last))))))))))
-
-  (defun agent-shell-switch-buffer ()
-    "Switch to an agent-shell buffer with status, cwd, context, and age annotations."
-    (interactive)
-    (let ((buffers (or (agent-shell-buffers)
-		       (user-error "no live agent-shell buffers")))
-	  (table (ht-create)))
-      (dolist (buf buffers)
-	(ht-set table (buffer-name buf) (agent-shell--buffer-annotation buf)))
-      (switch-to-buffer
-       (annotated-completing-read table
-				  :prompt "agent-shell => "
-				  :category 'agent-shell-buffer
-				  :require-match t))))
-
-  ;; action menu: common in-buffer operations, surfaced via annotated-completing-read.
-
-  (defvar agent-shell-action-alist
-    '(("submit" . shell-maker-submit)
-      ("interrupt" . agent-shell-interrupt)
-      ("jump to end (prompt)" . end-of-buffer)
-      ("compose in viewport" . agent-shell-prompt-compose)
-      ("goto last interaction" . agent-shell-goto-last-interaction)
-      ("jump to permission row" . agent-shell-jump-to-latest-permission-button-row)
-      ("next permission button" . agent-shell-next-permission-button)
-      ("previous permission button" . agent-shell-previous-permission-button)
-      ("next item" . agent-shell-next-item)
-      ("previous item" . agent-shell-previous-item)
-      ("other buffer (viewport)" . agent-shell-other-buffer)
-      ("switch agent-shell" . agent-shell-switch-buffer)
-      ("send region" . agent-shell-send-region)
-      ("send file" . agent-shell-send-file)
-      ("yank (DWIM)" . agent-shell-yank-dwim)
-      ("queue request" . agent-shell-queue-request)
-      ("resume pending" . agent-shell-resume-pending-requests)
-      ("cycle session mode" . agent-shell-cycle-session-mode)
-      ("set session mode" . agent-shell-set-session-mode)
-      ("set session model" . agent-shell-set-session-model)
-      ("copy session id" . agent-shell-copy-session-id)
-      ("open transcript" . agent-shell-open-transcript)
-      ("collapse menu" . agent-shell-collapse-menu))
-    "Alist of (LABEL . COMMAND) for `agent-shell-action-menu'.")
-
-  (defun agent-shell--permission-buttons ()
-    "Return a list of (LABEL . POSITION) for each pending permission button.
-LABEL is the visible button text trimmed of surrounding brackets/whitespace.
-POSITION is buffer position of the button's start."
-    (let (out)
-      (save-excursion
-	(goto-char (point-min))
-	(let (match)
-	  (while (setq match (text-property-search-forward 'button 'permission t))
-	    (let* ((beg (prop-match-beginning match))
-		   (end (prop-match-end match))
-		   (text (buffer-substring-no-properties beg end))
-		   (label (string-trim text "[][ \t\n\r]+" "[][ \t\n\r]+")))
-	      (push (cons label beg) out)))))
-      (nreverse out)))
-
-  (defun agent-shell--permission-action-at (position)
-    "Return the RET command bound on the permission button at POSITION."
-    (when-let ((keymap (get-text-property position 'keymap)))
-      (lookup-key keymap (kbd "RET"))))
-
-  (defun agent-shell--permission-button-action (pos)
-    "Return an interactive command that activates the permission button at POS."
-    (lambda ()
-      (interactive)
-      (when-let ((cmd (agent-shell--permission-action-at pos)))
-	(save-excursion
-	  (goto-char pos)
-	  (call-interactively cmd)))))
-
-  (defun agent-shell-action-menu ()
-    "Pick a common agent-shell action and run it via `call-interactively'.
-When a permission request is pending, permission responses are spliced into the menu."
-    (interactive)
-    (let* ((perm-entries
-	    (when (and (derived-mode-p 'agent-shell-mode)
-		       (agent-shell--permission-pending-p))
-	      (mapcar (lambda (b)
-			(cons (format "permission: %s" (car b))
-			      (agent-shell--permission-button-action (cdr b))))
-		      (agent-shell--permission-buttons))))
-	   (alist (append perm-entries agent-shell-action-alist))
-	   (table (ht-create)))
-      (dolist (entry alist)
-	(when (commandp (cdr entry))
-	  (ht-set table (car entry)
-		  (or (car (split-string (or (documentation (cdr entry)) "") "\n")) ""))))
-      (when-let* ((label (annotated-completing-read table
-			  :prompt "agent-shell action =>"
-			  :category 'agent-shell-action
-			  :require-match t))
-		  (cmd (cdr (assoc label alist)))
-		  ((commandp cmd)))
-	(call-interactively cmd))))
-
-
-  ;; commands menu: surface the slash-commands the *agent* advertises (via ACP)
-  ;; and insert the chosen one into the shell prompt.
-
-  (defun agent-shell-command-menu ()
-    "Insert one of the agent's advertised `/' commands at the prompt."
-    (interactive)
-    (let* ((shell (or (cond
-		       ((derived-mode-p 'agent-shell-mode) (current-buffer))
-		       ((agent-shell-viewport--shell-buffer)))
-		      (user-error "not in an agent-shell or viewport buffer")))
-	   (commands (with-current-buffer shell
-		       (map-elt agent-shell--state :available-commands)))
-	   (table (ht-create)))
-      (unless commands
-	(user-error "no agent slash-commands advertised in %s" (buffer-name shell)))
-      (seq-do (lambda (c)
-		(ht-set table (map-elt c 'name) (or (map-elt c 'description) "")))
-	      commands)
-      (agent-shell-insert :text (concat "/" (annotated-completing-read
-					     table
-					     :prompt "agent /command => "
-					     :category 'agent-shell-slash-command
-					     :require-match t) " ")
-			  :shell-buffer shell
-			  :submit nil)))
-
-
-  ;; collapse menu: toggle visibility of fragment blocks by type.
-
-  (defun agent-shell--blocks-in-buffer ()
-    "Return one entry per distinct fragment block in the buffer.
-Each entry is `((:start . POS) (:state . STATE))'.  Plain-text entries
-created via `agent-shell-ui-update-text' (no `:collapsed' key) are skipped.
-Toggling a block without an interactive indicator is a safe no-op."
-    (let ((seen (make-hash-table :test 'equal))
-	  (pos (point-min))
-	  out)
-      (while pos
-	(when-let* ((state (get-text-property pos 'agent-shell-ui-state))
-		    (id (map-elt state :qualified-id))
-		    ((assq :collapsed state))
-		    ((not (gethash id seen))))
-	  (puthash id t seen)
-	  (push (list (cons :start pos) (cons :state state)) out))
-	(setq pos (next-single-property-change pos 'agent-shell-ui-state)))
-      (nreverse out)))
-
-  (defun agent-shell--block-category (qualified-id)
-    "Classify QUALIFIED-ID into a coarse block category string."
-    (cond
-     ((string-match-p "agent_thought_chunk\\'" qualified-id) "thinking")
-     ((string-match-p "agent_message_chunk\\'" qualified-id) "agent message")
-     ((string-match-p "user_message_chunk\\'" qualified-id)  "user message")
-     ((string-suffix-p "-plan" qualified-id)                 "plan")
-     ((string-prefix-p "bootstrapping-" qualified-id)        "session info")
-     (t                                                       "tool call")))
-
-  (cl-defun agent-shell--set-collapse (target &key category)
-    "Force `:collapsed' = TARGET on every toggleable block.
-When CATEGORY is non-nil, only affect blocks matching that category."
-    (save-mark-and-excursion
-      (dolist (block (agent-shell--blocks-in-buffer))
-	(let* ((state (map-elt block :state))
-	       (id (map-elt state :qualified-id))
-	       (collapsed (map-elt state :collapsed)))
-	  (when (and (not (eq (and collapsed t) (and target t)))
-		     (or (null category)
-			 (equal category (agent-shell--block-category id))))
-	    (goto-char (map-elt block :start))
-	    (agent-shell-ui-toggle-fragment-at-point))))))
-
-  (defun agent-shell-collapse-menu ()
-    "Pick a collapse action via `annotated-completing-read'.
-Offers `+ expand all', `+ collapse all', and one entry per category of
-collapseable block present in the buffer.  Selecting a category toggles
-all of its blocks (collapsing if any are expanded; otherwise expanding)."
-    (interactive)
-    (require 'agent-shell)
-    (unless (or (derived-mode-p 'agent-shell-mode)
-		(derived-mode-p 'agent-shell-viewport-view-mode))
-      (user-error "Not in an agent-shell buffer"))
-    (let ((by-cat (ht-create))
-	  (table (ht-create)))
-      (dolist (b (agent-shell--blocks-in-buffer))
-	(let* ((state (map-elt b :state))
-	       (cat (agent-shell--block-category (map-elt state :qualified-id)))
-	       (entry (or (ht-get by-cat cat) (cons 0 0))))
-	  (cl-incf (car entry))
-	  (when (map-elt state :collapsed) (cl-incf (cdr entry)))
-	  (ht-set! by-cat cat entry)))
-      (ht-set! table "+ expand all"   "show every collapseable block")
-      (ht-set! table "+ collapse all" "hide every collapseable block")
-      (dolist (cat (sort (ht-keys by-cat) #'string<))
-	(let* ((entry (ht-get by-cat cat))
-	       (total (car entry))
-	       (n-collapsed (cdr entry))
-	       (state-str (cond ((zerop n-collapsed) "all expanded")
-				((= n-collapsed total) "all collapsed")
-				(t (format "%d/%d collapsed" n-collapsed total)))))
-	  (ht-set! table cat (format "%d block%s · %s"
-				     total (if (= total 1) "" "s") state-str))))
-      (pcase (annotated-completing-read table
-					:prompt "agent-shell collapse: "
-					:category 'agent-shell-collapse
-					:require-match t)
-	("+ expand all"   (agent-shell--set-collapse nil))
-	("+ collapse all" (agent-shell--set-collapse t))
-	(cat
-	 (let ((entry (ht-get by-cat cat)))
-	   (agent-shell--set-collapse (< (cdr entry) (car entry))
-				      :category cat))))))
-
   (defun agent-shell-dot-subdir (subdir)
     "Resolve SUBDIR under the per-instance agent-shell state path."
     (f-join (tychoish/conf-state-path "agent-shell") subdir))
@@ -2950,6 +2697,10 @@ all of its blocks (collapsing if any are expanded; otherwise expanding)."
 
   (advice-add 'agent-shell :before #'tychoish/agent-shell-mcp-refresh)
 
+  (setq agent-shell-anthropic-claude-environment
+	(agent-shell-make-environment-variables
+	 "CLAUDE_PERSONA" "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
+	 :inherit-env t))
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-anthropic-default-model-id "claude-sonnet-4-6")
   (setq agent-shell-anthropic-claude-environment (agent-shell-make-environment-variables :inherit-env t))
