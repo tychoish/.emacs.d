@@ -20,31 +20,13 @@
 (declare-function shell-maker-point-at-last-prompt-p "shell-maker")
 (declare-function tychoish/conf-state-path "tychoish-bootstrap")
 
-;; Suppress byte-compiler warnings for agent-shell-queue variables and commands
+;; Suppress byte-compiler warnings for agent-shell-queue commands
 ;; referenced in action alists and transient menus loaded lazily.
-(defvar agent-shell-queue-serialization-format)
-(defvar agent-shell-queue-state-file-function)
-(defvar agent-shell-queue-pick-buffer-function)
 (declare-function agent-shell-queue-open-buffer "agent-shell-queue")
 (declare-function agent-shell-queue-edit-task "agent-shell-queue")
 (declare-function agent-shell-queue-enqueue "agent-shell-queue")
 (declare-function agent-shell-queue-capture "agent-shell-queue")
 (declare-function agent-shell-queue-enqueue-clear "agent-shell-queue")
-
-;;; agent-shell-queue integration (lazy — no hard require)
-
-(defun agent-shell-extras--queue-state-file ()
-  "Queue state file under the per-instance agent-shell state directory."
-  (let ((ext (pcase agent-shell-queue-serialization-format
-               ('json "json")
-               ('yaml "yaml")
-               (_ "el"))))
-    (expand-file-name (concat "queue." ext)
-                      (tychoish/conf-state-path "agent-shell"))))
-
-(with-eval-after-load 'agent-shell-queue
-  (setq agent-shell-queue-state-file-function #'agent-shell-extras--queue-state-file)
-  (setq agent-shell-queue-pick-buffer-function #'agent-shell-extras--pick-buffer))
 
 (setq agent-shell-buffer-name-format
       (lambda (agent-name project-name)
@@ -211,9 +193,9 @@ POSITION is buffer position of the button's start."
                                              :category 'agent-shell-permission
                                              :require-match t
                                              :history 'agent-shell-resolve-permission))
-           (pos   (cdr (assoc label buttons)))
-           (cmd   (or (and pos (agent-shell--permission-action-at pos))
-                      (user-error "No action attached to permission button"))))
+           (pos (cdr (assoc label buttons)))
+           (cmd (or (and pos (agent-shell--permission-action-at pos))
+                    (user-error "No action attached to permission button"))))
       (save-excursion
         (goto-char pos)
         (call-interactively cmd)))))
@@ -280,44 +262,44 @@ When a permission request is pending, permission responses are spliced into the 
 (transient-define-prefix agent-shell-global-menu ()
   "Global agent-shell operations."
   [["Sessions"
-    ("s" "Switch session"   agent-shell-switch-buffer)
-    ("m" "Manager toggle"   agent-shell-manager-toggle)
-    ("f" "Find buffer"      agent-shell-manager-find-buffer)]
+    ("s" "Switch session" agent-shell-switch-buffer)
+    ("m" "Manager toggle" agent-shell-manager-toggle)
+    ("f" "Find buffer" agent-shell-manager-find-buffer)]
    ["Create"
-    ("n" "New shell"        agent-shell-new-shell)
-    ("t" "New temp shell"   agent-shell-new-temp-shell)
-    ("r" "Resume session"   agent-shell-resume-session)]
+    ("n" "New shell" agent-shell-new-shell)
+    ("t" "New temp shell" agent-shell-new-temp-shell)
+    ("r" "Resume session" agent-shell-resume-session)]
    ["Queue"
-    ("q" "Open queue"       agent-shell-queue-open-buffer)
-    ("e" "Enqueue prompt"   agent-shell-queue-enqueue)
-    ("E" "Edit task"        agent-shell-queue-edit-task)]])
+    ("q" "Open queue" agent-shell-queue-open-buffer)
+    ("e" "Enqueue prompt" agent-shell-queue-enqueue)
+    ("E" "Edit task" agent-shell-queue-edit-task)]])
 
 ;;;###autoload
 (transient-define-prefix agent-shell-session-menu ()
   "Actions for the current agent-shell session."
   [["Navigate"
-    ("g" "Last interaction"        agent-shell-goto-last-interaction)
-    ("P" "Jump to permissions"     agent-shell-jump-to-latest-permission-button-row)
-    ("n" "Next permission button"  agent-shell-next-permission-button)
-    ("p" "Prev permission button"  agent-shell-previous-permission-button)]
+    ("g" "Last interaction" agent-shell-goto-last-interaction)
+    ("P" "Jump to permissions" agent-shell-jump-to-latest-permission-button-row)
+    ("n" "Next permission button" agent-shell-next-permission-button)
+    ("p" "Prev permission button" agent-shell-previous-permission-button)]
    ["Act"
-    ("a" "Action menu"             agent-shell-action-menu)
-    ("R" "Resolve permission"      agent-shell-resolve-permission)
-    ("i" "Interrupt"               agent-shell-interrupt)
-    ("/" "Command menu"            agent-shell-command-menu)]
+    ("a" "Action menu" agent-shell-action-menu)
+    ("R" "Resolve permission" agent-shell-resolve-permission)
+    ("i" "Interrupt" agent-shell-interrupt)
+    ("/" "Command menu" agent-shell-command-menu)]
    ["Queue"
-    ("q" "Open queue"              agent-shell-queue-open-buffer)
-    ("e" "Enqueue prompt"          agent-shell-queue-enqueue)
-    ("E" "Edit task"               agent-shell-queue-edit-task)]
+    ("q" "Open queue" agent-shell-queue-open-buffer)
+    ("e" "Enqueue prompt" agent-shell-queue-enqueue)
+    ("E" "Edit task" agent-shell-queue-edit-task)]
    ["Mode"
-    ("c" "Cycle session mode"      agent-shell-cycle-session-mode)
-    ("M" "Set session mode"        agent-shell-set-session-mode)
-    ("v" "Set session model"       agent-shell-set-session-model)]
+    ("c" "Cycle session mode" agent-shell-cycle-session-mode)
+    ("M" "Set session mode" agent-shell-set-session-mode)
+    ("v" "Set session model" agent-shell-set-session-model)]
    ["Session"
-    ("f" "Fork session"            agent-shell-fork)
+    ("f" "Fork session" agent-shell-fork)
     ("o" "Other session (project)" agent-shell-switch-project-session)
-    ("I" "Copy session ID"         agent-shell-copy-session-id)
-    ("T" "Open transcript"         agent-shell-open-transcript)]])
+    ("I" "Copy session ID" agent-shell-copy-session-id)
+    ("T" "Open transcript" agent-shell-open-transcript)]])
 
 ;;; Command menu
 
@@ -413,7 +395,7 @@ three expand-by-default customization variables."
 	(cl-incf (car entry))
 	(when (map-elt state :collapsed) (cl-incf (cdr entry)))
 	(ht-set! by-cat cat entry)))
-    (ht-set! table "+ expand all"   "show every collapseable block")
+    (ht-set! table "+ expand all" "show every collapseable block")
     (ht-set! table "+ collapse all" "hide every collapseable block")
     (ht-set! table "~ set all: collapse by default"
              (if (and (not (symbol-value 'agent-shell-thought-process-expand-by-default))

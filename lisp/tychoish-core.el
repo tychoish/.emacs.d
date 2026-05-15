@@ -191,14 +191,14 @@
   (add-hook 'prog-mode-hook #'projectile-mode)
   (add-hook 'text-mode-hook #'projectile-mode)
 
-  (defun tychoish/projectile-enable-all-buffers ()
+  (defun projectile-enable-all-buffers ()
     "Enable `projectile-mode' in all live buffers."
     (interactive)
     (--mapc (with-current-buffer it
 	      (projectile-mode 1))
       (buffer-list)))
 
-  (defun tychoish/projectile-disable-all-buffers ()
+  (defun projectile-disable-all-buffers ()
     "Disable `projectile-mode' in all live buffers."
     (interactive)
     (--mapc (with-current-buffer it
@@ -2247,59 +2247,83 @@ Useful after changing `eglot-workspace-configuration' or
 
   (setq gptel-include-reasoning 'ignore)
 
-  (make-gptel-set-up-backend-functions :name "claude-opus-4-6" :key "o"
-				       :backend (gptel-make-anthropic "claude-opus" :key anthropic-api-key :stream t)
-				       :model 'claude-opus-4-6
-				       :api-key anthropic-api-key)
+  (make-gptel-set-up-backend-functions
+   :name "claude-opus-4-6"
+   :key "o"
+   :backend (gptel-make-anthropic "claude-opus" :key anthropic-api-key :stream t)
+   :model 'claude-opus-4-6
+   :api-key anthropic-api-key)
 
-  (make-gptel-set-up-backend-functions :name "claude-sonnet-4-6" :key "s"
-				       :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
-				       :model 'claude-sonnet-4-6
-				       :api-key anthropic-api-key)
+  (make-gptel-set-up-backend-functions
+   :name "claude-sonnet-4-6"
+   :key "s"
+   :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
+   :model 'claude-sonnet-4-6
+   :api-key anthropic-api-key)
 
-  (make-gptel-set-up-backend-functions :name "claude-haiku-4-5" :key "h"
-				       :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-				       :model 'claude-haiku-4-5
-				       :api-key anthropic-api-key)
+  (make-gptel-set-up-backend-functions
+   :name "claude-haiku-4-5"
+   :key "h"
+   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
+   :model 'claude-haiku-4-5
+   :api-key anthropic-api-key)
 
-  (make-gptel-set-up-backend-functions :name "gemini-pro-latest" :key "g"
-				       :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-				       :model 'gemini-flash-lite-latest)
+  (make-gptel-set-up-backend-functions
+   :name "gemini-pro-latest"
+   :key "g"
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+   :model 'gemini-flash-lite-latest)
 
-  (make-gptel-set-up-backend-functions :name "gemini-flash" :key "f"
-				       :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-				       :model 'gemini-flash-lite-latest)
+  (make-gptel-set-up-backend-functions
+   :name "gemini-flash"
+   :key "f"
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+   :model 'gemini-flash-lite-latest)
 
-  (make-gptel-set-up-backend-functions :name "gemini-flash-lite" :key "l"
-				       :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-				       :model 'gemini-flash-lite-latest)
+  (make-gptel-set-up-backend-functions
+   :name "gemini-flash-lite"
+   :key "l"
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
+   :model 'gemini-flash-lite-latest)
 
-  (make-gptel-set-up-backend-functions :name "copilot" :key "c"
-				       :backend (gptel-make-gh-copilot "copilot")
-				       :model 'claude-3.5-sonnet)
+  (make-gptel-set-up-backend-functions
+   :name "copilot"
+   :key "c"
+   :backend (gptel-make-gh-copilot "copilot")
+   :model 'claude-3.5-sonnet)
 
-  (make-gptel-set-up-backend-functions :name "gpt-5" :key "5"
-				       :backend (gptel-make-openai "openai" :key openai-api-key)
-				       :model 'gpt-5
-				       :api-key openai-api-key)
+  (make-gptel-set-up-backend-functions
+   :name "gpt-5"
+   :key "5"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
+   :model 'gpt-5
+   :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions :name "gpt-5-mini" :key "m"
-				       :backend (gptel-make-openai "openai" :key openai-api-key)
-				       :model 'gpt-5-mini
-				       :api-key openai-api-key)
+  (make-gptel-set-up-backend-functions
+   :name "gpt-5-mini"
+   :key "m"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
+   :model 'gpt-5-mini
+   :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions :name "gpt-5-nano" :key "n"
-				       :backend (gptel-make-openai "openai" :key openai-api-key)
-				       :model 'gpt-5-nano
-				       :api-key openai-api-key)
+  (make-gptel-set-up-backend-functions
+   :name "gpt-5-nano"
+   :key "n"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
+   :model 'gpt-5-nano
+   :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions :name "gpt-4o" :key "4"
-				       :backend (gptel-make-openai "openai" :key openai-api-key)
-				       :model 'gpt-4o)
+  (make-gptel-set-up-backend-functions
+   :name "gpt-4o"
+   :key "4"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
+   :model 'gpt-4o)
 
-  (make-gptel-set-up-backend-functions :name "gpt-4o-mini" :key "M"
-				       :backend (gptel-make-openai "openai" :key openai-api-key)
-				       :model 'gpt-4o-mini)
+  (make-gptel-set-up-backend-functions
+   :name "gpt-4o-mini"
+   :key "M"
+   :backend (gptel-make-openai "openai" :key openai-api-key)
+   :model 'gpt-4o-mini)
 
   (gptel-set-backend-default-claude-sonnet-4-6)
   (require 'gptel-integrations))
@@ -2435,64 +2459,78 @@ Useful after changing `eglot-workspace-configuration' or
   (add-to-list 'aidermacs-extra-args "--notifications")
   (add-to-list 'aidermacs-extra-args "--cache-prompts")
 
-  (make-aidermacs-model-selection-function :name "claude-max"
-					   :default-model "anthropic/claude-sonnet-4-5"
-					   :architect-model "anthropic/claude-opus-4-5")
+  (make-aidermacs-model-selection-function
+   :name "claude-max"
+   :default-model "anthropic/claude-sonnet-4-5"
+   :architect-model "anthropic/claude-opus-4-5")
 
-  (make-aidermacs-model-selection-function :name "claude-sonnet"
-					   :default-model "anthropic/claude-sonnet-4-5"
-					   :weak-model "anthropic/claude-haiku-4-5")
+  (make-aidermacs-model-selection-function
+   :name "claude-sonnet"
+   :default-model "anthropic/claude-sonnet-4-5"
+   :weak-model "anthropic/claude-haiku-4-5")
 
-  (make-aidermacs-model-selection-function :name "gpt-4o"
-					   :default-model "opeani/gpt-4o-mini"
-					   :architect-model "openai/gpt-4o")
+  (make-aidermacs-model-selection-function
+   :name "gpt-4o"
+   :default-model "opeani/gpt-4o-mini"
+   :architect-model "openai/gpt-4o")
 
-  (make-aidermacs-model-selection-function :name "gpt-4"
-					   :default-model "opeani/gpt-4o"
-					   :weak-model "opeani/gpt-4o-mini"
-					   :architect-model "opeani/gpt-4.5-preview")
+  (make-aidermacs-model-selection-function
+   :name "gpt-4"
+   :default-model "opeani/gpt-4o"
+   :weak-model "opeani/gpt-4o-mini"
+   :architect-model "opeani/gpt-4.5-preview")
 
-  (make-aidermacs-model-selection-function :name "gpt-5"
-					   :default-model "opeani/gpt-5"
-					   :architect-model "opeani/gpt-5.2"
-					   :weak-model "opeani/gpt-5-nano")
+  (make-aidermacs-model-selection-function
+   :name "gpt-5"
+   :default-model "opeani/gpt-5"
+   :architect-model "opeani/gpt-5.2"
+   :weak-model "opeani/gpt-5-nano")
 
-  (make-aidermacs-model-selection-function :name "gpt-5-mini"
-					   :default-model "opeani/gpt-5-mini"
-					   :weak-model "opeani/gpt-5-nano")
+  (make-aidermacs-model-selection-function
+   :name "gpt-5-mini"
+   :default-model "opeani/gpt-5-mini"
+   :weak-model "opeani/gpt-5-nano")
 
-  (make-aidermacs-model-selection-function :name "gemini-2"
-					   :default-model "gemini/gemini-2.5-flash"
-					   :architect-model "gemini/gemini-2.5-pro"
-					   :weak-model "gemini/gemini-2.5-flash-lite")
+  (make-aidermacs-model-selection-function
+   :name "gemini-2"
+   :default-model "gemini/gemini-2.5-flash"
+   :architect-model "gemini/gemini-2.5-pro"
+   :weak-model "gemini/gemini-2.5-flash-lite")
 
-  (make-aidermacs-model-selection-function :name "gemini"
-					   :default-model "gemini/gemini-flash-latest"
-					   :architect-model "gemini/gemini-pro")
+  (make-aidermacs-model-selection-function
+   :name "gemini"
+   :default-model "gemini/gemini-flash-latest"
+   :architect-model "gemini/gemini-pro")
 
-  (make-aidermacs-model-selection-function :name "gemini-3-flash"
-					   :default-model "gemini/gemini-3-flash-preview")
+  (make-aidermacs-model-selection-function
+   :name "gemini-3-flash"
+   :default-model "gemini/gemini-3-flash-preview")
 
-  (make-aidermacs-model-selection-function :name "copilot-gemini" :copilot 'use-copilot
-					   :default-model "github_copilot/gemini-2.5-pro")
+  (make-aidermacs-model-selection-function
+   :name "copilot-gemini" :copilot 'use-copilot
+   :default-model "github_copilot/gemini-2.5-pro")
 
-  (make-aidermacs-model-selection-function :name "copilot-gpt-4o" :copilot 'use-copilot
-					   :default-model "github_copilot/gpt-4o-mini"
-					   :architect-model "github_copilot/gpt-4o")
+  (make-aidermacs-model-selection-function
+   :name "copilot-gpt-4o" :copilot 'use-copilot
+   :default-model "github_copilot/gpt-4o-mini"
+   :architect-model "github_copilot/gpt-4o")
 
-  (make-aidermacs-model-selection-function :name "copilot-gpt-5" :copilot 'use-copilot
-					   :default-model "github_copilot/gpt-5-mini"
-					   :architect-model "github_copilot/gpt-5.2"
-					   :weak-model "github_copilot/gpt-5-nano")
+  (make-aidermacs-model-selection-function
+   :name "copilot-gpt-5" :copilot 'use-copilot
+   :default-model "github_copilot/gpt-5-mini"
+   :architect-model "github_copilot/gpt-5.2"
+   :weak-model "github_copilot/gpt-5-nano")
 
-  (make-aidermacs-model-selection-function :name "copilot-claude" :copilot 'use-copilot
-					   :default-model "github_copilot/claude-sonnet-4.5"
-					   :architect-model "github_copilot/claude-opus-4.5"
-					   :weak-model "github_copilot/claude-haiku-4.5")
+  (make-aidermacs-model-selection-function
+   :name "copilot-claude" :copilot 'use-copilot
+   :default-model "github_copilot/claude-sonnet-4.5"
+   :architect-model "github_copilot/claude-opus-4.5"
+   :weak-model "github_copilot/claude-haiku-4.5")
 
-  (make-aidermacs-model-selection-function :name "copilot-claude-sonnet" :copilot 'use-copilot
-					   :default-model "github_copilot/claude-sonnet-4.5"
-					   :weak-model "github_copilot/claude-haiku-4.5"))
+  (make-aidermacs-model-selection-function
+   :name "copilot-claude-sonnet" :copilot 'use-copilot
+   :default-model "github_copilot/claude-sonnet-4.5"
+   :weak-model "github_copilot/claude-haiku-4.5"))
 
 (use-package claude-code-ide
   :load-path "elpa/claude-code-ide"
@@ -2643,20 +2681,12 @@ Useful after changing `eglot-workspace-configuration' or
    ("c" . agent-shell-command-menu)
    ("n" . agent-shell-new-shell)
    ("t" . agent-shell-new-worktree-shell)
-   ("T" . agent-shell-new-temp-shell)
-   ("/" . agent-shell-queue-enqueue)
-   ("P" . agent-shell-queue-toggle-pause)
-   ("E" . agent-shell-queue-edit-task))
-
+   ("T" . agent-shell-new-temp-shell))
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
-  (make-read-extended-command-for-prefix "agent-shell-queue"
-    :bind-map tychoish/robot-agent-shell-map
-    :bind-key "q")
   :config
   (require 'agent-shell-extras)
-  (require 'agent-shell-queue)
   (bind-keys
    :map agent-shell-mode-map
    ("C-c C-c" . agent-shell-submit)
@@ -2668,7 +2698,7 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-c x" . agent-shell-command-menu)
    ("C-c TAB" . agent-shell-collapse-menu)
    ("C-<tab>" . agent-shell-next-item)
-   ("C-SPC" . agent-shell-cycle-session-mode))
+   ("S-SPC" . agent-shell-cycle-session-mode))
 
   (agent-shell-mode-key "?" agent-shell-resolve-permission)
   (agent-shell-mode-key "p" agent-shell-resolve-permission)
@@ -2685,7 +2715,7 @@ Useful after changing `eglot-workspace-configuration' or
      ("C-c TAB" . agent-shell-collapse-menu)
      ("TAB" . agent-shell-ui-toggle-fragment-at-point)
      ("C-<tab>" . agent-shell-viewport-next-item)
-     ("C-SPC" . agent-shell-viewport-cycle-session-mode)
+     ("S-SPC" . agent-shell-viewport-cycle-session-mode)
      ("?" . agent-shell-resolve-permission)
      ("a" . agent-shell-action-menu)
      ("b" . agent-shell-switch-buffer)))
@@ -2719,6 +2749,34 @@ Useful after changing `eglot-workspace-configuration' or
   (with-eval-after-load 'which-key
     (push '((nil . "^agent-shell-") . (nil . ""))
           which-key-replacement-alist)))
+
+(use-package agent-shell-queue
+  :bind (:map tychoish/robot-agent-shell-map
+         ("/" . agent-shell-queue-enqueue)
+         ("P" . agent-shell-queue-toggle-pause)
+         ("E" . agent-shell-queue-edit-task))
+  :commands (agent-shell-queue-open-buffer
+             agent-shell-queue-enqueue
+             agent-shell-queue-edit-task
+             agent-shell-queue-toggle-pause
+             agent-shell-queue-capture
+             agent-shell-queue-insert-pause
+             agent-shell-queue-insert-clear-context)
+  :init
+  (make-read-extended-command-for-prefix "agent-shell-queue"
+    :bind-map tychoish/robot-agent-shell-map
+    :bind-key "q")
+  :config
+  (defun tychoish--agent-shell-queue-state-file ()
+    "Queue state file under the per-instance agent-shell state directory."
+    (let ((ext (pcase agent-shell-queue-serialization-format
+                 ('json "json")
+                 ('yaml "yaml")
+                 (_ "el"))))
+      (expand-file-name (concat "queue." ext)
+                        (tychoish/conf-state-path "agent-shell"))))
+  (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
+  (setq agent-shell-queue-pick-buffer-function #'agent-shell-extras--pick-buffer))
 
 (use-package agent-shell-manager
   :load-path "elpa/agent-shell-manager"
