@@ -2644,7 +2644,9 @@ Useful after changing `eglot-workspace-configuration' or
    ("n" . agent-shell-new-shell)
    ("t" . agent-shell-new-worktree-shell)
    ("T" . agent-shell-new-temp-shell)
-   ("/" . agent-shell-queue-enqueue))
+   ("/" . agent-shell-queue-enqueue)
+   ("P" . agent-shell-queue-toggle-pause)
+   ("E" . agent-shell-queue-edit-task))
 
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
@@ -2713,7 +2715,10 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-header-style 'text)
   (setq agent-shell-thought-process-expand-by-default t)
   (setq agent-shell-tool-use-expand-by-default t)
-  (setq agent-shell-user-message-expand-by-default t))
+  (setq agent-shell-user-message-expand-by-default t)
+  (with-eval-after-load 'which-key
+    (push '((nil . "^agent-shell-") . (nil . ""))
+          which-key-replacement-alist)))
 
 (use-package agent-shell-manager
   :load-path "elpa/agent-shell-manager"

@@ -444,16 +444,9 @@ This combines the host name and the dameon name."
 (defvar desktop/last-save-time nil)
 
 (defun tychoish/set-up-emacs-instance-persistence ()
-  (with-silence
-    (recentf-mode 1)
-    (savehist-mode 1))
-
-  (with-eval-after-load 'consult
-    (bind-key "C-x C-r" 'consult-recent-file 'global-map))
-
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
-  (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
+  (setq savehist-file (tychoish/conf-state-path "history.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
   (setq tramp-persistency-file-name (tychoish/conf-state-path "tramp.el"))
 
@@ -462,7 +455,17 @@ This combines the host name and the dameon name."
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
   (setq recentf-max-menu-items 100)
-  (setq recentf-save-file (tychoish/conf-state-path "recentf.el")))
+  (setq recentf-save-file (tychoish/conf-state-path "recentf.el"))
+
+  (with-silence
+    (recentf-mode 1)
+    (savehist-mode 1))
+
+  (with-eval-after-load 'annotated-completing-read
+    (add-to-list 'savehist-additional-variables 'annotated-completing-read-history))
+
+  (with-eval-after-load 'consult
+    (bind-key "C-x C-r" 'consult-recent-file 'global-map)))
 
 (defun tychoish/desktop-save ()
   "Save desktop... sometimes"

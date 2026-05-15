@@ -25,7 +25,8 @@
 (defvar agent-shell-queue-serialization-format)
 (defvar agent-shell-queue-state-file-function)
 (defvar agent-shell-queue-pick-buffer-function)
-(declare-function agent-shell-queue-open "agent-shell-queue")
+(declare-function agent-shell-queue-open-buffer "agent-shell-queue")
+(declare-function agent-shell-queue-edit-task "agent-shell-queue")
 (declare-function agent-shell-queue-enqueue "agent-shell-queue")
 (declare-function agent-shell-queue-capture "agent-shell-queue")
 (declare-function agent-shell-queue-enqueue-clear "agent-shell-queue")
@@ -47,9 +48,14 @@
 
 (setq agent-shell-buffer-name-format
       (lambda (agent-name project-name)
-        (format "*%s-%s*"
-                (downcase (replace-regexp-in-string "\\s-+" "-" (string-trim agent-name)))
-                (downcase (replace-regexp-in-string "\\s-+" "-" (string-trim project-name))))))
+        (let* ((raw (string-trim project-name))
+               (base (file-name-nondirectory (directory-file-name raw)))
+               (stripped (replace-regexp-in-string "\\`[./]+" "" base))
+               (slug (downcase (replace-regexp-in-string "\\s-+" "-"
+                                                         (if (string-empty-p stripped) base stripped)))))
+          (format "*%s-%s*"
+                  (car (split-string (downcase (string-trim agent-name))))
+                  slug))))
 
 (defvar agent-shell-action-alist
   '(("submit" . shell-maker-submit)
@@ -76,14 +82,15 @@
     ("copy session id" . agent-shell-copy-session-id)
     ("open transcript" . agent-shell-open-transcript)
     ("collapse menu" . agent-shell-collapse-menu)
-    ("queue review" . agent-shell-queue-open))
+    ("queue review" . agent-shell-queue-open-buffer))
   "Alist of (LABEL . COMMAND) for `agent-shell-action-menu'.")
 
 ;;; Mode key
 
 (defmacro agent-shell-mode-key (key fn)
   "Define `agent-shell-output-key-KEY' and bind it in `agent-shell-mode-map'.
-In the output section calls FN interactively; self-inserts KEY at the prompt."
+In the output area, or while the shell is busy, calls FN interactively.
+Self-inserts KEY only when at the idle prompt."
   (let* ((key-str (if (stringp key) key (symbol-name key)))
          (name (intern (concat "agent-shell-output-key-" key-str)))
          (char (pcase key-str
@@ -91,9 +98,9 @@ In the output section calls FN interactively; self-inserts KEY at the prompt."
                  ((pred (lambda (s) (= 1 (length s)))) (aref key-str 0)))))
     `(progn
        (defun ,name ()
-         ,(format "In output: `%s'. Self-insert at prompt." fn)
+         ,(format "In output or busy: `%s'. Self-insert at idle prompt." fn)
          (interactive)
-         (if (shell-maker-point-at-last-prompt-p)
+         (if (and (not (shell-maker-busy)) (shell-maker-point-at-last-prompt-p))
              ,(if char `(self-insert-command 1 ,char) '(ignore))
            (call-interactively #',fn)))
        (define-key agent-shell-mode-map (kbd ,key-str) #',name))))
@@ -281,8 +288,9 @@ When a permission request is pending, permission responses are spliced into the 
     ("t" "New temp shell"   agent-shell-new-temp-shell)
     ("r" "Resume session"   agent-shell-resume-session)]
    ["Queue"
-    ("q" "Open queue"       agent-shell-queue-open)
-    ("e" "Enqueue prompt"   agent-shell-queue-enqueue)]])
+    ("q" "Open queue"       agent-shell-queue-open-buffer)
+    ("e" "Enqueue prompt"   agent-shell-queue-enqueue)
+    ("E" "Edit task"        agent-shell-queue-edit-task)]])
 
 ;;;###autoload
 (transient-define-prefix agent-shell-session-menu ()
@@ -298,8 +306,9 @@ When a permission request is pending, permission responses are spliced into the 
     ("i" "Interrupt"               agent-shell-interrupt)
     ("/" "Command menu"            agent-shell-command-menu)]
    ["Queue"
-    ("q" "Open queue"              agent-shell-queue-open)
-    ("e" "Enqueue prompt"          agent-shell-queue-enqueue)]
+    ("q" "Open queue"              agent-shell-queue-open-buffer)
+    ("e" "Enqueue prompt"          agent-shell-queue-enqueue)
+    ("E" "Edit task"               agent-shell-queue-edit-task)]
    ["Mode"
     ("c" "Cycle session mode"      agent-shell-cycle-session-mode)
     ("M" "Set session mode"        agent-shell-set-session-mode)
@@ -406,6 +415,18 @@ three expand-by-default customization variables."
 	(ht-set! by-cat cat entry)))
     (ht-set! table "+ expand all"   "show every collapseable block")
     (ht-set! table "+ collapse all" "hide every collapseable block")
+    (ht-set! table "~ set all: collapse by default"
+             (if (and (not (symbol-value 'agent-shell-thought-process-expand-by-default))
+                      (not (symbol-value 'agent-shell-tool-use-expand-by-default))
+                      (not (symbol-value 'agent-shell-user-message-expand-by-default)))
+                 "already collapsed by default"
+               "set thinking, tool calls, and user messages to collapse by default"))
+    (ht-set! table "~ set all: expand by default"
+             (if (and (symbol-value 'agent-shell-thought-process-expand-by-default)
+                      (symbol-value 'agent-shell-tool-use-expand-by-default)
+                      (symbol-value 'agent-shell-user-message-expand-by-default))
+                 "already expanded by default"
+               "set thinking, tool calls, and user messages to expand by default"))
     (dolist (cat (sort (ht-keys by-cat) #'string<))
       (let* ((entry (ht-get by-cat cat))
 	     (total (car entry))
@@ -426,6 +447,16 @@ three expand-by-default customization variables."
       (cond
        ((equal choice "+ expand all")   (agent-shell--set-collapse nil))
        ((equal choice "+ collapse all") (agent-shell--set-collapse t))
+       ((equal choice "~ set all: collapse by default")
+        (set 'agent-shell-thought-process-expand-by-default nil)
+        (set 'agent-shell-tool-use-expand-by-default nil)
+        (set 'agent-shell-user-message-expand-by-default nil)
+        (message "All block types set to collapse by default"))
+       ((equal choice "~ set all: expand by default")
+        (set 'agent-shell-thought-process-expand-by-default t)
+        (set 'agent-shell-tool-use-expand-by-default t)
+        (set 'agent-shell-user-message-expand-by-default t)
+        (message "All block types set to expand by default"))
        ((assoc choice toggles)
 	(let ((var (cdr (assoc choice toggles))))
 	  (set var (not (symbol-value var)))

@@ -385,16 +385,17 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
              :signature (f-join maildir "tools" "signatures")))
 
     (when (or default
-	      (and
-	       (not (and (null systems) (null instances)))
-	       (or (member tychoish/emacs-instance-id instances)
-		   (null instances))
-	       (or (member (system-name) systems)
-		   (null systems))))
+	      (not (and (null systems) (null instances))))
       (add-one-shot-hook
        :name account-name
-       :function configure-account-symbol
-       :hook 'emacs-startup-hook
+       :form `(when (or ,default
+			(and
+			 (or (member tychoish/emacs-instance-id ',instances)
+			     (null ',instances))
+			 (or (member (system-name) ',systems)
+			     (null ',systems))))
+		 (,configure-account-symbol))
+       :hook 'after-first-frame-created
        :idle-timer 0.5))
 
     `(defun ,configure-account-symbol ()

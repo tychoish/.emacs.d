@@ -224,6 +224,7 @@ Never use extra spaces to align let-binding RHS values or any other elements. Wr
 After byte-compiling a file as a correctness check:
 - If the `.elc` did not exist before the compile, delete it afterward.
 - If it already existed, leave it alone.
+- Delete operations of unwanted elc files should be done in the same tool invocation
 
 Byte-compilation is used only to catch errors, not to produce artifacts.
 
