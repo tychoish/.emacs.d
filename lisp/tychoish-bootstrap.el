@@ -448,9 +448,6 @@ This combines the host name and the dameon name."
     (recentf-mode 1)
     (savehist-mode 1))
 
-  (with-eval-after-load 'savehist
-    (annotated-completing-read-enable-session-save))
-
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" 'consult-recent-file 'global-map))
 
@@ -580,17 +577,17 @@ This combines the host name and the dameon name."
   (advice-add 'run-hooks-with-args :around 'with-hook-timing))
 
 (defun tychoish/init-force-relaod ()
-  (load "tychoish-bootstrap.el")
-  (load "tychoish-core.el")
-  (load "tychoish-mail.el")
-  (load "tychoish-org.el")
-  (tychoish/init-late-disable-modes)
-  (tychoish/init-late-enable-modes)
-  (tychoish/init-late-set-up-naming)
-  (tychoish/ensure-default-font)
-  (tychoish/ensure-light-theme)
-  (tychoish-set-up-user-local-config))
-
+  (with-slow-op-timer "<bootstrap.el>: force reload"
+    (load "tychoish-bootstrap.el")
+    (load "tychoish-core.el")
+    (load "tychoish-mail.el")
+    (load "tychoish-org.el")
+    (tychoish/init-late-disable-modes)
+    (tychoish/init-late-enable-modes)
+    (tychoish/init-late-set-up-naming)
+    (tychoish/ensure-default-font)
+    (tychoish/ensure-light-theme)
+    (tychoish-set-up-user-local-config)))
 
 (defun tychoish/init-late-set-up-naming ()
   (with-slow-op-timer
@@ -610,6 +607,7 @@ This combines the host name and the dameon name."
     (xterm-mouse-mode 1)
     (electric-pair-mode 1)
     (which-key-mode 1)
+    (annotated-completing-read-enable-session-save)
 
     (with-silence
       (repeat-mode 1))))

@@ -43,6 +43,9 @@
 (require 's)
 (require 'f)
 
+(with-eval-after-load 'savehist
+  (annotated-completing-read-enable-session-save))
+
 (defvar annotated-completing-read-history (ht-create)
   "Hash table mapping command symbols to per-command minibuffer history lists.
 Keys are symbols — typically `this-command' at call time — and values are
