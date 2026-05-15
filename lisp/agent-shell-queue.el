@@ -29,6 +29,7 @@
 (declare-function shell-maker-busy "shell-maker")
 (declare-function agent-shell-subscribe-to "agent-shell")
 (declare-function agent-shell-unsubscribe "agent-shell")
+(declare-function markdown-mode "markdown-mode")
 
 (defun agent-shell-queue--default-instance-name ()
   "Return a string identifying the current Emacs instance."
@@ -94,6 +95,10 @@ Items in this list are skipped by dispatch until the edit is saved or cancelled.
 
 (defvar agent-shell-queue--last-flush-time nil
   "Float-time of the most recent queue state write to disk.")
+
+(defvar agent-shell-queue--stale-item-ids nil
+  "List of item IDs that failed dispatch due to struct mismatch after code reload.
+These are automatically deferred and their buffers paused.")
 
 (defun agent-shell-queue-toggle-pause ()
   "Toggle the global queue pause state."
@@ -211,14 +216,6 @@ removed when the queue for that buffer empties or the buffer is killed.")
    :background background
    :created (float-time)))
 
-(defun agent-shell-queue--make-pause-item ()
-  "Return a new pause item that will halt queue dispatch when reached."
-  (agent-shell-queue-item--make
-   :id (format "q-%d" (cl-incf agent-shell-queue--counter))
-   :prompt "[PAUSE — waiting for human]"
-   :status 'active
-   :kind 'pause
-   :created (float-time)))
 
 ;;; Local utilities
 
@@ -399,22 +396,19 @@ DESERIALIZE-FN takes a string and returns an items alist."
              agent-shell-queue-serialization-format))
     (funcall (caddr entry) str)))
 
-(defun agent-shell-queue--active-items ()
-  "Return `agent-shell-queue--items' with done and running items stripped out."
-  (let ((transient '(done running)))
-    (cl-remove-if
-     (lambda (pair) (null (cdr pair)))
-     (mapcar (lambda (pair)
-               (cons (car pair)
-                     (cl-remove-if (lambda (item)
-                                     (memq (agent-shell-queue-item-status item) transient))
-                                   (cdr pair))))
-             agent-shell-queue--items))))
-
 (defun agent-shell-queue--save ()
-  "Write `agent-shell-queue--items' to disk, excluding done items."
-  (let ((file (agent-shell-queue--state-file))
-        (agent-shell-queue--items (agent-shell-queue--active-items)))
+  "Write `agent-shell-queue--items' to disk, excluding done and running items."
+  (let* ((file (agent-shell-queue--state-file))
+         (agent-shell-queue--items
+          (cl-remove-if
+           (lambda (pair) (null (cdr pair)))
+           (mapcar (lambda (pair)
+                     (cons (car pair)
+                           (cl-remove-if
+                            (lambda (item)
+                              (memq (agent-shell-queue-item-status item) '(done running)))
+                            (cdr pair))))
+                   agent-shell-queue--items))))
     (make-directory (file-name-directory file) t)
     (with-temp-file file
       (insert (agent-shell-queue--serialize))))
@@ -662,6 +656,21 @@ Returns non-nil if the item was successfully assigned and sent."
             (agent-shell-queue-send-item id)
             t))))))
 
+(defun agent-shell-queue--handle-stale-item (id buf-name err)
+  "Pause BUF-NAME and defer item ID after a struct access error ERR.
+Called when dispatching item ID raises an error, which indicates the item
+was built against an older struct definition before a code reload."
+  (cl-pushnew id agent-shell-queue--stale-item-ids :test #'equal)
+  (when-let ((pair (agent-shell-queue--item-by-id id)))
+    (condition-case nil
+        (setf (agent-shell-queue-item-status (cdr pair)) 'deferred)
+      (error nil)))
+  (cl-pushnew buf-name agent-shell-queue--buffer-paused :test #'equal)
+  (message "agent-shell-queue: item %s in %s appears stale after code reload; deferred and queue paused (%s)"
+           id buf-name err)
+  (agent-shell-queue--save)
+  (agent-shell-queue--refresh-buffer))
+
 (defun agent-shell-queue-send-item (id)
   "Send the item with ID to its target buffer, marking it as running.
 Items flagged as background are wrapped with `agent-shell-queue-background-prefix'.
@@ -675,19 +684,23 @@ Running and done items are not persisted across sessions."
         (unless (buffer-live-p buf)
           (agent-shell-queue--redirect-dead-target id buf-name)
           (cl-return-from agent-shell-queue-send-item nil))
-        (setf (agent-shell-queue-item-status item) 'running)
-        (setf (agent-shell-queue-item-dispatched item) (float-time))
-        (agent-shell-queue--save)
-        (agent-shell-queue--refresh-buffer)
-        (alert (truncate-string-to-width (agent-shell-queue-item-prompt item) 80 nil nil "…")
-               :title (format "Queue → %s" buf-name)
-               :category 'agent-shell-queue
-               :severity 'low)
-        (let ((prompt (if (agent-shell-queue-item-background item)
-                          (concat agent-shell-queue-background-prefix
-                                  (agent-shell-queue-item-prompt item))
-                        (agent-shell-queue-item-prompt item))))
-          (agent-shell-insert :text prompt :submit t :shell-buffer buf))))))
+        (condition-case err
+            (progn
+              (setf (agent-shell-queue-item-status item) 'running)
+              (setf (agent-shell-queue-item-dispatched item) (float-time))
+              (agent-shell-queue--save)
+              (agent-shell-queue--refresh-buffer)
+              (alert (truncate-string-to-width (agent-shell-queue-item-prompt item) 80 nil nil "…")
+                     :title (format "Queue → %s" buf-name)
+                     :category 'agent-shell-queue
+                     :severity 'low)
+              (let ((prompt (if (agent-shell-queue-item-background item)
+                                (concat agent-shell-queue-background-prefix
+                                        (agent-shell-queue-item-prompt item))
+                              (agent-shell-queue-item-prompt item))))
+                (agent-shell-insert :text prompt :submit t :shell-buffer buf)))
+          (error
+           (agent-shell-queue--handle-stale-item id buf-name err)))))))
 
 (defun agent-shell-queue--mark-running-done (buf-name)
   "Mark any running items for BUF-NAME as done, recording completion time.
@@ -812,18 +825,14 @@ No-op when `agent-shell-queue-paused' is non-nil."
               (agent-shell-queue-send-item
                (agent-shell-queue-item-id item)))))))))
 
-(defun agent-shell-queue--start-timer ()
-  "Start the backup idle-scan timer if it is not already running."
-  (unless agent-shell-queue--idle-timer
-    (setq agent-shell-queue--idle-timer
-          (run-with-idle-timer agent-shell-queue-idle-delay t
-                               #'agent-shell-queue--auto-send))))
-
 (defun agent-shell-queue--setup-hooks ()
   "Start the backup idle-scan timer.
 Per-buffer draining is registered lazily via `agent-shell-queue--ensure-subscription'
 when items are first added for a given buffer."
-  (agent-shell-queue--start-timer))
+       (unless agent-shell-queue--idle-timer
+	 (setq agent-shell-queue--idle-timer
+               (run-with-idle-timer agent-shell-queue-idle-delay t
+				    #'agent-shell-queue--auto-send))))
 
 ;;; Queue buffer
 
@@ -834,6 +843,54 @@ when items are first added for a given buffer."
   (agent-shell-queue--ensure-loaded)
   (agent-shell-queue--save)
   (message "agent-shell-queue: state saved to disk"))
+
+;;;###autoload
+(defun agent-shell-queue-clear-unparsable ()
+  "Remove items whose struct fields cannot be read; print each to *Messages*.
+Useful after a code reload that left in-memory structs with mismatched layouts.
+When called interactively, prompts y/n/a for each candidate before removing it.
+Affected buffer queues are paused and the queue state is saved."
+  (interactive "P")
+  (agent-shell-queue--ensure-loaded)
+  (let (candidates)
+    (dolist (pair agent-shell-queue--items)
+      (dolist (item (cdr pair))
+        (condition-case _
+            (progn
+              (agent-shell-queue-item-id item)
+              (agent-shell-queue-item-prompt item)
+              (agent-shell-queue-item-status item))
+          (error
+           (push (cons (car pair) item) candidates)))))
+    (if (null candidates)
+        (message "agent-shell-queue: no unparsable items found")
+      (let (removed (accept-all current-prefix-arg))
+        (dolist (entry candidates)
+          (let ((buf-name (car entry))
+                (item (cdr entry)))
+            (message "agent-shell-queue: unparsable item in %s: %S" buf-name item)
+            (when (or accept-all
+                      (not (called-interactively-p 'any))
+                      (let ((ch (read-char-choice
+                                 (format "Remove from %s? (y)es (n)o (a)ll: " buf-name)
+                                 '(?y ?n ?a))))
+                        (cond ((eq ch ?a) (setq accept-all t))
+                              ((eq ch ?n) nil)
+                              (t t))))
+              (let ((cell (assoc buf-name agent-shell-queue--items)))
+                (when cell
+                  (setcdr cell (cl-remove item (cdr cell) :test #'eq))))
+              (cl-pushnew buf-name agent-shell-queue--buffer-paused :test #'equal)
+              (push entry removed))))
+        (if (null removed)
+            (message "agent-shell-queue: no items removed")
+          (setq agent-shell-queue--items
+                (cl-remove-if (lambda (pair) (null (cdr pair)))
+                              agent-shell-queue--items))
+          (agent-shell-queue--save)
+          (agent-shell-queue--refresh-buffer)
+          (message "agent-shell-queue: removed %d unparsable item(s); affected queues paused"
+                   (length removed)))))))
 
 ;;;###autoload
 (defun agent-shell-queue-show-disk-state ()
@@ -869,14 +926,6 @@ when items are first added for a given buffer."
   "Return a status string for ITEM in BUF-NAME."
   (car (agent-shell-queue--item-display item buf-name)))
 
-(defun agent-shell-queue--item-age-string (item)
-  "Return a relative age string for ITEM.
-Done items show time since completion; all others show time since creation."
-  (let ((ref (if (and (eq (agent-shell-queue-item-status item) 'done)
-                      (agent-shell-queue-item-completed item))
-                 (agent-shell-queue-item-completed item)
-               (agent-shell-queue-item-created item))))
-    (agent-shell-queue--format-age (time-since ref))))
 
 (defun agent-shell-queue--item-display (item buf-name)
   "Return (STATUS-STRING . FACE) for ITEM in BUF-NAME."
@@ -915,34 +964,6 @@ Done items show time since completion; all others show time since creation."
         (when (derived-mode-p 'agent-shell-queue-mode)
           (agent-shell-queue-buffer-refresh))))))
 
-(defun agent-shell-queue--prompt-column-width ()
-  "Compute elastic width for the Prompt column based on the current window."
-  ;; Fixed columns: Status(12) Age(6) #(4) Buffer(20) = 42, plus 4 separators
-  (max 20 (- (window-width) 42 4)))
-
-(defun agent-shell-queue--ordinal (buf-name id)
-  "Return 1-based position of item ID in BUF-NAME's queue, or 0 if not found."
-  (let* ((items (cdr (assoc buf-name agent-shell-queue--items)))
-         (idx (cl-position id items :key #'agent-shell-queue-item-id :test #'equal)))
-    (if idx (1+ idx) 0)))
-
-(defun agent-shell-queue--make-entry (buf-name item prompt-width)
-  "Build a `tabulated-list-mode' entry for ITEM in BUF-NAME using PROMPT-WIDTH."
-  (let* ((id (agent-shell-queue-item-id item))
-         (display (agent-shell-queue--item-display item buf-name))
-         (status-str (car display))
-         (face (cdr display))
-         (cell (lambda (str) (if face (propertize str 'face face) str)))
-         (ordinal (agent-shell-queue--ordinal buf-name id)))
-    (list id
-          (vector (funcall cell status-str)
-                  (funcall cell (agent-shell-queue--item-age-string item))
-                  (funcall cell (if (> ordinal 0) (number-to-string ordinal) ""))
-                  (funcall cell (if (equal buf-name agent-shell-queue--unassigned-key)
-                                    "(unassigned)" buf-name))
-                  (funcall cell (truncate-string-to-width
-                                 (agent-shell-queue-item-prompt item)
-                                 prompt-width nil nil "…"))))))
 
 (defvar agent-shell-queue-mode-map
   (let ((m (make-sparse-keymap)))
@@ -979,7 +1000,18 @@ Done items show time since completion; all others show time since creation."
   (setq tabulated-list-sort-key nil)
   (tabulated-list-init-header)
   (tab-line-mode 1)
-  (setq tab-line-format '(:eval (agent-shell-queue--header-line))))
+  (setq tab-line-format
+        '(:eval (let* ((state (agent-shell-queue--activity-state))
+                       (sessions (length (agent-shell-buffers)))
+                       (depth (cl-reduce (lambda (acc pair) (+ acc (length (cdr pair))))
+                                         agent-shell-queue--items
+                                         :initial-value 0))
+                       (flush-str (if agent-shell-queue--last-flush-time
+                                      (agent-shell-queue--format-age
+                                       (time-since agent-shell-queue--last-flush-time))
+                                    "never")))
+                  (format " Queue: %s  |  Sessions: %d  |  Depth: %d  |  Flushed: %s ago"
+                          state sessions depth flush-str)))))
 
 (defun agent-shell-queue--activity-state ()
   "Return a propertized string describing the queue's current activity level."
@@ -1001,25 +1033,12 @@ Done items show time since completion; all others show time since creation."
    (t
     (propertize "idle" 'face 'shadow))))
 
-(defun agent-shell-queue--header-line ()
-  "Return a tab-line string: activity state, session count, depth, flush time."
-  (let* ((state (agent-shell-queue--activity-state))
-         (sessions (length (agent-shell-buffers)))
-         (depth (cl-reduce (lambda (acc pair) (+ acc (length (cdr pair))))
-                           agent-shell-queue--items
-                           :initial-value 0))
-         (flush-str (if agent-shell-queue--last-flush-time
-                        (agent-shell-queue--format-age
-                         (time-since agent-shell-queue--last-flush-time))
-                      "never")))
-    (format " Queue: %s  |  Sessions: %d  |  Depth: %d  |  Flushed: %s ago"
-            state sessions depth flush-str)))
 
 (defun agent-shell-queue-buffer-refresh ()
   "Rebuild the tabulated list from current queue state."
   (interactive)
   (agent-shell-queue--ensure-loaded)
-  (let ((pw (agent-shell-queue--prompt-column-width)))
+  (let ((pw (max 20 (- (window-width) 46))))
     (setq tabulated-list-format
           (vector '("Status" 12 t) '("Age" 6 t) '("#" 4 nil) '("Buffer" 20 t)
                   (list "Prompt" pw nil)))
@@ -1035,7 +1054,30 @@ Done items show time since completion; all others show time since creation."
                             assigned-pairs)))
             (dolist (pair ordered)
               (dolist (item (cdr pair))
-                (push (agent-shell-queue--make-entry (car pair) item pw) entries)))
+                (let* ((id (agent-shell-queue-item-id item))
+                       (display (agent-shell-queue--item-display item (car pair)))
+                       (status-str (car display))
+                       (face (cdr display))
+                       (cell (lambda (str) (if face (propertize str 'face face) str)))
+                       (items-for-buf (cdr (assoc (car pair) agent-shell-queue--items)))
+                       (idx (cl-position id items-for-buf
+                                         :key #'agent-shell-queue-item-id :test #'equal))
+                       (ordinal (if idx (1+ idx) 0))
+                       (ref (if (and (eq (agent-shell-queue-item-status item) 'done)
+                                     (agent-shell-queue-item-completed item))
+                                (agent-shell-queue-item-completed item)
+                              (agent-shell-queue-item-created item))))
+                  (push (list id
+                              (vector
+                               (funcall cell status-str)
+                               (funcall cell (agent-shell-queue--format-age (time-since ref)))
+                               (funcall cell (if (> ordinal 0) (number-to-string ordinal) ""))
+                               (funcall cell (if (equal (car pair) agent-shell-queue--unassigned-key)
+                                                 "(unassigned)" (car pair)))
+                               (funcall cell (truncate-string-to-width
+                                              (agent-shell-queue-item-prompt item)
+                                              pw nil nil "…"))))
+                        entries))))
             (nreverse entries)))
     (tabulated-list-print t)))
 
@@ -1093,7 +1135,12 @@ When called interactively, prompts for the target buffer."
          nil))
   (when buf
     (agent-shell-queue--ensure-loaded)
-    (let* ((item (agent-shell-queue--make-pause-item))
+    (let* ((item (agent-shell-queue-item--make
+                  :id (format "q-%d" (cl-incf agent-shell-queue--counter))
+                  :prompt "[PAUSE — waiting for human]"
+                  :status 'active
+                  :kind 'pause
+                  :created (float-time)))
            (id (agent-shell-queue-item-id item))
            (buf-name (buffer-name buf)))
       (agent-shell-queue--add-item-to-bucket buf-name item)
@@ -1134,8 +1181,9 @@ When called interactively, prompts for target buffer and context text."
     m)
   "Keymap for `agent-shell-queue-detail-mode'.")
 
-(define-derived-mode agent-shell-queue-detail-mode special-mode "Queue-Detail"
-  "Read-only view of a single agent-shell queue item.")
+(define-derived-mode agent-shell-queue-detail-mode markdown-mode "Queue-Detail"
+  "Read-only view of a single agent-shell queue item."
+  (setq buffer-read-only t))
 
 (defvar-local agent-shell-queue--detail-id nil
   "ID of the queue item displayed in this detail buffer.")
@@ -1346,7 +1394,7 @@ With a prefix argument, opens an unassigned capture instead."
     m)
   "Keymap for `agent-shell-queue-edit-mode'.")
 
-(define-derived-mode agent-shell-queue-edit-mode text-mode "Queue-Edit"
+(define-derived-mode agent-shell-queue-edit-mode markdown-mode "Queue-Edit"
   "Mode for editing a queued prompt in a popup buffer.")
 
 (defvar-local agent-shell-queue--editing-id nil
@@ -1468,7 +1516,7 @@ and age."
     m)
   "Keymap for `agent-shell-queue-capture-mode'.")
 
-(define-derived-mode agent-shell-queue-capture-mode text-mode "Queue-Capture"
+(define-derived-mode agent-shell-queue-capture-mode markdown-mode "Queue-Capture"
   "Mode for composing a queued agent-shell prompt.
 \\{agent-shell-queue-capture-mode-map}")
 
@@ -1481,17 +1529,14 @@ and age."
 (defvar-local agent-shell-queue--capture-background nil
   "When non-nil, the captured prompt will be flagged for background execution.")
 
-(defun agent-shell-queue--capture-buffer-name (target-buf)
-  "Return a unique capture buffer name for TARGET-BUF (nil = unassigned)."
-  (if target-buf
-      (format "*agent-shell-queue-capture: %s*" (buffer-name target-buf))
-    "*agent-shell-queue-capture: unassigned*"))
-
 (defun agent-shell-queue--open-capture (target-buf &optional origin-buf)
   "Open a capture buffer targeting TARGET-BUF (nil for unassigned queue).
 Multiple capture buffers can be open simultaneously; each is named after its target.
 ORIGIN-BUF is used for context-insertion commands; defaults to current buffer."
-  (let ((capture-buf (get-buffer-create (agent-shell-queue--capture-buffer-name target-buf))))
+  (let ((capture-buf (get-buffer-create
+                      (if target-buf
+                          (format "*agent-shell-queue-capture: %s*" (buffer-name target-buf))
+                        "*agent-shell-queue-capture: unassigned*"))))
     (with-current-buffer capture-buf
       (erase-buffer)
       (agent-shell-queue-capture-mode)

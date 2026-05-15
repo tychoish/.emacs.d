@@ -35,6 +35,7 @@ Mocks out disk I/O and buffer refresh so tests stay pure."
          (agent-shell-queue--subscriptions nil)
          (agent-shell-queue--editing-ids nil)
          (agent-shell-queue--buffer-paused nil)
+         (agent-shell-queue--stale-item-ids nil)
          (agent-shell-queue-paused nil)
          (agent-shell-queue--last-flush-time nil))
      (cl-letf (((symbol-function 'agent-shell-queue--save) #'ignore)
@@ -788,7 +789,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
         (kill-buffer buf)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; agent-shell-queue--retarget-item
+;;; agent-shell-queue--assign-item
 
 (ert-deftest agent-shell-queue/retarget-moves-item ()
   (agent-shell-queue-test/isolate
@@ -796,7 +797,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
               ((symbol-function 'agent-shell-queue--ensure-subscription) #'ignore))
       (setq agent-shell-queue--items
             (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
-      (agent-shell-queue--retarget-item "q-1" "buf2")
+      (agent-shell-queue--assign-item "q-1" "buf2")
       (should-not (assoc "buf1" agent-shell-queue--items))
       (let ((bucket (assoc "buf2" agent-shell-queue--items)))
         (should bucket)
@@ -806,7 +807,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   (agent-shell-queue-test/isolate-no-sub
     (setq agent-shell-queue--items
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
-    (agent-shell-queue--retarget-item "q-1" "buf1")
+    (agent-shell-queue--assign-item "q-1" "buf1")
     (should (= 1 (length agent-shell-queue--items)))
     (should (assoc "buf1" agent-shell-queue--items))))
 

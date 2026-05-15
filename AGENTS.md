@@ -70,6 +70,12 @@ End predicate functions with `-p`: `gui-p`, `should-read-abbrev-file-p`.
 
 Use `create-toggle-functions` from `xlib.el` to generate `turn-on-X`, `turn-off-X`, and `toggle-X` triads. Do not write these by hand.
 
+### Single-use internal functions
+
+Never write a private (`--`) function that is called from exactly one place. Inline the body at the call site instead. Exceptions:
+- Functions passed as values: timer callbacks (`run-with-idle-timer`, `run-with-timer`), advice (`advice-add`), subscription/hook registrations, dispatch table entries.
+- Functions covered by direct ERT tests.
+
 ---
 
 ## Loading and Startup

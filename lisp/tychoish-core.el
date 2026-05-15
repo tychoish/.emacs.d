@@ -2686,6 +2686,7 @@ Useful after changing `eglot-workspace-configuration' or
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
   :config
+  (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
   (require 'agent-shell-extras)
   (bind-keys
    :map agent-shell-mode-map
@@ -2707,6 +2708,7 @@ Useful after changing `eglot-workspace-configuration' or
   (agent-shell-mode-key "x" execute-extended-agent-shell-command)
   (agent-shell-mode-key "f" agent-shell-collapse-menu)
   (agent-shell-mode-key "c" agent-shell-command-menu)
+  (agent-shell-mode-key "m" agent-shell-global-menu)
   (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
 
   (with-eval-after-load 'agent-shell-viewport
@@ -2752,9 +2754,10 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-queue
   :bind (:map tychoish/robot-agent-shell-map
+         ("." . agent-shell-queue-menu)
          ("/" . agent-shell-queue-enqueue)
          ("P" . agent-shell-queue-toggle-pause)
-         ("E" . agent-shell-queue-edit-task))
+         ("-" . agent-shell-queue-edit-task))
   :commands (agent-shell-queue-open-buffer
              agent-shell-queue-enqueue
              agent-shell-queue-edit-task
@@ -2767,6 +2770,8 @@ Useful after changing `eglot-workspace-configuration' or
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "q")
   :config
+  (agent-shell-mode-key "q" agent-shell-queue-open-buffer)
+
   (defun tychoish--agent-shell-queue-state-file ()
     "Queue state file under the per-instance agent-shell state directory."
     (let ((ext (pcase agent-shell-queue-serialization-format
@@ -2775,6 +2780,7 @@ Useful after changing `eglot-workspace-configuration' or
                  (_ "el"))))
       (expand-file-name (concat "queue." ext)
                         (tychoish/conf-state-path "agent-shell"))))
+
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-pick-buffer-function #'agent-shell-extras--pick-buffer))
 

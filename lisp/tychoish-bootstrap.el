@@ -1189,6 +1189,15 @@ Returns the number of buffers killed."
       (setq-default fill-column previous-default))
     (setq-local fill-column new-value)))
 
+(defun tychoish--vfc-fill-column-watcher (_sym _newval op where)
+  "Re-apply visual-fill-column-mode when fill-column is set in an active buffer."
+  (when (and (eq op 'set) (buffer-live-p where))
+    (with-current-buffer where
+      (when (bound-and-true-p visual-fill-column-mode)
+        (visual-fill-column-mode 1)))))
+
+(add-variable-watcher 'fill-column #'tychoish--vfc-fill-column-watcher)
+
 (defun unfill-region (begin end)
   "Remove all linebreaks in a region but leave paragraphs
   indented text (quotes,code) and lines starting with an asterix (lists) intakt."
