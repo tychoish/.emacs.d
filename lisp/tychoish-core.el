@@ -1631,8 +1631,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (bind-key "M-<left>" 'balle-python-shift-left python-ts-mode-map)
   (bind-key "M-<right>" 'balle-python-shift-right python-ts-mode-map)
-
-					; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
+; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
@@ -1874,12 +1873,8 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :defines (c-aspell-dynamic markdow-aspell-dynamic mail-aspell-dynamic html-aspell-dynamic)
   :functions (flycheck-aspell--start-checker flycheck-aspell--parse)
   :config
-  (add-to-list 'flycheck-checkers 'c-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'org-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'rst-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'html-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'markdown-aspell-dynamic)
-  (add-to-list 'flycheck-checkers 'mail-aspell-dynamic)
+  (mapc (make-add-to-list-fn flycheck-checkers)
+	'(c-aspell-dynamic org-aspell-dynamic rst-aspell-dynamic html-aspell-dynamic markdown-aspell-dynamic mail-aspell-dynamic))
 
   (flycheck-aspell-define-checker "org" "Org" ("--add-filter" "url") (org-mode))
   (flycheck-aspell-define-checker "rst" "reStructuredText" ("--add-filter" "url") (rst-mode)))
@@ -1895,11 +1890,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defun tychoish/flycheck-grammarly-enable ()
     (interactive)
     (add-to-list 'flycheck-checkers 'grammarly)
-
     (add-to-list 'grammarly-on-open-function-list 'flycheck-grammarly--on-open)
     (add-to-list 'grammarly-on-message-function-list 'flycheck-grammarly--on-message)
     (add-to-list 'grammarly-on-close-function-list 'flycheck-grammarly--on-close)
-
     (flycheck-add-next-checker 'markdown-aspell-dynamic 'grammarly)
     (flycheck-add-next-checker 'mail-aspell-dynamic 'grammarly))
 
@@ -2139,7 +2132,6 @@ Useful after changing `eglot-workspace-configuration' or
   (add-to-list 'major-mode-remap-alist '(java-mode . java-ts-mode))
   (add-to-list 'major-mode-remap-alist '(css-mode . css-ts-mode))
   (add-to-list 'major-mode-remap-alist '(js-json-mode . json-ts-mode))
-
   (add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
   (add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
   (add-to-list 'major-mode-remap-alist '(c-or-c++-mode . c-or-c++-ts-mode))
@@ -2343,7 +2335,6 @@ Useful after changing `eglot-workspace-configuration' or
    :map tychoish/robot-gptel-map
    ("a" . gptel-agent)))
 
-
 (use-package mcp
   :ensure t
   :commands (mcp-hub-start-all-servers)
@@ -2451,13 +2442,12 @@ Useful after changing `eglot-workspace-configuration' or
   (tychoish/aider-setup-state)
   (defvar aidermacs-model-settings-path (f-join user-emacs-directory "aider.model.settings.yml"))
 
-  (add-to-list 'aidermacs-extra-args (concat "--input-history-file=" (tychoish/conf-state-path "aider.input-history.md")) t)
-  (add-to-list 'aidermacs-extra-args (concat "--chat-history-file=" (tychoish/conf-state-path "aider.chat-history.md")) t)
-  (add-to-list 'aidermacs-extra-args (concat "--model-settings-file=" aidermacs-model-settings-path) t)
-  (add-to-list 'aidermacs-extra-args "--editor-edit-format=udiff")
-  (add-to-list 'aidermacs-extra-args "--edit-format=udiff")
-  (add-to-list 'aidermacs-extra-args "--notifications")
-  (add-to-list 'aidermacs-extra-args "--cache-prompts")
+  (mapc (make-add-to-list-fn aidermacs-extra-args :append t)
+	(list (concat "--input-history-file=" (tychoish/conf-state-path "aider.input-history.md"))
+	      (concat "--chat-history-file=" (tychoish/conf-state-path "aider.chat-history.md"))
+	      (concat "--model-settings-file=" aidermacs-model-settings-path)
+	       "--editor-edit-format=udiff" "--edit-format=udiff"
+	       "--notifications" "--cache-prompts"))
 
   (make-aidermacs-model-selection-function
    :name "claude-max"
