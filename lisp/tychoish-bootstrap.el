@@ -462,7 +462,7 @@ This combines the host name and the dameon name."
     (savehist-mode 1))
 
   (with-eval-after-load 'annotated-completing-read
-    (add-to-list 'savehist-additional-variables 'annotated-completing-read-history))
+    (annotated-completing-read-enable-session-save))
 
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" 'consult-recent-file 'global-map)))

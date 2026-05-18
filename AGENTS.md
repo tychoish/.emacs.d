@@ -206,6 +206,12 @@ When adding a new utility to `xlib.el` or a DSL macro, add at minimum a smoke te
 
 ---
 
+## Transient Menus
+
+Every key sequence within a `transient-define-prefix` must be unique across all groups in that prefix. Transient does not enforce this at compile time or load time — duplicate keys silently shadow each other, so the collision only becomes apparent at runtime. Always audit for duplicates before committing changes to a transient menu.
+
+---
+
 ## Commit and Change Hygiene
 
 - Keep changes to a single concern per commit. Mixing a bug fix with a refactor makes bisecting harder.

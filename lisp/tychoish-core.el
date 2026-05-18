@@ -2675,13 +2675,13 @@ Useful after changing `eglot-workspace-configuration' or
    ("r" . agent-shell-rename-buffer)
    ("e" . agent-shell-jump-to-latest-permission-button-row)
    ("b" . agent-shell-switch-buffer)
-   ("a" . agent-shell-action-menu)
-   ("f" . agent-shell-collapse-menu)
+   ("a" . agent-shell-select-action)
+   ("f" . agent-shell-select-collapse)
    ("p" . agent-shell-resolve-permission)
-   ("c" . agent-shell-command-menu)
+   ("c" . agent-shell-select-command)
    ("n" . agent-shell-new-shell)
-   ("t" . agent-shell-new-worktree-shell)
-   ("T" . agent-shell-new-temp-shell))
+   ("w" . agent-shell-new-worktree-shell)
+   ("t" . agent-shell-new-temp-shell))
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
@@ -2693,34 +2693,31 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-c C-c" . agent-shell-submit)
    ("C-c C-k" . agent-shell-interrupt)
    ("C-c C-p" . agent-shell-resolve-permissions)
-   ("C-c C-a" . agent-shell-action-menu)
+   ("C-c C-a" . agent-shell-select-action)
    ("C-c b" . agent-shell-switch-buffer)
-   ("C-c m" . agent-shell-action-menu)
-   ("C-c x" . agent-shell-command-menu)
-   ("C-c TAB" . agent-shell-collapse-menu)
+   ("C-c j" . tychoish/robot-agent-shell-map)
+   ("C-c m" . agent-shell-select-action)
+   ("C-c x" . agent-shell-select-command)
+   ("C-c TAB" . agent-shell-select-collapse)
    ("C-<tab>" . agent-shell-next-item)
    ("S-SPC" . agent-shell-cycle-session-mode))
 
   (agent-shell-mode-key "?" agent-shell-resolve-permission)
   (agent-shell-mode-key "p" agent-shell-resolve-permission)
-  (agent-shell-mode-key "a" agent-shell-action-menu)
+  (agent-shell-mode-key "a" agent-shell-select-action)
   (agent-shell-mode-key "b" agent-shell-switch-buffer)
   (agent-shell-mode-key "x" execute-extended-agent-shell-command)
-  (agent-shell-mode-key "f" agent-shell-collapse-menu)
-  (agent-shell-mode-key "c" agent-shell-command-menu)
+  (agent-shell-mode-key "f" agent-shell-select-collapse)
+  (agent-shell-mode-key "c" agent-shell-select-command)
   (agent-shell-mode-key "m" agent-shell-global-menu)
   (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
 
   (with-eval-after-load 'agent-shell-viewport
     (bind-keys
      :map agent-shell-viewport-view-mode-map
-     ("C-c TAB" . agent-shell-collapse-menu)
-     ("TAB" . agent-shell-ui-toggle-fragment-at-point)
+     ("C-c TAB" . agent-shell-select-collapse)
      ("C-<tab>" . agent-shell-viewport-next-item)
-     ("S-SPC" . agent-shell-viewport-cycle-session-mode)
-     ("?" . agent-shell-resolve-permission)
-     ("a" . agent-shell-action-menu)
-     ("b" . agent-shell-switch-buffer)))
+     ("S-SPC" . agent-shell-viewport-cycle-session-mode)))
 
   (tychoish/mcp-servers-init)
 
@@ -2755,22 +2752,41 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package agent-shell-queue
   :bind (:map tychoish/robot-agent-shell-map
          ("." . agent-shell-queue-menu)
-         ("/" . agent-shell-queue-enqueue)
-         ("P" . agent-shell-queue-toggle-pause)
+         ("/" . agent-shell-queue-capture)
+         ("P" . agent-shell-queue-pause)
          ("-" . agent-shell-queue-edit-task))
-  :commands (agent-shell-queue-open-buffer
+  :commands (agent-shell-queue-buffer-open
              agent-shell-queue-enqueue
              agent-shell-queue-edit-task
-             agent-shell-queue-toggle-pause
+             agent-shell-queue-pause
+             agent-shell-queue-resume
              agent-shell-queue-capture
+             agent-shell-queue-capture-unassigned
+             agent-shell-queue-capture-from-region
+             agent-shell-queue-capture-from-context
+             agent-shell-queue-capture-from-clipboard
              agent-shell-queue-insert-pause
-             agent-shell-queue-insert-clear-context)
+             agent-shell-queue-insert-clear-context
+             agent-shell-queue-raw-edit
+             agent-shell-queue-import
+             agent-shell-queue-reload
+             agent-shell-queue-set-scope
+             agent-shell-queue-scope-global
+             agent-shell-queue-export
+             agent-shell-queue-enqueue-emacs
+             agent-shell-queue-insert-wait
+             agent-shell-queue-item-menu)
+  :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
+         (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
   :init
   (make-read-extended-command-for-prefix "agent-shell-queue"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "q")
   :config
-  (agent-shell-mode-key "q" agent-shell-queue-open-buffer)
+  (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
+  (bind-keys
+   :map agent-shell-queue-mode-map
+   ("C-c j" . tychoish/robot-agent-shell-map))
 
   (defun tychoish--agent-shell-queue-state-file ()
     "Queue state file under the per-instance agent-shell state directory."

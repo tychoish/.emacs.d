@@ -22,11 +22,19 @@
 
 ;; Suppress byte-compiler warnings for agent-shell-queue commands
 ;; referenced in action alists and transient menus loaded lazily.
-(declare-function agent-shell-queue-open-buffer "agent-shell-queue")
+(declare-function agent-shell-queue-buffer-open "agent-shell-queue")
 (declare-function agent-shell-queue-edit-task "agent-shell-queue")
 (declare-function agent-shell-queue-enqueue "agent-shell-queue")
 (declare-function agent-shell-queue-capture "agent-shell-queue")
 (declare-function agent-shell-queue-enqueue-clear "agent-shell-queue")
+(declare-function agent-shell-queue-capture-unassigned "agent-shell-queue")
+(declare-function agent-shell-queue-capture-from-region "agent-shell-queue")
+(declare-function agent-shell-queue-capture-from-context "agent-shell-queue")
+(declare-function agent-shell-queue-capture-from-clipboard "agent-shell-queue")
+(declare-function agent-shell-queue-pause "agent-shell-queue")
+(declare-function agent-shell-queue-resume "agent-shell-queue")
+(declare-function agent-shell-queue-raw-edit "agent-shell-queue")
+(declare-function agent-shell-queue-import "agent-shell-queue")
 
 (setq agent-shell-buffer-name-format
       (lambda (agent-name project-name)
@@ -57,22 +65,27 @@
     ("yank (DWIM)" . agent-shell-yank-dwim)
     ("queue request" . agent-shell-queue-enqueue)
     ("queue capture" . agent-shell-queue-capture)
+    ("capture unassigned" . agent-shell-queue-capture-unassigned)
+    ("capture from region" . agent-shell-queue-capture-from-region)
+    ("capture from clipboard" . agent-shell-queue-capture-from-clipboard)
+    ("capture from context" . agent-shell-queue-capture-from-context)
     ("queue clear" . agent-shell-queue-enqueue-clear)
     ("cycle session mode" . agent-shell-cycle-session-mode)
     ("set session mode" . agent-shell-set-session-mode)
     ("set session model" . agent-shell-set-session-model)
     ("copy session id" . agent-shell-copy-session-id)
     ("open transcript" . agent-shell-open-transcript)
-    ("collapse menu" . agent-shell-collapse-menu)
-    ("queue review" . agent-shell-queue-open-buffer))
-  "Alist of (LABEL . COMMAND) for `agent-shell-action-menu'.")
+    ("collapse menu" . agent-shell-select-collapse)
+    ("queue review" . agent-shell-queue-buffer-open))
+  "Alist of (LABEL . COMMAND) for `agent-shell-select-action'.")
 
 ;;; Mode key
 
 (defmacro agent-shell-mode-key (key fn)
   "Define `agent-shell-output-key-KEY' and bind it in `agent-shell-mode-map'.
 In the output area, or while the shell is busy, calls FN interactively.
-Self-inserts KEY only when at the idle prompt."
+Self-inserts KEY only when at the idle prompt.
+Also binds FN directly in `agent-shell-viewport-view-mode-map'."
   (let* ((key-str (if (stringp key) key (symbol-name key)))
          (name (intern (concat "agent-shell-output-key-" key-str)))
          (char (pcase key-str
@@ -85,7 +98,9 @@ Self-inserts KEY only when at the idle prompt."
          (if (and (not (shell-maker-busy)) (shell-maker-point-at-last-prompt-p))
              ,(if char `(self-insert-command 1 ,char) '(ignore))
            (call-interactively #',fn)))
-       (define-key agent-shell-mode-map (kbd ,key-str) #',name))))
+       (define-key agent-shell-mode-map (kbd ,key-str) #',name)
+       (with-eval-after-load 'agent-shell-viewport
+         (define-key agent-shell-viewport-view-mode-map (kbd ,key-str) #',fn)))))
 
 ;;; Completion setup
 
@@ -94,8 +109,36 @@ Self-inserts KEY only when at the idle prompt."
   (corfu-mode +1)
   (setq-local corfu-auto-prefix 2)
   (setq-local completion-at-point-functions
-	      (append (remq t completion-at-point-functions)
-		      (list #'cape-dabbrev))))
+              (cons #'cape-dabbrev (remq t completion-at-point-functions))))
+
+(defun agent-shell-queue-capture--slash-command-capf ()
+  "Complete agent slash commands after / in capture buffers with a live target."
+  (when-let* ((shell-buf (and (boundp 'agent-shell-queue--capture-target)
+                              agent-shell-queue--capture-target
+                              (buffer-live-p agent-shell-queue--capture-target)
+                              agent-shell-queue--capture-target))
+              (commands (with-current-buffer shell-buf
+                          (map-elt agent-shell--state :available-commands)))
+              ((not (seq-empty-p commands))))
+    (save-excursion
+      (let ((end (point)))
+        (when (re-search-backward "/" (line-beginning-position) t)
+          (list (1+ (point)) end
+                (mapcar (lambda (c) (map-elt c 'name)) commands)
+                :annotation-function
+                (lambda (name)
+                  (let ((cmd (seq-find (lambda (c) (equal (map-elt c 'name) name))
+                                       commands)))
+                    (concat "  " (or (and cmd (map-elt cmd 'description)) ""))))
+                :exclusive 'no))))))
+
+(defun agent-shell-queue-capture-corfu-setup ()
+  "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
+  (corfu-mode +1)
+  (setq-local corfu-auto-prefix 2)
+  (setq-local completion-at-point-functions
+	      (append '(cape-dabbrev agent-shell-queue-capture--slash-command-capf)
+		      (remq t completion-at-point-functions))))
 
 ;;; Buffer/session management
 
@@ -203,7 +246,7 @@ POSITION is buffer position of the button's start."
 ;;; Action menu
 
 ;;;###autoload
-(defun agent-shell-action-menu ()
+(defun agent-shell-select-action ()
   "Pick a common agent-shell action and run it via `call-interactively'.
 When a permission request is pending, permission responses are spliced into the menu."
   (interactive)
@@ -224,7 +267,7 @@ When a permission request is pending, permission responses are spliced into the 
 			  :prompt "agent-shell action =>"
 			  :category 'agent-shell-action
 			  :require-match t
-			  :history 'agent-shell-action-menu))
+			  :history 'agent-shell-select-action))
 		(cmd (cdr (assoc label alist)))
 		((commandp cmd)))
       (call-interactively cmd))))
@@ -262,17 +305,23 @@ When a permission request is pending, permission responses are spliced into the 
 (transient-define-prefix agent-shell-global-menu ()
   "Global agent-shell operations."
   [["Sessions"
-    ("s" "Switch session" agent-shell-switch-buffer)
-    ("m" "Manager toggle" agent-shell-manager-toggle)
-    ("f" "Find buffer" agent-shell-manager-find-buffer)]
+    (";" "Switch to session" agent-shell-switch-buffer)
+    ("," "Manager toggle" agent-shell-manager-toggle)
+    ("b" "Find buffer" agent-shell-manager-find-buffer)]
    ["Create"
-    ("n" "New shell" agent-shell-new-shell)
+    ("n" "New shell session" agent-shell-new-shell)
     ("t" "New temp shell" agent-shell-new-temp-shell)
-    ("r" "Resume session" agent-shell-resume-session)]
+    ("h" "Resume session (hydrate)" agent-shell-resume-session)]
    ["Queue"
     ("q" "Open queue" agent-shell-queue-open-buffer)
     ("e" "Enqueue prompt" agent-shell-queue-enqueue)
-    ("E" "Edit task" agent-shell-queue-edit-task)]])
+    ("E" "Edit task" agent-shell-queue-edit-task)]
+   ["Capture"
+    ("w" "Compose (write)" agent-shell-queue-capture)
+    ("u" "Unassigned capture" agent-shell-queue-capture-unassigned)
+    ("r" "From region" agent-shell-queue-capture-from-region)
+    ("y" "From clipboard" agent-shell-queue-capture-from-clipboard)
+    ("c" "From context" agent-shell-queue-capture-from-context)]])
 
 ;;;###autoload
 (transient-define-prefix agent-shell-session-menu ()
@@ -283,14 +332,20 @@ When a permission request is pending, permission responses are spliced into the 
     ("n" "Next permission button" agent-shell-next-permission-button)
     ("p" "Prev permission button" agent-shell-previous-permission-button)]
    ["Act"
-    ("a" "Action menu" agent-shell-action-menu)
+    ("a" "Action menu" agent-shell-select-action)
     ("R" "Resolve permission" agent-shell-resolve-permission)
     ("i" "Interrupt" agent-shell-interrupt)
-    ("/" "Command menu" agent-shell-command-menu)]
+    ("/" "Command menu" agent-shell-select-command)]
    ["Queue"
     ("q" "Open queue" agent-shell-queue-open-buffer)
     ("e" "Enqueue prompt" agent-shell-queue-enqueue)
     ("E" "Edit task" agent-shell-queue-edit-task)]
+   ["Capture"
+    ("w" "Compose (write)" agent-shell-queue-capture)
+    ("u" "Unassigned capture" agent-shell-queue-capture-unassigned)
+    ("r" "From region" agent-shell-queue-capture-from-region)
+    ("y" "From clipboard" agent-shell-queue-capture-from-clipboard)
+    ("z" "From context" agent-shell-queue-capture-from-context)]
    ["Mode"
     ("c" "Cycle session mode" agent-shell-cycle-session-mode)
     ("M" "Set session mode" agent-shell-set-session-mode)
@@ -304,7 +359,7 @@ When a permission request is pending, permission responses are spliced into the 
 ;;; Command menu
 
 ;;;###autoload
-(defun agent-shell-command-menu ()
+(defun agent-shell-select-command ()
   "Insert one of the agent's advertised `/' commands at the prompt."
   (interactive)
   (let* ((shell (or (cond
@@ -324,7 +379,7 @@ When a permission request is pending, permission responses are spliced into the 
 					   :prompt "agent /command => "
 					   :category 'agent-shell-slash-command
 					   :require-match t
-					   :history 'agent-shell-command-menu) " ")
+					   :history 'agent-shell-select-command) " ")
 			:shell-buffer shell
 			:submit nil)))
 
@@ -372,7 +427,7 @@ When CATEGORY is non-nil, only affect blocks matching that category."
 	  (agent-shell-ui-toggle-fragment-at-point))))))
 
 ;;;###autoload
-(defun agent-shell-collapse-menu ()
+(defun agent-shell-select-collapse ()
   "Pick a collapse action via `annotated-completing-read'.
 Offers bulk expand/collapse, per-category toggles, and entries to flip the
 three expand-by-default customization variables."
@@ -425,7 +480,7 @@ three expand-by-default customization variables."
 					     :prompt "agent-shell collapse: "
 					     :category 'agent-shell-collapse
 					     :require-match t
-					     :history 'agent-shell-collapse-menu)))
+					     :history 'agent-shell-select-collapse)))
       (cond
        ((equal choice "+ expand all")   (agent-shell--set-collapse nil))
        ((equal choice "+ collapse all") (agent-shell--set-collapse t))
