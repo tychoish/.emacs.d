@@ -827,6 +827,12 @@ Short-circuits on the first predicate that returns nil, consistent with `and' se
 (declare-function project-current "project")
 (declare-function project-buffers "project")
 
+
+(defun buffer-derived-mode-p (buffer mode)
+  (with-current-buffer buffer
+    (when (derived-mode-p mode)
+      t)))
+
 (cl-defun mode-buffers-for-project (&optional &key (mode major-mode))
   "Return buffers in the current project whose major mode derives from MODE.
 MODE defaults to `major-mode' of the calling buffer. Uses `approximate-project-buffers'

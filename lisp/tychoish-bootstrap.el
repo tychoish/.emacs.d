@@ -911,11 +911,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 ;; bulk buffer killing -- kill groups of buffers efficiently
 
-(defun buffer-derived-mode-p (buffer mode)
-  (with-current-buffer buffer
-    (when (derived-mode-p mode)
-      t)))
-
 (defun save-all-buffers ()
   (interactive)
   (save-some-buffers t t))
