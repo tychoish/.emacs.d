@@ -610,7 +610,6 @@ This combines the host name and the dameon name."
     (xterm-mouse-mode 1)
     (electric-pair-mode 1)
     (which-key-mode 1)
-    (annotated-completing-read-enable-session-save)
 
     (with-silence
       (repeat-mode 1))))
