@@ -273,6 +273,53 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; make-add-to-list-fn
+
+(defvar xlib--test-add-to-list-target nil)
+
+(ert-deftest xlib/make-add-to-list-fn-returns-lambda ()
+  (should (functionp (make-add-to-list-fn xlib--test-add-to-list-target))))
+
+(ert-deftest xlib/make-add-to-list-fn-unquoted-adds-item ()
+  (setq xlib--test-add-to-list-target nil)
+  (funcall (make-add-to-list-fn xlib--test-add-to-list-target) "a")
+  (should (member "a" xlib--test-add-to-list-target)))
+
+(ert-deftest xlib/make-add-to-list-fn-quoted-adds-item ()
+  (setq xlib--test-add-to-list-target nil)
+  (funcall (make-add-to-list-fn 'xlib--test-add-to-list-target) "a")
+  (should (member "a" xlib--test-add-to-list-target)))
+
+(ert-deftest xlib/make-add-to-list-fn-quoted-and-unquoted-same-result ()
+  (setq xlib--test-add-to-list-target nil)
+  (funcall (make-add-to-list-fn xlib--test-add-to-list-target) "a")
+  (let ((unquoted-result xlib--test-add-to-list-target))
+    (setq xlib--test-add-to-list-target nil)
+    (funcall (make-add-to-list-fn 'xlib--test-add-to-list-target) "a")
+    (should (equal unquoted-result xlib--test-add-to-list-target))))
+
+(ert-deftest xlib/make-add-to-list-fn-no-duplicates ()
+  (setq xlib--test-add-to-list-target '("a"))
+  (funcall (make-add-to-list-fn xlib--test-add-to-list-target) "a")
+  (should (= 1 (length xlib--test-add-to-list-target))))
+
+(ert-deftest xlib/make-add-to-list-fn-prepends-by-default ()
+  (setq xlib--test-add-to-list-target '("b"))
+  (funcall (make-add-to-list-fn xlib--test-add-to-list-target) "a")
+  (should (equal "a" (car xlib--test-add-to-list-target))))
+
+(ert-deftest xlib/make-add-to-list-fn-append-adds-to-end ()
+  (setq xlib--test-add-to-list-target '("a"))
+  (funcall (make-add-to-list-fn xlib--test-add-to-list-target :append t) "b")
+  (should (equal "b" (car (last xlib--test-add-to-list-target)))))
+
+(ert-deftest xlib/make-add-to-list-fn-mapc-appends-all ()
+  (setq xlib--test-add-to-list-target nil)
+  (mapc (make-add-to-list-fn xlib--test-add-to-list-target :append t)
+        '("a" "b" "c"))
+  (should (equal '("a" "b" "c") xlib--test-add-to-list-target)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Dash extensions
 
 (ert-deftest xlib/-distinct-by-car-removes-duplicate-car ()
