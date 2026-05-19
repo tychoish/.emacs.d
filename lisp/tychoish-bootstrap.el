@@ -2010,10 +2010,15 @@ magit process buffer for that submodule."
   "Discover and run all ERT tests under test/, then exit.
 Intended for CI invocations via --fg-daemon --eval.
 Installs a TIMEOUT-second kill guard (default 60) before running."
-  (let ((test-dir (expand-file-name "test" user-emacs-directory)))
+  (let ((test-dir (expand-file-name "test" user-emacs-directory))
+        (noninteractive t))
     (run-with-timer (or timeout 60) nil (lambda () (kill-emacs 1)))
-    (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
-      (load file nil t))
+    (condition-case err
+        (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
+          (load file nil t))
+      (error
+       (message "tychoish/run-ci-tests: error loading test files: %S" err)
+       (kill-emacs 1)))
     ;; ert-run-tests-batch-and-exit requires noninteractive=t (--batch only).
     ;; In --fg-daemon mode we call ert-run-tests-batch directly and kill-emacs
     ;; ourselves based on the result.

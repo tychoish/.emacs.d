@@ -42,6 +42,7 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         emacs_version:
           - "29.4"
@@ -58,7 +59,7 @@ jobs:
           version: ${{ matrix.emacs_version }}
 
       - name: Install system dependencies
-        run: sudo apt-get install -y aspell
+        run: sudo apt-get install -y aspell aspell-en
 
       - name: Link repo as ~/.emacs.d
         run: ln -sf "$GITHUB_WORKSPACE" ~/.emacs.d
