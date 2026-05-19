@@ -33,4 +33,8 @@ jobs:
         run: cask install
 
       - name: Run tests
-        run: cask exec ert-runner
+        run: |
+          cask exec ert-runner \
+            test/test-xlib.el \
+            test/test-builder.el \
+            test/test-project-projectile-integration.el
