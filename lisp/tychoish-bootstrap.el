@@ -33,29 +33,70 @@
 
 ;;; Code:
 
-(require 'f)
-(require 's)
-(require 'ht)
+(require 'xlib)
+(require 'fn)
 (require 'dash)
+
+(declare-function which-key-add-key-based-replacements "which-key")
+(declare-function which-key-add-keymap-based-replacements "which-key")
+
+(cl-defmacro which-key-customize (new-text &key map key form)
+  "Register a which-key annotation, deferred until which-key is loaded.
+
+NEW-TEXT is the replacement label (a string, or a cons (LABEL . COMMAND)
+for keymap-based replacements that also bind a prefix command).
+:KEY  — key sequence string; required unless :FORM is used.
+:MAP  — keymap (symbol or quoted symbol); selects
+        `which-key-add-keymap-based-replacements' instead of the key-only variant.
+:FORM — arbitrary expression; mutually exclusive with NEW-TEXT, :KEY, and :MAP.
+
+All constraints are validated at macro-expansion time."
+  (declare (indent 1))
+  (cond
+   (form
+    (when key
+      (user-error "which-key-customize: :form is mutually exclusive with :key"))
+    (when map
+      (user-error "which-key-customize: :form is mutually exclusive with :map"))
+    (when new-text
+      (user-error "which-key-customize: :form is mutually exclusive with new-text")))
+   (t
+    (unless new-text
+      (user-error "which-key-customize: new-text is required when :form is not provided"))
+    (unless key
+      (user-error "which-key-customize: :key is required when :form is not provided"))
+    (unless (stringp key)
+      (user-error "which-key-customize: :key must be a string literal, got: %S" key))))
+  (cond
+   (form `(with-eval-after-load 'which-key ,form))
+   (map `(with-eval-after-load 'which-key
+           (which-key-add-keymap-based-replacements ,map ,key ,new-text)))
+   (t `(with-eval-after-load 'which-key
+         (which-key-add-key-based-replacements ,key ,new-text)))))
+
+(defmacro flex-defun (name args &rest body)
+  "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
+Useful for functions used as hooks or advice targets where callers may pass
+more arguments than the function cares about."
+  (declare (indent defun) (doc-string 3))
+  `(defun ,name ,(append args '(&rest _)) ,@body))
 
 (declare-function browse-url-chrome "browse-url")
 
 (bind-keys
  ("C-x m" . execute-extended-command)
  ("C-x C-m" . execute-extended-command)
- ("C-x x c" . execute-extended-clipboard-command)
  ("M-X" . execute-extended-command-for-buffer)
  ("C-x b" . switch-to-buffer) ;; vs consult-buffer
  ("C-x l" . goto-line)
  ("C-x f" . find-file)
  ("C-x C-f" . find-file)
+ ("C-x C-d" . dired)
  ("C-x h" . help)
  ("C-x C-x" . exchange-point-and-mark)
  ;; ("C-x C-u w" . upcase-word)
  ;; ("C-x C-u t" . upcase-initials-region)
  ;; ("C-x C-u r" . upcase-region)
- ("C-x C-d" . dired)
- ("C-x d" . dired)
  ("C-x C-n" . count-words)
  ("C-c i" . indent-region)
  ("C-c c" . comment-region)
@@ -75,7 +116,6 @@
  ("C-z" . undo)
  ("C-w" . kill-region)
  ("C-<tab>" . completion-at-point)
- ("C-c s e" . eshell)
  ("M-h" . windmove-left)
  ("M-j" . windmove-down)
  ("M-k" . windmove-up)
@@ -84,16 +124,21 @@
  ("S-<down>" . windmove-down)
  ("S-<right>" . windmove-right)
  ("S-<up>" . windmove-up)
- ("M-H" . increase-window-left)
- ("M-J" . increase-window-down)
- ("M-K" . increase-window-up)
- ("M-L" . increase-window-right)
- ("M-<left>" . increase-window-left)
- ("M-<down>" . increase-window-down)
- ("M-<up>" . increase-window-up)
- ("M-<right>" . increase-window-right)
+ ("s-h" . increase-window-left)
+ ("s-j" . increase-window-down)
+ ("s-k" . increase-window-up)
+ ("s-l" . increase-window-right)
+ ("s-<left>" . increase-window-left)
+ ("s-<down>" . increase-window-down)
+ ("s-<up>" . increase-window-up)
+ ("s-<right>" . increase-window-right)
  ("M-/" . dabbrev-completion)
  ("C-M-/" . dabbrev-expand))
+
+(bind-keys
+ :map minibuffer-local-map
+ ("C-g" . tychoish/super-abort-minibuffers)
+ ("C-l" . backward-kill-word))
 
 (bind-keys
  ;; these are all from tychoish-common.el
@@ -114,23 +159,25 @@
 (bind-keys
  ;; these are all from tychoish-common.el
  :prefix "C-c t"
- :prefix-map tychoish-core-map
+ :prefix-map tychoish/core-map
  ("w" . toggle-local-whitespace-cleanup)
- :map tychoish-core-map ;; "C-c t"
+ ("s" . whitespace-cleanup)
+ ("k" . execute-extended-clipboard-command)
+ ("p" . toggle-electric-pair-inhibition)
+ ("e" . toggle-electric-pair-eagerness)
+ :map tychoish/core-map ;; "C-c t"
+ :prefix "b"
+ :prefix-map tychoish/blogging-map
+ ("m" . tychoish-insert-date)
+ ("p" . tychoish-blog-publish-post)
+ ("n" . tychoish-blog-create-post)
+ ("d" . tychoish-blog-open-drafts-dired)
+ :map tychoish/core-map ;; "C-c t"
  :prefix "t"
  :prefix-map tychoish/theme-map
  ("r" . disable-all-themes) ;; reset
  ("d" . tychoish-load-dark-theme)
  ("l" . tychoish-load-light-theme))
-
-(bind-keys
- :map tychoish-core-map
- ("p" . toggle-electric-pair-inhibition)
- ("e" . toggle-electric-pair-eagerness))
-
-(bind-keys
- :map minibuffer-local-map
- ("C-l" . backward-kill-word))
 
 (bind-keys
  :prefix "C-c d"
@@ -191,10 +238,10 @@
  ("TAB" . completion-at-point)
  ("." . completion-at-point)
  ("/" . dabbrev-completion)
- ("p" . completion-at-point))
+ ("p" . completion-at-point)
+ ("f" . tychoish/completion-select-flavor))
 
 (bind-keys
- :map global-map
  ("M-." . xref-find-definitions)
  :prefix "C-c l"
  :prefix-map tychoish/ide-map
@@ -205,30 +252,49 @@
  ("n" . xref-go-forward)
  ("o" . xref-find-definitions-other-window))
 
-(defvar-keymap tychoish/robot-gptel-set-default-model-map
-  :name "default model setters"
-  :doc "set default model for gtpel")
+(bind-keys
+ :prefix "C-c s"
+ :prefix-map tychoish/shell-map
+ ("m" . eshell))
 
-(which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
-  "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
+(bind-keys
+ :prefix "C-c r"
+ :prefix-map tychoish/robot-map
+ :map tychoish/robot-map
+ :prefix "g"
+ :prefix-map tychoish/robot-gptel-map
+ :map tychoish/robot-gptel-map
+ :prefix "m"
+ :prefix-map tychoish/robot-gptel-set-default-model-map)
 
+(which-key-customize '("project-grep" . tychoish/ecclectic-grep-project-map)
+  :map tychoish/ecclectic-grep-map :key "p")
+
+(put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
+(put 'upcase-region 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
 (put 'list-timers 'disabled nil)
 (put 'list-threads 'disabled nil)
 
+(with-eval-after-load 'dired
+  (bind-keys
+   :map dired-mode-map
+   ("w" . wdired-change-to-wdired-mode)))
+
 (with-eval-after-load "warnings"
- (add-to-list 'warning-suppress-log-types '(frameset)))
+  (add-to-list 'warning-suppress-log-types '(frameset)))
 
 (setq ad-redefinition-action 'accept)
 
 (setq fringe-mode 0)
-(setq ring-bell-function (lambda () nil))
+(setq ring-bell-function #'ignore)
 (setq font-lock-support-mode 'jit-lock-mode)
 (setq jit-lock-stealth-time nil)
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
+(setq tooltip-resize-echo-area t)
 
 (setq truncate-lines t)
 (setq use-dialog-box nil)
@@ -272,7 +338,6 @@
 
 (setq next-line-add-newlines nil)
 (setq undo-auto-current-boundary-timer t)
-(setq read-file-name-completion-ignore-case t)
 
 (setq select-enable-primary nil)
 (setq select-enable-clipboard nil)
@@ -294,8 +359,12 @@
 (setq eldoc-minor-mode-string "")
 (setq eldoc-echo-area-use-multiline-p t)
 (setq eldoc-echo-area-prefer-doc-buffer nil)
-(setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
+(setq eldoc-documentation-strategy #'eldoc-documentation-compose)
+(setq eldoc-echo-area-display-truncation-message nil)
+(setq max-mini-window-height 0.5)
 
+(when (>= emacs-major-version 29)
+  (setq package-install-upgrade-built-in t))
 (setq package-user-dir (concat user-emacs-directory "elpa"))
 
 (setq lpr-add-switches "-T ''")
@@ -336,30 +405,92 @@
         tab-mark
         newline-mark))
 
-(make-read-extended-command-for-prefix "clipboard")
-(make-read-extended-command-for-prefix "aidermacs")
-(make-read-extended-command-for-prefix "aidermacs-model")
-(make-read-extended-command-for-prefix "gptel")
-(make-read-extended-command-for-prefix "gptel-set-backend")
+(make-read-extended-command-for-prefix  "clipboard"
+ :bind-key "C-x x c")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; id-state -- emacs daemon/instance identification for state config
+
+(defun gui-p ()
+  "Return t when the current session is or may be a GUI session."
+  (when (or (daemonp) (window-system))
+    t))
+
+(defun tychoish-system-name ()
+  (interactive)
+  (message "system: %s" (system-name)))
+
+(defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
+
+(defvar-local tychoish-cache--resolved-instance-id nil)
+
+(defvar cli/instance-id nil
+  "CLI-specified daemon/instance name; set from command-line args in init.el.")
+
+(defvar tychoish/emacs-instance-id nil
+  "Name of the running Emacs instance; resolved from daemon state or CLI args.")
+
+(defun tychoish/resolve-instance-id ()
+  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
+    (or tychoish-cache--resolved-instance-id
+	(setq tychoish-cache--resolved-instance-id
+	      (let ((daemon (daemonp)))
+		(or (when (eq daemon t) "primary")
+		    (and daemon (setenv "EMACS_SERVER_FILE" daemon))
+		    cli/instance-id
+		    tychoish/emacs-instance-id
+		    "solo"))))))
+
+(defun tychoish/set-up-instance-name ()
+  (unless tychoish/emacs-instance-id
+    (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))))
+
+(defvar-local tychoish-cache--conf-emacs-host-and-instance nil)
+(defun tychoish/conf-emacs-host-and-instance ()
+  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
+    (or tychoish-cache--conf-emacs-host-and-instance
+	(setq-local tychoish-cache--conf-emacs-host-and-instance
+	            (list
+	             (if (eq system-type 'darwin)
+		         (car (s-split "\\." (system-name)))
+		       (system-name))
+	             (or tychoish/emacs-instance-id
+		         (tychoish/resolve-instance-id)))))))
+
+(defconst tychoish/conf-state-directory-name "state")
+
+(defun tychoish/conf-state-path (name)
+  (f-join user-emacs-directory
+	  tychoish/conf-state-directory-name
+	  (tychoish-get-config-file-prefix name)))
+
+(defun tychoish-get-config-file-prefix (name)
+  "Build a config file basename, for NAME.
+This combines the host name and the dameon name."
+  (s-join "-" (->> (tychoish/conf-emacs-host-and-instance)
+		   (reverse)
+		   (-concat (-l (when (or (equal "root" user-login-name)
+					  (f-symlink-p user-emacs-directory))
+				  user-login-name)
+				name))
+		   (reverse)
+		   (-non-nil))))
+
+(with-eval-after-load 'eshell
+  (setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; state -- setup desktop/bookmarks/savehist
 
 (defvar desktop/last-save-time nil)
+(defvar desktop-dirname nil)
 
 (defun tychoish/set-up-emacs-instance-persistence ()
-  (with-silence
-   (recentf-mode 1)
-   (savehist-mode 1))
-
-  (with-eval-after-load 'consult
-    (bind-key "C-x C-r" 'consult-recent-file 'global-map))
-
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
   (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
-  (setq-default savehist-file (tychoish/conf-state-path "savehist.el"))
-  (setq project-list-file (tychoish/conf-state-path "projects.el"))
+  (setq savehist-file (tychoish/conf-state-path "history.el"))
   (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
   (setq tramp-persistency-file-name (tychoish/conf-state-path "tramp.el"))
 
@@ -368,7 +499,17 @@
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
   (setq recentf-max-menu-items 100)
-  (setq recentf-save-file (tychoish/conf-state-path "recentf.el")))
+  (setq recentf-save-file (tychoish/conf-state-path "recentf.el"))
+
+  (with-silence
+    (recentf-mode 1)
+    (savehist-mode 1))
+
+  (with-eval-after-load 'annotated-completing-read
+    (annotated-completing-read-enable-session-save))
+
+  (with-eval-after-load 'consult
+    (bind-key "C-x C-r" 'consult-recent-file 'global-map)))
 
 (defun tychoish/desktop-save ()
   "Save desktop... sometimes"
@@ -377,7 +518,7 @@
     (when (or (> 40 (random 100))
               (< 150 (float-time (time-since desktop/last-save-time))))
       (desktop-save desktop-dirname)
-      (setq desktop/time-since-last-save (current-time)))))
+      (setq desktop/last-save-time (current-time)))))
 
 (defun tychoish/desktop-read-init ()
   ;; only read the desktop if we're not in the "solo" (no ID) emacs
@@ -389,7 +530,6 @@
     (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
     (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
-
     (if (daemonp)
         (progn
           (setq desktop-restore-frames t)
@@ -398,16 +538,17 @@
       (setq desktop-restore-eager t)
       (setq desktop-load-locked-desktop nil))
 
+    (require 'desktop)
+
     (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
       (with-gc-suppressed
        (with-file-name-handler-disabled
 	(with-silence (desktop-read)))))
 
-    (require 'desktop)
     (setq desktop-save t)
     (setq desktop/last-save-time (current-time))
 
-    (add-hook 'after-save-hook 'tychoish/desktop-save)
+    (run-with-idle-timer 120 t #'tychoish/desktop-save)
 
     (add-to-list 'desktop-globals-to-save 'register-alist)
     (add-to-list 'desktop-globals-to-save 'file-name-history)
@@ -449,11 +590,13 @@
         (message-log-max nil))
     (apply f arg)))
 
-(advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
-(advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
+(when (fboundp 'emacs-repository-branch-git)
+  (advice-add 'emacs-repository-branch-git :around #'ad:suppress-message))
+(when (fboundp 'emacs-repository-version-git)
+  (advice-add 'emacs-repository-version-git :around #'ad:suppress-message))
 
 (defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
-    "Hacky fix to resolve issue with native comp."
+  "Hacky fix to resolve issue with native comp."
   ;; https://emacs.stackexchange.com/questions/82010/why-is-emacs-recompiling-some-packages-on-every-startup
   (let* ((naive-elc-file (file-name-with-extension file "elc"))
          (elc-file (replace-regexp-in-string "\\.el\\.elc$" ".elc" naive-elc-file)))
@@ -462,106 +605,137 @@
 
 (advice-add 'native--compile-async-skip-p :around 'fixed-native--compile-async-skip-p)
 
+(cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
+  (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
+    `(progn
+       (add-hook 'emacs-startup-hook ',operation ,depth)
+       (defun ,operation ()
+	 (setq ,variable (current-time))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks -- functions that run in hooks configured in 'tychoish-core
 
 (defun with-hook-timing (inner &rest args)
   (->> args
-   (--mapc (with-slow-op-timer (format "<hook> %s" it)
-	    (funcall inner it)))))
+       (--mapc (with-slow-op-timer (format "<hook> %s" it)
+	         (funcall inner it)))))
 
-(advice-add 'run-hooks :around 'with-hook-timing)
-(advice-add 'run-hooks-with-args :around 'with-hook-timing)
+(when slow-op-reporting
+  (advice-add 'run-hooks :around 'with-hook-timing)
+  (advice-add 'run-hooks-with-args :around 'with-hook-timing))
 
-(setq default-frame-alist (unless (gui-p) '((background-color . nil))))
-
-(defun tychoish/init-late-disable-modes ()
-  (with-slow-op-timer
-   "<bootstrap.el> after-init [disable modes]"
-   (when (boundp 'scroll-bar-mode)
-     (scroll-bar-mode -1))
-   (tool-bar-mode -1)
-   (indent-tabs-mode -1)
-   (menu-bar-mode -1)))
-
-(defun tychoish/init-late-set-up-theme ()
-  (with-slow-op-timer
-   "<bootstrap.el> after-init [theme setup]"
-    (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
-    (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))
+(defun tychoish/init-force-relaod ()
+  (with-slow-op-timer "<bootstrap.el>: force reload"
+    (load "tychoish-bootstrap.el")
+    (load "tychoish-core.el")
+    (load "tychoish-mail.el")
+    (load "tychoish-org.el")
+    (tychoish/init-late-disable-modes)
+    (tychoish/init-late-enable-modes)
+    (tychoish/init-late-set-up-naming)
+    (tychoish/ensure-default-font)
     (tychoish/ensure-light-theme)
-    (tychoish/ensure-default-font)))
+    (tychoish-set-up-user-local-config)))
+
+(defun tychoish/init-late-set-up-naming ()
+  (with-slow-op-timer
+    "<bootstrap.el> after-init [theme setup]"
+    (tychoish/set-up-instance-name)
+    (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
+    (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" tychoish/emacs-instance-id)))))
 
 (defun tychoish/init-late-enable-modes ()
   (with-slow-op-timer
-   "<bootstrap.el> after-init [enable-modes]"
-   (global-auto-revert-mode 1)
-   (column-number-mode 1)
-   (delete-selection-mode 1)
-   (winner-mode 1)
-   (transient-mark-mode 1)
-   (xterm-mouse-mode 1)
-   (electric-pair-mode 1)
-   (which-key-mode 1)
-   (repeat-mode 1)))
+    "<bootstrap.el> after-init [enable-modes]"
+    (global-auto-revert-mode 1)
+    (column-number-mode 1)
+    (delete-selection-mode 1)
+    (winner-mode 1)
+    (transient-mark-mode 1)
+    (xterm-mouse-mode 1)
+    (electric-pair-mode 1)
+    (when (fboundp 'which-key-mode)
+      (which-key-mode 1))
+
+    (with-silence
+      (repeat-mode 1))))
+
+(unless (gui-p)
+  (push '(background-color . nil) default-frame-alist))
 
 (defun tychoish/set-up-delightful-mode-lighters ()
   (with-slow-op-timer
-   "<bootstrap.el> after-init [delight]"
-   (delight 'org-mode "org")
-   (delight 'org-agenda-mode "agenda")
-   (delight 'auto-revert-mode)
-   (delight 'eldoc-mode)
-   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
-   (delight 'auto-fill-function " afm")
-   (delight 'overwrite-mode "om")
-   (delight 'refill-mode "rf")
-   (delight 'visual-line-mode " wr")
-   (delight 'fundamental-mode "fun")))
+    "<bootstrap.el> after-init [delight]"
+    (delight 'org-mode "org")
+    (delight 'org-agenda-mode "agenda")
+    (delight 'auto-revert-mode)
+    (delight 'eldoc-mode)
+    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
+    (delight 'auto-fill-function " afm")
+    (delight 'overwrite-mode "om")
+    (delight 'refill-mode "rf")
+    (delight 'visual-line-mode " wr")
+    (delight 'fundamental-mode "fun")))
 
-(add-hygenic-one-shot-hook
+(add-one-shot-hook
  :name "delight-modeline"
- :operation 'tychoish/set-up-delightful-mode-lighters
- :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook))
+ :function tychoish/set-up-delightful-mode-lighters
+ :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook)
+ :idle-timer 0.2)
 
-(add-hygenic-one-shot-hook
+(add-one-shot-hook
  :name "restore-desktop"
  :function tychoish/desktop-read-init
- :hook after-first-frame-created)
+ :hook after-first-frame-created
+ :idle-timer 0.2)
 
-(add-hygenic-one-shot-hook
+(add-one-shot-hook
  :name "emacs-lockfile-setup"
- :form (if (equal "solo" tychoish/emacs-instance-id)
-	       (tychoish/set-up-ephemeral-instance-file-locks)
-	   (tychoish/set-up-named-instance-file-locks))
- :depth 50
- :hook after-first-frame-created)
+ :form (progn
+         (tychoish/init-late-set-up-naming)
+         (if (equal "solo" tychoish/emacs-instance-id)
+	     (tychoish/set-up-ephemeral-instance-file-locks)
+	   (tychoish/set-up-named-instance-file-locks)))
+ :hook emacs-startup-hook)
 
-(add-hygenic-one-shot-hook
+(add-one-shot-hook
  :name "emacs-instance-persistence"
- :function (tychoish/set-up-emacs-instance-persistence)
+ :form (tychoish/set-up-emacs-instance-persistence)
  :depth 75
- :hook after-first-frame-created)
+ :hook after-first-frame-created
+ :idle-timer 0.5)
 
-(add-hygenic-one-shot-hook
+(add-one-shot-hook
  :name "enable-modes"
  :function tychoish/init-late-enable-modes
- :hook (prog-mode-hook text-mode-hook))
+ :hook 'emacs-startup-hook
+ :idle-timer 0.3)
 
-(add-hygenic-one-shot-hook
+(add-one-shot-hook
  :name "ssh-agent"
- :function (tychoish/set-up-ssh-agent)
+ :form (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
-(add-hook 'emacs-startup-hook #'tychoish/init-late-disable-modes)
-(add-hook 'after-init-hook #'tychoish/init-late-set-up-theme)
-(add-hook 'auto-save-mode-hook 'tychoish/set-up-auto-save)
+(add-one-shot-hook
+ :name "ensure-default-font"
+ :function tychoish/ensure-default-font
+ :hook after-first-frame-created
+ :idle-timer 0.1)
+
+(add-one-shot-hook
+ :name "completion-flavor-init"
+ :form (with-silence
+	 (tychoish/completion-use-hybrid))
+ :hook '(vertico-prescient-mode-hook corfu-prescient-mode-hook))
+
+(add-hook 'emacs-startup-hook #'tychoish/ensure-light-theme)
+(add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
 
 (defun tychoish--load-user-file (feat)
   (with-slow-op-timer
-   (format "<%s.el> load user directory file" feat)
-   (require feat)))
+    (format "<%s.el> load user directory file" feat)
+    (require feat)))
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
@@ -627,6 +801,48 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; package.el management and elisp tools
+
+(defun byte-compile-all-user-emacs-files ()
+  "Recompile all most relevant emacs lisp files in the current
+installation that need to be recompiled. Call with a prefix argument to
+forcibly recompile all emacs files. Returns a list of all files that
+were recompiled."
+  (interactive)
+  (->> (list user-emacs-directory
+	     (f-join user-emacs-directory "lisp")
+	     (f-join user-emacs-directory "user"))
+       (--flat-map (f-entries it #'f-file-p))
+       (--filter (f-ext-p it "el"))
+       (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
+
+(declare-function package-installed-p "package")
+(declare-function package-desc-p "package")
+
+(autoload 'async-package-do-action "async-package")
+
+(defun async-package-operation (op pkgs)
+  (let* ((ops '(install upgrade 'reinstall))
+	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
+	 (filename (concat (f-join temporary-file-directory
+			           (s-join "-" (list
+					        "emacs" tychoish/emacs-instance-id
+					        "async-package"
+					        (symbol-name op)))) ".log")))
+    (unless (member op ops)
+      (user-error "%s is not a valid operation %S" op ops))
+
+    (unless valid-packages
+      (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
+
+    (async-package-do-action op valid-packages filename)))
+
+(defun package-install-async (pkgs)
+  (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
+  (async-package-operation 'install pkgs))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;; frame/window -- setup and manage frames and windows
 
 (setq window-sides-vertical t)
@@ -634,7 +850,12 @@
 (defun kill-eldoc-and-help-buffers ()
   "Kills all eldoc and help buffers"
   (interactive)
-  (kill-matching-buffers "\*Help\\*\\|*eldoc.*\\*" nil t))
+  (kill-matching-buffers "\\*Help\\*\\|\\*eldoc.*\\*" nil t))
+
+(defun contextual-menubar (&optional frame)
+  "Display the menubar in FRAME (default: selected frame) if on a graphical display, but hide it if in terminal."
+  (interactive)
+  (set-frame-parameter frame 'menu-bar-lines (if (display-graphic-p frame) 1 0)))
 
 (defun increase-window-up () (interactive) (enlarge-window 1 nil))
 (defun increase-window-down () (interactive) (enlarge-window -1 nil))
@@ -644,7 +865,6 @@
 (defun frame-unset-background-for-tty (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
   (unless (display-graphic-p frame)
-    (set-background-color "unspecified-bg")
     (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
 
 (defun current-frame-unset-background-for-tty ()
@@ -655,6 +875,248 @@
 (add-hook 'after-make-frame-functions #'frame-unset-background-for-tty)
 (add-hook 'server-after-make-frame-hook #'current-frame-unset-background-for-tty)
 (add-hook 'window-setup-hook #'current-frame-unset-background-for-tty)
+
+;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
+
+(defun text-scale-reset ()
+  (interactive)
+  (text-scale-set 0))
+
+(defun djcb-opacity-modify (&optional dec)
+  "Modify the transparency of the frame.
+If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
+  (let* ((alpha-or-nil (frame-parameter nil 'alpha)) ; nil before setting
+         (oldalpha (if alpha-or-nil alpha-or-nil 100))
+         (newalpha (if dec (- oldalpha 2) (+ oldalpha 2))))
+    (when (and (>= newalpha frame-alpha-lower-limit) (<= newalpha 100))
+      (modify-frame-parameters nil (list (cons 'alpha newalpha))))))
+
+(defun opacity-increase ()
+  (interactive)
+  (djcb-opacity-modify))
+
+(defun opacity-decrease ()
+  (interactive)
+  (djcb-opacity-modify t))
+
+(defun opacity-reset ()
+  (interactive)
+  (modify-frame-parameters nil `((alpha . 95))))
+
+(defun disable-all-themes ()
+  (interactive)
+  (mapc #'disable-theme custom-enabled-themes))
+
+(defun tychoish-load-light-theme ()
+  (interactive)
+
+  (unless (member 'modus-operandi custom-enabled-themes)
+    (when custom-enabled-themes
+      (disable-all-themes))
+
+    (if (custom-theme-p 'modus-operandi)
+	(enable-theme 'modus-operandi)
+      (load-theme 'modus-operandi t nil)))
+
+  (unless (alist-get 'alpha default-frame-alist)
+    (add-to-list 'default-frame-alist '(alpha . 97))))
+
+(defun tychoish/ensure-light-theme ()
+  (unless custom-enabled-themes
+    (tychoish-load-light-theme)))
+
+(defun tychoish/ensure-dark-theme ()
+  (unless custom-enabled-themes
+    (tychoish-load-dark-theme)))
+
+(defun tychoish-load-dark-theme ()
+  (interactive)
+  (disable-all-themes)
+  (when (load-theme 'modus-vivendi t t)
+    (enable-theme 'modus-vivendi))
+  (add-to-list 'default-frame-alist '(alpha . 95)))
+
+(defun tychoish-setup-font (font-face-name size)
+  (interactive "sName: \nNSize: ")
+  (let ((new-font-name (concat font-face-name "-" (number-to-string size)))
+	(font-cell (assoc 'font default-frame-alist)))
+    (if font-cell
+	(setcdr font-cell new-font-name)
+      (add-to-list 'default-frame-alist (cons 'font new-font-name)))
+    (when (display-graphic-p)
+      (set-frame-font new-font-name nil t)))
+  (assoc 'font default-frame-alist))
+
+(defun tychoish/ensure-font (font-face-name size)
+  (unless (assoc 'font default-frame-alist)
+    (tychoish-setup-font font-face-name size)))
+
+(defun tychoish/ensure-default-font ()
+  (tychoish/ensure-font "Source Code Pro" 13))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; bulk buffer killing -- kill groups of buffers efficiently
+
+(defun save-all-buffers ()
+  (interactive)
+  (save-some-buffers t t))
+
+(defun buffers-matching-path (regexp &optional internal-too)
+  (->> (buffer-list)
+       (--keep (let* ((buffer it)
+		      (name (buffer-file-name buffer)))
+		 (when (and name (not (string-equal name ""))
+			    (or internal-too (/= (aref name 0) ?\s))
+			    (string-match regexp name))
+		   buffer)))))
+
+(defun buffers-matching-mode (mode)
+  (->> (buffer-list)
+       (--select (with-current-buffer it (eq major-mode mode)))))
+
+(defun kill-buffers-in-directory (&optional directory)
+  "Kill all buffers in `directory'. When not defined, a directory can be selected interactively."
+  (interactive)
+
+  (unless directory
+    (setq directory (annotated-completing-read-directory)))
+
+  (let ((killed (->> (buffer-list)
+		     (--filter (buffer-file-name it))
+		     (--select (f-ancestor-of-p directory (buffer-file-name it)))
+		     (--map (cons (buffer-file-name it) (kill-buffer it)))
+		     (--filter (cdr it))
+		     (--keep (car it))
+		     (-unwind)
+		     (-non-nil)
+		     (--map (f-collapse-homedir it)))))
+
+    (if (called-interactively-p 'any)
+	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (s-join ", " killed))
+      killed)))
+
+
+(defun buffers-matching-project (thing)
+  (cond
+   ((or (bufferp thing) (and (stringp thing) (get-buffer thing)))
+    (with-current-buffer thing
+      (buffers-matching-path (approximate-project-root))))
+   ((and (stringp thing)
+	 (f-exists-p thing))
+    (->> (buffer-list)
+	 (--keep (f-equal-p thing (buffer-file-name it)))
+	 (-distinct)
+	 (--flat-map (with-current-buffer it (buffers-matching-path (approximate-project-root))))))))
+
+(defalias 'kill-buffers-matching-name 'kill-matching-buffers)
+
+(defun force-kill-buffers-matching-path (regexp)
+  (interactive "sKill buffers visiting a path matching this regular expression: \n")
+  (kill-buffers-matching-path regexp t t))
+
+(defun kill-buffers-matching-path (regexp &optional internal-too no-ask)
+  "Kill buffers whose name matches the specified REGEXP.
+Ignores buffers whose name starts with a space, unless optional
+prefix argument INTERNAL-TOO is non-nil.  Asks before killing
+each buffer, unless NO-ASK is non-nil."
+  (interactive "sKill buffers visiting a path matching this regular expression: \n")
+  (let* ((buffers (buffers-matching-path regexp internal-too))
+	 (killed (->> buffers
+		      (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
+		      (--filter (cdr it))
+		      (--keep (car it))
+		      (-unwind)
+		      (-non-nil))))
+
+    (if (called-interactively-p 'any)
+	(message "killed %d buffers matching '%S'" (length killed) (s-join ", " killed))
+      killed)))
+
+(defconst reference-source-paths
+  (append (cons package-user-dir package-directory-list) (list "/usr/share/emacs/.*" "/usr/lib/go/.*" ".*/src/emacs.*/src/.*"))
+  "paths of reference files, typically opened by jump-to-definition")
+
+(defun kill-all-reference-and-source-buffers ()
+  "Kill all buffers for files in external (upstream) sources, likely opened
+by jump-to-definition."
+  (interactive)
+  (let ((killed (->> reference-source-paths
+		     (-flat-map #'force-kill-buffers-matching-path)
+		     (-non-nil)
+		     (-map #'f-collapse-homedir))))
+    (if (called-interactively-p 'any)
+	(message "killed %s refrence/source buffers [%s]" (length killed) (s-join ", " killed))
+      killed)))
+
+(defun kill-buffers-matching-mode (mode)
+  "Kill all buffers matching the symbol defined by MODE.
+Returns the number of buffers killed."
+  (interactive
+   (list (intern
+          (completing-read
+           "mode: " ;; prompt
+           obarray  ;; collection
+           (lambda (symbol) (s-ends-with? "-mode" (symbol-name symbol)))
+           t nil nil major-mode))))
+  (let* ((buffers (buffers-matching-mode mode))
+	 (count (length buffers)))
+    (message "killing all buffers (%d) with mode \"%s\"" count mode)
+    (mapc #'kill-buffer buffers)
+    count))
+
+(defun tychoish/super-abort-minibuffers ()
+  (interactive)
+  (if (not (minibuffer-selected-window))
+      (keyboard-quit)
+    (abort-minibuffers)
+    (minibuffer-keyboard-quit))
+  (when (minibuffer-selected-window)
+    (move-beginning-of-line nil)
+    (kill-line)
+    (abort-minibuffers)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; buffer/frame management -- helper functions.
+
+(defun pin-buffer-to-window-toggle ()
+  "pin buffer to window, most useful in keeping chat buffers under control"
+  (interactive)
+  (let* ((buf (current-buffer))
+	 (window (selected-window))
+	 (current-state (window-dedicated-p window))
+	 (buf-name (buffer-name buf)))
+
+    (set-window-dedicated-p window (not current-state))
+
+    (if current-state
+	(message "pinned %s to window" buf-name)
+      (message "unpinned %s from window" buf-name))))
+
+(defun buffer-line-count (&optional buf)
+  "Return the number of lines in the specified buffer (name or buffer), defaulting to the current buffer."
+  (car (buffer-line-statistics buf)))
+
+(defun tychoish-run-current-major-mode-hooks (&optional buffer)
+  "Run all mode-hooks for the current major mode."
+  (interactive)
+  (with-current-buffer (or (when (bufferp buffer) buffer)
+			   (when (and (stringp buffer) (get-buffer buffer)) buffer)
+			   (current-buffer))
+    (apply #'run-mode-hooks (--keep (-concat (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
+
+(defun buffer-directory (buf)
+  "Return the `default-directory' of the provide buffer."
+  (when (bufferp buf)
+    (with-current-buffer buf
+      (let ((file-name (buffer-file-name buf)))
+	(cond ((null file-name) nil)
+	      ((f-directory-p file-name) file-name)
+	      ((f-file-p file-name) (file-name-directory file-name))
+	      (t default-directory))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -678,6 +1140,313 @@
 
 (with-eval-after-load 'elec-pair
   (add-to-list 'electric-pair-pairs '(?< . ?>)))
+
+;; move-text  -- use arrow keys to move whole
+
+(defun move-text-internal (arg)
+  (cond
+   ((and mark-active transient-mark-mode)
+    (if (> (point) (mark))
+        (exchange-point-and-mark))
+    (let ((column (current-column))
+          (text (delete-and-extract-region (point) (mark))))
+      (forward-line arg)
+      (move-to-column column t)
+      (set-mark (point))
+      (insert text)
+      (exchange-point-and-mark)
+      (setq deactivate-mark nil)))
+   (t
+    (let ((column (current-column)))
+      (beginning-of-line)
+      (when (or (> arg 0) (not (bobp)))
+        (forward-line)
+        (when (or (< arg 0) (not (eobp)))
+          (transpose-lines arg))
+        (forward-line -1))
+      (move-to-column column t)))))
+
+(defun move-text-down (arg)
+  "Move region (transient-mark-mode active) or current line arg lines down."
+  (interactive "*p")
+  (move-text-internal arg))
+
+(defun move-text-up (arg)
+  "Move region (transient-mark-mode active) or current line arg lines up."
+  (interactive "*p")
+  (move-text-internal (- arg)))
+
+;; word-wrapping  --
+
+(defalias 'turn-on-hard-wrap 'turn-off-soft-wrap)
+(defalias 'turn-off-hard-wrap 'turn-on-soft-wrap)
+(defalias 'toggle-soft-wrap 'toggle-on-soft-wrap)
+(defalias 'toggle-hard-wrap 'toggle-off-soft-wrap)
+
+(declare-function visual-fill-column-mode "`visual-fill-column'")
+
+(defun turn-on-soft-wrap ()
+  (interactive)
+  (let ((was-hard-wrapping auto-fill-function))
+    (auto-fill-mode -1)
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode 1))
+    (visual-line-mode 1)
+    (when was-hard-wrapping
+      (tychoish-show-wrapping-mode))))
+
+(defun turn-off-soft-wrap ()
+  (interactive)
+  (let ((was-soft-wrapping (not auto-fill-function)))
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode -1))
+    (visual-line-mode -1)
+    (auto-fill-mode 1)
+    (when was-soft-wrapping
+      (tychoish-show-wrapping-mode))))
+
+(defun toggle-word-wrap (&optional arg)
+  (interactive)
+  (when arg (user-error "ambiguous argument to `toggle-word-wrap'"))
+  (if auto-fill-function
+      (turn-on-soft-wrap)
+    (turn-on-hard-wrap)))
+
+(defun tychoish-show-wrapping-mode ()
+  (let ((buf (current-buffer))
+	(wrapping-mode (if auto-fill-function
+                           "hard"
+                         "soft")))
+    (message "wrapping mode `%s' for %s <%s>"
+	     wrapping-mode
+	     (buffer-local-value 'major-mode buf)
+	     (buffer-name buf))))
+
+(advice-add 'set-fill-column :around #'ad:set-fill-column-locally)
+
+(defun ad:set-fill-column-locally (f &rest arg)
+  (let ((had-default (default-boundp 'fill-column))
+	(previous-default (default-value 'fill-column))
+	(new-value (apply f arg)))
+    (when had-default
+      (setq-default fill-column previous-default))
+    (setq-local fill-column new-value)))
+
+(defun tychoish--vfc-fill-column-watcher (_sym _newval op where)
+  "Re-apply visual-fill-column-mode when fill-column is set in an active buffer."
+  (when (and (eq op 'set) (buffer-live-p where))
+    (with-current-buffer where
+      (when (bound-and-true-p visual-fill-column-mode)
+        (visual-fill-column-mode 1)))))
+
+(add-variable-watcher 'fill-column #'tychoish--vfc-fill-column-watcher)
+
+(defconst tychoish--vfc-heading-patterns
+  '((org-mode      . "^\\*+\\s-")
+    (markdown-mode . "^#+\\s-"))
+  "Alist mapping major-mode symbols to heading regexp patterns.")
+
+(defconst tychoish--vfc-wrap-prefix
+  (propertize " " 'display '(space :width 9999))
+  "wrap-prefix value that pushes continuation lines off-screen.
+A fixed large integer is used; (frame-width) would be more precise during
+export but adds complexity with no interactive benefit.")
+
+(defun tychoish--vfc-jit-lock (start end)
+  "Apply heading truncation wrap-prefix in the region START to END."
+  (let ((pattern (cdr (assq major-mode tychoish--vfc-heading-patterns))))
+    (when pattern
+      (save-excursion
+        (goto-char start)
+        (beginning-of-line)
+        (while (< (point) end)
+          (when (looking-at pattern)
+            (put-text-property (line-beginning-position)
+                               (line-end-position)
+                               'wrap-prefix tychoish--vfc-wrap-prefix))
+          (forward-line 1))))))
+
+(define-minor-mode tychoish-vfc-heading-truncation-mode
+  "Simulate truncation on heading lines when visual-fill-column is active."
+  :lighter nil
+  (if tychoish-vfc-heading-truncation-mode
+      (progn
+        (jit-lock-register #'tychoish--vfc-jit-lock)
+        (jit-lock-refontify))
+    (jit-lock-unregister #'tychoish--vfc-jit-lock)
+    (with-silent-modifications
+      (remove-text-properties (point-min) (point-max) '(wrap-prefix nil)))))
+
+(add-hook 'visual-fill-column-mode-hook
+          (lambda ()
+            (when (assq major-mode tychoish--vfc-heading-patterns)
+              (tychoish-vfc-heading-truncation-mode
+               (if (bound-and-true-p visual-fill-column-mode) 1 -1)))))
+
+(defun unfill-region (begin end)
+  "Remove all linebreaks in a region but leave paragraphs
+  indented text (quotes,code) and lines starting with an asterix (lists) intakt."
+  (interactive "r")
+  (replace-regexp-in-region "\\([^\n]\\)\n\\([^ *\n]\\)" "\\1 \\2" begin end))
+
+;; whitespace  --
+
+(defmacro tychoish/set-tab-width (num)
+  (unless (integerp num)
+    (signal 'wrong-type-argument num))
+  (unless (< num 32)
+    (warn "INVALID cannot create tab width hook function to >= 32 (%s)" num))
+
+  (let ((generated-name (intern (format "tychoish/set-local-tab-width-%d" num))))
+    `(defun ,generated-name ()
+       (set-tab-width ,num))))
+
+(defun set-tab-width (num-spaces)
+  (interactive "nTab width: ")
+  (setq-local tab-width num-spaces))
+
+(defun font-lock-show-tabs ()
+  "Return a font-lock style keyword for tab characters."
+  '(("\t" 0 'trailing-whitespace prepend)))
+
+(defun toggle-local-whitespace-cleanup ()
+  "Reset the before-save hook to preven cleaning up."
+  (interactive)
+  (if (setq-local show-trailing-whitespace (not show-trailing-whitespace))
+      (progn
+	(add-hook 'before-save-hook 'whitespace-cleanup nil t)
+	(message "turned on whitespace-cleanup for '%s'" (buffer-file-name (current-buffer))))
+    (remove-hook 'before-save-hook 'whitespace-cleanup)
+    (message "turned off whitespace-cleanup for '%s'" (buffer-file-name (current-buffer)))))
+
+(defun font-lock-width-keyword (width)
+  "Return a font-lock style keyword for strings beyond WIDTH that use `font-lock-warning-face'."
+  `((,(format "^%s\\(.+\\)" (make-string width ?.))
+     (1 font-lock-warning-face t))))
+
+;; line manipulation
+
+(defun uniquify-region-lines (beg end)
+  "Remove duplicate adjacent lines between BEG and END."
+  (interactive "*r")
+  (save-excursion
+    (goto-char beg)
+    (while (re-search-forward "^\\(.*\n\\)\\1+" end t)
+      (replace-match "\\1"))))
+
+(defun uniquify-buffer-lines ()
+  "Remove duplicate adjacent lines in the current buffer."
+  (interactive)
+  (uniquify-region-lines (point-min) (point-max)))
+
+;; files and notes
+
+(defun tychoish-insert-date ()
+  "Insert date string."
+  (interactive)
+  (insert (format-time-string "%Y-%m-%d")))
+
+(defvar tychoish-blog-path (expand-file-name "~/blog")
+  "Path to the blog's project directory.")
+
+(defvar tychoish-blog-extension ".md"
+  "File extension for the blog files.")
+
+(defun tychoish-blog-create-post (title)
+  "Create a new file for a post of with the specified TITLE."
+  (interactive "sPost Title: ")
+  (let* ((slug (f-make-slug title))
+         (draft-fn (f-join tychoish-blog-path (concat slug "-" tychoish-blog-extension))))
+    (if (file-exists-p draft-fn)
+        (find-file draft-fn)
+      (kill-new title)
+      (find-file draft-fn)
+      (yas-expand-snippet
+       (yas-lookup-snippet "hugo")))
+    (message "working on post: %s" draft-fn)))
+
+(defun tychoish-create-note-file (title &optional &key path)
+  "Create a new file for a post of with the specified TITLE."
+  (interactive "sName: ")
+  (let* ((slug (f-make-slug title))
+         (datetime (format-time-string "%Y-%02m-%02d"))
+         (draft-fn (f-join (or path
+			       (annotated-completing-read-directory))
+			   (concat datetime "." slug "." tychoish-blog-extension))))
+    (if (file-exists-p draft-fn)
+        (find-file draft-fn)
+      (find-file draft-fn)
+      (insert (concat "# " title))
+      (goto-char (point-max))
+      (whitespace-cleanup)
+      (insert "\n"))
+    (message "new note: %s" draft-fn)))
+
+(defun tychoish-blog-publish-post ()
+  "Move the blog post in the current buffer to the publication location.
+Does nothing if the current post is not in the drafts folder."
+  (interactive)
+  (let* ((publish-directory (f-join tychoish-blog-path "content" "post"))
+         (original-file-name (buffer-file-name (current-buffer)))
+         (published-file-name (f-join publish-directory (file-name-nondirectory original-file-name)))
+         (current-point (point)))
+    (cond
+     ((not (equal (file-name-extension original-file-name t) tychoish-blog-extension))
+      (message "post %s has incorrect extension" original-file-name))
+     ((buffer-modified-p)
+      (message "file %s is modified. please save before publishing" original-file-name))
+     ((file-exists-p published-file-name)
+      (message "published file exists with same name. not publishing"))
+     (t
+      (message "publishing: %s" published-file-name)
+      (rename-file original-file-name published-file-name)
+      (kill-buffer nil)
+      (find-file published-file-name)
+      (set-window-point (selected-window) current-point)
+      (message "published %s to %s" original-file-name publish-directory)))))
+
+(defun tychoish-blog-open-drafts-dired ()
+  "Open a dired buffer for the drafts folder."
+  (interactive)
+  (find-file (expand-file-name tychoish-blog-path)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; clean kill ring -- "deduplicate kill-ring"
+
+(defvar clean-kill-ring-filters '(string-blank-p))
+(defvar clean-kill-ring-prevent-duplicates t)
+
+(defun clean-kill-ring-filter-catch-p (string)
+  "T if STRING satisfies at least one of `clean-kill-ring-filters'."
+  (let ((caught nil)
+        (s (substring-no-properties string)))
+    (catch 'loop
+      (dolist (filter clean-kill-ring-filters)
+        (when (funcall filter s)
+          (setq caught t)
+          (throw 'loop t))))
+    caught))
+
+(defun clean-kill-ring-clean (&optional remove-dups)
+  "Remove `kill-ring' members that satisfy one of`clean-kill-ring-filters'.
+
+If REMOVE-DUPS or `clean-kill-ring-prevent-duplicates' is non-nil, or if called
+interactively then remove duplicate items from the `kill-ring'."
+  ;; from: https://github.com/NicholasBHubbard/clean-kill-ring.el/blob/main/clean-kill-ring.el
+  (interactive (list t))
+  (let ((new-kill-ring nil)
+        (this-kill-ring-member nil)
+        (i (1- (length kill-ring))))
+    (while (>= i 0)
+      (setq this-kill-ring-member (nth i kill-ring))
+      (unless (clean-kill-ring-filter-catch-p this-kill-ring-member)
+        (push this-kill-ring-member new-kill-ring))
+      (setq i (1- i)))
+    (if (or remove-dups clean-kill-ring-prevent-duplicates)
+        (setq kill-ring (delete-dups new-kill-ring))
+      (setq kill-ring new-kill-ring))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -739,26 +1508,27 @@
 	   (aidermacs-send-command-with-prefix "/weak-model " aidermacs-weak-model)
 	   (aidermacs-send-command-with-prefix "/editor-model " aidermacs-editor-model))))))
 
-
 (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
   (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
         (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
     `(progn
        (defun ,local-function-symbol ()
+         ,(format "Set LLM backend for the current buffer to `%s'" model)
          (interactive)
          (setq-local gptel-model ,model)
          ,(when api-key
             `(setq-local gptel-api-key (fn ,api-key)))
          (setq-local gptel-backend ,backend)
-         (message "[gptel] set backend to %s for the local buffer" name))
+         (message "[gptel] set backend to %s for the local buffer" ,name))
 
        (defun ,default-function-symbol ()
+         ,(format "Set the default LLM backend for the current session to `%s'" model)
          (interactive)
          (setq-default gptel-model ,model)
          ,(when api-key
             `(setq-default gptel-api-key (fn ,api-key)))
          (setq-default gptel-backend ,backend)
-         (message "[gptel] set default backend to %s" name))
+         (message "[gptel] set default backend to %s" ,name))
 
        (bind-keys :map gptel-mode-map
 		  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
@@ -774,13 +1544,34 @@
   (setq org-agenda-files (->> (list org-directory user-org-directories)
                               (-flatten)
                               (-map #'expand-file-name)
-                              (-keep #'trimmed-string-or-nil)
+                              (-keep #'s-trimmed-or-nil)
                               (-distinct)))
   (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
   (setq org-default-notes-file (f-join org-directory "records.org"))
   (setq org-archive-location (f-join org-directory "archive/%s::datetree/"))
   (setq deft-directory (f-join local-notes-directory "deft"))
   local-notes-directory)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
+
+(defun find-ssh-agent-socket-candidates ()
+  (->> (-value-to-list (format "/run/user/%d/ssh-agent.socket" (user-uid)))
+       (-concat (-sort #'s-less? (f-glob (f-join temporary-file-directory "ssh-*/agent.*" ))))
+       (-distinct)
+       (-non-nil)
+       (-filter #'f-writable?)
+       (nreverse)))
+
+(defun tychoish/set-up-ssh-agent ()
+  (let (env-value sockets)
+    (unless (setq env-value (getenv "SSH_AUTH_SOCK"))
+      (setq sockets (find-ssh-agent-socket-candidates))
+      (when (and sockets
+		 (<= 1 (length sockets)))
+	(setq env-value (setenv "SSH_AUTH_SOCK" (car sockets)))))
+    env-value))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -800,6 +1591,273 @@
   (setq x-alt-keysym 'meta)
   (setq x-super-keysym 'super))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; completion flavor -- switch between orderless / prescient / hybrid at runtime.
+
+(defvar tychoish/completion-flavor 'hybrid
+  "Currently active completion flavor.
+One of `hybrid', `orderless', `prescient'.  Set by the
+`tychoish/completion-use-*' commands; do not setq directly.")
+
+(defvar tychoish/completion-flavors
+  '((hybrid tychoish/completion-use-hybrid
+	    "orderless filter + prescient sort (frecency)")
+    (orderless tychoish/completion-use-orderless
+	       "pure orderless filter; default sort, no frecency")
+    (prescient tychoish/completion-use-prescient
+	       "prescient filter + sort (frecency)"))
+  "Alist of (NAME ACTIVATOR DESCRIPTION) for completion flavors.
+ACTIVATOR is the interactive command that installs the flavor.")
+
+(defvar tychoish/completion--applying nil
+  "Re-entry guard for the `tychoish/completion-use-*' functions.
+Cycling `vertico-prescient-mode' / `corfu-prescient-mode' fires their
+mode hooks, which can re-invoke a flavor function (e.g. via the
+startup one-shot hook below).  The guard makes the inner call a no-op.")
+
+(defun tychoish/completion--set-category-overrides (kind)
+  "Set `completion-category-overrides' for KIND (`orderless' or `prescient')."
+  (setq completion-category-overrides
+	(pcase kind
+	  ('orderless '((file (styles basic partial-completion))
+			(consult-grep (styles basic))
+			(buffer (styles orderless basic))
+			(command (styles orderless basic))
+			(symbol (styles orderless basic))))
+	  ('prescient '((file (styles basic partial-completion))
+			(consult-grep (styles basic)))))))
+
+(defun tychoish/completion--reload-prescient-mode (mode-symbol)
+  "Cycle MODE-SYMBOL off and back on so it picks up new `*-enable-*' values.
+`vertico-prescient' and `corfu-prescient' read the filtering/sorting flags
+only at mode activation, so changing the variables alone has no effect
+on an already-enabled mode."
+  (when (fboundp mode-symbol)
+    (when (symbol-value mode-symbol)
+      (funcall mode-symbol -1))
+    (funcall mode-symbol 1)))
+
+(defmacro tychoish/completion--with-guard (&rest body)
+  "Run BODY with `tychoish/completion--applying' bound non-nil.
+If already non-nil (we are re-entering from a prescient mode hook),
+BODY is skipped."
+  (declare (indent defun))
+  `(unless tychoish/completion--applying
+     (let ((tychoish/completion--applying t))
+       ,@body)))
+
+(defun tychoish/completion-use-hybrid ()
+  "Install the hybrid flavor: orderless filters, prescient sorts."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(orderless basic))
+    (tychoish/completion--set-category-overrides 'orderless)
+    (when (boundp 'vertico-prescient-enable-filtering)
+      (setq vertico-prescient-enable-filtering nil
+	    vertico-prescient-enable-sorting   t))
+    (when (boundp 'corfu-prescient-enable-filtering)
+      (setq corfu-prescient-enable-filtering nil
+	    corfu-prescient-enable-sorting   t))
+    (setq completion-preview-sort-function #'prescient-completion-sort)
+    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
+    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq tychoish/completion-flavor 'hybrid)
+    (message "completion: orderless filter + prescient sort")))
+
+(defun tychoish/completion-use-orderless ()
+  "Install pure orderless; prescient disabled (no frecency)."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(orderless basic))
+    (tychoish/completion--set-category-overrides 'orderless)
+    (setq completion-preview-sort-function nil)
+    (when (fboundp 'vertico-prescient-mode) (vertico-prescient-mode -1))
+    (when (fboundp 'corfu-prescient-mode)   (corfu-prescient-mode -1))
+    (setq tychoish/completion-flavor 'orderless)
+    (message "completion: pure orderless")))
+
+(defun tychoish/completion-use-prescient ()
+  "Install prescient for both filter and sort; orderless inert."
+  (interactive)
+  (tychoish/completion--with-guard
+    (setq completion-styles '(basic partial-completion emacs22))
+    (tychoish/completion--set-category-overrides 'prescient)
+    (when (boundp 'vertico-prescient-enable-filtering)
+      (setq vertico-prescient-enable-filtering t
+	    vertico-prescient-enable-sorting   t))
+    (when (boundp 'corfu-prescient-enable-filtering)
+      (setq corfu-prescient-enable-filtering t
+	    corfu-prescient-enable-sorting   t))
+    (setq completion-preview-sort-function #'prescient-completion-sort)
+    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
+    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq tychoish/completion-flavor 'prescient)
+    (message "completion: prescient filter + sort")))
+
+(defun tychoish/completion-select-flavor ()
+  "Pick a completion flavor via `annotated-completing-read'."
+  (interactive)
+  (let ((table (ht-create)))
+    (dolist (entry tychoish/completion-flavors)
+      (ht-set table (symbol-name (car entry))
+	      (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
+		      (nth 2 entry))))
+    (let* ((name (annotated-completing-read table
+		  :prompt "completion flavor => "
+		  :category 'tychoish-completion-flavor
+		  :require-match t))
+	   (entry (assq (intern name) tychoish/completion-flavors)))
+      (when entry (funcall (nth 1 entry))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; mcp configuration / setup
+
+(defvar tychoish/gopls-mcp-port 38713
+  "TCP port for the gopls MCP HTTP endpoint (shared or standalone).")
+
+(defvar tychoish/gopls-mcp-backends '(shared standalone stdio)
+  "Ordered fallback list of gopls MCP backends to try.
+Resolution stops at the first viable backend.  Recognized symbols:
+
+  `shared': connect to a running `gopls serve -mcp.listen=...'
+     daemon (typically managed by systemd).  Viable when
+     something is listening on `tychoish/gopls-mcp-port'.
+  `standalone': spawn (and reuse) a dedicated `gopls mcp -listen=...'
+     process from Emacs.  Viable when `gopls' is on PATH.
+  `stdio': declare a per-client `gopls mcp' stdio command; each
+     MCP client launches its own gopls.  Always viable when
+     `gopls' is on PATH.
+  `auto-remote': declare a stdio entry that runs `gopls -remote=auto
+     mcp', letting gopls's daemon-discovery logic find or
+     spawn the lsp daemon.  Note: as of current gopls, the
+     `mcp' subcommand does not actually consume `-remote',
+     so this behaves the same as `stdio' but is kept as a
+     documented option.
+  `none': disable the gopls entry entirely.")
+
+(defvar tychoish/gopls-mcp--standalone-process nil
+  "Process handle for an Emacs-spawned `gopls mcp -listen' instance.")
+
+(defvar tychoish/mcp-servers nil
+  "Normalized MCP server specs shared by mcp.el and agent-shell.
+Populated lazily by `tychoish/mcp-servers-init' the first time either
+`mcp-hub' or `agent-shell' loads, so PATH lookups don't run at startup.
+The gopls entry is resolved dynamically via `tychoish/gopls-mcp-resolve'
+and prepended by `tychoish/mcp-build-servers'.
+Each entry is a plist with one of:
+  (:name NAME :command CMD :args (ARGS...) [:env ((K . V) ...)] [:disabled t])
+  (:name NAME :url URL [:transport http|sse] [:headers ((K . V) ...)] [:disabled t])
+Entries with `:disabled t' are excluded by `tychoish/mcp-build-servers'.")
+
+(defun tychoish/mcp-servers-init (&optional force)
+  "Populate `tychoish/mcp-servers' if not already set.
+With prefix arg FORCE, reset and repopulate unconditionally."
+  (interactive "P")
+  (when (or force (null tychoish/mcp-servers))
+    (setq tychoish/mcp-servers nil)
+    (push '(:name "git" :command "uvx" :args ("mcp-server-git")) tychoish/mcp-servers)
+    (push '(:name "rg" :command "npx" :args ("-y" "mcp-ripgrep@latest")) tychoish/mcp-servers)
+    (push '(:name "gh" :command "gh" :args ("mcp")) tychoish/mcp-servers)
+
+    ;; (push '(:name "godoc" :command "godoc-mcpr") tychoish/mcp-servers)
+    ;; (push '(:name "time" :command "uvx" :args ("mcp-server-time")) tychoish/mcp-servers)
+    ;; (push '(:name "fetch" :command "uvx" :args ("mcp-server-fetch")) tychoish/mcp-servers)
+    ;; (push '(:name "awsdoc" :command "awslabs.aws-documentation-mcp-server") tychoish/mcp-servers)
+    ;; (push (list :name "lsp-mcp-rust" :command "npx" :args (list "tritlo/lsp-mcp" "rust" (executable-find "rust-analyzer"))) tychoish/mcp-servers)
+    ;; (push (list :name "lsp-mcp-bash" :command "npx" :args (list "tritlo/lsp-mcp" "bash" (executable-find "bash-language-server") "start")) tychoish/mcp-servers)
+    ;; (push (list :name "lsp-mcp-yaml" :command "npx" :args (list "tritlo/lsp-mcp" "yaml" (executable-find "yaml-language-server") "--stdio")) tychoish/mcp-servers)
+    ;; (push '(:name "github" :command "npx" :args ("-y" "mcp-remote" "https://api.githubcopilot.com/mcp")) tychoish/mcp-servers)
+    ;; (push '(:name "linear" :command "npx" :args ("-y" "mcp-remote" "https://mcp.linear.app/mcp")) tychoish/mcp-servers)
+    ;; (push '(:name "notion" :command "npx" :args ("-y" "mcp-remote" "https://mcp.notion.com/mcp")) tychoish/mcp-servers)
+    ;; (push '(:name "google-workspace" :command "uvx" :args ("workspace-mcp")) tychoish/mcp-servers)
+
+    (message "mcp-servers-init: %d servers registered (%d active)"
+             (length tychoish/mcp-servers)
+             (cl-count-if-not (lambda (s) (plist-get s :disabled)) tychoish/mcp-servers))))
+
+(defun tychoish/gopls-mcp--port-alive-p ()
+  "Return non-nil if something is accepting TCP on `tychoish/gopls-mcp-port'."
+  (condition-case nil
+      (let ((proc (make-network-process
+                   :name "gopls-mcp-probe"
+                   :host "127.0.0.1"
+                   :service tychoish/gopls-mcp-port
+                   :nowait nil
+                   :noquery t
+                   :buffer nil)))
+        (delete-process proc)
+        t)
+    (error nil)))
+
+(defun tychoish/gopls-mcp--ensure-standalone ()
+  "Start a standalone `gopls mcp -listen' on `tychoish/gopls-mcp-port'.
+Reuses any existing live process.  Returns the process or nil on failure."
+  (unless (and tychoish/gopls-mcp--standalone-process
+               (process-live-p tychoish/gopls-mcp--standalone-process))
+    (when (executable-find "gopls")
+      (setq tychoish/gopls-mcp--standalone-process
+            (make-process
+             :name "gopls-mcp"
+             :buffer (get-buffer-create " *gopls-mcp*")
+             :command (list "gopls" "mcp"
+                            (format "-listen=127.0.0.1:%d" tychoish/gopls-mcp-port))
+             :noquery t))))
+  tychoish/gopls-mcp--standalone-process)
+
+(defun tychoish/gopls-mcp--resolve-one (backend)
+  "Return a normalized MCP server spec for BACKEND, or nil if not viable."
+  (pcase backend
+    ('none nil)
+    ('shared (when (tychoish/gopls-mcp--port-alive-p)
+	       `(:name "gopls" :url ,(format "http://127.0.0.1:%d" tychoish/gopls-mcp-port) :transport http)))
+    ('standalone (when (tychoish/gopls-mcp--ensure-standalone)
+		   `(:name "gopls" :url ,(format "http://127.0.0.1:%d" tychoish/gopls-mcp-port) :transport http)))
+    ('stdio (when (executable-find "gopls")
+	      `(:name "gopls" :command "gopls" :args ("mcp"))))
+    ('auto-remote (when (executable-find "gopls")
+		    `(:name "gopls" :command "gopls" :args ("-remote=auto" "mcp"))))))
+
+(defun tychoish/gopls-mcp-resolve ()
+  "Resolve a gopls MCP spec by walking `tychoish/gopls-mcp-backends'."
+  (cl-some #'tychoish/gopls-mcp--resolve-one tychoish/gopls-mcp-backends))
+
+(defun tychoish/mcp-build-servers ()
+  "Build the active MCP server list with a freshly-resolved gopls entry.
+Servers with `:disabled t' in `tychoish/mcp-servers' are excluded."
+  (tychoish/mcp-servers-init)
+  (let* ((active (cl-remove-if (lambda (s) (plist-get s :disabled)) tychoish/mcp-servers))
+         (gopls (tychoish/gopls-mcp-resolve)))
+    (if gopls (cons gopls active) active)))
+
+(defun tychoish/mcp-spec->hub (spec)
+  "Translate SPEC to a `mcp-hub-servers' alist entry: (NAME . PLIST)."
+  (let* ((name (plist-get spec :name))
+         (url  (plist-get spec :url)))
+    (cons name
+          (if url
+              (list :url url)
+            (let ((plist (list :command (plist-get spec :command))))
+              (when-let* ((args (plist-get spec :args)))
+                (setq plist (plist-put plist :args args)))
+              plist)))))
+
+(defun tychoish/mcp-spec->acp (spec)
+  "Translate SPEC to an `agent-shell-mcp-servers' ACP McpServer alist."
+  (let ((name (plist-get spec :name))
+        (url  (plist-get spec :url)))
+    (if url
+        `((name . ,name)
+          (type . ,(symbol-name (or (plist-get spec :transport) 'http)))
+          (url . ,url)
+          (headers . ,(or (plist-get spec :headers) '())))
+      `((name . ,name)
+        (command . ,(plist-get spec :command))
+        (args . ,(or (plist-get spec :args) '()))
+        (env . ,(or (plist-get spec :env) '()))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; stdlib -- configuration of default/included emacs packages
@@ -810,7 +1868,16 @@
 
 (with-eval-after-load 'compile
   (add-to-list 'compilation-error-regexp-alist 'go-test)
-  (add-to-list 'compilation-error-regexp-alist-alist '(go-test . ("^\\s-+\\([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t))
+  (add-to-list 'compilation-error-regexp-alist 'go-panic)
+
+  (setq compilation-error-regexp-alist-alist ; first remove the standard conf; it's not good.
+        (remove 'go-panic (remove 'go-test compilation-error-regexp-alist-alist)))
+
+  (add-to-list 'compilation-error-regexp-alist-alist
+               ;; '(go-test . ("^\\s-+\\k([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t) ;; the standard, it works (ish)
+               '(go-test . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2)))
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(go-panic . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2))))
 
 (add-hook 'text-mode-hook 'tychoish/set-up-show-whitespace)
 (add-hook 'prog-mode-hook 'tychoish/set-up-show-whitespace)
@@ -824,29 +1891,29 @@
 (add-hook 'LaTeX-mode-hook 'visual-line-mode)
 (add-hook 'LaTeX-mode-hook 'turn-off-auto-fill)
 
-(add-to-list 'auto-mode-alist '("\\.tex'" . LaTeX-mode))
+(add-to-list 'auto-mode-alist '("\\.tex\\'" . LaTeX-mode))
 
-(add-to-list 'auto-mode-alist '("\\.el$'" . emacs-lisp-mode))
+(add-to-list 'auto-mode-alist '("\\.el\\'" . emacs-lisp-mode))
 
 (add-to-list 'auto-mode-alist '("makefile" . makefile-mode))
 (add-to-list 'auto-mode-alist '("Makefile" . makefile-mode))
-(add-to-list 'auto-mode-alist '("\\.mk$'" . makefile-mode))
+(add-to-list 'auto-mode-alist '("\\.mk\\'" . makefile-mode))
 
-(add-to-list 'auto-mode-alist '("\\.service$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.timer$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.target$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.mount$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.automount$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.slice$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.socket$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.path$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.conf$'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.org$'" . org-mode))
+(add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.timer\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.target\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.mount\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.automount\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.slice\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.socket\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.conf\\'" . conf-unix-mode))
+(add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
 
-(add-to-list 'auto-mode-alist '("\\.zsh$'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.zshrc$'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.bash_profile$'" . sh-mode))
-(add-to-list 'auto-mode-alist '(".*mutt.*"  message-mode))
+(add-to-list 'auto-mode-alist '("\\.zsh\\'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.zshrc\\'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.bash_profile\\'" . sh-mode))
+(add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
 (with-eval-after-load "em-cmpl"
   (add-hook 'eshell-mode 'eshell-cmpl-initialize))
@@ -855,9 +1922,9 @@
   (bind-keys
    :map comint-mode-map
    ("M-n" . comint-next-input)
-   ("M-p" . 'comint-previous-input)
+   ("M-p" . comint-previous-input)
    ([down] . comint-next-matching-input-from-input)
-   ([up] . 'comint-previous-matching-input-from-input)))
+   ([up] . comint-previous-matching-input-from-input)))
 
 (with-eval-after-load 'dabbrev
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
@@ -868,7 +1935,126 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
-(create-toggle-functions tychoish/slow-op-reporting)
+(create-toggle-functions slow-op-reporting)
+
+(declare-function magit-list-module-paths "magit-submodule")
+(declare-function magit-run-git "magit-process")
+
+(defun tychoish/--git-repo-p (dir)
+  "Return non-nil when DIR is the top of a git working tree.
+Both worktree roots and submodule directories qualify: in either case
+DIR contains a `.git' entry (a directory or a gitlink file)."
+  (file-exists-p (expand-file-name ".git" dir)))
+
+(defun tychoish/--gitmodules-paths (root)
+  "Return submodule paths declared in ROOT/.gitmodules.
+Parses the file directly so this works without magit or git."
+  (let ((path (expand-file-name ".gitmodules" root))
+        out)
+    (when (file-readable-p path)
+      (with-temp-buffer
+        (insert-file-contents path)
+        (goto-char (point-min))
+        (while (re-search-forward "^[ \t]*path[ \t]*=[ \t]*\\(.+?\\)[ \t]*$" nil t)
+          (push (match-string 1) out))))
+    (nreverse out)))
+
+(defun tychoish/--submodule-checked-out-p (root sub)
+  "Return non-nil when submodule SUB under ROOT is checked out."
+  (tychoish/--git-repo-p (expand-file-name sub root)))
+
+(defun tychoish/elpa-uninstalled-submodules ()
+  "Return elpa submodule paths that are registered but not checked out."
+  (let ((elpa-root (expand-file-name "elpa" user-emacs-directory)))
+    (cl-remove-if (lambda (sub) (tychoish/--submodule-checked-out-p elpa-root sub))
+                  (tychoish/--gitmodules-paths elpa-root))))
+
+(defun tychoish/elpa-check-submodules ()
+  "Warn if any elpa submodules are registered but not checked out.
+
+Missing submodules referenced via `:load-path' in `use-package' forms
+otherwise fail silently when their autoloaded hooks fire, e.g. aborting
+the rest of a mode-hook chain.
+
+No-ops when the surrounding state suggests a partial bootstrap rather
+than a real drift:
+- `.emacs.d' exists but is not a git working tree
+- any top-level submodule of `.emacs.d' (notably `elpa') is not checked out
+- `elpa/' exists but is not a git working tree"
+  (interactive)
+  (let* ((emacs-d (expand-file-name user-emacs-directory))
+         (elpa (expand-file-name "elpa" emacs-d)))
+    (unless (or (and (file-directory-p emacs-d)
+                     (not (tychoish/--git-repo-p emacs-d)))
+                (cl-some (lambda (sub)
+                           (not (tychoish/--submodule-checked-out-p emacs-d sub)))
+                         (tychoish/--gitmodules-paths emacs-d))
+                (and (file-directory-p elpa)
+                     (not (tychoish/--git-repo-p elpa))))
+      (when-let ((missing (tychoish/elpa-uninstalled-submodules)))
+        (display-warning
+         'tychoish/elpa
+         (format "uninstalled elpa submodules: %s\nrun: (cd %s && git submodule update --init %s)"
+                 (mapconcat #'identity missing " ")
+                 elpa
+                 (mapconcat #'identity missing " "))
+         :warning)
+        missing))))
+
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (run-with-idle-timer 5 nil #'tychoish/elpa-check-submodules)))
+
+(defun tychoish/elpa-pull-submodules ()
+  "Run `git pull origin' in each submodule under `.emacs.d/elpa/'.
+Submodules are enumerated via `magit-list-module-paths' against the
+elpa repository.  For each one, prompts y/n/a (yes/no/abort).  Pulls
+run synchronously via `magit-run-git'; per-pull output lands in the
+magit process buffer for that submodule."
+  (interactive)
+  (require 'magit-submodule)
+  (require 'magit-process)
+  (let* ((elpa-root (file-name-as-directory
+                     (expand-file-name "elpa" user-emacs-directory)))
+         (default-directory elpa-root)
+         (modules (magit-list-module-paths)))
+    (unless modules
+      (user-error "no submodules registered under %s" elpa-root))
+    (catch 'abort
+      (dolist (sub modules)
+        (pcase (car (read-multiple-choice
+                     (format "pull %s? " sub)
+                     '((?y "yes"   "git pull origin in this submodule")
+                       (?n "no"    "skip this submodule")
+                       (?a "abort" "stop iterating"))))
+          (?a (message "elpa submodule pull aborted")
+              (throw 'abort nil))
+          (?n (message "skip %s" sub))
+          (?y (let ((default-directory
+                     (file-name-as-directory
+                      (expand-file-name sub elpa-root))))
+                (message "pulling %s..." sub)
+                (magit-run-git "pull" "origin"))))))
+    (message "elpa submodule pull complete")))
+
+(defun tychoish/run-ci-tests (&optional timeout)
+  "Discover and run all ERT tests under test/, then exit.
+Intended for CI invocations via --fg-daemon --eval.
+Installs a TIMEOUT-second kill guard (default 60) before running."
+  (let ((test-dir (expand-file-name "test" user-emacs-directory))
+        (noninteractive t))
+    (run-with-timer (or timeout 60) nil (lambda () (kill-emacs 1)))
+    (condition-case err
+        (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
+          (load file nil t))
+      (error
+       (message "tychoish/run-ci-tests: error loading test files: %S" err)
+       (kill-emacs 1)))
+    ;; ert-run-tests-batch-and-exit requires noninteractive=t (--batch only).
+    ;; In --fg-daemon mode we call ert-run-tests-batch directly and kill-emacs
+    ;; ourselves based on the result.
+    (let ((stats (ert-run-tests-batch t)))
+      (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

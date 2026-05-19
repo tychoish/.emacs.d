@@ -1,6 +1,3 @@
 [submodule "elpa"]
 	path = elpa
 	url = https://github.com/tychoish/elpa.git
-[submodule "external/consult-mu"]
-	path = external/consult-mu
-	url = https://github.com/armindarvish/consult-mu.git

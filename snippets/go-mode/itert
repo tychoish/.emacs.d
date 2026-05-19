@@ -1,0 +1,9 @@
+func(yield func(T) error) {
+	for $1 {
+		if !yield($2) {
+			return
+		}
+		$2
+	}
+}
+$0

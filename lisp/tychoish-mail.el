@@ -1,11 +1,17 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'mu4e-autoloads)
+(eval-when-compile
+  (require 'xlib))
+
+(require 'mu4e-autoloads nil t)
 
 (declare-function f-join "f")
-(add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
 
-(autoload 'consult-mu "consult-mu")
+(use-package consult-mu
+  :load-path "elpa/consult-mu"
+  :commands (consult-mu))
+
+(autoload 'mu4e-update-index "mu4e-update")
 
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-new "mu4e-compose")
@@ -17,7 +23,8 @@
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 
-(declare-function consult-tycho--read-annotated "consult-tycho")
+(autoload 'annotated-completing-read "annotated-completing-read")
+(autoload 'annotated-completing-read-directory "annotated-completing-read")
 (declare-function cape-capf-prefix-length "cape")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
@@ -27,10 +34,7 @@
 (bind-keys
  :prefix "C-c m"
  :prefix-map tychoish/mail-map
- ("a" . tychoish-mail-select-account))
-
-(bind-keys
- :map tychoish/mail-map
+ ("a" . tychoish-mail-select-account)
  ("m" . mu4e)
  ("d" . mu4e-search-maildir)
  ("b" . mu4e-search-bookmark)
@@ -49,10 +53,9 @@
 (setq consult-mu-saved-searches-async '("#flag:unread"))
 
 (with-eval-after-load 'consult-mu
-  (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/"))
   (with-slow-op-timer
    "<mail.el> consult-mu extensions"
-   (add-to-list 'load-path (f-join user-emacs-directory "external/consult-mu/extras/"))
+   (add-to-list 'load-path (f-join package-user-dir "consult-mu/extras/"))
    (require 'consult-mu-compose)
    (require 'consult-mu-contacts)
    (require 'consult-mu-embark)
@@ -99,7 +102,8 @@
    (";" . mu4e-mark-resolve-deferred-marks)))
 
 (with-eval-after-load 'mu4e-view
-  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t))
+  (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
+  (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish/mail-unsubscribe) t))
 
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
 (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
@@ -142,7 +146,6 @@
 (setq mail-specify-envelope-from t)
 (setq mail-user-agent 'mu4e-user-agent)
 
-
 (setq mail-imenu-generic-expression
       '(("Subject"  "^Subject: *\\(.*\\)" 1)
         ("Cc"       "^C[Cc]: *\\(.*\\)" 1)
@@ -161,6 +164,8 @@
 (setq mu4e-sent-folder "/sent")
 (setq mu4e-trash-folder "/trash")
 (setq mu4e-user-agent-string nil)
+(setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+(setq mu4e--header-separator mail-header-separator)
 
 (defun tychoish/set-up-message-mode-buffer ()
   (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
@@ -180,6 +185,40 @@
   (interactive)
   (mu4e-compose-reply (yes-or-no-p "Reply to all?")))
 
+(defun tychoish/mail-unsubscribe (msg)
+  "Unsubscribe from a mailing list using the List-Unsubscribe header in MSG.
+For mailto: URIs, opens a compose buffer pre-filled with the unsubscribe
+address, subject, and body.  For https: URIs, opens the URL in a browser."
+  (interactive (list (mu4e-message-at-point)))
+  (let* ((header (or (mu4e-fetch-field msg "List-Unsubscribe")
+                     (user-error "No List-Unsubscribe header found")))
+         (uris (let (result)
+                 (with-temp-buffer
+                   (insert header)
+                   (goto-char (point-min))
+                   (while (re-search-forward "<\\([^>]+\\)>" nil t)
+                     (push (match-string 1) result)))
+                 (nreverse result))))
+    (unless uris
+      (user-error "No unsubscribe URIs in List-Unsubscribe header"))
+    (let ((uri (if (cdr uris)
+                   (completing-read "Unsubscribe via: " uris nil t)
+                 (car uris))))
+      (cond
+       ((string-prefix-p "mailto:" uri)
+        (let* ((rest (substring uri (length "mailto:")))
+               (parts (split-string rest "?"))
+               (to (car parts))
+               (params (when (cadr parts)
+                         (url-parse-query-string (cadr parts))))
+               (subject (cadr (assoc "subject" params)))
+               (body (cadr (assoc "body" params))))
+          (compose-mail to subject)))
+       ((string-match-p "\\`https?://" uri)
+        (browse-url uri))
+       (t
+        (user-error "Unrecognized URI scheme in List-Unsubscribe: %s" uri))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-mu functions
@@ -188,23 +227,20 @@
   "Select `consult-mu' initial query from mu4e-bookmarks."
   (interactive)
   (let* ((bookmarks (ht-create #'equal))
-	 (_ (mapc (lambda (bookmark) (setf (ht-get bookmarks (plist-get bookmark :name)) bookmark)) mu4e-bookmarks))
-	 (longest-id (length-of-longest-item (ht-keys bookmarks)))
-	 (selection (consult--read
-		     bookmarks
-		     :prompt "mu4e query =>> "
-		     :annotate (lambda (candidate)
-				 (let* ((bookmark (ht-get bookmarks candidate))
-					(key (plist-get bookmark :key))
-					(query (plist-get bookmark :query)))
-
-				   (marginalia--fields
-				    (:left (char-to-string key)
-					   :format (format "%s(b%%s)" (prefix-padding-for-annotation candidate longest-id))
-					   :face 'marginalia-key)
-				    (query
-				     :format (format "query: \"%s\"" query)
-				     :face 'marginalia-value)))))))
+         (_ (mapc (lambda (bm) (setf (ht-get bookmarks (plist-get bm :name)) bm))
+                  mu4e-bookmarks))
+         (annotation-table (let ((tbl (ht-create)))
+                              (ht-each (lambda (name bm)
+                                         (ht-set tbl name
+                                                 (format "[%s] %s"
+                                                         (char-to-string (plist-get bm :key))
+                                                         (plist-get bm :query))))
+                                       bookmarks)
+                              tbl))
+         (selection (annotated-completing-read
+                     annotation-table
+                     :prompt "mu4e query =>> "
+                     :category 'consult-mu)))
     (consult-mu (plist-get (ht-get bookmarks selection) :query))))
 
 (defun tychoish/consult-mu-headers-template ()
@@ -230,7 +266,7 @@
 						  ;; we could do more validation here, but it's probably more trouble
 						  ;; than it's worth.
 						  (t (f-expand maildir))))
-                                   (signature (setq signature (and (when (trimmed-string-or-nil signature)
+                                   (signature (setq signature (and (when (s-trimmed-or-nil signature)
                                                                      (cond ((eq signature-kind 'signature-directory)
                                                                             (f-join maildir ".sig"))
                                                                            ((eq signature-kind 'signature-file)
@@ -311,11 +347,10 @@
 		    " -- CURRENT"
 		  ""))))
 	    tychoish/mail-accounts-table)
-	   (consult-tycho--read-annotated
+	   (annotated-completing-read
 	    table
 	    :prompt "mail-account => "
 	    :require-match nil
-	    :command 'tychoish-mail-select-account
 	    :category 'consult-mu))))
 
   (let ((select-account-operation (intern account-id)))
@@ -336,7 +371,7 @@
          (configure-account-symbol (intern account-name))
 	 (maildir (expand-file-name maildir)))
 
-    (define-key 'tychoish/mail-map (kbd key) configure-account-symbol)
+    (define-key tychoish/mail-map (kbd key) configure-account-symbol)
 
     (ht-set tychoish/mail-accounts-table account-name
             (tychoish/mail-make-account
@@ -350,13 +385,18 @@
              :signature (f-join maildir "tools" "signatures")))
 
     (when (or default
-	      (and
-	       (not (and (null systems) (null instances)))
-	       (or (member tychoish/emacs-instance-id instances)
-		   (null instances))
-	       (or (member (system-name) systems)
-		   (null systems))))
-      (add-hook 'emacs-startup-hook configure-account-symbol))
+	      (not (and (null systems) (null instances))))
+      (add-one-shot-hook
+       :name account-name
+       :form `(when (or ,default
+			(and
+			 (or (member tychoish/emacs-instance-id ',instances)
+			     (null ',instances))
+			 (or (member (system-name) ',systems)
+			     (null ',systems))))
+		 (,configure-account-symbol))
+       :hook 'after-first-frame-created
+       :idle-timer 0.5))
 
     `(defun ,configure-account-symbol ()
        (interactive)
@@ -372,6 +412,8 @@
 	 (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
 	 (setq mu4e-mu-home (f-join maildir ".mu"))
 	 (setq message-auto-save-directory (f-join maildir "drafts"))
+	 (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+	 (setq mu4e--header-separator mail-header-separator)
 
 	 (let ((signature-kind (tychoish/mail-account-signature-kind conf))
 	       (signature (tychoish/mail-account-signature conf))
@@ -393,7 +435,6 @@
              (setq message-signature signature)))
 
            (setq user-mail-address address)
-           (setq message-signature-file address)
            (setq user-full-name given-name)
            (setq mu4e-compose-reply-to-address address)
 
@@ -407,6 +448,8 @@
 		 (replace-match new-from))))
 
            (setq mu4e-get-mail-command (tychoish/mail-account-fetchmail conf))
+
+	   (mu4e 'background)
 
            (message (format "mail: configured address [%s]" address)))))))
 

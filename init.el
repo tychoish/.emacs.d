@@ -7,57 +7,45 @@
 
 ;;; Code:
 
-(defmacro with-gc-suppressed (&rest body)
-  `(progn
-     (let ((gc-cons-threshold 800000000000000))
-       ,@body)
-     (let ((garbage-collection-messages t))
-       (garbage-collect))))
-
-(defmacro with-file-name-handler-disabled (&rest body)
-  `(let ((file-name-handler-alist nil))
-     ,@body))
-
-;;;###autoload
+;; Make xlib macros available before (with-gc-suppressed …) is read.
+;; Emacs eagerly expands macros in the entire top-level form before evaluating
+;; it, so (with-slow-op-timer …) inside the form needs xlib on load-path before
+;; that form is even read — the eval-when-compile nested inside the form is too
+;; late when loading from uncompiled source.  package-initialize is called here
+;; first so that xlib's dependencies (f, s, dash, ht) are on load-path.
+(eval-and-compile
+  (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+  (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
+  (package-initialize)
+  (require 'xlib))
 
 (with-gc-suppressed
- (defvar tychoish/slow-op-reporting (or debug-on-error init-file-debug))
- (defvar tychoish/slow-op-threshold 0.01)
-
- (defmacro with-slow-op-timer (name &rest body)
-   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
-   `(let* ((inhibit-message t)
-	   (time (current-time))
-	   (return-value (progn ,@body))
-	   (duration (time-to-seconds (time-since time))))
-      (when (and tychoish/slow-op-reporting (> duration tychoish/slow-op-threshold))
-	(message "[op]: %s: %.06fs" ,name duration))
-      return-value))
-
+ (defvar tychoish/startup-complete-time nil
+   "Timestamp reflecting when the instance' startup process actually completed.")
  (defvar tychoish/bootstrap-packages '(f s dash ht anaphora fn)
-   "Packages installed with the `--botstrap' CLI flag outside of use-package for performance.")
- (defvar tychoish/eglot-default-server-configuration nil)
- (defvar tychoish/emacs-instance-id nil)
- (defvar tychoish/startup-complete-time nil)
- (defvar cli/instance-id  nil)
+   "Packages installed with the `--botstrap' CLI flag outside of use-package.")
+ (defvar tychoish/eglot-default-server-configuration nil
+   "Define eglot Server configuration variable early for use later.")
+
+ (defvar tychoish/emacs-instance-id nil
+   "Name of emacs instance. `work', `personal', and `hud' are common long
+lived instances. Other ephemeral instance names ones may be useful.")
+ (defvar cli/instance-id  nil
+   "cli specified daemon/instance name")
 
  (defvar local-notes-directory (expand-file-name "~/notes")
    "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
-
- (defvar user-org-directories nil "Defines additional directories where org files might exist.")
- (defvar user-home-directory (expand-file-name "~") "path to the current home directory. cached during init.")
+ (defvar user-org-directories nil
+   "Defines additional directories where org files might exist.")
+ (defvar user-home-directory (expand-file-name "~")
+   "path to the current home directory. cached during init.")
 
  (defvar tychoish-disable-external-notifications nil
    "disable external notification support.")
 
- (when (string-match "NATIVE_COMP" system-configuration-features)
-   (setq native-comp-jit-compilation t)
-   (setq native-compile-prune-cache t))
-
  (setq initial-major-mode 'fundamental-mode)
  (setq initial-scratch-message nil)
  (setq inhibit-startup-message t)
- (setq package-enable-at-startup nil)
 
  (setq user-emacs-directory (expand-file-name user-emacs-directory))
 
@@ -76,7 +64,7 @@
 
  (defun cli/bootstrap ()
    (when (string-prefix-p "--bootstrap" argi)
-     (let ((packages '(f s dash ht))
+     (let ((packages '(f s dash ht cond-let))
 	   installed)
        (dolist (pkg packages)
 	 (if (package-installed-p pkg)
@@ -90,11 +78,11 @@
  (defun cli/time-reporting ()
    (when (string-prefix-p "--with-slow-op-timing" argi)
      (message "[op]: enabling time reporting")
-     (setq tychoish/slow-op-reporting t)))
+     (setq slow-op-reporting t)))
 
+ (add-to-list 'command-line-functions 'cli/time-reporting)
  (add-to-list 'command-line-functions 'cli/resolve-id)
  (add-to-list 'command-line-functions 'cli/bootstrap)
- (add-to-list 'command-line-functions 'cli/time-reporting)
 
  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
  (add-to-list 'package-archives '( "jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/") t)
@@ -107,51 +95,50 @@
  (declare-function alert "alert")
 
  (defun tychoish/startup-report-timing ()
-   (let ((msg (format "started (pid=%d) in %s [wall=%s]"
+   (let* ((startup-time (float-time (time-subtract tychoish/startup-complete-time before-init-time)))
+	  (init-time (float-time (time-subtract after-init-time before-init-time)))
+	  (wall-time (float-time (time-since before-init-time)))
+	  (msg (format "started (pid=%d) [user=%s sys=%s wall=%s]"
 		      (emacs-pid)
-		      (emacs-init-time)
-		      (float-time (time-since before-init-time)))))
-     (message "emacs: %s" msg)
+		      startup-time
+		      init-time
+		      wall-time)))
+     (message "[emacs]: <%s> wall time %s" tychoish/emacs-instance-id wall-time)
+     (message "[emacs]: <%s> user time %s" tychoish/emacs-instance-id startup-time)
+     (message "[emacs]: <%s> init time %s" tychoish/emacs-instance-id init-time)
      (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id))))
-
 
  (defun tychoish/startup-mark-complete ()
    (unless tychoish/startup-complete-time
      (setq tychoish/startup-complete-time (current-time))))
 
- (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 80)
- (add-hook 'emacs-startup-hook 'tychoish/startup-report-timing 90)
+ (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 99)
+ (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
 
  (with-file-name-handler-disabled
-  (add-to-list 'load-path (concat user-emacs-directory "lisp"))
-  (add-to-list 'load-path (concat user-emacs-directory "user"))
-  ;; (only) functions and macros used in the rest of the configuration
-  (with-slow-op-timer "<init.el> tychoish-common"
-   (require 'tychoish-common)
-   (declare-function tychoish/set-up-instance-name "tychoish-common")
-   (tychoish/set-up-instance-name))
+  (eval-when-compile
+    (add-to-list 'load-path (concat user-emacs-directory "lisp"))
+    (add-to-list 'load-path (concat user-emacs-directory "user"))
+    (require 'xlib))
 
-  ;; customized setup and configuration of core emacs and included packages
-
-  (with-slow-op-timer "<init.el> tychoish-bootstrap"
+  (with-slow-op-timer "<init> tychoish-bootstrap"
    (require 'tychoish-bootstrap)
+   (declare-function tychoish/conf-state-path "tychoish-bootstrap")
    (setq custom-file (tychoish/conf-state-path "custom.el"))
    'tychoish-bootstrap)
 
   ;; remaining use-package declarations.
-
-  (with-slow-op-timer "<init.el> load tychoish-core"
+  (with-slow-op-timer "<init> load tychoish-core"
    (require 'tychoish-core))
 
-  (with-slow-op-timer "<init.el> tychoish-mail"
+  (with-slow-op-timer "<init> tychoish-mail"
    (require 'tychoish-mail))
 
-  (with-slow-op-timer "<core.el> load tychoish-org"
+  (with-slow-op-timer "<init> load tychoish-org"
    (require 'tychoish-org))
 
   ;; load the user/*.el files
-
-  (with-slow-op-timer "<init.el> user-files"
+  (with-slow-op-timer "<init> user-files"
    (declare-function tychoish-set-up-user-local-config 'tychoish-bootstrap)
    (tychoish-set-up-user-local-config))))
 
