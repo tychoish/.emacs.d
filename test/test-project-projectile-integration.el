@@ -16,6 +16,9 @@
 (require 'project)
 (require 'projectile)
 
+(cl-defmethod project-name ((project (head projectile)))
+  (projectile-project-name (project-root project)))
+
 (defmacro project-test--with-project-dir (marker &rest body)
   "Create a temp directory containing MARKER file, bind `default-directory' to it, run BODY."
   (declare (indent defun))

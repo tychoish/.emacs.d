@@ -1113,7 +1113,7 @@
       (setq-default alert-default-style 'notifier))))
    (alert-libnotify-command
     (setq-default alert-default-style 'libnotify))
-   ((eql system-type 'gnu/linux)
+   ((and (eql system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
     (setq-default alert-default-style 'notifications))
    (t (setq-default alert-default-style 'message)))
 
@@ -2211,7 +2211,7 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package gptel
   :ensure t
-  :vc (:url "https://github.com/karthink/gptel" :rev newest)
+  :vc (:url "https://github.com/karthink/gptel" :rev "bbfbd711fae64b079f7057d71772805edeb00a3d")
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands (gptel gptel-rewrite)
   :init
