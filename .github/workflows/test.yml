@@ -58,12 +58,9 @@ jobs:
         with:
           emacs-version: ${{ matrix.emacs_version }}
 
-      - name: Install dependencies
-        run: cask install
-
       - name: Run integration tests
         run: |
           EMACSLOADPATH=$(find elpa -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
           HOME=$(dirname "$GITHUB_WORKSPACE") \
-          cask exec emacs --fg-daemon \
+          emacs --fg-daemon \
             --eval '(tychoish/run-ci-tests)'
