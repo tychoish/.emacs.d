@@ -2210,8 +2210,7 @@ Useful after changing `eglot-workspace-configuration' or
 	     google-gemini-model-info))
 
 (use-package gptel
-  :ensure t
-  :vc (:url "https://github.com/karthink/gptel" :rev "bbfbd711fae64b079f7057d71772805edeb00a3d")
+  :load-path "elpa/gptel"
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands (gptel gptel-rewrite)
   :init
