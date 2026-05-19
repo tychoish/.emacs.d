@@ -3599,18 +3599,16 @@ If FROM-ID is nil, returns all active/deferred/draft items.
 Returns a list of items; does not modify the queue."
   (let* ((items (cdr (assoc buf-name
                             (agent-shell-queue-store-items agent-shell-queue--store))))
-         (eligible (--filter (memq (agent-shell-queue-item-status it)
-                                   '(active deferred draft))
-                             items)))
+         (eligible-statuses '(active deferred draft)))
     (if (null from-id)
-        eligible
-      (let (found result)
-        (dolist (it eligible)
-          (when (equal (agent-shell-queue-item-id it) from-id)
-            (setq found t))
-          (when found
-            (push it result)))
-        (nreverse result)))))
+        (--filter (memq (agent-shell-queue-item-status it) eligible-statuses) items)
+      ;; Search for from-id in the full list (it may be running/done, not just eligible)
+      ;; then filter eligible items from that position onward.
+      (let* ((pos (cl-position from-id items
+                               :key #'agent-shell-queue-item-id
+                               :test #'equal))
+             (tail (if pos (nthcdr pos items) nil)))
+        (--filter (memq (agent-shell-queue-item-status it) eligible-statuses) tail)))))
 
 (defun agent-shell-queue--fork-create-worktree (source-buf worktree-branch worktree-path)
   "Create a git worktree for a fork operation.
