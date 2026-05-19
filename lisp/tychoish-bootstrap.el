@@ -394,6 +394,12 @@ more arguments than the function cares about."
 
 (defvar-local tychoish-cache--resolved-instance-id nil)
 
+(defvar cli/instance-id nil
+  "CLI-specified daemon/instance name; set from command-line args in init.el.")
+
+(defvar tychoish/emacs-instance-id nil
+  "Name of the running Emacs instance; resolved from daemon state or CLI args.")
+
 (defun tychoish/resolve-instance-id ()
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (or tychoish-cache--resolved-instance-id
@@ -448,6 +454,7 @@ This combines the host name and the dameon name."
 ;; state -- setup desktop/bookmarks/savehist
 
 (defvar desktop/last-save-time nil)
+(defvar desktop-dirname nil)
 
 (defun tychoish/set-up-emacs-instance-persistence ()
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
@@ -1076,7 +1083,7 @@ Returns the number of buffers killed."
       (let ((file-name (buffer-file-name buf)))
 	(cond ((null file-name) nil)
 	      ((f-directory-p file-name) file-name)
-	      ((f-file-p file-name) (f-dirname file-name))
+	      ((f-file-p file-name) (file-name-directory file-name))
 	      (t default-directory))))))
 
 
