@@ -37,10 +37,26 @@
 (require 'fn)
 (require 'dash)
 
-(defmacro with-which-key (&rest body)
-  "Evaluate BODY after which-key is loaded, safe when which-key is absent."
+(defmacro with-which-key (&rest args)
+  "Configure which-key annotations after which-key is loaded.
+
+Dispatches based on the first element of ARGS:
+- Non-nil symbol or quoted symbol: calls `which-key-add-keymap-based-replacements'
+  with ARGS.  Example: (with-which-key my-map \"k\" \"label\")
+- String: calls `which-key-add-key-based-replacements' with ARGS.
+  Example: (with-which-key \"C-c p\" \"projectile\" \"C-c q\" \"other\")
+- Anything else: wraps ARGS as body forms inside `with-eval-after-load'."
   (declare (indent 0))
-  `(with-eval-after-load 'which-key ,@body))
+  (cond
+   ((and (car args)
+         (or (symbolp (car args))
+             (and (listp (car args)) (eq (caar args) 'quote))))
+    `(with-eval-after-load 'which-key
+       (which-key-add-keymap-based-replacements ,@args)))
+   ((stringp (car args))
+    `(with-eval-after-load 'which-key
+       (which-key-add-key-based-replacements ,@args)))
+   (t `(with-eval-after-load 'which-key ,@args))))
 
 (defmacro flex-defun (name args &rest body)
   "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
@@ -235,9 +251,8 @@ more arguments than the function cares about."
  :prefix "m"
  :prefix-map tychoish/robot-gptel-set-default-model-map)
 
-(with-which-key
-  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
-    "p" '("project-grep" . tychoish/ecclectic-grep-project-map)))
+(with-which-key tychoish/ecclectic-grep-map
+  "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
