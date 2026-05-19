@@ -1291,15 +1291,10 @@ PACKAGES to `package-selected-packages' and echoes the result."
 
 ;; emacs-lisp -- Cask project operations
 
-(defun builder-cask-p (&optional root)
-  "Return non-nil if ROOT contains a Cask file."
-  (f-file-p (f-join (or root (approximate-project-root)) "Cask")))
-
 (builder-register-candidates
  :name "emacs-lisp-cask"
  :pipeline
- (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
-             (_ (builder-cask-p project-root-directory)))
+ (when (f-file-p (f-join project-root-directory "Cask"))
    (-l (make-builder-candidate
         :name (format "cask-install <%s>" project-name)
         :command "cask install"

@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Emacs ${{ matrix.emacs_version }}
         uses: purcell/setup-emacs@master
@@ -24,7 +26,7 @@ jobs:
 
       - name: Install Cask
         run: |
-          curl -fsSL https://raw.githubusercontent.com/cask/cask/master/go | python3
+          git clone https://github.com/cask/cask ~/.cask
           echo "$HOME/.cask/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
