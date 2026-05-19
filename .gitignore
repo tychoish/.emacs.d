@@ -20,3 +20,4 @@ lisp/**.elc
 external/**.elc
 request
 /.agent-shell/
+/.emacs.d
