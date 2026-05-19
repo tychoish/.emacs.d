@@ -1373,4 +1373,528 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
             (should (eq :false (gethash "ran" parsed)))))
       (ignore-errors (delete-file tmp)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue-with-paused-session — macro
+
+(ert-deftest agent-shell-queue/with-paused-session-pauses-during-body ()
+  "Session is paused while body executes, resumed afterward."
+  (agent-shell-queue-test/isolate
+    (with-temp-buffer
+      (rename-buffer "*test-session*" t)
+      (let ((paused-during nil))
+        (agent-shell-queue-with-paused-session (current-buffer)
+          (setq paused-during
+                (member (buffer-name) (agent-shell-queue-queue-session-paused
+                                       agent-shell-queue--queue))))
+        ;; After macro: session should be resumed (removed from paused list)
+        (should paused-during)
+        (should (not (member (buffer-name)
+                             (agent-shell-queue-queue-session-paused
+                              agent-shell-queue--queue))))))))
+
+(ert-deftest agent-shell-queue/with-paused-session-resumes-on-error ()
+  "Session is resumed even when body signals an error."
+  (agent-shell-queue-test/isolate
+    (with-temp-buffer
+      (rename-buffer "*test-err-session*" t)
+      (let ((buf-name (buffer-name)))
+        (ignore-errors
+          (agent-shell-queue-with-paused-session (current-buffer)
+            (error "deliberate test error")))
+        (should (not (member buf-name
+                             (agent-shell-queue-queue-session-paused
+                              agent-shell-queue--queue))))))))
+
+(ert-deftest agent-shell-queue/with-paused-session-accepts-string ()
+  "Macro works when BUF is a buffer name string."
+  (agent-shell-queue-test/isolate
+    (with-temp-buffer
+      (rename-buffer "*test-str-session*" t)
+      (let ((buf-name (buffer-name))
+            (paused-during nil))
+        (agent-shell-queue-with-paused-session buf-name
+          (setq paused-during
+                (member buf-name (agent-shell-queue-queue-session-paused
+                                  agent-shell-queue--queue))))
+        (should paused-during)
+        (should (not (member buf-name
+                             (agent-shell-queue-queue-session-paused
+                              agent-shell-queue--queue))))))))
+
+(ert-deftest agent-shell-queue/with-paused-session-returns-body-value ()
+  "Macro returns the value of its body."
+  (agent-shell-queue-test/isolate
+    (with-temp-buffer
+      (rename-buffer "*test-retval-session*" t)
+      (let ((result (agent-shell-queue-with-paused-session (current-buffer)
+                      (+ 1 2))))
+        (should (= 3 result))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--fork-collect-items
+
+(ert-deftest agent-shell-queue/fork-collect-items-nil-from-id ()
+  "With nil from-id, collects all active/deferred/draft items."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           ("*s*"
+            ("q1" "p1" 'active nil)
+            ("q2" "p2" 'deferred nil)
+            ("q3" "p3" 'done nil)
+            ("q4" "p4" 'draft nil))))
+    (let ((collected (agent-shell-queue--fork-collect-items "*s*" nil)))
+      (should (= 3 (length collected)))
+      (should (member "q1" (-map #'agent-shell-queue-item-id collected)))
+      (should (member "q2" (-map #'agent-shell-queue-item-id collected)))
+      (should (member "q4" (-map #'agent-shell-queue-item-id collected)))
+      (should (not (member "q3" (-map #'agent-shell-queue-item-id collected)))))))
+
+(ert-deftest agent-shell-queue/fork-collect-items-from-id ()
+  "With from-id, collects active items at and after that position."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           ("*s*"
+            ("q1" "p1" 'active nil)
+            ("q2" "p2" 'active nil)
+            ("q3" "p3" 'active nil)
+            ("q4" "p4" 'active nil))))
+    (let ((collected (agent-shell-queue--fork-collect-items "*s*" "q2")))
+      (should (= 3 (length collected)))
+      (should (-all? (lambda (it)
+                       (member (agent-shell-queue-item-id it) '("q2" "q3" "q4")))
+                     collected)))))
+
+(ert-deftest agent-shell-queue/fork-collect-items-from-id-skips-done ()
+  "Skips done and running items even when they appear in range."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           ("*s*"
+            ("q1" "p1" 'active nil)
+            ("q2" "p2" 'running nil)
+            ("q3" "p3" 'active nil)
+            ("q4" "p4" 'active nil))))
+    (let ((collected (agent-shell-queue--fork-collect-items "*s*" "q2")))
+      ;; q2 is running → not eligible; q3, q4 are active
+      (should (= 2 (length collected)))
+      (should (-all? (lambda (it)
+                       (member (agent-shell-queue-item-id it) '("q3" "q4")))
+                     collected)))))
+
+(ert-deftest agent-shell-queue/fork-collect-items-unknown-from-id ()
+  "Unknown from-id returns empty list."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           ("*s*" ("q1" "p1" 'active nil))))
+    (let ((collected (agent-shell-queue--fork-collect-items "*s*" "no-such-id")))
+      (should (null collected)))))
+
+(ert-deftest agent-shell-queue/fork-collect-items-empty-bucket ()
+  "Returns nil for an empty bucket."
+  (agent-shell-queue-test/isolate
+    (let ((collected (agent-shell-queue--fork-collect-items "*nonexistent*" nil)))
+      (should (null collected)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue-fork-session
+
+(defmacro agent-shell-queue-test/with-fork-stubs (new-buf-name &rest body)
+  "Execute BODY with session-creation stubbed to return a buffer named NEW-BUF-NAME.
+Also stubs subscription management and `sit-for' to avoid side effects."
+  (declare (indent 1))
+  `(agent-shell-queue-test/isolate-no-sub
+    (cl-letf (((symbol-function 'agent-shell-queue--fork-create-session)
+               (lambda (_src _mode _dir) (get-buffer-create ,new-buf-name)))
+              ((symbol-function 'sit-for) #'ignore))
+      ,@body)))
+
+(ert-deftest agent-shell-queue/fork-session-moves-items-to-new-buffer ()
+  "Items at/after from-id are moved to the new session buffer."
+  (agent-shell-queue-test/with-fork-stubs "*new-session*"
+    (with-temp-buffer
+      (rename-buffer "*src-session*" t)
+      (let ((src-buf (current-buffer)))
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
+              (agent-shell-queue-test/populate
+               ("*src-session*"
+                ("q1" "p1" 'active nil)
+                ("q2" "p2" 'active nil)
+                ("q3" "p3" 'active nil))))
+        (agent-shell-queue-fork-session src-buf "q2")
+        ;; q1 remains in source
+        (let ((src-items (cdr (assoc "*src-session*"
+                                     (agent-shell-queue-store-items agent-shell-queue--store)))))
+          (should (= 1 (length src-items)))
+          (should (equal "q1" (agent-shell-queue-item-id (car src-items)))))
+        ;; q2 and q3 moved to new session
+        (let ((new-items (cdr (assoc "*new-session*"
+                                     (agent-shell-queue-store-items agent-shell-queue--store)))))
+          (should (= 2 (length new-items)))
+          (should (member "q2" (-map #'agent-shell-queue-item-id new-items)))
+          (should (member "q3" (-map #'agent-shell-queue-item-id new-items))))
+        (kill-buffer "*new-session*")))))
+
+(ert-deftest agent-shell-queue/fork-session-nil-from-id-moves-all ()
+  "With nil from-id, all active items are moved to the new session."
+  (agent-shell-queue-test/with-fork-stubs "*new-all*"
+    (with-temp-buffer
+      (rename-buffer "*src-all*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*src-all*"
+              ("q1" "p1" 'active nil)
+              ("q2" "p2" 'active nil))))
+      (agent-shell-queue-fork-session (current-buffer) nil)
+      (let ((src-items (cdr (assoc "*src-all*"
+                                   (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (null src-items)))
+      (let ((new-items (cdr (assoc "*new-all*"
+                                   (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (= 2 (length new-items))))
+      (kill-buffer "*new-all*"))))
+
+(ert-deftest agent-shell-queue/fork-session-capture-pending-marks-status ()
+  "With :capture-pending, items get pending-fork status and stay in source."
+  (agent-shell-queue-test/with-fork-stubs "*fork-pending-new*"
+    (with-temp-buffer
+      (rename-buffer "*src-pending*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*src-pending*"
+              ("q1" "p1" 'active nil)
+              ("q2" "p2" 'active nil)
+              ("q3" "p3" 'active nil))))
+      (agent-shell-queue-fork-session (current-buffer) "q2"
+                                      '(:capture-pending t))
+      ;; q1 untouched; q2 and q3 become pending-fork
+      (let ((items (cdr (assoc "*src-pending*"
+                               (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (= 3 (length items)))
+        (should (eq 'active (agent-shell-queue-item-status
+                             (cl-find "q1" items :key #'agent-shell-queue-item-id
+                                      :test #'equal))))
+        (should (eq 'pending-fork (agent-shell-queue-item-status
+                                   (cl-find "q2" items :key #'agent-shell-queue-item-id
+                                            :test #'equal))))
+        (should (eq 'pending-fork (agent-shell-queue-item-status
+                                   (cl-find "q3" items :key #'agent-shell-queue-item-id
+                                            :test #'equal)))))
+      ;; source session remains paused after capture-pending
+      (should (member "*src-pending*"
+                      (agent-shell-queue-queue-session-paused agent-shell-queue--queue)))
+      (kill-buffer "*fork-pending-new*"))))
+
+(ert-deftest agent-shell-queue/fork-session-errors-when-no-items ()
+  "Signals user-error when there are no eligible items to fork."
+  (agent-shell-queue-test/with-fork-stubs "*no-items-new*"
+    (with-temp-buffer
+      (rename-buffer "*src-empty*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*src-empty*" ("q1" "p1" 'done nil))))
+      (should-error (agent-shell-queue-fork-session (current-buffer) nil)
+                    :type 'user-error)
+      (kill-buffer "*no-items-new*"))))
+
+(ert-deftest agent-shell-queue/fork-session-resumes-source-on-error ()
+  "Source session is resumed (removed from paused) if session creation fails."
+  (agent-shell-queue-test/isolate-no-sub
+    (cl-letf (((symbol-function 'agent-shell-queue--fork-create-session)
+               (lambda (_src _mode _dir) nil))  ; returns nil → triggers user-error
+              ((symbol-function 'sit-for) #'ignore))
+      (with-temp-buffer
+        (rename-buffer "*src-resume*" t)
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
+              (agent-shell-queue-test/populate
+               ("*src-resume*" ("q1" "p1" 'active nil))))
+        (ignore-errors
+          (agent-shell-queue-fork-session (current-buffer) nil))
+        ;; unwind-protect removes from paused list after error
+        (should (not (member "*src-resume*"
+                             (agent-shell-queue-queue-session-paused
+                              agent-shell-queue--queue))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue-release-pending-fork
+
+(ert-deftest agent-shell-queue/release-pending-fork-activates-items ()
+  "pending-fork items become active after release."
+  (agent-shell-queue-test/isolate-no-sub
+    (with-temp-buffer
+      (rename-buffer "*release-session*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*release-session*"
+              ("q1" "p1" 'pending-fork nil)
+              ("q2" "p2" 'pending-fork nil)
+              ("q3" "p3" 'active nil))))
+      ;; Pre-pause the session so resume has something to clear
+      (cl-pushnew "*release-session*"
+                  (agent-shell-queue-queue-session-paused agent-shell-queue--queue)
+                  :test #'equal)
+      (cl-letf (((symbol-function 'agent-shell-queue--send-next-for-buffer) #'ignore))
+        (agent-shell-queue-release-pending-fork (current-buffer)))
+      (let ((items (cdr (assoc "*release-session*"
+                               (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (-all? (lambda (it)
+                         (eq 'active (agent-shell-queue-item-status it)))
+                       items))))))
+
+(ert-deftest agent-shell-queue/release-pending-fork-no-op-when-none ()
+  "Releasing when no pending-fork items sends no-resume and reports 0."
+  (agent-shell-queue-test/isolate-no-sub
+    (with-temp-buffer
+      (rename-buffer "*release-none*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*release-none*" ("q1" "p1" 'active nil))))
+      (let (resumed)
+        (cl-letf (((symbol-function 'agent-shell-queue-session-resume)
+                   (lambda (_) (setq resumed t)))
+                  ((symbol-function 'agent-shell-queue--send-next-for-buffer) #'ignore))
+          (agent-shell-queue-release-pending-fork (current-buffer)))
+        ;; resume should not be called since nothing was pending-fork
+        (should (not resumed))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--fork-insert-at
+
+(ert-deftest agent-shell-queue/fork-insert-at-beginning ()
+  "Inserting at idx 0 places item before all others."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           ("*ins*" ("q1" "p1" 'active nil) ("q2" "p2" 'active nil))))
+    (let ((new-item (agent-shell-queue--make-item "new" nil 'emacs)))
+      (agent-shell-queue--fork-insert-at "*ins*" new-item 0)
+      (let ((items (cdr (assoc "*ins*"
+                               (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (= 3 (length items)))
+        (should (equal (agent-shell-queue-item-id new-item)
+                       (agent-shell-queue-item-id (car items))))))))
+
+(ert-deftest agent-shell-queue/fork-insert-at-middle ()
+  "Inserting at idx 1 places item between first and second."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           ("*ins-mid*" ("q1" "p1" 'active nil) ("q2" "p2" 'active nil))))
+    (let ((new-item (agent-shell-queue--make-item "mid" nil 'emacs)))
+      (agent-shell-queue--fork-insert-at "*ins-mid*" new-item 1)
+      (let ((items (cdr (assoc "*ins-mid*"
+                               (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (= 3 (length items)))
+        (should (equal "q1" (agent-shell-queue-item-id (nth 0 items))))
+        (should (equal (agent-shell-queue-item-id new-item)
+                       (agent-shell-queue-item-id (nth 1 items))))
+        (should (equal "q2" (agent-shell-queue-item-id (nth 2 items))))))))
+
+(ert-deftest agent-shell-queue/fork-insert-at-nil-appends ()
+  "Inserting with nil idx appends to end."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           ("*ins-end*" ("q1" "p1" 'active nil) ("q2" "p2" 'active nil))))
+    (let ((new-item (agent-shell-queue--make-item "end" nil 'emacs)))
+      (agent-shell-queue--fork-insert-at "*ins-end*" new-item nil)
+      (let ((items (cdr (assoc "*ins-end*"
+                               (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (= 3 (length items)))
+        (should (equal (agent-shell-queue-item-id new-item)
+                       (agent-shell-queue-item-id (nth 2 items))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue-insert-fork-before / -after
+
+(ert-deftest agent-shell-queue/insert-fork-before-inserts-emacs-item ()
+  "insert-fork-before adds an emacs-kind item before the target."
+  (agent-shell-queue-test/isolate-no-sub
+    (with-temp-buffer
+      (rename-buffer "*ibefore-session*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*ibefore-session*"
+              ("q1" "p1" 'active nil)
+              ("q2" "p2" 'active nil))))
+      (let ((fork-item (agent-shell-queue-insert-fork-before
+                        (current-buffer) "q2" nil)))
+        (should (eq 'emacs (agent-shell-queue-item-kind fork-item)))
+        (let ((items (cdr (assoc "*ibefore-session*"
+                                 (agent-shell-queue-store-items agent-shell-queue--store)))))
+          (should (= 3 (length items)))
+          (should (equal "q1" (agent-shell-queue-item-id (nth 0 items))))
+          ;; fork item lands at position 1 (before q2)
+          (should (equal (agent-shell-queue-item-id fork-item)
+                         (agent-shell-queue-item-id (nth 1 items))))
+          (should (equal "q2" (agent-shell-queue-item-id (nth 2 items)))))))))
+
+(ert-deftest agent-shell-queue/insert-fork-after-inserts-emacs-item ()
+  "insert-fork-after adds an emacs-kind item after the target."
+  (agent-shell-queue-test/isolate-no-sub
+    (with-temp-buffer
+      (rename-buffer "*iafter-session*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*iafter-session*"
+              ("q1" "p1" 'active nil)
+              ("q2" "p2" 'active nil))))
+      (let ((fork-item (agent-shell-queue-insert-fork-after
+                        (current-buffer) "q1" nil)))
+        (should (eq 'emacs (agent-shell-queue-item-kind fork-item)))
+        (let ((items (cdr (assoc "*iafter-session*"
+                                 (agent-shell-queue-store-items agent-shell-queue--store)))))
+          (should (= 3 (length items)))
+          (should (equal "q1" (agent-shell-queue-item-id (nth 0 items))))
+          ;; fork item at position 1 (after q1)
+          (should (equal (agent-shell-queue-item-id fork-item)
+                         (agent-shell-queue-item-id (nth 1 items))))
+          (should (equal "q2" (agent-shell-queue-item-id (nth 2 items)))))))))
+
+(ert-deftest agent-shell-queue/insert-fork-before-nil-appends ()
+  "insert-fork-before with nil item-id appends to end."
+  (agent-shell-queue-test/isolate-no-sub
+    (with-temp-buffer
+      (rename-buffer "*ib-nil*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*ib-nil*" ("q1" "p1" 'active nil))))
+      (let ((fork-item (agent-shell-queue-insert-fork-before (current-buffer) nil nil)))
+        (let ((items (cdr (assoc "*ib-nil*"
+                                 (agent-shell-queue-store-items agent-shell-queue--store)))))
+          (should (= 2 (length items)))
+          (should (equal (agent-shell-queue-item-id fork-item)
+                         (agent-shell-queue-item-id (nth 1 items)))))))))
+
+(ert-deftest agent-shell-queue/insert-fork-form-contains-buf-name ()
+  "The emacs form in the inserted item references the source buffer name."
+  (agent-shell-queue-test/isolate-no-sub
+    (with-temp-buffer
+      (rename-buffer "*iform-session*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*iform-session*" ("q1" "p1" 'active nil))))
+      (let ((fork-item (agent-shell-queue-insert-fork-after
+                        (current-buffer) "q1" '(:fork-mode fork))))
+        (should (string-match-p "iform-session"
+                                (agent-shell-queue-item-prompt fork-item)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--fork-session-from-running-emacs
+
+(ert-deftest agent-shell-queue/fork-from-running-emacs-forks-after-running ()
+  "Finds the running item and forks starting from the item after it."
+  (agent-shell-queue-test/with-fork-stubs "*from-running-new*"
+    (with-temp-buffer
+      (rename-buffer "*from-running-src*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*from-running-src*"
+              ("q1" "p1" 'done nil)
+              ("q2" "p2" 'running nil)   ; currently running emacs item
+              ("q3" "p3" 'active nil)
+              ("q4" "p4" 'active nil))))
+      (agent-shell-queue--fork-session-from-running-emacs "*from-running-src*" nil)
+      ;; q3 and q4 should be moved to new session
+      (let ((new-items (cdr (assoc "*from-running-new*"
+                                   (agent-shell-queue-store-items agent-shell-queue--store)))))
+        (should (= 2 (length new-items)))
+        (should (member "q3" (-map #'agent-shell-queue-item-id new-items)))
+        (should (member "q4" (-map #'agent-shell-queue-item-id new-items))))
+      (kill-buffer "*from-running-new*"))))
+
+(ert-deftest agent-shell-queue/fork-from-running-emacs-no-items-after ()
+  "Returns nil and does nothing when no items follow the running one."
+  (agent-shell-queue-test/with-fork-stubs "*from-running-empty-new*"
+    (with-temp-buffer
+      (rename-buffer "*from-running-empty*" t)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate
+             ("*from-running-empty*"
+              ("q1" "p1" 'running nil))))  ; running, nothing after it
+      ;; Should not error; fork-session will error with user-error which we ignore
+      (ignore-errors
+        (agent-shell-queue--fork-session-from-running-emacs "*from-running-empty*" nil))
+      (kill-buffer "*from-running-empty-new*"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; pending-fork status — display
+
+(ert-deftest agent-shell-queue/status-string-pending-fork ()
+  "Items with pending-fork status display as \"pending-fork\"."
+  (agent-shell-queue-test/isolate
+    (let ((item (agent-shell-queue-test/make-item "q-pf" "p" 'pending-fork nil)))
+      (should (equal "pending-fork" (agent-shell-queue--status-string item))))))
+
+(ert-deftest agent-shell-queue/item-display-pending-fork-face ()
+  "pending-fork items get the pending-fork face."
+  (agent-shell-queue-test/isolate
+    (let* ((item (agent-shell-queue-test/make-item "q-pf2" "p" 'pending-fork nil))
+           (display (agent-shell-queue--item-display item nil)))
+      (should (equal "pending-fork" (car display)))
+      (should (eq 'agent-shell-queue-pending-fork-face (cdr display))))))
+
+(ert-deftest agent-shell-queue/pending-fork-not-dispatched ()
+  "Items with pending-fork status are not eligible for dispatch."
+  (agent-shell-queue-test/isolate
+    (let ((items (list (agent-shell-queue-test/make-item "q-pf3" "p" 'pending-fork nil)
+                       (agent-shell-queue-test/make-item "q-act" "p" 'active nil))))
+      (let ((next (agent-shell-queue--next-dispatchable-item items)))
+        (should (equal "q-act" (agent-shell-queue-item-id next)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--fork-create-worktree
+
+(ert-deftest agent-shell-queue/fork-create-worktree-no-git-repo ()
+  "Returns nil when not in a git repo."
+  (agent-shell-queue-test/isolate
+    (cl-letf (((symbol-function 'shell-command-to-string)
+               (lambda (_) "")))  ; empty repo root
+      (let ((result (agent-shell-queue--fork-create-worktree nil nil nil)))
+        (should (null result))))))
+
+(ert-deftest agent-shell-queue/fork-create-worktree-failure ()
+  "Returns nil when git worktree add fails."
+  (agent-shell-queue-test/isolate
+    (cl-letf (((symbol-function 'shell-command-to-string)
+               (lambda (_) "/some/repo"))
+              ((symbol-function 'file-exists-p) (lambda (_) nil))
+              ((symbol-function 'call-process)
+               (lambda (&rest _) 128)))  ; non-zero exit
+      (let ((result (agent-shell-queue--fork-create-worktree nil "branch" "/some/wt")))
+        (should (null result))))))
+
+(ert-deftest agent-shell-queue/fork-create-worktree-success ()
+  "Returns the worktree path when git worktree add succeeds."
+  (agent-shell-queue-test/isolate
+    (cl-letf (((symbol-function 'shell-command-to-string)
+               (lambda (_) "/some/repo"))
+              ((symbol-function 'file-exists-p) (lambda (_) nil))
+              ((symbol-function 'call-process)
+               (lambda (&rest _) 0)))  ; zero exit = success
+      (let ((result (agent-shell-queue--fork-create-worktree nil "my-branch" "/my/wt")))
+        (should (equal "/my/wt" result))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--fork-elisp-form
+
+(ert-deftest agent-shell-queue/fork-elisp-form-contains-buf-name ()
+  "The generated form string contains the buffer name."
+  (let ((form (agent-shell-queue--fork-elisp-form "*my-shell*" nil)))
+    (should (string-match-p "my-shell" form))))
+
+(ert-deftest agent-shell-queue/fork-elisp-form-contains-opts ()
+  "The generated form string contains the opts plist."
+  (let ((form (agent-shell-queue--fork-elisp-form "*shell*" '(:fork-mode fork))))
+    (should (string-match-p "fork-mode" form))))
+
+(ert-deftest agent-shell-queue/fork-elisp-form-is-readable ()
+  "The generated form string is valid Emacs Lisp."
+  (let* ((form (agent-shell-queue--fork-elisp-form "*readable-shell*" '(:capture-pending t)))
+         (parsed (condition-case nil (read form) (error nil))))
+    (should (listp parsed))
+    (should (eq 'agent-shell-queue--fork-session-from-running-emacs (car parsed)))))
+
 ;;; test-agent-shell-queue.el ends here

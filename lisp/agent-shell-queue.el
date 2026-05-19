@@ -1385,6 +1385,7 @@ NEXT-P, when non-nil, marks the item as the next to be dispatched."
          (aborted (eq status 'aborted))
          (status-str
           (cond ((eq status 'invalid) "invalid")
+                ((eq status 'pending-fork) "pending-fork")
                 ((eq kind 'context) "context")
                 ((eq kind 'emacs) (if done "emacs.done" (if running "emacs.running" "emacs")))
                 ((eq kind 'wait) (if done "wait.done" (if running "wait.running" "wait")))
@@ -1406,6 +1407,7 @@ NEXT-P, when non-nil, marks the item as the next to be dispatched."
                 (t "scheduled")))
          (face
           (cond ((eq status 'invalid) 'font-lock-warning-face)
+                ((eq status 'pending-fork) 'agent-shell-queue-pending-fork-face)
                 ((eq status 'incomplete) 'font-lock-warning-face)
                 (done 'shadow)
                 (aborted 'font-lock-warning-face)
@@ -2797,6 +2799,14 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("C" "Insert compact (manual)" agent-shell-queue-insert-compact)
     ("!" "Insert Emacs call" agent-shell-queue-enqueue-emacs)
     ("T" "Insert wait-until (timer)" agent-shell-queue-insert-wait)]
+   ["Fork"
+    ("xf" "Fork queue at point" agent-shell-queue-buffer-fork
+     :if (lambda () (agent-shell-queue--point-item)))
+    ("xb" "Insert fork task before point" agent-shell-queue-buffer-insert-fork-before
+     :if (lambda () (agent-shell-queue--point-item)))
+    ("xa" "Insert fork task after point" agent-shell-queue-buffer-insert-fork-after
+     :if (lambda () (agent-shell-queue--point-item)))
+    ("xr" "Release pending-fork items" agent-shell-queue-release-pending-fork)]
    ["Scope / Export"
     ("N" "Set scope (narrow)" agent-shell-queue-set-scope)
     ("W" "Widen to global scope" agent-shell-queue-scope-global)
@@ -3549,6 +3559,410 @@ For each item whose ID already exists, prompts to keep, replace, or assign new I
       (agent-shell-queue--refresh-buffer))
     (message "agent-shell-queue: imported %d item(s)%s"
              added (if (> skipped 0) (format " (%d skipped)" skipped) "")))))
+
+;;; Fork operations ─────────────────────────────────────────────────────────────
+
+(defface agent-shell-queue-pending-fork-face
+  '((t :foreground "mediumpurple3" :slant italic))
+  "Face for queue items held pending a fork operation.")
+
+(defvar agent-shell-queue-fork-default-mode 'new
+  "Default mode for creating new sessions when forking a queue.
+`new' creates a clean new session via `agent-shell-new-shell'.
+`fork' uses the ACP fork session option via `agent-shell-fork'.")
+
+(declare-function agent-shell-new-shell "agent-shell")
+(declare-function agent-shell-fork "agent-shell")
+
+(defmacro agent-shell-queue-with-paused-session (buf &rest body)
+  "Execute BODY with BUF's queue session paused, then always resume it.
+BUF can be a buffer object or buffer name string.
+Directly manipulates the session-paused list to avoid spurious messages
+during setup.  Always resumes and saves even if BODY signals an error."
+  (declare (indent 1))
+  (let ((bname (make-symbol "bname")))
+    `(let ((,bname (if (bufferp ,buf) (buffer-name ,buf) ,buf)))
+       (cl-pushnew ,bname
+                   (agent-shell-queue-queue-session-paused agent-shell-queue--queue)
+                   :test #'equal)
+       (unwind-protect
+           (progn ,@body)
+         (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue)
+               (delete ,bname
+                       (agent-shell-queue-queue-session-paused agent-shell-queue--queue)))
+         (agent-shell-queue--save)
+         (agent-shell-queue--refresh-buffer)))))
+
+(defun agent-shell-queue--fork-collect-items (buf-name from-id)
+  "Return active items from BUF-NAME's queue at or after FROM-ID.
+If FROM-ID is nil, returns all active/deferred/draft items.
+Returns a list of items; does not modify the queue."
+  (let* ((items (cdr (assoc buf-name
+                            (agent-shell-queue-store-items agent-shell-queue--store))))
+         (eligible (--filter (memq (agent-shell-queue-item-status it)
+                                   '(active deferred draft))
+                             items)))
+    (if (null from-id)
+        eligible
+      (let (found result)
+        (dolist (it eligible)
+          (when (equal (agent-shell-queue-item-id it) from-id)
+            (setq found t))
+          (when found
+            (push it result)))
+        (nreverse result)))))
+
+(defun agent-shell-queue--fork-create-worktree (source-buf worktree-branch worktree-path)
+  "Create a git worktree for a fork operation.
+SOURCE-BUF provides the repo root (via `default-directory').
+WORKTREE-BRANCH is the new branch name (auto-generated if nil).
+WORKTREE-PATH is the worktree directory (auto-generated if nil).
+Returns the worktree path string on success, nil on failure."
+  (let* ((source-dir (if (buffer-live-p source-buf)
+                         (buffer-local-value 'default-directory source-buf)
+                       default-directory))
+         (repo-root (string-trim
+                     (shell-command-to-string
+                      (format "git -C %s rev-parse --show-toplevel 2>/dev/null"
+                              (shell-quote-argument source-dir)))))
+         (branch (or worktree-branch
+                     (format "queue-fork-%s"
+                             (format-time-string "%Y%m%d-%H%M%S"))))
+         (wt-path (or worktree-path
+                      (expand-file-name branch (temporary-file-directory)))))
+    (cond
+     ((string-empty-p repo-root)
+      (message "agent-shell-queue: not in a git repo, cannot create worktree")
+      nil)
+     ((file-exists-p wt-path)
+      (message "agent-shell-queue: worktree path already exists: %s" wt-path)
+      nil)
+     (t
+      (let ((exit-code (call-process "git" nil nil nil
+                                     "-C" repo-root
+                                     "worktree" "add" "-b" branch wt-path "HEAD")))
+        (if (= exit-code 0)
+            wt-path
+          (message "agent-shell-queue: git worktree add failed (exit %d)" exit-code)
+          nil))))))
+
+(defun agent-shell-queue--fork-create-session (source-buf fork-mode target-dir)
+  "Create a new agent-shell session and return the new buffer.
+SOURCE-BUF is the session being forked (used for directory and fork mode).
+FORK-MODE is `new' (create via `agent-shell-new-shell') or `fork' (via `agent-shell-fork').
+TARGET-DIR, when non-nil, overrides the working directory for the new session.
+Returns the newly created buffer on success, nil if none could be detected."
+  (let* ((before-bufs (agent-shell-buffers))
+         (dir (or target-dir
+                  (and (buffer-live-p source-buf)
+                       (buffer-local-value 'default-directory source-buf))
+                  default-directory)))
+    (pcase fork-mode
+      ('fork
+       (if (buffer-live-p source-buf)
+           (with-current-buffer source-buf
+             (let ((default-directory dir))
+               (call-interactively #'agent-shell-fork)))
+         (user-error "agent-shell-queue: `fork' mode requires a live source buffer")))
+      (_
+       (let ((default-directory dir))
+         (call-interactively #'agent-shell-new-shell))))
+    (sit-for 0.1)
+    (let ((after-bufs (agent-shell-buffers)))
+      (--first (not (memq it before-bufs)) after-bufs))))
+
+(defun agent-shell-queue--fork-elisp-form (buf-name opts)
+  "Return an Emacs Lisp form string for a fork-queue emacs item.
+BUF-NAME is the source session; OPTS is the fork options plist.
+The form calls `agent-shell-queue--fork-session-from-running-emacs' at
+dispatch time to dynamically determine which items to fork."
+  (format "(agent-shell-queue--fork-session-from-running-emacs %S %S)"
+          buf-name opts))
+
+(defun agent-shell-queue--fork-session-from-running-emacs (buf-name opts)
+  "Fork items after the currently-running emacs item in BUF-NAME's queue.
+Called at dispatch time by an emacs-kind fork item to determine from-id
+dynamically — handles reorderings that happened after the item was inserted.
+OPTS is the fork options plist (see `agent-shell-queue-fork-session')."
+  (let* ((items (cdr (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))))
+         (running-idx (cl-position-if
+                       (lambda (it) (eq (agent-shell-queue-item-status it) 'running))
+                       items))
+         (from-id (when running-idx
+                    (let ((next (nth (1+ running-idx) items)))
+                      (and next (agent-shell-queue-item-id next))))))
+    (when-let* ((source-buf (get-buffer buf-name)))
+      (agent-shell-queue-fork-session source-buf from-id opts))))
+
+;;;###autoload
+(defun agent-shell-queue-fork-session (source-buf &optional from-id opts)
+  "Fork the queue for SOURCE-BUF starting at FROM-ID into a new agent-shell session.
+
+Items at or after FROM-ID (by queue position among active/deferred/draft items)
+are moved to the new session.  When FROM-ID is nil, all eligible items are
+moved.  The original session is paused during session creation.
+
+OPTS is a plist with these keys:
+  :fork-mode       Symbol `new' (default) or `fork' — how to create the new session.
+                   `new' calls `agent-shell-new-shell'; `fork' calls `agent-shell-fork'.
+  :use-worktree    Non-nil — create a git worktree for the new session.
+  :worktree-path   String — explicit worktree path (auto-generated when nil).
+  :worktree-branch String — new branch name for the worktree.
+  :capture-pending Non-nil — mark items at/after FROM-ID as `pending-fork' in the
+                   original session instead of moving them, then leave the session
+                   paused so new items can be inserted before the frozen ones."
+  (interactive
+   (list (agent-shell-queue--pick-buffer "Fork queue for session: ")))
+  (agent-shell-queue--ensure-loaded)
+  (let* ((source-name (buffer-name source-buf))
+         (fork-mode (or (plist-get opts :fork-mode)
+                        agent-shell-queue-fork-default-mode))
+         (use-worktree (plist-get opts :use-worktree))
+         (worktree-path (plist-get opts :worktree-path))
+         (worktree-branch (plist-get opts :worktree-branch))
+         (capture-pending (plist-get opts :capture-pending))
+         (items-to-fork (agent-shell-queue--fork-collect-items source-name from-id))
+         ;; Track whether we should resume source after the fork.
+         ;; capture-pending intentionally leaves the source paused.
+         (should-resume t))
+    (unless items-to-fork
+      (user-error "agent-shell-queue: no eligible items to fork in %s" source-name))
+    ;; Pause source session while we create the new one.
+    (cl-pushnew source-name
+                (agent-shell-queue-queue-session-paused agent-shell-queue--queue)
+                :test #'equal)
+    (unwind-protect
+        (let* ((target-dir (when use-worktree
+                             (agent-shell-queue--fork-create-worktree
+                              source-buf worktree-branch worktree-path)))
+               (_ (when (and use-worktree (null target-dir))
+                    (user-error "agent-shell-queue: worktree creation failed")))
+               (new-buf (agent-shell-queue--fork-create-session
+                         source-buf fork-mode target-dir)))
+          (unless new-buf
+            (user-error "agent-shell-queue: could not detect new session after creation"))
+          (let ((new-name (buffer-name new-buf))
+                (fork-ids (--map (agent-shell-queue-item-id it) items-to-fork)))
+            (if capture-pending
+                ;; Mark affected items as pending-fork; leave them in source.
+                ;; Keep session paused so the user can insert tasks before them.
+                (progn
+                  (--each items-to-fork
+                    (setf (agent-shell-queue-item-status it) 'pending-fork))
+                  (setq should-resume nil)
+                  (agent-shell-queue--save)
+                  (agent-shell-queue--refresh-buffer)
+                  (message "agent-shell-queue: %d item(s) marked pending-fork in %s; new session %s created"
+                           (length fork-ids) source-name new-name))
+              ;; Normal mode: move items to the new session.
+              (--each fork-ids
+                (agent-shell-queue--assign-item it new-name))
+              (agent-shell-queue--ensure-subscription new-buf)
+              (agent-shell-queue--save)
+              (agent-shell-queue--refresh-buffer)
+              (message "agent-shell-queue: forked %d item(s) from %s → %s"
+                       (length fork-ids) source-name new-name))
+            new-buf))
+      ;; Always clean up pause state unless capture-pending requested it stays.
+      (when should-resume
+        (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue)
+              (delete source-name
+                      (agent-shell-queue-queue-session-paused agent-shell-queue--queue)))
+        (agent-shell-queue--save)
+        (agent-shell-queue--refresh-buffer)))))
+
+;;;###autoload
+(defun agent-shell-queue-release-pending-fork (&optional buf)
+  "Release all pending-fork items in BUF back to active status and resume dispatch.
+BUF defaults to the current agent-shell session when called from one."
+  (interactive
+   (list (or (and (derived-mode-p 'agent-shell-mode) (current-buffer))
+             (agent-shell-queue--pick-buffer "Release pending-fork items in: "))))
+  (agent-shell-queue--ensure-loaded)
+  (when buf
+    (let* ((buf-name (buffer-name buf))
+           (released 0))
+      (--each (cdr (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store)))
+        (when (eq (agent-shell-queue-item-status it) 'pending-fork)
+          (setf (agent-shell-queue-item-status it) 'active)
+          (cl-incf released)))
+      (agent-shell-queue--save)
+      (agent-shell-queue--refresh-buffer)
+      (when (> released 0)
+        (agent-shell-queue-session-resume buf))
+      (message "agent-shell-queue: released %d pending-fork item(s) in %s" released buf-name))))
+
+(defun agent-shell-queue--fork-insert-at (buf-name item idx)
+  "Insert ITEM into BUF-NAME's queue at position IDX (0-based).
+IDX nil or out-of-range appends to the end."
+  (let ((cell (or (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))
+                  (progn
+                    (agent-shell-queue--add-item-to-bucket buf-name item)
+                    nil))))
+    (when cell
+      (let* ((items (cdr cell))
+             (len (length items))
+             (pos (if (and idx (>= idx 0) (< idx len)) idx len)))
+        (setcdr cell (append (cl-subseq items 0 pos)
+                             (list item)
+                             (cl-subseq items pos)))))))
+
+;;;###autoload
+(defun agent-shell-queue-insert-fork-before (buf &optional item-id opts)
+  "Insert a fork task into BUF's queue immediately before ITEM-ID.
+When ITEM-ID is nil, appends to the end of the queue.
+When the fork task is dispatched (as an emacs item), it forks the queue
+starting at the item that follows the fork task in the queue at dispatch time.
+OPTS is the fork options plist (see `agent-shell-queue-fork-session')."
+  (interactive
+   (list (or (and (derived-mode-p 'agent-shell-queue-mode)
+                  (when-let* ((id (tabulated-list-get-id))
+                              (pair (agent-shell-queue--item-by-id id)))
+                    (get-buffer (car pair))))
+             (agent-shell-queue--pick-buffer "Insert fork-before in: "))
+         (and (derived-mode-p 'agent-shell-queue-mode) (tabulated-list-get-id))
+         nil))
+  (agent-shell-queue--ensure-loaded)
+  (let* ((buf-name (buffer-name buf))
+         (form (agent-shell-queue--fork-elisp-form buf-name opts))
+         (fork-item (agent-shell-queue--make-item form nil 'emacs))
+         (items (cdr (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))))
+         (idx (when item-id
+                (cl-position item-id items
+                             :key #'agent-shell-queue-item-id :test #'equal))))
+    (agent-shell-queue--fork-insert-at buf-name fork-item idx)
+    (agent-shell-queue--ensure-subscription buf)
+    (agent-shell-queue--save)
+    (agent-shell-queue--refresh-buffer)
+    (message "agent-shell-queue: fork task inserted before %s in %s"
+             (or item-id "end") buf-name)
+    fork-item))
+
+;;;###autoload
+(defun agent-shell-queue-insert-fork-after (buf &optional item-id opts)
+  "Insert a fork task into BUF's queue immediately after ITEM-ID.
+When ITEM-ID is nil, appends to the end of the queue.
+When the fork task is dispatched, it forks the queue starting at the next
+item after the fork task (determined dynamically at dispatch time).
+OPTS is the fork options plist (see `agent-shell-queue-fork-session')."
+  (interactive
+   (list (or (and (derived-mode-p 'agent-shell-queue-mode)
+                  (when-let* ((id (tabulated-list-get-id))
+                              (pair (agent-shell-queue--item-by-id id)))
+                    (get-buffer (car pair))))
+             (agent-shell-queue--pick-buffer "Insert fork-after in: "))
+         (and (derived-mode-p 'agent-shell-queue-mode) (tabulated-list-get-id))
+         nil))
+  (agent-shell-queue--ensure-loaded)
+  (let* ((buf-name (buffer-name buf))
+         (form (agent-shell-queue--fork-elisp-form buf-name opts))
+         (fork-item (agent-shell-queue--make-item form nil 'emacs))
+         (items (cdr (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))))
+         (idx (when item-id
+                (when-let* ((pos (cl-position item-id items
+                                              :key #'agent-shell-queue-item-id
+                                              :test #'equal)))
+                  (1+ pos)))))
+    (agent-shell-queue--fork-insert-at buf-name fork-item idx)
+    (agent-shell-queue--ensure-subscription buf)
+    (agent-shell-queue--save)
+    (agent-shell-queue--refresh-buffer)
+    (message "agent-shell-queue: fork task inserted after %s in %s"
+             (or item-id "end") buf-name)
+    fork-item))
+
+(defun agent-shell-queue--fork-build-opts ()
+  "Build fork options plist interactively using annotated-completing-read.
+Prompts for fork mode, worktree settings, and capture-pending flag.
+Returns a plist suitable for `agent-shell-queue-fork-session' or nil to abort."
+  (let* ((mode-table (ht-create))
+         (_ (ht-set! mode-table "new session"
+                     "Create a clean new session via agent-shell-new-shell"))
+         (_ (ht-set! mode-table "fork session (ACP)"
+                     "Fork via agent-shell-fork (preserves context)"))
+         (mode-choice (annotated-completing-read mode-table
+                                                 :prompt "fork mode: "
+                                                 :category 'agent-shell-fork-mode
+                                                 :require-match t
+                                                 :history 'agent-shell-queue-fork-mode))
+         (fork-mode (if (equal mode-choice "fork session (ACP)") 'fork 'new))
+         (wt-table (ht-create))
+         (_ (ht-set! wt-table "no worktree"
+                     "New session opens in the same working directory"))
+         (_ (ht-set! wt-table "create worktree"
+                     "Run git worktree add and open the session in the new tree"))
+         (wt-choice (annotated-completing-read wt-table
+                                              :prompt "worktree: "
+                                              :category 'agent-shell-fork-worktree
+                                              :require-match t
+                                              :history 'agent-shell-queue-fork-worktree))
+         (use-worktree (equal wt-choice "create worktree"))
+         (worktree-branch (when use-worktree
+                            (let ((b (read-string "Branch name (empty = auto): ")))
+                              (unless (string-empty-p b) b))))
+         (worktree-path (when use-worktree
+                          (let ((p (read-string "Worktree path (empty = auto): ")))
+                            (unless (string-empty-p p) p))))
+         (cp-table (ht-create))
+         (_ (ht-set! cp-table "move items to new session"
+                     "Items are moved; original session resumes automatically"))
+         (_ (ht-set! cp-table "capture pending (freeze & pause)"
+                     "Items stay in original session as pending-fork; session stays paused"))
+         (cp-choice (annotated-completing-read cp-table
+                                              :prompt "after fork: "
+                                              :category 'agent-shell-fork-capture
+                                              :require-match t
+                                              :history 'agent-shell-queue-fork-capture))
+         (capture-pending (equal cp-choice "capture pending (freeze & pause)")))
+    (list :fork-mode fork-mode
+          :use-worktree use-worktree
+          :worktree-branch worktree-branch
+          :worktree-path worktree-path
+          :capture-pending capture-pending)))
+
+;;;###autoload
+(defun agent-shell-queue-buffer-fork ()
+  "Fork the queue starting at the item at point into a new session.
+Prompts interactively for fork options; uses annotated-completing-read when
+called outside the queue buffer to build options without task-at-point context."
+  (interactive)
+  (agent-shell-queue--ensure-loaded)
+  (let* ((id (and (derived-mode-p 'agent-shell-queue-mode) (tabulated-list-get-id)))
+         (pair (and id (agent-shell-queue--item-by-id id)))
+         (buf (if pair
+                  (get-buffer (car pair))
+                (agent-shell-queue--pick-buffer "Fork session: ")))
+         (from-id (when pair id))
+         (opts (agent-shell-queue--fork-build-opts)))
+    (agent-shell-queue-fork-session buf from-id opts)))
+
+;;;###autoload
+(defun agent-shell-queue-buffer-insert-fork-before ()
+  "Insert a fork queue item before the item at point.
+Prompts for fork options interactively."
+  (interactive)
+  (agent-shell-queue--ensure-loaded)
+  (let* ((id (and (derived-mode-p 'agent-shell-queue-mode) (tabulated-list-get-id)))
+         (pair (and id (agent-shell-queue--item-by-id id)))
+         (buf (if pair
+                  (get-buffer (car pair))
+                (agent-shell-queue--pick-buffer "Insert fork-before in: ")))
+         (opts (agent-shell-queue--fork-build-opts)))
+    (agent-shell-queue-insert-fork-before buf id opts)))
+
+;;;###autoload
+(defun agent-shell-queue-buffer-insert-fork-after ()
+  "Insert a fork queue item after the item at point.
+Prompts for fork options interactively."
+  (interactive)
+  (agent-shell-queue--ensure-loaded)
+  (let* ((id (and (derived-mode-p 'agent-shell-queue-mode) (tabulated-list-get-id)))
+         (pair (and id (agent-shell-queue--item-by-id id)))
+         (buf (if pair
+                  (get-buffer (car pair))
+                (agent-shell-queue--pick-buffer "Insert fork-after in: ")))
+         (opts (agent-shell-queue--fork-build-opts)))
+    (agent-shell-queue-insert-fork-after buf id opts)))
 
 ;;; Initialize on load
 
