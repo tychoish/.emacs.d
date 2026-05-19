@@ -414,7 +414,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
     (user-error "cannot define routine (loops) %s org-capture-templates with key `r'" name))
 
   (when-let* ((description (format "%s routines <%s>" name (f-filename path)))
-	      (_ (not (string-equal-p "" key))))
+	      (_ (not (string-equal "" key))))
     (add-to-list 'org-capture-templates (list (concat "r" key) description))
     (add-to-list 'org-capture-templates (list (concat key "r") description)))
 
@@ -480,6 +480,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                    (list (concat key char)
                          (format "%s %s <%s>" name kind (f-filename path))))
       (push (list (concat char key) (car first-sub) (cdr first-sub)) specs))
+    ;; TODO re
     (dolist (entry (append specs
                            (--map (cons (concat key (car it)) (cdr it))
                                   default-subs)))

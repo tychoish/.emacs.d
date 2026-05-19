@@ -27,20 +27,24 @@
 ;;; Test helpers
 
 (defmacro agent-shell-queue-test/isolate (&rest body)
-  "Execute BODY with fresh, isolated queue globals.
-Mocks out disk I/O and buffer refresh so tests stay pure."
-  `(let ((agent-shell-queue--items nil)
-         (agent-shell-queue--loaded t)
-         (agent-shell-queue--subscriptions nil)
-         (agent-shell-queue--editing-ids nil)
-         (agent-shell-queue--session-paused nil)
-         (agent-shell-queue--stale-item-ids nil)
-         (agent-shell-queue--next-flush-time nil)
-         (agent-shell-queue--wait-timers nil)
-         (agent-shell-queue--compact-running nil)
-         (agent-shell-queue--response-start-positions nil)
-         (agent-shell-queue-paused nil)
-         (agent-shell-queue--last-flush-time nil))
+  "Execute BODY with fresh, isolated queue state.
+Shadows both the live store and queue globals so no test touches real state."
+  `(let* ((agent-shell-queue--store
+           (agent-shell-queue--make-store :items nil :format 'plist :file nil))
+          (agent-shell-queue--queue
+           (agent-shell-queue-queue--make
+            :store 'agent-shell-queue--store
+            :paused nil
+            :session-paused nil
+            :editing-ids nil))
+          (agent-shell-queue--loaded t)
+          (agent-shell-queue--subscriptions nil)
+          (agent-shell-queue--stale-item-ids nil)
+          (agent-shell-queue--next-flush-time nil)
+          (agent-shell-queue--wait-timers nil)
+          (agent-shell-queue--compact-running nil)
+          (agent-shell-queue--response-start-positions nil)
+          (agent-shell-queue--last-flush-time nil))
      (cl-letf (((symbol-function 'agent-shell-queue--save) #'ignore)
                ((symbol-function 'agent-shell-queue--refresh-buffer) #'ignore)
                ((symbol-function 'alert) #'ignore))
@@ -67,7 +71,7 @@ Mocks out disk I/O and buffer refresh so tests stay pure."
    :response nil))
 
 (defun agent-shell-queue-test/populate (&rest specs)
-  "Return a fresh `agent-shell-queue--items' alist from SPECS.
+  "Return a fresh items alist from SPECS.
 Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   (let (result)
     (dolist (spec specs)
@@ -145,14 +149,14 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   "Items with ID in editing-ids show 'editing' regardless of their status."
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'active nil)))
-      (setq agent-shell-queue--editing-ids '("q-1"))
+      (setf (agent-shell-queue-queue-editing-ids agent-shell-queue--queue) '("q-1"))
       (should (equal "editing" (agent-shell-queue--status-string item))))))
 
 (ert-deftest agent-shell-queue/status-string-session-paused ()
   "Active item targeting a session-paused buffer shows 'paused<shell>'."
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'active nil)))
-      (setq agent-shell-queue--session-paused '("paused-buf"))
+      (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue) '("paused-buf"))
       (should (equal "paused<shell>"
                      (agent-shell-queue--status-string item "paused-buf"))))))
 
@@ -160,7 +164,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   "Deferred items are not shown as paused even if session is paused."
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'deferred nil)))
-      (setq agent-shell-queue--session-paused '("paused-buf"))
+      (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue) '("paused-buf"))
       (should (equal "held"
                      (agent-shell-queue--status-string item "paused-buf"))))))
 
@@ -168,8 +172,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   "Editing status takes priority over session-paused."
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'active nil)))
-      (setq agent-shell-queue--editing-ids '("q-1"))
-      (setq agent-shell-queue--session-paused '("paused-buf"))
+      (setf (agent-shell-queue-queue-editing-ids agent-shell-queue--queue) '("q-1"))
+      (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue) '("paused-buf"))
       (should (equal "editing"
                      (agent-shell-queue--status-string item "paused-buf"))))))
 
@@ -179,15 +183,15 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/activity-state-paused ()
   "Global pause overrides everything."
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue-paused t)
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-queue-paused agent-shell-queue--queue) t)
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("b" ("q-1" "p" running nil))))
     (should (equal "PAUSED"
                    (substring-no-properties (agent-shell-queue--activity-state))))))
 
 (ert-deftest agent-shell-queue/activity-state-running ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("b" ("q-1" "p" running nil))))
     (should (equal "running"
                    (substring-no-properties (agent-shell-queue--activity-state))))))
@@ -195,7 +199,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/activity-state-waiting ()
   "Active items with none running → waiting."
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("b" ("q-1" "p" active nil))))
     (should (equal "waiting"
                    (substring-no-properties (agent-shell-queue--activity-state))))))
@@ -209,7 +213,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/activity-state-idle-only-done ()
   "Only done items → idle."
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("b" ("q-1" "p" done nil))))
     (should (equal "idle"
                    (substring-no-properties (agent-shell-queue--activity-state))))))
@@ -270,7 +274,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/item-by-id-found ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "first" active nil) ("q-2" "second" active nil))
            '("buf2" ("q-3" "third" active nil))))
@@ -282,7 +286,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/item-by-id-not-found ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "first" active nil))))
     (should-not (agent-shell-queue--item-by-id "q-99"))))
 
@@ -292,7 +296,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/item-by-id-across-buckets ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "a" active nil))
            '("buf2" ("q-2" "b" active nil))
@@ -311,9 +315,9 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
             (should (agent-shell-queue-item-p item))
             (should (equal "hello" (agent-shell-queue-item-prompt item)))
             (should (eq 'active (agent-shell-queue-item-status item)))
-            (should (= 1 (length agent-shell-queue--items)))
-            (should (equal (buffer-name buf) (caar agent-shell-queue--items)))
-            (should (= 1 (length (cdar agent-shell-queue--items)))))
+            (should (= 1 (length (agent-shell-queue-store-items agent-shell-queue--store))))
+            (should (equal (buffer-name buf) (caar (agent-shell-queue-store-items agent-shell-queue--store))))
+            (should (= 1 (length (cdar (agent-shell-queue-store-items agent-shell-queue--store))))))
         (kill-buffer buf)))))
 
 (ert-deftest agent-shell-queue/add-appends-to-existing-bucket ()
@@ -323,8 +327,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (progn
             (agent-shell-queue-add "first" buf)
             (agent-shell-queue-add "second" buf)
-            (should (= 1 (length agent-shell-queue--items)))
-            (let ((items (cdar agent-shell-queue--items)))
+            (should (= 1 (length (agent-shell-queue-store-items agent-shell-queue--store))))
+            (let ((items (cdar (agent-shell-queue-store-items agent-shell-queue--store))))
               (should (= 2 (length items)))
               (should (equal "first"  (agent-shell-queue-item-prompt (nth 0 items))))
               (should (equal "second" (agent-shell-queue-item-prompt (nth 1 items))))))
@@ -346,7 +350,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (progn
             (agent-shell-queue-add "for-one" buf1)
             (agent-shell-queue-add "for-two" buf2)
-            (should (= 2 (length agent-shell-queue--items))))
+            (should (= 2 (length (agent-shell-queue-store-items agent-shell-queue--store)))))
         (kill-buffer buf1)
         (kill-buffer buf2)))))
 
@@ -366,18 +370,18 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/remove-single-item ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue-remove "q-1")
-    (should-not agent-shell-queue--items)))
+    (should-not (agent-shell-queue-store-items agent-shell-queue--store))))
 
 (ert-deftest agent-shell-queue/remove-one-of-many ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "a" active nil) ("q-2" "b" active nil) ("q-3" "c" active nil))))
     (agent-shell-queue-remove "q-2")
-    (let ((items (cdar agent-shell-queue--items)))
+    (let ((items (cdar (agent-shell-queue-store-items agent-shell-queue--store))))
       (should (= 2 (length items)))
       (should (equal "q-1" (agent-shell-queue-item-id (nth 0 items))))
       (should (equal "q-3" (agent-shell-queue-item-id (nth 1 items)))))))
@@ -388,7 +392,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
       (cl-letf (((symbol-function 'agent-shell-queue--drop-subscription)
                  (lambda (name) (setq dropped name)))
                 ((symbol-function 'agent-shell-queue--ensure-subscription) #'ignore))
-        (setq agent-shell-queue--items
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
               (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
         (agent-shell-queue-remove "q-1")
         (should (equal "buf1" dropped))))))
@@ -399,7 +403,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
       (cl-letf (((symbol-function 'agent-shell-queue--drop-subscription)
                  (lambda (name) (setq dropped name)))
                 ((symbol-function 'agent-shell-queue--ensure-subscription) #'ignore))
-        (setq agent-shell-queue--items
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
               (agent-shell-queue-test/populate
                '("buf1" ("q-1" "a" active nil) ("q-2" "b" active nil))))
         (agent-shell-queue-remove "q-1")
@@ -407,127 +411,127 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/remove-unknown-id-is-noop ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue-remove "q-999")
-    (should (= 1 (length agent-shell-queue--items)))))
+    (should (= 1 (length (agent-shell-queue-store-items agent-shell-queue--store))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue-defer
 
 (ert-deftest agent-shell-queue/defer-active-to-deferred ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue-defer "q-1")
-    (should (eq 'deferred (agent-shell-queue-item-status (cadar agent-shell-queue--items))))))
+    (should (eq 'deferred (agent-shell-queue-item-status (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/defer-deferred-to-active ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" deferred nil))))
     (agent-shell-queue-defer "q-1")
-    (should (eq 'active (agent-shell-queue-item-status (cadar agent-shell-queue--items))))))
+    (should (eq 'active (agent-shell-queue-item-status (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/defer-twice-returns-to-active ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue-defer "q-1")
     (agent-shell-queue-defer "q-1")
-    (should (eq 'active (agent-shell-queue-item-status (cadar agent-shell-queue--items))))))
+    (should (eq 'active (agent-shell-queue-item-status (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue-set-background-task
 
 (ert-deftest agent-shell-queue/set-background-task-on ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue-set-background-task "q-1" t)
-    (should (agent-shell-queue-item-background (cadar agent-shell-queue--items)))))
+    (should (agent-shell-queue-item-background (cadar (agent-shell-queue-store-items agent-shell-queue--store))))))
 
 (ert-deftest agent-shell-queue/set-background-task-off ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active t))))
     (agent-shell-queue-set-background-task "q-1" nil)
-    (should-not (agent-shell-queue-item-background (cadar agent-shell-queue--items)))))
+    (should-not (agent-shell-queue-item-background (cadar (agent-shell-queue-store-items agent-shell-queue--store))))))
 
 (ert-deftest agent-shell-queue/set-background-task-idempotent ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue-set-background-task "q-1" t)
     (agent-shell-queue-set-background-task "q-1" t)
-    (should (agent-shell-queue-item-background (cadar agent-shell-queue--items)))))
+    (should (agent-shell-queue-item-background (cadar (agent-shell-queue-store-items agent-shell-queue--store))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue-edit
 
 (ert-deftest agent-shell-queue/edit-replaces-prompt ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "old" active nil))))
     (agent-shell-queue-edit "q-1" "new prompt")
     (should (equal "new prompt"
-                   (agent-shell-queue-item-prompt (cadar agent-shell-queue--items))))))
+                   (agent-shell-queue-item-prompt (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/edit-unknown-id-is-noop ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "old" active nil))))
     (agent-shell-queue-edit "q-999" "new")
     (should (equal "old"
-                   (agent-shell-queue-item-prompt (cadar agent-shell-queue--items))))))
+                   (agent-shell-queue-item-prompt (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue--move / move-up / move-down
 
 (ert-deftest agent-shell-queue/move-up-middle ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "a" active nil) ("q-2" "b" active nil) ("q-3" "c" active nil))))
     (agent-shell-queue-move-up "q-3")
     (should (equal '("q-1" "q-3" "q-2")
-                   (mapcar #'agent-shell-queue-item-id (cdar agent-shell-queue--items))))))
+                   (mapcar #'agent-shell-queue-item-id (cdar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/move-down-middle ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "a" active nil) ("q-2" "b" active nil) ("q-3" "c" active nil))))
     (agent-shell-queue-move-down "q-1")
     (should (equal '("q-2" "q-1" "q-3")
-                   (mapcar #'agent-shell-queue-item-id (cdar agent-shell-queue--items))))))
+                   (mapcar #'agent-shell-queue-item-id (cdar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/move-up-at-top-is-noop ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "a" active nil) ("q-2" "b" active nil))))
     (agent-shell-queue-move-up "q-1")
     (should (equal '("q-1" "q-2")
-                   (mapcar #'agent-shell-queue-item-id (cdar agent-shell-queue--items))))))
+                   (mapcar #'agent-shell-queue-item-id (cdar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/move-down-at-bottom-is-noop ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "a" active nil) ("q-2" "b" active nil))))
     (agent-shell-queue-move-down "q-2")
     (should (equal '("q-1" "q-2")
-                   (mapcar #'agent-shell-queue-item-id (cdar agent-shell-queue--items))))))
+                   (mapcar #'agent-shell-queue-item-id (cdar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/move-only-item-is-noop ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "a" active nil))))
     (agent-shell-queue-move-up "q-1")
     (agent-shell-queue-move-down "q-1")
     (should (equal '("q-1")
-                   (mapcar #'agent-shell-queue-item-id (cdar agent-shell-queue--items))))))
+                   (mapcar #'agent-shell-queue-item-id (cdar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Pause: global and per-session
@@ -535,11 +539,11 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/pause-and-resume-sets-flag ()
   "pause sets the flag; resume clears it."
   (agent-shell-queue-test/isolate
-    (should-not agent-shell-queue-paused)
+    (should-not (agent-shell-queue-queue-paused agent-shell-queue--queue))
     (agent-shell-queue-pause)
-    (should agent-shell-queue-paused)
+    (should (agent-shell-queue-queue-paused agent-shell-queue--queue))
     (agent-shell-queue-resume)
-    (should-not agent-shell-queue-paused)))
+    (should-not (agent-shell-queue-queue-paused agent-shell-queue--queue))))
 
 (ert-deftest agent-shell-queue/session-pause-adds-name ()
   "session-pause adds the buffer name to --session-paused."
@@ -548,7 +552,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
       (unwind-protect
           (progn
             (agent-shell-queue-session-pause buf)
-            (should (member (buffer-name buf) agent-shell-queue--session-paused)))
+            (should (member (buffer-name buf) (agent-shell-queue-queue-session-paused agent-shell-queue--queue))))
         (kill-buffer buf)))))
 
 (ert-deftest agent-shell-queue/session-resume-removes-name ()
@@ -557,32 +561,32 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (let ((buf (get-buffer-create " *asq-pause-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--session-paused (list (buffer-name buf)))
+            (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue) (list (buffer-name buf)))
             (cl-letf (((symbol-function 'agent-shell-queue--send-next-for-buffer) #'ignore))
               (agent-shell-queue-session-resume buf))
-            (should-not (member (buffer-name buf) agent-shell-queue--session-paused)))
+            (should-not (member (buffer-name buf) (agent-shell-queue-queue-session-paused agent-shell-queue--queue))))
         (kill-buffer buf)))))
 
 (ert-deftest agent-shell-queue/unpause-all-sessions-clears-list ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--session-paused '("buf1" "buf2" "buf3"))
+    (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue) '("buf1" "buf2" "buf3"))
     (agent-shell-queue-unpause-all-sessions)
-    (should-not agent-shell-queue--session-paused)))
+    (should-not (agent-shell-queue-queue-session-paused agent-shell-queue--queue))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Dispatch: editing-ids and buffer-paused prevent sends
 
 (ert-deftest agent-shell-queue/send-next-skips-editing-item ()
-  "An item in agent-shell-queue--editing-ids is never dispatched."
+  "An item in (agent-shell-queue-queue-editing-ids agent-shell-queue--queue) is never dispatched."
   (agent-shell-queue-test/isolate-no-sub
     (let ((sent nil)
           (buf (get-buffer-create " *asq-edit-skip-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "edit me" 'active nil))))
-            (setq agent-shell-queue--editing-ids '("q-1"))
+            (setf (agent-shell-queue-queue-editing-ids agent-shell-queue--queue) '("q-1"))
             (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
                       ((symbol-function 'agent-shell-insert)
                        (lambda (&rest _) (setq sent t))))
@@ -597,10 +601,10 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-buf-pause-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "p" 'active nil))))
-            (setq agent-shell-queue--session-paused (list (buffer-name buf)))
+            (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue) (list (buffer-name buf)))
             (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
                       ((symbol-function 'agent-shell-insert)
                        (lambda (&rest _) (setq sent t))))
@@ -614,8 +618,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-global-pause-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue-paused t)
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-queue-paused agent-shell-queue--queue) t)
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "p" 'active nil))))
             (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
@@ -633,13 +637,13 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (let ((buf (get-buffer-create " *asq-send-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "prompt" 'active nil))))
             (cl-letf (((symbol-function 'agent-shell-insert) #'ignore)
                       ((symbol-function 'buffer-live-p) (lambda (_) t)))
               (agent-shell-queue-send-item "q-1")
-              (let ((item (cadar agent-shell-queue--items)))
+              (let ((item (cadar (agent-shell-queue-store-items agent-shell-queue--store))))
                 (should (eq 'running (agent-shell-queue-item-status item)))
                 (should (numberp (agent-shell-queue-item-dispatched item))))))
         (kill-buffer buf)))))
@@ -651,7 +655,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-send-test2*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "the prompt" 'active nil))))
             (cl-letf (((symbol-function 'agent-shell-insert)
@@ -671,7 +675,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-bg-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "do thing" 'active t))))
             (cl-letf (((symbol-function 'agent-shell-insert)
@@ -684,9 +688,10 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/send-item-dead-buffer-errors ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("dead-buf" ("q-1" "hello" active nil))))
-    (cl-letf (((symbol-function 'get-buffer) (lambda (_) nil)))
+    (cl-letf (((symbol-function 'get-buffer) (lambda (_) nil))
+              ((symbol-function 'agent-shell-buffers) (lambda () nil)))
       (should-error (agent-shell-queue-send-item "q-1") :type 'user-error))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -694,26 +699,26 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/mark-running-done-sets-status ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "p" running nil))))
     (agent-shell-queue--mark-running-done "buf1")
-    (should (eq 'done (agent-shell-queue-item-status (cadar agent-shell-queue--items))))))
+    (should (eq 'done (agent-shell-queue-item-status (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/mark-running-done-sets-completed-time ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "p" running nil))))
     (agent-shell-queue--mark-running-done "buf1")
-    (should (numberp (agent-shell-queue-item-completed (cadar agent-shell-queue--items))))))
+    (should (numberp (agent-shell-queue-item-completed (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 (ert-deftest agent-shell-queue/mark-running-done-only-running-items ()
   "Active items are not affected."
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate
            '("buf1" ("q-1" "p" running nil) ("q-2" "p2" active nil))))
     (agent-shell-queue--mark-running-done "buf1")
-    (let ((items (cdar agent-shell-queue--items)))
+    (let ((items (cdar (agent-shell-queue-store-items agent-shell-queue--store))))
       (should (eq 'done   (agent-shell-queue-item-status (nth 0 items))))
       (should (eq 'active (agent-shell-queue-item-status (nth 1 items)))))))
 
@@ -724,12 +729,12 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
       (cl-letf (((symbol-function 'agent-shell-queue--alert-if-empty)
                  (lambda () (setq alert-fired t))))
         ;; No running items — mark should NOT fire alert
-        (setq agent-shell-queue--items
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
               (agent-shell-queue-test/populate '("buf1" ("q-1" "p" active nil))))
         (agent-shell-queue--mark-running-done "buf1")
         (should-not alert-fired)
         ;; Running item — mark SHOULD fire alert
-        (setq agent-shell-queue--items
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
               (agent-shell-queue-test/populate '("buf1" ("q-2" "p" running nil))))
         (agent-shell-queue--mark-running-done "buf1")
         (should alert-fired)))))
@@ -742,7 +747,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (let ((alerted nil))
       (cl-letf (((symbol-function 'alert)
                  (lambda (&rest _) (setq alerted t))))
-        (setq agent-shell-queue--items
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
               (agent-shell-queue-test/populate '("buf1" ("q-1" "p" done nil))))
         (agent-shell-queue--alert-if-empty)
         (should alerted)))))
@@ -752,7 +757,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (let ((alerted nil))
       (cl-letf (((symbol-function 'alert)
                  (lambda (&rest _) (setq alerted t))))
-        (setq agent-shell-queue--items
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
               (agent-shell-queue-test/populate '("buf1" ("q-1" "p" active nil))))
         (agent-shell-queue--alert-if-empty)
         (should-not alerted)))))
@@ -762,7 +767,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (let ((alerted nil))
       (cl-letf (((symbol-function 'alert)
                  (lambda (&rest _) (setq alerted t))))
-        (setq agent-shell-queue--items
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
               (agent-shell-queue-test/populate '("buf1" ("q-1" "p" running nil))))
         (agent-shell-queue--alert-if-empty)
         (should-not alerted)))))
@@ -775,13 +780,13 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (let ((buf (get-buffer-create " *asq-reenq-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "done prompt" 'done nil))))
-            (setf (agent-shell-queue-item-completed (cadar agent-shell-queue--items)) 2000.0)
+            (setf (agent-shell-queue-item-completed (cadar (agent-shell-queue-store-items agent-shell-queue--store))) 2000.0)
             (agent-shell-queue-reenqueue "q-1")
             ;; Original done item still there + new active item
-            (let ((items (cdar agent-shell-queue--items)))
+            (let ((items (cdar (agent-shell-queue-store-items agent-shell-queue--store))))
               (should (= 2 (length items)))
               (let ((new-item (nth 1 items)))
                 (should (equal "done prompt" (agent-shell-queue-item-prompt new-item)))
@@ -793,7 +798,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (let ((buf (get-buffer-create " *asq-reenq-err-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "active" 'active nil))))
             (should-error (agent-shell-queue-reenqueue "q-1") :type 'user-error))
@@ -806,21 +811,21 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   (agent-shell-queue-test/isolate
     (cl-letf (((symbol-function 'agent-shell-queue--drop-subscription) #'ignore)
               ((symbol-function 'agent-shell-queue--ensure-subscription) #'ignore))
-      (setq agent-shell-queue--items
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
             (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
       (agent-shell-queue--assign-item "q-1" "buf2")
-      (should-not (assoc "buf1" agent-shell-queue--items))
-      (let ((bucket (assoc "buf2" agent-shell-queue--items)))
+      (should-not (assoc "buf1" (agent-shell-queue-store-items agent-shell-queue--store)))
+      (let ((bucket (assoc "buf2" (agent-shell-queue-store-items agent-shell-queue--store))))
         (should bucket)
         (should (equal "q-1" (agent-shell-queue-item-id (cadr bucket))))))))
 
 (ert-deftest agent-shell-queue/retarget-same-buffer-is-noop ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue--assign-item "q-1" "buf1")
-    (should (= 1 (length agent-shell-queue--items)))
-    (should (assoc "buf1" agent-shell-queue--items))))
+    (should (= 1 (length (agent-shell-queue-store-items agent-shell-queue--store))))
+    (should (assoc "buf1" (agent-shell-queue-store-items agent-shell-queue--store)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Persistence: save/load roundtrip
@@ -828,19 +833,20 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/save-load-roundtrip ()
   (let* ((tmp (make-temp-file "asq-test"))
          (agent-shell-queue-state-file-function (lambda () tmp))
-         (agent-shell-queue--items nil)
+         (agent-shell-queue--store
+          (agent-shell-queue--make-store :items nil :format 'plist :file nil))
          (agent-shell-queue--loaded t)
          (agent-shell-queue--last-flush-time nil))
     (unwind-protect
         (progn
-          (setq agent-shell-queue--items
+          (setf (agent-shell-queue-store-items agent-shell-queue--store)
                 (agent-shell-queue-test/populate
                  '("mybuf" ("q-5" "persisted" deferred t))))
           (agent-shell-queue--save)
-          (setq agent-shell-queue--items nil)
+          (setf (agent-shell-queue-store-items agent-shell-queue--store) nil)
           (agent-shell-queue--load)
-          (should (= 1 (length agent-shell-queue--items)))
-          (let* ((pair (car agent-shell-queue--items))
+          (should (= 1 (length (agent-shell-queue-store-items agent-shell-queue--store))))
+          (let* ((pair (car (agent-shell-queue-store-items agent-shell-queue--store)))
                  (item (cadr pair)))
             (should (equal "mybuf" (car pair)))
             (should (equal "q-5" (agent-shell-queue-item-id item)))
@@ -854,7 +860,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/save-sets-flush-time ()
   (let* ((tmp (make-temp-file "asq-flush"))
          (agent-shell-queue-state-file-function (lambda () tmp))
-         (agent-shell-queue--items nil)
+         (agent-shell-queue--store
+          (agent-shell-queue--make-store :items nil :format 'plist :file nil))
          (agent-shell-queue--last-flush-time nil))
     (unwind-protect
         (progn
@@ -865,40 +872,43 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/load-missing-file-is-noop ()
   (let* ((agent-shell-queue-state-file-function
           (lambda () "/tmp/asq-test-definitely-does-not-exist-xyz"))
-         (agent-shell-queue--items nil))
+         (agent-shell-queue--store
+          (agent-shell-queue--make-store :items nil :format 'plist :file nil)))
     (should-not (condition-case err
                     (progn (agent-shell-queue--load) nil)
                   (error err)))
-    (should-not agent-shell-queue--items)))
+    (should-not (agent-shell-queue-store-items agent-shell-queue--store))))
 
 (ert-deftest agent-shell-queue/load-corrupt-file-is-noop ()
   (let* ((tmp (make-temp-file "asq-corrupt"))
          (agent-shell-queue-state-file-function (lambda () tmp))
-         (agent-shell-queue--items nil))
+         (agent-shell-queue--store
+          (agent-shell-queue--make-store :items nil :format 'plist :file nil)))
     (unwind-protect
         (progn
           (with-temp-file tmp (insert "this is not valid elisp )))"))
           (should-not (condition-case err
                           (progn (agent-shell-queue--load) nil)
                         (error err)))
-          (should-not agent-shell-queue--items))
+          (should-not (agent-shell-queue-store-items agent-shell-queue--store)))
       (ignore-errors (delete-file tmp)))))
 
 (ert-deftest agent-shell-queue/load-restores-multiple-items ()
   "Loading persisted state restores all items across buckets."
   (let* ((tmp (make-temp-file "asq-multi"))
          (agent-shell-queue-state-file-function (lambda () tmp))
-         (agent-shell-queue--items nil))
+         (agent-shell-queue--store
+          (agent-shell-queue--make-store :items nil :format 'plist :file nil)))
     (unwind-protect
         (progn
-          (setq agent-shell-queue--items
+          (setf (agent-shell-queue-store-items agent-shell-queue--store)
                 (agent-shell-queue-test/populate
                  '("buf" ("q-7" "a" active nil) ("q-12" "b" active nil))))
           (agent-shell-queue--save)
-          (setq agent-shell-queue--items nil)
+          (setf (agent-shell-queue-store-items agent-shell-queue--store) nil)
           (agent-shell-queue--load)
-          (should (= 1 (length agent-shell-queue--items)))
-          (should (= 2 (length (cdar agent-shell-queue--items)))))
+          (should (= 1 (length (agent-shell-queue-store-items agent-shell-queue--store))))
+          (should (= 2 (length (cdar (agent-shell-queue-store-items agent-shell-queue--store))))))
       (ignore-errors (delete-file tmp)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -906,30 +916,31 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/serialize-plist-roundtrip ()
   (agent-shell-queue-test/isolate
-    (let ((agent-shell-queue-serialization-format 'plist))
-      (setq agent-shell-queue--items
-            (agent-shell-queue-test/populate
-             '("buf" ("q-3" "hello plist" deferred t))))
-      (let* ((str   (agent-shell-queue--serialize))
-             (items (agent-shell-queue--deserialize str))
-             (item  (cadr (car items))))
-        (should (equal "buf"         (caar items)))
-        (should (equal "q-3"         (agent-shell-queue-item-id item)))
-        (should (equal "hello plist" (agent-shell-queue-item-prompt item)))
-        (should (eq 'deferred        (agent-shell-queue-item-status item)))
-        (should (agent-shell-queue-item-background item))))))
+    (setf (agent-shell-queue-store-format agent-shell-queue--store) 'plist)
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           '("buf" ("q-3" "hello plist" deferred t))))
+    (let* ((str   (agent-shell-queue-serialize agent-shell-queue--store))
+           (items (agent-shell-queue-deserialize agent-shell-queue--store str))
+           (item  (cadr (car items))))
+      (should (equal "buf"         (caar items)))
+      (should (equal "q-3"         (agent-shell-queue-item-id item)))
+      (should (equal "hello plist" (agent-shell-queue-item-prompt item)))
+      (should (eq 'deferred        (agent-shell-queue-item-status item)))
+      (should (agent-shell-queue-item-background item)))))
 
 (ert-deftest agent-shell-queue/serialize-plist-symbols-survive ()
   (agent-shell-queue-test/isolate
-    (let ((agent-shell-queue-serialization-format 'plist))
-      (setq agent-shell-queue--items
-            (agent-shell-queue-test/populate
-             '("b" ("q-1" "a" active nil) ("q-2" "b" deferred nil))))
-      (let* ((items (agent-shell-queue--deserialize (agent-shell-queue--serialize)))
-             (list  (cdar items)))
-        (should (eq 'active   (agent-shell-queue-item-status (nth 0 list))))
-        (should (eq 'deferred (agent-shell-queue-item-status (nth 1 list))))
-        (should-not (agent-shell-queue-item-background (nth 0 list)))))))
+    (setf (agent-shell-queue-store-format agent-shell-queue--store) 'plist)
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           '("b" ("q-1" "a" active nil) ("q-2" "b" deferred nil))))
+    (let* ((items (agent-shell-queue-deserialize agent-shell-queue--store
+                                                 (agent-shell-queue-serialize agent-shell-queue--store)))
+           (list  (cdar items)))
+      (should (eq 'active   (agent-shell-queue-item-status (nth 0 list))))
+      (should (eq 'deferred (agent-shell-queue-item-status (nth 1 list))))
+      (should-not (agent-shell-queue-item-background (nth 0 list))))))
 
 ;;; Serialization: item plist struct accessors
 
@@ -960,29 +971,30 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/serialize-json-roundtrip ()
   (skip-unless (fboundp 'json-serialize))
   (agent-shell-queue-test/isolate
-    (let ((agent-shell-queue-serialization-format 'json))
-      (setq agent-shell-queue--items
-            (agent-shell-queue-test/populate
-             '("buf" ("q-4" "hello json" deferred t))))
-      (let* ((str   (agent-shell-queue--serialize))
-             (items (agent-shell-queue--deserialize str))
-             (item  (cadr (car items))))
-        (should (equal "buf"        (caar items)))
-        (should (equal "q-4"        (agent-shell-queue-item-id item)))
-        (should (equal "hello json" (agent-shell-queue-item-prompt item)))
-        (should (eq 'deferred       (agent-shell-queue-item-status item)))
-        (should (agent-shell-queue-item-background item))))))
+    (setf (agent-shell-queue-store-format agent-shell-queue--store) 'json)
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate
+           '("buf" ("q-4" "hello json" deferred t))))
+    (let* ((str   (agent-shell-queue-serialize agent-shell-queue--store))
+           (items (agent-shell-queue-deserialize agent-shell-queue--store str))
+           (item  (cadr (car items))))
+      (should (equal "buf"        (caar items)))
+      (should (equal "q-4"        (agent-shell-queue-item-id item)))
+      (should (equal "hello json" (agent-shell-queue-item-prompt item)))
+      (should (eq 'deferred       (agent-shell-queue-item-status item)))
+      (should (agent-shell-queue-item-background item)))))
 
 (ert-deftest agent-shell-queue/serialize-json-status-is-symbol ()
   (skip-unless (fboundp 'json-serialize))
   (agent-shell-queue-test/isolate
-    (let ((agent-shell-queue-serialization-format 'json))
-      (setq agent-shell-queue--items
-            (agent-shell-queue-test/populate '("b" ("q-1" "p" active nil))))
-      (let ((item (cadr (car (agent-shell-queue--deserialize
-                              (agent-shell-queue--serialize))))))
-        (should (eq 'active (agent-shell-queue-item-status item)))
-        (should (symbolp    (agent-shell-queue-item-status item)))))))
+    (setf (agent-shell-queue-store-format agent-shell-queue--store) 'json)
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate '("b" ("q-1" "p" active nil))))
+    (let ((item (cadr (car (agent-shell-queue-deserialize
+                            agent-shell-queue--store
+                            (agent-shell-queue-serialize agent-shell-queue--store))))))
+      (should (eq 'active (agent-shell-queue-item-status item)))
+      (should (symbolp    (agent-shell-queue-item-status item))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Archive
@@ -1107,7 +1119,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-auto-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "def" 'deferred nil))))
             (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
@@ -1123,7 +1135,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-busy-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "hello" 'active nil))))
             (cl-letf (((symbol-function 'shell-maker-busy) (lambda () t))
@@ -1140,7 +1152,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-first-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "a" 'active nil)
                               (agent-shell-queue-test/make-item "q-2" "b" 'active nil))))
@@ -1278,10 +1290,10 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 
 (ert-deftest agent-shell-queue/defer-unknown-id-is-noop ()
   (agent-shell-queue-test/isolate-no-sub
-    (setq agent-shell-queue--items
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
     (agent-shell-queue-defer "q-999")
-    (should (eq 'active (agent-shell-queue-item-status (cadar agent-shell-queue--items))))))
+    (should (eq 'active (agent-shell-queue-item-status (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue--auto-send — when-let* short-circuits
@@ -1293,10 +1305,10 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-sess-pause-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "p" 'active nil))))
-            (setq agent-shell-queue--session-paused (list (buffer-name buf)))
+            (setf (agent-shell-queue-queue-session-paused agent-shell-queue--queue) (list (buffer-name buf)))
             (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
                       ((symbol-function 'agent-shell-insert)
                        (lambda (&rest _) (setq sent t))))
@@ -1311,7 +1323,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (buf (get-buffer-create " *asq-auto-send-dispatch*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--items
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "first" 'active nil)
                               (agent-shell-queue-test/make-item "q-2" "second" 'active nil))))
