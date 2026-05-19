@@ -33,7 +33,13 @@ jobs:
         run: cask install
 
       - name: Run tests
-        run: cask exec ert-runner --timeout 60
+        run: |
+          cask exec ert-runner --timeout 60 \
+            test/test-xlib.el \
+            test/test-builder.el \
+            test/test-project-projectile-integration.el \
+            test/test-annotated-completing-read.el \
+            test/test-magit-gh-extras.el
 
   integration:
     runs-on: ubuntu-latest
