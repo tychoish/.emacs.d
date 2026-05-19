@@ -37,26 +37,42 @@
 (require 'fn)
 (require 'dash)
 
-(defmacro with-which-key (&rest args)
-  "Configure which-key annotations after which-key is loaded.
+(declare-function which-key-add-key-based-replacements "which-key")
+(declare-function which-key-add-keymap-based-replacements "which-key")
 
-Dispatches based on the first element of ARGS:
-- Non-nil symbol or quoted symbol: calls `which-key-add-keymap-based-replacements'
-  with ARGS.  Example: (with-which-key my-map \"k\" \"label\")
-- String: calls `which-key-add-key-based-replacements' with ARGS.
-  Example: (with-which-key \"C-c p\" \"projectile\" \"C-c q\" \"other\")
-- Anything else: wraps ARGS as body forms inside `with-eval-after-load'."
-  (declare (indent 0))
+(cl-defmacro which-key-customize (new-text &key map key form)
+  "Register a which-key annotation, deferred until which-key is loaded.
+
+NEW-TEXT is the replacement label (a string, or a cons (LABEL . COMMAND)
+for keymap-based replacements that also bind a prefix command).
+:KEY  — key sequence string; required unless :FORM is used.
+:MAP  — keymap (symbol or quoted symbol); selects
+        `which-key-add-keymap-based-replacements' instead of the key-only variant.
+:FORM — arbitrary expression; mutually exclusive with NEW-TEXT, :KEY, and :MAP.
+
+All constraints are validated at macro-expansion time."
+  (declare (indent 1))
   (cond
-   ((and (car args)
-         (or (symbolp (car args))
-             (and (listp (car args)) (eq (caar args) 'quote))))
-    `(with-eval-after-load 'which-key
-       (which-key-add-keymap-based-replacements ,@args)))
-   ((stringp (car args))
-    `(with-eval-after-load 'which-key
-       (which-key-add-key-based-replacements ,@args)))
-   (t `(with-eval-after-load 'which-key ,@args))))
+   (form
+    (when key
+      (user-error "which-key-customize: :form is mutually exclusive with :key"))
+    (when map
+      (user-error "which-key-customize: :form is mutually exclusive with :map"))
+    (when new-text
+      (user-error "which-key-customize: :form is mutually exclusive with new-text")))
+   (t
+    (unless new-text
+      (user-error "which-key-customize: new-text is required when :form is not provided"))
+    (unless key
+      (user-error "which-key-customize: :key is required when :form is not provided"))
+    (unless (stringp key)
+      (user-error "which-key-customize: :key must be a string literal, got: %S" key))))
+  (cond
+   (form `(with-eval-after-load 'which-key ,form))
+   (map `(with-eval-after-load 'which-key
+           (which-key-add-keymap-based-replacements ,map ,key ,new-text)))
+   (t `(with-eval-after-load 'which-key
+         (which-key-add-key-based-replacements ,key ,new-text)))))
 
 (defmacro flex-defun (name args &rest body)
   "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
@@ -251,8 +267,8 @@ more arguments than the function cares about."
  :prefix "m"
  :prefix-map tychoish/robot-gptel-set-default-model-map)
 
-(with-which-key tychoish/ecclectic-grep-map
-  "p" '("project-grep" . tychoish/ecclectic-grep-project-map))
+(which-key-customize '("project-grep" . tychoish/ecclectic-grep-project-map)
+  :map tychoish/ecclectic-grep-map :key "p")
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
