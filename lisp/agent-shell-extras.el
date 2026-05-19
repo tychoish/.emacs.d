@@ -35,6 +35,10 @@
 (declare-function agent-shell-queue-resume "agent-shell-queue")
 (declare-function agent-shell-queue-raw-edit "agent-shell-queue")
 (declare-function agent-shell-queue-import "agent-shell-queue")
+(declare-function agent-shell-queue-fork-session "agent-shell-queue")
+(declare-function agent-shell-queue-insert-fork-before "agent-shell-queue")
+(declare-function agent-shell-queue-insert-fork-after "agent-shell-queue")
+(declare-function agent-shell-queue-release-pending-fork "agent-shell-queue")
 
 (setq agent-shell-buffer-name-format
       (lambda (agent-name project-name)
@@ -354,7 +358,12 @@ When a permission request is pending, permission responses are spliced into the 
     ("f" "Fork session" agent-shell-fork)
     ("o" "Other session (project)" agent-shell-switch-project-session)
     ("I" "Copy session ID" agent-shell-copy-session-id)
-    ("T" "Open transcript" agent-shell-open-transcript)]])
+    ("T" "Open transcript" agent-shell-open-transcript)]
+   ["Fork Queue"
+    ("Gf" "Fork queue from here" agent-shell-queue-fork-session)
+    ("Gb" "Insert fork task before" agent-shell-queue-insert-fork-before)
+    ("Ga" "Insert fork task after" agent-shell-queue-insert-fork-after)
+    ("Gr" "Release pending-fork items" agent-shell-queue-release-pending-fork)]])
 
 ;;; Command menu
 
