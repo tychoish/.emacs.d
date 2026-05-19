@@ -327,7 +327,8 @@ more arguments than the function cares about."
 (setq eldoc-echo-area-display-truncation-message nil)
 (setq max-mini-window-height 0.5)
 
-(setq package-install-upgrade-built-in t)
+(when (>= emacs-major-version 29)
+  (setq package-install-upgrade-built-in t))
 (setq package-user-dir (concat user-emacs-directory "elpa"))
 
 (setq lpr-add-switches "-T ''")
@@ -546,8 +547,10 @@ This combines the host name and the dameon name."
         (message-log-max nil))
     (apply f arg)))
 
-(advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
-(advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
+(when (fboundp 'emacs-repository-branch-git)
+  (advice-add 'emacs-repository-branch-git :around #'ad:suppress-message))
+(when (fboundp 'emacs-repository-version-git)
+  (advice-add 'emacs-repository-version-git :around #'ad:suppress-message))
 
 (defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
   "Hacky fix to resolve issue with native comp."

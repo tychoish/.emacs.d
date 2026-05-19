@@ -34,7 +34,6 @@ lived instances. Other ephemeral instance names ones may be useful.")
  (setq initial-major-mode 'fundamental-mode)
  (setq initial-scratch-message nil)
  (setq inhibit-startup-message t)
- (setq package-enable-at-startup nil)
 
  (setq user-emacs-directory (expand-file-name user-emacs-directory))
 
@@ -80,6 +79,8 @@ lived instances. Other ephemeral instance names ones may be useful.")
 				    ("nongnu"    . 2)
 				    ("gnu"    . 1)
 				    ("jcs-elpa" . 0)))
+
+ (package-initialize)
 
  (declare-function alert "alert")
 
