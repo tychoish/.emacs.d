@@ -25,9 +25,7 @@ jobs:
           version: ${{ matrix.emacs_version }}
 
       - name: Install Cask
-        run: |
-          git clone https://github.com/cask/cask ~/.cask
-          echo "$HOME/.cask/bin" >> "$GITHUB_PATH"
+        uses: cask/setup-cask@master
 
       - name: Install dependencies
         run: cask install
