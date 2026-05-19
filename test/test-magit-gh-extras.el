@@ -8,15 +8,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'ht)
-
-(defvar magit-gh-extras-test--load-path
-  (expand-file-name "lisp" (file-name-directory
-                            (directory-file-name
-                             (file-name-directory (or load-file-name buffer-file-name))))))
-
-(unless (featurep 'magit-gh-extras)
-  (add-to-list 'load-path magit-gh-extras-test--load-path)
-  (require 'magit-gh-extras))
+(require 'magit-gh-extras)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; magit-gh--pr-closed-p (pure)

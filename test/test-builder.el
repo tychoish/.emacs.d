@@ -10,18 +10,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'ht)
-
-;; Load builder; skip the top-level macro expansions that call xlib
-;; functions not available in isolation by stubbing dependencies.
-
-(defvar builder-test--load-path
-  (expand-file-name "lisp" (file-name-directory
-                             (directory-file-name
-                              (file-name-directory (or load-file-name buffer-file-name))))))
-
-(unless (featurep 'builder)
-  (add-to-list 'load-path builder-test--load-path)
-  (require 'builder))
+(require 'builder)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder-candidate struct

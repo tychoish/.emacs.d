@@ -7,4 +7,5 @@
   (depends-on "f")
   (depends-on "s")
   (depends-on "ht")
+  (depends-on "projectile")
   (depends-on "ert-runner"))
