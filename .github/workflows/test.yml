@@ -61,7 +61,7 @@ jobs:
         run: |
           EMACSLOADPATH=$(find elpa -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
           HOME=$(dirname "$GITHUB_WORKSPACE") \
-          xvfb-run emacs \
+          emacs --fg-daemon \
             --eval '(run-with-timer 60 nil (lambda () (kill-emacs 1)))' \
             -l test/test-xlib.el \
             -l test/test-builder.el \
