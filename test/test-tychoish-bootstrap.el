@@ -147,7 +147,7 @@
              (lambda () (list "host" "inst")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
-      (should (string-prefix-p user-emacs-directory
+      (should (string-prefix-p (expand-file-name user-emacs-directory)
                                (tychoish/conf-state-path "bookmarks"))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

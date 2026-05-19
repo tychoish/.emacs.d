@@ -37,6 +37,43 @@
 (require 'fn)
 (require 'dash)
 
+(declare-function which-key-add-key-based-replacements "which-key")
+(declare-function which-key-add-keymap-based-replacements "which-key")
+
+(cl-defmacro which-key-customize (new-text &key map key form)
+  "Register a which-key annotation, deferred until which-key is loaded.
+
+NEW-TEXT is the replacement label (a string, or a cons (LABEL . COMMAND)
+for keymap-based replacements that also bind a prefix command).
+:KEY  — key sequence string; required unless :FORM is used.
+:MAP  — keymap (symbol or quoted symbol); selects
+        `which-key-add-keymap-based-replacements' instead of the key-only variant.
+:FORM — arbitrary expression; mutually exclusive with NEW-TEXT, :KEY, and :MAP.
+
+All constraints are validated at macro-expansion time."
+  (declare (indent 1))
+  (cond
+   (form
+    (when key
+      (user-error "which-key-customize: :form is mutually exclusive with :key"))
+    (when map
+      (user-error "which-key-customize: :form is mutually exclusive with :map"))
+    (when new-text
+      (user-error "which-key-customize: :form is mutually exclusive with new-text")))
+   (t
+    (unless new-text
+      (user-error "which-key-customize: new-text is required when :form is not provided"))
+    (unless key
+      (user-error "which-key-customize: :key is required when :form is not provided"))
+    (unless (stringp key)
+      (user-error "which-key-customize: :key must be a string literal, got: %S" key))))
+  (cond
+   (form `(with-eval-after-load 'which-key ,form))
+   (map `(with-eval-after-load 'which-key
+           (which-key-add-keymap-based-replacements ,map ,key ,new-text)))
+   (t `(with-eval-after-load 'which-key
+         (which-key-add-key-based-replacements ,key ,new-text)))))
+
 (defmacro flex-defun (name args &rest body)
   "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
 Useful for functions used as hooks or advice targets where callers may pass
@@ -230,9 +267,8 @@ more arguments than the function cares about."
  :prefix "m"
  :prefix-map tychoish/robot-gptel-set-default-model-map)
 
-(with-eval-after-load 'which-key
-  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
-    "p" '("project-grep" . tychoish/ecclectic-grep-project-map)))
+(which-key-customize '("project-grep" . tychoish/ecclectic-grep-project-map)
+  :map tychoish/ecclectic-grep-map :key "p")
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
@@ -327,7 +363,8 @@ more arguments than the function cares about."
 (setq eldoc-echo-area-display-truncation-message nil)
 (setq max-mini-window-height 0.5)
 
-(setq package-install-upgrade-built-in t)
+(when (>= emacs-major-version 29)
+  (setq package-install-upgrade-built-in t))
 (setq package-user-dir (concat user-emacs-directory "elpa"))
 
 (setq lpr-add-switches "-T ''")
@@ -388,6 +425,12 @@ more arguments than the function cares about."
 
 (defvar-local tychoish-cache--resolved-instance-id nil)
 
+(defvar cli/instance-id nil
+  "CLI-specified daemon/instance name; set from command-line args in init.el.")
+
+(defvar tychoish/emacs-instance-id nil
+  "Name of the running Emacs instance; resolved from daemon state or CLI args.")
+
 (defun tychoish/resolve-instance-id ()
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (or tychoish-cache--resolved-instance-id
@@ -442,6 +485,7 @@ This combines the host name and the dameon name."
 ;; state -- setup desktop/bookmarks/savehist
 
 (defvar desktop/last-save-time nil)
+(defvar desktop-dirname nil)
 
 (defun tychoish/set-up-emacs-instance-persistence ()
   (setq project-list-file (tychoish/conf-state-path "projects.el"))
@@ -546,8 +590,10 @@ This combines the host name and the dameon name."
         (message-log-max nil))
     (apply f arg)))
 
-(advice-add 'emacs-repository-branch-git :around #'ad:suppress-message)
-(advice-add 'emacs-repository-version-git :around #'ad:suppress-message)
+(when (fboundp 'emacs-repository-branch-git)
+  (advice-add 'emacs-repository-branch-git :around #'ad:suppress-message))
+(when (fboundp 'emacs-repository-version-git)
+  (advice-add 'emacs-repository-version-git :around #'ad:suppress-message))
 
 (defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
   "Hacky fix to resolve issue with native comp."
@@ -609,7 +655,8 @@ This combines the host name and the dameon name."
     (transient-mark-mode 1)
     (xterm-mouse-mode 1)
     (electric-pair-mode 1)
-    (which-key-mode 1)
+    (when (fboundp 'which-key-mode)
+      (which-key-mode 1))
 
     (with-silence
       (repeat-mode 1))))
@@ -1067,7 +1114,7 @@ Returns the number of buffers killed."
       (let ((file-name (buffer-file-name buf)))
 	(cond ((null file-name) nil)
 	      ((f-directory-p file-name) file-name)
-	      ((f-file-p file-name) (f-dirname file-name))
+	      ((f-file-p file-name) (file-name-directory file-name))
 	      (t default-directory))))))
 
 
@@ -1142,7 +1189,8 @@ Returns the number of buffers killed."
   (interactive)
   (let ((was-hard-wrapping auto-fill-function))
     (auto-fill-mode -1)
-    (visual-fill-column-mode 1)
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode 1))
     (visual-line-mode 1)
     (when was-hard-wrapping
       (tychoish-show-wrapping-mode))))
@@ -1150,7 +1198,8 @@ Returns the number of buffers killed."
 (defun turn-off-soft-wrap ()
   (interactive)
   (let ((was-soft-wrapping (not auto-fill-function)))
-    (visual-fill-column-mode -1)
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode -1))
     (visual-line-mode -1)
     (auto-fill-mode 1)
     (when was-soft-wrapping
@@ -1232,7 +1281,7 @@ export but adds complexity with no interactive benefit.")
           (lambda ()
             (when (assq major-mode tychoish--vfc-heading-patterns)
               (tychoish-vfc-heading-truncation-mode
-               (if visual-fill-column-mode 1 -1)))))
+               (if (bound-and-true-p visual-fill-column-mode) 1 -1)))))
 
 (defun unfill-region (begin end)
   "Remove all linebreaks in a region but leave paragraphs
@@ -1987,6 +2036,25 @@ magit process buffer for that submodule."
                 (message "pulling %s..." sub)
                 (magit-run-git "pull" "origin"))))))
     (message "elpa submodule pull complete")))
+
+(defun tychoish/run-ci-tests (&optional timeout)
+  "Discover and run all ERT tests under test/, then exit.
+Intended for CI invocations via --fg-daemon --eval.
+Installs a TIMEOUT-second kill guard (default 60) before running."
+  (let ((test-dir (expand-file-name "test" user-emacs-directory))
+        (noninteractive t))
+    (run-with-timer (or timeout 60) nil (lambda () (kill-emacs 1)))
+    (condition-case err
+        (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
+          (load file nil t))
+      (error
+       (message "tychoish/run-ci-tests: error loading test files: %S" err)
+       (kill-emacs 1)))
+    ;; ert-run-tests-batch-and-exit requires noninteractive=t (--batch only).
+    ;; In --fg-daemon mode we call ert-run-tests-batch directly and kill-emacs
+    ;; ourselves based on the result.
+    (let ((stats (ert-run-tests-batch t)))
+      (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

@@ -13,16 +13,7 @@
 
 (require 'ert)
 (require 'cl-lib)
-
-(defvar agent-shell-queue-org-test--load-path
-  (expand-file-name "lisp" (file-name-directory
-                            (directory-file-name
-                             (file-name-directory
-                              (or load-file-name buffer-file-name))))))
-
-(unless (featurep 'agent-shell-queue-org)
-  (add-to-list 'load-path agent-shell-queue-org-test--load-path)
-  (require 'agent-shell-queue-org))
+(require 'agent-shell-queue-org)
 
 ;;; Test helpers
 

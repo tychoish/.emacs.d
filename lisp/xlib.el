@@ -124,24 +124,32 @@ hyphen). When SPACE-PADDING is non-nil, the separator is surrounded by spaces."
 (s-define-join-string-function ?| :space-padding t)
 
 (defun s-shortest (a b)
+  "Return the shorter of strings A and B. When equal in length, return A."
   (if (>= (length b) (length a))
       a
     b))
 
 (defun s-collapse-hyphens (str)
+  "Replace runs of three or more consecutive hyphens in STR with a single hyphen."
   (replace-regexp-in-string "-\\{3,\\}" "-" str))
 
 (defun s-normalize-symbol-name (name)
+  "Normalize NAME to a clean hyphen-separated string suitable for use as a symbol name.
+Trims outer whitespace, collapses internal whitespace, replaces common punctuation
+with hyphens, and collapses runs of three or more hyphens."
   (let* ((sanatized (s-trim (s-collapse-whitespace name)))
 	 (canonicalized (s-replace-all (--map (cons it "-") '("=" "_" " " "_" "'" "\"" "\\" "/")) sanatized)))
     (s-collapse-hyphens canonicalized)))
 
 (defun s-trimmed-or-nil (value)
+  "Return VALUE trimmed of surrounding whitespace, or nil if VALUE is not a string or is empty after trimming."
   (and (stringp value)
        (unless (string-empty-p (setq value (string-trim value))) value)
        value))
 
 (defun s-trim-non-word-chars (value)
+  "Trim leading and trailing non-word characters from VALUE.
+Return nil if VALUE is not a string or is empty after trimming."
   (and (stringp value)
        (unless (string-empty-p (setq value (string-trim value "\\W+" "\\W+"))) value)
        value))
@@ -163,6 +171,7 @@ Use this to guard against blank user input or empty configuration values."
 
 (eval-and-compile
   (defun s-number-word (num)
+    "Return the English word for integer NUM. Supports values 1 through 20."
     (cond
      ((eql num 1) "one")
      ((eql num 2) "two")
@@ -375,12 +384,15 @@ of the equality function customization differs slightly."
 ;; `ht.el' -- extensions and aditions
 
 (defmacro ht-get-lambda (table)
+  "Return a lambda of one argument KEY that looks up KEY in TABLE."
   `(lambda (key) (ht-get ,table key)))
 
 (defmacro ht-set-lambda (table)
+  "Return a lambda of two arguments KEY and VALUE that sets KEY to VALUE in TABLE."
   `(lambda (key value) (ht-set ,table key value)))
 
 (defmacro ht-contains-p-lambda (table)
+  "Return a lambda of one argument KEY that tests whether KEY is present in TABLE."
   `(lambda (key) (ht-contains-p ,table key)))
 
 (defmacro ht-get-function (table)
@@ -402,6 +414,8 @@ of the equality function customization differs slightly."
        (ht-contains-p ,table key))))
 
 (cl-defmacro ht-make-named-table (name &optional &key (test #'equal))
+  "Define a named hash table variable and named accessor functions.
+Creates `ht-NAME-get', `ht-NAME-set', and `ht-NAME-contains-p'. TEST defaults to `equal'."
   (let ((name (or (when (stringp name) (intern name))
 		  (when (symbolp name) name)
 		  (intern (format "%S" name))))
@@ -419,9 +433,11 @@ of the equality function customization differs slightly."
 ;; `f.el' -- extensions and additions
 
 (defun f-mtime (filename)
+  "Return the modification time of FILENAME as a time value."
   (file-attribute-modification-time (file-attributes filename)))
 
 (defun f-atime (filename)
+  "Return the access time of FILENAME as a time value."
   (file-attribute-access-time (file-attributes filename)))
 
 (defun f-make-slug (s)
@@ -432,9 +448,11 @@ of the equality function customization differs slightly."
     (string-clean-whitespace s))))
 
 (defun f-filename-is-p (entry name)
+  "Return non-nil if the filename component of path ENTRY equals NAME."
   (f-equal-p (f-filename entry) name))
 
 (defun f-when-file-exists (path)
+  "Return PATH if it exists on the filesystem, otherwise nil."
   (when (f-exists-p path)
     path))
 
@@ -444,6 +462,7 @@ of the equality function customization differs slightly."
     (-distinct sequence)))
 
 (defmacro f-directories-containing-file-with-extension-function (extension)
+  "Define `f-EXT-file-p' and `f-directories-containing-file-with-extension-EXT' for EXTENSION."
   (when (s-prefix-p "." extension)
     (setq extension (string-trim-left extension "^\\.")))
 
@@ -461,6 +480,8 @@ of the equality function customization differs slightly."
 	    (-distinct)))))
 
 (defun f-files-in-directory (path)
+  "Return a flat list of all files under PATH.
+PATH may be a directory, a file (returns siblings), or a list of paths."
   (cond
    ((stringp path)
     (cond
@@ -475,6 +496,8 @@ Searches recursively. PATH defaults to `default-directory' when nil."
        (-map #'f-dirname)))
 
 (defmacro f-directories-containing-file-function (filename &rest files)
+  "Define helper predicates and a search function for directories containing FILENAME.
+Also accepts additional FILES as alternate names to match."
   (let* ((filenames (cons filename files))
 	 (symbol-filename (string-replace "." "-" (downcase filename)))
 	 (pred (intern (s-join-with-hyphen "f-directory-contains" symbol-filename "file"))))
@@ -500,9 +523,11 @@ Searches recursively. PATH defaults to `default-directory' when nil."
 		(-distinct)))))))
 
 (defun f-collapse-homedir (path)
+  "Replace the expanded home directory prefix in PATH with `~/'."
   (string-replace (expand-file-name "~/") "~/" path))
 
 (defun f-visually-compress-path (num path)
+  "Truncate each component of PATH to at most NUM characters, preserving the separator."
   (->> (f-split path)
        (--map (if (length> it num)
 		  (substring it 0 num)
@@ -511,10 +536,14 @@ Searches recursively. PATH defaults to `default-directory' when nil."
        (s-join (f-path-separator))))
 
 (defmacro f-visual-compression-function (num)
+  "Define `f-visually-compress-to-NAME' that truncates each path component to NUM characters."
   `(defun ,(intern (concat "f-visually-compress-to-" (s-number-word num))) (path)
      (f-visually-compress-path ,num path)))
 
 (defun f-filter-directories (options &rest sequence)
+  "Return entries from SEQUENCE that are existing directories.
+OPTIONS is a symbol or list: `cannonicalize' expands paths to absolute form,
+`unique' deduplicates results via `f-equal-p'."
   (let ((cannonicalize (option-set-p 'cannonicalize options)))
     (setq sequence (->> (if (stringp (car sequence))
 			    sequence
@@ -563,10 +592,12 @@ OPTIONS may be a single symbol or a list of symbols."
 ;; utility macros
 
 (defmacro disabled (&rest body)
+  "Wrap BODY so it never executes. Keeps code byte-compilable while effectively commenting it out."
   `(unless 'disabled
      ,@body))
 
 (defmacro with-force-write (&rest body)
+  "Temporarily clear `buffer-read-only', evaluate BODY, then restore it to t."
   (declare (indent defun) (debug t))
   `(prog1
        (progn
@@ -692,6 +723,7 @@ collisions. CLEANUP uninterns the generated symbol after the hook fires."
 	   ,@(--map `(add-hook ',it ',cleanup-symbol ,depth ,local) filtered-hooks))))))
 
 (defmacro make-run-hooks-function-for (mode)
+  "Define a zero-argument function `run-hooks-for-MODE' that runs `MODE-hook'."
   (let* ((mode-name (symbol-name mode))
 	 (hook-name (concat mode-name "-hook"))
 	 (function-name (intern (concat "run-hooks-for-" mode-name))))
@@ -699,6 +731,9 @@ collisions. CLEANUP uninterns the generated symbol after the hook fires."
        (run-hooks (intern ,hook-name)))))
 
 (cl-defmacro create-toggle-functions (value &optional &key short-name local keymap key)
+  "Define turn-on, turn-off, and toggle interactive commands for variable VALUE.
+Use SHORT-NAME to override the generated name. LOCAL makes commands use `setq-local'.
+Optionally bind the toggle to KEY in KEYMAP."
   (let* ((name (or short-name (symbol-name value)))
 	 (suffix (when local "local"))
 	 (ops (list
@@ -719,6 +754,9 @@ collisions. CLEANUP uninterns the generated symbol after the hook fires."
 	  `(bind-key ,key ',(car (nth 2 ops)) ,keymap)))))
 
 (cl-defmacro make-read-extended-command-for-prefix (prefix &optional &key bind-map bind-key key-alias)
+  "Define an interactive command that runs `execute-extended-command' filtered to PREFIX.
+Only commands whose names begin with PREFIX are offered for completion.
+Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-key label."
   (declare (indent defun))
   (unless (setq prefix (s-trimmed-or-nil prefix))
     (user-error "cannot build predicate function for '%s'" prefix))
@@ -746,9 +784,12 @@ collisions. CLEANUP uninterns the generated symbol after the hook fires."
 	      :map ,(or bind-map 'global-map)
 	      (,bind-key . ,user-command-symbol))
 	     ,(when key-alias
-		`(which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias)))))))
+		`(with-eval-after-load 'which-key
+		   (which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias))))))))
 
 (defmacro with-toggle-once (name &rest body)
+  "Define a function NAME that executes BODY only the first time it is called.
+Subsequent calls are no-ops. Uses an auto-generated toggle variable to guard execution."
   (declare (indent defun) (debug t))
   (let ((operation (or (when (symbolp name) name)
 		       (when (stringp name) (intern name))))
@@ -764,6 +805,7 @@ collisions. CLEANUP uninterns the generated symbol after the hook fires."
 	   (setq ,toggle t))))))
 
 (defmacro with-prefix-arg (arg &rest body)
+  "Evaluate BODY with `current-prefix-arg' bound to ARG."
   `(let ((current-prefix-arg ,arg))
      ,@body))
 
@@ -795,6 +837,7 @@ Use this to build a keymap programmatically and return it in one expression."
      ,map))
 
 (cl-defmacro setq-when-nil (variable value &optional &key local)
+  "Set VARIABLE to VALUE only if VARIABLE is currently nil. Use :local t for `setq-local'."
   `(unless ,variable
      (,(if local 'setq-local 'setq) ,variable ,value)))
 
@@ -826,7 +869,6 @@ Short-circuits on the first predicate that returns nil, consistent with `and' se
 (declare-function project-root "project")
 (declare-function project-current "project")
 (declare-function project-buffers "project")
-
 
 (defun buffer-derived-mode-p (buffer mode)
   (with-current-buffer buffer

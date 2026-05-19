@@ -153,6 +153,71 @@ Nil means use a subdirectory of `temporary-file-directory' named
 (defvar agent-shell-queue-safe-save-format nil
   "Serialization format for safe-save backups, or nil to use `agent-shell-queue-serialization-format'.")
 
+;;; Struct macro
+
+(defmacro agent-shell-queue--defstruct (type-name &rest fields)
+  "Define a cl-defstruct TYPE-NAME with FIELDS and generate plist serializers.
+FIELDS are plain symbols.  Generates constructor TYPE-NAME--make plus:
+  TYPE-NAME-to-plist   — struct → keyword-keyed plist
+  TYPE-NAME-from-plist — keyword-keyed plist → struct"
+  (declare (indent 1))
+  (let* ((sname   (symbol-name type-name))
+         (ctor    (intern (concat sname "--make")))
+         (to-fn   (intern (concat sname "-to-plist")))
+         (from-fn (intern (concat sname "-from-plist"))))
+    `(progn
+       (cl-defstruct (,type-name (:constructor ,ctor) (:copier nil))
+         ,@fields)
+       (defun ,to-fn (item)
+         ,(format "Convert %s ITEM to a keyword-keyed plist." sname)
+         (list ,@(cl-mapcan
+                  (lambda (f)
+                    (list (intern (concat ":" (symbol-name f)))
+                          `(,(intern (concat sname "-" (symbol-name f))) item)))
+                  fields)))
+       (defun ,from-fn (plist)
+         ,(format "Reconstruct a %s from keyword-keyed PLIST." sname)
+         (,ctor ,@(cl-mapcan
+                   (lambda (f)
+                     (let ((kw (intern (concat ":" (symbol-name f)))))
+                       (list kw `(plist-get plist ,kw))))
+                   fields))))))
+
+;;; Data model
+
+(agent-shell-queue--defstruct agent-shell-queue-item
+  id prompt status kind background created dispatched completed response)
+
+(cl-defstruct (agent-shell-queue-store
+               (:constructor agent-shell-queue--make-store)
+               (:copier nil))
+  "Queue state bundle: items, serialization format, and file path."
+  items    ; (BUFFER-NAME . ITEM-LIST) alist
+  format   ; symbol: plist | json | yaml
+  file)    ; string: absolute path to state file
+
+(defvar agent-shell-queue--items nil
+  "Items alist used by format-specific serializers (e.g. org).
+Bound dynamically by `agent-shell-queue--serialize-items' methods
+before calling the format's serialize helper.")
+
+(defvar agent-shell-queue--store
+  (agent-shell-queue--make-store :items nil :format 'plist :file nil)
+  "Live queue store.  Items are loaded from disk by --load, written by --save.")
+
+(cl-defstruct (agent-shell-queue-queue
+               (:constructor agent-shell-queue-queue--make)
+               (:copier nil))
+  "Queue runtime state and reference to the active store."
+  (store 'agent-shell-queue--store) ; symbol naming the live store variable
+  (paused nil)          ; boolean: global pause flag
+  (session-paused nil)  ; list of buffer names paused from dispatch
+  (editing-ids nil))    ; list of item IDs currently open in an edit buffer
+
+(defvar agent-shell-queue--queue
+  (agent-shell-queue-queue--make)
+  "The active queue object.  Persisted via `savehist-additional-variables'.")
+
 (defun agent-shell-queue-pause ()
   "Pause the global queue; no new items will be dispatched."
   (interactive)
@@ -270,66 +335,6 @@ Installed as :before advice on `shell-maker-submit'."
   "Pick a live agent-shell buffer using PROMPT via `completing-read'."
   (when-let* ((bufs (agent-shell-buffers)))
     (get-buffer (completing-read prompt (-map #'buffer-name bufs) nil t))))
-
-;;; Struct macro
-
-(defmacro agent-shell-queue--defstruct (type-name &rest fields)
-  "Define a cl-defstruct TYPE-NAME with FIELDS and generate plist serializers.
-FIELDS are plain symbols.  Generates constructor TYPE-NAME--make plus:
-  TYPE-NAME-to-plist   — struct → keyword-keyed plist
-  TYPE-NAME-from-plist — keyword-keyed plist → struct"
-  (declare (indent 1))
-  (let* ((sname   (symbol-name type-name))
-         (ctor    (intern (concat sname "--make")))
-         (to-fn   (intern (concat sname "-to-plist")))
-         (from-fn (intern (concat sname "-from-plist"))))
-    `(progn
-       (cl-defstruct (,type-name (:constructor ,ctor) (:copier nil))
-         ,@fields)
-       (defun ,to-fn (item)
-         ,(format "Convert %s ITEM to a keyword-keyed plist." sname)
-         (list ,@(cl-mapcan
-                  (lambda (f)
-                    (list (intern (concat ":" (symbol-name f)))
-                          `(,(intern (concat sname "-" (symbol-name f))) item)))
-                  fields)))
-       (defun ,from-fn (plist)
-         ,(format "Reconstruct a %s from keyword-keyed PLIST." sname)
-         (,ctor ,@(cl-mapcan
-                   (lambda (f)
-                     (let ((kw (intern (concat ":" (symbol-name f)))))
-                       (list kw `(plist-get plist ,kw))))
-                   fields))))))
-
-;;; Data model
-
-(agent-shell-queue--defstruct agent-shell-queue-item
-  id prompt status kind background created dispatched completed response)
-
-(cl-defstruct (agent-shell-queue-store
-               (:constructor agent-shell-queue--make-store)
-               (:copier nil))
-  "Queue state bundle: items, serialization format, and file path."
-  items    ; (BUFFER-NAME . ITEM-LIST) alist
-  format   ; symbol: plist | json | yaml
-  file)    ; string: absolute path to state file
-
-(defvar agent-shell-queue--store
-  (agent-shell-queue--make-store :items nil :format 'plist :file nil)
-  "Live queue store.  Items are loaded from disk by --load, written by --save.")
-
-(cl-defstruct (agent-shell-queue-queue
-               (:constructor agent-shell-queue-queue--make)
-               (:copier nil))
-  "Queue runtime state and reference to the active store."
-  (store 'agent-shell-queue--store) ; symbol naming the live store variable
-  (paused nil)          ; boolean: global pause flag
-  (session-paused nil)  ; list of buffer names paused from dispatch
-  (editing-ids nil))    ; list of item IDs currently open in an edit buffer
-
-(defvar agent-shell-queue--queue
-  (agent-shell-queue-queue--make)
-  "The active queue object.  Persisted via `savehist-additional-variables'.")
 
 (defvar agent-shell-queue--loaded nil
   "Non-nil after the on-disk state has been read into memory.")

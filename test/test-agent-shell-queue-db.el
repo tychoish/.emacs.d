@@ -14,20 +14,8 @@
 
 (require 'ert)
 (require 'cl-lib)
-
-(defvar agent-shell-queue-db-test--load-path
-  (expand-file-name "lisp" (file-name-directory
-                            (directory-file-name
-                             (file-name-directory
-                              (or load-file-name buffer-file-name))))))
-
-(unless (featurep 'agent-shell-queue)
-  (add-to-list 'load-path agent-shell-queue-db-test--load-path)
-  (require 'agent-shell-queue))
-
-(unless (featurep 'agent-shell-queue-db)
-  (add-to-list 'load-path agent-shell-queue-db-test--load-path)
-  (require 'agent-shell-queue-db))
+(require 'agent-shell-queue)
+(require 'agent-shell-queue-db)
 
 ;;; Helpers
 

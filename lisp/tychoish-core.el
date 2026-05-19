@@ -152,7 +152,7 @@
 	     projectile-mode-on
 	     projectile-save-project-buffers)
   :init
-  (which-key-add-key-based-replacements "C-c p" "projectile")
+  (which-key-customize "projectile" :key "C-c p")
   ;; previously added projectile-mode to the after-init-hook (probably
   ;; to get keybindings to load correctly,) appears unnecessary, but
   ;; wanted to leave note here.
@@ -246,8 +246,8 @@
 	     find-merge-conflicts
 	     ripgrep-regexp)
   :init
-  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
-    "r" '("rg-grep" . tychoish/ecclectic-rg-map))
+  (which-key-customize '("rg-grep" . tychoish/ecclectic-rg-map)
+    :map tychoish/ecclectic-grep-map :key "r")
   :config
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
@@ -364,7 +364,7 @@
   :bind-keymap ("C-c /" . google-this-mode-submap)
   :commands (google-this-mode)
   :config
-  (which-key-add-key-based-replacements "C-c /" "google-this")
+  (which-key-customize "google-this" :key "C-c /")
   (setq google-this-browse-url-function 'browse-url-default-browser)
   (google-this-mode 1))
 
@@ -517,7 +517,7 @@
   :hook ((text-mode prog-mode) . yas-minor-mode)
   :config
   (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
-  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
+  (which-key-customize "yasnippet" :key "C-c &"))
 
 (use-package yasnippet-capf
   :ensure t
@@ -1007,8 +1007,8 @@
    ("x" . execute-extended-magit-command)
    ("m" . execute-extended-smerge-command))
 
-  (which-key-add-keymap-based-replacements 'magit-command-mode-map "m" "(s)merge-commands")
-  (which-key-add-keymap-based-replacements 'magit-command-mode-map "x" "magit-commands")
+  (which-key-customize "(s)merge-commands" :map 'magit-command-mode-map :key "m")
+  (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x")
 
   (let* ((dir (package-desc-dir (package-get-descriptor 'transient)))
 	 (path (f-join dir "transient.el")))
@@ -1078,7 +1078,7 @@
   (bind-keys
    :map magit-command-mode-map
    ("r" . execute-extended-forge-command))
-  (which-key-add-keymap-based-replacements 'magit-command-mode-map "r" "forge-commands"))
+  (which-key-customize "forge-commands" :map 'magit-command-mode-map :key "r"))
 
 (use-package gist
   :ensure t
@@ -1113,7 +1113,7 @@
       (setq-default alert-default-style 'notifier))))
    (alert-libnotify-command
     (setq-default alert-default-style 'libnotify))
-   ((eql system-type 'gnu/linux)
+   ((and (eql system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
     (setq-default alert-default-style 'notifications))
    (t (setq-default alert-default-style 'message)))
 
@@ -1160,8 +1160,8 @@
 	     tychoish/telega-switch-to-root
 	     tychoish/telega-force-kill)
   :init
-  (which-key-add-key-based-replacements "C-c n" "telega-prefix")
-  (which-key-add-key-based-replacements "C-c v" "telega-prefix")
+  (which-key-customize "telega-prefix" :key "C-c n")
+  (which-key-customize "telega-prefix" :key "C-c v")
   (make-read-extended-command-for-prefix "telega"
     :bind-map telega-prefix-map
     :bind-key "x"
@@ -1354,7 +1354,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (add-hook 'markdown-mode-hook 'turn-on-soft-wrap)
   (add-hook 'markdown-mode-hook (lambda ()
-                                  (when visual-fill-column-mode
+                                  (when (bound-and-true-p visual-fill-column-mode)
                                     (tychoish-vfc-heading-truncation-mode 1))))
   (defun tychoish/markdown-setup-imenu ()
     (setq imenu-generic-expression markdown-imenu-generic-expression))
@@ -2190,7 +2190,7 @@ Useful after changing `eglot-workspace-configuration' or
   ;; Pulse source line (performance hit)
   ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
   (setq dape-key-prefix (kbd "C-c C-d"))
-  (which-key-add-key-based-replacements "C-c C-d" "dape")
+  (which-key-customize "dape" :key "C-c C-d")
   (setq dape-buffer-window-arrangement 'right)
   (setq dape-cwd-function #'approximate-project-root))
 
@@ -2209,9 +2209,23 @@ Useful after changing `eglot-workspace-configuration' or
 	     google-gemini-list-models
 	     google-gemini-model-info))
 
+;; gptel is loaded via :load-path from the elpa/ vc checkout, which has no
+;; gptel-pkg.el (it's gitignored upstream).  Register it in package-alist so
+;; dependency checks by gptel-agent and gptel-aibo succeed.
+(when (featurep 'package)
+  (unless (assq 'gptel package-alist)
+    (push (list 'gptel
+                (package-desc-create
+                 :name 'gptel
+                 :version '(0 9 8 0)
+                 :summary "A simple LLM client for Emacs"
+                 :reqs '((emacs (27 1)) (compat (29 1 4 4)) (transient (0 7 4)))
+                 :kind 'vc
+                 :dir (expand-file-name "elpa/gptel" user-emacs-directory)))
+          package-alist)))
+
 (use-package gptel
-  :ensure t
-  :vc (:url "https://github.com/karthink/gptel" :rev newest)
+  :load-path "elpa/gptel"
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands (gptel gptel-rewrite)
   :init
@@ -2324,13 +2338,13 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
-  :ensure t
+  :load-path "elpa/gptel-aibo-20250709.851"
   :bind (:map tychoish/robot-gptel-map
 	      ("w" . gptel-aibo-summon))
   :commands (gptel-aibo-summon gptel-aibo))
 
 (use-package gptel-agent
-  :ensure t
+  :load-path "elpa/gptel-agent-20260308.2122"
   :after (gptel)
   :commands (gptel-agent)
   :init
@@ -2679,9 +2693,9 @@ Useful after changing `eglot-workspace-configuration' or
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
-  (with-eval-after-load 'which-key
-    (push '((nil . "^agent-shell-") . (nil . ""))
-          which-key-replacement-alist))
+  (which-key-customize nil
+    :form (push '((nil . "^agent-shell-") . (nil . ""))
+                which-key-replacement-alist))
   :config
   (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
   (require 'agent-shell-extras)

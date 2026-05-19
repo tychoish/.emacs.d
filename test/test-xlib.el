@@ -1144,28 +1144,31 @@
     (should (= 1 fire-count))))
 
 (ert-deftest xlib/add-one-shot-hook-after-first-frame-created-routes-to-window-setup ()
-  "In non-daemon mode, after-first-frame-created adds to window-setup-hook.
-The routing is decided at macro-expansion time via (daemonp), so in batch
-non-daemon mode this test verifies the unquoted form adds to window-setup-hook."
-  (let ((before window-setup-hook))
+  "after-first-frame-created routes to window-setup-hook or server-after-make-frame-hook.
+In daemon mode the macro bakes in server-after-make-frame-hook at compile time;
+in non-daemon mode it uses window-setup-hook."
+  (let* ((expected-hook (if (daemonp) 'server-after-make-frame-hook 'window-setup-hook))
+         (before (symbol-value expected-hook)))
     (add-one-shot-hook
      :name "xlib-test-frame-sentinel"
      :hook after-first-frame-created
      :form t)
     (unwind-protect
-        (should (> (length window-setup-hook) (length before)))
-      (setq window-setup-hook before))))
+        (should (> (length (symbol-value expected-hook)) (length before)))
+      (set expected-hook before))))
 
 (ert-deftest xlib/add-one-shot-hook-after-first-frame-created-quoted-routes-to-window-setup ()
-  "The quoted form of the sentinel is also routed correctly after the xlib.el fix."
-  (let ((before window-setup-hook))
+  "The quoted form of after-first-frame-created also routes correctly.
+See xlib/add-one-shot-hook-after-first-frame-created-routes-to-window-setup."
+  (let* ((expected-hook (if (daemonp) 'server-after-make-frame-hook 'window-setup-hook))
+         (before (symbol-value expected-hook)))
     (add-one-shot-hook
      :name "xlib-test-frame-sentinel-quoted"
      :hook 'after-first-frame-created
      :form t)
     (unwind-protect
-        (should (> (length window-setup-hook) (length before)))
-      (setq window-setup-hook before))))
+        (should (> (length (symbol-value expected-hook)) (length before)))
+      (set expected-hook before))))
 
 (ert-deftest xlib/add-one-shot-hook-idle-timer-schedules-timer ()
   "With :idle-timer, the hook body is deferred via run-with-idle-timer."
