@@ -253,7 +253,8 @@ command its own isolated history."
        (-map #'f-expand)
        (-map #'directory-file-name)
        (-map #'f-canonical)
-       (-distinct)))
+       (-distinct)
+       (-map #'file-name-as-directory)))
 
 (defun annotated-completing-read--directory-parents (&optional start stop)
   "Return intermediate directory paths walking up from START to STOP."

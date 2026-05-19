@@ -1287,5 +1287,34 @@ PACKAGES to `package-selected-packages' and echoes the result."
             :directory project-root-directory
             :annotation (format "%s elisp package <%s>" desc display-name)))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; emacs-lisp -- Cask project operations
+
+(builder-register-candidates
+ :name "emacs-lisp-cask"
+ :pipeline
+ (when (f-file-p (f-join project-root-directory "Cask"))
+   (-l (make-builder-candidate
+        :name (format "cask-install <%s>" project-name)
+        :command "cask install"
+        :directory project-root-directory
+        :annotation (format "install Cask dependencies for %s" project-name))
+       (make-builder-candidate
+        :name (format "cask-test <%s>" project-name)
+        :command "cask exec ert-runner"
+        :directory project-root-directory
+        :annotation (format "run ert tests via ert-runner for %s" project-name))
+       (make-builder-candidate
+        :name (format "cask-build <%s>" project-name)
+        :command "cask build"
+        :directory project-root-directory
+        :annotation (format "byte-compile sources via Cask for %s" project-name))
+       (make-builder-candidate
+        :name (format "cask-clean <%s>" project-name)
+        :command "cask clean-elc"
+        :directory project-root-directory
+        :annotation (format "remove compiled .elc files via Cask for %s" project-name)))))
+
 (provide 'builder)
 ;;; builder.el ends here

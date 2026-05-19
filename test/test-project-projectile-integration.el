@@ -14,6 +14,10 @@
 
 (require 'ert)
 (require 'project)
+(require 'projectile)
+
+(cl-defmethod project-name ((project (head projectile)))
+  (projectile-project-name (project-root project)))
 
 (defmacro project-test--with-project-dir (marker &rest body)
   "Create a temp directory containing MARKER file, bind `default-directory' to it, run BODY."
@@ -31,8 +35,6 @@
 
 (ert-deftest project-projectile/project-current-returns-projectile-object ()
   "project-current returns a (projectile . root) cons when projectile-mode is on."
-  (skip-unless (featurep 'projectile))
-  (skip-unless (fboundp 'project-projectile))
   (project-test--with-project-dir ".projectile"
     (let ((project-find-functions '(project-projectile)))
       (let ((proj (project-current nil dir)))
@@ -41,17 +43,18 @@
         (should (eq (car proj) 'projectile))))))
 
 (ert-deftest project-projectile/project-current-uses-projectile-when-mode-on ()
-  "With projectile-mode active, project-find-functions includes project-projectile."
-  (skip-unless (featurep 'projectile))
-  (should (member #'project-projectile project-find-functions)))
+  "Enabling projectile-mode adds project-projectile to project-find-functions."
+  (unwind-protect
+      (progn
+        (projectile-mode 1)
+        (should (member #'project-projectile project-find-functions)))
+    (projectile-mode -1)))
 
 ;; ---------------------------------------------------------------------------
 ;; project-root delegates to projectile
 
 (ert-deftest project-projectile/project-root-matches-projectile-project-root ()
   "project-root on a projectile project object matches projectile-project-root."
-  (skip-unless (featurep 'projectile))
-  (skip-unless (fboundp 'project-projectile))
   (project-test--with-project-dir ".projectile"
     (let ((project-find-functions '(project-projectile)))
       (let* ((proj (project-current nil dir))
@@ -67,8 +70,6 @@
 (ert-deftest project-projectile/project-name-default-returns-basename ()
   "Without a cl-defmethod override, project-name returns the root directory basename.
 This documents the gap: it ignores projectile-project-name / projectile-project-name-function."
-  (skip-unless (featurep 'projectile))
-  (skip-unless (fboundp 'project-projectile))
   (project-test--with-project-dir ".projectile"
     (let ((project-find-functions '(project-projectile)))
       (let* ((proj (project-current nil dir))
@@ -99,8 +100,6 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
 
 (ert-deftest project-projectile/project-name-with-override-uses-projectile ()
   "When the cl-defmethod override is in place, project-name delegates to projectile-project-name."
-  (skip-unless (featurep 'projectile))
-  (skip-unless (fboundp 'project-projectile))
   (skip-unless (project-test--projectile-name-method-defined-p))
   (project-test--with-project-dir ".projectile"
     (let ((project-find-functions '(project-projectile)))
@@ -112,8 +111,6 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
 
 (ert-deftest project-projectile/project-name-override-differs-from-basename-when-custom ()
   "When projectile-project-name-function is customised, the override diverges from basename."
-  (skip-unless (featurep 'projectile))
-  (skip-unless (fboundp 'project-projectile))
   (skip-unless (project-test--projectile-name-method-defined-p))
   (project-test--with-project-dir ".projectile"
     (let* ((project-find-functions '(project-projectile))
@@ -132,8 +129,6 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
 
 (ert-deftest project-projectile/project-buffers-returns-list ()
   "project-buffers returns a list (possibly empty) for a projectile project."
-  (skip-unless (featurep 'projectile))
-  (skip-unless (fboundp 'project-projectile))
   (project-test--with-project-dir ".projectile"
     (let ((project-find-functions '(project-projectile)))
       (let* ((proj (project-current nil dir)))

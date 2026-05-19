@@ -8,15 +8,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'ht)
-
-(defvar magit-gh-extras-test--load-path
-  (expand-file-name "lisp" (file-name-directory
-                            (directory-file-name
-                             (file-name-directory (or load-file-name buffer-file-name))))))
-
-(unless (featurep 'magit-gh-extras)
-  (add-to-list 'load-path magit-gh-extras-test--load-path)
-  (require 'magit-gh-extras))
+(require 'magit-gh-extras)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; magit-gh--pr-closed-p (pure)
@@ -115,51 +107,61 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; magit-gh--prune-scan
 
+(defun magit-gh-extras-test--make-pr-table (alist)
+  "Build a hash table of branch→pr-alist from ALIST for use in scan mocks."
+  (let ((table (make-hash-table :test #'equal)))
+    (pcase-dolist (`(,branch . ,pr) alist)
+      (puthash branch pr table))
+    table))
+
 (ert-deftest magit-gh-extras/scan-collects-closed-prs ()
   "scan keeps only branches whose PR is merged or closed."
-  (cl-letf (((symbol-function 'magit-gh--repo-dir) (lambda () "/tmp/r"))
-            ((symbol-function 'magit-gh--tracking-branches) (lambda () '("a" "b" "c" "d")))
-            ((symbol-function 'magit-gh--pr-for-branch)
-             (lambda (b) (pcase b
-                           ("a" '((number . 1) (state . "MERGED")))
-                           ("b" '((number . 2) (state . "OPEN")))
-                           ("c" '((number . 3) (state . "CLOSED")))
-                           ("d" nil)))))
-    (with-temp-buffer
-      (setq-local magit-gh--prune-state nil)
-      (let ((result (magit-gh--prune-scan)))
-        (should (equal '("a" "c") (mapcar #'car result)))
-        (should (equal '("a" "c")
-                       (mapcar #'car (plist-get magit-gh--prune-state :candidates))))))))
+  (let ((prs (magit-gh-extras-test--make-pr-table
+              '(("a" . ((number . 1) (state . "MERGED")))
+                ("c" . ((number . 3) (state . "CLOSED")))))))
+    (cl-letf (((symbol-function 'magit-gh--repo-dir) (lambda () "/tmp/r"))
+              ((symbol-function 'magit-gh--default-branch) (lambda () "main"))
+              ((symbol-function 'magit-get-current-branch) (lambda () "current"))
+              ((symbol-function 'magit-gh--fetch-closed-prs) (lambda (&optional _) prs))
+              ((symbol-function 'magit-list-local-branch-names) (lambda () '("a" "b" "c" "d"))))
+      (with-temp-buffer
+        (setq-local magit-gh--prune-state nil)
+        (let ((result (magit-gh--prune-scan)))
+          (should (equal '("a" "c") (mapcar #'car result)))
+          (should (equal '("a" "c")
+                         (mapcar #'car (plist-get magit-gh--prune-state :candidates)))))))))
 
 (ert-deftest magit-gh-extras/scan-drops-stale-marked ()
   "Marked branches no longer in candidate set are dropped."
-  (cl-letf (((symbol-function 'magit-gh--repo-dir) (lambda () "/tmp/r"))
-            ((symbol-function 'magit-gh--tracking-branches) (lambda () '("a" "b" "c")))
-            ((symbol-function 'magit-gh--pr-for-branch)
-             (lambda (b) (pcase b
-                           ("a" '((number . 1) (state . "MERGED")))
-                           ("b" '((number . 2) (state . "OPEN")))
-                           ("c" '((number . 3) (state . "CLOSED")))))))
-    (with-temp-buffer
-      ;; 'gone' is stale (not a branch); 'b' is open (not a candidate)
-      (setq-local magit-gh--prune-state
-                  (list :candidates nil :marked '("a" "gone" "b")))
-      (magit-gh--prune-scan)
-      (should (equal '("a") (plist-get magit-gh--prune-state :marked))))))
+  (let ((prs (magit-gh-extras-test--make-pr-table
+              '(("a" . ((number . 1) (state . "MERGED")))
+                ("c" . ((number . 3) (state . "CLOSED")))))))
+    (cl-letf (((symbol-function 'magit-gh--repo-dir) (lambda () "/tmp/r"))
+              ((symbol-function 'magit-gh--default-branch) (lambda () "main"))
+              ((symbol-function 'magit-get-current-branch) (lambda () "current"))
+              ((symbol-function 'magit-gh--fetch-closed-prs) (lambda (&optional _) prs))
+              ((symbol-function 'magit-list-local-branch-names) (lambda () '("a" "b" "c"))))
+      (with-temp-buffer
+        ;; 'gone' is stale (not a branch); 'b' has no closed PR (not a candidate)
+        (setq-local magit-gh--prune-state
+                    (list :candidates nil :marked '("a" "gone" "b")))
+        (magit-gh--prune-scan)
+        (should (equal '("a") (plist-get magit-gh--prune-state :marked)))))))
 
 (ert-deftest magit-gh-extras/scan-empty ()
-  "scan with only open PRs yields empty candidates."
-  (cl-letf (((symbol-function 'magit-gh--repo-dir) (lambda () "/tmp/r"))
-            ((symbol-function 'magit-gh--tracking-branches) (lambda () '("a")))
-            ((symbol-function 'magit-gh--pr-for-branch)
-             (lambda (_) '((number . 1) (state . "OPEN")))))
-    (with-temp-buffer
-      (setq-local magit-gh--prune-state nil)
-      (let ((result (magit-gh--prune-scan)))
-        (should-not result)
-        (should-not (plist-get magit-gh--prune-state :candidates))
-        (should-not (plist-get magit-gh--prune-state :marked))))))
+  "scan with no closed PRs yields empty candidates."
+  (let ((prs (make-hash-table :test #'equal)))
+    (cl-letf (((symbol-function 'magit-gh--repo-dir) (lambda () "/tmp/r"))
+              ((symbol-function 'magit-gh--default-branch) (lambda () "main"))
+              ((symbol-function 'magit-get-current-branch) (lambda () "current"))
+              ((symbol-function 'magit-gh--fetch-closed-prs) (lambda (&optional _) prs))
+              ((symbol-function 'magit-list-local-branch-names) (lambda () '("a"))))
+      (with-temp-buffer
+        (setq-local magit-gh--prune-state nil)
+        (let ((result (magit-gh--prune-scan)))
+          (should-not result)
+          (should-not (plist-get magit-gh--prune-state :candidates))
+          (should-not (plist-get magit-gh--prune-state :marked)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; magit-gh--prune-state-buffer

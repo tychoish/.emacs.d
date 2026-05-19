@@ -9,12 +9,13 @@
   `(let ((file-name-handler-alist nil))
      ,@body))
 
-(setcar native-comp-eln-load-path (expand-file-name "~/.cache/emacs/eln/"))
+(setq package-enable-at-startup nil)
 
 (push '(tool-bar-lines . 0) default-frame-alist)
 (push '(menu-bar-lines . 0) default-frame-alist)
 (push '(vertical-scroll-bars . nil) default-frame-alist)
 
 (when (string-match "NATIVE_COMP" system-configuration-features)
+  (setcar native-comp-eln-load-path (expand-file-name "~/.cache/emacs/eln/"))
   (setq native-comp-jit-compilation t)
   (setq native-compile-prune-cache t))

@@ -197,13 +197,14 @@ string-in-paragraph-contents issues during tree walking."
 
 ;;; Registration
 
-(cl-defmethod agent-shell-queue-serialize ((format (eql org)))
-  (agent-shell-queue-org--serialize))
+(cl-defmethod agent-shell-queue--serialize-items ((_format (eql org)) items)
+  (let ((agent-shell-queue--items items))
+    (agent-shell-queue-org--serialize)))
 
-(cl-defmethod agent-shell-queue-deserialize ((format (eql org)) string)
+(cl-defmethod agent-shell-queue--deserialize-items ((_format (eql org)) string)
   (agent-shell-queue-org--deserialize string))
 
-(cl-defmethod agent-shell-queue-format-file-extension ((format (eql org)))
+(cl-defmethod agent-shell-queue-format-file-extension ((_format (eql org)))
   ".org")
 
 (provide 'agent-shell-queue-org)

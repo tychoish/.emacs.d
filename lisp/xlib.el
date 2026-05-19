@@ -784,7 +784,8 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 	      :map ,(or bind-map 'global-map)
 	      (,bind-key . ,user-command-symbol))
 	     ,(when key-alias
-		`(which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias)))))))
+		`(with-eval-after-load 'which-key
+		   (which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias))))))))
 
 (defmacro with-toggle-once (name &rest body)
   "Define a function NAME that executes BODY only the first time it is called.
