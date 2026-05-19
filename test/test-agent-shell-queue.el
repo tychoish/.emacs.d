@@ -30,12 +30,15 @@
   "Execute BODY with fresh, isolated queue globals.
 Mocks out disk I/O and buffer refresh so tests stay pure."
   `(let ((agent-shell-queue--items nil)
-         (agent-shell-queue--counter 0)
          (agent-shell-queue--loaded t)
          (agent-shell-queue--subscriptions nil)
          (agent-shell-queue--editing-ids nil)
-         (agent-shell-queue--buffer-paused nil)
+         (agent-shell-queue--session-paused nil)
          (agent-shell-queue--stale-item-ids nil)
+         (agent-shell-queue--next-flush-time nil)
+         (agent-shell-queue--wait-timers nil)
+         (agent-shell-queue--compact-running nil)
+         (agent-shell-queue--response-start-positions nil)
          (agent-shell-queue-paused nil)
          (agent-shell-queue--last-flush-time nil))
      (cl-letf (((symbol-function 'agent-shell-queue--save) #'ignore)
@@ -51,15 +54,17 @@ Mocks out disk I/O and buffer refresh so tests stay pure."
       ,@body)))
 
 (defun agent-shell-queue-test/make-item (id prompt &optional status background)
-  "Build a test item directly, bypassing the counter."
+  "Build a test item directly, bypassing ID generation."
   (agent-shell-queue-item--make
    :id id
    :prompt prompt
    :status (or status 'active)
+   :kind 'prompt
    :background background
    :created 1000.0
    :dispatched nil
-   :completed nil))
+   :completed nil
+   :response nil))
 
 (defun agent-shell-queue-test/populate (&rest specs)
   "Return a fresh `agent-shell-queue--items' alist from SPECS.
@@ -104,32 +109,32 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/status-string-active ()
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'active nil)))
-      (should (equal "active" (agent-shell-queue--status-string item))))))
+      (should (equal "scheduled" (agent-shell-queue--status-string item))))))
 
 (ert-deftest agent-shell-queue/status-string-deferred ()
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'deferred nil)))
-      (should (equal "deferred" (agent-shell-queue--status-string item))))))
+      (should (equal "held" (agent-shell-queue--status-string item))))))
 
 (ert-deftest agent-shell-queue/status-string-active-background ()
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'active t)))
-      (should (equal "active/bg" (agent-shell-queue--status-string item))))))
+      (should (equal "scheduled.bg" (agent-shell-queue--status-string item))))))
 
 (ert-deftest agent-shell-queue/status-string-deferred-background ()
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'deferred t)))
-      (should (equal "deferred/bg" (agent-shell-queue--status-string item))))))
+      (should (equal "held.bg" (agent-shell-queue--status-string item))))))
 
 (ert-deftest agent-shell-queue/status-string-running ()
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'running nil)))
-      (should (equal "running" (agent-shell-queue--status-string item))))))
+      (should (equal "running.active" (agent-shell-queue--status-string item))))))
 
 (ert-deftest agent-shell-queue/status-string-running-background ()
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'running t)))
-      (should (equal "running/bg" (agent-shell-queue--status-string item))))))
+      (should (equal "running.active.bg" (agent-shell-queue--status-string item))))))
 
 (ert-deftest agent-shell-queue/status-string-done ()
   (agent-shell-queue-test/isolate
@@ -143,28 +148,28 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
       (setq agent-shell-queue--editing-ids '("q-1"))
       (should (equal "editing" (agent-shell-queue--status-string item))))))
 
-(ert-deftest agent-shell-queue/status-string-buf-blocked ()
-  "Active item in a buffer-paused buffer shows 'buf-blocked'."
+(ert-deftest agent-shell-queue/status-string-session-paused ()
+  "Active item targeting a session-paused buffer shows 'paused<shell>'."
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'active nil)))
-      (setq agent-shell-queue--buffer-paused '("paused-buf"))
-      (should (equal "buf-blocked"
+      (setq agent-shell-queue--session-paused '("paused-buf"))
+      (should (equal "paused<shell>"
                      (agent-shell-queue--status-string item "paused-buf"))))))
 
-(ert-deftest agent-shell-queue/status-string-buf-blocked-not-deferred ()
-  "Deferred items are not shown as buf-blocked even if buffer is paused."
+(ert-deftest agent-shell-queue/status-string-session-paused-not-deferred ()
+  "Deferred items are not shown as paused even if session is paused."
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'deferred nil)))
-      (setq agent-shell-queue--buffer-paused '("paused-buf"))
-      (should (equal "deferred"
+      (setq agent-shell-queue--session-paused '("paused-buf"))
+      (should (equal "held"
                      (agent-shell-queue--status-string item "paused-buf"))))))
 
-(ert-deftest agent-shell-queue/status-string-editing-takes-priority-over-blocked ()
-  "Editing status takes priority over buf-blocked."
+(ert-deftest agent-shell-queue/status-string-editing-takes-priority-over-paused ()
+  "Editing status takes priority over session-paused."
   (agent-shell-queue-test/isolate
     (let ((item (agent-shell-queue-test/make-item "q-1" "p" 'active nil)))
       (setq agent-shell-queue--editing-ids '("q-1"))
-      (setq agent-shell-queue--buffer-paused '("paused-buf"))
+      (setq agent-shell-queue--session-paused '("paused-buf"))
       (should (equal "editing"
                      (agent-shell-queue--status-string item "paused-buf"))))))
 
@@ -235,13 +240,15 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue--make-item
 
-(ert-deftest agent-shell-queue/make-item-increments-counter ()
+(ert-deftest agent-shell-queue/make-item-has-string-id ()
+  "Each --make-item call returns an item with a unique string ID starting with q."
   (agent-shell-queue-test/isolate
-    (let ((item (agent-shell-queue--make-item "hello")))
-      (should (equal "q-1" (agent-shell-queue-item-id item)))
-      (should (= 1 agent-shell-queue--counter))
-      (agent-shell-queue--make-item "world")
-      (should (= 2 agent-shell-queue--counter)))))
+    (let ((id1 (agent-shell-queue-item-id (agent-shell-queue--make-item "hello")))
+          (id2 (agent-shell-queue-item-id (agent-shell-queue--make-item "world"))))
+      (should (stringp id1))
+      (should (string-prefix-p "q" id1))
+      (should (stringp id2))
+      (should (not (equal id1 id2))))))
 
 (ert-deftest agent-shell-queue/make-item-defaults ()
   (agent-shell-queue-test/isolate
@@ -431,29 +438,29 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (should (eq 'active (agent-shell-queue-item-status (cadar agent-shell-queue--items))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; agent-shell-queue-toggle-background
+;;; agent-shell-queue-set-background-task
 
-(ert-deftest agent-shell-queue/toggle-background-on ()
+(ert-deftest agent-shell-queue/set-background-task-on ()
   (agent-shell-queue-test/isolate-no-sub
     (setq agent-shell-queue--items
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
-    (agent-shell-queue-toggle-background "q-1")
+    (agent-shell-queue-set-background-task "q-1" t)
     (should (agent-shell-queue-item-background (cadar agent-shell-queue--items)))))
 
-(ert-deftest agent-shell-queue/toggle-background-off ()
+(ert-deftest agent-shell-queue/set-background-task-off ()
   (agent-shell-queue-test/isolate-no-sub
     (setq agent-shell-queue--items
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active t))))
-    (agent-shell-queue-toggle-background "q-1")
+    (agent-shell-queue-set-background-task "q-1" nil)
     (should-not (agent-shell-queue-item-background (cadar agent-shell-queue--items)))))
 
-(ert-deftest agent-shell-queue/toggle-background-idempotent ()
+(ert-deftest agent-shell-queue/set-background-task-idempotent ()
   (agent-shell-queue-test/isolate-no-sub
     (setq agent-shell-queue--items
           (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
-    (agent-shell-queue-toggle-background "q-1")
-    (agent-shell-queue-toggle-background "q-1")
-    (should-not (agent-shell-queue-item-background (cadar agent-shell-queue--items)))))
+    (agent-shell-queue-set-background-task "q-1" t)
+    (agent-shell-queue-set-background-task "q-1" t)
+    (should (agent-shell-queue-item-background (cadar agent-shell-queue--items)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue-edit
@@ -523,40 +530,44 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
                    (mapcar #'agent-shell-queue-item-id (cdar agent-shell-queue--items))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Pause: global and per-buffer
+;;; Pause: global and per-session
 
-(ert-deftest agent-shell-queue/toggle-pause-sets-flag ()
+(ert-deftest agent-shell-queue/pause-and-resume-sets-flag ()
+  "pause sets the flag; resume clears it."
   (agent-shell-queue-test/isolate
     (should-not agent-shell-queue-paused)
-    (agent-shell-queue-toggle-pause)
+    (agent-shell-queue-pause)
     (should agent-shell-queue-paused)
-    (agent-shell-queue-toggle-pause)
+    (agent-shell-queue-resume)
     (should-not agent-shell-queue-paused)))
 
-(ert-deftest agent-shell-queue/buffer-toggle-pause-adds-name ()
+(ert-deftest agent-shell-queue/session-pause-adds-name ()
+  "session-pause adds the buffer name to --session-paused."
   (agent-shell-queue-test/isolate
     (let ((buf (get-buffer-create " *asq-pause-test*")))
       (unwind-protect
           (progn
-            (agent-shell-queue-buffer-toggle-buffer-pause buf)
-            (should (member (buffer-name buf) agent-shell-queue--buffer-paused)))
+            (agent-shell-queue-session-pause buf)
+            (should (member (buffer-name buf) agent-shell-queue--session-paused)))
         (kill-buffer buf)))))
 
-(ert-deftest agent-shell-queue/buffer-toggle-pause-removes-name ()
+(ert-deftest agent-shell-queue/session-resume-removes-name ()
+  "session-resume removes the buffer name from --session-paused."
   (agent-shell-queue-test/isolate
     (let ((buf (get-buffer-create " *asq-pause-test*")))
       (unwind-protect
           (progn
-            (setq agent-shell-queue--buffer-paused (list (buffer-name buf)))
-            (agent-shell-queue-buffer-toggle-buffer-pause buf)
-            (should-not (member (buffer-name buf) agent-shell-queue--buffer-paused)))
+            (setq agent-shell-queue--session-paused (list (buffer-name buf)))
+            (cl-letf (((symbol-function 'agent-shell-queue--send-next-for-buffer) #'ignore))
+              (agent-shell-queue-session-resume buf))
+            (should-not (member (buffer-name buf) agent-shell-queue--session-paused)))
         (kill-buffer buf)))))
 
-(ert-deftest agent-shell-queue/unpause-all-clears-list ()
+(ert-deftest agent-shell-queue/unpause-all-sessions-clears-list ()
   (agent-shell-queue-test/isolate
-    (setq agent-shell-queue--buffer-paused '("buf1" "buf2" "buf3"))
-    (agent-shell-queue-unpause-all-buffers)
-    (should-not agent-shell-queue--buffer-paused)))
+    (setq agent-shell-queue--session-paused '("buf1" "buf2" "buf3"))
+    (agent-shell-queue-unpause-all-sessions)
+    (should-not agent-shell-queue--session-paused)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Dispatch: editing-ids and buffer-paused prevent sends
@@ -580,7 +591,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
         (kill-buffer buf)))))
 
 (ert-deftest agent-shell-queue/send-next-skips-buffer-paused ()
-  "Items targeting a buffer-paused buffer are not dispatched."
+  "Items targeting a session-paused buffer are not dispatched."
   (agent-shell-queue-test/isolate-no-sub
     (let ((sent nil)
           (buf (get-buffer-create " *asq-buf-pause-test*")))
@@ -589,7 +600,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
             (setq agent-shell-queue--items
                   (list (list (buffer-name buf)
                               (agent-shell-queue-test/make-item "q-1" "p" 'active nil))))
-            (setq agent-shell-queue--buffer-paused (list (buffer-name buf)))
+            (setq agent-shell-queue--session-paused (list (buffer-name buf)))
             (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
                       ((symbol-function 'agent-shell-insert)
                        (lambda (&rest _) (setq sent t))))
@@ -818,7 +829,6 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   (let* ((tmp (make-temp-file "asq-test"))
          (agent-shell-queue-state-file-function (lambda () tmp))
          (agent-shell-queue--items nil)
-         (agent-shell-queue--counter 0)
          (agent-shell-queue--loaded t)
          (agent-shell-queue--last-flush-time nil))
     (unwind-protect
@@ -827,8 +837,7 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
                 (agent-shell-queue-test/populate
                  '("mybuf" ("q-5" "persisted" deferred t))))
           (agent-shell-queue--save)
-          (setq agent-shell-queue--items nil
-                agent-shell-queue--counter 0)
+          (setq agent-shell-queue--items nil)
           (agent-shell-queue--load)
           (should (= 1 (length agent-shell-queue--items)))
           (let* ((pair (car agent-shell-queue--items))
@@ -838,7 +847,6 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
             (should (equal "persisted" (agent-shell-queue-item-prompt item)))
             (should (eq 'deferred (agent-shell-queue-item-status item)))
             (should (agent-shell-queue-item-background item)))
-          (should (>= agent-shell-queue--counter 5))
           ;; save sets flush time
           (should (numberp agent-shell-queue--last-flush-time)))
       (ignore-errors (delete-file tmp)))))
@@ -876,21 +884,21 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
           (should-not agent-shell-queue--items))
       (ignore-errors (delete-file tmp)))))
 
-(ert-deftest agent-shell-queue/load-restores-counter ()
-  (let* ((tmp (make-temp-file "asq-counter"))
+(ert-deftest agent-shell-queue/load-restores-multiple-items ()
+  "Loading persisted state restores all items across buckets."
+  (let* ((tmp (make-temp-file "asq-multi"))
          (agent-shell-queue-state-file-function (lambda () tmp))
-         (agent-shell-queue--items nil)
-         (agent-shell-queue--counter 0))
+         (agent-shell-queue--items nil))
     (unwind-protect
         (progn
           (setq agent-shell-queue--items
                 (agent-shell-queue-test/populate
                  '("buf" ("q-7" "a" active nil) ("q-12" "b" active nil))))
           (agent-shell-queue--save)
-          (setq agent-shell-queue--items nil
-                agent-shell-queue--counter 0)
+          (setq agent-shell-queue--items nil)
           (agent-shell-queue--load)
-          (should (>= agent-shell-queue--counter 12)))
+          (should (= 1 (length agent-shell-queue--items)))
+          (should (= 2 (length (cdar agent-shell-queue--items)))))
       (ignore-errors (delete-file tmp)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1142,5 +1150,215 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
               (agent-shell-queue--auto-send)
               (should (= 1 sent-count))))
         (kill-buffer buf)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--refresh-buffer guard chain
+;; Note: these tests call --refresh-buffer directly without the isolate
+;; macro, since isolate stubs out the function under test.
+
+(ert-deftest agent-shell-queue/refresh-buffer-skips-dead-buffer ()
+  "No error and no refresh when the queue buffer does not exist."
+  (let ((refreshed nil))
+    (cl-letf (((symbol-function 'agent-shell-queue-buffer-refresh)
+               (lambda () (setq refreshed t)))
+              ((symbol-function 'get-buffer)
+               (lambda (_) nil)))
+      (agent-shell-queue--refresh-buffer)
+      (should-not refreshed))))
+
+(ert-deftest agent-shell-queue/refresh-buffer-skips-wrong-mode ()
+  "No refresh when the queue buffer is live but not in agent-shell-queue-mode."
+  (let ((refreshed nil)
+        (buf (get-buffer-create " *asq-refresh-test*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell-queue-buffer-refresh)
+                   (lambda () (setq refreshed t)))
+                  ((symbol-function 'get-buffer)
+                   (lambda (_) buf))
+                  ((symbol-function 'derived-mode-p)
+                   (lambda (_) nil)))
+          (agent-shell-queue--refresh-buffer)
+          (should-not refreshed))
+      (kill-buffer buf))))
+
+(ert-deftest agent-shell-queue/refresh-buffer-calls-refresh-when-live-and-mode ()
+  "Refresh is called when the buffer is live and in agent-shell-queue-mode."
+  (let ((refreshed nil)
+        (buf (get-buffer-create " *asq-refresh-live-test*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell-queue-buffer-refresh)
+                   (lambda () (setq refreshed t)))
+                  ((symbol-function 'get-buffer)
+                   (lambda (_) buf))
+                  ((symbol-function 'derived-mode-p)
+                   (lambda (_) t)))
+          (agent-shell-queue--refresh-buffer)
+          (should refreshed))
+      (kill-buffer buf))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--session-mode-blocked-p guard chain
+
+(ert-deftest agent-shell-queue/session-mode-blocked-dead-buffer ()
+  "Returns nil when the buffer is dead."
+  (agent-shell-queue-test/isolate
+    (let ((buf (get-buffer-create " *asq-mode-blocked-dead*")))
+      (kill-buffer buf)
+      (should-not (agent-shell-queue--session-mode-blocked-p buf)))))
+
+(ert-deftest agent-shell-queue/session-mode-blocked-no-mode-id ()
+  "Returns nil when map-nested-elt finds no :session :mode-id."
+  (agent-shell-queue-test/isolate
+    (let ((buf (get-buffer-create " *asq-mode-blocked-no-id*"))
+          (agent-shell-queue-blocked-session-modes '("blocked-mode")))
+      (unwind-protect
+          (cl-letf (((symbol-function 'map-nested-elt)
+                     (lambda (&rest _) nil)))
+            (should-not (agent-shell-queue--session-mode-blocked-p buf)))
+        (kill-buffer buf)))))
+
+(ert-deftest agent-shell-queue/session-mode-blocked-mode-not-in-list ()
+  "Returns nil when mode-id is not in blocked-session-modes."
+  (agent-shell-queue-test/isolate
+    (let ((buf (get-buffer-create " *asq-mode-blocked-not-in*"))
+          (agent-shell-queue-blocked-session-modes '("blocked-mode")))
+      (unwind-protect
+          (cl-letf (((symbol-function 'map-nested-elt)
+                     (lambda (&rest _) "other-mode")))
+            (should-not (agent-shell-queue--session-mode-blocked-p buf)))
+        (kill-buffer buf)))))
+
+(ert-deftest agent-shell-queue/session-mode-blocked-mode-in-list ()
+  "Returns non-nil when mode-id is in blocked-session-modes."
+  (agent-shell-queue-test/isolate
+    (let ((buf (get-buffer-create " *asq-mode-blocked-in*"))
+          (agent-shell-queue-blocked-session-modes '("blocked-mode" "other")))
+      (unwind-protect
+          (cl-letf (((symbol-function 'map-nested-elt)
+                     (lambda (&rest _) "blocked-mode")))
+            (should (agent-shell-queue--session-mode-blocked-p buf)))
+        (kill-buffer buf)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--drop-subscription — setq is unconditional
+
+(ert-deftest agent-shell-queue/drop-subscription-cleans-up-dead-buffer ()
+  "Subscription entry is removed from registry even when the buffer is dead."
+  (agent-shell-queue-test/isolate
+    (setq agent-shell-queue--subscriptions
+          (list (cons "dead-buf" 'fake-token)))
+    (cl-letf (((symbol-function 'get-buffer) (lambda (_) nil)))
+      (agent-shell-queue--drop-subscription "dead-buf"))
+    (should-not agent-shell-queue--subscriptions)))
+
+(ert-deftest agent-shell-queue/drop-subscription-cleans-up-non-agent-shell-mode ()
+  "Subscription entry is removed even when buffer is live but wrong mode."
+  (agent-shell-queue-test/isolate
+    (let ((buf (get-buffer-create " *asq-drop-sub-test*")))
+      (unwind-protect
+          (progn
+            (setq agent-shell-queue--subscriptions
+                  (list (cons (buffer-name buf) 'fake-token)))
+            (cl-letf (((symbol-function 'derived-mode-p) (lambda (_) nil))
+                      ((symbol-function 'agent-shell-unsubscribe) #'ignore))
+              (agent-shell-queue--drop-subscription (buffer-name buf)))
+            (should-not agent-shell-queue--subscriptions))
+        (kill-buffer buf)))))
+
+(ert-deftest agent-shell-queue/drop-subscription-unknown-buf-name-noop ()
+  "Calling with an unregistered name does not error and leaves registry intact."
+  (agent-shell-queue-test/isolate
+    (setq agent-shell-queue--subscriptions
+          (list (cons "other-buf" 'token)))
+    (agent-shell-queue--drop-subscription "no-such-buf")
+    (should (= 1 (length agent-shell-queue--subscriptions)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue-defer — unknown id is noop
+
+(ert-deftest agent-shell-queue/defer-unknown-id-is-noop ()
+  (agent-shell-queue-test/isolate-no-sub
+    (setq agent-shell-queue--items
+          (agent-shell-queue-test/populate '("buf1" ("q-1" "hello" active nil))))
+    (agent-shell-queue-defer "q-999")
+    (should (eq 'active (agent-shell-queue-item-status (cadar agent-shell-queue--items))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--auto-send — when-let* short-circuits
+
+(ert-deftest agent-shell-queue/auto-send-skips-session-paused ()
+  "Items targeting a session-paused buffer are not dispatched."
+  (agent-shell-queue-test/isolate-no-sub
+    (let ((sent nil)
+          (buf (get-buffer-create " *asq-sess-pause-test*")))
+      (unwind-protect
+          (progn
+            (setq agent-shell-queue--items
+                  (list (list (buffer-name buf)
+                              (agent-shell-queue-test/make-item "q-1" "p" 'active nil))))
+            (setq agent-shell-queue--session-paused (list (buffer-name buf)))
+            (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
+                      ((symbol-function 'agent-shell-insert)
+                       (lambda (&rest _) (setq sent t))))
+              (agent-shell-queue--auto-send)
+              (should-not sent)))
+        (kill-buffer buf)))))
+
+(ert-deftest agent-shell-queue/auto-send-dispatches-next-item ()
+  "auto-send dispatches the first active item for an idle buffer."
+  (agent-shell-queue-test/isolate-no-sub
+    (let ((dispatched-id nil)
+          (buf (get-buffer-create " *asq-auto-send-dispatch*")))
+      (unwind-protect
+          (progn
+            (setq agent-shell-queue--items
+                  (list (list (buffer-name buf)
+                              (agent-shell-queue-test/make-item "q-1" "first" 'active nil)
+                              (agent-shell-queue-test/make-item "q-2" "second" 'active nil))))
+            (cl-letf (((symbol-function 'shell-maker-busy) (lambda () nil))
+                      ((symbol-function 'agent-shell-queue-send-item)
+                       (lambda (id) (setq dispatched-id id))))
+              (agent-shell-queue--auto-send)
+              (should (equal "q-1" dispatched-id))))
+        (kill-buffer buf)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--write-archive — :ran field follows dispatched
+
+(ert-deftest agent-shell-queue/write-archive-ran-when-dispatched ()
+  ":ran is t when dispatched is non-nil."
+  (let* ((tmp (make-temp-file "asq-archive-ran"))
+         (agent-shell-queue-archive-file tmp)
+         (item (agent-shell-queue-item--make
+                :id "q-1" :prompt "p" :status 'done
+                :background nil :created 1000.0
+                :dispatched 2000.0 :completed 3000.0)))
+    (unwind-protect
+        (progn
+          (agent-shell-queue--write-archive "buf" item)
+          (let* ((raw (with-temp-buffer
+                        (insert-file-contents tmp)
+                        (buffer-string)))
+                 (parsed (json-parse-string raw)))
+            (should (eq t (gethash "ran" parsed)))))
+      (ignore-errors (delete-file tmp)))))
+
+(ert-deftest agent-shell-queue/write-archive-not-ran-when-no-dispatched ()
+  ":ran is :false when dispatched is nil."
+  (let* ((tmp (make-temp-file "asq-archive-norun"))
+         (agent-shell-queue-archive-file tmp)
+         (item (agent-shell-queue-item--make
+                :id "q-2" :prompt "p" :status 'done
+                :background nil :created 1000.0
+                :dispatched nil :completed nil)))
+    (unwind-protect
+        (progn
+          (agent-shell-queue--write-archive "buf" item)
+          (let* ((raw (with-temp-buffer
+                        (insert-file-contents tmp)
+                        (buffer-string)))
+                 (parsed (json-parse-string raw)))
+            (should (eq :false (gethash "ran" parsed)))))
+      (ignore-errors (delete-file tmp)))))
 
 ;;; test-agent-shell-queue.el ends here

@@ -2,7 +2,8 @@
 
 (eval-when-compile
   (require 'dash)
-  (require 'xlib))
+  (require 'xlib)
+  (require 'fn))
 
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")
@@ -12,6 +13,11 @@
 
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook 'turn-on-soft-wrap) ;; from 'tychoish-common
+  (defun tychoish--org-enable-vfc-heading-truncation ()
+    "Enable heading truncation mode when visual-fill-column is active."
+    (when visual-fill-column-mode
+      (tychoish-vfc-heading-truncation-mode 1)))
+  (add-hook 'org-mode-hook #'tychoish--org-enable-vfc-heading-truncation)
   (add-hook 'org-agenda-mode-hook 'tychoish/background-revbufs-for-hook)
   (add-hook 'org-mode-hook 'tychoish/set-up-buffer-org-mode)
 
@@ -194,8 +200,6 @@
   "p" #'org-gist-export-private-gist
   "g" #'org-gist-export-public-gist)
 
-
-
 (with-eval-after-load 'org-agenda
   (bind-keys
    :map org-agenda-mode-map
@@ -313,7 +317,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (let ((scope (if (org-before-first-heading-p) 'file 'tree))
         markers)
     (org-map-entries
-     (lambda () (push (point-marker) markers))
+     (fn (push (point-marker) markers))
      (tychoish-org-done-state-match)
      scope
      'archive)
@@ -345,20 +349,22 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (interactive)
   (let ((key-table (ht-create))
 	(annotation-table (ht-create)))
-    (dolist (template (--filter (< 4 (length it)) org-capture-templates))
-      (let ((key-char    (nth 0 template))
-	    (description (nth 1 template))
-	    (file        (f-filename (cadr (nth 3 template))))
-	    (body        (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 template))))))
-	(ht-set key-table description key-char)
-	(ht-set annotation-table description
-		(format "[%s] <%s> '%s'" key-char file body))))
-    (let ((selection (annotated-completing-read
+    (->> org-capture-templates
+	 (--filter (< 4 (length it)))
+	 (--mapc (let* ((template it)
+			(key-char    (nth 0 template))
+			(description (nth 1 template))
+			(file        (f-filename (cadr (nth 3 template))))
+			(body        (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 template))))))
+		   (ht-set key-table description key-char)
+		   (ht-set annotation-table description (format "[%s] <%s> '%s'" key-char file body))))))
+      (org-capture nil (ht-get key-table (annotated-completing-read
 		      annotation-table
 		      :prompt "org-capture => "
 		      :category 'org-capture
-		      :require-match nil)))
-      (org-capture nil (ht-get key-table selection)))))
+		      :require-match nil))))
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -401,17 +407,16 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
                                 ("r" "routines"))))
 
 ;;;###autoload
-(cl-defun tychoish/org-capture-add-routine-templates (&key name
-							   (key "")
-							   (path (concat (f-make-slug name) ".org")))
+(cl-defun tychoish/org-capture-add-routine-templates
+    (&key name (key "") (path (concat (f-make-slug name) ".org")))
 
   (when (string-equal "r" key)
     (user-error "cannot define routine (loops) %s org-capture-templates with key `r'" name))
 
-  (let ((description (format "%s routines <%s>" name (f-filename path))))
-    (unless (string-equal "" key)
-      (add-to-list 'org-capture-templates (list (concat "r" key) description))
-      (add-to-list 'org-capture-templates (list (concat key "r") description))))
+  (when-let* ((description (format "%s routines <%s>" name (f-filename path)))
+	      (_ (not (string-equal-p "" key))))
+    (add-to-list 'org-capture-templates (list (concat "r" key) description))
+    (add-to-list 'org-capture-templates (list (concat key "r") description)))
 
   (->> '(("1d" .  "Daily")
          ("1w" .  "Weekly")
@@ -446,7 +451,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (read-string "title => "))
 
 (cl-defun tychoish/org-capture--add-flat-templates
-    (&key kind char name path key target body-fn first-sub default-subs
+    (&key kind char name path (key "") target body-fn first-sub default-subs
           (prepend t) (time-prompt-suffix nil))
   "Register a flat set of capture templates of KIND for NAME at PATH.
 
@@ -467,6 +472,7 @@ PREPEND becomes the templates' :prepend value.  When a key sequence
 ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (when (string-equal char key)
     (user-error "cannot define %s %s org-capture-templates with key `%s'" kind name char))
+
   (let (specs append-item)
     (unless (string-equal "" key)
       (setq append-item t)
@@ -557,7 +563,6 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 	       (concat (f-make-slug name) ".org")))
 
   (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
-
 
   (let ((org-filename (if (or (f-exists-p path)
 			      (and

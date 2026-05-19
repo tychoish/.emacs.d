@@ -48,6 +48,13 @@
 Keys are symbols — typically `this-command' at call time — and values are
 the standard Emacs history lists accumulated by `completing-read'.")
 
+(defun annotated-completing-read--ensure-history ()
+  "Reset history to a fresh hash table if savehist restored a corrupt value."
+  (unless (hash-table-p annotated-completing-read-history)
+    (setq annotated-completing-read-history (ht-create))))
+
+(add-hook 'savehist-mode-hook #'annotated-completing-read--ensure-history)
+
 (defun annotated-completing-read--length-of-longest (items)
   (apply #'max 0 (mapcar #'length items)))
 

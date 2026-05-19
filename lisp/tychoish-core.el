@@ -1353,6 +1353,9 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (add-hook 'markdown-mode-hook 'turn-on-soft-wrap)
+  (add-hook 'markdown-mode-hook (lambda ()
+                                  (when visual-fill-column-mode
+                                    (tychoish-vfc-heading-truncation-mode 1))))
   (defun tychoish/markdown-setup-imenu ()
     (setq imenu-generic-expression markdown-imenu-generic-expression))
   (add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)
@@ -2671,10 +2674,14 @@ Useful after changing `eglot-workspace-configuration' or
    ("c" . agent-shell-select-command)
    ("n" . agent-shell-new-shell)
    ("w" . agent-shell-new-worktree-shell)
-   ("t" . agent-shell-new-temp-shell))
+   ("t" . agent-shell-new-temp-shell)
+   ("V" . tychoish/agent-shell-toggle-terse-output))
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
+  (with-eval-after-load 'which-key
+    (push '((nil . "^agent-shell-") . (nil . ""))
+          which-key-replacement-alist))
   :config
   (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
   (require 'agent-shell-extras)
@@ -2722,22 +2729,40 @@ Useful after changing `eglot-workspace-configuration' or
 
   (advice-add 'agent-shell :before #'tychoish/agent-shell-mcp-refresh)
 
-  (setq agent-shell-anthropic-claude-environment
-	(agent-shell-make-environment-variables
-	 "CLAUDE_PERSONA" "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
-	 :inherit-env t))
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-anthropic-default-model-id "claude-sonnet-4-6")
-  (setq agent-shell-anthropic-claude-environment (agent-shell-make-environment-variables :inherit-env t))
   (setq agent-shell-file-completion-enabled t)
   (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
   (setq agent-shell-header-style 'text)
-  (setq agent-shell-thought-process-expand-by-default t)
-  (setq agent-shell-tool-use-expand-by-default t)
-  (setq agent-shell-user-message-expand-by-default t)
-  (with-eval-after-load 'which-key
-    (push '((nil . "^agent-shell-") . (nil . ""))
-          which-key-replacement-alist)))
+  (setq agent-shell-thought-process-expand-by-default nil)
+  (setq agent-shell-tool-use-expand-by-default nil)
+  (setq agent-shell-user-message-expand-by-default nil)
+
+  (defconst tychoish/agent-shell-terse-persona
+    "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
+    "CLAUDE_PERSONA value that requests terse output from the agent.")
+
+  (defvar tychoish/agent-shell-terse-output t
+    "When non-nil, pass `tychoish/agent-shell-terse-persona' to every agent session.")
+
+  (defun tychoish/agent-shell--apply-environment ()
+    "Set `agent-shell-anthropic-claude-environment' from current toggle state."
+    (setq agent-shell-anthropic-claude-environment
+          (if tychoish/agent-shell-terse-output
+              (agent-shell-make-environment-variables
+               "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona
+               :inherit-env t)
+            (agent-shell-make-environment-variables :inherit-env t))))
+
+  (defun tychoish/agent-shell-toggle-terse-output ()
+    "Toggle terse agent output on or off and update the running environment."
+    (interactive)
+    (setq tychoish/agent-shell-terse-output (not tychoish/agent-shell-terse-output))
+    (tychoish/agent-shell--apply-environment)
+    (message "Agent terse output: %s"
+             (if tychoish/agent-shell-terse-output "on" "off")))
+
+  (tychoish/agent-shell--apply-environment))
 
 (use-package agent-shell-queue
   :bind (:map tychoish/robot-agent-shell-map
@@ -2788,7 +2813,8 @@ Useful after changing `eglot-workspace-configuration' or
                         (tychoish/conf-state-path "agent-shell"))))
 
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
-  (setq agent-shell-queue-pick-buffer-function #'agent-shell-extras--pick-buffer))
+  (setq agent-shell-queue-pick-buffer-function #'agent-shell-extras--pick-buffer)
+  (setq agent-shell-queue-show-ordinal-column nil))
 
 (use-package agent-shell-manager
   :load-path "elpa/agent-shell-manager"
@@ -2905,6 +2931,46 @@ call-site that has access to SHELL-BUFFER."
 (use-package uuidgen
   :ensure t
   :defer t)
+
+;;; Config analysis
+
+(defun tychoish-core-use-package-sizes ()
+  "Return (PACKAGE-NAME . LINE-COUNT) pairs for every top-level use-package
+block in tychoish-core.el, sorted by LINE-COUNT descending."
+  (let ((file (expand-file-name "lisp/tychoish-core.el" user-emacs-directory))
+        results)
+    (with-temp-buffer
+      (set-syntax-table emacs-lisp-mode-syntax-table)
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (while (re-search-forward "^(use-package \\([^ \t\n]+\\)" nil t)
+        (let* ((name (match-string-no-properties 1))
+               (start (match-beginning 0)))
+          (goto-char start)
+          (condition-case nil
+              (progn
+                (forward-sexp 1)
+                (push (cons name (count-lines start (point))) results))
+            (scan-error
+             (forward-line 1))))))
+    (sort results (lambda (a b) (> (cdr a) (cdr b))))))
+
+;;;###autoload
+(defun tychoish-core-use-package-sizes-report ()
+  "Display use-package blocks from tychoish-core.el sorted by line count."
+  (interactive)
+  (let* ((results (tychoish-core-use-package-sizes))
+         (buf (get-buffer-create "*use-package-sizes*")))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "%-40s %s\n" "Package" "Lines"))
+        (insert (make-string 48 ?-) "\n")
+        (dolist (entry results)
+          (insert (format "%-40s %d\n" (car entry) (cdr entry))))
+        (goto-char (point-min)))
+      (special-mode))
+    (pop-to-buffer buf)))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

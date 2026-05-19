@@ -313,7 +313,7 @@ When a permission request is pending, permission responses are spliced into the 
     ("t" "New temp shell" agent-shell-new-temp-shell)
     ("h" "Resume session (hydrate)" agent-shell-resume-session)]
    ["Queue"
-    ("q" "Open queue" agent-shell-queue-open-buffer)
+    ("q" "Open queue" agent-shell-queue-buffer-open)
     ("e" "Enqueue prompt" agent-shell-queue-enqueue)
     ("E" "Edit task" agent-shell-queue-edit-task)]
    ["Capture"
@@ -337,7 +337,7 @@ When a permission request is pending, permission responses are spliced into the 
     ("i" "Interrupt" agent-shell-interrupt)
     ("/" "Command menu" agent-shell-select-command)]
    ["Queue"
-    ("q" "Open queue" agent-shell-queue-open-buffer)
+    ("q" "Open queue" agent-shell-queue-buffer-open)
     ("e" "Enqueue prompt" agent-shell-queue-enqueue)
     ("E" "Edit task" agent-shell-queue-edit-task)]
    ["Capture"
