@@ -612,7 +612,8 @@ This combines the host name and the dameon name."
     (transient-mark-mode 1)
     (xterm-mouse-mode 1)
     (electric-pair-mode 1)
-    (which-key-mode 1)
+    (when (fboundp 'which-key-mode)
+      (which-key-mode 1))
 
     (with-silence
       (repeat-mode 1))))
