@@ -33,11 +33,7 @@ jobs:
         run: cask install
 
       - name: Run tests
-        run: |
-          cask exec ert-runner --timeout 60 \
-            test/test-xlib.el \
-            test/test-builder.el \
-            test/test-project-projectile-integration.el
+        run: cask exec ert-runner --timeout 60
 
   integration:
     runs-on: ubuntu-latest
@@ -62,8 +58,4 @@ jobs:
           EMACSLOADPATH=$(find elpa -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
           HOME=$(dirname "$GITHUB_WORKSPACE") \
           emacs --fg-daemon \
-            --eval '(run-with-timer 60 nil (lambda () (kill-emacs 1)))' \
-            -l test/test-xlib.el \
-            -l test/test-builder.el \
-            -l test/test-project-projectile-integration.el \
-            --eval '(ert-run-tests-batch-and-exit t)'
+            --eval '(tychoish/run-ci-tests)'

@@ -1988,5 +1988,15 @@ magit process buffer for that submodule."
                 (magit-run-git "pull" "origin"))))))
     (message "elpa submodule pull complete")))
 
+(defun tychoish/run-ci-tests (&optional timeout)
+  "Discover and run all ERT tests under test/, then exit.
+Intended for CI invocations via --fg-daemon --eval.
+Installs a TIMEOUT-second kill guard (default 60) before running."
+  (let ((test-dir (expand-file-name "test" user-emacs-directory)))
+    (run-with-timer (or timeout 60) nil (lambda () (kill-emacs 1)))
+    (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
+      (load file nil t))
+    (ert-run-tests-batch-and-exit t)))
+
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here
