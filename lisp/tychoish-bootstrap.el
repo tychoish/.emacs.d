@@ -37,6 +37,11 @@
 (require 'fn)
 (require 'dash)
 
+(defmacro with-which-key (&rest body)
+  "Evaluate BODY after which-key is loaded, safe when which-key is absent."
+  (declare (indent 0))
+  `(with-eval-after-load 'which-key ,@body))
+
 (defmacro flex-defun (name args &rest body)
   "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
 Useful for functions used as hooks or advice targets where callers may pass
@@ -230,7 +235,7 @@ more arguments than the function cares about."
  :prefix "m"
  :prefix-map tychoish/robot-gptel-set-default-model-map)
 
-(with-eval-after-load 'which-key
+(with-which-key
   (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
     "p" '("project-grep" . tychoish/ecclectic-grep-project-map)))
 
@@ -2000,7 +2005,11 @@ Installs a TIMEOUT-second kill guard (default 60) before running."
     (run-with-timer (or timeout 60) nil (lambda () (kill-emacs 1)))
     (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
       (load file nil t))
-    (ert-run-tests-batch-and-exit t)))
+    ;; ert-run-tests-batch-and-exit requires noninteractive=t (--batch only).
+    ;; In --fg-daemon mode we call ert-run-tests-batch directly and kill-emacs
+    ;; ourselves based on the result.
+    (let ((stats (ert-run-tests-batch t)))
+      (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
 
 (provide 'tychoish-bootstrap)
 ;;; tychoish-bootstrap.el ends here

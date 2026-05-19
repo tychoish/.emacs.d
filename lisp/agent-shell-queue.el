@@ -314,6 +314,11 @@ FIELDS are plain symbols.  Generates constructor TYPE-NAME--make plus:
   format   ; symbol: plist | json | yaml
   file)    ; string: absolute path to state file
 
+(defvar agent-shell-queue--items nil
+  "Items alist used by format-specific serializers (e.g. org).
+Bound dynamically by `agent-shell-queue--serialize-items' methods
+before calling the format's serialize helper.")
+
 (defvar agent-shell-queue--store
   (agent-shell-queue--make-store :items nil :format 'plist :file nil)
   "Live queue store.  Items are loaded from disk by --load, written by --save.")

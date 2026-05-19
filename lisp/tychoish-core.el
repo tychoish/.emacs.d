@@ -152,7 +152,7 @@
 	     projectile-mode-on
 	     projectile-save-project-buffers)
   :init
-  (with-eval-after-load 'which-key
+  (with-which-key
     (which-key-add-key-based-replacements "C-c p" "projectile"))
   ;; previously added projectile-mode to the after-init-hook (probably
   ;; to get keybindings to load correctly,) appears unnecessary, but
@@ -247,7 +247,7 @@
 	     find-merge-conflicts
 	     ripgrep-regexp)
   :init
-  (with-eval-after-load 'which-key
+  (with-which-key
     (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
       "r" '("rg-grep" . tychoish/ecclectic-rg-map)))
   :config
@@ -366,7 +366,8 @@
   :bind-keymap ("C-c /" . google-this-mode-submap)
   :commands (google-this-mode)
   :config
-  (which-key-add-key-based-replacements "C-c /" "google-this")
+  (with-which-key
+    (which-key-add-key-based-replacements "C-c /" "google-this"))
   (setq google-this-browse-url-function 'browse-url-default-browser)
   (google-this-mode 1))
 
@@ -519,7 +520,8 @@
   :hook ((text-mode prog-mode) . yas-minor-mode)
   :config
   (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
-  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
+  (with-which-key
+    (which-key-add-key-based-replacements "C-c &" "yasnippet")))
 
 (use-package yasnippet-capf
   :ensure t
@@ -1009,8 +1011,9 @@
    ("x" . execute-extended-magit-command)
    ("m" . execute-extended-smerge-command))
 
-  (which-key-add-keymap-based-replacements 'magit-command-mode-map "m" "(s)merge-commands")
-  (which-key-add-keymap-based-replacements 'magit-command-mode-map "x" "magit-commands")
+  (with-which-key
+    (which-key-add-keymap-based-replacements 'magit-command-mode-map "m" "(s)merge-commands")
+    (which-key-add-keymap-based-replacements 'magit-command-mode-map "x" "magit-commands"))
 
   (let* ((dir (package-desc-dir (package-get-descriptor 'transient)))
 	 (path (f-join dir "transient.el")))
@@ -1080,7 +1083,8 @@
   (bind-keys
    :map magit-command-mode-map
    ("r" . execute-extended-forge-command))
-  (which-key-add-keymap-based-replacements 'magit-command-mode-map "r" "forge-commands"))
+  (with-which-key
+    (which-key-add-keymap-based-replacements 'magit-command-mode-map "r" "forge-commands")))
 
 (use-package gist
   :ensure t
@@ -1162,7 +1166,7 @@
 	     tychoish/telega-switch-to-root
 	     tychoish/telega-force-kill)
   :init
-  (with-eval-after-load 'which-key
+  (with-which-key
     (which-key-add-key-based-replacements "C-c n" "telega-prefix")
     (which-key-add-key-based-replacements "C-c v" "telega-prefix"))
   (make-read-extended-command-for-prefix "telega"
@@ -2193,7 +2197,8 @@ Useful after changing `eglot-workspace-configuration' or
   ;; Pulse source line (performance hit)
   ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
   (setq dape-key-prefix (kbd "C-c C-d"))
-  (which-key-add-key-based-replacements "C-c C-d" "dape")
+  (with-which-key
+    (which-key-add-key-based-replacements "C-c C-d" "dape"))
   (setq dape-buffer-window-arrangement 'right)
   (setq dape-cwd-function #'approximate-project-root))
 
@@ -2696,7 +2701,7 @@ Useful after changing `eglot-workspace-configuration' or
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "m")
-  (with-eval-after-load 'which-key
+  (with-which-key
     (push '((nil . "^agent-shell-") . (nil . ""))
           which-key-replacement-alist))
   :config
