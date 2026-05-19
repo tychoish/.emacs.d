@@ -33,8 +33,38 @@ jobs:
         run: cask install
 
       - name: Run tests
+        timeout-minutes: 1
         run: |
           cask exec ert-runner \
             test/test-xlib.el \
             test/test-builder.el \
             test/test-project-projectile-integration.el
+
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        emacs_version:
+          - "29.4"
+          - "30.1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Emacs ${{ matrix.emacs_version }}
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+
+      - name: Run integration tests
+        timeout-minutes: 1
+        run: |
+          EMACSLOADPATH=$(find elpa -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
+          HOME=$(dirname "$GITHUB_WORKSPACE") \
+          emacs -nw \
+            -l test/test-xlib.el \
+            -l test/test-builder.el \
+            -l test/test-project-projectile-integration.el \
+            --eval '(ert-run-tests-batch-and-exit t)'
