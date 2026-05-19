@@ -38,6 +38,9 @@
 (declare-function agent-shell-subscribe-to "agent-shell")
 (declare-function agent-shell-unsubscribe "agent-shell")
 (declare-function markdown-mode "markdown-mode")
+(declare-function yaml-encode "yaml")
+(declare-function yaml-parse-string "yaml")
+(declare-function yaml-mode "yaml-mode")
 
 (defun agent-shell-queue--default-instance-name ()
   "Return a string identifying the current Emacs instance."
@@ -88,7 +91,6 @@ When nil (the default), completed items are not logged to disk.")
 Each line is a JSON object containing the item's prompt, target path,
 instance name, run flag, dispatch/completion timestamps, and runtime.
 When nil, archiving is not available.")
-
 
 (defvar agent-shell-queue--last-flush-time nil
   "Float-time of the most recent queue state write to disk.")
@@ -362,7 +364,6 @@ the session queue is paused until the mode changes.")
 
 (defun agent-shell-queue--make-item (prompt &optional background kind)
   "Return a new active queue item for PROMPT."
-  ;; TODO fold this function (if possible) in inline into the struct constructor validation. 
   (agent-shell-queue-item--make
    :id (agent-shell-queue--gen-id)
    :prompt prompt
@@ -370,7 +371,6 @@ the session queue is paused until the mode changes.")
    :kind (or kind 'prompt)
    :background background
    :created (float-time)))
-
 
 ;;; Local utilities
 
@@ -445,10 +445,9 @@ Status is interned; background truthy only when exactly `t'."
     (error "json-serialize not available (requires Emacs 27+)"))
   (json-serialize
    (vconcat
-    (-map (lambda (pair)
-            (list :buffer (car pair)
-                  :items (vconcat (-map #'agent-shell-queue--item-to-json (cdr pair)))))
-          items))))
+    (--map (list :buffer (car it)
+                 :items (vconcat (-map #'agent-shell-queue--item-to-json (cdr it))))
+           items))))
 
 (defun agent-shell-queue--deserialize-json (str)
   "Deserialize STR (JSON format) into an items alist."
@@ -604,11 +603,9 @@ is set, writes a versioned backup before overwriting the state file."
     (let* ((base-store (agent-shell-queue--current-store))
            (filtered-items
             (->> (agent-shell-queue-store-items base-store)
-                 (-map (lambda (pair)
-                         (cons (car pair)
-                               (--remove (memq (agent-shell-queue-item-status it) '(done running))
-                                         (cdr pair)))))
-                 (-remove (lambda (pair) (null (cdr pair))))))
+                 (--keep (let ((items (--remove (memq (agent-shell-queue-item-status it) '(done running))
+                                                (cdr it))))
+                           (when items (cons (car it) items))))))
            (store (agent-shell-queue--make-store
                    :items  filtered-items
                    :format (agent-shell-queue-store-format base-store)
@@ -945,7 +942,6 @@ was built against an older struct definition before a code reload."
 Items flagged as background are wrapped with `agent-shell-queue-background-prefix'.
 The item transitions to done when the buffer's turn-complete event fires.
 Running and done items are not persisted across sessions."
-  
   (when-let* ((pair (agent-shell-queue--item-by-id id)))
     (let* ((buf-name (car pair))
            (item (cdr pair))
@@ -1059,26 +1055,26 @@ all collapsed blocks are folded: only the prose between them."
                              ;; starts where field transitions away from input.
                              (response-start
                               (or (next-single-property-change start-pos 'field nil end-pos)
-                                  start-pos)))
-                        ;; Walk forward collecting plain-text segments (no
-                        ;; agent-shell-ui-state), skipping collapsed blocks.
-                        (let ((pos response-start)
-                              segments)
-                          (while (< pos end-pos)
-                            (if (get-text-property pos 'agent-shell-ui-state)
-                                (setq pos (or (next-single-property-change
-                                               pos 'agent-shell-ui-state nil end-pos)
-                                              end-pos))
-                              (let ((seg-end (or (next-single-property-change
-                                                  pos 'agent-shell-ui-state nil end-pos)
-                                                 end-pos)))
-                                (let ((seg (string-trim
-                                            (buffer-substring-no-properties pos seg-end))))
-                                  (when (not (string-empty-p seg))
-                                    (push seg segments)))
-                                (setq pos seg-end))))
-                          (when segments
-                            (string-join (nreverse segments) "\n\n"))))))))
+                                  start-pos))
+                             ;; Walk forward collecting plain-text segments (no
+                             ;; agent-shell-ui-state), skipping collapsed blocks.
+                             (pos response-start)
+                             (segments nil))
+                        (while (< pos end-pos)
+                          (if (get-text-property pos 'agent-shell-ui-state)
+                              (setq pos (or (next-single-property-change
+                                             pos 'agent-shell-ui-state nil end-pos)
+                                            end-pos))
+                            (let* ((seg-end (or (next-single-property-change
+                                                 pos 'agent-shell-ui-state nil end-pos)
+                                                end-pos))
+                                   (seg (string-trim
+                                         (buffer-substring-no-properties pos seg-end))))
+                              (when (not (string-empty-p seg))
+                                (push seg segments))
+                              (setq pos seg-end))))
+                        (when segments
+                          (string-join (nreverse segments) "\n\n")))))))
         (when (and text (not (string-empty-p text)))
           (setf (agent-shell-queue-item-response (cdr pair))
                 (if (> (length text) 8192)
@@ -1160,15 +1156,16 @@ Deferred via a zero-delay timer to let the current event complete before
 submitting the next prompt.  Deferred items are skipped.
 No-op when the queue is globally paused."
   (run-with-timer 0 nil
-   (fn (when (and (buffer-live-p buf)
-                  (not (agent-shell-queue-queue-paused agent-shell-queue--queue))
-                  (not (member (buffer-name buf) (agent-shell-queue-queue-session-paused agent-shell-queue--queue))))
-	 (with-current-buffer buf
-           (when-let* ((_ (not (shell-maker-busy)))
-                       (buf-name (buffer-name))
-                       (item (agent-shell-queue--next-dispatchable-item
-                              (cdr (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))))))
-             (agent-shell-queue-send-item (agent-shell-queue-item-id item))))))))
+   (lambda ()
+     (when (and (buffer-live-p buf)
+                (not (agent-shell-queue-queue-paused agent-shell-queue--queue))
+                (not (member (buffer-name buf) (agent-shell-queue-queue-session-paused agent-shell-queue--queue))))
+       (with-current-buffer buf
+         (when-let* ((_ (not (shell-maker-busy)))
+                     (buf-name (buffer-name))
+                     (item (agent-shell-queue--next-dispatchable-item
+                            (cdr (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))))))
+           (agent-shell-queue-send-item (agent-shell-queue-item-id item))))))))
 
 (defun agent-shell-queue--drop-subscription (buf-name)
   "Unsubscribe from `turn-complete' events for BUF-NAME and remove from registry.
@@ -1297,47 +1294,46 @@ When called interactively, prompts y/n/a for each candidate before removing it.
 Affected buffer queues are paused and the queue state is saved."
   (interactive "P")
   (agent-shell-queue--ensure-loaded)
-  (let (candidates)
-    (-each (agent-shell-queue-store-items agent-shell-queue--store)
-      (lambda (pair)
-        (-each (cdr pair)
-          (lambda (item)
-            (condition-case _
-                (ignore (agent-shell-queue-item-id item)
-                        (agent-shell-queue-item-prompt item)
-                        (agent-shell-queue-item-status item))
-              (error
-               (push (cons (car pair) item) candidates)))))))
-    ;; TODO flatten nested ifs into a cond block 
-    (if (null candidates)
-        (message "agent-shell-queue: no unparsable items found")
-      (let (removed (accept-all current-prefix-arg))
-        (--each candidates
-          (let ((buf-name (car it))
-                (item (cdr it)))
-
-            (message "agent-shell-queue: unparsable item in %s: %S" buf-name item)
-
-            (when (or accept-all
-                      (not (called-interactively-p 'any))
-                      (let ((ch (read-char-choice
-                                 (format "Remove from %s? (y)es (n)o (a)ll: " buf-name)
-                                 '(?y ?n ?a))))
-                        (cond ((eq ch ?a) (setq accept-all t))
-                              ((eq ch ?n) nil)
-                              (t t))))
-              (when-let* ((cell (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))))
-                (setcdr cell (--remove (eq it item) (cdr cell))))
-              (cl-pushnew buf-name (agent-shell-queue-queue-session-paused agent-shell-queue--queue) :test #'equal)
-              (push it removed))))
-        (if (null removed)
-            (message "agent-shell-queue: no items removed")
-          (setf (agent-shell-queue-store-items agent-shell-queue--store)
-                (--remove (null (cdr it)) (agent-shell-queue-store-items agent-shell-queue--store)))
-          (agent-shell-queue--save)
-          (agent-shell-queue--refresh-buffer)
-          (message "agent-shell-queue: removed %d unparsable item(s); affected queues paused"
-                   (length removed)))))))
+  (let* ((candidates (->> (agent-shell-queue-store-items agent-shell-queue--store)
+                          (-mapcat (lambda (pair)
+                                     (--keep (condition-case _
+                                                 (ignore (agent-shell-queue-item-id it)
+                                                         (agent-shell-queue-item-prompt it)
+                                                         (agent-shell-queue-item-status it))
+                                               (error (cons (car pair) it)))
+                                             (cdr pair))))))
+         removed
+         (accept-all current-prefix-arg))
+    (cond
+     ((null candidates)
+      (message "agent-shell-queue: no unparsable items found"))
+     (t
+      (--each candidates
+        (let ((buf-name (car it))
+              (item (cdr it)))
+          (message "agent-shell-queue: unparsable item in %s: %S" buf-name item)
+          (when (or accept-all
+                    (not (called-interactively-p 'any))
+                    (let ((ch (read-char-choice
+                               (format "Remove from %s? (y)es (n)o (a)ll: " buf-name)
+                               '(?y ?n ?a))))
+                      (cond ((eq ch ?a) (setq accept-all t))
+                            ((eq ch ?n) nil)
+                            (t t))))
+            (when-let* ((cell (assoc buf-name (agent-shell-queue-store-items agent-shell-queue--store))))
+              (setcdr cell (--remove (eq it item) (cdr cell))))
+            (cl-pushnew buf-name (agent-shell-queue-queue-session-paused agent-shell-queue--queue) :test #'equal)
+            (push it removed))))
+      (cond
+       ((null removed)
+        (message "agent-shell-queue: no items removed"))
+       (t
+        (setf (agent-shell-queue-store-items agent-shell-queue--store)
+              (--remove (null (cdr it)) (agent-shell-queue-store-items agent-shell-queue--store)))
+        (agent-shell-queue--save)
+        (agent-shell-queue--refresh-buffer)
+        (message "agent-shell-queue: removed %d unparsable item(s); affected queues paused"
+                 (length removed))))))))
 
 ;;;###autoload
 (defun agent-shell-queue-show-disk-state ()
@@ -1463,13 +1459,12 @@ When non-nil, `<down>' and `<up>' move by item rather than by line.")
 
 ;; Persist display preferences and queue state across sessions.
 (with-eval-after-load 'savehist
-  (cl-pushnew 'agent-shell-queue--queue savehist-additional-variables)
-  (-each '(agent-shell-queue-show-buffer-column
-           agent-shell-queue-show-ordinal-column
-           agent-shell-queue-show-age-column
-           agent-shell-queue-multiline-format)
-    (lambda (var)
-      (cl-pushnew var savehist-additional-variables))))
+  (--each '(agent-shell-queue--queue
+            agent-shell-queue-show-buffer-column
+            agent-shell-queue-show-ordinal-column
+            agent-shell-queue-show-age-column
+            agent-shell-queue-multiline-format)
+    (cl-pushnew it savehist-additional-variables)))
 
 (defun agent-shell-queue--scope-label (scope)
   "Return a short human-readable string for SCOPE."
@@ -1903,7 +1898,6 @@ Must be called immediately after `tabulated-list-print'."
       (setq target-id (tabulated-list-get-id))
       ;; Now find the first (topmost) line of that item
       (when target-id
-	;; TODO use more descriptive names for bobp and eobp 
         (while (and (not (bobp))
                     (equal (get-text-property (line-beginning-position 0)
                                               'tabulated-list-id)
@@ -2107,7 +2101,7 @@ and the queue advances to the next item."
 
     (agent-shell-queue--save)
     (agent-shell-queue--refresh-buffer)
-    
+
     (when-let* ((buf (get-buffer buf-name)))
       (agent-shell-queue--send-next-for-buffer buf))))
 
@@ -2265,9 +2259,8 @@ and the queue advances to the next item."
   (interactive)
   (when-let* ((id agent-shell-queue--item-view-id)
               (pair (agent-shell-queue--item-by-id id))
-              (item (cdr pair)))
-    ;; TODO combine into when-let using (or (agent-shell-queue--ensure-loaded) t) to avoid early return
-    (agent-shell-queue--assert-not-running item)
+              (item (cdr pair))
+              (_ (or (agent-shell-queue--assert-not-running item) t)))
     (when (agent-shell-queue--confirm-remove item)
       (quit-window)
       (agent-shell-queue-remove id)
@@ -2366,9 +2359,8 @@ and the queue advances to the next item."
   (when-let* ((id agent-shell-queue--item-view-id)
               (pair (agent-shell-queue--item-by-id id))
               (bufs (or (agent-shell-buffers)
-                        (user-error "No live agent-shell buffers"))))
-    ;; TODO combine into when-let using (or (agent-shell-queue--ensure-loaded) t) to avoid early return
-    (agent-shell-queue--assert-not-running (cdr pair))
+                        (user-error "No live agent-shell buffers")))
+              (_ (or (agent-shell-queue--assert-not-running (cdr pair)) t)))
     (let* ((current-dir (when-let* ((b (get-buffer (car pair))))
                           (buffer-local-value 'default-directory b)))
            (table (ht-create)))
@@ -2439,7 +2431,7 @@ Pauses the session queue — call `agent-shell-queue-session-resume' to restart.
               (pair (agent-shell-queue--item-by-id id))
               (item (cdr pair))
               ((eq (agent-shell-queue-item-status item) 'running)))
-    
+
     (let ((buf-name (car pair)))
       (when-let* ((buf (get-buffer buf-name))
                   (_ (buffer-live-p buf)))
@@ -2758,7 +2750,7 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("lp" "Pause (session)" agent-shell-queue-session-pause)
     ("lR" "Resume (session)" agent-shell-queue-session-resume)
     ("U" "Resume all sessions" agent-shell-queue-unpause-all-sessions)]
-   ["Manage Task" :if (lambda () (agent-shell-queue--point-item))
+   ["Manage Task" :if agent-shell-queue--point-item
     ("s" "Dispatch now" agent-shell-queue-buffer-send
      :if (lambda () (not (memq (agent-shell-queue--point-status) '(done running aborted nil draft)))))
     ("X" "Abort (interrupt)" agent-shell-queue-buffer-abort
@@ -2806,11 +2798,11 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("T" "Insert wait-until (timer)" agent-shell-queue-insert-wait)]
    ["Fork"
     ("xf" "Fork queue at point" agent-shell-queue-buffer-fork
-     :if (lambda () (agent-shell-queue--point-item)))
+     :if agent-shell-queue--point-item)
     ("xb" "Insert fork task before point" agent-shell-queue-buffer-insert-fork-before
-     :if (lambda () (agent-shell-queue--point-item)))
+     :if agent-shell-queue--point-item)
     ("xa" "Insert fork task after point" agent-shell-queue-buffer-insert-fork-after
-     :if (lambda () (agent-shell-queue--point-item)))
+     :if agent-shell-queue--point-item)
     ("xr" "Release pending-fork items" agent-shell-queue-release-pending-fork)]
    ["Scope / Export"
     ("N" "Set scope (narrow)" agent-shell-queue-set-scope)
@@ -2820,7 +2812,7 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("F" "Flush to disk" agent-shell-queue-flush)
     ("D" "Show disk state" agent-shell-queue-show-disk-state)
     ("O" "Open shell for item at point" agent-shell-queue-buffer-open-shell
-     :if (lambda () (agent-shell-queue--point-item)))]
+     :if agent-shell-queue--point-item)]
    ["Display"
     ("dv" "Column display options" agent-shell-queue-select-columns)
     ("db" "Toggle buffer column" agent-shell-queue-toggle-buffer-column
@@ -2880,10 +2872,9 @@ being edited, switches to that buffer and signals an error."
                       (buffer-local-value 'agent-shell-queue--editing-id existing)))
       (let ((edit-buf (get-buffer-create "*agent-shell-queue-edit*")))
           (with-current-buffer edit-buf
-            (let ((prev-id agent-shell-queue--editing-id))
-              (when prev-id
-                (setf (agent-shell-queue-queue-editing-ids agent-shell-queue--queue)
-                      (delete prev-id (agent-shell-queue-queue-editing-ids agent-shell-queue--queue)))))
+            (when-let* ((prev-id agent-shell-queue--editing-id))
+              (setf (agent-shell-queue-queue-editing-ids agent-shell-queue--queue)
+                    (delete prev-id (agent-shell-queue-queue-editing-ids agent-shell-queue--queue))))
             (erase-buffer)
             (insert (agent-shell-queue-item-prompt item))
             (agent-shell-queue-edit-mode)
@@ -3158,10 +3149,12 @@ When called interactively, opens a capture buffer for composing the prompt."
     (with-current-buffer buf
       (if (shell-maker-busy)
           (agent-shell-queue-add prompt buf background)
-        (agent-shell-insert :text (if background
-                                      (concat agent-shell-queue-background-prefix prompt)
-                                    prompt)
-                            :submit t :no-focus t)))))
+        (agent-shell-insert
+	 :text (if background
+                   (concat agent-shell-queue-background-prefix prompt)
+                 prompt)
+         :submit t
+	 :no-focus t)))))
 
 ;;;###autoload
 (defun agent-shell-queue-enqueue-clear (&optional buf)
@@ -3331,7 +3324,8 @@ cancel with \\[agent-shell-queue-raw-edit-cancel]."
   (let ((file (expand-file-name
                (format "agent-shell-queue-edit-failed-%s.yaml" (format-time-string "%Y%m%dT%H%M%S"))
                (file-name-directory (agent-shell-queue--state-file)))))
-    (with-temp-file file (insert text))
+    (with-temp-file file
+      (insert text))
     (--each (nreverse errors)
       (message "agent-shell-queue raw edit: %s" it))
     (message "agent-shell-queue: %d error(s) — buffer saved to %s (queue remains paused)"
@@ -3397,8 +3391,7 @@ cancel with \\[agent-shell-queue-raw-edit-cancel]."
    ((listp parsed) parsed)
    (t (list parsed))))
 
-;; TODO use cl-return-from to early return from to reduce the amount of nesting.
-(defun agent-shell-queue-raw-edit-confirm ()
+(cl-defun agent-shell-queue-raw-edit-confirm ()
   "Validate and apply the YAML in this raw-edit buffer."
   (interactive)
   (unless (fboundp 'yaml-parse-string)
@@ -3414,57 +3407,56 @@ cancel with \\[agent-shell-queue-raw-edit-cancel]."
                                         :sequence-type 'list
                                         :null-object nil
                                         :false-object nil))
-      (error (push (format "YAML parse error: %s" (cadr err)) errors)))
-    (unless errors
-      (let ((all-ids nil)
-            (new-buckets nil))
-        (-each (-filter #'hash-table-p (agent-shell-queue--yaml-buckets parsed))
-          (lambda (bucket)
-            (let* ((buf-name (gethash "buffer" bucket))
-                   (items-raw (gethash "items" bucket))
-                   (items-list (if (vectorp items-raw)
-                                   (append items-raw nil)
-                                 items-raw))
-                   (bucket-items))
-              (unless buf-name
-                (push "a bucket is missing the 'buffer' field" errors))
-              (-each (-filter #'hash-table-p items-list)
-                (lambda (item-h)
-                  (let ((id (gethash "id" item-h)))
-                    (when (and id (member id all-ids))
-                      (push (format "duplicate ID '%s'" id) errors))
-                    (when id (push id all-ids))
-                    (let ((result (agent-shell-queue--parse-yaml-item item-h snapshot)))
-                      (if (cdr result)
-                          (setq errors (append errors (cdr result)))
-                        (push (car result) bucket-items))))))
-              (when (and buf-name bucket-items)
-                (push (cons buf-name (nreverse bucket-items)) new-buckets)))))
-
-        (unless errors
-          ;; Preserve running/done items from current queue
-          (let ((preserved nil))
-            (--each (agent-shell-queue-store-items agent-shell-queue--store)
-              (let ((kept (--filter (memq (agent-shell-queue-item-status it) '(running done))
-                                   (cdr it))))
-                (when kept
-                  (push (cons (car it) kept) preserved))))
-            (let ((result (nreverse new-buckets)))
-              (--each (nreverse preserved)
-                (if-let* ((cell (assoc (car it) result)))
-                    (setcdr cell (append (cdr cell) (cdr it)))
-                  (push it result)))
-
-              (setf (agent-shell-queue-store-items agent-shell-queue--store)
-                    (--remove (null (cdr it)) result))))
-          (setf (agent-shell-queue-queue-paused agent-shell-queue--queue) was-paused)
-          (agent-shell-queue--save)
-          (quit-window t)
-          (agent-shell-queue--refresh-buffer)
-          (message "agent-shell-queue: raw edit applied%s"
-                   (if was-paused " (queue remains paused)" "")))))
-    (when errors
-      (agent-shell-queue--raw-edit-fail text errors))))
+      (error (push (format "YAML parse error: %s" (cadr err)) errors)
+             (cl-return-from agent-shell-queue-raw-edit-confirm
+               (agent-shell-queue--raw-edit-fail text errors))))
+    (let ((all-ids nil)
+          (new-buckets nil))
+      (-each (-filter #'hash-table-p (agent-shell-queue--yaml-buckets parsed))
+        (lambda (bucket)
+          (let* ((buf-name (gethash "buffer" bucket))
+                 (items-raw (gethash "items" bucket))
+                 (items-list (if (vectorp items-raw)
+                                 (append items-raw nil)
+                               items-raw))
+                 (bucket-items))
+            (unless buf-name
+              (push "a bucket is missing the 'buffer' field" errors))
+            (-each (-filter #'hash-table-p items-list)
+              (lambda (item-h)
+                (let ((id (gethash "id" item-h)))
+                  (when (and id (member id all-ids))
+                    (push (format "duplicate ID '%s'" id) errors))
+                  (when id (push id all-ids))
+                  (let ((result (agent-shell-queue--parse-yaml-item item-h snapshot)))
+                    (if (cdr result)
+                        (setq errors (append errors (cdr result)))
+                      (push (car result) bucket-items))))))
+            (when (and buf-name bucket-items)
+              (push (cons buf-name (nreverse bucket-items)) new-buckets)))))
+      (when errors
+        (cl-return-from agent-shell-queue-raw-edit-confirm
+          (agent-shell-queue--raw-edit-fail text errors)))
+      ;; Preserve running/done items from current queue
+      (let ((preserved nil))
+        (--each (agent-shell-queue-store-items agent-shell-queue--store)
+          (let ((kept (--filter (memq (agent-shell-queue-item-status it) '(running done))
+                               (cdr it))))
+            (when kept
+              (push (cons (car it) kept) preserved))))
+        (let ((result (nreverse new-buckets)))
+          (--each (nreverse preserved)
+            (if-let* ((cell (assoc (car it) result)))
+                (setcdr cell (append (cdr cell) (cdr it)))
+              (push it result)))
+          (setf (agent-shell-queue-store-items agent-shell-queue--store)
+                (--remove (null (cdr it)) result))))
+      (setf (agent-shell-queue-queue-paused agent-shell-queue--queue) was-paused)
+      (agent-shell-queue--save)
+      (quit-window t)
+      (agent-shell-queue--refresh-buffer)
+      (message "agent-shell-queue: raw edit applied%s"
+               (if was-paused " (queue remains paused)" "")))))
 
 (defun agent-shell-queue-raw-edit-cancel ()
   "Cancel raw edit; restore the queue pause state from before editing."
@@ -3503,62 +3495,60 @@ For each item whose ID already exists, prompts to keep, replace, or assign new I
             (error (user-error "YAML parse error: %s" (cadr err)))))
          (added 0)
          (skipped 0))
-    (-each (-filter #'hash-table-p (agent-shell-queue--yaml-buckets parsed))
-      (lambda (bucket)
-        (let* ((buf-name (gethash "buffer" bucket))
-               (items-raw (gethash "items" bucket))
-               (items-list (cond
-                            ((vectorp items-raw) (append items-raw nil))
-                            ((listp items-raw) items-raw)
-                            (t nil))))
-          (-each (-filter #'hash-table-p items-list)
-            (lambda (item-h)
-              (let* ((raw-id (gethash "id" item-h))
-                     (existing (and raw-id (agent-shell-queue--item-by-id raw-id)))
-                     (final-id
-                      (cond
-                       ((null raw-id) (agent-shell-queue--gen-id))
-                       ((null existing) raw-id)
-                       (t (let ((choice (completing-read
-                                         (format "ID '%s' exists — " raw-id)
-                                         '("keep existing (skip)"
-                                           "replace existing"
-                                           "assign new ID")
-                                         nil t)))
-                            (cond
-                             ((string-prefix-p "keep" choice) 'skip)
-                             ((string-prefix-p "replace" choice) raw-id)
-                             (t (agent-shell-queue--gen-id))))))))
-                (cond
-                 ((eq final-id 'skip) (cl-incf skipped))
-                 (t
-                  (when (and (stringp final-id) (equal final-id raw-id) existing)
-                    (agent-shell-queue-remove raw-id))
-                  (let* ((prompt (gethash "prompt" item-h ""))
-                         (status-str (gethash "status" item-h "active"))
-                         (status (condition-case nil (intern status-str) (error 'active)))
-                         (kind-str (gethash "kind" item-h "prompt"))
-                         (kind (condition-case nil (intern kind-str) (error 'prompt)))
-                         (bg (eq t (gethash "background" item-h)))
-                         (target-buf (and buf-name
-                                          (not (equal buf-name agent-shell-queue--unassigned-key))
-                                          (get-buffer buf-name)))
-                         (item (agent-shell-queue-item--make
-                                :id final-id
-                                :prompt (if (string-empty-p (string-trim (or prompt "")))
-                                            "(imported)" (string-trim prompt))
-                                :status (if (memq status '(active deferred invalid)) status 'active)
-                                :kind (if (memq kind '(prompt pause context emacs wait compact)) kind 'prompt)
-                                :background bg
-                                :created (or (gethash "created" item-h) (float-time)))))
-                    (when target-buf
-                      (agent-shell-queue--ensure-subscription target-buf))
-                    (agent-shell-queue--add-item-to-bucket
-                     (if (and buf-name (not (string-empty-p buf-name)))
-                         buf-name
-                       agent-shell-queue--unassigned-key)
-                     item)
-                    (cl-incf added)))))))))
+    (--each (-filter #'hash-table-p (agent-shell-queue--yaml-buckets parsed))
+      (let* ((buf-name (gethash "buffer" it))
+             (items-raw (gethash "items" it))
+             (items-list (cond
+                          ((vectorp items-raw) (append items-raw nil))
+                          ((listp items-raw) items-raw)
+                          (t nil))))
+        (--each (-filter #'hash-table-p items-list)
+          (let* ((raw-id (gethash "id" it))
+                 (existing (and raw-id (agent-shell-queue--item-by-id raw-id)))
+                 (final-id
+                  (cond
+                   ((null raw-id) (agent-shell-queue--gen-id))
+                   ((null existing) raw-id)
+                   (t (let ((choice (completing-read
+                                     (format "ID '%s' exists — " raw-id)
+                                     '("keep existing (skip)"
+                                       "replace existing"
+                                       "assign new ID")
+                                     nil t)))
+                        (cond
+                         ((string-prefix-p "keep" choice) 'skip)
+                         ((string-prefix-p "replace" choice) raw-id)
+                         (t (agent-shell-queue--gen-id))))))))
+            (cond
+             ((eq final-id 'skip) (cl-incf skipped))
+             (t
+              (when (and (stringp final-id) (equal final-id raw-id) existing)
+                (agent-shell-queue-remove raw-id))
+              (let* ((prompt (gethash "prompt" it ""))
+                     (status-str (gethash "status" it "active"))
+                     (status (condition-case nil (intern status-str) (error 'active)))
+                     (kind-str (gethash "kind" it "prompt"))
+                     (kind (condition-case nil (intern kind-str) (error 'prompt)))
+                     (bg (eq t (gethash "background" it)))
+                     (target-buf (and buf-name
+                                      (not (equal buf-name agent-shell-queue--unassigned-key))
+                                      (get-buffer buf-name)))
+                     (item (agent-shell-queue-item--make
+                            :id final-id
+                            :prompt (if (string-empty-p (string-trim (or prompt "")))
+                                        "(imported)" (string-trim prompt))
+                            :status (if (memq status '(active deferred invalid)) status 'active)
+                            :kind (if (memq kind '(prompt pause context emacs wait compact)) kind 'prompt)
+                            :background bg
+                            :created (or (gethash "created" it) (float-time)))))
+                (when target-buf
+                  (agent-shell-queue--ensure-subscription target-buf))
+                (agent-shell-queue--add-item-to-bucket
+                 (if (and buf-name (not (string-empty-p buf-name)))
+                     buf-name
+                   agent-shell-queue--unassigned-key)
+                 item)
+                (cl-incf added)))))))
     (when (> added 0)
       (agent-shell-queue--save)
       (agent-shell-queue--refresh-buffer))
