@@ -7,6 +7,18 @@
 
 ;;; Code:
 
+;; Make xlib macros available before (with-gc-suppressed …) is read.
+;; Emacs eagerly expands macros in the entire top-level form before evaluating
+;; it, so (with-slow-op-timer …) inside the form needs xlib on load-path before
+;; that form is even read — the eval-when-compile nested inside the form is too
+;; late when loading from uncompiled source.  package-initialize is called here
+;; first so that xlib's dependencies (f, s, dash, ht) are on load-path.
+(eval-and-compile
+  (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+  (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
+  (package-initialize)
+  (require 'xlib))
+
 (with-gc-suppressed
  (defvar tychoish/startup-complete-time nil
    "Timestamp reflecting when the instance' startup process actually completed.")
@@ -79,8 +91,6 @@ lived instances. Other ephemeral instance names ones may be useful.")
 				    ("nongnu"    . 2)
 				    ("gnu"    . 1)
 				    ("jcs-elpa" . 0)))
-
- (package-initialize)
 
  (declare-function alert "alert")
 

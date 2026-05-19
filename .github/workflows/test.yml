@@ -57,12 +57,8 @@ jobs:
         with:
           version: ${{ matrix.emacs_version }}
 
-      - name: Set up Cask
-        uses: cask/setup-cask@master
+      - name: Link repo as ~/.emacs.d
+        run: ln -sf "$GITHUB_WORKSPACE" ~/.emacs.d
 
       - name: Run integration tests
-        run: |
-          EMACSLOADPATH=$(find elpa -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
-          HOME=$(dirname "$GITHUB_WORKSPACE") \
-          emacs --fg-daemon \
-            --eval '(tychoish/run-ci-tests)'
+        run: emacs --fg-daemon --eval '(tychoish/run-ci-tests)'
