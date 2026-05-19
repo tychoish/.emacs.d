@@ -33,9 +33,8 @@ jobs:
         run: cask install
 
       - name: Run tests
-        timeout-minutes: 1
         run: |
-          cask exec ert-runner \
+          cask exec ert-runner --timeout 60 \
             test/test-xlib.el \
             test/test-builder.el \
             test/test-project-projectile-integration.el
@@ -59,11 +58,11 @@ jobs:
           version: ${{ matrix.emacs_version }}
 
       - name: Run integration tests
-        timeout-minutes: 1
         run: |
           EMACSLOADPATH=$(find elpa -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
           HOME=$(dirname "$GITHUB_WORKSPACE") \
-          emacs -nw \
+          xvfb-run emacs \
+            --eval '(run-with-timer 60 nil (lambda () (kill-emacs 1)))' \
             -l test/test-xlib.el \
             -l test/test-builder.el \
             -l test/test-project-projectile-integration.el \
