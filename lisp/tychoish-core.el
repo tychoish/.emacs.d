@@ -152,7 +152,8 @@
 	     projectile-mode-on
 	     projectile-save-project-buffers)
   :init
-  (which-key-add-key-based-replacements "C-c p" "projectile")
+  (with-eval-after-load 'which-key
+    (which-key-add-key-based-replacements "C-c p" "projectile"))
   ;; previously added projectile-mode to the after-init-hook (probably
   ;; to get keybindings to load correctly,) appears unnecessary, but
   ;; wanted to leave note here.
@@ -246,8 +247,9 @@
 	     find-merge-conflicts
 	     ripgrep-regexp)
   :init
-  (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
-    "r" '("rg-grep" . tychoish/ecclectic-rg-map))
+  (with-eval-after-load 'which-key
+    (which-key-add-keymap-based-replacements tychoish/ecclectic-grep-map
+      "r" '("rg-grep" . tychoish/ecclectic-rg-map)))
   :config
   (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
@@ -1160,8 +1162,9 @@
 	     tychoish/telega-switch-to-root
 	     tychoish/telega-force-kill)
   :init
-  (which-key-add-key-based-replacements "C-c n" "telega-prefix")
-  (which-key-add-key-based-replacements "C-c v" "telega-prefix")
+  (with-eval-after-load 'which-key
+    (which-key-add-key-based-replacements "C-c n" "telega-prefix")
+    (which-key-add-key-based-replacements "C-c v" "telega-prefix"))
   (make-read-extended-command-for-prefix "telega"
     :bind-map telega-prefix-map
     :bind-key "x"

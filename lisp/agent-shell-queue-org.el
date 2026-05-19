@@ -96,14 +96,14 @@ build the property drawer so org manages drawer formatting."
       (insert "   " line "\n"))
     (insert "\n")))
 
-(defun agent-shell-queue-org--serialize ()
-  "Serialize `agent-shell-queue--items' to an org-mode string."
+(defun agent-shell-queue-org--serialize (items)
+  "Serialize ITEMS to an org-mode string."
   (with-temp-buffer
     (org-mode)
     (insert "#+TITLE: Agent Shell Queue\n")
     (insert "#+STARTUP: overview\n")
     (insert "#+TODO: TODO DOING WAIT HOLD DRAFT | DONE ABORTED\n\n")
-    (dolist (pair agent-shell-queue--items)
+    (dolist (pair items)
       (goto-char (point-max))
       (insert (format "* %s\n\n" (car pair)))
       (dolist (item (cdr pair))
@@ -197,13 +197,13 @@ string-in-paragraph-contents issues during tree walking."
 
 ;;; Registration
 
-(cl-defmethod agent-shell-queue-serialize ((format (eql org)))
-  (agent-shell-queue-org--serialize))
+(cl-defmethod agent-shell-queue--serialize-items ((_format (eql org)) items)
+  (agent-shell-queue-org--serialize items))
 
-(cl-defmethod agent-shell-queue-deserialize ((format (eql org)) string)
+(cl-defmethod agent-shell-queue--deserialize-items ((_format (eql org)) string)
   (agent-shell-queue-org--deserialize string))
 
-(cl-defmethod agent-shell-queue-format-file-extension ((format (eql org)))
+(cl-defmethod agent-shell-queue-format-file-extension ((_format (eql org)))
   ".org")
 
 (provide 'agent-shell-queue-org)
