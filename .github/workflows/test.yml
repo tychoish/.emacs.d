@@ -19,13 +19,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Emacs ${{ matrix.emacs_version }}
-        uses: purcell/setup-emacs@master
-        with:
-          version: ${{ matrix.emacs_version }}
-
-      - name: Install Cask
+      - name: Set up Emacs and Cask
         uses: cask/setup-cask@master
+        with:
+          emacs-version: ${{ matrix.emacs_version }}
 
       - name: Install dependencies
         run: cask install
@@ -46,14 +43,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Emacs ${{ matrix.emacs_version }}
-        uses: purcell/setup-emacs@master
+      - name: Set up Emacs and Cask
+        uses: cask/setup-cask@master
         with:
-          version: ${{ matrix.emacs_version }}
+          emacs-version: ${{ matrix.emacs_version }}
+
+      - name: Install dependencies
+        run: cask install
 
       - name: Run integration tests
         run: |
           EMACSLOADPATH=$(find elpa -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
           HOME=$(dirname "$GITHUB_WORKSPACE") \
-          emacs --fg-daemon \
+          cask exec emacs --fg-daemon \
             --eval '(tychoish/run-ci-tests)'
