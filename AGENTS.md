@@ -4,6 +4,9 @@ This file documents code style, organizational conventions, and development
 principles for this Emacs configuration. Follow these guidelines when making
 any changes.
 
+Elisp-specific coding rules (naming conventions, list operations, macros, cl-lib
+restrictions) live in `.claude/rules/lisp.md`.
+
 ---
 
 ## File Organization
@@ -44,37 +47,6 @@ The configuration is split into focused files:
 ```
 
 Lexical binding is mandatory on every file.
-
----
-
-## Naming Conventions
-
-### Function and variable prefixes
-
-| Prefix                 | Meaning                                                                 |
-|------------------------|-------------------------------------------------------------------------|
-| `tychoish/`            | Public interactive commands and configuration functions                 |
-| `tychoish--`           | Private implementation details; do not call from other files            |
-| `tychoish-`            | Public non-interactive functions (utilities, accessors)                 |
-| `ad:`                  | Advice functions (`:around`, `:before`, `:after` targets)               |
-| `cli/`                 | Command-line argument handlers registered with `command-line-functions` |
-| `f-`, `s-`, `-`, `ht-` | Extensions to the f/s/dash/ht libraries in `xlib.el`                    |
-
-Never define `tychoish/` functions in `xlib.el`. `xlib.el` is a pure utility library with no dependency on the config's domain logic.
-
-### Predicates
-
-End predicate functions with `-p`: `gui-p`, `should-read-abbrev-file-p`.
-
-### Toggle generators
-
-Use `create-toggle-functions` from `xlib.el` to generate `turn-on-X`, `turn-off-X`, and `toggle-X` triads. Do not write these by hand.
-
-### Single-use internal functions
-
-Never write a private (`--`) function that is called from exactly one place. Inline the body at the call site instead. Exceptions:
-- Functions passed as values: timer callbacks (`run-with-idle-timer`, `run-with-timer`), advice (`advice-add`), subscription/hook registrations, dispatch table entries.
-- Functions covered by direct ERT tests.
 
 ---
 
@@ -133,36 +105,6 @@ Always use `tychoish/conf-state-path` to build paths under the state directory. 
 ### `custom-file`
 
 Do not add variables to `custom.el` by hand. `custom-file` is set to a state-path so Emacs can write there; configuration should use explicit `setq` in the appropriate source file instead.
-
----
-
-## Macros
-
-### Write macros only for genuine repetition
-
-A macro is appropriate when the same structural pattern appears three or more times and cannot be expressed as a higher-order function. Prefer functions with `funcall` over macros when the body is just a value transformation.
-
-### Macro hygiene
-
-- Use `cl-defmacro` when the macro has keyword arguments.
-- Use `declare (indent N)` for macros with a body argument so indentation works correctly.
-- Prefer `gensym` / `make-symbol` over manual name mangling to avoid variable capture.
-- Never call functions with observable side effects inside a macro's expansion-time code (the non-backquoted parts). Side effects at expansion time run during `load`, not when the macro form is evaluated at runtime.
-
-### `with-*` macros
-
-Macros that temporarily modify a dynamic variable must restore it with `let`, not `setq`. Always use `prog1` or `unwind-protect` to return the body's value:
-
-```elisp
-;; Correct:
-(defmacro with-foo (value &rest body)
-  `(let ((foo ,value))
-     ,@body))
-
-;; Wrong (leaks):
-(defmacro with-foo (value &rest body)
-  `(progn (setq foo ,value) ,@body (setq foo nil)))
-```
 
 ---
 
@@ -252,3 +194,27 @@ Changes don't take effect in the running Emacs until the file is reloaded.
 
 After loading or reloeading `lisp/tychoish-bootstrap.el` ALWAYS reload
 `lisp/tychoish-core.el`.
+
+### Testing
+
+All fixes to bugs should be accompanied with a regression test. If
+possible write a reproduction of a bug as a regression test before making the fix.
+
+Features and functionality should be tested and testable.
+
+### Code Style
+
+Using libraries like `ht`, `dash`, `s`, and `f`, as well as standard
+library should be preferred to implementing basic functionally.
+
+Using functionality from `xlib` is generally acceptable, though some
+some packages (annotated-completing-read, agent-shell-queue) should
+not pick up this dependency without consultation.
+
+Limit the use of the 'cl-lib package to `cl-defun`, `cl-defmacro` and
+`cl-defstruct` and generic-functions. Most code can.
+
+Avoid deeply nested flow control.
+
+Avoid single-use declarations.
+
