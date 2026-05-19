@@ -15,7 +15,7 @@
   (add-hook 'org-mode-hook 'turn-on-soft-wrap) ;; from 'tychoish-common
   (defun tychoish--org-enable-vfc-heading-truncation ()
     "Enable heading truncation mode when visual-fill-column is active."
-    (when visual-fill-column-mode
+    (when (bound-and-true-p visual-fill-column-mode)
       (tychoish-vfc-heading-truncation-mode 1)))
   (add-hook 'org-mode-hook #'tychoish--org-enable-vfc-heading-truncation)
   (add-hook 'org-agenda-mode-hook 'tychoish/background-revbufs-for-hook)

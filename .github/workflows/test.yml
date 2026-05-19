@@ -57,6 +57,9 @@ jobs:
         with:
           version: ${{ matrix.emacs_version }}
 
+      - name: Install system dependencies
+        run: sudo apt-get install -y aspell
+
       - name: Link repo as ~/.emacs.d
         run: ln -sf "$GITHUB_WORKSPACE" ~/.emacs.d
 

@@ -1151,7 +1151,8 @@ Returns the number of buffers killed."
   (interactive)
   (let ((was-hard-wrapping auto-fill-function))
     (auto-fill-mode -1)
-    (visual-fill-column-mode 1)
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode 1))
     (visual-line-mode 1)
     (when was-hard-wrapping
       (tychoish-show-wrapping-mode))))
@@ -1159,7 +1160,8 @@ Returns the number of buffers killed."
 (defun turn-off-soft-wrap ()
   (interactive)
   (let ((was-soft-wrapping (not auto-fill-function)))
-    (visual-fill-column-mode -1)
+    (when (fboundp 'visual-fill-column-mode)
+      (visual-fill-column-mode -1))
     (visual-line-mode -1)
     (auto-fill-mode 1)
     (when was-soft-wrapping
@@ -1241,7 +1243,7 @@ export but adds complexity with no interactive benefit.")
           (lambda ()
             (when (assq major-mode tychoish--vfc-heading-patterns)
               (tychoish-vfc-heading-truncation-mode
-               (if visual-fill-column-mode 1 -1)))))
+               (if (bound-and-true-p visual-fill-column-mode) 1 -1)))))
 
 (defun unfill-region (begin end)
   "Remove all linebreaks in a region but leave paragraphs

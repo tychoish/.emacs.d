@@ -1361,7 +1361,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (add-hook 'markdown-mode-hook 'turn-on-soft-wrap)
   (add-hook 'markdown-mode-hook (lambda ()
-                                  (when visual-fill-column-mode
+                                  (when (bound-and-true-p visual-fill-column-mode)
                                     (tychoish-vfc-heading-truncation-mode 1))))
   (defun tychoish/markdown-setup-imenu ()
     (setq imenu-generic-expression markdown-imenu-generic-expression))
