@@ -357,14 +357,12 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 			(file        (f-filename (cadr (nth 3 template))))
 			(body        (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 template))))))
 		   (ht-set key-table description key-char)
-		   (ht-set annotation-table description (format "[%s] <%s> '%s'" key-char file body))))))
+		   (ht-set annotation-table description (format "[%s] <%s> '%s'" key-char file body)))))
       (org-capture nil (ht-get key-table (annotated-completing-read
 		      annotation-table
 		      :prompt "org-capture => "
 		      :category 'org-capture
-		      :require-match nil))))
-
-
+		      :require-match nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
