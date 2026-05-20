@@ -19,5 +19,5 @@ wordfreq-dicts/**
 lisp/**.elc
 external/**.elc
 request
-/.agent-shell/
+**/.agent-shell/**
 /.emacs.d
