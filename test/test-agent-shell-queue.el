@@ -1893,4 +1893,31 @@ Also stubs subscription management and `sit-for' to avoid side effects."
     (should (listp parsed))
     (should (eq 'agent-shell-queue--fork-session-from-running-emacs (car parsed)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Transient menu key integrity
+
+(ert-deftest agent-shell-queue/menu-no-key-prefix-conflicts ()
+  "No key in agent-shell-queue-menu is a strict prefix of another key."
+  (let* ((keys (transient-test/collect-keys 'agent-shell-queue-menu))
+         (conflicts (transient-test/key-prefix-conflicts keys)))
+    (should (null conflicts))))
+
+(ert-deftest agent-shell-queue/menu-no-duplicate-keys ()
+  "No key appears more than once in agent-shell-queue-menu."
+  (let* ((keys (transient-test/collect-keys 'agent-shell-queue-menu))
+         (dups (transient-test/duplicate-keys keys)))
+    (should (null dups))))
+
+(ert-deftest agent-shell-queue/item-menu-no-key-prefix-conflicts ()
+  "No key in agent-shell-queue-item-menu is a strict prefix of another key."
+  (let* ((keys (transient-test/collect-keys 'agent-shell-queue-item-menu))
+         (conflicts (transient-test/key-prefix-conflicts keys)))
+    (should (null conflicts))))
+
+(ert-deftest agent-shell-queue/item-menu-no-duplicate-keys ()
+  "No key appears more than once in agent-shell-queue-item-menu."
+  (let* ((keys (transient-test/collect-keys 'agent-shell-queue-item-menu))
+         (dups (transient-test/duplicate-keys keys)))
+    (should (null dups))))
+
 ;;; test-agent-shell-queue.el ends here
