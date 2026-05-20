@@ -2814,20 +2814,20 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("O" "Open shell for item at point" agent-shell-queue-buffer-open-shell
      :if agent-shell-queue--point-item)]
    ["Display"
-    ("dv" "Column display options" agent-shell-queue-select-columns)
-    ("db" "Toggle buffer column" agent-shell-queue-toggle-buffer-column
+    ("V" "Column display options" agent-shell-queue-select-columns)
+    ("Vb" "Toggle buffer column" agent-shell-queue-toggle-buffer-column
      :description (lambda ()
                     (if agent-shell-queue-show-buffer-column
                         "Hide buffer column" "Show buffer column")))
-    ("d#" "Toggle ordinal (#) column" agent-shell-queue-toggle-ordinal-column
+    ("V#" "Toggle ordinal (#) column" agent-shell-queue-toggle-ordinal-column
      :description (lambda ()
                     (if agent-shell-queue-show-ordinal-column
                         "Hide ordinal (#) column" "Show ordinal (#) column")))
-    ("da" "Toggle age column" agent-shell-queue-toggle-age-column
+    ("Va" "Toggle age column" agent-shell-queue-toggle-age-column
      :description (lambda ()
                     (if agent-shell-queue-show-age-column
                         "Hide age column" "Show age column")))
-    ("dm" "Toggle multi-line format" agent-shell-queue-toggle-multiline-format
+    ("Vm" "Toggle multi-line format" agent-shell-queue-toggle-multiline-format
      :description (lambda ()
                     (if agent-shell-queue-multiline-format
                         "Single-line format" "Multi-line format")))]
