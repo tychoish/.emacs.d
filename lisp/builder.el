@@ -16,7 +16,7 @@
 (require 'ht)
 (require 'dash)
 
-(require 'xlib)
+(require 'xtdlib)
 (require 'annotated-completing-read)
 (require 'eglot-test-at-point)
 
@@ -955,7 +955,7 @@ call `builder-add-candidates'."
 ;; `approximate-project-root', identified by the convention that the
 ;; root contains <NAME>.el where NAME matches the directory name
 ;; (with an optional ".el" suffix on the directory itself, as in
-;; "xlib.el/xlib.el"). Multi-file packages are supported: every
+;; "xtdlib.el/xtdlib.el"). Multi-file packages are supported: every
 ;; top-level .el file is treated as a source (excluding the generated
 ;; <NAME>-pkg.el and <NAME>-autoloads.el). Tests live under <root>/test/
 ;; as test-*.el or *-test.el. Dependencies come from <NAME>-pkg.el's
@@ -965,7 +965,7 @@ call `builder-add-candidates'."
 (defun builder-elisp-package--name (root)
   "Return the package name for the elisp project at ROOT.
 Strips a trailing \".el\" from the directory name so a project in
-\"xlib.el/\" packages as \"xlib\"."
+\"xtdlib.el/\" packages as \"xtdlib\"."
   (let ((basename (f-filename (directory-file-name root))))
     (if (string-suffix-p ".el" basename)
         (string-remove-suffix ".el" basename)

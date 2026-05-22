@@ -1,10 +1,10 @@
-;;; xlib.el --- Extended elisp utility library -*- lexical-binding: t -*-
+;;; xtdlib.el --- Extended elisp utility library -*- lexical-binding: t -*-
 
 ;; Author: tychoish
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "30.1") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19"))
 ;; Keywords: extensions utility
-;; URL: https://github.com/tychoish/xlib.el
+;; URL: https://github.com/tychoish/xtdlib.el
 
 ;; This file is not part of GNU Emacs
 
@@ -86,7 +86,7 @@ Empty strings and strings that are entirely whitespace are excluded from the res
     (char-equal char value)))
 
 (eval-and-compile
-  (defconst xlib--join-char-names
+  (defconst xtdlib--join-char-names
     '((?- "hyphen" "kebab")
       (?_ "underscore" "snake")
       (?. "period" "dot")
@@ -99,11 +99,11 @@ Empty strings and strings that are entirely whitespace are excluded from the res
 
 (cl-defmacro s-define-join-string-function (char &optional &key use-jargon-names space-padding)
   "Define a function `s-join-with-NAME' that joins non-empty strings with CHAR as separator.
-NAME is derived from CHAR via `xlib--join-char-names', falling back to the Unicode character
+NAME is derived from CHAR via `xtdlib--join-char-names', falling back to the Unicode character
 name. When USE-JARGON-NAMES is non-nil, the alternate jargon name is used (e.g. kebab vs
 hyphen). When SPACE-PADDING is non-nil, the separator is surrounded by spaces."
   (cl-check-type char character "must create join function using the character to join the strings")
-  (let* ((entry (assoc char xlib--join-char-names))
+  (let* ((entry (assoc char xtdlib--join-char-names))
          (name (downcase (if entry
                              (if use-jargon-names (nth 2 entry) (nth 1 entry))
                            (s-join "-" (s-split " " (char-to-name char))))))
@@ -784,8 +784,7 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 	      :map ,(or bind-map 'global-map)
 	      (,bind-key . ,user-command-symbol))
 	     ,(when key-alias
-		`(with-eval-after-load 'which-key
-		   (which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias))))))))
+		`(which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,key-alias)))))))
 
 (defmacro with-toggle-once (name &rest body)
   "Define a function NAME that executes BODY only the first time it is called.
@@ -926,5 +925,5 @@ Use this to guard optional integrations with packages that may not be present."
 	      (with-current-buffer it
                 (file-in-directory-p default-directory directory)))))))
 
-(provide 'xlib)
-;;; xlib.el ends here
+(provide 'xtdlib)
+;;; xtdlib.el ends here

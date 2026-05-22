@@ -1237,7 +1237,7 @@ Returns the number of buffers killed."
   (when (and (eq op 'set) (buffer-live-p where))
     (with-current-buffer where
       (when (bound-and-true-p visual-fill-column-mode)
-        (visual-fill-column-mode 1)))))
+        (visual-fill-column-mode 0)))))
 
 (add-variable-watcher 'fill-column #'tychoish--vfc-fill-column-watcher)
 
