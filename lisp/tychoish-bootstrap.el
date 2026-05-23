@@ -1700,17 +1700,17 @@ BODY is skipped."
 (defun tychoish/completion-select-flavor ()
   "Pick a completion flavor via `annotated-completing-read'."
   (interactive)
-  (let ((table (make-hash-table :test #'equal)))
-    (dolist (entry tychoish/completion-flavors)
-      (ht-set table (symbol-name (car entry))
-	      (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
-		      (nth 2 entry))))
-    (let* ((name (annotated-completing-read table
+  (let* ((name (annotated-completing-read
+                (seq-map (lambda (entry)
+                           (cons (symbol-name (car entry))
+                                 (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
+                                         (nth 2 entry))))
+                         tychoish/completion-flavors)
 		  :prompt "completion flavor => "
 		  :category 'tychoish-completion-flavor
 		  :require-match t))
 	   (entry (assq (intern name) tychoish/completion-flavors)))
-      (when entry (funcall (nth 1 entry))))))
+      (when entry (funcall (nth 1 entry)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

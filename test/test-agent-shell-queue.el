@@ -2134,4 +2134,28 @@ Applies to all capture paths, not just insert-after."
   (let ((agent-shell-queue-archive-enabled nil))
     (should-error (agent-shell-queue-buffer-archive) :type 'user-error)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--active-item-count
+
+(ert-deftest agent-shell-queue/active-item-count-excludes-done ()
+  "Depth count must not include items with status `done'."
+  (let ((items (list (agent-shell-queue-test/make-item "q01" "p" 'active)
+                     (agent-shell-queue-test/make-item "q02" "p" 'done)
+                     (agent-shell-queue-test/make-item "q03" "p" 'deferred)
+                     (agent-shell-queue-test/make-item "q04" "p" 'done))))
+    (should (= 2 (agent-shell-queue--active-item-count items)))))
+
+(ert-deftest agent-shell-queue/active-item-count-all-done ()
+  (let ((items (list (agent-shell-queue-test/make-item "q01" "p" 'done)
+                     (agent-shell-queue-test/make-item "q02" "p" 'done))))
+    (should (= 0 (agent-shell-queue--active-item-count items)))))
+
+(ert-deftest agent-shell-queue/active-item-count-none-done ()
+  (let ((items (list (agent-shell-queue-test/make-item "q01" "p" 'active)
+                     (agent-shell-queue-test/make-item "q02" "p" 'running))))
+    (should (= 2 (agent-shell-queue--active-item-count items)))))
+
+(ert-deftest agent-shell-queue/active-item-count-empty ()
+  (should (= 0 (agent-shell-queue--active-item-count nil))))
+
 ;;; test-agent-shell-queue.el ends here

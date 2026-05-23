@@ -375,15 +375,14 @@ When a permission request is pending, permission responses are spliced into the 
 		     ((agent-shell-viewport--shell-buffer)))
 		    (user-error "not in an agent-shell or viewport buffer")))
 	 (commands (with-current-buffer shell
-		     (map-elt agent-shell--state :available-commands)))
-	 (table (make-hash-table :test #'equal)))
+		     (map-elt agent-shell--state :available-commands))))
     (unless commands
       (user-error "no agent slash-commands advertised in %s" (buffer-name shell)))
-    (seq-do (lambda (c)
-	      (ht-set table (map-elt c 'name) (or (map-elt c 'description) "")))
-	    commands)
     (agent-shell-insert :text (concat "/" (annotated-completing-read
-					   table
+					   (seq-map (lambda (c)
+						     (cons (map-elt c 'name)
+							   (or (map-elt c 'description) "")))
+						   commands)
 					   :prompt "agent /command => "
 					   :category 'agent-shell-slash-command
 					   :require-match t
