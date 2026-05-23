@@ -205,6 +205,9 @@
 	      (projectile-mode 11))
       (buffer-list))))
 
+(use-package annotated-completing-read
+  :load-path "elpa/annotated-completing-read.el")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; grep/search

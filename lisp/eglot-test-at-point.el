@@ -27,7 +27,7 @@
 ;; and running, using eglot.
 
 (require 'eglot)
-(require 'ht)
+(require 'seq)
 (require 'annotated-completing-read)
 
 (defvar-local eglot-test-at-point-command nil
@@ -43,7 +43,7 @@ ARGUMENTS is the raw plist/vector from the LSP command.  Return nil to skip.")
 Set buffer-locally per language.")
 
 (defvar-local eglot-test-at-point-list-fn nil
-  "Function () => ht of NAME -> ANNOTATION for all tests in the current buffer.
+  "Function () => alist of (NAME . ANNOTATION) for all tests in the current buffer.
 Used by `eglot-test-at-point-select' to populate the selection menu.")
 
 (defvar-local eglot-test-at-point-get-name-fn nil
@@ -56,14 +56,14 @@ When set, `eglot-test-at-point-name' calls this instead of the
   "Configure test codelens vars for Go (gopls `test' lens)."
   (setq-local
    eglot-test-at-point-command "gopls.run_tests"
-   eglot-test-at-point-list-fn #'eglot-test-at-point--go-list
+   eglot-test-at-point-list-fn #'eglot-test-at-point--go-names-in-buffer
    eglot-test-at-point-run-command-fn (lambda (name) (format "go test -v -run=^%s$ ." name))
    eglot-test-at-point-name-fn (lambda (args)
-				    (let* ((run-args   (aref args 0))
-					   (tests      (plist-get run-args :Tests))
+				    (let* ((run-args (aref args 0))
+					   (tests (plist-get run-args :Tests))
 					   (benchmarks (plist-get run-args :Benchmarks)))
 				      (cond
-				       ((and tests      (> (length tests)      0)) (aref tests 0))
+				       ((and tests (> (length tests) 0)) (aref tests 0))
 				       ((and benchmarks (> (length benchmarks) 0)) (aref benchmarks 0)))))))
 
 (defun eglot-test-at-point-setup-rust ()
@@ -72,11 +72,11 @@ When set, `eglot-test-at-point-name' calls this instead of the
    eglot-test-at-point-command "rust-analyzer.runSingle"
    eglot-test-at-point-run-command-fn (lambda (name) (format "cargo test %s -- --nocapture" name))
    eglot-test-at-point-name-fn (lambda (args)
-				   (let* ((runnable (aref args 0))
-					  (label    (plist-get runnable :label))
-					  (kind     (plist-get runnable :kind)))
-				     (when (and label kind (member kind '("test" "bench")))
-				       (string-remove-prefix (concat kind " ") label))))))
+				   (when-let* ((runnable (aref args 0))
+					       (label (plist-get runnable :label))
+					       (kind (plist-get runnable :kind))
+					       ((member kind '("test" "bench"))))
+				     (string-remove-prefix (concat kind " ") label)))))
 
 (defun eglot-test-at-point-setup-python ()
   "Configure test discovery for Python via pylsp (+ python-lsp-ruff, pylsp-rope).
@@ -91,44 +91,48 @@ inside `Test*' classes (kind 5).  Runs tests with `python -m pytest'."
    eglot-test-at-point-get-name-fn #'eglot-test-at-poing--python-name-at-point))
 
 (defun eglot-test-at-point--python-name-at-point ()
-  (when-let* ((server  (eglot-current-server))
-	      (_       (eglot-server-capable :documentSymbolProvider))
-	      (pos     (point))
+  (when-let* ((server (eglot-current-server))
+	      (_ (eglot-server-capable :documentSymbolProvider))
+	      (pos (point))
 	      (symbols (eglot--request server
 				       :textDocument/documentSymbol
 				       `(:textDocument ,(eglot--TextDocumentIdentifier))
 				       :cancel-on-input non-essential)))
     (or
      ;; top-level test_* functions
-     (cl-loop for sym   across symbols
-	      for name  = (plist-get sym :name)
-	      for kind  = (plist-get sym :kind)
-	      for range = (plist-get sym :range)
-	      when (and (eql kind 12)
-			(string-prefix-p "test_" name)
-			range
-			(let ((reg (eglot-range-region range)))
-			  (and (<= (car reg) pos) (< pos (cdr reg)))))
-	      return name)
+     (when-let* ((sym (seq-find
+                       (lambda (sym)
+                         (let ((name (plist-get sym :name))
+                               (kind (plist-get sym :kind))
+                               (range (plist-get sym :range)))
+                           (and (eql kind 12)
+                                (string-prefix-p "test_" name)
+                                range
+                                (let ((reg (eglot-range-region range)))
+                                  (and (<= (car reg) pos) (< pos (cdr reg)))))))
+                       symbols)))
+       (plist-get sym :name))
      ;; test_* methods inside Test* classes
-     (cl-loop for sym        across symbols
-	      for class-name  = (plist-get sym :name)
-	      for kind        = (plist-get sym :kind)
-	      for children    = (plist-get sym :children)
-	      when (and (eql kind 5)
-			(string-prefix-p "Test" class-name)
-			children)
-	      thereis
-	      (cl-loop for method across children
-		       for mname  = (plist-get method :name)
-		       for mkind  = (plist-get method :kind)
-		       for mrange = (plist-get method :range)
-		       when (and (eql mkind 6)
-				 (string-prefix-p "test_" mname)
-				 mrange
-				 (let ((reg (eglot-range-region mrange)))
-				   (and (<= (car reg) pos) (< pos (cdr reg)))))
-		       return (format "%s::%s" class-name mname))))))
+     (seq-some
+      (lambda (sym)
+        (when-let* ((class-name (plist-get sym :name))
+                    (kind (plist-get sym :kind))
+                    (children (plist-get sym :children))
+                    ((eql kind 5))
+                    ((string-prefix-p "Test" class-name)))
+          (seq-some
+           (lambda (method)
+             (when-let* ((mname (plist-get method :name))
+                         (mkind (plist-get method :kind))
+                         (mrange (plist-get method :range))
+                         ((eql mkind 6))
+                         ((string-prefix-p "test_" mname))
+                         (reg (eglot-range-region mrange))
+                         ((<= (car reg) pos))
+                         ((< pos (cdr reg))))
+               (format "%s::%s" class-name mname)))
+           children)))
+      symbols))))
 
 (add-hook 'go-mode-hook #'eglot-test-at-point-setup-go)
 (add-hook 'go-ts-mode-hook #'eglot-test-at-point-setup-go)
@@ -146,13 +150,20 @@ TYPE is `test' or `benchmark'.  Uses gopls `test' code lenses."
                                       :textDocument/codeLens
                                       `(:textDocument ,(eglot--TextDocumentIdentifier))
                                       :cancel-on-input non-essential)))
-    (cl-loop for lens  across lenses
-             for cmd   = (plist-get lens :command)
-             when (and cmd (equal (plist-get cmd :command) "gopls.run_tests"))
-             for raw-args = (plist-get cmd :arguments)
-             for run-args = (when (and raw-args (> (length raw-args) 0)) (aref raw-args 0))
-             nconc (cl-loop for name across (or (plist-get run-args :Tests)      []) collect (cons name 'test))
-             nconc (cl-loop for name across (or (plist-get run-args :Benchmarks) []) collect (cons name 'benchmark)))))
+    (thread-last lenses
+      (seq-filter (lambda (lens)
+                    (when-let* ((cmd (plist-get lens :command)))
+                      (equal (plist-get cmd :command) "gopls.run_tests"))))
+      (seq-mapcat (lambda (lens)
+                    (let* ((cmd (plist-get lens :command))
+                           (raw-args (plist-get cmd :arguments))
+                           (run-args (when (and raw-args (> (length raw-args) 0))
+                                       (aref raw-args 0))))
+                      (append
+                       (seq-map (lambda (name) (cons name 'test))
+                                (or (plist-get run-args :Tests) []))
+                       (seq-map (lambda (name) (cons name 'benchmark))
+                                (or (plist-get run-args :Benchmarks) [])))))))))
 
 (defun eglot-test-at-point-name ()
   "Return the test name at point via LSP, or nil.
@@ -162,24 +173,25 @@ with `eglot-test-at-point-command' and `eglot-test-at-point-name-fn'."
   (if eglot-test-at-point-get-name-fn
       (funcall eglot-test-at-point-get-name-fn)
     (when-let* ((cmd-name eglot-test-at-point-command)
-                (name-fn  eglot-test-at-point-name-fn)
-                (server   (eglot-current-server))
-                (_        (eglot-server-capable :codeLensProvider))
-                (pos      (point))
-                (lenses   (eglot--request server
+                (name-fn eglot-test-at-point-name-fn)
+                (server (eglot-current-server))
+                (_ (eglot-server-capable :codeLensProvider))
+                (pos (point))
+                (lenses (eglot--request server
                                           :textDocument/codeLens
                                           `(:textDocument ,(eglot--TextDocumentIdentifier))
                                           :cancel-on-input non-essential)))
-      (let (best-args)
-        (cl-loop for lens  across lenses
-                 for cmd   = (plist-get lens :command)
-                 for range = (plist-get lens :range)
-                 when (and cmd range (equal (plist-get cmd :command) cmd-name))
-                 do (let ((beg (car (eglot-range-region range))))
-                      (when (<= beg pos)
-                        (setq best-args (plist-get cmd :arguments)))))
-        (when best-args
-          (funcall name-fn best-args))))))
+      (when-let* ((best (thread-last lenses
+                           (seq-filter (lambda (lens)
+                                         (let* ((cmd (plist-get lens :command))
+                                                (range (plist-get lens :range)))
+                                           (and cmd range
+                                                (equal (plist-get cmd :command) cmd-name)
+                                                (<= (car (eglot-range-region range)) pos)))))
+                           last
+                           car))
+                   (best-args (plist-get (plist-get best :command) :arguments)))
+        (funcall name-fn best-args)))))
 
 ;;;###autoload
 (defun eglot-test-at-point ()
@@ -193,21 +205,12 @@ to be set buffer-locally."
     (user-error "no test runner configured for %s" major-mode))
   (let* ((test-name (or (eglot-test-at-point-name)
                         (user-error "no test found at point")))
-         (directory    (f-dirname (buffer-file-name)))
-         (project-name (f-filename (directory-file-name (approximate-project-root))))
-         (pkg-name     (f-filename directory))
-         (buf-name     (format "*%s-test-%s*" project-name pkg-name))
-         (command      (funcall eglot-test-at-point-run-command-fn test-name))
+         (directory (f-dirname (buffer-file-name)))
+         (pkg-name (file-name-directory directory))
+         (buf-name (format "*%s-test-%s*" (approximate-project-name) pkg-name))
+         (command (funcall eglot-test-at-point-run-command-fn test-name))
          (default-directory directory))
     (compilation-start command 'compilation-mode (compile-buffer-name buf-name))))
-
-
-(defun eglot-test-at-point--go-list ()
-  "Return ht of NAME -> TYPE-STRING for all tests in the current Go buffer."
-  (when-let* ((pairs (eglot-test-at-point--go-names-in-buffer)))
-    (let ((table (ht-create)))
-      (dolist (pair pairs table)
-        (ht-set! table (car pair) (symbol-name (cdr pair)))))))
 
 ;;;###autoload
 (defun eglot-test-at-point-select ()
@@ -221,14 +224,14 @@ to be set buffer-locally."
     (user-error "no test runner configured for %s" major-mode))
   (unless eglot-test-at-point-list-fn
     (user-error "no test listing function configured for %s" major-mode))
-  (let* ((table     (or (funcall eglot-test-at-point-list-fn)
-                        (user-error "no tests found in buffer")))
+  (let* ((table (or (funcall eglot-test-at-point-list-fn)
+                     (user-error "no tests found in buffer")))
          (test-name (annotated-completing-read table :prompt "Test: " :require-match t))
-         (directory    (f-dirname (buffer-file-name)))
+         (directory (f-dirname (buffer-file-name)))
          (project-name (f-filename (directory-file-name (approximate-project-root))))
-         (pkg-name     (f-filename directory))
-         (buf-name     (format "*%s-test-%s*" project-name pkg-name))
-         (command      (funcall eglot-test-at-point-run-command-fn test-name))
+         (pkg-name (f-filename directory))
+         (buf-name (format "*%s-test-%s*" project-name pkg-name))
+         (command (funcall eglot-test-at-point-run-command-fn test-name))
          (default-directory directory))
     (compilation-start command 'compilation-mode (compile-buffer-name buf-name))))
 

@@ -1,9 +1,9 @@
-;;; xtdlib.el --- Extended elisp utility library -*- lexical-binding: t -*-
+;;; xtdlib.el --- E(x)tended s(t)an(d)ard Emacs Lisp Library -*- lexical-binding: t -*-
 
-;; Author: tychoish
+;; Author: sam kleinman (tychoish)
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "30.1") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19"))
-;; Keywords: extensions utility
+;; Package-Requires: ((emacs "29.4") (f "0.20") (s "1.12") (ht "2.3") (dash "2.19"))
+;; Keywords: utility, library, elisp.
 ;; URL: https://github.com/tychoish/xtdlib.el
 
 ;; This file is not part of GNU Emacs
@@ -45,8 +45,12 @@
 
 ;; slow-op -- reporting for operation timing
 
-(defvar slow-op-reporting debug-on-error)
-(defvar slow-op-threshold 0.01)
+(defvar slow-op-reporting debug-on-error
+  "A toggle that, when enabled is supports more verbose timing reporting.
+Turns `with-slow-op-timer' from a noop to reporting on the duration of enclosed operations.")
+
+(defvar slow-op-threshold 0.01
+  "Threshold in seconds, or fractions thereof. Controls the behavior of `with-slow-op-timer'. Any operation below this threshold (faster) are ignored. Use this to control verbosity.")
 
 (defmacro with-slow-op-timer (name &rest body)
   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
@@ -79,7 +83,7 @@ Empty strings and strings that are entirely whitespace are excluded from the res
 
 (defun s-or-char-equal (char value)
   "Return t when CHAR equals VALUE, where VALUE may be a character or single-char string."
-  (cl-check-type char  character             "char must be a character")
+  (cl-check-type char  character         "char must be a character")
   (cl-check-type value (or string character) "value must be a string or character")
   (if (stringp value)
       (string-equal (char-to-string char) value)
@@ -111,6 +115,7 @@ hyphen). When SPACE-PADDING is non-nil, the separator is surrounded by spaces."
 	 (padding (if space-padding " " ""))
 	 (join-with (concat padding (char-to-string char) padding)))
     `(defun ,(intern op-name) (&rest words)
+       ,(format "Joins a variadic sequence of strings with `%s' (%s). When the kwarg `:space-padding',  the join char is padded with space characters on both ends before joining." char name)
        (->> words
 	    (-filter-s-trim)
 	    (s-join ,join-with)))))
@@ -870,6 +875,7 @@ Short-circuits on the first predicate that returns nil, consistent with `and' se
 (declare-function project-buffers "project")
 
 (defun buffer-derived-mode-p (buffer mode)
+  "Returns t when the major-mode of `buffer' is or is derived from `mode.'"
   (with-current-buffer buffer
     (when (derived-mode-p mode)
       t)))

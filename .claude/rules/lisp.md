@@ -15,34 +15,29 @@ or collection function.
 
 ## List Operations and Iteration
 
-Use dash.el equivalents instead of cl-lib or raw `mapcar`:
+Use `seq.el` equivalents instead of cl-lib or raw `mapcar`:
 
 | Avoid | Use instead |
 |-------|-------------|
-| `(mapcar (lambda ...) list)` | `(-map (lambda ...) list)` or `(--map EXPR list)` |
-| `(cl-remove-if PRED list)` | `(-remove PRED list)` or `(--remove EXPR list)` |
-| `(cl-remove-if-not PRED list)` | `(-filter PRED list)` or `(--filter EXPR list)` |
-| `(cl-find-if PRED list)` | `(-first PRED list)` or `(--first EXPR list)` |
-| `(cl-some PRED list)` | `(-any? PRED list)` or `(--any? EXPR list)` |
-| `(cl-every PRED list)` | `(-all? PRED list)` or `(--all? EXPR list)` |
-| `(cl-reduce (lambda (acc x) (+ acc (f x))) list :initial-value 0)` | `(--sum (f it) list)` |
-| `(dolist (x list) BODY)` | `(-each list (lambda (x) BODY))` or `(--each list BODY)` |
-
-Use anaphoric variants (`--map`, `--filter`, `--each`, `--sum`, etc.) when the body is a
-simple expression referring to the element as `it`. Use the lambda form when the body is
-multi-line or captures outer variables by name.
+| `(mapcar (lambda ...) list)` | `(seq-map (lambda ...) list)` |
+| `(cl-remove-if PRED list)` | `(seq-remove PRED list)` |
+| `(cl-remove-if-not PRED list)` | `(seq-filter PRED list)` |
+| `(cl-find-if PRED list)` | `(seq-find PRED list)` |
+| `(cl-some PRED list)` | `(seq-some PRED list)` |
+| `(cl-every PRED list)` | `(seq-every-p PRED list)` |
+| `(cl-reduce f list :initial-value init)` | `(seq-reduce f list init)` |
 
 ### Threading macros over nesting
 
-Use `->` and `->>` from dash.el to express a series of transformations on the same value
+Use `thread-last` from `subr-x` to express a series of transformations on the same value
 instead of nesting function calls:
 
 ```elisp
 ;; Avoid:
-(mapcar #'f (cl-remove-if #'pred (mapcar #'g list)))
+(seq-map #'f (seq-remove #'pred (seq-map #'g list)))
 
 ;; Prefer:
-(->> list (-map #'g) (-remove #'pred) (-map #'f))
+(thread-last list (seq-map #'g) (seq-remove #'pred) (seq-map #'f))
 ```
 
 ---
@@ -118,11 +113,11 @@ reference. Pass the function directly with `#'`:
 
 ```elisp
 ;; Avoid:
-(-map (lambda (x) (upcase x)) list)
+(seq-map (lambda (x) (upcase x)) list)
 (add-hook 'some-hook (lambda () (my-fn)))
 
 ;; Prefer:
-(-map #'upcase list)
+(seq-map #'upcase list)
 (add-hook 'some-hook #'my-fn)
 ```
 
@@ -191,7 +186,7 @@ own line:
 | `tychoish-`            | Public non-interactive functions (utilities, accessors)                 |
 | `ad:`                  | Advice functions (`:around`, `:before`, `:after` targets)               |
 | `cli/`                 | Command-line argument handlers registered with `command-line-functions` |
-| `f-`, `s-`, `-`, `ht-` | Extensions to the f/s/dash/ht libraries in `xlib.el`                    |
+| `xt-`                  | Extensions and utilities in `xtdlib.el`                                 |
 
 Never define `tychoish/` functions in `xlib.el`. `xlib.el` is a pure utility library with no dependency on the config's domain logic.
 

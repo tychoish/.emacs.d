@@ -24,7 +24,7 @@ The configuration is split into focused files:
 | `lisp/tychoish-core.el`             | All `use-package` forms. Organized by functional area with section headers.                   |
 | `lisp/tychoish-mail.el`             | Mu4e and mail account configuration.                                                          |
 | `lisp/tychoish-org.el`              | Org-mode, org-roam, capture templates.                                                        |
-| `lisp/xlib.el`                      | Pure utility library: dash/s/ht/f extensions, macros, no Emacs UI deps.                       |
+| `lisp/xtdlib.el`                      | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
 | `lisp/builder.el`                   | Compilation buffer system.                                                                    |
 | `lisp/annotated-completing-read.el` | ACR completion UI.                                                                            |
 | `lisp/eglot-test-at-point.el`       | Eglot test runner helper.                                                                     |
@@ -63,7 +63,7 @@ Lexical binding is mandatory on every file.
 ```
 early-init.el
   └─ init.el (inside with-gc-suppressed)
-       ├─ xlib (eval-when-compile + load-path setup)
+       ├─ xtdlib (eval-when-compile + load-path setup)
        ├─ tychoish-bootstrap (keybindings, settings, hooks)
        ├─ tychoish-core (use-package forms)
        ├─ tychoish-mail
@@ -144,7 +144,7 @@ Tests live in `test/`. Load the test file with `M-x load-file` or run with:
 emacs -batch -l test/tychoish-test.el
 ```
 
-When adding a new utility to `xlib.el` or a DSL macro, add at minimum a smoke test that exercises the generated output. The `eglot-test-at-point.el` module has examples of test runner integration.
+When adding a new utility to `xtdlib.el` or a DSL macro, add at minimum a smoke test that exercises the generated output. The `eglot-test-at-point.el` module has examples of test runner integration.
 
 ---
 
@@ -157,7 +157,7 @@ Every key sequence within a `transient-define-prefix` must be unique across all 
 ## Commit and Change Hygiene
 
 - Keep changes to a single concern per commit. Mixing a bug fix with a refactor makes bisecting harder.
-- After changing `tychoish-bootstrap.el` or `xlib.el`, byte-compile with `M-x byte-compile-all-user-emacs-files` (bound by default) to catch warnings.
+- After changing `tychoish-bootstrap.el` or `xtdlib.el`, byte-compile with `M-x byte-compile-all-user-emacs-files` (bound by default) to catch warnings.
 - Removing a keybinding: check all other files for references to the bound command before removing its map entry.
 - The `user/` directory is gitignored. Machine-specific overrides go there, not in the committed files.
 
@@ -204,10 +204,9 @@ Features and functionality should be tested and testable.
 
 ### Code Style
 
-Using libraries like `ht`, `dash`, `s`, and `f`, as well as standard
-library should be preferred to implementing basic functionally.
+Prefer standard library functions over reimplementing basic functionality.
 
-Using functionality from `xlib` is generally acceptable, though some
+Using functionality from `xtdlib` is generally acceptable, though some
 some packages (annotated-completing-read, agent-shell-queue) should
 not pick up this dependency without consultation.
 
