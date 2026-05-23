@@ -28,7 +28,9 @@
 
 (require 'eglot)
 (require 'seq)
+
 (require 'annotated-completing-read)
+(require 'xtdlib)
 
 (defvar-local eglot-test-at-point-command nil
   "LSP command name identifying test-running code lenses in the current buffer.
@@ -88,7 +90,7 @@ inside `Test*' classes (kind 5).  Runs tests with `python -m pytest'."
    eglot-test-at-point-command nil
    eglot-test-at-point-name-fn nil
    eglot-test-at-point-run-command-fn (lambda (name) (format "python -m pytest -v %s::%s" (buffer-file-name) name))
-   eglot-test-at-point-get-name-fn #'eglot-test-at-poing--python-name-at-point))
+   eglot-test-at-point-get-name-fn #'eglot-test-at-point--python-name-at-point))
 
 (defun eglot-test-at-point--python-name-at-point ()
   (when-let* ((server (eglot-current-server))
@@ -205,7 +207,7 @@ to be set buffer-locally."
     (user-error "no test runner configured for %s" major-mode))
   (let* ((test-name (or (eglot-test-at-point-name)
                         (user-error "no test found at point")))
-         (directory (f-dirname (buffer-file-name)))
+         (directory (file-name-directory (buffer-file-name)))
          (pkg-name (file-name-directory directory))
          (buf-name (format "*%s-test-%s*" (approximate-project-name) pkg-name))
          (command (funcall eglot-test-at-point-run-command-fn test-name))
@@ -227,10 +229,9 @@ to be set buffer-locally."
   (let* ((table (or (funcall eglot-test-at-point-list-fn)
                      (user-error "no tests found in buffer")))
          (test-name (annotated-completing-read table :prompt "Test: " :require-match t))
-         (directory (f-dirname (buffer-file-name)))
-         (project-name (f-filename (directory-file-name (approximate-project-root))))
-         (pkg-name (f-filename directory))
-         (buf-name (format "*%s-test-%s*" project-name pkg-name))
+         (directory (file-name-directory (buffer-file-name)))
+         (pkg-name (file-name-directory directory))
+         (buf-name (format "*%s-test-%s*" (approximate-project-name) pkg-name))
          (command (funcall eglot-test-at-point-run-command-fn test-name))
          (default-directory directory))
     (compilation-start command 'compilation-mode (compile-buffer-name buf-name))))

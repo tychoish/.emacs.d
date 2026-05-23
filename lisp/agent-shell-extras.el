@@ -163,26 +163,28 @@ Also binds FN directly in `agent-shell-viewport-view-mode-map'."
 	   (size (map-nested-elt state '(:usage :context-size)))
 	   (last (map-elt state :last-activity-time))
 	   (cwd (abbreviate-file-name (or default-directory ""))))
-      (s-join " · "
-	      (-non-nil
-	       (list (format "[%s]" status)
-		     cwd
-		     (when (and (numberp used) (numberp size) (> size 0))
-		       (format "ctx %.0f%%" (* 100.0 (/ (float used) size))))
-		     (when last
-		       (format "%s ago"
-			       (agent-shell--format-age (time-since last))))))))))
+      (mapconcat 'identity
+		 (-non-nil
+		  (list (format "[%s]" status)
+			cwd
+			(when (and (numberp used) (numberp size) (> size 0))
+			  (format "ctx %.0f%%" (* 100.0 (/ (float used) size))))
+			(when last
+			  (format "%s ago"
+				  (agent-shell--format-age (time-since last))))))
+		 " · "))))
 
 (defun agent-shell-extras--pick-buffer (prompt)
   "Select an agent-shell buffer via PROMPT using status/cwd/context annotations."
-  (let ((table (ht-create)))
-    (dolist (buf (or (agent-shell-buffers) (user-error "No live agent-shell buffers")))
-      (ht-set table (buffer-name buf) (agent-shell--buffer-annotation buf)))
-    (get-buffer (annotated-completing-read table
-					   :prompt prompt
-					   :category 'agent-shell-buffer
-					   :require-match t
-					   :history 'agent-shell-extras--pick-buffer))))
+  (let ((bufs (or (agent-shell-buffers) (user-error "No live agent-shell buffers"))))
+    (get-buffer
+     (annotated-completing-read
+      (seq-map (lambda (buf) (cons (buffer-name buf) (agent-shell--buffer-annotation buf)))
+	       bufs)
+      :prompt prompt
+      :category 'agent-shell-buffer
+      :require-match t
+      :history 'agent-shell-extras--pick-buffer))))
 
 ;;;###autoload
 (defun agent-shell-switch-buffer ()
@@ -226,26 +228,27 @@ POSITION is buffer position of the button's start."
 (defun agent-shell-resolve-permission ()
   "Resolve a pending permission prompt via `annotated-completing-read'."
   (interactive)
+
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in an agent-shell buffer"))
+
   (unless (agent-shell--permission-pending-p)
     (user-error "No pending permission request in this buffer"))
-  (let ((buttons (or (agent-shell--permission-buttons)
-                     (user-error "No permission buttons found in this buffer")))
-        (table (ht-create)))
-    (dolist (b buttons)
-      (ht-set table (car b) (format "pos %d" (cdr b))))
-    (let* ((label (annotated-completing-read table
-                                             :prompt "permission => "
-                                             :category 'agent-shell-permission
-                                             :require-match t
-                                             :history 'agent-shell-resolve-permission))
-           (pos (cdr (assoc label buttons)))
-           (cmd (or (and pos (agent-shell--permission-action-at pos))
-                    (user-error "No action attached to permission button"))))
-      (save-excursion
-        (goto-char pos)
-        (call-interactively cmd)))))
+
+  (let* ((label (annotated-completing-read
+		 (or (agent-shell--permission-buttons)
+		     (user-error "No permission buttons found in this buffer"))
+                 :prompt "permission => "
+                 :category 'agent-shell-permission
+                 :require-match t
+                 :history 'agent-shell-resolve-permission))
+         (pos (cdr (assoc label buttons)))
+         (cmd (or (and pos (agent-shell--permission-action-at pos))
+                  (user-error "No action attached to permission button"))))
+
+    (save-excursion
+      (goto-char pos)
+      (call-interactively cmd))))
 
 ;;; Action menu
 
@@ -254,33 +257,32 @@ POSITION is buffer position of the button's start."
   "Pick a common agent-shell action and run it via `call-interactively'.
 When a permission request is pending, permission responses are spliced into the menu."
   (interactive)
-  (let* ((perm-entries
-	  (when (and (derived-mode-p 'agent-shell-mode)
-		     (agent-shell--permission-pending-p))
-	    (mapcar (lambda (b)
-		      (cons (format "permission: %s" (car b))
-			    (agent-shell--permission-button-action (cdr b))))
-		    (agent-shell--permission-buttons))))
-	 (alist (append perm-entries agent-shell-action-alist))
-	 (table (ht-create)))
-    (dolist (entry alist)
-      (when (commandp (cdr entry))
-	(ht-set table (car entry)
-		(or (car (split-string (or (documentation (cdr entry)) "") "\n")) ""))))
-    (when-let* ((label (annotated-completing-read table
-			  :prompt "agent-shell action =>"
-			  :category 'agent-shell-action
-			  :require-match t
-			  :history 'agent-shell-select-action))
-		(cmd (cdr (assoc label alist)))
-		((commandp cmd)))
-      (call-interactively cmd))))
+  (when-let* ((table (thread-last (when (and (derived-mode-p 'agent-shell-mode)
+					     (agent-shell--permission-pending-p))
+				    (mapcar (lambda (b)
+					      (cons (format "permission: %s" (car b))
+						    (agent-shell--permission-button-action (cdr b))))
+					    (agent-shell--permission-buttons)))
+				  (append agent-shell-action-alist)
+				  (seq-filter (lambda (entry) (commandp (cdr entry))))
+				  (seq-map (lambda (entry)
+					    (cons (car entry)
+						  (or (car (split-string (or (documentation (cdr entry)) "") "\n")) ""))))))
+	      (label (annotated-completing-read
+		      :prompt "agent-shell action =>"
+		      :category 'agent-shell-action
+		      :require-match t
+		      :history 'agent-shell-select-action))
+	      (cmd (cdr (assoc label table)))
+	      (_ (commandp cmd)))
+    (call-interactively cmd)))
 
 ;;; Project session switching
 
 (defun agent-shell-extras--same-project-buffers ()
   "Return live agent-shell buffers sharing the current buffer's project directory."
   (let ((dir default-directory))
+    ;; TODO refactor this to use seq-filter and (with-current-buffer) (simplification)
     (cl-remove-if-not
      (lambda (b)
        (and (not (eq b (current-buffer)))
@@ -291,17 +293,14 @@ When a permission request is pending, permission responses are spliced into the 
 (defun agent-shell-switch-project-session ()
   "Switch to another agent-shell session in the same project directory."
   (interactive)
-  (let* ((bufs (or (agent-shell-extras--same-project-buffers)
-                   (user-error "No other agent-shell sessions for this project")))
-         (table (ht-create)))
-    (dolist (buf bufs)
-      (ht-set table (buffer-name buf) (agent-shell--buffer-annotation buf)))
-    (switch-to-buffer
-     (get-buffer (annotated-completing-read table
-                                            :prompt "project session => "
-                                            :category 'agent-shell-buffer
-                                            :require-match t
-                                            :history 'agent-shell-switch-project-session)))))
+  (switch-to-buffer
+   (get-buffer (annotated-completing-read
+		(agent-shell--buffer-annotation (or (agent-shell-extras--same-project-buffers)
+						    (user-error "No other agent-shell sessions for this project")))
+                :prompt "project session =>"
+                :category 'agent-shell-buffer
+                :require-match t
+                :history 'agent-shell-switch-project-session))))
 
 ;;; Transient menus
 
@@ -372,12 +371,12 @@ When a permission request is pending, permission responses are spliced into the 
   "Insert one of the agent's advertised `/' commands at the prompt."
   (interactive)
   (let* ((shell (or (cond
-		      ((derived-mode-p 'agent-shell-mode) (current-buffer))
-		      ((agent-shell-viewport--shell-buffer)))
-		     (user-error "not in an agent-shell or viewport buffer")))
+		     ((derived-mode-p 'agent-shell-mode) (current-buffer))
+		     ((agent-shell-viewport--shell-buffer)))
+		    (user-error "not in an agent-shell or viewport buffer")))
 	 (commands (with-current-buffer shell
 		     (map-elt agent-shell--state :available-commands)))
-	 (table (ht-create)))
+	 (table (make-hash-table :test #'equal)))
     (unless commands
       (user-error "no agent slash-commands advertised in %s" (buffer-name shell)))
     (seq-do (lambda (c)
@@ -444,8 +443,8 @@ three expand-by-default customization variables."
   (unless (or (derived-mode-p 'agent-shell-mode)
 	      (derived-mode-p 'agent-shell-viewport-view-mode))
     (user-error "Not in an agent-shell buffer"))
-  (let* ((by-cat (ht-create))
-	 (table (ht-create))
+  (let* ((by-cat (make-hash-table :test #'equal))
+	 (table (make-hash-table :test #'equal))
 	 (toggles '(("~ thinking: expand-by-default"
 		     . agent-shell-thought-process-expand-by-default)
 		    ("~ tool call: expand-by-default"

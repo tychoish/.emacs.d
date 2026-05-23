@@ -458,7 +458,7 @@ Creates `ht-NAME-get', `ht-NAME-set', and `ht-NAME-contains-p'. TEST defaults to
 
 (defun f-when-file-exists (path)
   "Return PATH if it exists on the filesystem, otherwise nil."
-  (when (f-exists-p path)
+  (when (file-exists-p path)
     path))
 
 (defun f-distinct (sequence)

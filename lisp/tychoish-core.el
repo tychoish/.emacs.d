@@ -394,7 +394,7 @@
   (defun capf-wordfreq-avalible-p ()
     (and (fboundp 'capf-wordfreq-completion-at-point-function)
 	 (fboundp 'capf-wordfreq--dictionary)
-	 (f-exists-p (capf-wordfreq--dictionary))))
+	 (file-exists-p (capf-wordfreq--dictionary))))
   (setq capf-wordfreq-minimal-candidate-length 5))
 
 (use-package cape
@@ -432,7 +432,7 @@
 	     (funcall ',wrapper ',inner))))))
 
   (defun tychoish/maybe-capf-dict ()
-    (and (boundp 'cape-dict-file) (f-exists-p cape-dict-file) #'cape-dict))
+    (and (boundp 'cape-dict-file) (file-exists-p cape-dict-file) #'cape-dict))
 
   (defun tychoish/maybe-capf-wordfreq ()
     (disabled (when (capf-wordfreq-avalible-p)
@@ -1015,7 +1015,7 @@
 
   (let* ((dir (package-desc-dir (package-get-descriptor 'transient)))
 	 (path (f-join dir "transient.el")))
-    (if (f-exists-p path)
+    (if (file-exists-p path)
 	(load-file path)
       (message "could not force-load %s" path))))
 
@@ -2457,9 +2457,9 @@ Useful after changing `eglot-workspace-configuration' or
       (message "[robots]: set environment variable for OpenAI"))
 
     (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
-		(_ (f-exists-p uv-bin-path))
+		(_ (file-exists-p uv-bin-path))
 		(aider-bin-path (f-join uv-bin-path "aider"))
-		(_ (f-exists-p aider-bin-path))
+		(_ (file-exists-p aider-bin-path))
 		(search-path (getenv "PATH")))
 
       (unless (s-contains-p uv-bin-path search-path)
@@ -2654,7 +2654,7 @@ Useful after changing `eglot-workspace-configuration' or
 
   ;; Data directory
   (setq efrit-data-directory (tychoish/conf-state-path "efrit"))
-  (unless (f-exists-p efrit-data-directory)
+  (unless (file-exists-p efrit-data-directory)
     (make-directory efrit-data-directory t))
 
   ;; Enable debug logging
@@ -2836,7 +2836,13 @@ Useful after changing `eglot-workspace-configuration' or
       (expand-file-name (concat "queue." ext)
                         (tychoish/conf-state-path "agent-shell"))))
 
+  (defun tychoish--agent-shell-queue-archive-file ()
+    "Archive file under the per-instance agent-shell state directory."
+    (expand-file-name "queue-archive.jsonl"
+                      (tychoish/conf-state-path "agent-shell")))
+
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
+  (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
   (setq agent-shell-queue-pick-buffer-function #'agent-shell-extras--pick-buffer)
   (setq agent-shell-queue-show-ordinal-column nil))
 

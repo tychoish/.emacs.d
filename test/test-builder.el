@@ -94,7 +94,7 @@
 
 (ert-deftest builder-test/add-candidate-inserts-by-name ()
   "Adding a candidate stores it under its name key."
-  (let ((tbl (ht-create))
+  (let ((tbl (make-hash-table :test #'equal))
         (c (make-builder-candidate :command "make" :name "build")))
     (builder--add-candidate tbl c)
     (should (ht-contains-p tbl "build"))
@@ -102,7 +102,7 @@
 
 (ert-deftest builder-test/add-candidate-overwrites-existing ()
   "Adding a candidate with an existing name replaces the previous entry."
-  (let ((tbl (ht-create))
+  (let ((tbl (make-hash-table :test #'equal))
         (c1 (make-builder-candidate :command "make" :name "build"))
         (c2 (make-builder-candidate :command "make -j4" :name "build")))
     (builder--add-candidate tbl c1)
@@ -111,7 +111,7 @@
 
 (ert-deftest builder-test/add-candidates-filters-non-candidates ()
   "Non-candidate values in the list are silently ignored."
-  (let ((tbl (ht-create))
+  (let ((tbl (make-hash-table :test #'equal))
         (c (make-builder-candidate :command "make" :name "build")))
     (builder--add-candidates tbl (list c nil "not-a-candidate" 42))
     (should (= 1 (ht-size tbl)))
@@ -119,7 +119,7 @@
 
 (ert-deftest builder-test/add-candidates-all-valid ()
   "All valid candidates are inserted."
-  (let ((tbl (ht-create))
+  (let ((tbl (make-hash-table :test #'equal))
         (c1 (make-builder-candidate :command "make" :name "build"))
         (c2 (make-builder-candidate :command "make test" :name "test"))
         (c3 (make-builder-candidate :command "make lint" :name "lint")))
@@ -131,7 +131,7 @@
 
 (ert-deftest builder-test/add-candidates-empty-list ()
   "Empty input list leaves the table unchanged."
-  (let ((tbl (ht-create)))
+  (let ((tbl (make-hash-table :test #'equal)))
     (builder--add-candidates tbl nil)
     (should (= 0 (ht-size tbl)))))
 
@@ -176,7 +176,7 @@
   (builder-register-candidates
    :name "test-reg-pop"
    :pipeline (list (make-builder-candidate :command "echo pop" :name "pop")))
-  (let ((tbl (ht-create)))
+  (let ((tbl (make-hash-table :test #'equal)))
     (builder-candidates-for-test-reg-pop "/" "proj" (list "/") tbl)
     (should (ht-contains-p tbl "pop"))))
 
@@ -185,7 +185,7 @@
   (builder-register-candidates
    :name "test-reg-ret"
    :pipeline nil)
-  (let ((tbl (ht-create)))
+  (let ((tbl (make-hash-table :test #'equal)))
     (should (eq t (builder-candidates-for-test-reg-ret "/" "proj" (list "/") tbl)))))
 
 (ert-deftest builder-test/register-candidates-with-false-predicate ()
@@ -194,7 +194,7 @@
    :name "test-reg-pred"
    :predicate nil
    :pipeline (list (make-builder-candidate :command "never" :name "never")))
-  (let ((tbl (ht-create)))
+  (let ((tbl (make-hash-table :test #'equal)))
     (builder-candidates-for-test-reg-pred "/" "proj" (list "/") tbl)
     (should (= 0 (ht-size tbl)))))
 
@@ -221,7 +221,7 @@
    :pipeline (list (make-builder-candidate :command "cmd1" :name "c1")
                    (make-builder-candidate :command "cmd2" :name "c2")
                    (make-builder-candidate :command "cmd3" :name "c3")))
-  (let ((tbl (ht-create)))
+  (let ((tbl (make-hash-table :test #'equal)))
     (builder-candidates-for-test-reg-multi "/" "proj" (list "/") tbl)
     (should (= 3 (ht-size tbl)))
     (should (ht-contains-p tbl "c1"))
@@ -246,26 +246,26 @@
 
 (ert-deftest builder-test/candidate-priority-from-table ()
   "Returns the candidate's priority when the name is in the table."
-  (let ((tbl (ht-create))
+  (let ((tbl (make-hash-table :test #'equal))
         (c (make-builder-candidate :command "make" :name "build" :priority 1)))
     (ht-set tbl "build" c)
     (should (= 1 (builder--candidate-priority tbl "build")))))
 
 (ert-deftest builder-test/candidate-priority-default-when-missing ()
   "Returns 2 for names not present in the table."
-  (should (= 2 (builder--candidate-priority (ht-create) "unknown"))))
+  (should (= 2 (builder--candidate-priority (make-hash-table :test #'equal) "unknown"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder--make-sort-fn
 
 (ert-deftest builder-test/make-sort-fn-returns-function ()
   "`builder--make-sort-fn' returns a callable function."
-  (should (functionp (builder--make-sort-fn (ht-create) 'test-key))))
+  (should (functionp (builder--make-sort-fn (make-hash-table :test #'equal) 'test-key))))
 
 (ert-deftest builder-test/make-sort-fn-history-before-non-history ()
   "Items present in history sort before items not in history."
-  (let* ((annotated-completing-read-history (ht-create))
-         (tbl (ht-create)))
+  (let* ((annotated-completing-read-history (make-hash-table :test #'equal))
+         (tbl (make-hash-table :test #'equal)))
     (ht-set tbl "fresh" (make-builder-candidate :command "x" :name "fresh" :priority 2))
     (ht-set tbl "prior" (make-builder-candidate :command "y" :name "prior" :priority 2))
     (ht-set annotated-completing-read-history 'h '("prior"))
@@ -274,8 +274,8 @@
 
 (ert-deftest builder-test/make-sort-fn-history-recency-order ()
   "More recent history entries (lower index) sort before older ones."
-  (let* ((annotated-completing-read-history (ht-create))
-         (tbl (ht-create)))
+  (let* ((annotated-completing-read-history (make-hash-table :test #'equal))
+         (tbl (make-hash-table :test #'equal)))
     (ht-set tbl "a" (make-builder-candidate :command "a" :name "a" :priority 2))
     (ht-set tbl "b" (make-builder-candidate :command "b" :name "b" :priority 2))
     ;; history list: index 0 = most recent = "a", index 1 = "b"
@@ -285,8 +285,8 @@
 
 (ert-deftest builder-test/make-sort-fn-priority-order-among-non-history ()
   "Lower priority number sorts first among items not in history."
-  (let* ((annotated-completing-read-history (ht-create))
-         (tbl (ht-create)))
+  (let* ((annotated-completing-read-history (make-hash-table :test #'equal))
+         (tbl (make-hash-table :test #'equal)))
     (ht-set tbl "tier0" (make-builder-candidate :command "a" :name "tier0" :priority 0))
     (ht-set tbl "tier2" (make-builder-candidate :command "b" :name "tier2" :priority 2))
     (ht-set tbl "tier3" (make-builder-candidate :command "c" :name "tier3" :priority 3))
@@ -296,8 +296,8 @@
 
 (ert-deftest builder-test/make-sort-fn-length-tiebreaker ()
   "Among same-priority non-history items, shorter key sorts first."
-  (let* ((annotated-completing-read-history (ht-create))
-         (tbl (ht-create)))
+  (let* ((annotated-completing-read-history (make-hash-table :test #'equal))
+         (tbl (make-hash-table :test #'equal)))
     (ht-set tbl "short" (make-builder-candidate :command "x" :name "short" :priority 2))
     (ht-set tbl "longer-name" (make-builder-candidate :command "y" :name "longer-name" :priority 2))
     (let ((sorted (funcall (builder--make-sort-fn tbl 'empty) '("longer-name" "short"))))
@@ -305,8 +305,8 @@
 
 (ert-deftest builder-test/make-sort-fn-does-not-mutate-input ()
   "The input list is not mutated (uses copy-sequence internally)."
-  (let* ((annotated-completing-read-history (ht-create))
-         (tbl (ht-create))
+  (let* ((annotated-completing-read-history (make-hash-table :test #'equal))
+         (tbl (make-hash-table :test #'equal))
          (input (list "b" "a")))
     (ht-set tbl "a" (make-builder-candidate :command "a" :name "a"))
     (ht-set tbl "b" (make-builder-candidate :command "b" :name "b"))
@@ -346,13 +346,13 @@
 (ert-deftest builder-test/candidate-cache-p-true-when-set ()
   "`builder--candidate-cache-p' returns t when buffer has cached candidates."
   (with-temp-buffer
-    (setq-local builder--cached-candidates (ht-create))
+    (setq-local builder--cached-candidates (make-hash-table :test #'equal))
     (should (builder--candidate-cache-p (current-buffer)))))
 
 (ert-deftest builder-test/clear-candidate-cache-removes-entry ()
   "`builder--clear-candidate-cache' clears cached candidates for the buffer."
   (with-temp-buffer
-    (setq-local builder--cached-candidates (ht-create))
+    (setq-local builder--cached-candidates (make-hash-table :test #'equal))
     (builder--clear-candidate-cache (current-buffer))
     (should-not (buffer-local-value 'builder--cached-candidates (current-buffer)))))
 
@@ -363,9 +363,9 @@
     (unwind-protect
         (progn
           (with-current-buffer buf-a
-            (setq-local builder--cached-candidates (ht-create)))
+            (setq-local builder--cached-candidates (make-hash-table :test #'equal)))
           (with-current-buffer buf-b
-            (setq-local builder--cached-candidates (ht-create)))
+            (setq-local builder--cached-candidates (make-hash-table :test #'equal)))
           (builder--clear-candidate-cache buf-a)
           (should-not (buffer-local-value 'builder--cached-candidates buf-a))
           (should (buffer-local-value 'builder--cached-candidates buf-b)))
@@ -379,9 +379,9 @@
     (unwind-protect
         (progn
           (with-current-buffer buf-a
-            (setq-local builder--cached-candidates (ht-create)))
+            (setq-local builder--cached-candidates (make-hash-table :test #'equal)))
           (with-current-buffer buf-b
-            (setq-local builder--cached-candidates (ht-create)))
+            (setq-local builder--cached-candidates (make-hash-table :test #'equal)))
           (builder-clear-all-caches)
           (should-not (buffer-local-value 'builder--cached-candidates buf-a))
           (should-not (buffer-local-value 'builder--cached-candidates buf-b)))
@@ -436,7 +436,7 @@
 (ert-deftest builder-test/read-command-cons-pair-from-existing-table ()
   "`builder--read-command' with an explicit table returns a cons of
 the selected name and the candidate table."
-  (let* ((tbl (ht-create))
+  (let* ((tbl (make-hash-table :test #'equal))
          (c (make-builder-candidate :command "make" :name "build")))
     (ht-set tbl "build" c)
     (cl-letf (((symbol-function 'annotated-completing-read)
@@ -448,7 +448,7 @@ the selected name and the candidate table."
 
 (ert-deftest builder-test/read-command-unknown-selection-adds-candidate ()
   "When the user types a string not in the table, a new candidate is created."
-  (let* ((tbl (ht-create)))
+  (let* ((tbl (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'annotated-completing-read)
                (lambda (_tbl &rest _) "custom-cmd"))
               ((symbol-function 'builder--get-candidates)

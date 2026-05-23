@@ -171,7 +171,7 @@ Use `emacsclient` for all Emacs operations — byte-compilation, `check-parens`,
 
 ### Elisp formatting: no alignment padding
 
-Never use extra spaces to align let-binding RHS values or any other elements. Write `(table (ht-create))` not `(table   (ht-create))`. One space after the symbol name, always. Applies to `let`/`let*`, `plist`, `alist`, and all multi-element forms.
+Never use extra spaces to align let-binding RHS values or any other elements. Write `(table (make-hash-table :test #'equal))` not `(table   (make-hash-table :test #'equal))`. One space after the symbol name, always. Applies to `let`/`let*`, `plist`, `alist`, and all multi-element forms.
 
 ### Byte-compilation hygiene
 
@@ -197,10 +197,13 @@ After loading or reloeading `lisp/tychoish-bootstrap.el` ALWAYS reload
 
 ### Testing
 
-All fixes to bugs should be accompanied with a regression test. If
-possible write a reproduction of a bug as a regression test before making the fix.
+All fixes to bugs must include a regression test that would have caught the
+bug. Where possible, write the reproduction test before making the fix so the
+test fails first, then passes after the fix.
 
-Features and functionality should be tested and testable.
+Features and new functionality are not complete until tests have been written.
+A task is not done when the code compiles and appears to work — it is done when
+the relevant test suite passes with coverage for the new or fixed behaviour.
 
 ### Code Style
 

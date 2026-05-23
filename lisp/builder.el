@@ -247,7 +247,7 @@ priority from CANDIDATES, with key length as a final tiebreaker."
 (defun builder--read-command (&optional command table)
   (let* ((candidates (or table
 			 (builder--get-candidates default-directory command)))
-         (annotation-table (let ((tbl (ht-create)))
+         (annotation-table (let ((tbl (make-hash-table :test #'equal)))
                              (ht-each (lambda (name cand)
                                         (ht-set tbl name (builder-candidate-annotation cand)))
                                       candidates)
@@ -273,7 +273,7 @@ priority from CANDIDATES, with key length as a final tiebreaker."
 
 (cl-defun builder--project-compilation-buffers (&optional &key name (project (approximate-project-name)))
   "Return a hash table of candidate compilation buffer names for PROJECT."
-  (let ((buffer-table (ht-create))
+  (let ((buffer-table (make-hash-table :test #'equal))
         (default-names (list "push" "gen" "buf" "benchmark" "check" "compile" "run" "lint" "test" "build")))
     (when name
       (cl-pushnew name default-names :test #'equal))
@@ -442,7 +442,7 @@ call `builder-add-candidates'."
 			     (-map #'f-full)
 			     (-append (annotated-completing-read--directory-parents default-directory project-root-directory))
 			     (-distinct)))
-	   (operation-table (ht-create)))
+	   (operation-table (make-hash-table :test #'equal)))
 
       (when command
 	(builder--add-candidate
@@ -668,7 +668,7 @@ call `builder-add-candidates'."
  :pipeline (when-let* ((filename (if (and (buffer-file-name) (derived-mode-p '(go-mode go-ts-mode)))
 				     (buffer-file-name)
 				   (thing-at-point 'filename)))
-		       (exists (f-exists-p filename))
+		       (exists (file-exists-p filename))
 		       (is-golang (f-ext-p filename "go"))
 		       (short-filename (f-collapse-homedir filename))
 		       (basename (f-filename filename)))

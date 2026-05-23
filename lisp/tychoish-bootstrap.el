@@ -746,7 +746,7 @@ This combines the host name and the dameon name."
        (-map #'intern)
        (-map #'tychoish--load-user-file)))
 
-(defvar tychoish/abbrev-files-cache (ht-create)
+(defvar tychoish/abbrev-files-cache (make-hash-table :test #'equal)
   "cache mapping file names to files' mtime to avoid re-importing files")
 
 (defun should-read-abbrev-file-p (path)
@@ -756,7 +756,7 @@ This combines the host name and the dameon name."
 (defun tychoish/load-abbrev-files ()
   (->> (f-entries (f-join user-emacs-directory "abbrev"))
        (--filter (f-ext-p it "el"))
-       (-filter #'f-exists-p)
+       (-filter #'file-exists-p)
        (-filter #'should-read-abbrev-file-p)
        (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
        (--mapc (ht-set tychoish/abbrev-files-cache it (f-mtime it))))
@@ -1003,7 +1003,7 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
     (with-current-buffer thing
       (buffers-matching-path (approximate-project-root))))
    ((and (stringp thing)
-	 (f-exists-p thing))
+	 (file-exists-p thing))
     (->> (buffer-list)
 	 (--keep (f-equal-p thing (buffer-file-name it)))
 	 (-distinct)
@@ -1700,7 +1700,7 @@ BODY is skipped."
 (defun tychoish/completion-select-flavor ()
   "Pick a completion flavor via `annotated-completing-read'."
   (interactive)
-  (let ((table (ht-create)))
+  (let ((table (make-hash-table :test #'equal)))
     (dolist (entry tychoish/completion-flavors)
       (ht-set table (symbol-name (car entry))
 	      (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")

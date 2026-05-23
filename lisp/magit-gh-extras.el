@@ -160,7 +160,7 @@ Stale marked branches are dropped from `:marked'. Returns new candidates."
 CANDIDATES is the alist of (BRANCH . PR-ALIST). MARKED is the list of
 branch names currently marked for batch pruning. Branch entries are
 labeled `prune: BRANCH' with a ` [marked]' suffix when applicable."
-  (let ((table (ht-create)))
+  (let ((table (make-hash-table :test #'equal)))
     (ht-set table "exit menu" "leave the menu without further action")
     (ht-set table "refresh" "re-scan PRs and rebuild the cache (returns to menu)")
     (when candidates
@@ -222,7 +222,7 @@ Updates `:marked' in the buffer-local state of BUF."
   (let* ((state (buffer-local-value 'magit-gh--prune-state buf))
 	 (candidates (plist-get state :candidates))
 	 (marked (plist-get state :marked))
-	 (table (ht-create)))
+	 (table (make-hash-table :test #'equal)))
     (unless candidates
       (user-error "No candidate branches to mark"))
     (dolist (entry candidates)

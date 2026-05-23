@@ -427,30 +427,30 @@
 ;;; ht extensions
 
 (ert-deftest xtdlib/ht-get-lambda-retrieves-value ()
-  (let* ((tbl (ht-create))
+  (let* ((tbl (make-hash-table :test #'equal))
          (getter (ht-get-lambda tbl)))
     (ht-set tbl "key" "val")
     (should (equal "val" (funcall getter "key")))))
 
 (ert-deftest xtdlib/ht-get-lambda-missing-key-returns-nil ()
-  (let* ((tbl (ht-create))
+  (let* ((tbl (make-hash-table :test #'equal))
          (getter (ht-get-lambda tbl)))
     (should-not (funcall getter "missing"))))
 
 (ert-deftest xtdlib/ht-set-lambda-stores-value ()
-  (let* ((tbl (ht-create))
+  (let* ((tbl (make-hash-table :test #'equal))
          (setter (ht-set-lambda tbl)))
     (funcall setter "key" "val")
     (should (equal "val" (ht-get tbl "key")))))
 
 (ert-deftest xtdlib/ht-contains-p-lambda-found ()
-  (let* ((tbl (ht-create))
+  (let* ((tbl (make-hash-table :test #'equal))
          (pred (ht-contains-p-lambda tbl)))
     (ht-set tbl "key" "val")
     (should (funcall pred "key"))))
 
 (ert-deftest xtdlib/ht-contains-p-lambda-not-found ()
-  (let* ((tbl (ht-create))
+  (let* ((tbl (make-hash-table :test #'equal))
          (pred (ht-contains-p-lambda tbl)))
     (should-not (funcall pred "missing"))))
 

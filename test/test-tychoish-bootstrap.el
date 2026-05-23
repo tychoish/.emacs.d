@@ -818,14 +818,14 @@
 
 (ert-deftest bootstrap/should-read-abbrev-not-in-cache ()
   "Returns t when path is absent from cache."
-  (let ((tychoish/abbrev-files-cache (ht-create)))
+  (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
     (should (should-read-abbrev-file-p "/some/path.el"))))
 
 (ert-deftest bootstrap/should-read-abbrev-fresh-cache-entry ()
   "Returns nil when cache entry is newer than the file."
   (let ((tmp (make-temp-file "ert-abbrev-")))
     (unwind-protect
-        (let ((tychoish/abbrev-files-cache (ht-create)))
+        (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
           (ht-set tychoish/abbrev-files-cache tmp
                   (time-add (current-time) (seconds-to-time 3600)))
           (should-not (should-read-abbrev-file-p tmp)))
@@ -835,7 +835,7 @@
   "Returns t when the file is newer than the cache entry."
   (let ((tmp (make-temp-file "ert-abbrev-stale-")))
     (unwind-protect
-        (let ((tychoish/abbrev-files-cache (ht-create)))
+        (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
           (ht-set tychoish/abbrev-files-cache tmp
                   (time-subtract (current-time) (seconds-to-time 3600)))
           (should (should-read-abbrev-file-p tmp)))
@@ -843,7 +843,7 @@
 
 (ert-deftest bootstrap/should-read-abbrev-returns-boolean ()
   "Return value is t or nil."
-  (let ((tychoish/abbrev-files-cache (ht-create)))
+  (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
     (let ((result (should-read-abbrev-file-p "/nope")))
       (should (or (eq result t) (eq result nil))))))
 

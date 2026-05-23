@@ -64,7 +64,7 @@ element (the completion table function)."
 ;;; History
 
 (ert-deftest annotated-completing-read/history-keyed-by-this-command ()
-  (let ((annotated-completing-read-history (ht-create))
+  (let ((annotated-completing-read-history (make-hash-table :test #'equal))
         (this-command 'my-test-command)
         (table (ht ("x" "note"))))
     (cl-letf (((symbol-function 'completing-read)
@@ -76,7 +76,7 @@ element (the completion table function)."
                    (ht-get annotated-completing-read-history 'my-test-command)))))
 
 (ert-deftest annotated-completing-read/explicit-history-key-isolates ()
-  (let ((annotated-completing-read-history (ht-create))
+  (let ((annotated-completing-read-history (make-hash-table :test #'equal))
         (this-command 'other-command)
         (table (ht ("x" "note"))))
     (cl-letf (((symbol-function 'completing-read)
@@ -89,7 +89,7 @@ element (the completion table function)."
     (should (null (ht-get annotated-completing-read-history 'other-command)))))
 
 (ert-deftest annotated-completing-read/history-accumulates-across-calls ()
-  (let ((annotated-completing-read-history (ht-create))
+  (let ((annotated-completing-read-history (make-hash-table :test #'equal))
         (this-command 'accumulate-cmd)
         (table (ht ("x" "1") ("y" "2"))))
     (cl-letf (((symbol-function 'completing-read)

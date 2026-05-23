@@ -347,8 +347,8 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 (defun consult-org-capture ()
   "Select a capture template interactively."
   (interactive)
-  (let ((key-table (ht-create))
-	(annotation-table (ht-create)))
+  (let ((key-table (make-hash-table :test #'equal))
+	(annotation-table (make-hash-table :test #'equal)))
     (->> org-capture-templates
 	 (--filter (< 4 (length it)))
 	 (--mapc (let* ((template it)
@@ -563,10 +563,10 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 
   (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
 
-  (let ((org-filename (if (or (f-exists-p path)
+  (let ((org-filename (if (or (file-exists-p path)
 			      (and
 			       (< 1 (length (f-split path)))
-			       (f-exists-p (f-dirname path))))
+			       (file-exists-p (f-dirname path))))
 			  path
 			(concat org-directory "/" path))))
     (tychoish/org-capture-add-routine-templates

@@ -86,11 +86,15 @@ When nil (the default), completed items are not logged to disk.")
 (defvar agent-shell-queue-pick-buffer-function #'agent-shell-queue--default-pick-buffer
   "Function called with a PROMPT string to pick an agent-shell buffer.")
 
-(defvar agent-shell-queue-archive-file nil
-  "File path for the JSONL archive written by `agent-shell-queue-buffer-archive'.
-Each line is a JSON object containing the item's prompt, target path,
-instance name, run flag, dispatch/completion timestamps, and runtime.
-When nil, archiving is not available.")
+(defvar agent-shell-queue-archive-enabled nil
+  "When non-nil, completed items can be archived and `agent-shell-queue-buffer-archive'
+is active.  The destination path is controlled separately by
+`agent-shell-queue-archive-file-function'.  Set to t to enable archiving.")
+
+(defvar agent-shell-queue-archive-file-function #'agent-shell-queue--default-archive-file
+  "Function returning the JSONL archive file path.  Called with no arguments.
+Override to store the archive at a custom location.  Only consulted when
+`agent-shell-queue-archive-enabled' is non-nil.")
 
 (defvar agent-shell-queue--last-flush-time nil
   "Float-time of the most recent queue state write to disk.")
@@ -163,9 +167,9 @@ FIELDS are plain symbols.  Generates constructor TYPE-NAME--make plus:
   TYPE-NAME-to-plist   — struct → keyword-keyed plist
   TYPE-NAME-from-plist — keyword-keyed plist → struct"
   (declare (indent 1))
-  (let* ((sname   (symbol-name type-name))
-         (ctor    (intern (concat sname "--make")))
-         (to-fn   (intern (concat sname "-to-plist")))
+  (let* ((sname (symbol-name type-name))
+         (ctor (intern (concat sname "--make")))
+         (to-fn (intern (concat sname "-to-plist")))
          (from-fn (intern (concat sname "-from-plist"))))
     `(progn
        (cl-defstruct (,type-name (:constructor ,ctor) (:copier nil))
@@ -212,9 +216,9 @@ before calling the format's serialize helper.")
                (:copier nil))
   "Queue runtime state and reference to the active store."
   (store 'agent-shell-queue--store) ; symbol naming the live store variable
-  (paused nil)          ; boolean: global pause flag
-  (session-paused nil)  ; list of buffer names paused from dispatch
-  (editing-ids nil))    ; list of item IDs currently open in an edit buffer
+  (paused nil) ; boolean: global pause flag
+  (session-paused nil) ; list of buffer names paused from dispatch
+  (editing-ids nil)) ; list of item IDs currently open in an edit buffer
 
 (defvar agent-shell-queue--queue
   (agent-shell-queue-queue--make)
@@ -333,6 +337,15 @@ Installed as :before advice on `shell-maker-submit'."
                                        1))
                     user-emacs-directory))
 
+(defun agent-shell-queue--default-archive-file ()
+  "Default JSONL archive file path under `user-emacs-directory'."
+  (expand-file-name "agent-shell-queue-archive.jsonl" user-emacs-directory))
+
+(defun agent-shell-queue--archive-file ()
+  "Return the resolved archive file path, or nil if archiving is disabled."
+  (when agent-shell-queue-archive-enabled
+    (funcall agent-shell-queue-archive-file-function)))
+
 (defun agent-shell-queue--default-pick-buffer (prompt)
   "Pick a live agent-shell buffer using PROMPT via `completing-read'."
   (when-let* ((bufs (agent-shell-buffers)))
@@ -393,10 +406,10 @@ the session queue is paused until the mode changes.")
 (defun agent-shell-queue--format-age (delta)
   "Format DELTA time-value as a short relative age string."
   (let ((s (float-time delta)))
-    (cond ((< s 60)    (format "%ds" (truncate s)))
-          ((< s 3600)  (format "%dm" (truncate (/ s 60))))
+    (cond ((< s 60) (format "%ds" (truncate s)))
+          ((< s 3600) (format "%dm" (truncate (/ s 60))))
           ((< s 86400) (format "%dh" (truncate (/ s 3600))))
-          (t           (format "%dd" (truncate (/ s 86400)))))))
+          (t (format "%dd" (truncate (/ s 86400)))))))
 
 ;;; Persistence
 
@@ -455,8 +468,8 @@ Status is interned; background truthy only when exactly `t'."
     (error "json-parse-string not available (requires Emacs 27+)"))
   (->> (json-parse-string str
                           :object-type 'plist
-                          :array-type  'list
-                          :null-object  nil
+                          :array-type 'list
+                          :null-object nil
                           :false-object nil)
        (-map (lambda (bucket)
                (cons (plist-get bucket :buffer)
@@ -469,12 +482,12 @@ Status is interned; background truthy only when exactly `t'."
   "Convert ITEM to a hash-table suitable for `yaml-encode'.
 Status is stored as a string; background as t or nil."
   (let ((h (make-hash-table :test 'equal)))
-    (puthash "id" (agent-shell-queue-item-id item) h)
-    (puthash "prompt" (agent-shell-queue-item-prompt item) h)
-    (puthash "status" (symbol-name (agent-shell-queue-item-status item)) h)
-    (puthash "kind" (symbol-name (or (agent-shell-queue-item-kind item) 'prompt)) h)
-    (puthash "background" (if (agent-shell-queue-item-background item) t nil) h)
-    (puthash "created" (agent-shell-queue-item-created item) h)
+    (map-put! item "id" (agent-shell-queue-item-id) h)
+    (map-put! item "prompt" (agent-shell-queue-item-prompt) h)
+    (map-put! item "status" (symbol-name (agent-shell-queue-item-status)) h)
+    (map-put! item "kind" (symbol-name (or (agent-shell-queue-item-kind) 'prompt)) h)
+    (map-put! item "background" (if (agent-shell-queue-item-background) t nil) h)
+    (map-put! item "created" (agent-shell-queue-item-created) h)
     h))
 
 (defun agent-shell-queue--item-from-yaml (obj)
@@ -495,8 +508,8 @@ Status is stored as a string; background as t or nil."
    (vconcat
     (-map (lambda (pair)
             (let ((h (make-hash-table :test 'equal)))
-              (puthash "buffer" (car pair) h)
-              (puthash "items" (vconcat (-map #'agent-shell-queue--item-to-yaml (cdr pair))) h)
+              (map-put! pair "buffer" (car) h)
+              (map-put! pair "items" (vconcat (-map #'agent-shell-queue--item-to-yaml (cdr))) h)
               h))
           items))))
 
@@ -505,10 +518,10 @@ Status is stored as a string; background as t or nil."
   (unless (fboundp 'yaml-parse-string)
     (error "yaml-parse-string not available; install the `yaml' package"))
   (->> (yaml-parse-string str
-                          :object-type  'hash-table
+                          :object-type 'hash-table
                           :sequence-type 'list
-                          :null-object   nil
-                          :false-object  nil)
+                          :null-object nil
+                          :false-object nil)
        (-map (lambda (bucket)
                (cons (gethash "buffer" bucket)
                      (-map #'agent-shell-queue--item-from-yaml
@@ -607,9 +620,9 @@ is set, writes a versioned backup before overwriting the state file."
                                                 (cdr it))))
                            (when items (cons (car it) items))))))
            (store (agent-shell-queue--make-store
-                   :items  filtered-items
+                   :items filtered-items
                    :format (agent-shell-queue-store-format base-store)
-                   :file   (agent-shell-queue-store-file   base-store)))
+                   :file (agent-shell-queue-store-file base-store)))
            (serialized (agent-shell-queue-serialize store))
            (file (agent-shell-queue-store-file store)))
       (when-let* ((_ agent-shell-queue-safe-save)
@@ -626,9 +639,9 @@ is set, writes a versioned backup before overwriting the state file."
         (with-temp-file backup
           (insert (agent-shell-queue-serialize
                    (agent-shell-queue--make-store
-                    :items  filtered-items
+                    :items filtered-items
                     :format fmt
-                    :file   nil)))))
+                    :file nil)))))
       (make-directory (file-name-directory file) t)
       (with-temp-file file
         (insert serialized))))
@@ -658,9 +671,9 @@ No-op when `agent-shell-queue-done-log-file' is nil."
   "Append a JSONL record for ITEM in BUF-NAME to `agent-shell-queue-archive-file'.
 The record includes the target buffer's directory, instance name, whether the
 item was dispatched, ISO-8601 archive timestamp, and runtime (dispatched→completed)."
-  (when agent-shell-queue-archive-file
+  (when-let* ((file (agent-shell-queue--archive-file)))
     (condition-case err
-        (let* ((file agent-shell-queue-archive-file)
+        (let* ((file file)
                (buf (get-buffer buf-name))
                (path (when (buffer-live-p buf)
                        (buffer-local-value 'default-directory buf)))
@@ -696,11 +709,12 @@ item was dispatched, ISO-8601 archive timestamp, and runtime (dispatched→compl
 
 ;;;###autoload
 (defun agent-shell-queue-buffer-archive ()
-  "Archive the item at point to `agent-shell-queue-archive-file' and remove it.
-Errors if `agent-shell-queue-archive-file' is not set."
+  "Archive the item at point to the archive file and remove it from the queue.
+Archiving must be enabled via `agent-shell-queue-archive-enabled'.
+The destination path is provided by `agent-shell-queue-archive-file-function'."
   (interactive)
-  (unless agent-shell-queue-archive-file
-    (user-error "Set `agent-shell-queue-archive-file' before archiving"))
+  (unless agent-shell-queue-archive-enabled
+    (user-error "Enable archiving by setting `agent-shell-queue-archive-enabled' to t"))
   (when-let* ((id (tabulated-list-get-id))
               (pair (agent-shell-queue--item-by-id id))
               (item (cdr pair)))
@@ -719,10 +733,10 @@ from the file in the current store."
           (funcall agent-shell-queue-load-function)
         (error (message "agent-shell-queue: load failed: %s" err)))
     (let* ((store (agent-shell-queue--current-store))
-           (file  (agent-shell-queue-store-file store)))
+           (file (agent-shell-queue-store-file store)))
       (when (file-exists-p file)
         (condition-case err
-            (let* ((str   (with-temp-buffer
+            (let* ((str (with-temp-buffer
                             (insert-file-contents file)
                             (buffer-string)))
                    (items (agent-shell-queue-deserialize store str)))
@@ -937,6 +951,20 @@ was built against an older struct definition before a code reload."
   (agent-shell-queue--save)
   (agent-shell-queue--refresh-buffer))
 
+(defun agent-shell-queue--complete-item (item buf-name)
+  "Mark ITEM in BUF-NAME as done and trigger the next dispatch cycle.
+Records completion time, appends to the done log, persists state,
+refreshes the queue buffer, fires the empty-queue alert if warranted,
+and dispatches the next item for BUF-NAME if the buffer is still live."
+  (setf (agent-shell-queue-item-completed item) (float-time))
+  (setf (agent-shell-queue-item-status item) 'done)
+  (agent-shell-queue--append-done-log buf-name item)
+  (agent-shell-queue--save)
+  (agent-shell-queue--refresh-buffer)
+  (agent-shell-queue--alert-if-empty)
+  (when-let* ((buf (get-buffer buf-name)))
+    (agent-shell-queue--send-next-for-buffer buf)))
+
 (defun agent-shell-queue-send-item (id)
   "Send the item with ID to its target buffer, marking it as running.
 Items flagged as background are wrapped with `agent-shell-queue-background-prefix'.
@@ -967,13 +995,7 @@ Running and done items are not persisted across sessions."
                  (condition-case eval-err
                      (eval (read (agent-shell-queue-item-prompt item)) t)
                    (error (message "agent-shell-queue: emacs item %s error: %s" id eval-err)))
-                 (setf (agent-shell-queue-item-completed item) (float-time))
-                 (setf (agent-shell-queue-item-status item) 'done)
-                 (agent-shell-queue--append-done-log buf-name item)
-                 (agent-shell-queue--save)
-                 (agent-shell-queue--refresh-buffer)
-                 (agent-shell-queue--alert-if-empty)
-                 (agent-shell-queue--send-next-for-buffer buf))
+                 (agent-shell-queue--complete-item item buf-name))
                 ((or 'pause 'compact)
                  (cl-pushnew (cons buf-name id) agent-shell-queue--compact-running :test #'equal)
                  (cl-pushnew buf-name (agent-shell-queue-queue-session-paused agent-shell-queue--queue) :test #'equal)
@@ -999,14 +1021,7 @@ Running and done items are not persisted across sessions."
                             (when-let* ((wpair (agent-shell-queue--item-by-id id))
                                         (witem (cdr wpair))
                                         (wbuf-name (car wpair)))
-                              (setf (agent-shell-queue-item-completed witem) (float-time))
-                              (setf (agent-shell-queue-item-status witem) 'done)
-                              (agent-shell-queue--append-done-log wbuf-name witem)
-                              (agent-shell-queue--save)
-                              (agent-shell-queue--refresh-buffer)
-                              (agent-shell-queue--alert-if-empty)
-                              (when-let* ((wbuf (get-buffer wbuf-name)))
-                                (agent-shell-queue--send-next-for-buffer wbuf)))))))
+                              (agent-shell-queue--complete-item witem wbuf-name))))))
                    (push (cons id wait-timer) agent-shell-queue--wait-timers)
                    (agent-shell-queue--save)
                    (agent-shell-queue--refresh-buffer)))
@@ -1061,18 +1076,21 @@ all collapsed blocks are folded: only the prose between them."
                              (pos response-start)
                              (segments nil))
                         (while (< pos end-pos)
-                          (if (get-text-property pos 'agent-shell-ui-state)
-                              (setq pos (or (next-single-property-change
-                                             pos 'agent-shell-ui-state nil end-pos)
-                                            end-pos))
-                            (let* ((seg-end (or (next-single-property-change
-                                                 pos 'agent-shell-ui-state nil end-pos)
-                                                end-pos))
-                                   (seg (string-trim
-                                         (buffer-substring-no-properties pos seg-end))))
-                              (when (not (string-empty-p seg))
-                                (push seg segments))
-                              (setq pos seg-end))))
+                          (let ((state (get-text-property pos 'agent-shell-ui-state)))
+                            (if (assq :collapsed state)
+                                ;; Collapsible block (thinking, tool call, etc.) — skip.
+                                (setq pos (or (next-single-property-change
+                                               pos 'agent-shell-ui-state nil end-pos)
+                                              end-pos))
+                              ;; Plain text or no state — collect up to the next boundary.
+                              (let* ((seg-end (or (next-single-property-change
+                                                   pos 'agent-shell-ui-state nil end-pos)
+                                                  end-pos))
+                                     (seg (string-trim
+                                           (buffer-substring-no-properties pos seg-end))))
+                                (when (not (string-empty-p seg))
+                                  (push seg segments))
+                                (setq pos seg-end)))))
                         (when segments
                           (string-join (nreverse segments) "\n\n")))))))
         (when (and text (not (string-empty-p text)))
@@ -1498,9 +1516,10 @@ Temporary buffers (no live session) are excluded from directory scopes."
         (unless (equal buf-name agent-shell-queue--unassigned-key)
           (push (cons buf-name (cons 'buffer buf-name)) buf-entries)
           (when (buffer-live-p buf)
-            (puthash (expand-file-name
-                      (buffer-local-value 'default-directory buf))
-                     t dirs)))))
+            (map-put! dirs
+                      (expand-file-name
+                       (buffer-local-value 'default-directory buf))
+                      t)))))
     (-concat
      (list (cons "global (all)" nil))
      (--map (cons (abbreviate-file-name it) (cons 'directory it))
@@ -1513,13 +1532,13 @@ Temporary buffers (no live session) are excluded from directory scopes."
   (interactive)
   (agent-shell-queue--ensure-loaded)
   (let* ((candidates (agent-shell-queue--scope-candidates))
-         (table (ht-create)))
+         (table (make-hash-table :test #'equal)))
     (--each candidates
       (let* ((scope (cdr it))
              (count (-sum (--map (if (agent-shell-queue--scope-matches-p (car it) scope)
                                     (length (cdr it)) 0)
                                  (agent-shell-queue-store-items agent-shell-queue--store)))))
-        (ht-set table (car it) (format "%d item(s)" count))))
+        (map-put! table (car it) (format "%d item(s)" count))))
     (let* ((label (annotated-completing-read table
                                              :prompt "queue scope => "
                                              :category 'agent-shell-queue-scope
@@ -1562,9 +1581,9 @@ Includes all statuses (active, deferred, running, done)."
                                         '(pause compact context))))
                            (cdr it))
                         (cdr it)))
-               (h (ht-create)))
-          (ht-set h "buffer" (car it))
-          (ht-set h "items" (vconcat (-map #'agent-shell-queue--item-to-yaml-edit items)))
+               (h (make-hash-table :test #'equal)))
+          (map-put! h "buffer" (car it))
+          (map-put! h "items" (vconcat (-map #'agent-shell-queue--item-to-yaml-edit items)))
           (push h buckets))))
     (with-current-buffer (get-buffer-create out-name)
       (let ((inhibit-read-only t))
@@ -2299,10 +2318,11 @@ and the queue advances to the next item."
     (agent-shell-queue--refresh-buffer)))
 
 (defun agent-shell-queue-item-view-archive ()
-  "Archive the displayed item to `agent-shell-queue-archive-file'."
+  "Archive the displayed item and close the view.
+Archiving must be enabled via `agent-shell-queue-archive-enabled'."
   (interactive)
-  (unless agent-shell-queue-archive-file
-    (user-error "Set `agent-shell-queue-archive-file' before archiving"))
+  (unless agent-shell-queue-archive-enabled
+    (user-error "Enable archiving by setting `agent-shell-queue-archive-enabled' to t"))
   (when-let* ((id agent-shell-queue--item-view-id)
               (pair (agent-shell-queue--item-by-id id))
               (item (cdr pair)))
@@ -2363,14 +2383,14 @@ and the queue advances to the next item."
               (_ (or (agent-shell-queue--assert-not-running (cdr pair)) t)))
     (let* ((current-dir (when-let* ((b (get-buffer (car pair))))
                           (buffer-local-value 'default-directory b)))
-           (table (ht-create)))
+           (table (make-hash-table :test #'equal)))
       (-each bufs
         (lambda (buf)
           (let* ((dir (buffer-local-value 'default-directory buf))
                  (ann (if (and current-dir (equal dir current-dir))
                           (concat "(same dir) " (abbreviate-file-name dir))
                         (abbreviate-file-name (or dir "")))))
-            (ht-set table (buffer-name buf) ann))))
+            (map-put! table (buffer-name buf) ann))))
       (when-let* ((new-name (annotated-completing-read table
                                                        :prompt "assign to: "
                                                        :category 'agent-shell-buffer
@@ -2559,13 +2579,13 @@ Items in the unassigned bucket are moved to the selected shell's queue."
     (agent-shell-queue--assert-not-running (cdr pair))
     (let* ((current-dir (when-let* ((b (get-buffer (car pair))))
                           (buffer-local-value 'default-directory b)))
-           (table (ht-create)))
+           (table (make-hash-table :test #'equal)))
       (--each bufs
         (let* ((dir (buffer-local-value 'default-directory it))
                (ann (if (and current-dir (equal dir current-dir))
                         (concat "(same dir) " (abbreviate-file-name dir))
                       (abbreviate-file-name (or dir "")))))
-          (ht-set table (buffer-name it) ann)))
+          (map-put! table (buffer-name it) ann)))
       (when-let* ((new-name (annotated-completing-read table
                                                        :prompt "assign to: "
                                                        :category 'agent-shell-buffer
@@ -2604,9 +2624,9 @@ Items in the unassigned bucket are moved to the selected shell's queue."
                   (when done
                     (list (cons "re-enqueue (new active copy)" #'agent-shell-queue-buffer-reenqueue)))
                   (list (cons "remove" #'agent-shell-queue-buffer-remove))))
-           (table (ht-create)))
+           (table (make-hash-table :test #'equal)))
       (--each cmds
-        (ht-set table (car it)
+        (map-put! table (car it)
                 (or (car (split-string (or (documentation (cdr it)) "") "\n")) "")))
       (when-let* ((choice (annotated-completing-read table
                                                      :prompt "action => "
@@ -2697,14 +2717,14 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
   (let* ((columns `(("Buffer column" . agent-shell-queue-show-buffer-column)
                     ("Ordinal # column" . agent-shell-queue-show-ordinal-column)
                     ("Age column" . agent-shell-queue-show-age-column)))
-         (table (ht-create)))
-    (ht-set! table "+ show all columns"
+         (table (make-hash-table :test #'equal)))
+    (map-put! table "+ show all columns"
              (if (and agent-shell-queue-show-buffer-column
                       agent-shell-queue-show-ordinal-column
                       agent-shell-queue-show-age-column)
                  "already showing all columns"
                "enable Buffer, Ordinal, and Age columns"))
-    (ht-set! table "+ minimal: status and prompt only"
+    (map-put! table "+ minimal: status and prompt only"
              (if (and (not agent-shell-queue-show-buffer-column)
                       (not agent-shell-queue-show-ordinal-column)
                       (not agent-shell-queue-show-age-column))
@@ -2712,9 +2732,9 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
                "hide Buffer, Ordinal, and Age columns"))
     (--each columns
       (let ((on (symbol-value (cdr it))))
-        (ht-set! table (car it)
+        (map-put! table (car it)
                  (if on "visible · click to hide" "hidden · click to show"))))
-    (ht-set! table "Multi-line format"
+    (map-put! table "Multi-line format"
              (if agent-shell-queue-multiline-format
                  "on · prompt on second line · click to disable"
                "off · single-line · click to enable"))
@@ -2897,8 +2917,8 @@ Annotations show queue position, target buffer, buffer state, item status,
 and age."
   (interactive)
   (agent-shell-queue--ensure-loaded)
-  (let ((table (ht-create))
-        (id-by-key (ht-create)))
+  (let ((table (make-hash-table :test #'equal))
+        (id-by-key (make-hash-table :test #'equal)))
     (-each (agent-shell-queue-store-items agent-shell-queue--store)
       (lambda (pair)
         (let* ((buf-name (car pair))
@@ -2919,8 +2939,8 @@ and age."
                                   (truncate-string-to-width prompt 60 nil nil "…")))
                      (ann (format "#%d · %s [%s] · %s · %s"
                                   pos buf-name buf-state status age)))
-                (ht-set table key ann)
-                (ht-set id-by-key key id)))))))
+                (map-put! table key ann)
+                (map-put! id-by-key key id)))))))
     (when (ht-empty-p table)
       (user-error "No editable queued items"))
     (when-let* ((choice (annotated-completing-read table
@@ -3001,10 +3021,13 @@ than duplicate the draft on subsequent saves.")
 Multiple capture buffers can be open simultaneously; each is named after its target.
 ORIGIN-BUF is used for context-insertion commands; defaults to current buffer.
 INITIAL-CONTENT, when non-nil, is inserted into the buffer before display."
-  (let ((capture-buf (get-buffer-create
-                      (if target-buf
-                          (format "*agent-shell-queue-capture: %s*" (buffer-name target-buf))
-                        "*agent-shell-queue-capture: unassigned*"))))
+  (let* ((bucket-name (if target-buf
+                          (buffer-name target-buf)
+                        agent-shell-queue--unassigned-key))
+         (capture-buf (get-buffer-create
+                       (if target-buf
+                           (format "*agent-shell-queue-capture: %s*" (buffer-name target-buf))
+                         "*agent-shell-queue-capture: unassigned*"))))
     (with-current-buffer capture-buf
       (erase-buffer)
       (agent-shell-queue-capture-mode)
@@ -3013,7 +3036,15 @@ INITIAL-CONTENT, when non-nil, is inserted into the buffer before display."
             agent-shell-queue--capture-background-task nil
             agent-shell-queue--capture-after-id nil)
       (when (and initial-content (not (string-empty-p initial-content)))
-        (insert initial-content)))
+        (insert initial-content))
+      (let* ((bucket-items (cdr (assoc bucket-name (agent-shell-queue-store-items agent-shell-queue--store))))
+             (depth (length bucket-items))
+             (state (agent-shell-queue--activity-state)))
+        (setq-local header-line-format
+                    (concat
+                     (propertize (format " %s  |  " bucket-name) 'face 'shadow)
+                     state
+                     (propertize (format "  |  depth: %d" depth) 'face 'shadow)))))
     (pop-to-buffer capture-buf '(display-buffer-below-selected))
     capture-buf))
 
@@ -3185,9 +3216,8 @@ rather than appended to the end."
            (unless (equal bucket-name agent-shell-queue--unassigned-key)
              (get-buffer bucket-name))
            (current-buffer))
-        (setq agent-shell-queue--capture-after-id id)
-        (setq-local header-line-format
-                    (propertize (format " Inserting after item %s" id) 'face 'shadow))))))
+        (setq agent-shell-queue--capture-after-id id)))))
+
 
 ;;;###autoload
 (defun agent-shell-queue-capture-from-region (&optional buf)
@@ -3255,17 +3285,17 @@ Confirm with \\[agent-shell-queue-raw-edit-confirm], cancel with \\[agent-shell-
 
 (defun agent-shell-queue--item-to-yaml-edit (item)
   "Convert ITEM to a hash-table for raw editing; omits nil timestamp fields."
-  (let ((h (ht-create)))
-    (ht-set h "id" (agent-shell-queue-item-id item))
-    (ht-set h "prompt" (agent-shell-queue-item-prompt item))
-    (ht-set h "status" (symbol-name (agent-shell-queue-item-status item)))
-    (ht-set h "kind" (symbol-name (or (agent-shell-queue-item-kind item) 'prompt)))
-    (ht-set h "background" (if (agent-shell-queue-item-background item) t nil))
-    (ht-set h "created" (agent-shell-queue-item-created item))
+  (let ((h (make-hash-table :test #'equal)))
+    (map-put! h "id" (agent-shell-queue-item-id item))
+    (map-put! h "prompt" (agent-shell-queue-item-prompt item))
+    (map-put! h "status" (symbol-name (agent-shell-queue-item-status item)))
+    (map-put! h "kind" (symbol-name (or (agent-shell-queue-item-kind item) 'prompt)))
+    (map-put! h "background" (if (agent-shell-queue-item-background item) t nil))
+    (map-put! h "created" (agent-shell-queue-item-created item))
     (when-let* ((d (agent-shell-queue-item-dispatched item)))
-      (ht-set h "dispatched" d))
+      (map-put! h "dispatched" d))
     (when-let* ((c (agent-shell-queue-item-completed item)))
-      (ht-set h "completed" c))
+      (map-put! h "completed" c))
     h))
 
 (defun agent-shell-queue--render-to-yaml ()
@@ -3281,9 +3311,9 @@ Confirm with \\[agent-shell-queue-raw-edit-confirm], cancel with \\[agent-shell-
                                                  '(done running)))
                                          (cdr pair))))
                              (when items
-                               (let ((h (ht-create)))
-                                 (ht-set h "buffer" (car pair))
-                                 (ht-set h "items"
+                               (let ((h (make-hash-table :test #'equal)))
+                                 (map-put! h "buffer" (car pair))
+                                 (map-put! h "items"
                                          (vconcat (-map #'agent-shell-queue--item-to-yaml-edit items)))
                                  h))))
                          (agent-shell-queue-store-items agent-shell-queue--store)))))
@@ -3291,9 +3321,9 @@ Confirm with \\[agent-shell-queue-raw-edit-confirm], cancel with \\[agent-shell-
 
 (defun agent-shell-queue--make-edit-snapshot ()
   "Return a hash-table mapping item ID to item struct for all current items."
-  (let ((table (ht-create)))
+  (let ((table (make-hash-table :test #'equal)))
     (--each (-mapcat #'cdr (agent-shell-queue-store-items agent-shell-queue--store))
-      (ht-set table (agent-shell-queue-item-id it) it))
+      (map-put! table (agent-shell-queue-item-id it) it))
     table))
 
 ;;;###autoload
@@ -3868,10 +3898,10 @@ OPTS is the fork options plist (see `agent-shell-queue-fork-session')."
   "Build fork options plist interactively using annotated-completing-read.
 Prompts for fork mode, worktree settings, and capture-pending flag.
 Returns a plist suitable for `agent-shell-queue-fork-session' or nil to abort."
-  (let* ((mode-table (ht-create))
-         (_ (ht-set! mode-table "new session"
+  (let* ((mode-table (make-hash-table :test #'equal))
+         (_ (map-put! mode-table "new session"
                      "Create a clean new session via agent-shell-new-shell"))
-         (_ (ht-set! mode-table "fork session (ACP)"
+         (_ (map-put! mode-table "fork session (ACP)"
                      "Fork via agent-shell-fork (preserves context)"))
          (mode-choice (annotated-completing-read mode-table
                                                  :prompt "fork mode: "
@@ -3879,10 +3909,10 @@ Returns a plist suitable for `agent-shell-queue-fork-session' or nil to abort."
                                                  :require-match t
                                                  :history 'agent-shell-queue-fork-mode))
          (fork-mode (if (equal mode-choice "fork session (ACP)") 'fork 'new))
-         (wt-table (ht-create))
-         (_ (ht-set! wt-table "no worktree"
+         (wt-table (make-hash-table :test #'equal))
+         (_ (map-put! wt-table "no worktree"
                      "New session opens in the same working directory"))
-         (_ (ht-set! wt-table "create worktree"
+         (_ (map-put! wt-table "create worktree"
                      "Run git worktree add and open the session in the new tree"))
          (wt-choice (annotated-completing-read wt-table
                                               :prompt "worktree: "
@@ -3896,10 +3926,10 @@ Returns a plist suitable for `agent-shell-queue-fork-session' or nil to abort."
          (worktree-path (when use-worktree
                           (let ((p (read-string "Worktree path (empty = auto): ")))
                             (unless (string-empty-p p) p))))
-         (cp-table (ht-create))
-         (_ (ht-set! cp-table "move items to new session"
+         (cp-table (make-hash-table :test #'equal))
+         (_ (map-put! cp-table "move items to new session"
                      "Items are moved; original session resumes automatically"))
-         (_ (ht-set! cp-table "capture pending (freeze & pause)"
+         (_ (map-put! cp-table "capture pending (freeze & pause)"
                      "Items stay in original session as pending-fork; session stays paused"))
          (cp-choice (annotated-completing-read cp-table
                                               :prompt "after fork: "

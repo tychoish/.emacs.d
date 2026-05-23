@@ -75,6 +75,105 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
     (nreverse result)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue--capture-response
+
+(defun agent-shell-queue-test/make-response-buffer (&rest spans)
+  "Build a temp buffer simulating an agent-shell response buffer.
+The buffer contains a `field=input' prompt echo followed by SPANS.
+Each span is (TEXT &optional STATE) where STATE is placed on the span
+as `agent-shell-ui-state'.  A `field=boundary' marker follows all spans.
+
+Returns (BUFFER . START-POS) where START-POS is the position of the prompt
+echo — the correct value for `agent-shell-queue--response-start-positions'.
+Caller is responsible for killing the buffer."
+  (let ((buf (generate-new-buffer "*test-response-buf*")))
+    (with-current-buffer buf
+      ;; Echoed prompt with field=input.  capture-response uses this to find
+      ;; where the model response begins (first field change past start-pos).
+      (let* ((beg (point))
+             (start-pos beg))
+        (insert "echoed-prompt")
+        (put-text-property beg (point) 'field 'input)
+        ;; Response spans follow the prompt.
+        (dolist (span spans)
+          (let* ((text (car span))
+                 (state (cadr span))
+                 (sbeg (point)))
+            (insert text)
+            (when state
+              (put-text-property sbeg (point) 'agent-shell-ui-state state))))
+        ;; End-of-output boundary required by capture logic.
+        (let ((bbeg (point)))
+          (insert "\n")
+          (put-text-property bbeg (point) 'field 'boundary))
+        (cons buf start-pos)))))
+
+(ert-deftest agent-shell-queue/capture-response-collects-plain-text-with-ui-state ()
+  "Regression: plain text stored via agent-shell-ui-update-text carries
+agent-shell-ui-state without :collapsed.  capture-response must include it."
+  (let* ((item (agent-shell-queue-test/make-item "q01" "prompt" 'running))
+         (plain-state '((:qualified-id . "msg-1")))
+         (buf+start (agent-shell-queue-test/make-response-buffer
+                     (list "Hello, world!" plain-state)))
+         (shell-buf (car buf+start))
+         (start-pos (cdr buf+start)))
+    (unwind-protect
+        (agent-shell-queue-test/isolate
+         (setf (agent-shell-queue-store-items agent-shell-queue--store)
+               (list (list (buffer-name shell-buf) item)))
+         (setq agent-shell-queue--response-start-positions
+               (list (cons "q01" start-pos)))
+         (agent-shell-queue--capture-response "q01" (buffer-name shell-buf))
+         (should (equal "Hello, world!"
+                        (agent-shell-queue-item-response item))))
+      (kill-buffer shell-buf))))
+
+(ert-deftest agent-shell-queue/capture-response-skips-collapsible-blocks ()
+  "Collapsible blocks (thinking, tool calls) have :collapsed in their state
+and must be excluded from the captured response."
+  (let* ((item (agent-shell-queue-test/make-item "q01" "prompt" 'running))
+         (block-state '((:qualified-id . "tool-1") (:collapsed . t)))
+         (buf+start (agent-shell-queue-test/make-response-buffer
+                     (list "[tool output]" block-state)))
+         (shell-buf (car buf+start))
+         (start-pos (cdr buf+start)))
+    (unwind-protect
+        (agent-shell-queue-test/isolate
+         (setf (agent-shell-queue-store-items agent-shell-queue--store)
+               (list (list (buffer-name shell-buf) item)))
+         (setq agent-shell-queue--response-start-positions
+               (list (cons "q01" start-pos)))
+         (agent-shell-queue--capture-response "q01" (buffer-name shell-buf))
+         (should-not (agent-shell-queue-item-response item)))
+      (kill-buffer shell-buf))))
+
+(ert-deftest agent-shell-queue/capture-response-mixes-plain-and-block ()
+  "Plain text is collected and collapsible blocks are skipped when interleaved."
+  (let* ((item (agent-shell-queue-test/make-item "q01" "prompt" 'running))
+         (plain-state-1 '((:qualified-id . "msg-1")))
+         (block-state   '((:qualified-id . "tool-1") (:collapsed . t)))
+         (plain-state-2 '((:qualified-id . "msg-2")))
+         (buf+start (agent-shell-queue-test/make-response-buffer
+                     (list "First sentence."  plain-state-1)
+                     (list "[tool output]"    block-state)
+                     (list "Second sentence." plain-state-2)))
+         (shell-buf (car buf+start))
+         (start-pos (cdr buf+start)))
+    (unwind-protect
+        (agent-shell-queue-test/isolate
+         (setf (agent-shell-queue-store-items agent-shell-queue--store)
+               (list (list (buffer-name shell-buf) item)))
+         (setq agent-shell-queue--response-start-positions
+               (list (cons "q01" start-pos)))
+         (agent-shell-queue--capture-response "q01" (buffer-name shell-buf))
+         (let ((response (agent-shell-queue-item-response item)))
+           (should (stringp response))
+           (should (string-match-p "First sentence" response))
+           (should (string-match-p "Second sentence" response))
+           (should-not (string-match-p "tool output" response))))
+      (kill-buffer shell-buf))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue--format-age (pure)
 
 (ert-deftest agent-shell-queue/format-age-seconds ()
@@ -994,7 +1093,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   "Write archive writes a valid JSON line to the file."
   (skip-unless (fboundp 'json-serialize))
   (let* ((tmp (make-temp-file "asq-archive"))
-         (agent-shell-queue-archive-file tmp)
+         (agent-shell-queue-archive-enabled t)
+         (agent-shell-queue-archive-file-function (lambda () tmp))
          (agent-shell-queue-instance-name "test-instance")
          (buf (get-buffer-create " *asq-archive-buf*")))
     (unwind-protect
@@ -1018,9 +1118,9 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
       (ignore-errors (delete-file tmp))
       (kill-buffer buf))))
 
-(ert-deftest agent-shell-queue/write-archive-noop-when-nil ()
-  "Write archive does nothing when archive-file is nil."
-  (let ((agent-shell-queue-archive-file nil))
+(ert-deftest agent-shell-queue/write-archive-noop-when-disabled ()
+  "Write archive does nothing when archiving is disabled."
+  (let ((agent-shell-queue-archive-enabled nil))
     (should-not (condition-case err
                     (progn
                       (agent-shell-queue--write-archive
@@ -1032,7 +1132,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
   "Items never dispatched have :ran false in archive."
   (skip-unless (fboundp 'json-serialize))
   (let* ((tmp (make-temp-file "asq-archive-ran"))
-         (agent-shell-queue-archive-file tmp)
+         (agent-shell-queue-archive-enabled t)
+         (agent-shell-queue-archive-file-function (lambda () tmp))
          (agent-shell-queue-instance-name "ti"))
     (unwind-protect
         (progn
@@ -1331,7 +1432,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/write-archive-ran-when-dispatched ()
   ":ran is t when dispatched is non-nil."
   (let* ((tmp (make-temp-file "asq-archive-ran"))
-         (agent-shell-queue-archive-file tmp)
+         (agent-shell-queue-archive-enabled t)
+         (agent-shell-queue-archive-file-function (lambda () tmp))
          (item (agent-shell-queue-item--make
                 :id "q-1" :prompt "p" :status 'done
                 :background nil :created 1000.0
@@ -1349,7 +1451,8 @@ Each spec is (BUF-NAME (ID PROMPT STATUS BACKGROUND) ...)."
 (ert-deftest agent-shell-queue/write-archive-not-ran-when-no-dispatched ()
   ":ran is :false when dispatched is nil."
   (let* ((tmp (make-temp-file "asq-archive-norun"))
-         (agent-shell-queue-archive-file tmp)
+         (agent-shell-queue-archive-enabled t)
+         (agent-shell-queue-archive-file-function (lambda () tmp))
          (item (agent-shell-queue-item--make
                 :id "q-2" :prompt "p" :status 'done
                 :background nil :created 1000.0
@@ -1919,5 +2022,116 @@ Also stubs subscription management and `sit-for' to avoid side effects."
   (let* ((keys (transient-test/collect-keys 'agent-shell-queue-item-menu))
          (dups (transient-test/duplicate-keys keys)))
     (should (null dups))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; capture buffer header (agent-shell-queue--open-capture)
+
+(defmacro agent-shell-queue-test/with-capture (target-buf &rest body)
+  "Run BODY with pop-to-buffer and capture-mode stubbed out.
+Binds `capture-buf' to the buffer returned by `--open-capture'."
+  (declare (indent 1))
+  `(cl-letf (((symbol-function 'pop-to-buffer) #'ignore)
+             ((symbol-function 'agent-shell-queue-capture-mode) #'ignore))
+     (let ((capture-buf (agent-shell-queue--open-capture ,target-buf)))
+       (unwind-protect
+           (progn ,@body)
+         (when (buffer-live-p capture-buf)
+           (kill-buffer capture-buf))))))
+
+(ert-deftest agent-shell-queue/open-capture-header-shows-bucket-state-depth ()
+  "Regression: header shows bucket/state/depth — not 'Inserting after item <id>'.
+Applies to all capture paths, not just insert-after."
+  (let ((target (generate-new-buffer "*test-capture-target*")))
+    (unwind-protect
+        (agent-shell-queue-test/isolate
+         (let ((item (agent-shell-queue-test/make-item "q01" "p" 'active)))
+           (setf (agent-shell-queue-store-items agent-shell-queue--store)
+                 (list (list (buffer-name target) item)))
+           (cl-letf (((symbol-function 'agent-shell-queue--activity-state)
+                      (lambda () "idle")))
+             (agent-shell-queue-test/with-capture target
+               (let ((header (with-current-buffer capture-buf header-line-format)))
+                 (should (stringp header))
+                 (should-not (string-match-p "Inserting after item" header))
+                 (should (string-match-p (regexp-quote (buffer-name target)) header))
+                 (should (string-match-p "idle" header))
+                 (should (string-match-p "depth: 1" header)))))))
+      (kill-buffer target))))
+
+(ert-deftest agent-shell-queue/open-capture-header-shows-unassigned ()
+  "Unassigned capture (nil target) shows the unassigned key in the header."
+  (agent-shell-queue-test/isolate
+   (cl-letf (((symbol-function 'agent-shell-queue--activity-state) (lambda () "idle")))
+     (agent-shell-queue-test/with-capture nil
+       (let ((header (with-current-buffer capture-buf header-line-format)))
+         (should (stringp header))
+         (should (string-match-p (regexp-quote agent-shell-queue--unassigned-key)
+                                 header)))))))
+
+(ert-deftest agent-shell-queue/open-capture-header-reflects-depth ()
+  "Header depth reflects the actual item count in the target bucket."
+  (let ((target (generate-new-buffer "*test-capture-depth*")))
+    (unwind-protect
+        (agent-shell-queue-test/isolate
+         (let ((items (list (agent-shell-queue-test/make-item "q01" "p1" 'active)
+                            (agent-shell-queue-test/make-item "q02" "p2" 'active)
+                            (agent-shell-queue-test/make-item "q03" "p3" 'deferred))))
+           (setf (agent-shell-queue-store-items agent-shell-queue--store)
+                 (list (cons (buffer-name target) items)))
+           (cl-letf (((symbol-function 'agent-shell-queue--activity-state)
+                      (lambda () "idle")))
+             (agent-shell-queue-test/with-capture target
+               (let ((header (with-current-buffer capture-buf header-line-format)))
+                 (should (string-match-p "depth: 3" header)))))))
+      (kill-buffer target))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-queue archive enable/path separation
+
+(ert-deftest agent-shell-queue/archive-file-disabled-when-not-enabled ()
+  "`agent-shell-queue--archive-file' returns nil when archive-enabled is nil."
+  (let ((agent-shell-queue-archive-enabled nil))
+    (should-not (agent-shell-queue--archive-file))))
+
+(ert-deftest agent-shell-queue/archive-file-calls-function-when-enabled ()
+  "`agent-shell-queue--archive-file' calls the file function when enabled."
+  (let ((agent-shell-queue-archive-enabled t)
+        (agent-shell-queue-archive-file-function (lambda () "/tmp/test-archive.jsonl")))
+    (should (equal "/tmp/test-archive.jsonl" (agent-shell-queue--archive-file)))))
+
+(ert-deftest agent-shell-queue/default-archive-file-returns-string ()
+  "The default archive file function returns a non-empty string path."
+  (let ((result (agent-shell-queue--default-archive-file)))
+    (should (stringp result))
+    (should (string-match-p "\\.jsonl\\'" result))))
+
+(ert-deftest agent-shell-queue/write-archive-no-op-when-disabled ()
+  "`--write-archive' does nothing when archiving is disabled."
+  (let ((agent-shell-queue-archive-enabled nil)
+        (wrote nil))
+    (cl-letf (((symbol-function 'write-region)
+               (lambda (&rest _) (setq wrote t))))
+      (let ((item (agent-shell-queue-test/make-item "q01" "p" 'done)))
+        (agent-shell-queue--write-archive "*buf*" item))
+      (should-not wrote))))
+
+(ert-deftest agent-shell-queue/write-archive-writes-when-enabled ()
+  "`--write-archive' writes a record when archiving is enabled."
+  (let* ((agent-shell-queue-archive-enabled t)
+         (agent-shell-queue-archive-file-function (lambda () "/tmp/test-archive.jsonl"))
+         (wrote nil))
+    (cl-letf (((symbol-function 'make-directory) #'ignore)
+              ((symbol-function 'lock-file) #'ignore)
+              ((symbol-function 'unlock-file) #'ignore)
+              ((symbol-function 'write-region)
+               (lambda (&rest _) (setq wrote t))))
+      (let ((item (agent-shell-queue-test/make-item "q01" "prompt" 'done)))
+        (agent-shell-queue--write-archive "*buf*" item))
+      (should wrote))))
+
+(ert-deftest agent-shell-queue/buffer-archive-errors-when-disabled ()
+  "`agent-shell-queue-buffer-archive' signals user-error when disabled."
+  (let ((agent-shell-queue-archive-enabled nil))
+    (should-error (agent-shell-queue-buffer-archive) :type 'user-error)))
 
 ;;; test-agent-shell-queue.el ends here

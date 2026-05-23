@@ -229,7 +229,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
   (let* ((bookmarks (ht-create #'equal))
          (_ (mapc (lambda (bm) (setf (ht-get bookmarks (plist-get bm :name)) bm))
                   mu4e-bookmarks))
-         (annotation-table (let ((tbl (ht-create)))
+         (annotation-table (let ((tbl (make-hash-table :test #'equal)))
                               (ht-each (lambda (name bm)
                                          (ht-set tbl name
                                                  (format "[%s] %s"
@@ -301,7 +301,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
                                                     ((eq (type-of signature) 'signature-source) signature)
                                                     ((not (eq (type-of signature) 'string)) (user-error "invalid type for signature"))
                                                     ((f-directory-p signature) 'signature-directory)
-                                                    ((f-exists-p signature) 'signature-file)
+                                                    ((file-exists-p signature) 'signature-file)
                                                     (t 'signature-text))))))
 
   "track mail account configurations. used internally by tychoish-define-mail-account"
@@ -334,7 +334,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
   "Use consult to select an account/mail configuration."
 
   (interactive
-   (list (let ((table (ht-create)))
+   (list (let ((table (make-hash-table :test #'equal)))
 	   (ht-map
 	    (lambda (key account)
 	      (ht-set
