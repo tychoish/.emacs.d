@@ -403,7 +403,9 @@ the session queue is paused until the mode changes.")
   (funcall agent-shell-queue-pick-buffer-function prompt))
 
 (defun agent-shell-queue--format-age (delta)
-  "Format DELTA time-value as a short relative age string."
+  "Format DELTA time-value as a short relative age string.
+Alternative using stdlib: (car (split-string (format-seconds \"%dd %hh %mm %ss%z\" s)))
+but that yields \"0d\" for a zero delta instead of \"0s\"."
   (let ((s (float-time delta)))
     (cond ((< s 60) (format "%ds" (truncate s)))
           ((< s 3600) (format "%dm" (truncate (/ s 60))))
@@ -2903,7 +2905,9 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("n" "Unassigned capture" agent-shell-queue-capture-unassigned)
     ("r" "From region" agent-shell-queue-capture-from-region)
     ("y" "From clipboard" agent-shell-queue-capture-from-clipboard)
-    ("c" "From context" agent-shell-queue-capture-from-context)]
+    ("c" "From context" agent-shell-queue-capture-from-context)
+    ("q" "Enqueue prompt" agent-shell-queue-enqueue)
+    ("Q" "Enqueue clear" agent-shell-queue-enqueue-clear)]
    ["Insert"
     ("i" "Insert pause checkpoint" agent-shell-queue-insert-pause)
     ("I" "Insert context drop" agent-shell-queue-insert-clear-context)
@@ -2932,19 +2936,23 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("db" "Toggle buffer column" agent-shell-queue-toggle-buffer-column
      :description (lambda ()
                     (if agent-shell-queue-show-buffer-column
-                        "Hide buffer column" "Show buffer column")))
+                        "Hide buffer column"
+		      "Show buffer column")))
     ("dn" "Toggle ordinal (#) column" agent-shell-queue-toggle-ordinal-column
      :description (lambda ()
                     (if agent-shell-queue-show-ordinal-column
-                        "Hide ordinal (#) column" "Show ordinal (#) column")))
+                        "Hide ordinal (#) column"
+		      "Show ordinal (#) column")))
     ("da" "Toggle age column" agent-shell-queue-toggle-age-column
      :description (lambda ()
                     (if agent-shell-queue-show-age-column
-                        "Hide age column" "Show age column")))
+                        "Hide age column"
+		      "Show age column")))
     ("dm" "Toggle multi-line format" agent-shell-queue-toggle-multiline-format
      :description (lambda ()
                     (if agent-shell-queue-multiline-format
-                        "Single-line format" "Multi-line format")))]
+                        "Single-line format"
+		      "Multi-line format")))]
    ["Raw Edit / Import"
     ("C-e" "Raw edit queue (YAML)" agent-shell-queue-raw-edit)
     ("C-E" "Import items (YAML)" agent-shell-queue-import)

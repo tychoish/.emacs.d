@@ -289,16 +289,12 @@
   (defun consult-rg-pwd-wizard (&optional initial)
     "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
     (interactive "P")
-    (consult-rg-pwd
-     :initial initial
-     :context t))
+    (consult-rg-pwd initial :context t))
 
   (defun consult-rg-project-wizard (&optional initial)
     "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
     (interactive "P")
-    (consult-rg-project
-     :initial initial
-     :context t))
+    (consult-rg-project initial :context t))
 
   ;; find-ripgrep -- compilation buffer wrappers
 
@@ -2708,7 +2704,7 @@ Useful after changing `eglot-workspace-configuration' or
                 which-key-replacement-alist))
   :config
   (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
-  (require 'agent-shell-extras)
+  (require 'agent-shell-menu)
   (bind-keys
    :map agent-shell-mode-map
    ("C-c C-c" . agent-shell-submit)

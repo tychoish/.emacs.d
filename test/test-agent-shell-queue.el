@@ -197,6 +197,26 @@ and must be excluded from the captured response."
   (should (equal "59m" (agent-shell-queue--format-age (- 3600.0 60))))
   (should (equal "1h"  (agent-shell-queue--format-age 3600.0))))
 
+;;; format-age with time-value inputs (seconds-to-time)
+
+(ert-deftest agent-shell-queue/format-age-time-value-seconds ()
+  (should (equal "1s"  (agent-shell-queue--format-age (seconds-to-time 1))))
+  (should (equal "30s" (agent-shell-queue--format-age (seconds-to-time 30))))
+  (should (equal "59s" (agent-shell-queue--format-age (seconds-to-time 59)))))
+
+(ert-deftest agent-shell-queue/format-age-time-value-minutes ()
+  (should (equal "1m"  (agent-shell-queue--format-age (seconds-to-time 60))))
+  (should (equal "5m"  (agent-shell-queue--format-age (seconds-to-time 300))))
+  (should (equal "59m" (agent-shell-queue--format-age (seconds-to-time 3599)))))
+
+(ert-deftest agent-shell-queue/format-age-time-value-hours ()
+  (should (equal "1h" (agent-shell-queue--format-age (seconds-to-time 3600))))
+  (should (equal "2h" (agent-shell-queue--format-age (seconds-to-time 7200)))))
+
+(ert-deftest agent-shell-queue/format-age-time-value-days ()
+  (should (equal "1d" (agent-shell-queue--format-age (seconds-to-time 86400))))
+  (should (equal "3d" (agent-shell-queue--format-age (seconds-to-time (* 3 86400))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue--status-string (pure)
 

@@ -1,4 +1,4 @@
-;;; agent-shell-extras.el --- Custom extensions for agent-shell -*- lexical-binding: t -*-
+;;; agent-shell-menu.el --- ACR menus and transient prefixes for agent-shell -*- lexical-binding: t -*-
 
 ;; Author: tycho garen
 ;; Maintainer: tychoish
@@ -9,16 +9,13 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'ht)
 (require 'annotated-completing-read)
-(require 's)
-(require 'dash)
 (require 'transient)
 (require 'agent-shell)
+(require 'agent-shell-setup)
 
 (declare-function agent-shell-viewport--shell-buffer "agent-shell-viewport")
-(declare-function shell-maker-point-at-last-prompt-p "shell-maker")
-(declare-function tychoish/conf-state-path "tychoish-bootstrap")
+(declare-function agent-shell-queue--format-age "agent-shell-queue")
 
 ;; Suppress byte-compiler warnings for agent-shell-queue commands
 ;; referenced in action alists and transient menus loaded lazily.
@@ -39,17 +36,6 @@
 (declare-function agent-shell-queue-insert-fork-before "agent-shell-queue")
 (declare-function agent-shell-queue-insert-fork-after "agent-shell-queue")
 (declare-function agent-shell-queue-release-pending-fork "agent-shell-queue")
-
-(setq agent-shell-buffer-name-format
-      (lambda (agent-name project-name)
-        (let* ((raw (string-trim project-name))
-               (base (file-name-nondirectory (directory-file-name raw)))
-               (stripped (replace-regexp-in-string "\\`[./]+" "" base))
-               (slug (downcase (replace-regexp-in-string "\\s-+" "-"
-                                                         (if (string-empty-p stripped) base stripped)))))
-          (format "*%s-%s*"
-                  (car (split-string (downcase (string-trim agent-name))))
-                  slug))))
 
 (defvar agent-shell-action-alist
   '(("submit" . shell-maker-submit)
@@ -83,76 +69,7 @@
     ("queue review" . agent-shell-queue-buffer-open))
   "Alist of (LABEL . COMMAND) for `agent-shell-select-action'.")
 
-;;; Mode key
-
-(defmacro agent-shell-mode-key (key fn)
-  "Define `agent-shell-output-key-KEY' and bind it in `agent-shell-mode-map'.
-In the output area, or while the shell is busy, calls FN interactively.
-Self-inserts KEY only when at the idle prompt.
-Also binds FN directly in `agent-shell-viewport-view-mode-map'."
-  (let* ((key-str (if (stringp key) key (symbol-name key)))
-         (name (intern (concat "agent-shell-output-key-" key-str)))
-         (char (pcase key-str
-                 ("TAB" ?\t)
-                 ((pred (lambda (s) (= 1 (length s)))) (aref key-str 0)))))
-    `(progn
-       (defun ,name ()
-         ,(format "In output or busy: `%s'. Self-insert at idle prompt." fn)
-         (interactive)
-         (if (and (not (shell-maker-busy)) (shell-maker-point-at-last-prompt-p))
-             ,(if char `(self-insert-command 1 ,char) '(ignore))
-           (call-interactively #',fn)))
-       (define-key agent-shell-mode-map (kbd ,key-str) #',name)
-       (with-eval-after-load 'agent-shell-viewport
-         (define-key agent-shell-viewport-view-mode-map (kbd ,key-str) #',fn)))))
-
-;;; Completion setup
-
-(defun agent-shell-corfu-setup ()
-  "Configure corfu auto-completion for agent-shell buffers."
-  (corfu-mode +1)
-  (setq-local corfu-auto-prefix 2)
-  (setq-local completion-at-point-functions
-              (cons #'cape-dabbrev (remq t completion-at-point-functions))))
-
-(defun agent-shell-queue-capture--slash-command-capf ()
-  "Complete agent slash commands after / in capture buffers with a live target."
-  (when-let* ((shell-buf (and (boundp 'agent-shell-queue--capture-target)
-                              agent-shell-queue--capture-target
-                              (buffer-live-p agent-shell-queue--capture-target)
-                              agent-shell-queue--capture-target))
-              (commands (with-current-buffer shell-buf
-                          (map-elt agent-shell--state :available-commands)))
-              ((not (seq-empty-p commands))))
-    (save-excursion
-      (let ((end (point)))
-        (when (re-search-backward "/" (line-beginning-position) t)
-          (list (1+ (point)) end
-                (mapcar (lambda (c) (map-elt c 'name)) commands)
-                :annotation-function
-                (lambda (name)
-                  (let ((cmd (seq-find (lambda (c) (equal (map-elt c 'name) name))
-                                       commands)))
-                    (concat "  " (or (and cmd (map-elt cmd 'description)) ""))))
-                :exclusive 'no))))))
-
-(defun agent-shell-queue-capture-corfu-setup ()
-  "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
-  (corfu-mode +1)
-  (setq-local corfu-auto-prefix 2)
-  (setq-local completion-at-point-functions
-	      (append '(cape-dabbrev agent-shell-queue-capture--slash-command-capf)
-		      (remq t completion-at-point-functions))))
-
 ;;; Buffer/session management
-
-(defun agent-shell--format-age (delta)
-  "Format DELTA, a time-value, as a short relative age (e.g. \"3m\", \"2h\")."
-  (let ((s (float-time delta)))
-    (cond ((< s 60) (format "%ds" (truncate s)))
-	  ((< s 3600) (format "%dm" (truncate (/ s 60))))
-	  ((< s 86400) (format "%dh" (truncate (/ s 3600))))
-	  (t (format "%dd" (truncate (/ s 86400)))))))
 
 (defun agent-shell--buffer-annotation (buf)
   "Build an annotation string describing the agent-shell BUF."
@@ -164,14 +81,14 @@ Also binds FN directly in `agent-shell-viewport-view-mode-map'."
 	   (last (map-elt state :last-activity-time))
 	   (cwd (abbreviate-file-name (or default-directory ""))))
       (mapconcat 'identity
-		 (-non-nil
+		 (seq-remove #'null
 		  (list (format "[%s]" status)
 			cwd
 			(when (and (numberp used) (numberp size) (> size 0))
 			  (format "ctx %.0f%%" (* 100.0 (/ (float used) size))))
 			(when last
 			  (format "%s ago"
-				  (agent-shell--format-age (time-since last))))))
+				  (agent-shell-queue--format-age (time-since last))))))
 		 " · "))))
 
 (defun agent-shell-extras--pick-buffer (prompt)
@@ -453,36 +370,36 @@ three expand-by-default customization variables."
     (dolist (b (agent-shell--blocks-in-buffer))
       (let* ((state (map-elt b :state))
 	     (cat (agent-shell--block-category (map-elt state :qualified-id)))
-	     (entry (or (ht-get by-cat cat) (cons 0 0))))
+	     (entry (or (gethash cat by-cat) (cons 0 0))))
 	(cl-incf (car entry))
 	(when (map-elt state :collapsed) (cl-incf (cdr entry)))
-	(ht-set! by-cat cat entry)))
-    (ht-set! table "+ expand all" "show every collapseable block")
-    (ht-set! table "+ collapse all" "hide every collapseable block")
-    (ht-set! table "~ set all: collapse by default"
-             (if (and (not (symbol-value 'agent-shell-thought-process-expand-by-default))
-                      (not (symbol-value 'agent-shell-tool-use-expand-by-default))
-                      (not (symbol-value 'agent-shell-user-message-expand-by-default)))
-                 "already collapsed by default"
-               "set thinking, tool calls, and user messages to collapse by default"))
-    (ht-set! table "~ set all: expand by default"
-             (if (and (symbol-value 'agent-shell-thought-process-expand-by-default)
-                      (symbol-value 'agent-shell-tool-use-expand-by-default)
-                      (symbol-value 'agent-shell-user-message-expand-by-default))
-                 "already expanded by default"
-               "set thinking, tool calls, and user messages to expand by default"))
-    (dolist (cat (sort (ht-keys by-cat) #'string<))
-      (let* ((entry (ht-get by-cat cat))
+	(map-put! by-cat cat entry)))
+    (map-put! table "+ expand all" "show every collapseable block")
+    (map-put! table "+ collapse all" "hide every collapseable block")
+    (map-put! table "~ set all: collapse by default"
+              (if (and (not (symbol-value 'agent-shell-thought-process-expand-by-default))
+                       (not (symbol-value 'agent-shell-tool-use-expand-by-default))
+                       (not (symbol-value 'agent-shell-user-message-expand-by-default)))
+                  "already collapsed by default"
+                "set thinking, tool calls, and user messages to collapse by default"))
+    (map-put! table "~ set all: expand by default"
+              (if (and (symbol-value 'agent-shell-thought-process-expand-by-default)
+                       (symbol-value 'agent-shell-tool-use-expand-by-default)
+                       (symbol-value 'agent-shell-user-message-expand-by-default))
+                  "already expanded by default"
+                "set thinking, tool calls, and user messages to expand by default"))
+    (dolist (cat (sort (hash-table-keys by-cat) #'string<))
+      (let* ((entry (gethash cat by-cat))
 	     (total (car entry))
 	     (n-collapsed (cdr entry))
 	     (state-str (cond ((zerop n-collapsed) "all expanded")
 			      ((= n-collapsed total) "all collapsed")
 			      (t (format "%d/%d collapsed" n-collapsed total)))))
-	(ht-set! table cat (format "%d block%s · %s"
-				   total (if (= total 1) "" "s") state-str))))
+	(map-put! table cat (format "%d block%s · %s"
+				    total (if (= total 1) "" "s") state-str))))
     (dolist (toggle toggles)
-      (ht-set! table (car toggle)
-	       (if (symbol-value (cdr toggle)) "expanded by default" "collapsed by default")))
+      (map-put! table (car toggle)
+	        (if (symbol-value (cdr toggle)) "expanded by default" "collapsed by default")))
     (let ((choice (annotated-completing-read table
 					     :prompt "agent-shell collapse: "
 					     :category 'agent-shell-collapse
@@ -506,10 +423,10 @@ three expand-by-default customization variables."
 	  (set var (not (symbol-value var)))
 	  (message "%s → %s" var (if (symbol-value var) "expanded" "collapsed"))))
        (t
-	(let ((entry (ht-get by-cat choice)))
+	(let ((entry (gethash choice by-cat)))
 	  (agent-shell--set-collapse (< (cdr entry) (car entry))
 				     :category choice)))))))
 
-(provide 'agent-shell-extras)
+(provide 'agent-shell-menu)
 
-;;; agent-shell-extras.el ends here
+;;; agent-shell-menu.el ends here
