@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -32,13 +36,7 @@ jobs:
         run: cask install
 
       - name: Run tests
-        run: |
-          cask exec ert-runner \
-            test/test-xtdlib.el \
-            test/test-builder.el \
-            test/test-project-projectile-integration.el \
-            test/test-annotated-completing-read.el \
-            test/test-magit-gh-extras.el
+        run: cask exec ert-runner test/test-*.el
 
   integration:
     runs-on: ubuntu-latest
