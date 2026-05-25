@@ -2223,7 +2223,7 @@ Useful after changing `eglot-workspace-configuration' or
     (push (list 'gptel
                 (package-desc-create
                  :name 'gptel
-                 :version '(0 9 8 0)
+                 :version '(0 9 9 3)
                  :summary "A simple LLM client for Emacs"
                  :reqs '((emacs (27 1)) (compat (29 1 4 4)) (transient (0 7 4)))
                  :kind 'vc

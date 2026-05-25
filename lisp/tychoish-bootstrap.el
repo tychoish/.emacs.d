@@ -2045,6 +2045,8 @@ Intended for CI invocations via --fg-daemon --eval.
 Installs a TIMEOUT-second kill guard (default 60) before running."
   (let ((test-dir (expand-file-name "test" user-emacs-directory))
         (noninteractive t))
+    (add-to-list 'load-path test-dir)
+    (load (expand-file-name "test-helper" test-dir) nil t)
     (run-with-timer (or timeout 60) nil (lambda () (kill-emacs 1)))
     (condition-case err
         (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))

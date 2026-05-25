@@ -107,7 +107,7 @@
 	     (pa "emacs-process-name" :is process-name)
 	     (pa "program" :is program)
 	     (pa "on-finish" :is (lambda (out) (message "INFO: notify process for %s completed [%s] with %s" (buffer-name buffer) out compile-result-message)))
-	     (-append args (-strings (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
+	     (append args (-strings (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
 
     (when (or send-when
 	      (> (/ alert-threshold 2) (float-time (time-since (current-idle-time))))
@@ -225,7 +225,7 @@
   (unless (derived-mode-p 'compilation-mode)
     (user-error "operation is only applicable for COMPILATION-MODE buffers"))
   (let ((directory (or (annotated-completing-read-directory
-                        :candidates (-distinct
+                        :candidates (seq-uniq
                                      (append (list compilation-directory default-directory)
                                              (annotated-completing-read--directory-default-candidates)
                                              (f-directories (approximate-project-root))))
@@ -532,159 +532,169 @@ call `builder-add-candidates'."
 
 (builder-register-candidates
  :name "minibuffer-shell-commands"
- :pipeline (thread-last (-join (--map (cons it "minibuffer-history") (minibuffer-default-add-shell-commands))
-			(--map (cons it "shell-command-history") shell-command-history))
-		(--map
-		 (let ((command (car it))
-		       (source (cdr it))
-		       (annotation-tag (if (string-equal default-directory project-root-directory) "project root" "working directory")))
-		   (make-builder-candidate
-		    :name (if (> (length command) 32) (concat (substring command 0 29) "...") command)
-		    :command command
-		    :directory project-root-directory
-		    :annotation (format "operation from `%s' in the %s (%s)" source annotation-tag default-directory)
-		    :priority 3)))))
+ :pipeline (seq-map
+		 (lambda (it)
+		   (let ((command (car it))
+			 (source (cdr it))
+			 (annotation-tag (if (string-equal default-directory project-root-directory) "project root" "working directory")))
+		     (make-builder-candidate
+		      :name (if (> (length command) 32) (concat (substring command 0 29) "...") command)
+		      :command command
+		      :directory project-root-directory
+		      :annotation (format "operation from `%s' in the %s (%s)" source annotation-tag default-directory)
+		      :priority 3)))
+		 (-join (seq-map (lambda (it) (cons it "minibuffer-history")) (minibuffer-default-add-shell-commands))
+			(seq-map (lambda (it) (cons it "shell-command-history")) shell-command-history))))
 
 (builder-register-candidates
  :name "project-compilation-buffer-commands"
- :pipeline (thread-last (mode-buffers-for-project
-		 :mode 'compilation-mode)
-		(--keep
-		 (with-current-buffer it
-		   (when-let* ((command (s-trimmed-or-nil (car compilation-arguments))))
-		     (cons command it))))
-		(--flat-map
-		 (let ((command (car it))
-		       (buf (cdr it)))
-		   (thread-last (list project-root-directory (buffer-directory buf) default-directory)
-			(-distinct)
-			(-non-nil)
-			(--map (let ((operation-directory it))
-				 (make-builder-candidate
-				  :name (format "rerun from %s [%s]" buf (f-visually-compress-to-five operation-directory))
-				  :command command
-				  :directory operation-directory
-				  :annotation (format "command '%s' from %s in %s" command buf operation-directory)
-				  :priority 1))))))))
+ :pipeline (seq-mapcat
+		 (lambda (it)
+		   (let ((command (car it))
+			 (buf (cdr it)))
+		     (seq-map (lambda (it)
+				(let ((operation-directory it))
+				  (make-builder-candidate
+				   :name (format "rerun from %s [%s]" buf (f-visually-compress-to-five operation-directory))
+				   :command command
+				   :directory operation-directory
+				   :annotation (format "command '%s' from %s in %s" command buf operation-directory)
+				   :priority 1)))
+			      (seq-filter #'identity
+					 (seq-uniq
+					  (list project-root-directory (buffer-directory buf) default-directory))))))
+		 (seq-keep
+		  (lambda (it) (with-current-buffer it
+				 (when-let* ((command (s-trimmed-or-nil (car compilation-arguments))))
+				   (cons command it))))
+		  (mode-buffers-for-project :mode 'compilation-mode))))
 
 (builder-register-candidates
  :name "makefiles"
- :pipeline (thread-last (f-directories-containing-file-makefile directories)
-		(--flat-map (let* ((default-directory it)
-				   (makefile-report (process-lines "bash" "-c" "make --dry-run --print-data-base | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//'")))
-			      (unless (string-prefix-p "make: ***" (car makefile-report))
-				(thread-last makefile-report
-				     (--map (let ((target it))
-					      `((target . ,target)
-						(directory . ,default-directory))))
-				     (--filter (and it (alist-get 'directory it) (alist-get 'target it)))))))
-		(--flat-map
-		 (let* ((directory (alist-get 'directory it))
-			(target (alist-get 'target it))
-			(is-current-directory (f-equal-p default-directory directory))
-			(is-project-root (f-equal-p project-root-directory directory))
-			(display-directory (s-shortest
-					    (string-remove-suffix project-root-directory directory)
-					    (if is-project-root
-						(concat "<" project-name ">")
-					      (f-collapse-homedir directory))))
-			(command-template (if is-current-directory
-					      (format "make %%s%s" target)
-					    (format "make %%s-C %s %s" directory target)))
-			(name-template (if is-current-directory
-					   command-template
-					 (string-replace directory display-directory command-template)))
-			(annotation-template (cond
-					      (is-project-root (format "build target %s in project root (%s)" target display-directory))
-					      (is-current-directory (format "build target %s in current directory (%s)" target display-directory))
-					      (t (format "build target %s in %s" target display-directory)))))
-		   (thread-last '((""         "")
-			  ("-k "      ", continuing on error")
-			  ("-B "      ", unconditionally")
-			  ("-k -B "   ", unconditionally while continuing on error"))
-			(--map (let ((flag (car it))
-				     (annotation-suffix (cdr it)))
-				 (make-builder-candidate
-				  :name (format name-template flag)
-				  :command (format command-template flag)
-				  :directory directory
-				  :annotation (s-join-with-space annotation-template annotation-suffix)))))))))
+ :pipeline (seq-mapcat
+		 (lambda (it)
+		   (let* ((directory (alist-get 'directory it))
+			  (target (alist-get 'target it))
+			  (is-current-directory (f-equal-p default-directory directory))
+			  (is-project-root (f-equal-p project-root-directory directory))
+			  (display-directory (s-shortest
+					     (string-remove-suffix project-root-directory directory)
+					     (if is-project-root
+						 (concat "<" project-name ">")
+					       (f-collapse-homedir directory))))
+			  (command-template (if is-current-directory
+					       (format "make %%s%s" target)
+					     (format "make %%s-C %s %s" directory target)))
+			  (name-template (if is-current-directory
+					    command-template
+					  (string-replace directory display-directory command-template)))
+			  (annotation-template (cond
+					       (is-project-root (format "build target %s in project root (%s)" target display-directory))
+					       (is-current-directory (format "build target %s in current directory (%s)" target display-directory))
+					       (t (format "build target %s in %s" target display-directory)))))
+		     (seq-map (lambda (it)
+				(let ((flag (car it))
+				      (annotation-suffix (cdr it)))
+				  (make-builder-candidate
+				   :name (format name-template flag)
+				   :command (format command-template flag)
+				   :directory directory
+				   :annotation (s-join-with-space annotation-template annotation-suffix))))
+			      '((""	  "")
+				("-k "	  ", continuing on error")
+				("-B "	  ", unconditionally")
+				("-k -B " ", unconditionally while continuing on error")))))
+		 (seq-mapcat
+		  (lambda (it)
+		    (let* ((default-directory it)
+			   (makefile-report (process-lines "bash" "-c" "make --dry-run --print-data-base | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//'")))
+		      (unless (string-prefix-p "make: ***" (car makefile-report))
+			(seq-filter (lambda (it) (and it (alist-get 'directory it) (alist-get 'target it)))
+				    (seq-map (lambda (it)
+					      (let ((target it))
+						`((target . ,target)
+						  (directory . ,default-directory))))
+					    makefile-report)))))
+		  (f-directories-containing-file-makefile directories))))
 
 (builder-register-candidates
  :name "go-packages"
- :pipeline (thread-last (-append
-		 (f-directories-containing-file-with-extension-go directories)
-		 (f-directories-containing-file-go-mod project-root-directory))
-		(-non-nil)
-		(-uniq)
-		(--flat-map
-		 (let* ((prefix (concat "." (f-path-separator)))
-			(directory it)
-			(operation-directory (cond
-			      ((or (f-equal-p directory project-root-directory) (f-directory-contains-go-mod-file directory)) "./")
-			      ((string-prefix-p prefix directory) directory)
-			      ((string-prefix-p (f-path-separator) directory) directory)
-			      (t (concat prefix directory))))
-			(operation-directory-tree (f-join operation-directory "..."))
-			(operation-directory-tree (if (string-equal "..." operation-directory-tree) "./..." operation-directory-tree))
-			(short-path (f-collapse-homedir operation-directory))
-			(package-path (string-replace project-root-directory "" operation-directory))
-			(is-recursive (string-suffix-p "..." it))
-			(path-for-project-tag (cond ((f-equal-p operation-directory project-root-directory) "")
-						    ((equal short-path package-path) "")
-						    (t package-path)))
-			(proj-path-tag (format "<%s>/%s" project-name path-for-project-tag))
-			(proj-path-for-name (s-join-with-space (format "<%s>/%s" project-name
-								       (f-visually-compress-to-five path-for-project-tag))))
-			(proj-path-recursive (f-join proj-path-for-name "...")))
-		   (-append
-		    (-l (make-builder-candidate
-			 :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
-			 :command (s-join-with-space "go build" operation-directory-tree)
-			 :directory directory
-			 :annotation (s-join-with-space "build in" project-name "at" short-path "recursively"))
-			(make-builder-candidate
-			 :name (s-join-with-space "go build +tests" (f-join proj-path-for-name "..."))
-			 :command (s-join-with-space "go test -run=NOOP" operation-directory-tree)
-			 :directory directory
-			 :annotation (s-join-with-space "build in (including tests) for" project-name "at" short-path "recursively"))
-			(make-builder-candidate
-			 :name (s-join-with-space "go test +race +coverage +gaps" proj-path-for-name)
-			 :directory directory
-			 :command (s-join-with-space
-				   "go test -coverprofile=coverage.out -race" operation-directory ";"
-				   "go tool cover -html=coverage.out -o=coverage.html;"
-				   (s-join-with-pipe
-				    "go tool cover -func=coverage.out"
-				    (s-concat "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\"")
-				    "grep -v '100.0%'"
-				    "column -t;"))
-			 :annotation (s-join-with-space "collect and report coverage data for" short-path)))
-		    (thread-last '(("go test -cover"  "the code coverage collector")
-			   ("go test -race"   "the race detector")
-			   ("go test"         "default options"))
-			 (--flat-map
-			  (let ((command-prefix (car it))
-				(annotation-prefix (cadr it)))
-			    (thread-last '("10s" "30s" "1m")
-				 (--map
-				  (let* ((timeout-spec it)
-					 (is-default (equal timeout-spec ""))
-					 (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
-					 (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
-				    (make-builder-candidate
-				     :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
-				     :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
-				     :directory directory
-				     :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name))))))))
-		    (thread-last '("revive" "makezero" "exhaustruct")
-			 (--map
-			  (make-builder-candidate
-			   :name (format "lint %s %s" it proj-path-for-name)
-			   :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
+ :pipeline (seq-mapcat
+		 (lambda (it)
+		   (let* ((prefix (concat "." (f-path-separator)))
+			  (directory it)
+			  (operation-directory (cond
+				((or (f-equal-p directory project-root-directory) (f-directory-contains-go-mod-file directory)) "./")
+				((string-prefix-p prefix directory) directory)
+				((string-prefix-p (f-path-separator) directory) directory)
+				(t (concat prefix directory))))
+			  (operation-directory-tree (f-join operation-directory "..."))
+			  (operation-directory-tree (if (string-equal "..." operation-directory-tree) "./..." operation-directory-tree))
+			  (short-path (f-collapse-homedir operation-directory))
+			  (package-path (string-replace project-root-directory "" operation-directory))
+			  (is-recursive (string-suffix-p "..." it))
+			  (path-for-project-tag (cond ((f-equal-p operation-directory project-root-directory) "")
+						      ((equal short-path package-path) "")
+						      (t package-path)))
+			  (proj-path-tag (format "<%s>/%s" project-name path-for-project-tag))
+			  (proj-path-for-name (s-join-with-space (format "<%s>/%s" project-name
+									 (f-visually-compress-to-five path-for-project-tag))))
+			  (proj-path-recursive (f-join proj-path-for-name "...")))
+		     (append
+		      (-l (make-builder-candidate
+			   :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
+			   :command (s-join-with-space "go build" operation-directory-tree)
 			   :directory directory
-			   :annotation (format "run (only) the %s linter in %s" it short-path)))))))))
-
+			   :annotation (s-join-with-space "build in" project-name "at" short-path "recursively"))
+			  (make-builder-candidate
+			   :name (s-join-with-space "go build +tests" (f-join proj-path-for-name "..."))
+			   :command (s-join-with-space "go test -run=NOOP" operation-directory-tree)
+			   :directory directory
+			   :annotation (s-join-with-space "build in (including tests) for" project-name "at" short-path "recursively"))
+			  (make-builder-candidate
+			   :name (s-join-with-space "go test +race +coverage +gaps" proj-path-for-name)
+			   :directory directory
+			   :command (s-join-with-space
+				     "go test -coverprofile=coverage.out -race" operation-directory ";"
+				     "go tool cover -html=coverage.out -o=coverage.html;"
+				     (s-join-with-pipe
+				      "go tool cover -func=coverage.out"
+				      "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\""
+				      "grep -v '100.0%'"
+				      "column -t;"))
+			   :annotation (s-join-with-space "collect and report coverage data for" short-path)))
+		      (seq-mapcat
+		       (lambda (it)
+			 (let ((command-prefix (car it))
+			       (annotation-prefix (cadr it)))
+			   (seq-map
+			    (lambda (it)
+			      (let* ((timeout-spec it)
+				     (is-default (equal timeout-spec ""))
+				     (timeout-arg (unless is-default (concat "--timeout=" timeout-spec)))
+				     (timeout-name (if is-default "no timeout" (s-join-with-space "a" timeout-spec "timeout"))))
+				(make-builder-candidate
+				 :name (s-join-with-space command-prefix timeout-spec (f-join proj-path-for-name "..."))
+				 :command (s-join-with-space command-prefix timeout-arg operation-directory-tree)
+				 :directory directory
+				 :annotation (format "run go test in %s recursively with %s and %s" short-path annotation-prefix timeout-name))))
+			    '("10s" "30s" "1m"))))
+		       '(("go test -cover"  "the code coverage collector")
+			 ("go test -race"   "the race detector")
+			 ("go test"         "default options")))
+		      (seq-map
+		       (lambda (it)
+			 (make-builder-candidate
+			  :name (format "lint %s %s" it proj-path-for-name)
+			  :command (format "golangci-lint run --enable-only=%s %s" it operation-directory)
+			  :directory directory
+			  :annotation (format "run (only) the %s linter in %s" it short-path)))
+		       '("revive" "makezero" "exhaustruct")))))
+		 (seq-uniq
+		  (seq-filter #'identity
+			      (append
+			       (f-directories-containing-file-with-extension-go directories)
+			       (f-directories-containing-file-go-mod project-root-directory))))))
 (builder-register-candidates
  :name "go-files"
  :pipeline (when-let* ((filename (if (and (buffer-file-name) (derived-mode-p '(go-mode go-ts-mode)))
@@ -729,161 +739,173 @@ call `builder-add-candidates'."
              (basename  (f-filename filename))
              (short-path (f-collapse-homedir directory))
              (test-names (eglot-test-at-point--go-names-in-buffer)))
-   (thread-last test-names
-        (--flat-map
-         (let* ((test-name (car it))
-                (is-bench  (eq (cdr it) 'benchmark))
-                (run-flags (if is-bench
-                               (format "-bench=^%s$ -run=^$" test-name)
-                             (format "-run=^%s$" test-name)))
-                (type-name (if is-bench "benchmark" "test")))
-           (thread-last '(("" "")
-                  ("-race" "+race"))
-                (--flat-map
-                 (let ((race-flag  (car it))
-                       (race-label (cadr it)))
-		   (thread-last '("10s" "30s" "1m")
-			(--map
-			 (let ((timeout-flag (format "-timeout=%s" it))
-			       (timeout-label it))
-                           (make-builder-candidate
-                            :name       (s-join-with-space "go test -v" race-label timeout-label test-name basename)
-                            :command    (s-join-with-space "go test -v" race-flag timeout-flag run-flags ".")
-                            :directory  directory
-                            :annotation (format "run %s %s in %s" type-name test-name short-path)
-                            :priority   0))))))))))))
-
+   (seq-mapcat
+    (lambda (it)
+      (let* ((test-name (car it))
+             (is-bench  (eq (cdr it) 'benchmark))
+             (run-flags (if is-bench
+                            (format "-bench=^%s$ -run=^$" test-name)
+                          (format "-run=^%s$" test-name)))
+             (type-name (if is-bench "benchmark" "test")))
+        (seq-mapcat
+         (lambda (it)
+           (let ((race-flag  (car it))
+                 (race-label (cadr it)))
+             (seq-map
+              (lambda (it)
+                (let ((timeout-flag (format "-timeout=%s" it))
+                      (timeout-label it))
+                  (make-builder-candidate
+                   :name       (s-join-with-space "go test -v" race-label timeout-label test-name basename)
+                   :command    (s-join-with-space "go test -v" race-flag timeout-flag run-flags ".")
+                   :directory  directory
+                   :annotation (format "run %s %s in %s" type-name test-name short-path)
+                   :priority   0)))
+              '("10s" "30s" "1m"))))
+         '(("" "")
+           ("-race" "+race")))))
+    test-names)))
 (builder-register-candidates
  :name "go-modules"
  :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
-	     (thread-last go-mod-directories
-		(--flat-map
-		 (let ((filename (f-filename it))
-		       (directory it))
-		    (thread-last '(("lint run"         "golangci-lint run"        "run `golangci-lint' in package")
-			   ("lint fix"         "golangci-lint run --fix"  "run `golangci-lint' and fix trivial errors in package")
-			   (nil                "go mod tidy"              "run `go mod tidy' in package")
-			   (nil                "go doc -all"              "go doc for entire package")
-			   ("go doc -outline"  "go doc --"                "go doc outline for package")
-			   ("<pkgs> | xargs go test +race +coverage"
-			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -cover"
-			        "run all tests (with the race detector) for all submodules of")
-			   ("<pkgs> | xargs go build +test ./..."
-			        "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go build"
-				"build all tests in all packages and sub-packages for"))
-			 (-append
-			  (unless (eql 1 (length go-mod-directories))
-			    '(("<mod> | xargs go test -race"
-			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -cover ./...'"
-				   "run tests for all modules and submodules in")
-			      ("<mod> | xargs go build ./..."
-			           "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go build ./...'"
-				   "run builds for all modules and submodules in"))))
-			 (-non-nil)
-			 (--map (let ((name (if (car it) (car it) (cadr it)))
-				      (command (cadr it))
-				      (annotation (caddr it)))
-				  (make-builder-candidate
-				   :name name
-				   :command command
-				   :directory directory
-				   :annotation (s-join-with-space annotation filename))))))))))
-
+	     (seq-mapcat
+	      (lambda (it)
+		(let ((filename (f-filename it))
+		      (directory it))
+		  (seq-filter
+		   #'identity
+		   (seq-map
+		    (lambda (it)
+		      (let ((name (if (car it) (car it) (cadr it)))
+			    (command (cadr it))
+			    (annotation (caddr it)))
+			(make-builder-candidate
+			 :name name
+			 :command command
+			 :directory directory
+			 :annotation (s-join-with-space annotation filename))))
+		    (append
+		     '(("lint run"         "golangci-lint run"        "run `golangci-lint' in package")
+		       ("lint fix"         "golangci-lint run --fix"  "run `golangci-lint' and fix trivial errors in package")
+		       (nil                "go mod tidy"              "run `go mod tidy' in package")
+		       (nil                "go doc -all"              "go doc for entire package")
+		       ("go doc -outline"  "go doc --"                "go doc outline for package")
+		       ("<pkgs> | xargs go test +race +coverage"
+			    "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -cover"
+			    "run all tests (with the race detector) for all submodules of")
+		       ("<pkgs> | xargs go build +test ./..."
+			    "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go build"
+			   "build all tests in all packages and sub-packages for"))
+		     (unless (eql 1 (length go-mod-directories))
+		       '(("<mod> | xargs go test -race"
+			       "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go test -race -cover ./...'"
+			      "run tests for all modules and submodules in")
+			 ("<mod> | xargs go build ./..."
+			       "find . -name 'go.mod' | xargs --verbose -I{} bash -c 'pushd $(dirname {}); go build ./...'"
+			      "run builds for all modules and submodules in"))))))))
+	      go-mod-directories)))
 (builder-register-candidates
  :name "py-projects"
- :pipeline (thread-last (f-directories-containing-file-pyproject-toml directories)
-		(--flat-map
-		 (list
-		  (make-builder-candidate
-		   :command "ruff check"
-		   :directory it
-		   :annotation (format "run `ruff check' in package %s" it))
-		  (make-builder-candidate
-		   :name "ruff check fix"
-		   :command "ruff check --fix --show-fixes"
-		   :directory it
-		   :annotation (format "run `ruff check' and automatically fix lint violations in package %s" it))
-		  (make-builder-candidate
-		   :name "ruff check fix +unsafe"
-		   :command "ruff check --fix --unsafe-fixes --show-fixes"
-		   :directory it
-		   :annotation (format "render all unsafe fixes (which may modify the intent of the code) in package %s" it))
-		  (make-builder-candidate
-		   :name "ruff format"
-		   :command "ruff format --respect-gitignore"
-		   :directory it
-		   :annotation (format "run `ruff format' in package %s" it))
-		  (make-builder-candidate
-		   :command "ruff analyze"
-		   :directory it
-		   :annotation (format "run `ruff analyze' in package %s" it))))))
+ :pipeline (seq-mapcat
+	     (lambda (it)
+	       (list
+		(make-builder-candidate
+		 :command "ruff check"
+		 :directory it
+		 :annotation (format "run `ruff check' in package %s" it))
+		(make-builder-candidate
+		 :name "ruff check fix"
+		 :command "ruff check --fix --show-fixes"
+		 :directory it
+		 :annotation (format "run `ruff check' and automatically fix lint violations in package %s" it))
+		(make-builder-candidate
+		 :name "ruff check fix +unsafe"
+		 :command "ruff check --fix --unsafe-fixes --show-fixes"
+		 :directory it
+		 :annotation (format "render all unsafe fixes (which may modify the intent of the code) in package %s" it))
+		(make-builder-candidate
+		 :name "ruff format"
+		 :command "ruff format --respect-gitignore"
+		 :directory it
+		 :annotation (format "run `ruff format' in package %s" it))
+		(make-builder-candidate
+		 :command "ruff analyze"
+		 :directory it
+		 :annotation (format "run `ruff analyze' in package %s" it))))
+	     (f-directories-containing-file-pyproject-toml directories)))
 
 (builder-register-candidates
  :name "python"
- :pipeline (thread-last (f-directories-containing-file-with-extension-py directories)
-		(--flat-map
-		 (list
-		  (make-builder-candidate
-		   :command (format "black %s" it)
-		   :directory it
-		   :annotation (format "run `black' in the directory %s" it))
-		  (make-builder-candidate
-		   :command (format "isort %s" it)
-		   :directory it
-		   :annotation (format "run `isort' in the directory %s" it))
-		  (make-builder-candidate
-		   :command (format "isort --force-single-line-imports %s" it)
-		   :directory it
-		   :annotation (format "run `isort' in the directory %s (single line imports)" it))))))
+ :pipeline (seq-mapcat
+	     (lambda (it)
+	       (list
+		(make-builder-candidate
+		 :command (format "black %s" it)
+		 :directory it
+		 :annotation (format "run `black' in the directory %s" it))
+		(make-builder-candidate
+		 :command (format "isort %s" it)
+		 :directory it
+		 :annotation (format "run `isort' in the directory %s" it))
+		(make-builder-candidate
+		 :command (format "isort --force-single-line-imports %s" it)
+		 :directory it
+		 :annotation (format "run `isort' in the directory %s (single line imports)" it))))
+	     (f-directories-containing-file-with-extension-py directories)))
 
 (builder-register-candidates
  :name "rust-project"
- :pipeline (thread-last (f-directories-containing-file-cargo-toml directories)
-		(--flat-map
-		 (let ((annotation-directory (f-collapse-homedir it))
-		       (directory it))
-		   (thread-last '("build" "check" "test" "fix" "fmt" "clippy" "clippy --fix")
-			(--map
-			 (if (f-equal-p project-root-directory directory)
-			     (make-builder-candidate
-			      :directory directory
-			      :command (format "cargo %s" it)
-			      :annotation (format "run cargo target '%s' in project root (%s)" it annotation-directory))
-			   (make-builder-candidate
-			    :directory directory
-			    :name (format "cargo %s <%s>" it (f-base directory))
-			    :command (format "cd %s; cargo %s" directory it)
-			    :annotation (format "run cargo target '%s' in package (%s)" it annotation-directory)))))))
-		(-concat
-		 (when (f-directories-containing-file-cargo-toml project-root-directory)
-		   (let ((annotation-directory (f-collapse-homedir project-root-directory)))
-		     (thread-last '("libs" "bins" "examples" "tests" "benches" "all-targets")
-			  (--flat-map
-			   (list
-			    (make-builder-candidate
-			     :directory project-root-directory
-			     :command (concat "cargo build --" it)
-			     :annotation (format "build %s in project root (%s)" it annotation-directory))
-			    (make-builder-candidate
-			     :directory project-root-directory
-			     :command (concat "cargo check --" it)
-			     :annotation (format "run static analysis %s in project root (%s)" it annotation-directory))))))))))
+ :pipeline (append
+	     (seq-mapcat
+	      (lambda (it)
+		(let ((annotation-directory (f-collapse-homedir it))
+		      (directory it))
+		  (seq-map
+		   (lambda (it)
+		     (if (f-equal-p project-root-directory directory)
+			 (make-builder-candidate
+			  :directory directory
+			  :command (format "cargo %s" it)
+			  :annotation (format "run cargo target '%s' in project root (%s)" it annotation-directory))
+		       (make-builder-candidate
+			:directory directory
+			:name (format "cargo %s <%s>" it (f-base directory))
+			:command (format "cd %s; cargo %s" directory it)
+			:annotation (format "run cargo target '%s' in package (%s)" it annotation-directory))))
+		   '("build" "check" "test" "fix" "fmt" "clippy" "clippy --fix"))))
+	      (f-directories-containing-file-cargo-toml directories))
+	     (when (f-directories-containing-file-cargo-toml project-root-directory)
+	       (let ((annotation-directory (f-collapse-homedir project-root-directory)))
+		 (seq-mapcat
+		  (lambda (it)
+		    (list
+		     (make-builder-candidate
+		      :directory project-root-directory
+		      :command (concat "cargo build --" it)
+		      :annotation (format "build %s in project root (%s)" it annotation-directory))
+		     (make-builder-candidate
+		      :directory project-root-directory
+		      :command (concat "cargo check --" it)
+		      :annotation (format "run static analysis %s in project root (%s)" it annotation-directory))))
+		  '("libs" "bins" "examples" "tests" "benches" "all-targets"))))))
 
 (builder-register-candidates
  :name "justfile"
- :pipeline (thread-last (f-directories-containing-file-justfile directories)
-		(--flat-map
-		 (let ((directory it)
-		       (annotation-directory (f-collapse-homedir it)))
-		   (thread-last (when-let* ((default-directory directory)
-				    (output (shell-command-to-string "just --summary"))
-				    (candidates (split-string output)))
-			  candidates)
-			(--map (make-builder-candidate
-				:directory directory
-				:command (format "just %s" it)
-				:annotation (format "exec justfile target %s in %s" it annotation-directory))))))))
-
+ :pipeline (seq-mapcat
+	     (lambda (it)
+	       (let ((directory it)
+		     (annotation-directory (f-collapse-homedir it)))
+		 (seq-map
+		  (lambda (it)
+		    (make-builder-candidate
+		     :directory directory
+		     :command (format "just %s" it)
+		     :annotation (format "exec justfile target %s in %s" it annotation-directory)))
+		  (when-let* ((default-directory directory)
+			      (output (shell-command-to-string "just --summary"))
+			      (candidates (split-string output)))
+		    candidates))))
+	     (f-directories-containing-file-justfile directories)))
 (defun builder--vale-insert-statistics (buffer _message &key filename)
   (interactive)
   (let* ((table (json-parse-string (shell-command-to-string (format "vale ls-metrics --output=line %s" filename)))))
@@ -897,8 +919,7 @@ call `builder-add-candidates'."
 
 (defun builder--el-files-in-directory (directory)
   "Return a list of .el files in DIRECTORY, excluding byte-compiled .elc files."
-  (thread-last (f-entries directory #'f-file-p)
-       (--filter (f-ext-p it "el"))))
+  (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries directory #'f-file-p)))
 
 (builder-register-candidates
  :name "emacs-lisp-file"
@@ -1017,19 +1038,18 @@ byte-compiled as ordinary sources."
   (let* ((name (builder-elisp-package--name root))
          (skip (list (concat name "-pkg.el")
                      (concat name "-autoloads.el"))))
-    (thread-last (f-entries root #'f-file-p)
-         (--filter (f-ext-p it "el"))
-         (--remove (member (f-filename it) skip)))))
+    (seq-remove (lambda (it) (member (f-filename it) skip))
+		 (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries root #'f-file-p)))))
 
 (defun builder-elisp-package--test-files (root)
   "Return the list of test files under ROOT/test (test-*.el or *-test.el)."
   (let ((test-dir (f-join root "test")))
     (when (f-directory-p test-dir)
-      (thread-last (f-entries test-dir #'f-file-p)
-           (--filter (f-ext-p it "el"))
-           (--filter (let ((name (f-filename it)))
-                       (or (string-prefix-p "test-" name)
-                           (string-suffix-p "-test.el" name))))))))
+      (seq-filter (lambda (it)
+		     (let ((name (f-filename it)))
+		       (or (string-prefix-p "test-" name)
+			   (string-suffix-p "-test.el" name))))
+		   (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries test-dir #'f-file-p))))))
 
 (defun builder-elisp-package--read-pkg-deps (pkg-file)
   "Return dep symbols from a multi-file package's <NAME>-pkg.el descriptor.
@@ -1043,9 +1063,8 @@ The pseudo-package `emacs' is omitted."
         (let ((reqs (nth 4 form)))
           (when (and (consp reqs) (eq (car reqs) 'quote))
             (setq reqs (cadr reqs)))
-          (thread-last reqs
-               (--map (car it))
-               (--remove (eq it 'emacs))))))))
+          (seq-remove (lambda (it) (eq it 'emacs))
+			  (seq-map #'car reqs)))))))
 
 (defun builder-elisp-package--read-deps (file-or-root)
   "Return list of dep package symbols for the package at FILE-OR-ROOT.
@@ -1064,15 +1083,14 @@ package `emacs' is omitted, since it is not installable."
     (with-temp-buffer
       (insert-file-contents file-or-root)
       (when-let* ((line (lm-header "Package-Requires")))
-        (thread-last (read line)
-             (--map (car it))
-             (--remove (eq it 'emacs))))))))
+        (seq-remove (lambda (it) (eq it 'emacs))
+			(seq-map #'car (read line))))))))
 
 (defun builder-elisp-package--require-deps (deps)
   "Require each symbol in DEPS, signaling a `user-error' if any cannot load.
 Use this from contexts that assume the user's `load-path' already provides them
 \(direct M-x invocation, or batch with `-L' flags pointing into ~/.emacs.d/elpa)."
-  (--each deps
+  (dolist (it deps)
     (unless (require it nil t)
       (user-error "elisp-package dependency not on load-path: %s" it))))
 
@@ -1090,12 +1108,12 @@ opens the *ert* selector."
       (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
     (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
     (let* ((test-dir (f-join root "test"))
-           (load-path (-non-nil (-l root (and (f-directory-p test-dir) test-dir) load-path))))
+           (load-path (seq-filter #'identity (list root (and (f-directory-p test-dir) test-dir) load-path))))
       (load main-file nil t)
-      (--each (builder-elisp-package--source-files root)
+      (dolist (it (builder-elisp-package--source-files root))
         (unless (f-equal-p it main-file)
           (load it nil t)))
-      (--each (builder-elisp-package--test-files root)
+      (dolist (it (builder-elisp-package--test-files root))
         (load it nil t)))
     (if noninteractive
         (ert-run-tests-batch-and-exit)
@@ -1113,7 +1131,7 @@ In batch mode exits with status 1 if any file fails to compile."
     (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
     (let* ((load-path (cons root load-path))
            (failed 0))
-      (--each (builder-elisp-package--source-files root)
+      (dolist (it (builder-elisp-package--source-files root))
         (unless (byte-compile-file it)
           (cl-incf failed)))
       (when noninteractive
@@ -1144,7 +1162,7 @@ are not included. The tarball lands in <root>/build/packages/."
            (archive-dir (f-join build-root "packages"))
            (recipes-dir (f-join build-root "recipes"))
            (recipe-path (f-join recipes-dir name)))
-      (--each (-l build-root working-dir archive-dir recipes-dir)
+      (dolist (it (list build-root working-dir archive-dir recipes-dir))
         (make-directory it t))
       (with-temp-file recipe-path
         (let ((print-quoted t))
@@ -1167,12 +1185,12 @@ are not included. The tarball lands in <root>/build/packages/."
   "Remove build artifacts (build/, .cache/, *.elc) for the elisp package at point."
   (interactive)
   (let ((root (file-name-as-directory (approximate-project-root))))
-    (--each (list (f-join root "build") (f-join root ".cache"))
+    (dolist (it (list (f-join root "build") (f-join root ".cache")))
       (when (f-directory-p it)
         (delete-directory it t)
         (message "removed %s" it)))
-    (--each (thread-last (f-entries root #'f-file-p t)
-                 (--filter (f-ext-p it "elc")))
+    (dolist (it (seq-filter (lambda (it) (f-ext-p it "elc"))
+			  (f-entries root #'f-file-p t)))
       (delete-file it)
       (message "removed %s" it))
     (when noninteractive (kill-emacs 0))))
@@ -1189,9 +1207,8 @@ Reads `Package-Requires' via `package-desc-reqs' on the entry in
 `package-alist'; filters the `emacs' pseudo-dependency.  Returns nil
 when PACKAGE is not installed."
   (when-let* ((desc (cadr (assq package package-alist))))
-    (thread-last (package-desc-reqs desc)
-         (mapcar #'car)
-         (--remove (eq it 'emacs)))))
+    (seq-remove (lambda (it) (eq it 'emacs))
+		 (mapcar #'car (package-desc-reqs desc)))))
 
 (defun builder-package-deps-map (packages)
   "Return a hash-table mapping each symbol in PACKAGES to its direct deps.
@@ -1208,8 +1225,8 @@ Includes the roots themselves even when they have no entry in
 `package--get-deps' filters such roots out of its result because it
 keys off `package-alist'; we union the raw roots back in so closure
 membership is meaningful for non-package.el installs."
-  (-distinct (append (copy-sequence packages)
-                     (package--get-deps (copy-sequence packages)))))
+  (seq-uniq (append (copy-sequence packages)
+                    (package--get-deps (copy-sequence packages)))))
 
 (defvar builder-package-installed-exclude '(archives gnupg)
   "Directory-name symbols under `package-user-dir' to ignore.
@@ -1224,12 +1241,12 @@ entry are still surfaced.  A trailing `-<digits-and-dots>' version
 suffix (as written by package.el) is stripped so the result is
 comparable with `package-alist' keys."
   (when (file-directory-p package-user-dir)
-    (thread-last (directory-files package-user-dir nil "\\`[^.]")
-         (--filter (file-directory-p (expand-file-name it package-user-dir)))
-         (--map (replace-regexp-in-string "-[0-9.]+\\'" "" it))
-         (-map #'intern)
-         (--remove (memq it builder-package-installed-exclude))
-         (-distinct))))
+    (seq-uniq
+     (seq-remove (lambda (it) (memq it builder-package-installed-exclude))
+		 (mapcar #'intern
+			  (seq-map (lambda (it) (replace-regexp-in-string "-[0-9.]+\\'" "" it))
+				   (seq-filter (lambda (it) (file-directory-p (expand-file-name it package-user-dir)))
+					      (directory-files package-user-dir nil "\\`[^.]"))))))))
 
 (defun builder-package--declared-use-packages (&optional dir)
   "Return symbols declared via `use-package' in init source files.
@@ -1261,7 +1278,7 @@ are not misclassified as unused."
               (while t (funcall walk (read (current-buffer))))
             (end-of-file nil)
             (invalid-read-syntax nil)))))
-    (-distinct declared)))
+    (seq-uniq declared)))
 
 ;;;###autoload
 (defun builder-package-unused (packages)
@@ -1273,13 +1290,13 @@ installs out of the unused list.  The installed set comes from
 `builder-package--installed-on-disk'.  Called interactively, defaults
 PACKAGES to `package-selected-packages' and echoes the result."
   (interactive (list package-selected-packages))
-  (let* ((roots (-distinct (append packages
-                                   (builder-package--declared-use-packages))))
+  (let* ((roots (seq-uniq (append packages
+                                  (builder-package--declared-use-packages))))
          (needed (builder-package-deps-closure roots))
-         (unused (thread-last (builder-package--installed-on-disk)
-                      (--remove (memq it needed))
-                      (-sort (lambda (a b) (string-lessp (symbol-name a)
-                                                        (symbol-name b)))))))
+         (unused (seq-sort (lambda (a b) (string-lessp (symbol-name a)
+						    (symbol-name b)))
+			  (seq-remove (lambda (it) (memq it needed))
+				      (builder-package--installed-on-disk)))))
     (when (called-interactively-p 'interactive)
       (if unused
           (message "%d unused under %s: %s"
@@ -1295,19 +1312,20 @@ PACKAGES to `package-selected-packages' and echoes the result."
              (_ (builder-elisp-package-p project-root-directory))
              (display-name (builder-elisp-package--name project-root-directory))
              (lisp-dir (f-join user-emacs-directory "lisp")))
-   (thread-last '(("test-package"    "builder-elisp-package-test"    "run ert tests for")
-          ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
-          ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
-          ("clean-package"   "builder-elisp-package-clean"   "remove build artifacts of"))
-        (--map
-         (let ((op (car it))
-               (fn (cadr it))
-               (desc (caddr it)))
-           (make-builder-candidate
-            :name (format "%s-<%s>" op display-name)
-            :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" -f %s" lisp-dir fn)
-            :directory project-root-directory
-            :annotation (format "%s elisp package <%s>" desc display-name)))))))
+   (seq-map
+    (lambda (it)
+      (let ((op (car it))
+	    (fn (cadr it))
+	    (desc (caddr it)))
+	(make-builder-candidate
+	 :name (format "%s-<%s>" op display-name)
+	 :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" -f %s" lisp-dir fn)
+	 :directory project-root-directory
+	 :annotation (format "%s elisp package <%s>" desc display-name))))
+    '(("test-package"    "builder-elisp-package-test"    "run ert tests for")
+      ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
+      ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
+      ("clean-package"   "builder-elisp-package-clean"   "remove build artifacts of")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
