@@ -2215,21 +2215,6 @@ Useful after changing `eglot-workspace-configuration' or
 	     google-gemini-list-models
 	     google-gemini-model-info))
 
-;; gptel is loaded via :load-path from the elpa/ vc checkout, which has no
-;; gptel-pkg.el (it's gitignored upstream).  Register it in package-alist so
-;; dependency checks by gptel-agent and gptel-aibo succeed.
-(when (featurep 'package)
-  (unless (assq 'gptel package-alist)
-    (push (list 'gptel
-                (package-desc-create
-                 :name 'gptel
-                 :version '(0 9 9 3)
-                 :summary "A simple LLM client for Emacs"
-                 :reqs '((emacs (27 1)) (compat (29 1 4 4)) (transient (0 7 4)))
-                 :kind 'vc
-                 :dir (expand-file-name "elpa/gptel" user-emacs-directory)))
-          package-alist)))
-
 (use-package gptel
   :load-path "elpa/gptel"
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)

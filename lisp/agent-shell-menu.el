@@ -36,7 +36,6 @@
 (require 'annotated-completing-read)
 (require 'transient)
 (require 'agent-shell)
-(require 'agent-shell-setup)
 
 (declare-function agent-shell-viewport--shell-buffer "agent-shell-viewport")
 (declare-function agent-shell-queue--format-age "agent-shell-queue")
