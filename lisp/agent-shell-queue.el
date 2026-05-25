@@ -441,7 +441,10 @@ Status is stored as a string; background as a JSON boolean."
    :status (symbol-name (agent-shell-queue-item-status item))
    :kind (symbol-name (or (agent-shell-queue-item-kind item) 'prompt))
    :background (if (agent-shell-queue-item-background item) t :false)
-   :created (agent-shell-queue-item-created item)))
+   :created (agent-shell-queue-item-created item)
+   :dispatched (or (agent-shell-queue-item-dispatched item) :null)
+   :completed (or (agent-shell-queue-item-completed item) :null)
+   :response (or (agent-shell-queue-item-response item) :null)))
 
 (defun agent-shell-queue--item-from-json (obj)
   "Reconstruct a queue item from JSON-parsed plist OBJ.
@@ -452,7 +455,10 @@ Status is interned; background truthy only when exactly `t'."
    :status (intern (plist-get obj :status))
    :kind (intern (or (plist-get obj :kind) "prompt"))
    :background (eq t (plist-get obj :background))
-   :created (plist-get obj :created)))
+   :created (plist-get obj :created)
+   :dispatched (plist-get obj :dispatched)
+   :completed (plist-get obj :completed)
+   :response (let ((r (plist-get obj :response))) (unless (eq r :null) r))))
 
 (defun agent-shell-queue--serialize-json (items)
   "Serialize ITEMS to a JSON string."
@@ -491,6 +497,9 @@ Status is stored as a string; background as t or nil."
     (map-put! h "kind" (symbol-name (or (agent-shell-queue-item-kind item) 'prompt)))
     (map-put! h "background" (if (agent-shell-queue-item-background item) t nil))
     (map-put! h "created" (agent-shell-queue-item-created item))
+    (map-put! h "dispatched" (agent-shell-queue-item-dispatched item))
+    (map-put! h "completed" (agent-shell-queue-item-completed item))
+    (map-put! h "response" (or (agent-shell-queue-item-response item) :null))
     h))
 
 (defun agent-shell-queue--item-from-yaml (obj)
@@ -501,7 +510,10 @@ Status is stored as a string; background as t or nil."
    :status (intern (gethash "status" obj))
    :kind (intern (or (gethash "kind" obj) "prompt"))
    :background (eq t (gethash "background" obj))
-   :created (gethash "created" obj)))
+   :created (gethash "created" obj)
+   :dispatched (gethash "dispatched" obj)
+   :completed (gethash "completed" obj)
+   :response (let ((r (gethash "response" obj))) (unless (eq r :null) r))))
 
 (defun agent-shell-queue--serialize-yaml (items)
   "Serialize ITEMS to a YAML string via `yaml-encode'."
@@ -609,7 +621,7 @@ a subdirectory of `temporary-file-directory' named emacs-<instance>."
        (temporary-file-directory))))
 
 (defun agent-shell-queue--save ()
-  "Persist queue items, excluding done and running items.
+  "Persist all queue items; all items are persisted regardless of status.
 Delegates to `agent-shell-queue-save-function' when set; otherwise writes
 to the file in the current store.
 When `agent-shell-queue-safe-save' is non-nil and no custom save function
@@ -617,18 +629,8 @@ is set, writes a versioned backup before overwriting the state file."
   (if agent-shell-queue-save-function
       (funcall agent-shell-queue-save-function)
     (let* ((base-store (agent-shell-queue--current-store))
-           (filtered-items
-            (thread-last (agent-shell-queue-store-items base-store)
-                         (seq-map (lambda (it)
-                                    (when-let* ((items (seq-remove
-                                                        (lambda (it)
-                                                          (memq (agent-shell-queue-item-status it)
-                                                                '(done running)))
-                                                        (cdr it))))
-                                      (cons (car it) items))))
-                         (seq-filter #'identity)))
            (store (agent-shell-queue--make-store
-                   :items filtered-items
+                   :items (agent-shell-queue-store-items base-store)
                    :format (agent-shell-queue-store-format base-store)
                    :file (agent-shell-queue-store-file base-store)))
            (serialized (agent-shell-queue-serialize store))
@@ -647,7 +649,7 @@ is set, writes a versioned backup before overwriting the state file."
         (with-temp-file backup
           (insert (agent-shell-queue-serialize
                    (agent-shell-queue--make-store
-                    :items filtered-items
+                    :items (agent-shell-queue-store-items base-store)
                     :format fmt
                     :file nil)))))
       (make-directory (file-name-directory file) t)
@@ -734,7 +736,9 @@ The destination path is provided by `agent-shell-queue-archive-file-function'."
 (defun agent-shell-queue--load ()
   "Populate the live store items from the durable store.
 Delegates to `agent-shell-queue-load-function' when set; otherwise reads
-from the file in the current store."
+from the file in the current store.  After loading, items with status
+`running' are normalized to `active' since a running item from a previous
+session cannot be resumed and must be re-dispatched."
   (if agent-shell-queue-load-function
       (condition-case err
           (funcall agent-shell-queue-load-function)
@@ -749,7 +753,14 @@ from the file in the current store."
                    (with-temp-buffer
                      (insert-file-contents file)
                      (buffer-string))))
-          (error (message "agent-shell-queue: ignoring unreadable state: %s" err)))))))
+          (error (message "agent-shell-queue: ignoring unreadable state: %s" err)))))
+    ;; Items that were running when the session ended cannot be resumed.
+    ;; Normalize them to active so they will be re-dispatched.
+    (dolist (pair (agent-shell-queue-store-items agent-shell-queue--store))
+      (dolist (item (cdr pair))
+        (when (eq (agent-shell-queue-item-status item) 'running)
+          (setf (agent-shell-queue-item-status item) 'active)
+          (setf (agent-shell-queue-item-dispatched item) nil))))))
 
 (defun agent-shell-queue--ensure-loaded ()
   "Load queue state from disk on first call."
@@ -2289,7 +2300,20 @@ and the queue advances to the next item."
       (insert response "\n"))
     (insert sep "\n")
     (insert (propertize
-             "[e] edit  [s] send  [k] remove  [d/u] pause/schedule  [m] menu  [q] close"
+             (let ((status (agent-shell-queue-item-status item)))
+               (cond
+                ((eq status 'running)
+                 "[X] abort  [m] menu  [q] close")
+                ((eq status 'active)
+                 "[s] send now  [e] edit  [d] pause  [b] background  [m] menu  [q] close")
+                ((eq status 'deferred)
+                 "[u] schedule  [e] edit  [m] menu  [q] close")
+                ((memq status '(done aborted))
+                 "[R] re-enqueue  [A] archive  [k] remove  [m] menu  [q] close")
+                ((eq status 'incomplete)
+                 "[s] retry  [e] edit  [k] remove  [m] menu  [q] close")
+                (t
+                 "[e] edit  [k] remove  [m] menu  [q] close")))
              'face 'shadow))))
 
 (defun agent-shell-queue-buffer-view-item ()
@@ -2393,6 +2417,104 @@ Archiving must be enabled via `agent-shell-queue-archive-enabled'."
     (agent-shell-queue-remove id)
     (agent-shell-queue--refresh-buffer)
     (message "agent-shell-queue: archived %s" id)))
+
+;;;###autoload
+(defun agent-shell-queue-archive-done-n (n)
+  "Archive the N oldest done items across all queues.
+Errors if archiving is not enabled."
+  (interactive (list (let ((n (read-number "Archive how many done items? " 10)))
+                       (if (> n 0)
+                           n
+                         (user-error "N must be a positive number")))))
+  (unless agent-shell-queue-archive-enabled
+    (user-error "Enable archiving by setting `agent-shell-queue-archive-enabled' to t"))
+  (let* ((all-pairs
+          (thread-last (agent-shell-queue-store-items agent-shell-queue--store)
+                       (seq-mapcat (lambda (bucket)
+                                     (seq-map (lambda (item) (cons (car bucket) item))
+                                              (cdr bucket))))
+                       (seq-filter (lambda (pair)
+                                     (eq (agent-shell-queue-item-status (cdr pair)) 'done)))
+                       (seq-sort (lambda (a b)
+                                   (< (agent-shell-queue-item-created (cdr a))
+                                      (agent-shell-queue-item-created (cdr b)))))))
+         (to-archive (seq-take all-pairs n))
+         (count (length to-archive)))
+    (when (= count 0)
+      (user-error "No done items to archive"))
+    (dolist (pair to-archive)
+      (agent-shell-queue--write-archive (car pair) (cdr pair))
+      (agent-shell-queue-remove (agent-shell-queue-item-id (cdr pair))))
+    (agent-shell-queue--save)
+    (agent-shell-queue--refresh-buffer)
+    (message "agent-shell-queue: archived %d done item(s)" count)))
+
+;;;###autoload
+(defun agent-shell-queue-archive-done-all ()
+  "Archive all done items across all queues.
+Errors if archiving is not enabled or no done items exist."
+  (interactive)
+  (unless agent-shell-queue-archive-enabled
+    (user-error "Enable archiving by setting `agent-shell-queue-archive-enabled' to t"))
+  (let* ((all-pairs
+          (thread-last (agent-shell-queue-store-items agent-shell-queue--store)
+                       (seq-mapcat (lambda (bucket)
+                                     (seq-map (lambda (item) (cons (car bucket) item))
+                                              (cdr bucket))))
+                       (seq-filter (lambda (pair)
+                                     (eq (agent-shell-queue-item-status (cdr pair)) 'done)))
+                       (seq-sort (lambda (a b)
+                                   (< (agent-shell-queue-item-created (cdr a))
+                                      (agent-shell-queue-item-created (cdr b)))))))
+         (count (length all-pairs)))
+    (when (= count 0)
+      (user-error "No done items to archive"))
+    (dolist (pair all-pairs)
+      (agent-shell-queue--write-archive (car pair) (cdr pair))
+      (agent-shell-queue-remove (agent-shell-queue-item-id (cdr pair))))
+    (agent-shell-queue--save)
+    (agent-shell-queue--refresh-buffer)
+    (message "agent-shell-queue: archived %d done item(s)" count)))
+
+;;;###autoload
+(defun agent-shell-queue-load-archive (&optional file)
+  "Import items from the JSONL archive file into the queue as active items.
+FILE defaults to the path returned by `agent-shell-queue-archive-file-function';
+when called interactively with a prefix argument, prompts for a file path."
+  (interactive
+   (list (if current-prefix-arg
+             (read-file-name "Archive file: " nil (agent-shell-queue--archive-file) t)
+           (or (agent-shell-queue--archive-file)
+               (user-error "Set `agent-shell-queue-archive-enabled' or pass a file")))))
+  (unless (file-exists-p file)
+    (user-error "Archive file not found: %s" file))
+  (let ((count 0)
+        (content (with-temp-buffer
+                   (insert-file-contents file)
+                   (buffer-string))))
+    (dolist (line (split-string content "\n"))
+      (unless (string-blank-p line)
+        (condition-case err
+            (let* ((obj (json-parse-string line :object-type 'plist))
+                   (item (agent-shell-queue-item--make
+                          :id (agent-shell-queue--gen-id)
+                          :prompt (plist-get obj :prompt)
+                          :status 'active
+                          :kind (intern (or (plist-get obj :kind) "prompt"))
+                          :background (eq t (plist-get obj :background))
+                          :created (float-time)))
+                   (raw-target (plist-get obj :target))
+                   (target (if (and raw-target (get-buffer raw-target))
+                               raw-target
+                             agent-shell-queue--unassigned-key)))
+              (agent-shell-queue--add-item-to-bucket target item)
+              (setq count (1+ count)))
+          (error (message "agent-shell-queue: skipping malformed archive line: %s" err)))))
+    (when (= count 0)
+      (user-error "No items found in archive"))
+    (agent-shell-queue--save)
+    (agent-shell-queue--refresh-buffer)
+    (message "agent-shell-queue: imported %d item(s) from archive" count)))
 
 (defun agent-shell-queue-item-view-enable-background-task ()
   "Flag the displayed item for background sub-agent execution."
