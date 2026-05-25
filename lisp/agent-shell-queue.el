@@ -1691,10 +1691,10 @@ Includes all statuses (active, deferred, running, done)."
     ;; View / send / remove
     (define-key m (kbd "RET")      #'agent-shell-queue-buffer-view-item)
     (define-key m (kbd "s")        #'agent-shell-queue-buffer-send)
-    (define-key m (kbd "k")        #'agent-shell-queue-buffer-remove)
-    (define-key m (kbd "DEL")      #'agent-shell-queue-buffer-remove)
+    (define-key m (kbd "C-K")      #'agent-shell-queue-buffer-remove)
+    (define-key m (kbd "C-<DEL>")  #'agent-shell-queue-buffer-remove)
     (define-key m (kbd "R")        #'agent-shell-queue-buffer-reenqueue)
-    (define-key m (kbd "A")        #'agent-shell-queue-buffer-archive)
+    (define-key m (kbd "C-A")      #'agent-shell-queue-buffer-archive)
     (define-key m (kbd "z")        #'agent-shell-queue-buffer-mark-done)
     ;; Edit
     (define-key m (kbd "e")        #'agent-shell-queue-buffer-edit)
@@ -2240,10 +2240,10 @@ and the queue advances to the next item."
   (let ((m (make-sparse-keymap)))
     ;; Core lifecycle
     (define-key m (kbd "s")        #'agent-shell-queue-item-view-send)
-    (define-key m (kbd "k")        #'agent-shell-queue-item-view-remove)
-    (define-key m (kbd "DEL")      #'agent-shell-queue-item-view-remove)
+    (define-key m (kbd "C-K")      #'agent-shell-queue-item-view-remove)
+    (define-key m (kbd "C-<DEL>")  #'agent-shell-queue-item-view-remove)
     (define-key m (kbd "R")        #'agent-shell-queue-item-view-reenqueue)
-    (define-key m (kbd "A")        #'agent-shell-queue-item-view-archive)
+    (define-key m (kbd "C-A")      #'agent-shell-queue-item-view-archive)
     (define-key m (kbd "z")        #'agent-shell-queue-item-view-mark-done)
     ;; Edit
     (define-key m (kbd "e")        #'agent-shell-queue-item-view-edit)
@@ -2739,6 +2739,14 @@ Pauses the session queue — call `agent-shell-queue-session-resume' to restart.
 Items in aborted state remain editable; only running, done, or absent items are excluded."
   (not (memq (agent-shell-queue--point-status) '(done running nil))))
 
+(transient-define-prefix agent-shell-queue-item-destructive-menu ()
+  "Destructive actions for the item shown in the current item-view buffer."
+  [["Destructive"
+    ("A" "Archive" agent-shell-queue-item-view-archive
+     :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))
+    ("k" "Remove" agent-shell-queue-item-view-remove
+     :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))]])
+
 (transient-define-prefix agent-shell-queue-item-menu ()
   "Actions for the item shown in the current item-view buffer."
   [["Manage Task"
@@ -2762,9 +2770,7 @@ Items in aborted state remain editable; only running, done, or absent items are 
     ("B" "Disable background task" agent-shell-queue-item-view-disable-background-task
      :if (lambda () (and (not (memq (agent-shell-queue--iv-status) '(done running aborted)))
                          (agent-shell-queue--iv-bg-p))))
-    ("A" "Archive" agent-shell-queue-item-view-archive
-     :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))
-    ("k" "Remove" agent-shell-queue-item-view-remove
+    ("C-d" "Destructive…" agent-shell-queue-item-destructive-menu
      :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))]
    ["Move / Assign" :if (lambda () (not (memq (agent-shell-queue--iv-status) '(done running aborted nil))))
     ("M-<up>" "Move up" agent-shell-queue-item-view-move-up
@@ -3005,6 +3011,19 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
 
 ;;; Transient menu
 
+(transient-define-prefix agent-shell-queue-destructive-menu ()
+  "Destructive actions for the item at point in the queue buffer."
+  [["Destructive"
+    ("A" "Archive" agent-shell-queue-buffer-archive
+     :if agent-shell-queue--point-not-running-p)
+    ("k" "Remove" agent-shell-queue-buffer-remove
+     :if agent-shell-queue--point-not-running-p)]])
+
+(define-advice agent-shell-queue-destructive-menu (:before () guard-queue-buffer)
+  "Signal an error when not invoked from an agent-shell queue overview buffer."
+  (unless (derived-mode-p 'agent-shell-queue-mode)
+    (user-error "Queue menu is only available from the agent-shell queue buffer")))
+
 (transient-define-prefix agent-shell-queue-menu ()
   "Actions for the item at point in the queue buffer."
   [["Queue control"
@@ -3035,9 +3054,7 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("B" "Disable background task" agent-shell-queue-buffer-disable-background-task
      :if (lambda () (and (agent-shell-queue--point-editable-p)
                          (agent-shell-queue--point-bg-p))))
-    ("A" "Archive" agent-shell-queue-buffer-archive
-     :if agent-shell-queue--point-not-running-p)
-    ("k" "Remove" agent-shell-queue-buffer-remove
+    ("C-d" "Destructive…" agent-shell-queue-destructive-menu
      :if agent-shell-queue--point-not-running-p)]
    ["Move / Assign" :if agent-shell-queue--point-editable-p
     ("M-<up>" "Move up" agent-shell-queue-buffer-move-up

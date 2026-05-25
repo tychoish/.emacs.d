@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: cask install
 
+      - name: Remove stale byte-compiled files
+        run: find elpa -name "*.elc" -delete
+
       - name: Run tests
         run: cask exec ert-runner test/test-*.el
 

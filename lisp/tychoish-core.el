@@ -2769,7 +2769,7 @@ Useful after changing `eglot-workspace-configuration' or
 
   (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
-  (setq agent-shell-anthropic-default-model-id "claude-sonnet-4-6")
+  (setq agent-shell-anthropic-default-model-id "default")
   (setq agent-shell-file-completion-enabled t)
   (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
   (setq agent-shell-header-style 'text)
