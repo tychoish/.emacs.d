@@ -2673,8 +2673,7 @@ Useful after changing `eglot-workspace-configuration' or
   :after (shell-maker)
   :delight ((agent-shell-completion-mode "")
 	    (agent-shell-ui-mode ""))
-  :hook ((agent-shell-mode . agent-shell-corfu-setup)
-	 (agent-shell-viewport-edit-mode . agent-shell-corfu-setup))
+  :hook ((agent-shell-viewport-edit-mode . agent-shell-corfu-setup))
   :init
   (bind-keys
    :map tychoish/robot-map
@@ -2703,8 +2702,8 @@ Useful after changing `eglot-workspace-configuration' or
     :form (push '((nil . "^agent-shell-") . (nil . ""))
                 which-key-replacement-alist))
   :config
-  (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
   (require 'agent-shell-menu)
+
   (bind-keys
    :map agent-shell-mode-map
    ("C-c C-c" . agent-shell-submit)
@@ -2736,28 +2735,6 @@ Useful after changing `eglot-workspace-configuration' or
      ("C-<tab>" . agent-shell-viewport-next-item)
      ("S-SPC" . agent-shell-viewport-cycle-session-mode)))
 
-  (tychoish/mcp-servers-init)
-
-  (defun agent-shell-dot-subdir (subdir)
-    "Resolve SUBDIR under the per-instance agent-shell state path."
-    (f-join (tychoish/conf-state-path "agent-shell") subdir))
-
-  (defun tychoish/agent-shell-mcp-refresh (&rest _)
-    "Recompute `agent-shell-mcp-servers' from `tychoish/mcp-build-servers'."
-    (setq agent-shell-mcp-servers
-	  (mapcar #'tychoish/mcp-spec->acp (tychoish/mcp-build-servers))))
-
-  (advice-add 'agent-shell :before #'tychoish/agent-shell-mcp-refresh)
-
-  (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
-  (setq agent-shell-anthropic-default-model-id "claude-sonnet-4-6")
-  (setq agent-shell-file-completion-enabled t)
-  (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
-  (setq agent-shell-header-style 'text)
-  (setq agent-shell-thought-process-expand-by-default nil)
-  (setq agent-shell-tool-use-expand-by-default nil)
-  (setq agent-shell-user-message-expand-by-default nil)
-
   (defconst tychoish/agent-shell-terse-persona
     "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
     "CLAUDE_PERSONA value that requests terse output from the agent.")
@@ -2782,7 +2759,48 @@ Useful after changing `eglot-workspace-configuration' or
     (message "Agent terse output: %s"
              (if tychoish/agent-shell-terse-output "on" "off")))
 
-  (tychoish/agent-shell--apply-environment))
+  (defun agent-shell-dot-subdir (subdir)
+    "Resolve SUBDIR under the per-instance agent-shell state path."
+    (f-join (tychoish/conf-state-path "agent-shell") subdir))
+
+  (defun tychoish/agent-shell-mcp-refresh (&rest _)
+    "Recompute `agent-shell-mcp-servers' from `tychoish/mcp-build-servers'."
+    (setq agent-shell-mcp-servers
+	  (mapcar #'tychoish/mcp-spec->acp (tychoish/mcp-build-servers))))
+
+  (defun agent-shell-corfu-setup ()
+    "Configure corfu auto-completion for agent-shell buffers."
+    (corfu-mode +1)
+    (setq-local corfu-auto-prefix 2)
+    (setq-local completion-at-point-functions
+		(cons #'cape-dabbrev (remq t completion-at-point-functions))))
+
+  (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
+  (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-corfu-setup)
+  (advice-add 'agent-shell :before #'tychoish/agent-shell-mcp-refresh)
+
+  (tychoish/mcp-servers-init)
+  (tychoish/agent-shell--apply-environment)
+
+  (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
+  (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
+  (setq agent-shell-anthropic-default-model-id "claude-sonnet-4-6")
+  (setq agent-shell-file-completion-enabled t)
+  (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
+  (setq agent-shell-header-style 'text)
+  (setq agent-shell-thought-process-expand-by-default nil)
+  (setq agent-shell-tool-use-expand-by-default nil)
+  (setq agent-shell-user-message-expand-by-default nil)
+  (setq agent-shell-buffer-name-format
+	(lambda (agent-name project-name)
+          (let* ((raw (string-trim project-name))
+		 (base (file-name-nondirectory (directory-file-name raw)))
+		 (stripped (replace-regexp-in-string "\\`[./]+" "" base))
+		 (slug (downcase (replace-regexp-in-string "\\s-+" "-"
+                                                           (if (string-empty-p stripped) base stripped)))))
+            (format "*%s-%s*"
+                    (car (split-string (downcase (string-trim agent-name))))
+                    slug)))))
 
 (use-package agent-shell-queue
   :bind (:map tychoish/robot-agent-shell-map
@@ -2818,10 +2836,33 @@ Useful after changing `eglot-workspace-configuration' or
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "q")
   :config
-  (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
-  (bind-keys
-   :map agent-shell-queue-mode-map
-   ("C-c j" . tychoish/robot-agent-shell-map))
+  (defun agent-shell-queue-capture-corfu-setup ()
+    "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
+    (corfu-mode +1)
+    (setq-local corfu-auto-prefix 2)
+    (setq-local completion-at-point-functions
+		(append '(cape-dabbrev agent-shell-queue-capture--slash-command-capf)
+			(remq t completion-at-point-functions))))
+
+  (defun agent-shell-queue-capture--slash-command-capf ()
+    "Complete agent slash commands after / in capture buffers with a live target."
+    (when-let* ((shell-buf (and (boundp 'agent-shell-queue--capture-target)
+				(buffer-live-p agent-shell-queue--capture-target)
+				agent-shell-queue--capture-target))
+		(commands (with-current-buffer shell-buf
+                            (map-elt agent-shell--state :available-commands)))
+		((not (seq-empty-p commands))))
+      (save-excursion
+	(let ((end (point)))
+          (when (re-search-backward "/" (line-beginning-position) t)
+            (list (1+ (point)) end
+                  (mapcar (lambda (c) (map-elt c 'name)) commands)
+                  :annotation-function
+                  (lambda (name)
+                    (let ((cmd (seq-find (lambda (c) (equal (map-elt c 'name) name)) commands)))
+                      (concat "  " (or (and cmd (map-elt cmd 'description)) ""))))
+                  :exclusive 'no))))))
+
 
   (defun tychoish--agent-shell-queue-state-file ()
     "Queue state file under the per-instance agent-shell state directory."
@@ -2836,6 +2877,12 @@ Useful after changing `eglot-workspace-configuration' or
     "Archive file under the per-instance agent-shell state directory."
     (expand-file-name "queue-archive.jsonl"
                       (tychoish/conf-state-path "agent-shell")))
+
+  (bind-keys
+   :map agent-shell-queue-mode-map
+   ("C-c j" . tychoish/robot-agent-shell-map))
+
+  (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
 
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)

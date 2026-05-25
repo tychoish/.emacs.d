@@ -69,6 +69,29 @@
     ("queue review" . agent-shell-queue-buffer-open))
   "Alist of (LABEL . COMMAND) for `agent-shell-select-action'.")
 
+;;; Key binding
+
+(defmacro agent-shell-mode-key (key fn)
+  "Define `agent-shell-output-key-KEY' and bind it in `agent-shell-mode-map'.
+In the output area, or while the shell is busy, calls FN interactively.
+Self-inserts KEY only when at the idle prompt.
+Also binds FN directly in `agent-shell-viewport-view-mode-map'."
+  (let* ((key-str (if (stringp key) key (symbol-name key)))
+         (name (intern (concat "agent-shell-output-key-" key-str)))
+         (char (pcase key-str
+                 ("TAB" ?\t)
+                 ((pred (lambda (s) (= 1 (length s)))) (aref key-str 0)))))
+    `(progn
+       (defun ,name ()
+         ,(format "In output or busy: `%s'. Self-insert at idle prompt." fn)
+         (interactive)
+         (if (and (not (shell-maker-busy)) (shell-maker-point-at-last-prompt-p))
+             ,(if char `(self-insert-command 1 ,char) '(ignore))
+           (call-interactively #',fn)))
+       (define-key agent-shell-mode-map (kbd ,key-str) #',name)
+       (with-eval-after-load 'agent-shell-viewport
+         (define-key agent-shell-viewport-view-mode-map (kbd ,key-str) #',fn)))))
+
 ;;; Buffer/session management
 
 (defun agent-shell--buffer-annotation (buf)
