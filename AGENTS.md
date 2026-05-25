@@ -27,7 +27,6 @@ The configuration is split into focused files:
 | `lisp/xtdlib.el`                      | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
 | `lisp/builder.el`                   | Compilation buffer system.                                                                    |
 | `lisp/agent-shell-menu.el`          | ACR-based menus, transient prefixes, buffer/permission/command/collapse UI                    |
-| `lisp/agent-shell-setup.el`         | Mode keybinding macro, corfu completion setup, buffer-name config                             |
 | `lisp/annotated-completing-read.el` | ACR completion UI.                                                                            |
 | `lisp/eglot-test-at-point.el`       | Eglot test runner helper.                                                                     |
 | `user/*.el`                         | Per-machine overrides. Loaded last; not committed.                                            |

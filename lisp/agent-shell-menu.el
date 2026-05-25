@@ -27,8 +27,7 @@
 ;; ACR-based interactive menus for agent-shell sessions.  Provides transient
 ;; prefix menus `agent-shell-global-menu' and `agent-shell-session-menu' for
 ;; navigating and controlling agent sessions.  Covers permission resolution,
-;; action selection, command selection, and collapse control.  Setup and
-;; keybinding infrastructure lives in `agent-shell-setup.el'.
+;; action selection, command selection, and collapse control.
 
 ;;; Code:
 
