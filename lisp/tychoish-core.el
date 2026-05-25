@@ -13,7 +13,7 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'xlib))
+  (require 'xtdlib))
 
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
@@ -2836,6 +2836,12 @@ Useful after changing `eglot-workspace-configuration' or
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "q")
   :config
+  (bind-keys
+   :map agent-shell-queue-mode-map
+   ("C-c j" . tychoish/robot-agent-shell-map))
+
+  (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
+
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
     (corfu-mode +1)
@@ -2863,7 +2869,6 @@ Useful after changing `eglot-workspace-configuration' or
                       (concat "  " (or (and cmd (map-elt cmd 'description)) ""))))
                   :exclusive 'no))))))
 
-
   (defun tychoish--agent-shell-queue-state-file ()
     "Queue state file under the per-instance agent-shell state directory."
     (let ((ext (pcase agent-shell-queue-serialization-format
@@ -2878,11 +2883,8 @@ Useful after changing `eglot-workspace-configuration' or
     (expand-file-name "queue-archive.jsonl"
                       (tychoish/conf-state-path "agent-shell")))
 
-  (bind-keys
-   :map agent-shell-queue-mode-map
-   ("C-c j" . tychoish/robot-agent-shell-map))
-
-  (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
+  (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-capture-corfu-setup)
+  (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-capture-corfu-setup)
 
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)

@@ -2,7 +2,7 @@
 
 (eval-when-compile
   (require 'dash)
-  (require 'xlib)
+  (require 'xtdlib)
   (require 'fn))
 
 (autoload 'org-agenda-files "org")

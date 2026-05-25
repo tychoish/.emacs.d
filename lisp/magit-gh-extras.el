@@ -3,7 +3,7 @@
 ;; Author: tycho garen
 ;; Maintainer: tychoish
 ;; Version: 0.1
-;; Package-Requires: ((emacs "29.1") (magit "4.0") (ht "2.3") (annotated-completing-read "0.1"))
+;; Package-Requires: ((emacs "29.1") (magit "4.0") (annotated-completing-read "0.1"))
 ;; Keywords: vc, tools, magit, github
 ;; URL: https://github.com/tychoish/dot-emacs
 
@@ -19,7 +19,8 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'ht)
+(require 'map)
+
 (require 'annotated-completing-read)
 
 (declare-function magit-toplevel "magit-git")
@@ -43,7 +44,7 @@ Lives on a hidden state buffer per repository.")
 
 (defun magit-gh--pr-closed-p (pr)
   "Return non-nil when PR alist represents a merged or closed PR."
-  (member (alist-get 'state pr) '("MERGED" "CLOSED")))
+  (member (map-elt pr 'state) '("MERGED" "CLOSED")))
 
 (defun magit-gh--default-branch ()
   "Return the repository's default branch name, falling back to \"main\"."
@@ -76,7 +77,7 @@ or the file is unreadable."
 	      (insert-file-contents file)
 	      (goto-char (point-min))
 	      (dolist (pr (read (current-buffer)))
-		(puthash (alist-get 'headRefName pr) pr table)))
+		(map-put! table (map-elt pr 'headRefName) pr)))
 	  (error (message "magit-gh prune: ignoring unreadable cache: %s" err)))))
     table))
 
@@ -86,7 +87,7 @@ No-op when `magit-gh-prune-cache-dir' is nil."
   (when-let ((file (magit-gh--prune-cache-file)))
     (make-directory magit-gh-prune-cache-dir t)
     (let (prs)
-      (maphash (lambda (_branch pr) (push pr prs)) table)
+      (map-do (lambda (_branch pr) (push pr prs)) table)
       (with-temp-file file
 	(prin1 prs (current-buffer))))))
 
@@ -102,9 +103,9 @@ Uses a single gh call fetching up to `magit-gh-prune-pr-limit' PRs."
     (when (string-prefix-p "[" output)
       (dolist (pr (json-parse-string output :array-type 'list :object-type 'alist))
 	(when (magit-gh--pr-closed-p pr)
-	  (let ((branch (alist-get 'headRefName pr)))
-	    (unless (gethash branch table)
-	      (puthash branch pr table))))))
+	  (let ((branch (map-elt pr 'headRefName)))
+	    (unless (map-elt table branch)
+	      (map-put! table branch pr))))))
     (magit-gh--prune-save-cache table)
     table))
 
@@ -136,7 +137,7 @@ Stale marked branches are dropped from `:marked'. Returns new candidates."
 	 (candidates nil))
     (dolist (branch (magit-list-local-branch-names))
       (unless (member branch protected)
-	(let ((pr (gethash branch closed-prs)))
+	(let ((pr (map-elt closed-prs branch)))
 	  (when pr
 	    (push (cons branch pr) candidates)))))
     (setq candidates (nreverse candidates))
@@ -151,9 +152,9 @@ Stale marked branches are dropped from `:marked'. Returns new candidates."
 (defun magit-gh--prune-format-annotation (pr)
   "Return a one-line annotation string describing PR alist."
   (format "PR #%s %s: %s"
-	  (alist-get 'number pr)
-	  (alist-get 'state pr)
-	  (alist-get 'title pr)))
+	  (map-elt pr 'number)
+	  (map-elt pr 'state)
+	  (map-elt pr 'title)))
 
 (defun magit-gh--prune-build-menu (candidates marked)
   "Build a hash-table menu for the prune command.
@@ -161,25 +162,25 @@ CANDIDATES is the alist of (BRANCH . PR-ALIST). MARKED is the list of
 branch names currently marked for batch pruning. Branch entries are
 labeled `prune: BRANCH' with a ` [marked]' suffix when applicable."
   (let ((table (make-hash-table :test #'equal)))
-    (ht-set table "exit menu" "leave the menu without further action")
-    (ht-set table "refresh" "re-scan PRs and rebuild the cache (returns to menu)")
+    (map-put! table "exit menu" "leave the menu without further action")
+    (map-put! table "refresh" "re-scan PRs and rebuild the cache (returns to menu)")
     (when candidates
-      (ht-set table "prune all branches (no prompt)"
-	      (format "delete all %d candidate branch(es)" (length candidates)))
-      (ht-set table "prune all branches (with prompt)"
-	      (format "delete %d candidate(s), confirming each (y/n/q/!)"
-		      (length candidates)))
-      (ht-set table "mark branch for pruning"
-	      "toggle the mark on a branch for batch pruning"))
+      (map-put! table "prune all branches (no prompt)"
+	       (format "delete all %d candidate branch(es)" (length candidates)))
+      (map-put! table "prune all branches (with prompt)"
+	       (format "delete %d candidate(s), confirming each (y/n/q/!)"
+		       (length candidates)))
+      (map-put! table "mark branch for pruning"
+	       "toggle the mark on a branch for batch pruning"))
     (when marked
-      (ht-set table "prune marked branches"
-	      (format "delete %d marked branch(es)" (length marked))))
+      (map-put! table "prune marked branches"
+	       (format "delete %d marked branch(es)" (length marked))))
     (dolist (entry candidates)
       (let* ((branch (car entry))
 	     (pr (cdr entry))
 	     (suffix (if (member branch marked) " [marked]" "")))
-	(ht-set table (format "prune: %s%s" branch suffix)
-		(magit-gh--prune-format-annotation pr))))
+	(map-put! table (format "prune: %s%s" branch suffix)
+		 (magit-gh--prune-format-annotation pr))))
     table))
 
 (defun magit-gh--prune-parse-branch-label (label)
@@ -230,7 +231,7 @@ Updates `:marked' in the buffer-local state of BUF."
 	     (pr (cdr entry))
 	     (label (format "%s%s" branch
 			    (if (member branch marked) " [marked]" ""))))
-	(ht-set table label (magit-gh--prune-format-annotation pr))))
+	(map-put! table label (magit-gh--prune-format-annotation pr))))
     (let* ((label (annotated-completing-read table
 					     :prompt "toggle mark => "
 					     :category 'magit-gh-mark

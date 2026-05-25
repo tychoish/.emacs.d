@@ -3,8 +3,33 @@
 ;; Author: tycho garen
 ;; Maintainer: tychoish
 ;; Keywords: tools, agent-shell
+;; Version: 0.1.0
+;; URL: https://github.com/tychoish/dot-emacs
+;; Package-Requires: ((emacs "29.1") (transient "0.4") (annotated-completing-read "0.1") (agent-shell "0.1"))
 
 ;; This file is not part of GNU Emacs
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; Implements a persistent prompt queue for agent-shell sessions, supporting
+;; multi-session dispatch with pause, resume, and archive lifecycle management.
+;; Queue state is serialized to plist, JSON, or YAML for session persistence
+;; across Emacs restarts.  Interactive capture, edit, and item-view buffers
+;; allow queue manipulation without leaving Emacs.  Fork operations split a
+;; queue across multiple sessions for parallel workloads.
 
 ;;; Code:
 
@@ -505,15 +530,15 @@ Status is stored as a string; background as t or nil."
 (defun agent-shell-queue--item-from-yaml (obj)
   "Reconstruct a queue item from a hash-table OBJ produced by `yaml-parse-string'."
   (agent-shell-queue-item--make
-   :id (gethash "id" obj)
-   :prompt (gethash "prompt" obj)
-   :status (intern (gethash "status" obj))
-   :kind (intern (or (gethash "kind" obj) "prompt"))
-   :background (eq t (gethash "background" obj))
-   :created (gethash "created" obj)
-   :dispatched (gethash "dispatched" obj)
-   :completed (gethash "completed" obj)
-   :response (let ((r (gethash "response" obj))) (unless (eq r :null) r))))
+   :id (map-elt obj "id")
+   :prompt (map-elt obj "prompt")
+   :status (intern (map-elt obj "status"))
+   :kind (intern (or (map-elt obj "kind") "prompt"))
+   :background (eq t (map-elt obj "background"))
+   :created (map-elt obj "created")
+   :dispatched (map-elt obj "dispatched")
+   :completed (map-elt obj "completed")
+   :response (let ((r (map-elt obj "response"))) (unless (eq r :null) r))))
 
 (defun agent-shell-queue--serialize-yaml (items)
   "Serialize ITEMS to a YAML string via `yaml-encode'."
@@ -538,9 +563,9 @@ Status is stored as a string; background as t or nil."
                                   :null-object nil
                                   :false-object nil)
                (seq-map (lambda (bucket)
-                          (cons (gethash "buffer" bucket)
+                          (cons (map-elt bucket "buffer")
                                 (seq-map #'agent-shell-queue--item-from-yaml
-                                         (gethash "items" bucket)))))))
+                                         (map-elt bucket "items")))))))
 
 ;; -- Serialization generics --
 
@@ -3175,7 +3200,7 @@ and age."
                                                    :category 'agent-shell-queue-item
                                                    :require-match t
                                                    :history 'agent-shell-queue-edit-task))
-                (id (gethash choice id-by-key)))
+                (id (map-elt id-by-key choice)))
       (agent-shell-queue--open-edit-for-id id))))
 
 (defun agent-shell-queue-edit-save-and-flush ()
@@ -3596,17 +3621,17 @@ cancel with \\[agent-shell-queue-raw-edit-cancel]."
 
 (defun agent-shell-queue--parse-yaml-item (item-h snapshot)
   "Validate hash-table ITEM-H against SNAPSHOT; return (item . errors) or (nil . errors)."
-  (let* ((id (gethash "id" item-h))
-         (prompt (gethash "prompt" item-h))
-         (status-str (gethash "status" item-h "active"))
-         (kind-str (gethash "kind" item-h "prompt"))
-         (bg (gethash "background" item-h))
-         (created (gethash "created" item-h))
-         (dispatched (gethash "dispatched" item-h))
-         (completed (gethash "completed" item-h))
+  (let* ((id (map-elt item-h "id"))
+         (prompt (map-elt item-h "prompt"))
+         (status-str (map-elt item-h "status" "active"))
+         (kind-str (map-elt item-h "kind" "prompt"))
+         (bg (map-elt item-h "background"))
+         (created (map-elt item-h "created"))
+         (dispatched (map-elt item-h "dispatched"))
+         (completed (map-elt item-h "completed"))
          (status (condition-case nil (intern status-str) (error nil)))
          (kind (condition-case nil (intern kind-str) (error nil)))
-         (orig (and id snapshot (gethash id snapshot)))
+         (orig (and id snapshot (map-elt snapshot id)))
          (errors nil))
     (when (or (null prompt)
               (and (stringp prompt) (string-empty-p (string-trim prompt))))
@@ -3678,8 +3703,8 @@ cancel with \\[agent-shell-queue-raw-edit-cancel]."
       (thread-last (agent-shell-queue--yaml-buckets parsed)
         (seq-filter #'hash-table-p)
         (seq-do (lambda (bucket)
-                  (let* ((buf-name (gethash "buffer" bucket))
-                         (items-raw (gethash "items" bucket))
+                  (let* ((buf-name (map-elt bucket "buffer"))
+                         (items-raw (map-elt bucket "items"))
                          (items-list (if (vectorp items-raw)
                                          (append items-raw nil)
                                        items-raw))
@@ -3687,7 +3712,7 @@ cancel with \\[agent-shell-queue-raw-edit-cancel]."
                     (unless buf-name
                       (push "a bucket is missing the 'buffer' field" errors))
                     (dolist (item-h (seq-filter #'hash-table-p items-list))
-                      (let ((id (gethash "id" item-h)))
+                      (let ((id (map-elt item-h "id")))
                         (when (and id (member id all-ids))
                           (push (format "duplicate ID '%s'" id) errors))
                         (when id (push id all-ids))
@@ -3761,14 +3786,14 @@ For each item whose ID already exists, prompts to keep, replace, or assign new I
     (thread-last (agent-shell-queue--yaml-buckets parsed)
       (seq-filter #'hash-table-p)
       (seq-do (lambda (bucket)
-                (let* ((buf-name (gethash "buffer" bucket))
-                       (items-raw (gethash "items" bucket))
+                (let* ((buf-name (map-elt bucket "buffer"))
+                       (items-raw (map-elt bucket "items"))
                        (items-list (cond
                                     ((vectorp items-raw) (append items-raw nil))
                                     ((listp items-raw) items-raw)
                                     (t nil))))
                   (dolist (it (seq-filter #'hash-table-p items-list))
-          (let* ((raw-id (gethash "id" it))
+          (let* ((raw-id (map-elt it "id"))
                  (existing (and raw-id (agent-shell-queue--item-by-id raw-id)))
                  (final-id
                   (cond
@@ -3789,12 +3814,12 @@ For each item whose ID already exists, prompts to keep, replace, or assign new I
              (t
               (when (and (stringp final-id) (equal final-id raw-id) existing)
                 (agent-shell-queue-remove raw-id))
-              (let* ((prompt (gethash "prompt" it ""))
-                     (status-str (gethash "status" it "active"))
+              (let* ((prompt (map-elt it "prompt" ""))
+                     (status-str (map-elt it "status" "active"))
                      (status (condition-case nil (intern status-str) (error 'active)))
-                     (kind-str (gethash "kind" it "prompt"))
+                     (kind-str (map-elt it "kind" "prompt"))
                      (kind (condition-case nil (intern kind-str) (error 'prompt)))
-                     (bg (eq t (gethash "background" it)))
+                     (bg (eq t (map-elt it "background")))
                      (target-buf (and buf-name
                                       (not (equal buf-name agent-shell-queue--unassigned-key))
                                       (get-buffer buf-name)))
@@ -3805,7 +3830,7 @@ For each item whose ID already exists, prompts to keep, replace, or assign new I
                             :status (if (memq status '(active deferred invalid)) status 'active)
                             :kind (if (memq kind '(prompt pause context emacs wait compact)) kind 'prompt)
                             :background bg
-                            :created (or (gethash "created" it) (float-time)))))
+                            :created (or (map-elt it "created") (float-time)))))
                 (when target-buf
                   (agent-shell-queue--ensure-subscription target-buf))
                 (agent-shell-queue--add-item-to-bucket

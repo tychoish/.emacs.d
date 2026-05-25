@@ -4,6 +4,7 @@
 ;; Maintainer: tychoish
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "30.1"))
+;; Keywords: tools, languages, eglot, testing
 ;; URL: https://github.com/tychoish/eglot-test-at-point
 
 ;; This file is not part of GNU Emacs
@@ -23,8 +24,15 @@
 
 ;;; Commentary:
 
-;; This provides access to the codelens-based specific test discovery
-;; and running, using eglot.
+;; Provides code-lens and document-symbol based test discovery via Eglot.
+;; Language-specific setup is handled by `eglot-test-at-point-setup-go',
+;; `eglot-test-at-point-setup-rust', and `eglot-test-at-point-setup-python'.
+;; The primary user-facing commands are `eglot-test-at-point', which runs
+;; the test nearest point, and `eglot-test-at-point-select', which offers
+;; an annotated completion menu of all discovered tests in the buffer.
+;; Per-language behaviour is controlled via buffer-local variables such as
+;; `eglot-test-at-point-command', `eglot-test-at-point-name-fn', and
+;; `eglot-test-at-point-run-command-fn'.
 
 (require 'eglot)
 (require 'seq)

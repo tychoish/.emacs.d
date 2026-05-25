@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (eval-when-compile
-  (require 'xlib))
+  (require 'xtdlib))
 
 (require 'mu4e-autoloads nil t)
 

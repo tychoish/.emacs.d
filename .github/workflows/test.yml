@@ -34,7 +34,7 @@ jobs:
       - name: Run tests
         run: |
           cask exec ert-runner \
-            test/test-xlib.el \
+            test/test-xtdlib.el \
             test/test-builder.el \
             test/test-project-projectile-integration.el \
             test/test-annotated-completing-read.el \

@@ -3,8 +3,32 @@
 ;; Author: tycho garen
 ;; Maintainer: tychoish
 ;; Keywords: tools, agent-shell
+;; Version: 0.1.0
+;; URL: https://github.com/tychoish/dot-emacs
+;; Package-Requires: ((emacs "29.1") (transient "0.4") (annotated-completing-read "0.1") (agent-shell "0.1"))
 
 ;; This file is not part of GNU Emacs
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; ACR-based interactive menus for agent-shell sessions.  Provides transient
+;; prefix menus `agent-shell-global-menu' and `agent-shell-session-menu' for
+;; navigating and controlling agent sessions.  Covers permission resolution,
+;; action selection, command selection, and collapse control.  Setup and
+;; keybinding infrastructure lives in `agent-shell-setup.el'.
 
 ;;; Code:
 
@@ -199,16 +223,16 @@ When a permission request is pending, permission responses are spliced into the 
   (interactive)
   (when-let* ((table (thread-last (when (and (derived-mode-p 'agent-shell-mode)
 					     (agent-shell--permission-pending-p))
-				    (mapcar (lambda (b)
-					      (cons (format "permission: %s" (car b))
-						    (agent-shell--permission-button-action (cdr b))))
-					    (agent-shell--permission-buttons)))
+					    (agent-shell--permission-buttons))
+				  (mapcar (lambda (b)
+					    (cons (format "permission: %s" (car b))
+						  (agent-shell--permission-button-action (cdr b)))))
 				  (append agent-shell-action-alist)
 				  (seq-filter (lambda (entry) (commandp (cdr entry))))
 				  (seq-map (lambda (entry)
 					    (cons (car entry)
 						  (or (car (split-string (or (documentation (cdr entry)) "") "\n")) ""))))))
-	      (label (annotated-completing-read
+	      (label (annotated-completing-read table
 		      :prompt "agent-shell action =>"
 		      :category 'agent-shell-action
 		      :require-match t
@@ -343,8 +367,8 @@ created via `agent-shell-ui-update-text' (no `:collapsed' key) are skipped."
       (when-let* ((state (get-text-property pos 'agent-shell-ui-state))
 		  (id (map-elt state :qualified-id))
 		  ((assq :collapsed state))
-		  ((not (gethash id seen))))
-	(puthash id t seen)
+		  ((not (map-elt seen id))))
+	(map-put! seen id t)
 	(push (list (cons :start pos) (cons :state state)) out))
       (setq pos (next-single-property-change pos 'agent-shell-ui-state)))
     (nreverse out)))
@@ -393,7 +417,7 @@ three expand-by-default customization variables."
     (dolist (b (agent-shell--blocks-in-buffer))
       (let* ((state (map-elt b :state))
 	     (cat (agent-shell--block-category (map-elt state :qualified-id)))
-	     (entry (or (gethash cat by-cat) (cons 0 0))))
+	     (entry (or (map-elt by-cat cat) (cons 0 0))))
 	(cl-incf (car entry))
 	(when (map-elt state :collapsed) (cl-incf (cdr entry)))
 	(map-put! by-cat cat entry)))
@@ -411,8 +435,8 @@ three expand-by-default customization variables."
                        (symbol-value 'agent-shell-user-message-expand-by-default))
                   "already expanded by default"
                 "set thinking, tool calls, and user messages to expand by default"))
-    (dolist (cat (sort (hash-table-keys by-cat) #'string<))
-      (let* ((entry (gethash cat by-cat))
+    (dolist (cat (sort (map-keys by-cat) #'string<))
+      (let* ((entry (map-elt by-cat cat))
 	     (total (car entry))
 	     (n-collapsed (cdr entry))
 	     (state-str (cond ((zerop n-collapsed) "all expanded")
@@ -446,7 +470,7 @@ three expand-by-default customization variables."
 	  (set var (not (symbol-value var)))
 	  (message "%s → %s" var (if (symbol-value var) "expanded" "collapsed"))))
        (t
-	(let ((entry (gethash choice by-cat)))
+	(let ((entry (map-elt by-cat choice)))
 	  (agent-shell--set-collapse (< (cdr entry) (car entry))
 				     :category choice)))))))
 

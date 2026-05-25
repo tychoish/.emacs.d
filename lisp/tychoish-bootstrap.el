@@ -33,9 +33,10 @@
 
 ;;; Code:
 
-(require 'xlib)
+(require 'xtdlib)
 (require 'fn)
 (require 'dash)
+(require 'map)
 
 (declare-function which-key-add-key-based-replacements "which-key")
 (declare-function which-key-add-keymap-based-replacements "which-key")
@@ -600,7 +601,7 @@ This combines the host name and the dameon name."
   ;; https://emacs.stackexchange.com/questions/82010/why-is-emacs-recompiling-some-packages-on-every-startup
   (let* ((naive-elc-file (file-name-with-extension file "elc"))
          (elc-file (replace-regexp-in-string "\\.el\\.elc$" ".elc" naive-elc-file)))
-    (or (gethash elc-file comp--no-native-compile)
+    (or (map-elt comp--no-native-compile elc-file)
         (funcall native--compile-async-skip-p file load selector))))
 
 (advice-add 'native--compile-async-skip-p :around 'fixed-native--compile-async-skip-p)
@@ -918,7 +919,7 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 	(enable-theme 'modus-operandi)
       (load-theme 'modus-operandi t nil)))
 
-  (unless (alist-get 'alpha default-frame-alist)
+  (unless (map-elt default-frame-alist 'alpha)
     (add-to-list 'default-frame-alist '(alpha . 97))))
 
 (defun tychoish/ensure-light-theme ()
