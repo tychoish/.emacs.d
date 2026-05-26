@@ -796,13 +796,25 @@ and must be excluded from the captured response."
               (should (equal "/bg do thing" inserted-text))))
         (kill-buffer buf)))))
 
-(ert-deftest agent-shell-queue/send-item-dead-buffer-errors ()
+(ert-deftest agent-shell-queue/send-item-dead-buffer-alerts-and-pauses ()
+  "Dead target during dispatch emits a high-severity alert and pauses the
+session queue instead of raising a user-error."
   (agent-shell-queue-test/isolate-no-sub
-    (setf (agent-shell-queue-store-items agent-shell-queue--store)
-          (agent-shell-queue-test/populate '("dead-buf" ("q-1" "hello" active nil))))
-    (cl-letf (((symbol-function 'get-buffer) (lambda (_) nil))
-              ((symbol-function 'agent-shell-buffers) (lambda () nil)))
-      (should-error (agent-shell-queue-send-item "q-1") :type 'user-error))))
+    (let (alerted)
+      (setf (agent-shell-queue-store-items agent-shell-queue--store)
+            (agent-shell-queue-test/populate '("dead-buf" ("q-1" "hello" active nil))))
+      (cl-letf (((symbol-function 'get-buffer) (lambda (_) nil))
+                ((symbol-function 'alert)
+                 (lambda (msg &rest args)
+                   (setq alerted (list msg (plist-get args :severity))))))
+        (should-not (condition-case err
+                        (progn (agent-shell-queue-send-item "q-1") nil)
+                      (user-error err)))
+        (should alerted)
+        (should (eq 'high (cadr alerted)))
+        (should (member "dead-buf"
+                        (agent-shell-queue-queue-session-paused
+                         agent-shell-queue--queue)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue--mark-running-done
