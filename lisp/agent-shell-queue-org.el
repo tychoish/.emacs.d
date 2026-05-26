@@ -25,6 +25,7 @@
 
 ;;; Code:
 
+(require 'seq)
 (require 'agent-shell-queue)
 (require 'org)
 (require 'org-element)
@@ -43,7 +44,7 @@
   "Alist mapping queue status symbols to org TODO keyword strings.")
 
 (defconst agent-shell-queue-org--keyword-status
-  (--map (cons (cdr it) (car it)) agent-shell-queue-org--status-keyword)
+  (seq-map (lambda (it) (cons (cdr it) (car it))) agent-shell-queue-org--status-keyword)
   "Reverse alist: org TODO keyword strings to queue status symbols.")
 
 ;;; Shared helpers
@@ -178,7 +179,7 @@ Must be called in the buffer where ITEM-HL was parsed."
 
 (defun agent-shell-queue-org--headlines-of (element)
   "Return the direct headline children of ELEMENT as a list."
-  (--filter (eq (org-element-type it) 'headline) (org-element-contents element)))
+  (seq-filter (lambda (it) (eq (org-element-type it) 'headline)) (org-element-contents element)))
 
 (defun agent-shell-queue-org--deserialize (str)
   "Deserialize STR (org format) into an items alist via org-element.

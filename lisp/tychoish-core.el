@@ -12,8 +12,13 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'xtdlib))
+(eval-when-compile (require 'xtdlib))
+
+(declare-function s-trimmed-or-nil "xtdlib")
+(declare-function approximate-project-root "xtdlib")
+(declare-function approximate-project-name "xtdlib")
+(declare-function compile-buffer-name "xtdlib")
+(declare-function mode-buffers "xtdlib")
 
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
@@ -1837,7 +1842,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 			  "VALIDATE_ALL_CODEBASE=true"
 			  "LINTER_RULES_PATH=."
 			  "RUN_LOCAL=true"))
-	   (optstr (format "-e %s" (s-join " -e " options)))
+	   (optstr (format "-e %s" (string-join options " -e ")))
 	   (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
       (builder-compile-project "super-lint" command-string)))
 

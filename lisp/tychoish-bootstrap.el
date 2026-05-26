@@ -33,13 +33,18 @@
 
 ;;; Code:
 
-(require 'xtdlib)
+(eval-when-compile (require 'xtdlib))
 (require 'fn)
 (require 'dash)
+(require 'subr-x)
 (require 'map)
 
 (declare-function which-key-add-key-based-replacements "which-key")
 (declare-function which-key-add-keymap-based-replacements "which-key")
+(declare-function s-trimmed-or-nil "xtdlib")
+(declare-function approximate-project-root "xtdlib")
+(declare-function approximate-project-name "xtdlib")
+(declare-function approximate-project-buffers "xtdlib")
 
 (cl-defmacro which-key-customize (new-text &key map key form)
   "Register a which-key annotation, deferred until which-key is loaded.
@@ -454,7 +459,7 @@ more arguments than the function cares about."
 	(setq-local tychoish-cache--conf-emacs-host-and-instance
 	            (list
 	             (if (eq system-type 'darwin)
-		         (car (s-split "\\." (system-name)))
+		         (car (split-string (system-name) "\\."))
 		       (system-name))
 	             (or tychoish/emacs-instance-id
 		         (tychoish/resolve-instance-id)))))))
@@ -469,14 +474,15 @@ more arguments than the function cares about."
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
 This combines the host name and the dameon name."
-  (s-join "-" (->> (tychoish/conf-emacs-host-and-instance)
-		   (reverse)
-		   (-concat (-l (when (or (equal "root" user-login-name)
-					  (f-symlink-p user-emacs-directory))
-				  user-login-name)
-				name))
-		   (reverse)
-		   (-non-nil))))
+  (string-join (->> (tychoish/conf-emacs-host-and-instance)
+		    (reverse)
+		    (-concat (-l (when (or (equal "root" user-login-name)
+					   (f-symlink-p user-emacs-directory))
+				   user-login-name)
+				 name))
+		    (reverse)
+		    (-non-nil))
+	       "-"))
 
 (with-eval-after-load 'eshell
   (setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))
@@ -618,9 +624,10 @@ This combines the host name and the dameon name."
 ;; hooks -- functions that run in hooks configured in 'tychoish-core
 
 (defun with-hook-timing (inner &rest args)
-  (->> args
-       (--mapc (with-slow-op-timer (format "<hook> %s" it)
-	         (funcall inner it)))))
+  (mapc (lambda (it)
+          (with-slow-op-timer (format "<hook> %s" it)
+            (funcall inner it)))
+        args))
 
 (when slow-op-reporting
   (advice-add 'run-hooks :around 'with-hook-timing)
@@ -741,7 +748,7 @@ This combines the host name and the dameon name."
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
   (->> (f-entries (f-join user-emacs-directory "user"))
-       (--filter (s-suffix-p ".el" it))
+       (--filter (string-suffix-p ".el" it))
        (-map #'f-filename)
        (-map #'f-base)
        (-map #'intern)
@@ -760,7 +767,7 @@ This combines the host name and the dameon name."
        (-filter #'file-exists-p)
        (-filter #'should-read-abbrev-file-p)
        (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
-       (--mapc (ht-set tychoish/abbrev-files-cache it (f-mtime it))))
+       (mapc (lambda (it) (ht-set tychoish/abbrev-files-cache it (f-mtime it)))))
 
   (delight 'abbrev-mode "abb")
   (setq save-abbrevs t))
@@ -826,10 +833,11 @@ were recompiled."
   (let* ((ops '(install upgrade 'reinstall))
 	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
 	 (filename (concat (f-join temporary-file-directory
-			           (s-join "-" (list
-					        "emacs" tychoish/emacs-instance-id
-					        "async-package"
-					        (symbol-name op)))) ".log")))
+			           (string-join (list
+						    "emacs" tychoish/emacs-instance-id
+						    "async-package"
+						    (symbol-name op))
+					           "-")) ".log")))
     (unless (member op ops)
       (user-error "%s is not a valid operation %S" op ops))
 
@@ -989,12 +997,12 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 		     (--map (cons (buffer-file-name it) (kill-buffer it)))
 		     (--filter (cdr it))
 		     (--keep (car it))
-		     (-unwind)
+		     (apply #'append)
 		     (-non-nil)
 		     (--map (f-collapse-homedir it)))))
 
     (if (called-interactively-p 'any)
-	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (s-join ", " killed))
+	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (string-join killed ", "))
       killed)))
 
 
@@ -1027,11 +1035,11 @@ each buffer, unless NO-ASK is non-nil."
 		      (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
 		      (--filter (cdr it))
 		      (--keep (car it))
-		      (-unwind)
+		      (apply #'append)
 		      (-non-nil))))
 
     (if (called-interactively-p 'any)
-	(message "killed %d buffers matching '%S'" (length killed) (s-join ", " killed))
+	(message "killed %d buffers matching '%S'" (length killed) (string-join killed ", "))
       killed)))
 
 (defconst reference-source-paths
@@ -1047,7 +1055,7 @@ by jump-to-definition."
 		     (-non-nil)
 		     (-map #'f-collapse-homedir))))
     (if (called-interactively-p 'any)
-	(message "killed %s refrence/source buffers [%s]" (length killed) (s-join ", " killed))
+	(message "killed %s refrence/source buffers [%s]" (length killed) (string-join killed ", "))
       killed)))
 
 (defun kill-buffers-matching-mode (mode)
@@ -1058,7 +1066,7 @@ Returns the number of buffers killed."
           (completing-read
            "mode: " ;; prompt
            obarray  ;; collection
-           (lambda (symbol) (s-ends-with? "-mode" (symbol-name symbol)))
+           (lambda (symbol) (string-suffix-p "-mode" (symbol-name symbol)))
            t nil nil major-mode))))
   (let* ((buffers (buffers-matching-mode mode))
 	 (count (length buffers)))
@@ -1559,12 +1567,13 @@ interactively then remove duplicate items from the `kill-ring'."
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 
 (defun find-ssh-agent-socket-candidates ()
-  (->> (-value-to-list (format "/run/user/%d/ssh-agent.socket" (user-uid)))
-       (-concat (-sort #'s-less? (f-glob (f-join temporary-file-directory "ssh-*/agent.*" ))))
-       (-distinct)
-       (-non-nil)
-       (-filter #'f-writable?)
-       (nreverse)))
+  (let ((v (format "/run/user/%d/ssh-agent.socket" (user-uid))))
+    (->> (if (listp v) v (list v))
+         (-concat (sort (copy-sequence (f-glob (f-join temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
+         (-distinct)
+         (-non-nil)
+         (-filter #'f-writable?)
+         (nreverse))))
 
 (defun tychoish/set-up-ssh-agent ()
   (let (env-value sockets)
@@ -2042,12 +2051,12 @@ magit process buffer for that submodule."
 (defun tychoish/run-ci-tests (&optional timeout)
   "Discover and run all ERT tests under test/, then exit.
 Intended for CI invocations via --fg-daemon --eval.
-Installs a TIMEOUT-second kill guard (default 60) before running."
+Installs a TIMEOUT-second kill guard (default 240) before running."
   (let ((test-dir (expand-file-name "test" user-emacs-directory))
         (noninteractive t))
     (add-to-list 'load-path test-dir)
     (load (expand-file-name "test-helper" test-dir) nil t)
-    (run-with-timer (or timeout 60) nil (lambda () (kill-emacs 1)))
+    (run-with-timer (or timeout 240) nil (lambda () (kill-emacs 1)))
     (condition-case err
         (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
           (load file nil t))

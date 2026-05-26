@@ -26,36 +26,35 @@
 (defmacro agent-shell-queue-db-test/with-db (&rest body)
   "Run BODY with isolated queue globals and a fresh temporary SQLite database.
 Opens a new connection to a temp file, runs BODY, then closes the connection
-and deletes the temp file regardless of whether BODY signals an error."
+and deletes the temp file regardless of whether BODY signals an error.
+Skips the enclosing test when built-in sqlite is unavailable."
   (declare (indent 0))
-  `(agent-shell-queue-db-test/skip-if-no-sqlite)
-  `(let* ((db-path (make-temp-file "aq-db-test-" nil ".db"))
-          (agent-shell-queue-db-file db-path)
-          (agent-shell-queue-db--connection nil)
-          (agent-shell-queue--items nil)
-          (agent-shell-queue--loaded t)
-          (agent-shell-queue--subscriptions nil)
-          (agent-shell-queue--editing-ids nil)
-          (agent-shell-queue--session-paused nil)
-          (agent-shell-queue--stale-item-ids nil)
-          (agent-shell-queue-paused nil)
-          (agent-shell-queue--last-flush-time nil)
-          (agent-shell-queue--next-flush-time nil)
-          (agent-shell-queue-save-function nil)
-          (agent-shell-queue-load-function nil)
-          (agent-shell-queue-state-file-function
-           #'agent-shell-queue--default-state-file)
-          (agent-shell-queue-db--saved-save-function nil)
-          (agent-shell-queue-db--saved-load-function nil)
-          (agent-shell-queue-db--saved-state-file-function nil))
-     (cl-letf (((symbol-function 'agent-shell-queue--refresh-buffer) #'ignore)
-               ((symbol-function 'agent-shell-queue--ensure-subscription) #'ignore)
-               ((symbol-function 'agent-shell-queue--drop-subscription) #'ignore)
-               ((symbol-function 'alert) #'ignore))
-       (unwind-protect
-           (progn ,@body)
-         (agent-shell-queue-db--close)
-         (when (file-exists-p db-path) (delete-file db-path))))))
+  `(progn
+     (skip-unless (fboundp 'sqlite-open))
+     (let* ((db-path (make-temp-file "aq-db-test-" nil ".db"))
+            (agent-shell-queue-db-file db-path)
+            (agent-shell-queue-db--connection nil)
+            (agent-shell-queue--items nil)
+            (agent-shell-queue--loaded t)
+            (agent-shell-queue--subscriptions nil)
+            (agent-shell-queue--stale-item-ids nil)
+            (agent-shell-queue--last-flush-time nil)
+            (agent-shell-queue--next-flush-time nil)
+            (agent-shell-queue-save-function nil)
+            (agent-shell-queue-load-function nil)
+            (agent-shell-queue-state-file-function
+             #'agent-shell-queue--default-state-file)
+            (agent-shell-queue-db--saved-save-function nil)
+            (agent-shell-queue-db--saved-load-function nil)
+            (agent-shell-queue-db--saved-state-file-function nil))
+       (cl-letf (((symbol-function 'agent-shell-queue--refresh-buffer) #'ignore)
+                 ((symbol-function 'agent-shell-queue--ensure-subscription) #'ignore)
+                 ((symbol-function 'agent-shell-queue--drop-subscription) #'ignore)
+                 ((symbol-function 'alert) #'ignore))
+         (unwind-protect
+             (progn ,@body)
+           (agent-shell-queue-db--close)
+           (when (file-exists-p db-path) (delete-file db-path)))))))
 
 (defun agent-shell-queue-db-test/make-item (id prompt &optional status background kind)
   "Build a deterministic test item with fixed timestamps."
@@ -584,6 +583,7 @@ reached.  This test documents the actual behaviour."
 
 (ert-deftest agent-shell-queue-db/enable-with-explicit-file ()
   "db-enable with a file argument sets `agent-shell-queue-db-file'."
+  (skip-unless (fboundp 'sqlite-open))
   (let* ((tmp (make-temp-file "aq-enable-test-" nil ".db"))
          (agent-shell-queue-db-file nil)
          (agent-shell-queue-db--connection nil)

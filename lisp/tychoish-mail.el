@@ -1,11 +1,11 @@
 ;; -*- lexical-binding: t -*-
 
-(eval-when-compile
-  (require 'xtdlib))
+(eval-when-compile (require 'xtdlib))
 
 (require 'mu4e-autoloads nil t)
 
 (declare-function f-join "f")
+(declare-function s-trimmed-or-nil "xtdlib")
 
 (use-package consult-mu
   :load-path "elpa/consult-mu"
