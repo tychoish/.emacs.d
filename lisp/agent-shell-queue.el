@@ -216,7 +216,7 @@ FIELDS are plain symbols.  Generates constructor TYPE-NAME--make plus:
 ;;; Data model
 
 (agent-shell-queue--defstruct agent-shell-queue-item
-  id prompt status kind background created dispatched completed response)
+  id prompt status kind background created dispatched completed response outcome)
 
 (cl-defstruct (agent-shell-queue-store
                (:constructor agent-shell-queue--make-store)
@@ -469,7 +469,8 @@ Status is stored as a string; background as a JSON boolean."
    :created (agent-shell-queue-item-created item)
    :dispatched (or (agent-shell-queue-item-dispatched item) :null)
    :completed (or (agent-shell-queue-item-completed item) :null)
-   :response (or (agent-shell-queue-item-response item) :null)))
+   :response (or (agent-shell-queue-item-response item) :null)
+   :outcome (if-let* ((o (agent-shell-queue-item-outcome item))) (symbol-name o) :null)))
 
 (defun agent-shell-queue--item-from-json (obj)
   "Reconstruct a queue item from JSON-parsed plist OBJ.
@@ -483,7 +484,8 @@ Status is interned; background truthy only when exactly `t'."
    :created (plist-get obj :created)
    :dispatched (plist-get obj :dispatched)
    :completed (plist-get obj :completed)
-   :response (let ((r (plist-get obj :response))) (unless (eq r :null) r))))
+   :response (let ((r (plist-get obj :response))) (unless (eq r :null) r))
+   :outcome (when-let* ((o (plist-get obj :outcome))) (unless (eq o :null) (intern o)))))
 
 (defun agent-shell-queue--serialize-json (items)
   "Serialize ITEMS to a JSON string."
@@ -525,6 +527,7 @@ Status is stored as a string; background as t or nil."
     (map-put! h "dispatched" (agent-shell-queue-item-dispatched item))
     (map-put! h "completed" (agent-shell-queue-item-completed item))
     (map-put! h "response" (or (agent-shell-queue-item-response item) :null))
+    (map-put! h "outcome" (if-let* ((o (agent-shell-queue-item-outcome item))) (symbol-name o) :null))
     h))
 
 (defun agent-shell-queue--item-from-yaml (obj)
@@ -538,7 +541,8 @@ Status is stored as a string; background as t or nil."
    :created (map-elt obj "created")
    :dispatched (map-elt obj "dispatched")
    :completed (map-elt obj "completed")
-   :response (let ((r (map-elt obj "response"))) (unless (eq r :null) r))))
+   :response (let ((r (map-elt obj "response"))) (unless (eq r :null) r))
+   :outcome (when-let* ((o (map-elt obj "outcome"))) (unless (eq o :null) (intern o)))))
 
 (defun agent-shell-queue--serialize-yaml (items)
   "Serialize ITEMS to a YAML string via `yaml-encode'."
@@ -730,7 +734,8 @@ item was dispatched, ISO-8601 archive timestamp, and runtime (dispatched→compl
                              :created (or (agent-shell-queue-item-created item) :null)
                              :dispatched (or dispatched :null)
                              :completed (or completed :null)
-                             :runtime (or runtime :null)))))
+                             :runtime (or runtime :null)
+                             :outcome (if-let* ((o (agent-shell-queue-item-outcome item))) (symbol-name o) :null)))))
           (make-directory (file-name-directory file) t)
           ;; Advisory lock via Emacs's own .#file mechanism — no subprocess,
           ;; no persistent fd.  write-region with append opens, writes, closes.
@@ -1180,6 +1185,7 @@ Only fires the empty-queue alert when at least one item was actually marked done
            (agent-shell-queue-item-id item) buf-name))
         (setf (agent-shell-queue-item-completed item) (float-time))
         (setf (agent-shell-queue-item-status item) 'done)
+        (setf (agent-shell-queue-item-outcome item) 'success)
         (agent-shell-queue--append-done-log buf-name item)
         (setq marked t))
        ((memq (agent-shell-queue-item-status item) '(aborted incomplete))
@@ -1200,6 +1206,7 @@ The queue must be manually resumed via `agent-shell-queue-session-resume'."
                                 (when (eq (agent-shell-queue-item-status it) 'running)
                                   (setf (agent-shell-queue-item-completed it) (float-time))
                                   (setf (agent-shell-queue-item-status it) 'incomplete)
+                                  (setf (agent-shell-queue-item-outcome it) 'interrupted)
                                   t)))
                      (seq-filter #'identity))
     (cl-pushnew buf-name (agent-shell-queue-queue-session-paused agent-shell-queue--queue) :test #'equal))
@@ -2206,6 +2213,7 @@ and the queue advances to the next item."
     (agent-shell-queue--assert-not-running item)
     (setf (agent-shell-queue-item-status item) 'done)
     (setf (agent-shell-queue-item-completed item) (float-time))
+    (setf (agent-shell-queue-item-outcome item) 'manual)
     (agent-shell-queue--append-done-log buf-name item)
 
     (when (member (cons buf-name id) agent-shell-queue--compact-running)
@@ -2296,6 +2304,8 @@ and the queue advances to the next item."
              (if (equal target agent-shell-queue--unassigned-key)
                  "(unassigned)" target))
     (funcall field "Status:" (agent-shell-queue--status-string item target next-p))
+    (when-let* ((outcome (agent-shell-queue-item-outcome item)))
+      (funcall field "Outcome:" (symbol-name outcome)))
     (funcall field "Kind:" (symbol-name (or kind 'prompt)))
     (funcall field "Background:" (if bg "yes" "no"))
     (insert sep "\n")
@@ -2647,6 +2657,7 @@ Pauses the session queue — call `agent-shell-queue-session-resume' to restart.
         (with-current-buffer buf
           (agent-shell-interrupt)))
       (setf (agent-shell-queue-item-status item) 'aborted)
+      (setf (agent-shell-queue-item-outcome item) 'canceled)
       (cl-pushnew buf-name (agent-shell-queue-queue-session-paused agent-shell-queue--queue) :test #'equal)
       (agent-shell-queue--save)
       (agent-shell-queue-buffer-refresh))))
@@ -2666,6 +2677,7 @@ Pauses the session queue — call `agent-shell-queue-session-resume' to restart.
         (with-current-buffer buf
           (agent-shell-interrupt)))
       (setf (agent-shell-queue-item-status item) 'aborted)
+      (setf (agent-shell-queue-item-outcome item) 'canceled)
       (cl-pushnew buf-name (agent-shell-queue-queue-session-paused agent-shell-queue--queue) :test #'equal)
       (agent-shell-queue--save)
       (agent-shell-queue--refresh-buffer)

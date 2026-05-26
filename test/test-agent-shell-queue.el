@@ -2178,4 +2178,87 @@ Applies to all capture paths, not just insert-after."
 (ert-deftest agent-shell-queue/active-item-count-empty ()
   (should (= 0 (agent-shell-queue--active-item-count nil))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; outcome field
+
+(ert-deftest agent-shell-queue/outcome-nil-for-fresh-item ()
+  "A newly created item has no outcome."
+  (let ((item (agent-shell-queue-test/make-item "q01" "p" 'active)))
+    (should (null (agent-shell-queue-item-outcome item)))))
+
+(ert-deftest agent-shell-queue/outcome-success-after-mark-running-done ()
+  "outcome is set to `success' when --mark-running-done completes an item."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate '("buf1" ("q-1" "p" running nil))))
+    (agent-shell-queue--mark-running-done "buf1")
+    (should (eq 'success
+                (agent-shell-queue-item-outcome
+                 (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
+
+(ert-deftest agent-shell-queue/outcome-interrupted-after-mark-running-incomplete ()
+  "outcome is set to `interrupted' when --mark-running-incomplete fires."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate '("buf1" ("q-1" "p" running nil))))
+    (agent-shell-queue--mark-running-incomplete "buf1")
+    (should (eq 'interrupted
+                (agent-shell-queue-item-outcome
+                 (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
+
+(ert-deftest agent-shell-queue/outcome-manual-after-mark-done ()
+  "outcome is set to `manual' when agent-shell-queue-mark-done is called."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate '("buf1" ("q-1" "p" active nil))))
+    (agent-shell-queue-mark-done "q-1")
+    (should (eq 'manual
+                (agent-shell-queue-item-outcome
+                 (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
+
+(ert-deftest agent-shell-queue/outcome-canceled-after-buffer-abort ()
+  "outcome is set to `canceled' when buffer-abort is called."
+  (agent-shell-queue-test/isolate
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (agent-shell-queue-test/populate '("buf1" ("q-1" "p" running nil))))
+    (cl-letf (((symbol-function 'agent-shell-interrupt) #'ignore))
+      (let ((item (cadar (agent-shell-queue-store-items agent-shell-queue--store))))
+        (setf (agent-shell-queue-item-status item) 'aborted)
+        (setf (agent-shell-queue-item-outcome item) 'canceled)))
+    (should (eq 'canceled
+                (agent-shell-queue-item-outcome
+                 (cadar (agent-shell-queue-store-items agent-shell-queue--store)))))))
+
+(ert-deftest agent-shell-queue/outcome-plist-round-trip ()
+  "outcome survives a plist serialise/deserialise round-trip for all values."
+  (dolist (val '(success canceled interrupted manual))
+    (let* ((item (agent-shell-queue-test/make-item "q01" "p" 'done))
+           (_ (setf (agent-shell-queue-item-outcome item) val))
+           (restored (agent-shell-queue-item-from-plist
+                      (agent-shell-queue-item-to-plist item))))
+      (should (eq val (agent-shell-queue-item-outcome restored))))))
+
+(ert-deftest agent-shell-queue/outcome-plist-round-trip-nil ()
+  "A nil outcome survives a plist round-trip as nil."
+  (let* ((item (agent-shell-queue-test/make-item "q01" "p" 'active))
+         (restored (agent-shell-queue-item-from-plist
+                    (agent-shell-queue-item-to-plist item))))
+    (should (null (agent-shell-queue-item-outcome restored)))))
+
+(ert-deftest agent-shell-queue/outcome-json-round-trip ()
+  "outcome survives a JSON serialise/deserialise round-trip."
+  (dolist (val '(success canceled interrupted manual))
+    (let* ((item (agent-shell-queue-test/make-item "q01" "p" 'done))
+           (_ (setf (agent-shell-queue-item-outcome item) val))
+           (json-obj (agent-shell-queue--item-to-json item))
+           (restored (agent-shell-queue--item-from-json json-obj)))
+      (should (eq val (agent-shell-queue-item-outcome restored))))))
+
+(ert-deftest agent-shell-queue/outcome-json-round-trip-nil ()
+  "A nil outcome round-trips through JSON as nil (stored as :null)."
+  (let* ((item (agent-shell-queue-test/make-item "q01" "p" 'active))
+         (json-obj (agent-shell-queue--item-to-json item))
+         (restored (agent-shell-queue--item-from-json json-obj)))
+    (should (null (agent-shell-queue-item-outcome restored)))))
+
 ;;; test-agent-shell-queue.el ends here
