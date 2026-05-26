@@ -122,10 +122,6 @@ lived instances. Other ephemeral instance names ones may be useful.")
  (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
 
  (with-file-name-handler-disabled
-  (eval-when-compile
-    (add-to-list 'load-path (concat user-emacs-directory "lisp"))
-    (add-to-list 'load-path (concat user-emacs-directory "user")))
-
   (with-slow-op-timer "<init> tychoish-bootstrap"
    (require 'tychoish-bootstrap)
    (declare-function tychoish/conf-state-path "tychoish-bootstrap")
