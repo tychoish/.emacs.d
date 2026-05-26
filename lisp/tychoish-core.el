@@ -14,11 +14,8 @@
 
 (eval-when-compile (require 'xtdlib))
 
-(declare-function s-trimmed-or-nil "xtdlib")
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
-(declare-function compile-buffer-name "xtdlib")
-(declare-function mode-buffers "xtdlib")
 
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
@@ -265,19 +262,22 @@
     (interactive "P")
     (let ((context (or context current-prefix-arg)))
       (consult-ripgrep
-       (or (s-trimmed-or-nil directory)
+       (or (awhen directory (string-trim directory))
 	   (annotated-completing-read-directory)
-	   (approximate-project-root))
+	   (annotated-completing-read--project-root))
        (if (and (or context (not initial)) (not (eq context 'override)))
 	   (annotated-completing-read-context-from-point
 	    :prompt "rg(init):")
 	 initial))))
 
+
+
   (cl-defun consult-rg-project (&optional initial &key context)
     "Start an iterative rg session in the project root, if possible, falling back as necessary."
     (interactive "P")
     (consult-rg
-     :directory (or (approximate-project-root) (annotated-completing-read-directory))
+     :directory (or (annotated-completing-read--project-root)
+		    (annotated-completing-read-directory))
      :initial initial
      :context (or context current-prefix-arg 'override)))
 
@@ -304,7 +304,7 @@
   ;; find-ripgrep -- compilation buffer wrappers
 
   (cl-defun ripgrep-compile (&key regexp directory buffer-name)
-    (let ((compilation-buffer-name-function (compile-buffer-name (or buffer-name (format "*%s-rg*" (approximate-project-name))))))
+    (let ((compilation-buffer-name-function (lambda (&optional _) (or buffer-name (format "*%s-rg*" (approximate-project-name))))))
       (ripgrep-regexp regexp directory)))
 
   (cl-defun find-ripgrep--resolve-regexp (&key regexp directory)
@@ -336,16 +336,16 @@
     "Run `rg' from the system at the project root. Output is written to a compile buffer."
     (interactive)
     (ripgrep-compile
-     :directory (approximate-project-root)
+     :directory (annotated-completing-read--project-root)
      :regexp (find-ripgrep--resolve-regexp
-	      :directory (approximate-project-root))))
+	      :directory (annotated-completing-read--project-root))))
 
   (defun find-merge-conflicts ()
     "Use ripgrep to identify all merge conflict artifacts"
     (interactive)
     (ripgrep-compile
      :regexp "^(=======$|<<<<<<<|>>>>>>>)"
-     :directory (approximate-project-root)
+     :directory (annotated-completing-read--project-root)
      :buffer-name (format "*%s-merge-conflicts*" (approximate-project-name)))))
 
 (use-package deadgrep
@@ -1495,8 +1495,11 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (defun go-mode-set-up-all-buffers ()
     (interactive)
-    (->> (mode-buffers 'go-ts-mode)
-	 (-mapc #'tychoish/go-mode-setup-for-buffer)))
+    (thread-last (buffer-list)
+		 (seq-filter (lambda (buf) (with-current-buffer buf
+					     (or (derived-mode-p 'go-ts-mode)
+						 (derived-mode-p 'go-mode)))))
+		 (mapc #'tychoish/go-mode-setup-for-buffer)))
 
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
@@ -2627,7 +2630,7 @@ Useful after changing `eglot-workspace-configuration' or
     (or (when (boundp 'anthropic-api-key) anthropic-api-key)
 	(unless tychoish/aider-setup-state
 	  (or (tychoish/aider-setup-state) nil))
-	(awhen (s-trimmed-or-nil (getenv "ANTHROPIC_API_KEY")) it)
+	(awhen (getenv "ANTHROPIC_API_KEY") (string-trim it))
 	(when-let* ((auth-info (car (auth-source-search :host efrit-api-auth-source-host
 							:user efrit-api-auth-source-user
 							:require '(:secret))))

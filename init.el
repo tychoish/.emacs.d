@@ -16,8 +16,7 @@
 (eval-and-compile
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
-  (package-initialize)
-  (require 'xtdlib))
+  (package-initialize))
 
 (with-gc-suppressed
  (defvar tychoish/startup-complete-time nil
@@ -118,8 +117,7 @@ lived instances. Other ephemeral instance names ones may be useful.")
  (with-file-name-handler-disabled
   (eval-when-compile
     (add-to-list 'load-path (concat user-emacs-directory "lisp"))
-    (add-to-list 'load-path (concat user-emacs-directory "user"))
-    (require 'xtdlib))
+    (add-to-list 'load-path (concat user-emacs-directory "user")))
 
   (with-slow-op-timer "<init> tychoish-bootstrap"
    (require 'tychoish-bootstrap)

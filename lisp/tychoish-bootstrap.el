@@ -41,7 +41,6 @@
 
 (declare-function which-key-add-key-based-replacements "which-key")
 (declare-function which-key-add-keymap-based-replacements "which-key")
-(declare-function s-trimmed-or-nil "xtdlib")
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
 (declare-function approximate-project-buffers "xtdlib")
@@ -1554,7 +1553,9 @@ interactively then remove duplicate items from the `kill-ring'."
   (setq org-agenda-files (->> (list org-directory user-org-directories)
                               (-flatten)
                               (-map #'expand-file-name)
-                              (-keep #'s-trimmed-or-nil)
+			      (-non-nil)
+			      (-map #'string-trim)
+			      (-remove #'string-empty-p)
                               (-distinct)))
   (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
   (setq org-default-notes-file (f-join org-directory "records.org"))
