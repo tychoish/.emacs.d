@@ -7,16 +7,23 @@
 
 ;;; Code:
 
-;; Make xtdlib macros available before (with-gc-suppressed …) is read.
-;; Emacs eagerly expands macros in the entire top-level form before evaluating
-;; it, so (with-slow-op-timer …) inside the form needs xtdlib on load-path before
-;; that form is even read — the eval-when-compile nested inside the form is too
-;; late when loading from uncompiled source.  package-initialize is called here
-;; first so that xtdlib's dependencies (f, s, dash, ht) are on load-path.
+;; Load-path setup and package bootstrap.  lisp/ and user/ are added so the
+;; configuration modules (tychoish-bootstrap, tychoish-core, …) can be found.
+;; xtdlib is bootstrapped here because it must be on load-path before the
+;; modules are compiled — their eval-when-compile forms need it at byte-compile
+;; time, and package-initialize alone will not install a missing package.
+;; When the elpa/ submodule is present the checkout is added to load-path
+;; directly; on a fresh install without the submodule it is fetched via
+;; package-vc from GitHub.
 (eval-and-compile
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
-  (package-initialize))
+  (package-initialize)
+  (unless (package-installed-p 'xtdlib)
+    (let ((checkout (expand-file-name "elpa/xtdlib" user-emacs-directory)))
+      (if (file-directory-p checkout)
+          (add-to-list 'load-path checkout)
+        (package-vc-install '(xtdlib :url "https://github.com/tychoish/xtdlib.el"))))))
 
 (with-gc-suppressed
  (defvar tychoish/startup-complete-time nil

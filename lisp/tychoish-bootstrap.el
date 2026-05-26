@@ -39,6 +39,9 @@
 (require 'subr-x)
 (require 'map)
 
+(use-package xtdlib
+  :demand t)
+
 (declare-function which-key-add-key-based-replacements "which-key")
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
