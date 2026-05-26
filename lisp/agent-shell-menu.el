@@ -212,6 +212,45 @@ POSITION is buffer position of the button's start."
       (goto-char pos)
       (call-interactively cmd))))
 
+;;; Transient permission group helpers
+
+(defun agent-shell--session-shell-buffer ()
+  "Return the agent-shell buffer for the current window context.
+Works from both agent-shell buffers and viewport buffers."
+  (cond
+   ((derived-mode-p 'agent-shell-mode) (current-buffer))
+   ((agent-shell-viewport--shell-buffer))))
+
+(defun agent-shell--session-permission-pending-p ()
+  "Return non-nil when a permission is pending in the relevant shell buffer."
+  (when-let* ((shell (agent-shell--session-shell-buffer)))
+    (agent-shell--permission-pending-p :shell-buffer shell)))
+
+(defun agent-shell--session-permission-button-action (shell-buf pos)
+  "Return an interactive command that activates the permission button at POS in SHELL-BUF."
+  (lambda ()
+    (interactive)
+    (with-current-buffer shell-buf
+      (when-let* ((cmd (agent-shell--permission-action-at pos)))
+        (save-excursion
+          (goto-char pos)
+          (call-interactively cmd))))))
+
+(defun agent-shell--session-permission-suffixes (_group)
+  "Return transient suffixes for each pending permission button.
+Keys are assigned as 1, 2, 3… in button order."
+  (when-let* ((shell (agent-shell--session-shell-buffer))
+              (buttons (with-current-buffer shell
+                         (agent-shell--permission-buttons))))
+    (seq-map-indexed
+     (lambda (btn i)
+       (transient-parse-suffix
+        'agent-shell-session-menu
+        (list (number-to-string (1+ i))
+              (format "Permission: %s" (car btn))
+              (agent-shell--session-permission-button-action shell (cdr btn)))))
+     buttons)))
+
 ;;; Action menu
 
 ;;;###autoload
@@ -219,25 +258,27 @@ POSITION is buffer position of the button's start."
   "Pick a common agent-shell action and run it via `call-interactively'.
 When a permission request is pending, permission responses are spliced into the menu."
   (interactive)
-  (when-let* ((table (thread-last (when (and (derived-mode-p 'agent-shell-mode)
-					     (agent-shell--permission-pending-p))
-					    (agent-shell--permission-buttons))
-				  (mapcar (lambda (b)
-					    (cons (format "permission: %s" (car b))
-						  (agent-shell--permission-button-action (cdr b)))))
-				  (append agent-shell-action-alist)
-				  (seq-filter (lambda (entry) (commandp (cdr entry))))
-				  (seq-map (lambda (entry)
-					    (cons (car entry)
-						  (or (car (split-string (or (documentation (cdr entry)) "") "\n")) ""))))))
-	      (label (annotated-completing-read table
-		      :prompt "agent-shell action =>"
-		      :category 'agent-shell-action
-		      :require-match t
-		      :history 'agent-shell-select-action))
-	      (cmd (cdr (assoc label table)))
-	      (_ (commandp cmd)))
-    (call-interactively cmd)))
+  (let* ((perm-entries (when (and (derived-mode-p 'agent-shell-mode)
+				  (agent-shell--permission-pending-p))
+			 (seq-map (lambda (b)
+				    (cons (format "permission: %s" (car b))
+					  (agent-shell--permission-button-action (cdr b))))
+				  (agent-shell--permission-buttons))))
+	 (cmd-entries (seq-filter (lambda (entry) (commandp (cdr entry)))
+				  agent-shell-action-alist))
+	 (all-entries (append perm-entries cmd-entries))
+	 (display-table (seq-map (lambda (entry)
+				   (cons (car entry)
+					 (or (car (split-string (or (documentation (cdr entry)) "") "\n")) "")))
+				 all-entries))
+	 (label (annotated-completing-read display-table
+		 :prompt "agent-shell action =>"
+		 :category 'agent-shell-action
+		 :require-match t
+		 :history 'agent-shell-select-action))
+	 (cmd (cdr (assoc label all-entries))))
+    (when (commandp cmd)
+      (call-interactively cmd))))
 
 ;;; Project session switching
 
@@ -291,6 +332,9 @@ When a permission request is pending, permission responses are spliced into the 
 ;;;###autoload
 (transient-define-prefix agent-shell-session-menu ()
   "Actions for the current agent-shell session."
+  [:description "Permissions"
+   :if agent-shell--session-permission-pending-p
+   :setup-children agent-shell--session-permission-suffixes]
   [["Navigate"
     ("g" "Last interaction" agent-shell-goto-last-interaction)
     ("P" "Jump to permissions" agent-shell-jump-to-latest-permission-button-row)

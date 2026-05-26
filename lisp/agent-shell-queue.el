@@ -1013,17 +1013,18 @@ Drops the subscription on the old bucket if it empties; ensures one on the new."
     (agent-shell-queue--refresh-buffer)))
 
 (defun agent-shell-queue--redirect-dead-target (id buf-name)
-  "When BUF-NAME is no longer live, offer to assign item ID to another shell.
-Returns non-nil if the item was successfully assigned and sent."
-  (if-let* ((available (agent-shell-buffers)))
-      (when-let* ((_ (yes-or-no-p (format "Buffer %s is gone. Assign to another shell? " buf-name)))
-                  (new-name (completing-read (format "Assign '%s' to: " buf-name)
-                                             (seq-map #'buffer-name available) nil t))
-                  (_ (not (string-empty-p new-name))))
-        (agent-shell-queue--assign-item id new-name)
-        (agent-shell-queue-send-item id)
-        t)
-    (user-error "Buffer %s is gone and no agent-shell buffers are live" buf-name)))
+  "Alert and pause BUF-NAME's session queue when its target buffer is gone.
+Emits a high-severity persistent alert referencing ID, adds BUF-NAME to the
+session-paused list, persists state, and returns nil."
+  (alert (format "Queue for '%s' paused — target buffer is gone (item %s)" buf-name id)
+         :title (format "Queue → %s" buf-name)
+         :category 'agent-shell-queue
+         :severity 'high
+         :persistent t)
+  (cl-pushnew buf-name (agent-shell-queue-queue-session-paused agent-shell-queue--queue) :test #'equal)
+  (agent-shell-queue--save)
+  (agent-shell-queue--refresh-buffer)
+  nil)
 
 (defun agent-shell-queue--handle-stale-item (id buf-name err)
   "Pause BUF-NAME and defer item ID after a struct access error ERR.
@@ -2116,12 +2117,15 @@ Must be called immediately after `tabulated-list-print'."
     (agent-shell-queue-buffer-refresh)))
 
 (defun agent-shell-queue-reenqueue (id)
-  "Create a new active queue item from the done item with ID."
+  "Create a new active queue item from the done item with ID.
+When the original target buffer is dead, prompts for a live replacement."
   (when-let* ((pair (or (agent-shell-queue--item-by-id id)
                         (user-error "No queue item with id %s" id)))
                (old-item (cdr pair))
                (buf (or (get-buffer (car pair))
-                        (user-error "Target buffer %s is no longer live" (car pair)))))
+                        (or (agent-shell-queue--pick-buffer
+                             (format "Buffer '%s' is gone. Re-enqueue to: " (car pair)))
+                            (user-error "No live agent-shell buffers available")))))
     (unless (memq (agent-shell-queue-item-status old-item) '(done aborted))
       (user-error "Item %s is not done or aborted; cannot re-enqueue" id))
     (agent-shell-queue-add
@@ -2456,7 +2460,7 @@ and the queue advances to the next item."
 
 (defun agent-shell-queue-item-view-reenqueue ()
   "Re-enqueue the displayed done or aborted item as a new active item."
-  (interactive)https://github.com/casaphq/go-monorepo/pull/6420
+  (interactive)
   (when-let* ((id agent-shell-queue--item-view-id)
               (pair (agent-shell-queue--item-by-id id))
               (_ (memq (agent-shell-queue-item-status (cdr pair)) '(done aborted))))

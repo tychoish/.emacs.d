@@ -914,6 +914,74 @@ and must be excluded from the captured response."
             (should-error (agent-shell-queue-reenqueue "q-1") :type 'user-error))
         (kill-buffer buf)))))
 
+(ert-deftest agent-shell-queue/reenqueue-dead-buffer-prompts-for-replacement ()
+  "When the original target buffer is dead, reenqueue prompts for a live one."
+  (agent-shell-queue-test/isolate-no-sub
+    (let ((live-buf (get-buffer-create " *asq-reenq-live*")))
+      (unwind-protect
+          (progn
+            ;; Item stored under a dead buffer name
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
+                  (list (list " *asq-dead-buf*"
+                              (agent-shell-queue-test/make-item "q-1" "hello" 'done nil))))
+            (cl-letf (((symbol-function 'agent-shell-queue--pick-buffer)
+                       (lambda (_prompt) live-buf)))
+              (agent-shell-queue-reenqueue "q-1"))
+            (let ((all-items (seq-mapcat #'cdr
+                                         (agent-shell-queue-store-items agent-shell-queue--store))))
+              ;; A new active item exists targeting live-buf
+              (should (seq-find (lambda (it)
+                                  (and (equal "hello" (agent-shell-queue-item-prompt it))
+                                       (eq 'active (agent-shell-queue-item-status it))))
+                                all-items))))
+        (kill-buffer live-buf)))))
+
+(ert-deftest agent-shell-queue/reenqueue-dead-buffer-no-live-buffers-errors ()
+  "When target is dead and no live buffers exist, reenqueue signals user-error."
+  (agent-shell-queue-test/isolate-no-sub
+    (setf (agent-shell-queue-store-items agent-shell-queue--store)
+          (list (list " *asq-gone*"
+                      (agent-shell-queue-test/make-item "q-1" "hello" 'done nil))))
+    (cl-letf (((symbol-function 'agent-shell-queue--pick-buffer)
+               (lambda (_prompt) nil)))
+      (should-error (agent-shell-queue-reenqueue "q-1") :type 'user-error))))
+
+(ert-deftest agent-shell-queue/redirect-dead-target-alerts-and-pauses ()
+  "Dead target during automatic dispatch emits a high-severity alert and
+pauses the session queue instead of prompting interactively."
+  (agent-shell-queue-test/isolate
+    (let (alerted paused-sessions)
+      (cl-letf (((symbol-function 'alert)
+                 (lambda (msg &rest args)
+                   (setq alerted (list msg (plist-get args :severity)))))
+                ((symbol-function 'agent-shell-queue--save) #'ignore)
+                ((symbol-function 'agent-shell-queue--refresh-buffer) #'ignore))
+        (agent-shell-queue--redirect-dead-target "q-1" " *dead-buf*")
+        (setq paused-sessions
+              (agent-shell-queue-queue-session-paused agent-shell-queue--queue)))
+      (should alerted)
+      (should (eq 'high (cadr alerted)))
+      (should (member " *dead-buf*" paused-sessions)))))
+
+(ert-deftest agent-shell-queue/item-view-reenqueue-no-stray-form ()
+  "Regression: a bare URL was accidentally left after (interactive) in
+`agent-shell-queue-item-view-reenqueue', causing Symbol's value as variable
+is void: https://... when the command was invoked on an aborted item."
+  (agent-shell-queue-test/isolate-no-sub
+    (let ((buf (get-buffer-create " *asq-iv-reenq-test*")))
+      (unwind-protect
+          (progn
+            (setf (agent-shell-queue-store-items agent-shell-queue--store)
+                  (list (list (buffer-name buf)
+                              (agent-shell-queue-test/make-item "q-1" "https://example.com/pr/42" 'aborted nil))))
+            (with-temp-buffer
+              (setq-local agent-shell-queue--item-view-id "q-1")
+              (cl-letf (((symbol-function 'quit-window) #'ignore))
+                (should-not (condition-case err
+                                (progn (agent-shell-queue-item-view-reenqueue) nil)
+                              (void-variable err))))))
+        (kill-buffer buf)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-queue--assign-item
 

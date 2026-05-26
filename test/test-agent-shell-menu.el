@@ -96,6 +96,47 @@
     (should (null (agent-shell--permission-buttons)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell-select-action
+
+(ert-deftest agent-shell-menu/select-action-calls-command-not-docstring ()
+  "Regression: selecting a permission option must invoke the command, not the
+doc-string.  The old pipeline converted (label . cmd) to (label . doc-string)
+before the assoc lookup, so `call-interactively' received \"\" and signalled
+Wrong type argument: commandp, \"\"."
+  (let* ((invoked nil)
+	 (action (lambda () (interactive) (setq invoked t)))
+	 (captured-table nil))
+    (cl-letf (((symbol-function 'derived-mode-p) (lambda (&rest _) t))
+	      ((symbol-function 'agent-shell--permission-pending-p) (lambda () t))
+	      ((symbol-function 'agent-shell--permission-buttons)
+	       (lambda () (list (cons "Allow" 1))))
+	      ((symbol-function 'agent-shell--permission-button-action)
+	       (lambda (_pos) action))
+	      ((symbol-function 'annotated-completing-read)
+	       (lambda (table &rest _)
+		 (setq captured-table table)
+		 "permission: Allow")))
+      (agent-shell-select-action))
+    (should invoked)
+    (should (equal "" (cdr (assoc "permission: Allow" captured-table))))))
+
+(ert-deftest agent-shell-menu/select-action-permission-entries-before-actions ()
+  "Permission entries appear before regular action entries in the display table."
+  (let (captured-table)
+    (cl-letf (((symbol-function 'derived-mode-p) (lambda (&rest _) t))
+	      ((symbol-function 'agent-shell--permission-pending-p) (lambda () t))
+	      ((symbol-function 'agent-shell--permission-buttons)
+	       (lambda () (list (cons "Allow" 1))))
+	      ((symbol-function 'agent-shell--permission-button-action)
+	       (lambda (_pos) (lambda () (interactive))))
+	      ((symbol-function 'annotated-completing-read)
+	       (lambda (table &rest _)
+		 (setq captured-table table)
+		 (caar table))))
+      (agent-shell-select-action))
+    (should (string-prefix-p "permission:" (caar captured-table)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-extras--pick-buffer
 
 (ert-deftest agent-shell-menu/pick-buffer-passes-alist-not-buffer-list ()
@@ -175,6 +216,78 @@ produced 'Each alist entry must be a cons cell; got: #<buffer ...>'."
               (should-not (memq other result)))))
       (kill-buffer match)
       (kill-buffer other))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell--session-permission-suffixes
+
+(ert-deftest agent-shell-menu/session-permission-suffixes-empty-when-no-pending ()
+  "No suffixes generated when no permission is pending."
+  (cl-letf (((symbol-function 'agent-shell--session-shell-buffer) (lambda () nil)))
+    (should (null (agent-shell--session-permission-suffixes nil)))))
+
+(ert-deftest agent-shell-menu/session-permission-suffixes-one-per-button ()
+  "One transient suffix is produced per pending permission button."
+  (let ((shell (generate-new-buffer " *mock-shell*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell--session-shell-buffer)
+                   (lambda () shell))
+                  ((symbol-function 'agent-shell--permission-buttons)
+                   (lambda () (list (cons "Allow" 10) (cons "Deny" 20))))
+                  ((symbol-function 'agent-shell--permission-action-at)
+                   (lambda (_pos) #'ignore)))
+          (let ((suffixes (agent-shell--session-permission-suffixes nil)))
+            (should (= 2 (length suffixes)))
+            (should (equal "1" (transient--suffix-key (nth 0 suffixes))))
+            (should (equal "2" (transient--suffix-key (nth 1 suffixes))))))
+      (kill-buffer shell))))
+
+(ert-deftest agent-shell-menu/session-permission-suffixes-labels-include-button-text ()
+  "Each suffix description includes the permission button label."
+  (let ((shell (generate-new-buffer " *mock-shell-2*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell--session-shell-buffer)
+                   (lambda () shell))
+                  ((symbol-function 'agent-shell--permission-buttons)
+                   (lambda () (list (cons "Allow for session" 10))))
+                  ((symbol-function 'agent-shell--permission-action-at)
+                   (lambda (_pos) #'ignore)))
+          (let* ((suffix (car (agent-shell--session-permission-suffixes nil)))
+                 (desc (plist-get (cdr suffix) :description)))
+            (should (string-match-p "Allow for session" desc))))
+      (kill-buffer shell))))
+
+(ert-deftest agent-shell-menu/session-permission-action-runs-in-shell-buffer ()
+  "The action lambda activates the button in the shell buffer regardless of
+which buffer is current when the action is invoked."
+  (let* ((shell (generate-new-buffer " *mock-shell-3*"))
+         (invoked-in nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer shell
+            (insert "x")
+            (put-text-property 1 2
+                               'keymap
+                               (let ((m (make-sparse-keymap)))
+                                 (define-key m (kbd "RET")
+                                   (lambda () (interactive)
+                                     (setq invoked-in (current-buffer))))
+                                 m)))
+          (let ((action (agent-shell--session-permission-button-action shell 1)))
+            (with-temp-buffer
+              (call-interactively action)))
+          (should (eq shell invoked-in)))
+      (kill-buffer shell))))
+
+(ert-deftest agent-shell-menu/session-permission-pending-p-uses-shell-buffer ()
+  "The predicate checks the shell buffer, not the current buffer."
+  (let ((shell (generate-new-buffer " *mock-shell-4*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell--session-shell-buffer)
+                   (lambda () shell))
+                  ((symbol-function 'agent-shell--permission-pending-p)
+                   (lambda (&rest _) t)))
+          (should (agent-shell--session-permission-pending-p)))
+      (kill-buffer shell))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Transient menu key integrity
