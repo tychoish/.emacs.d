@@ -38,7 +38,9 @@
 (require 'seq)
 
 (require 'annotated-completing-read)
-(require 'xtdlib)
+
+(declare-function approximate-project-name "xtdlib")
+(declare-function compile-buffer-name "xtdlib")
 
 (defvar-local eglot-test-at-point-command nil
   "LSP command name identifying test-running code lenses in the current buffer.

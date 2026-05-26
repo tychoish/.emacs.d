@@ -40,9 +40,22 @@
 (require 'subr-x)
 (require 'map)
 
-(require 'xtdlib)
+(eval-when-compile (require 'xtdlib))
 (require 'annotated-completing-read)
 (require 'eglot-test-at-point)
+
+(declare-function approximate-project-root "xtdlib")
+(declare-function approximate-project-name "xtdlib")
+(declare-function approximate-project-buffers "xtdlib")
+(declare-function mode-buffers "xtdlib")
+(declare-function mode-buffers-for-project "xtdlib")
+(declare-function compile-buffer-name "xtdlib")
+(declare-function s-join-with-space "xtdlib")
+(declare-function s-join-with-pipe "xtdlib")
+(declare-function s-join-with-kebab "xtdlib")
+(declare-function s-join-with-hyphen "xtdlib")
+(declare-function s-shortest "xtdlib")
+(declare-function s-trimmed-or-nil "xtdlib")
 
 (declare-function lm-header "lisp-mnt")
 (declare-function package-build-archive "package-build")
@@ -72,7 +85,7 @@
 (defun builder--go-module (&optional directory)
   (if go-module-path
       go-module-path
-    (let* ((output (with-default-directory directory
+    (let* ((output (let ((default-directory directory))
 		     (string-trim (shell-command-to-string "go list"))))
 	   (proj-root (approximate-project-root)))
       (if (or (f-equal-p default-directory directory)

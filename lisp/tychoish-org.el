@@ -1,6 +1,7 @@
 ;;  -*- lexical-binding: t -*-
 
 (eval-when-compile
+  (require 'subr-x)
   (require 'dash)
   (require 'xtdlib)
   (require 'fn))
@@ -222,11 +223,11 @@
 		     (--flat-map (if (f-directory-p it)
 				     (f-glob "*.org" it)
 				   (list it)))
-		     (--remove (s-suffix-p "archive.org" it))))
+		     (--remove (string-suffix-p "archive.org" it))))
 	 (buffers (->> files
 		       (--map (or (get-file-buffer it)
 				  (find-file-noselect it t))))))
-    (message "opened %d agenda files [%s]" (length files) (s-join ", " files))
+    (message "opened %d agenda files [%s]" (length files) (string-join files ", "))
     buffers))
 
 ;;;###autoload
@@ -355,7 +356,8 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 			(key-char    (nth 0 template))
 			(description (nth 1 template))
 			(file        (f-filename (cadr (nth 3 template))))
-			(body        (s-trim (s-truncate 32 (string-replace "\n" " " (nth 4 template))))))
+			(body        (let ((s (string-replace "\n" " " (nth 4 template))))
+				       (string-trim (if (> (length s) 32) (concat (substring s 0 29) "...") s)))))
 		   (ht-set key-table description key-char)
 		   (ht-set annotation-table description (format "[%s] <%s> '%s'" key-char file body)))))
       (org-capture nil (ht-get key-table (annotated-completing-read
@@ -493,7 +495,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                              :kill-buffer t
                              :empty-lines-after 1)))
         (when (and time-prompt-suffix
-                   (s-suffix-p time-prompt-suffix key-sequence))
+                   (string-suffix-p time-prompt-suffix key-sequence))
           (setq template (append template (list :time-prompt t))))
         (add-to-list 'org-capture-templates template append-item)))))
 
@@ -549,9 +551,9 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (when (and agenda (not (-contains-p (org-agenda-files) (f-full path))))
     (add-to-list 'org-agenda-files path))
   (when (not (equal "" key))
-    (when (s-contains? key "jntr")
+    (when (string-search "jntr" key)
       (error "org-capture prefix key '%s' for '%s' contains well-known prefix" key path))
-    (when (s-contains? key "xlk")
+    (when (string-search "xlk" key)
       (error "org-capture prefix key '%s' for '%s' contains sub-template key" key path)))
 
   (unless name
