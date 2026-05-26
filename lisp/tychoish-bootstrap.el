@@ -648,7 +648,6 @@ This combines the host name and the dameon name."
     (load "tychoish-core.el")
     (load "tychoish-mail.el")
     (load "tychoish-org.el")
-    (tychoish/init-late-disable-modes)
     (tychoish/init-late-enable-modes)
     (tychoish/init-late-set-up-naming)
     (tychoish/ensure-default-font)
