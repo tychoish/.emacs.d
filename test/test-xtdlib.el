@@ -1144,28 +1144,30 @@
     (should (= 1 fire-count))))
 
 (ert-deftest xtdlib/add-one-shot-hook-after-first-frame-created-routes-to-window-setup ()
-  "In non-daemon mode, after-first-frame-created adds to window-setup-hook.
-The routing is decided at macro-expansion time via (daemonp), so in batch
-non-daemon mode this test verifies the unquoted form adds to window-setup-hook."
-  (let ((before window-setup-hook))
+  "after-first-frame-created routes to window-setup-hook in non-daemon mode and
+server-after-make-frame-hook in daemon mode.  The routing is decided at
+macro-expansion time via (daemonp), so this test mirrors that logic."
+  (let* ((target-hook (if (daemonp) 'server-after-make-frame-hook 'window-setup-hook))
+         (before (symbol-value target-hook)))
     (add-one-shot-hook
      :name "xtdlib-test-frame-sentinel"
      :hook after-first-frame-created
      :form t)
     (unwind-protect
-        (should (> (length window-setup-hook) (length before)))
-      (setq window-setup-hook before))))
+        (should (> (length (symbol-value target-hook)) (length before)))
+      (set target-hook before))))
 
 (ert-deftest xtdlib/add-one-shot-hook-after-first-frame-created-quoted-routes-to-window-setup ()
-  "The quoted form of the sentinel is also routed correctly after the xtdlib.el fix."
-  (let ((before window-setup-hook))
+  "The quoted sentinel form routes to the same hook as the unquoted form."
+  (let* ((target-hook (if (daemonp) 'server-after-make-frame-hook 'window-setup-hook))
+         (before (symbol-value target-hook)))
     (add-one-shot-hook
      :name "xtdlib-test-frame-sentinel-quoted"
      :hook 'after-first-frame-created
      :form t)
     (unwind-protect
-        (should (> (length window-setup-hook) (length before)))
-      (setq window-setup-hook before))))
+        (should (> (length (symbol-value target-hook)) (length before)))
+      (set target-hook before))))
 
 (ert-deftest xtdlib/add-one-shot-hook-idle-timer-schedules-timer ()
   "With :idle-timer, the hook body is deferred via run-with-idle-timer."
