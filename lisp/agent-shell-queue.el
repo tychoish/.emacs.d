@@ -218,6 +218,29 @@ FIELDS are plain symbols.  Generates constructor TYPE-NAME--make plus:
 (agent-shell-queue--defstruct agent-shell-queue-item
   id prompt status kind background created dispatched completed response outcome)
 
+(defun agent-shell-queue--migrate-item-if-stale (item)
+  "Return ITEM or a current-layout copy with missing slots defaulted to nil.
+Compares the vector length of ITEM against a freshly constructed default
+instance; if shorter, copies the available slots into the new struct by index.
+New trailing slots are left at nil.  Handles future field additions without
+modification."
+  (let* ((current (agent-shell-queue-item--make))
+         (old-len (length item))
+         (new-len (length current)))
+    (if (= old-len new-len)
+        item
+      (dotimes (i (1- (min old-len new-len)))
+        (aset current (1+ i) (aref item (1+ i))))
+      current)))
+
+(defun agent-shell-queue--migrate-all-stale-items ()
+  "Upgrade every in-memory item to the current struct layout.
+Replaces old-format items (missing the outcome slot) in the live store with
+freshly constructed equivalents.  Safe to call repeatedly; up-to-date items
+are returned unchanged by `agent-shell-queue--migrate-item-if-stale'."
+  (dolist (bucket (agent-shell-queue-store-items agent-shell-queue--store))
+    (setcdr bucket (seq-map #'agent-shell-queue--migrate-item-if-stale (cdr bucket)))))
+
 (cl-defstruct (agent-shell-queue-store
                (:constructor agent-shell-queue--make-store)
                (:copier nil))
@@ -1005,8 +1028,11 @@ Returns non-nil if the item was successfully assigned and sent."
 (defun agent-shell-queue--handle-stale-item (id buf-name err)
   "Pause BUF-NAME and defer item ID after a struct access error ERR.
 Called when dispatching item ID raises an error, which indicates the item
-was built against an older struct definition before a code reload."
+was built against an older struct definition before a code reload.
+Migrates all in-memory items to the current struct layout before saving so
+that the subsequent --save does not fail on other stale items."
   (cl-pushnew id agent-shell-queue--stale-item-ids :test #'equal)
+  (agent-shell-queue--migrate-all-stale-items)
   (when-let* ((pair (agent-shell-queue--item-by-id id)))
     (condition-case nil
         (setf (agent-shell-queue-item-status (cdr pair)) 'deferred)
@@ -1312,6 +1338,7 @@ Primary draining is handled by per-buffer `turn-complete' subscriptions.
 No-op when the queue is globally paused."
   (when (and agent-shell-queue--loaded (agent-shell-queue-store-items agent-shell-queue--store)
              (not (agent-shell-queue-queue-paused agent-shell-queue--queue)))
+    (agent-shell-queue--migrate-all-stale-items)
     (dolist (it (copy-sequence (agent-shell-queue-store-items agent-shell-queue--store)))
       (when-let* ((buf-name (car it))
                   (buf (get-buffer buf-name))
