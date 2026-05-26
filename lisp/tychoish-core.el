@@ -12,7 +12,8 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'xtdlib))
+(eval-when-compile
+  (require 'xtdlib))
 
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")

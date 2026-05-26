@@ -39,9 +39,6 @@
 
 (require 'annotated-completing-read)
 
-(declare-function approximate-project-name "xtdlib")
-(declare-function compile-buffer-name "xtdlib")
-
 (defvar-local eglot-test-at-point-command nil
   "LSP command name identifying test-running code lenses in the current buffer.
 Set buffer-locally per language, e.g. \"gopls.run_tests\" for Go.")
@@ -219,10 +216,10 @@ to be set buffer-locally."
                         (user-error "no test found at point")))
          (directory (file-name-directory (buffer-file-name)))
          (pkg-name (file-name-directory directory))
-         (buf-name (format "*%s-test-%s*" (approximate-project-name) pkg-name))
+         (buf-name (format "*%s-test-%s*" (file-name-nondirectory (annotated-completing-read--project-root)) pkg-name))
          (command (funcall eglot-test-at-point-run-command-fn test-name))
          (default-directory directory))
-    (compilation-start command 'compilation-mode (compile-buffer-name buf-name))))
+    (compilation-start command 'compilation-mode (lambda (&optional _) buf-name))))
 
 ;;;###autoload
 (defun eglot-test-at-point-select ()
@@ -241,10 +238,10 @@ to be set buffer-locally."
          (test-name (annotated-completing-read table :prompt "Test: " :require-match t))
          (directory (file-name-directory (buffer-file-name)))
          (pkg-name (file-name-directory directory))
-         (buf-name (format "*%s-test-%s*" (approximate-project-name) pkg-name))
+         (buf-name (format "*%s-test-%s*" (file-name-nondirectory (annotated-completing-read--project-root)) pkg-name))
          (command (funcall eglot-test-at-point-run-command-fn test-name))
          (default-directory directory))
-    (compilation-start command 'compilation-mode (compile-buffer-name buf-name))))
+    (compilation-start command 'compilation-mode (lambda (&optional _) buf-name))))
 
 (provide 'eglot-test-at-point)
 ;;; eglot-test-at-point.el ends here"

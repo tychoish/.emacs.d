@@ -40,10 +40,17 @@
 (require 'map)
 
 (declare-function which-key-add-key-based-replacements "which-key")
-(declare-function which-key-add-keymap-based-replacements "which-key")
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
 (declare-function approximate-project-buffers "xtdlib")
+
+(defun tychoish--which-key-add-replacement (map key new-text)
+  "Register a which-key annotation for KEY with NEW-TEXT, scoped to MAP when supported.
+Falls back to `which-key-add-key-based-replacements' on Emacs versions that lack
+the keymap-scoped variant."
+  (if (and map (fboundp 'which-key-add-keymap-based-replacements))
+    (which-key-add-keymap-based-replacements map key new-text)
+    (which-key-add-key-based-replacements key new-text)))
 
 (cl-defmacro which-key-customize (new-text &key map key form)
   "Register a which-key annotation, deferred until which-key is loaded.
@@ -51,8 +58,8 @@
 NEW-TEXT is the replacement label (a string, or a cons (LABEL . COMMAND)
 for keymap-based replacements that also bind a prefix command).
 :KEY  — key sequence string; required unless :FORM is used.
-:MAP  — keymap (symbol or quoted symbol); selects
-        `which-key-add-keymap-based-replacements' instead of the key-only variant.
+:MAP  — keymap (symbol or quoted symbol); uses the keymap-scoped API when
+        available, falling back to the global-key variant otherwise.
 :FORM — arbitrary expression; mutually exclusive with NEW-TEXT, :KEY, and :MAP.
 
 All constraints are validated at macro-expansion time."
@@ -75,7 +82,7 @@ All constraints are validated at macro-expansion time."
   (cond
    (form `(with-eval-after-load 'which-key ,form))
    (map `(with-eval-after-load 'which-key
-           (which-key-add-keymap-based-replacements ,map ,key ,new-text)))
+           (tychoish--which-key-add-replacement ,map ,key ,new-text)))
    (t `(with-eval-after-load 'which-key
          (which-key-add-key-based-replacements ,key ,new-text)))))
 
