@@ -63,6 +63,13 @@
 ;; the agent-shell-menu :config block, not the agent-shell :config block.
 ;; Before the fix, agent-shell :config called agent-shell-mode-key before
 ;; agent-shell-menu was loaded, making the macro void and aborting config.
+;;
+;; agent-shell is lazy-loaded (:after shell-maker, no :demand t), so it is
+;; not loaded by daemon startup alone.  Requiring it here triggers the
+;; use-package eval-after-load chain: agent-shell :config runs (shell-maker
+;; is pulled in by agent-shell.el itself), then agent-shell-menu loads
+;; immediately via :demand t and its :config runs.
+(require 'agent-shell nil t)
 
 (ert-deftest tychoish-core/agent-shell-mode-key-functions-defined ()
   "Verify agent-shell-mode-key wrapper functions were created by agent-shell-menu."
