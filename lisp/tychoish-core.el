@@ -2701,27 +2701,6 @@ Useful after changing `eglot-workspace-configuration' or
   (which-key-customize nil
     :form (push '((nil . "^agent-shell-") . (nil . ""))
                 which-key-replacement-alist))
-  :config
-  (bind-keys
-   :map agent-shell-mode-map
-   ("C-c C-c" . agent-shell-submit)
-   ("C-c C-k" . agent-shell-interrupt)
-   ("C-c C-p" . agent-shell-resolve-permissions)
-   ("C-c C-a" . agent-shell-select-action)
-   ("C-c b" . agent-shell-switch-buffer)
-   ("C-c j" . tychoish/robot-agent-shell-map)
-   ("C-c m" . agent-shell-select-action)
-   ("C-c x" . agent-shell-select-command)
-   ("C-c TAB" . agent-shell-select-collapse)
-   ("C-<tab>" . agent-shell-next-item)
-   ("S-SPC" . agent-shell-cycle-session-mode))
-
-  (with-eval-after-load 'agent-shell-viewport
-    (bind-keys
-     :map agent-shell-viewport-view-mode-map
-     ("C-c TAB" . agent-shell-select-collapse)
-     ("C-<tab>" . agent-shell-viewport-next-item)
-     ("S-SPC" . agent-shell-viewport-cycle-session-mode)))
 
   (defconst tychoish/agent-shell-terse-persona
     "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
@@ -2763,16 +2742,7 @@ Useful after changing `eglot-workspace-configuration' or
     (setq-local completion-at-point-functions
 		(cons #'cape-dabbrev (remq t completion-at-point-functions))))
 
-  (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
-  (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-corfu-setup)
-  (advice-add 'agent-shell :before #'tychoish/agent-shell-mcp-refresh)
-
-  (tychoish/mcp-servers-init)
-  (tychoish/agent-shell--apply-environment)
-
   (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
-  (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
-  (setq agent-shell-anthropic-default-model-id "default")
   (setq agent-shell-file-completion-enabled t)
   (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
   (setq agent-shell-header-style 'text)
@@ -2788,7 +2758,37 @@ Useful after changing `eglot-workspace-configuration' or
                                                            (if (string-empty-p stripped) base stripped)))))
             (format "*%s-%s*"
                     (car (split-string (downcase (string-trim agent-name))))
-                    slug)))))
+                    slug))))
+  :config
+  (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
+  (setq agent-shell-anthropic-default-model-id "default")
+  (bind-keys
+   :map agent-shell-mode-map
+   ("C-c C-c" . agent-shell-submit)
+   ("C-c C-k" . agent-shell-interrupt)
+   ("C-c C-p" . agent-shell-resolve-permissions)
+   ("C-c C-a" . agent-shell-select-action)
+   ("C-c b" . agent-shell-switch-buffer)
+   ("C-c j" . tychoish/robot-agent-shell-map)
+   ("C-c m" . agent-shell-select-action)
+   ("C-c x" . agent-shell-select-command)
+   ("C-c TAB" . agent-shell-select-collapse)
+   ("C-<tab>" . agent-shell-next-item)
+   ("S-SPC" . agent-shell-cycle-session-mode))
+
+  (with-eval-after-load 'agent-shell-viewport
+    (bind-keys
+     :map agent-shell-viewport-view-mode-map
+     ("C-c TAB" . agent-shell-select-collapse)
+     ("C-<tab>" . agent-shell-viewport-next-item)
+     ("S-SPC" . agent-shell-viewport-cycle-session-mode)))
+
+  (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
+  (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-corfu-setup)
+  (advice-add 'agent-shell :before #'tychoish/agent-shell-mcp-refresh)
+
+  (tychoish/mcp-servers-init)
+  (tychoish/agent-shell--apply-environment))
 
 (use-package agent-shell-menu
   :load-path "elpa/agent-shell-menu"
