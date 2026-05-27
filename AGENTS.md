@@ -26,7 +26,7 @@ The configuration is split into focused files:
 | `lisp/tychoish-org.el`              | Org-mode, org-roam, capture templates.                                                        |
 | `lisp/xtdlib.el`                      | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
 | `lisp/builder.el`                   | Compilation buffer system.                                                                    |
-| `lisp/agent-shell-menu.el`          | ACR-based menus, transient prefixes, buffer/permission/command/collapse UI                    |
+| `elpa/agent-shell-menu/`            | ACR-based menus, transient prefixes, buffer/permission/command/collapse UI (own git repo)     |
 | `lisp/annotated-completing-read.el` | ACR completion UI.                                                                            |
 | `lisp/eglot-test-at-point.el`       | Eglot test runner helper.                                                                     |
 | `user/*.el`                         | Per-machine overrides. Loaded last; not committed.                                            |

@@ -319,6 +319,110 @@ in-memory cache is already populated."
 	    (setq magit-gh--prune-state
 		  (plist-put magit-gh--prune-state :closed-prs table))))))))
 
+;;; Collect infrastructure
+
+(defvar magit-gh-collect-base-dir nil
+  "Base directory for artifact downloads, or nil to use <project-root>/plans/.")
+
+(defvar magit-gh-collect-name-function #'magit-gh--collect-default-name
+  "Function (TYPE SLUG ID) => string naming a collection run directory.
+TYPE is a symbol (`ci' or `pr'), SLUG is a branch or PR slug string,
+ID is a run-id or PR number.  The result is used as a subdirectory
+name under the base collection directory.")
+
+(defvar magit-gh-collect-index-format 'json
+  "Serialization format for index files written by collect commands.
+`json' (default, always available) or `yaml' (requires the `yaml' package).")
+
+(defun magit-gh--collect-default-name (type slug id)
+  "Return TYPE-SLUG-ID with non-alphanumeric characters replaced by hyphens."
+  (downcase
+   (replace-regexp-in-string
+    "[^a-z0-9-]+" "-"
+    (format "%s-%s-%s" type slug id))))
+
+(defun magit-gh--collect-dir (root type slug id)
+  "Create and return an artifact directory under ROOT for this collection run.
+ROOT is the project root directory (captured before any async work).
+BASE is `magit-gh-collect-base-dir' or <ROOT>/plans/.
+The leaf name is produced by `magit-gh-collect-name-function'."
+  (let* ((base (or magit-gh-collect-base-dir
+                   (expand-file-name "plans" root)))
+         (name (funcall magit-gh-collect-name-function type slug id))
+         (dir  (expand-file-name name base)))
+    (make-directory dir t)
+    dir))
+
+(defun magit-gh--index-table (&rest kvs)
+  "Build a string-keyed hash-table for JSON/YAML serialization from KVS pairs.
+KVS is a flat list of alternating string KEY and VALUE arguments."
+  (let ((ht (make-hash-table :test #'equal)))
+    (while kvs
+      (puthash (pop kvs) (pop kvs) ht))
+    ht))
+
+(defun magit-gh--file-table (path type)
+  "Return a string-keyed hash-table representing a collected file entry."
+  (let ((ht (make-hash-table :test #'equal)))
+    (puthash "path" path ht)
+    (puthash "type" type ht)
+    ht))
+
+(defun magit-gh--write-index (dir data)
+  "Write DATA hash-table as an index file inside DIR.
+Format is controlled by `magit-gh-collect-index-format'."
+  (pcase magit-gh-collect-index-format
+    ('yaml
+     (unless (require 'yaml nil t)
+       (user-error "magit-gh: yaml format requires the `yaml' package"))
+     (with-temp-file (expand-file-name "index.yaml" dir)
+       (insert (yaml-encode data))))
+    (_
+     (with-temp-file (expand-file-name "index.json" dir)
+       (insert (json-serialize data :false-object :false :null-object nil))))))
+
+(defun magit-gh--run-process (args dir on-success &optional on-error)
+  "Run `gh' with ARGS in DIR asynchronously.
+ON-SUCCESS is called with the output string when the process exits 0.
+ON-ERROR is called with the output string and exit code otherwise;
+when nil, a `message' is emitted instead."
+  (let* ((buf (generate-new-buffer " *magit-gh-proc*"))
+         (proc (make-process
+                :name "magit-gh"
+                :buffer buf
+                :command (cons "gh" args)
+                :connection-type 'pipe
+                :noquery t
+                :sentinel
+                (lambda (proc _event)
+                  (when (memq (process-status proc) '(exit signal))
+                    (let ((output (with-current-buffer (process-buffer proc)
+                                    (buffer-string)))
+                          (code (process-exit-status proc)))
+                      (kill-buffer (process-buffer proc))
+                      (if (= code 0)
+                          (funcall on-success output)
+                        (if on-error
+                            (funcall on-error output code)
+                          (message "magit-gh: gh %s exited %d: %s"
+                                   (car args) code
+                                   (string-trim output))))))))))
+    (with-current-buffer buf
+      (setq default-directory dir))
+    proc))
+
+(defun magit-gh--repo-info ()
+  "Return a plist :owner :repo :branch for the current repository.
+Uses `gh repo view' and `magit-get-current-branch'."
+  (let* ((default-directory (magit-gh--repo-dir))
+         (output (string-trim
+                  (shell-command-to-string
+                   "gh repo view --json owner,name --jq '[.owner.login,.name]|@tsv'")))
+         (parts (split-string output "\t")))
+    (list :owner  (nth 0 parts)
+          :repo   (nth 1 parts)
+          :branch (magit-get-current-branch))))
+
 (provide 'magit-gh-extras)
 
 ;;; magit-gh-extras.el ends here

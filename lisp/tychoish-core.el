@@ -1024,16 +1024,22 @@
 (use-package magit-gh
   :ensure t
   :after magit
-  :commands (magit-gh-prune-merged-branches)
+  :commands (magit-gh-prune-merged-branches magit-gh-ci-fetch magit-gh-pr-fetch)
   :config
   (setq magit-gh-pr-limit 50)
   (require 'magit-gh-extras)
+  (require 'magit-gh-ci)
+  (require 'magit-gh-pr)
   (setq magit-gh-prune-cache-dir (tychoish/conf-state-path "magit-gh-prune"))
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-gh-prune-prefetch)))
   (transient-append-suffix 'magit-gh "v"
-    '("P" "Prune merged/closed PR branches" magit-gh-prune-merged-branches)))
+    '("P" "Prune merged/closed PR branches" magit-gh-prune-merged-branches))
+  (transient-append-suffix 'magit-gh "P"
+    '("L" "Fetch CI logs" magit-gh-ci-fetch))
+  (transient-append-suffix 'magit-gh "L"
+    '("R" "Fetch PR comments" magit-gh-pr-fetch)))
 
 (use-package smerge-mode
   :after (magit)
@@ -2710,16 +2716,6 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-<tab>" . agent-shell-next-item)
    ("S-SPC" . agent-shell-cycle-session-mode))
 
-  (agent-shell-mode-key "?" agent-shell-resolve-permission)
-  (agent-shell-mode-key "p" agent-shell-resolve-permission)
-  (agent-shell-mode-key "a" agent-shell-select-action)
-  (agent-shell-mode-key "b" agent-shell-switch-buffer)
-  (agent-shell-mode-key "x" execute-extended-agent-shell-command)
-  (agent-shell-mode-key "f" agent-shell-select-collapse)
-  (agent-shell-mode-key "c" agent-shell-select-command)
-  (agent-shell-mode-key "m" agent-shell-global-menu)
-  (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
-
   (with-eval-after-load 'agent-shell-viewport
     (bind-keys
      :map agent-shell-viewport-view-mode-map
@@ -2796,7 +2792,19 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-menu
   :load-path "elpa/agent-shell-menu"
-  :after (agent-shell))
+  :after (agent-shell)
+  :demand t
+  :config
+  (agent-shell-mode-key "?" agent-shell-resolve-permission)
+  (agent-shell-mode-key "p" agent-shell-resolve-permission)
+  (agent-shell-mode-key "a" agent-shell-select-action)
+  (agent-shell-mode-key "b" agent-shell-switch-buffer)
+  (agent-shell-mode-key "x" execute-extended-agent-shell-command)
+  (agent-shell-mode-key "f" agent-shell-select-collapse)
+  (agent-shell-mode-key "c" agent-shell-select-command)
+  (agent-shell-mode-key "m" agent-shell-global-menu)
+  (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
+  (agent-shell-mode-key "q" agent-shell-queue-buffer-open))
 
 (use-package agent-shell-queue
   :load-path "elpa/agent-shell-queue"
@@ -2836,8 +2844,6 @@ Useful after changing `eglot-workspace-configuration' or
   (bind-keys
    :map agent-shell-queue-mode-map
    ("C-c j" . tychoish/robot-agent-shell-map))
-
-  (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
