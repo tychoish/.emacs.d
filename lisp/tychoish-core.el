@@ -2696,8 +2696,6 @@ Useful after changing `eglot-workspace-configuration' or
     :form (push '((nil . "^agent-shell-") . (nil . ""))
                 which-key-replacement-alist))
   :config
-  (require 'agent-shell-menu)
-
   (bind-keys
    :map agent-shell-mode-map
    ("C-c C-c" . agent-shell-submit)
@@ -2796,7 +2794,12 @@ Useful after changing `eglot-workspace-configuration' or
                     (car (split-string (downcase (string-trim agent-name))))
                     slug)))))
 
+(use-package agent-shell-menu
+  :load-path "elpa/agent-shell-menu"
+  :after (agent-shell))
+
 (use-package agent-shell-queue
+  :load-path "elpa/agent-shell-queue"
   :bind (:map tychoish/robot-agent-shell-map
          ("." . agent-shell-queue-menu)
          ("/" . agent-shell-queue-capture)
