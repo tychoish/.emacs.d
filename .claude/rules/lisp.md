@@ -26,6 +26,43 @@ Use `seq.el` equivalents instead of cl-lib or raw `mapcar`:
 | `(cl-some PRED list)` | `(seq-some PRED list)` |
 | `(cl-every PRED list)` | `(seq-every-p PRED list)` |
 | `(cl-reduce f list :initial-value init)` | `(seq-reduce f list init)` |
+| `(dolist (it list) BODY)` | `(seq-do (lambda (it) BODY) list)` |
+| `(dolist (it list) (push (f it) acc))` | `(thread-last list (seq-map #'f))` |
+
+### Prefer `seq-do` over `dolist`
+
+Never use `dolist` for side-effectful iteration over a list. Use `seq-do` instead:
+
+```elisp
+;; Avoid:
+(dolist (item items)
+  (setf (item-status item) 'done))
+
+;; Prefer:
+(seq-do (lambda (item)
+          (setf (item-status item) 'done))
+        items)
+```
+
+When a `dolist` accumulates results via `push` into a local variable, replace the whole
+pattern with `thread-last` + `seq-map`/`seq-filter` instead:
+
+```elisp
+;; Avoid:
+(let (results)
+  (dolist (it items)
+    (when (pred it)
+      (push (transform it) results)))
+  (nreverse results))
+
+;; Prefer:
+(thread-last items
+  (seq-filter #'pred)
+  (seq-map #'transform))
+```
+
+The `while` form is acceptable only for buffer-traversal loops that use point-based
+operations (`forward-line`, `eobp`, etc.) — these have no `seq.el` equivalent.
 
 ### Threading macros over nesting
 
