@@ -25,7 +25,7 @@
            ,@body)
        (delete-directory dir t))))
 
-(defun magit-gh-ci-test/make-run (id name status conclusion workflow)
+(defun magit-gh-ci-test/make-run (id name status conclusion workflow &optional sha)
   "Return a fake run alist."
   `((databaseId . ,id)
     (name . ,name)
@@ -33,7 +33,8 @@
     (conclusion . ,conclusion)
     (workflowName . ,workflow)
     (createdAt . "2026-01-01T00:00:00Z")
-    (headBranch . "feature/test")))
+    (headBranch . "feature/test")
+    (headSha . ,(or sha "abc123def456"))))
 
 ;;; magit-gh-ci--failure-p
 
@@ -143,8 +144,8 @@
                       :branch "main"
                       :run-info run-info
                       :files (list '(:path "run-info.json"  :type "metadata")
-                                   '(:path "run-logs.txt"   :type "logs")
-                                   '(:path "run-failed-logs.txt" :type "failed-logs")))))
+                                   '(:path "run-logs.ghlog"        :type "logs")
+                                   '(:path "run-failed-logs.ghlog" :type "failed-logs")))))
       (magit-gh-ci--step-finalize ctx)
       (should (file-exists-p (expand-file-name "index.json" dir)))
       (let* ((raw (with-temp-buffer
@@ -205,7 +206,7 @@
                    (funcall on-success "failed log output"))))
         (magit-gh-ci--step-failed-logs ctx)
         (should (equal "run" gh-called))
-        (should (file-exists-p (expand-file-name "run-failed-logs.txt" dir)))))))
+        (should (file-exists-p (expand-file-name "run-failed-logs.ghlog" dir)))))))
 
 (provide 'test-magit-gh-ci)
 ;;; test-magit-gh-ci.el ends here

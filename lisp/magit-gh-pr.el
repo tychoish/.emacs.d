@@ -27,8 +27,6 @@
 (require 'map)
 (require 'magit-gh-extras)
 
-(declare-function magit-gh--check-gh "magit-gh")
-(declare-function magit-gh--repo-dir "magit-gh")
 (declare-function magit-toplevel "magit-git")
 (declare-function magit-get-current-branch "magit-git")
 

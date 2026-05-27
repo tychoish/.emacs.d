@@ -28,8 +28,6 @@
 (require 'map)
 (require 'magit-gh-extras)
 
-(declare-function magit-gh--check-gh "magit-gh")
-(declare-function magit-gh--repo-dir "magit-gh")
 (declare-function magit-toplevel "magit-git")
 (declare-function magit-get-current-branch "magit-git")
 
@@ -41,38 +39,67 @@
 (defvar magit-gh-ci-include-failed-log t
   "When non-nil, download a failed-steps-only log alongside the full run log.")
 
+(defvar magit-gh-ci-open-dired nil
+  "When non-nil, open a dired buffer in the artifact directory after fetch completes.")
+
+;;; Log viewer mode
+
+(define-derived-mode magit-gh-ci-log-mode special-mode "GH-Log"
+  "Major mode for viewing GitHub Actions CI log files.
+Applies ANSI colour sequences and provides read-only navigation."
+  (when (fboundp 'ansi-color-apply-on-region)
+    (let ((inhibit-read-only t))
+      (ansi-color-apply-on-region (point-min) (point-max)))))
+
+(add-to-list 'auto-mode-alist '("\\.ghlog\\'" . magit-gh-ci-log-mode))
+
 ;;; Internal helpers
 
 (defun magit-gh-ci--failure-p (conclusion)
   "Return non-nil when CONCLUSION string indicates a failed run."
   (member conclusion '("failure" "timed_out" "startup_failure")))
 
-(defun magit-gh-ci--run-annotation (run)
-  "Return a one-line annotation string for RUN alist."
-  (format "%-12s %-12s  %-30s  %s"
-          (or (map-elt run 'status) "")
-          (or (map-elt run 'conclusion) "in_progress")
-          (or (map-elt run 'workflowName) "")
-          (or (map-elt run 'createdAt) "")))
+(defun magit-gh-ci--run-annotation (run &optional ordinal)
+  "Return a one-line annotation string for RUN alist.
+ORDINAL, when non-nil, is an integer position in the sorted run list (1 = most recent)."
+  (let ((sha (map-elt run 'headSha)))
+    (format "%4s  %-12s %-12s  %-30s  %s"
+            (if ordinal (format "#%d" ordinal) "")
+            (or (map-elt run 'status) "")
+            (or (map-elt run 'conclusion) "in_progress")
+            (or (map-elt run 'workflowName) "")
+            (if sha (substring sha 0 (min 8 (length sha))) ""))))
+
+(defun magit-gh-ci--sort-runs (runs)
+  "Return RUNS sorted most-recent first by createdAt."
+  (sort (copy-sequence runs)
+        (lambda (a b)
+          (string> (or (map-elt a 'createdAt) "")
+                   (or (map-elt b 'createdAt) "")))))
 
 (defun magit-gh-ci--select-run (runs)
   "Prompt the user to select from RUNS via annotated-completing-read.
+Runs are presented most-recent first.  The annotation shows an ordinal
+\\=#N (where #1 is most recent) and the first 8 characters of the commit SHA.
 When RUNS has exactly one entry it is returned directly without prompting."
   (if (= (length runs) 1)
       (car runs)
-    (let ((table (make-hash-table :test #'equal)))
-      (dolist (run runs)
-        (let ((key (format "#%s %s"
-                           (map-elt run 'databaseId)
-                           (or (map-elt run 'name) ""))))
-          (map-put! table key (magit-gh-ci--run-annotation run))))
+    (let ((table (make-hash-table :test #'equal))
+          (sorted (magit-gh-ci--sort-runs runs)))
+      (seq-map-indexed
+       (lambda (run i)
+         (let ((key (format "#%s %s"
+                            (map-elt run 'databaseId)
+                            (or (map-elt run 'name) ""))))
+           (map-put! table key (magit-gh-ci--run-annotation run (1+ i)))))
+       sorted)
       (let* ((choice (annotated-completing-read
                       table
                       :prompt "CI run => "
                       :require-match t))
              (id (when (string-match "\\`#\\([0-9]+\\) " choice)
                    (string-to-number (match-string 1 choice)))))
-        (seq-find (lambda (r) (= (map-elt r 'databaseId) id)) runs)))))
+        (seq-find (lambda (r) (= (map-elt r 'databaseId) id)) sorted)))))
 
 (defun magit-gh-ci--make-error-handler (label)
   "Return an on-error callback that messages the user for step LABEL."
@@ -115,7 +142,9 @@ When RUNS has exactly one entry it is returned directly without prompting."
                                                    (plist-get f :type)))
                                                 files)))))
     (magit-gh--write-index dir data)
-    (message "magit-gh-ci: done — %d file(s) in %s" (length files) dir)))
+    (message "magit-gh-ci: done — %d file(s) in %s" (length files) dir)
+    (when magit-gh-ci-open-dired
+      (dired dir))))
 
 (defun magit-gh-ci--step-failed-logs (ctx)
   "Fetch failed-step-only logs when applicable, then finalize."
@@ -130,7 +159,7 @@ When RUNS has exactly one entry it is returned directly without prompting."
            (list "run" "view" run-id "--log-failed")
            repo-dir
            (lambda (output)
-             (let ((file "run-failed-logs.txt"))
+             (let ((file "run-failed-logs.ghlog"))
                (with-temp-file (expand-file-name file (plist-get ctx :dir))
                  (insert output))
                (magit-gh-ci--step-finalize
@@ -148,7 +177,7 @@ When RUNS has exactly one entry it is returned directly without prompting."
      (list "run" "view" run-id "--log")
      repo-dir
      (lambda (output)
-       (let ((file "run-logs.txt"))
+       (let ((file "run-logs.ghlog"))
          (with-temp-file (expand-file-name file (plist-get ctx :dir))
            (insert output))
          (magit-gh-ci--step-failed-logs
@@ -190,7 +219,7 @@ When RUNS has exactly one entry it is returned directly without prompting."
      (list "run" "list"
            "--branch" branch
            "--limit" (number-to-string magit-gh-ci-run-limit)
-           "--json" "databaseId,name,status,conclusion,createdAt,headBranch,event,workflowName")
+           "--json" "databaseId,name,status,conclusion,createdAt,headBranch,headSha,event,workflowName")
      repo-dir
      (lambda (output)
        (let ((runs (json-parse-string output :array-type 'list :object-type 'alist)))
@@ -211,10 +240,10 @@ When RUN-ID is non-nil, fetch that specific run without prompting.
 Otherwise list recent runs and prompt for a selection.
 
 Creates an artifact directory under plans/ containing:
-  run-info.json       — full run metadata
-  run-logs.txt        — complete step logs
-  run-failed-logs.txt — failed-step logs (when `magit-gh-ci-include-failed-log')
-  index.json          — collection summary"
+  run-info.json        — full run metadata
+  run-logs.ghlog       — complete step logs (opens in `magit-gh-ci-log-mode')
+  run-failed-logs.ghlog — failed-step logs (when `magit-gh-ci-include-failed-log')
+  index.json           — collection summary"
   (interactive)
   (magit-gh--check-gh)
   (let* ((repo-dir (magit-gh--repo-dir))

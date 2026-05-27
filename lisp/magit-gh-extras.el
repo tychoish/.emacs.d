@@ -27,8 +27,19 @@
 (declare-function magit-list-local-branch-names "magit-git")
 (declare-function magit-get-current-branch "magit-git")
 (declare-function magit-branch-delete "magit-branch")
-(declare-function magit-gh--repo-dir "magit-gh")
-(declare-function magit-gh--check-gh "magit-gh")
+
+;;; Core helpers shared by all magit-gh-* modules
+
+(defun magit-gh--check-gh ()
+  "Signal `user-error' when the `gh' CLI is not found on PATH."
+  (unless (executable-find "gh")
+    (user-error "magit-gh: `gh' CLI not found on PATH")))
+
+(defun magit-gh--repo-dir ()
+  "Return the current git repository root for running `gh' commands.
+Signals `user-error' when not inside a git repository."
+  (or (magit-toplevel)
+      (user-error "magit-gh: not inside a git repository")))
 
 (defvar magit-gh-prune-pr-limit 100
   "Maximum number of PRs to fetch from GitHub on each incremental scan.")
