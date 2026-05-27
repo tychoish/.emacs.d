@@ -63,16 +63,10 @@
 ;; the agent-shell-menu :config block, not the agent-shell :config block.
 ;; Before the fix, agent-shell :config called agent-shell-mode-key before
 ;; agent-shell-menu was loaded, making the macro void and aborting config.
-;;
-;; agent-shell is lazy-loaded (:after shell-maker, no :demand t), so it is
-;; not loaded by daemon startup alone.  Requiring it here triggers the
-;; use-package eval-after-load chain: agent-shell :config runs (shell-maker
-;; is pulled in by agent-shell.el itself), then agent-shell-menu loads
-;; immediately via :demand t and its :config runs.
-(require 'agent-shell nil t)
 
 (ert-deftest tychoish-core/agent-shell-mode-key-functions-defined ()
   "Verify agent-shell-mode-key wrapper functions were created by agent-shell-menu."
+  (require 'agent-shell nil t)
   (should (fboundp 'agent-shell-output-key-?))
   (should (fboundp 'agent-shell-output-key-p))
   (should (fboundp 'agent-shell-output-key-a))
@@ -82,11 +76,13 @@
 
 (ert-deftest tychoish-core/agent-shell-header-style-configured ()
   "Verify agent-shell-header-style is set; confirms agent-shell :config ran to completion."
+  (require 'agent-shell nil t)
   (should (boundp 'agent-shell-header-style))
   (should (eq agent-shell-header-style 'text)))
 
 (ert-deftest tychoish-core/agent-shell-buffer-name-format-is-function ()
   "Verify agent-shell-buffer-name-format is a callable; confirms agent-shell :config ran to completion."
+  (require 'agent-shell nil t)
   (should (boundp 'agent-shell-buffer-name-format))
   (should (functionp agent-shell-buffer-name-format)))
 
