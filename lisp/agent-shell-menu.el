@@ -59,6 +59,9 @@
 (declare-function agent-shell-queue-insert-fork-after "agent-shell-queue")
 (declare-function agent-shell-queue-release-pending-fork "agent-shell-queue")
 
+(declare-function agent-review "agent-review")
+(declare-function agent-review-send-to-agent-shell "agent-review")
+
 (defvar agent-shell-action-alist
   '(("submit" . shell-maker-submit)
     ("interrupt" . agent-shell-interrupt)
@@ -90,6 +93,11 @@
     ("collapse menu" . agent-shell-select-collapse)
     ("queue review" . agent-shell-queue-buffer-open))
   "Alist of (LABEL . COMMAND) for `agent-shell-select-action'.")
+
+(with-eval-after-load 'agent-review
+  (add-to-list 'agent-shell-action-alist '("review changes" . agent-review) t)
+  (add-to-list 'agent-shell-action-alist
+               '("send review issues to shell" . agent-review-send-to-agent-shell) t))
 
 ;;; Key binding
 
@@ -181,7 +189,9 @@ POSITION is buffer position of the button's start."
   "Return an interactive command that activates the permission button at POS."
   (lambda ()
     (interactive)
-    (when-let ((cmd (agent-shell--permission-action-at pos)))
+    (when-let* ((cmd (agent-shell--permission-action-at pos))
+                ((functionp cmd))
+                ((commandp cmd)))
       (save-excursion
 	(goto-char pos)
 	(call-interactively cmd)))))
@@ -197,9 +207,10 @@ POSITION is buffer position of the button's start."
   (unless (agent-shell--permission-pending-p)
     (user-error "No pending permission request in this buffer"))
 
-  (let* ((label (annotated-completing-read
-		 (or (agent-shell--permission-buttons)
-		     (user-error "No permission buttons found in this buffer"))
+  (let* ((buttons (or (agent-shell--permission-buttons)
+                      (user-error "No permission buttons found in this buffer")))
+         (label (annotated-completing-read
+		 buttons
                  :prompt "permission => "
                  :category 'agent-shell-permission
                  :require-match t
@@ -231,7 +242,9 @@ Works from both agent-shell buffers and viewport buffers."
   (lambda ()
     (interactive)
     (with-current-buffer shell-buf
-      (when-let* ((cmd (agent-shell--permission-action-at pos)))
+      (when-let* ((cmd (agent-shell--permission-action-at pos))
+                  ((functionp cmd))
+                  ((commandp cmd)))
         (save-excursion
           (goto-char pos)
           (call-interactively cmd))))))
@@ -307,6 +320,10 @@ When a permission request is pending, permission responses are spliced into the 
 
 ;;; Transient menus
 
+(defun agent-shell-menu--agent-review-available-p ()
+  "Return non-nil when `agent-review' is loaded."
+  (featurep 'agent-review))
+
 ;;;###autoload
 (transient-define-prefix agent-shell-global-menu ()
   "Global agent-shell operations."
@@ -327,7 +344,10 @@ When a permission request is pending, permission responses are spliced into the 
     ("u" "Unassigned capture" agent-shell-queue-capture-unassigned)
     ("r" "From region" agent-shell-queue-capture-from-region)
     ("y" "From clipboard" agent-shell-queue-capture-from-clipboard)
-    ("c" "From context" agent-shell-queue-capture-from-context)]])
+    ("c" "From context" agent-shell-queue-capture-from-context)]
+   ["Review" :if agent-shell-menu--agent-review-available-p
+    ("V" "Review changes" agent-review
+     :if agent-shell-menu--agent-review-available-p)]])
 
 ;;;###autoload
 (transient-define-prefix agent-shell-session-menu ()
@@ -368,7 +388,12 @@ When a permission request is pending, permission responses are spliced into the 
     ("Gf" "Fork queue from here" agent-shell-queue-fork-session)
     ("Gb" "Insert fork task before" agent-shell-queue-insert-fork-before)
     ("Ga" "Insert fork task after" agent-shell-queue-insert-fork-after)
-    ("Gr" "Release pending-fork items" agent-shell-queue-release-pending-fork)]])
+    ("Gr" "Release pending-fork items" agent-shell-queue-release-pending-fork)]
+   ["Review" :if agent-shell-menu--agent-review-available-p
+    ("V" "Review changes" agent-review
+     :if agent-shell-menu--agent-review-available-p)
+    ("J" "Send issues to shell" agent-review-send-to-agent-shell
+     :if agent-shell-menu--agent-review-available-p)]])
 
 ;;; Command menu
 

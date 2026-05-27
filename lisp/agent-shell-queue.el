@@ -65,6 +65,7 @@
 (declare-function yaml-encode "yaml")
 (declare-function yaml-parse-string "yaml")
 (declare-function yaml-mode "yaml-mode")
+(declare-function json-pretty-print-buffer "json")
 
 (defun agent-shell-queue--default-instance-name ()
   "Return a string identifying the current Emacs instance."
@@ -1175,21 +1176,19 @@ all collapsed blocks are folded: only the prose between them."
                              (pos response-start)
                              (segments nil))
                         (while (< pos end-pos)
-                          (let ((state (get-text-property pos 'agent-shell-ui-state)))
-                            (if (assq :collapsed state)
-                                ;; Collapsible block (thinking, tool call, etc.) — skip.
-                                (setq pos (or (next-single-property-change
-                                               pos 'agent-shell-ui-state nil end-pos)
-                                              end-pos))
-                              ;; Plain text or no state — collect up to the next boundary.
-                              (let* ((seg-end (or (next-single-property-change
-                                                   pos 'agent-shell-ui-state nil end-pos)
-                                                  end-pos))
-                                     (seg (string-trim
-                                           (buffer-substring-no-properties pos seg-end))))
+                          (let* ((state (get-text-property pos 'agent-shell-ui-state))
+                                 (block-end (or (next-single-property-change
+                                                 pos 'agent-shell-ui-state nil end-pos)
+                                                end-pos)))
+                            (if (and state (text-property-any pos block-end 'invisible t))
+                                ;; Block has hidden body (collapsed tool call, thinking, etc.) — skip.
+                                (setq pos block-end)
+                              ;; Visible content (plain text, agent message, expanded block) — collect.
+                              (let ((seg (string-trim
+                                          (buffer-substring-no-properties pos block-end))))
                                 (when (not (string-empty-p seg))
                                   (push seg segments))
-                                (setq pos seg-end)))))
+                                (setq pos block-end)))))
                         (when segments
                           (string-join (nreverse segments) "\n\n")))))))
         (when (and text (not (string-empty-p text)))
@@ -1570,16 +1569,27 @@ NEXT-P, when non-nil, marks the item as the next to be dispatched."
 
 (defvar-local agent-shell-queue--display-scope nil
   "Current display scope for the queue buffer.
-nil means global (show all items).
-`(directory . DIR)' means items for shell buffers under DIR.
-`(buffer . BUF-NAME)' means items for exactly that buffer.")
+
+Narrowing semantics:
+- nil (global): all buckets and items are visible; no scope indicator in the tab-line.
+- \\='(buffer . BUF-NAME): only items for that one shell buffer are visible; the
+  tab-line shows \"Buffer: BUF-NAME\" to indicate the active filter.
+- \\='(directory . DIR): only items for shell buffers whose `default-directory' is
+  under DIR are visible; the tab-line shows \"Scope: DIR\".
+
+The Buffer column in the tabulated list is controlled independently by
+`agent-shell-queue-show-buffer-column' (toggle with db in the queue menu).
+Narrowing and the Buffer column are orthogonal: narrowing filters which rows
+appear; the Buffer column controls whether a per-row buffer-name cell is shown.
+
+Use `agent-shell-queue-set-scope' (N) to narrow and `agent-shell-queue-scope-global'
+(W) to widen back to global.")
 
 ;;; Display configuration
 
 (defvar agent-shell-queue-show-buffer-column t
   "Show the Buffer column in the queue buffer.
-Auto-suppressed when only one bucket is visible; that bucket's name
-appears in the tab-line instead.")
+Toggle interactively with `agent-shell-queue-toggle-buffer-column' (db in the menu).")
 
 (defvar agent-shell-queue-show-ordinal-column t
   "Show the ordinal (#) column in the queue buffer.")
@@ -1776,6 +1786,7 @@ Includes all statuses (active, deferred, running, done)."
     (define-key m (kbd "o")        #'agent-shell-queue-buffer-open-shell)
     (define-key m (kbd "X")        #'agent-shell-queue-buffer-abort)
     (define-key m (kbd "V")        #'agent-shell-queue-select-columns)
+    (define-key m (kbd "=")        #'agent-shell-queue-buffer-inspect-item)
     (define-key m (kbd "m")        #'agent-shell-queue-menu)
     (define-key m (kbd "?")        #'describe-bindings)
     (define-key m (kbd "q")        #'quit-window)
@@ -1809,16 +1820,12 @@ reinitializing headers on pure content refreshes.")
                                      (seq-map (lambda (it)
                                                 (agent-shell-queue--active-item-count (cdr it)))
                                               visible-items)))
-                       (single-bucket-name
-                        (when (= (length visible-items) 1)
-                          (caar visible-items)))
-                       (bucket-display
-                        (when single-bucket-name
-                          (format "  |  Buffer: %s" single-bucket-name)))
                        (scope-display
-                        (when (and (null single-bucket-name) scope)
-                          (format "  |  Scope: %s"
-                                  (agent-shell-queue--scope-label scope))))
+                        (pcase scope
+                          ('nil nil)
+                          (`(buffer . ,name) (format "  |  Buffer: %s" name))
+                          (_ (format "  |  Scope: %s"
+                                     (agent-shell-queue--scope-label scope)))))
                        (flush-display
                         (if agent-shell-queue--last-flush-time
                             (format "%s ago" (agent-shell-queue--format-age
@@ -1842,9 +1849,8 @@ reinitializing headers on pure content refreshes.")
                                       (agent-shell-buffers))))
                           (format "  |  INTERCEPT: %s"
                                   (mapconcat #'buffer-name intercepting ", ")))))
-                  (format " Queue: %s  |  Sessions: %d  |  Depth: %d%s%s%s  |  Flushed: %s%s"
+                  (format " Queue: %s  |  Sessions: %d  |  Depth: %d%s%s  |  Flushed: %s%s"
                           state sessions depth
-                          (or bucket-display "")
                           (or scope-display "")
                           (or intercept-display "")
                           flush-display (or next-display ""))))))
@@ -1918,10 +1924,7 @@ SHOW-BUFFER-P indicates whether the Buffer column is included."
          (ordered (if unassigned-pair
                       (append assigned-pairs (list unassigned-pair))
                     assigned-pairs))
-         (single-bucket-p (= (length ordered) 1))
-         ;; When only one bucket is visible, its name goes in the tab-line
-         ;; rather than a redundant column on every row.
-         (show-buffer-p (and agent-shell-queue-show-buffer-column (not single-bucket-p)))
+         (show-buffer-p agent-shell-queue-show-buffer-column)
          (column-structure (list show-buffer-p
                                  agent-shell-queue-show-ordinal-column
                                  agent-shell-queue-show-age-column))
@@ -2296,8 +2299,9 @@ and the queue advances to the next item."
     (define-key m (kbd "M-<up>")   #'agent-shell-queue-item-view-move-up)
     (define-key m (kbd "M-<down>") #'agent-shell-queue-item-view-move-down)
     (define-key m (kbd "t")        #'agent-shell-queue-item-view-assign)
-    ;; Refresh / menu / close
+    ;; Refresh / inspect / menu / close
     (define-key m (kbd "g")        #'agent-shell-queue-item-view-refresh)
+    (define-key m (kbd "i")        #'agent-shell-queue-item-view-inspect)
     (define-key m (kbd "m")        #'agent-shell-queue-item-menu)
     (define-key m (kbd "q")        #'quit-window)
     m)
@@ -2543,6 +2547,14 @@ Errors if archiving is not enabled or no done items exist."
     (message "agent-shell-queue: archived %d done item(s)" count)))
 
 ;;;###autoload
+(defun agent-shell-queue-toggle-archive ()
+  "Toggle `agent-shell-queue-archive-enabled' and report the new state."
+  (interactive)
+  (setq agent-shell-queue-archive-enabled (not agent-shell-queue-archive-enabled))
+  (message "agent-shell-queue: archiving %s"
+           (if agent-shell-queue-archive-enabled "enabled" "disabled")))
+
+;;;###autoload
 (defun agent-shell-queue-load-archive (&optional file)
   "Import items from the JSONL archive file into the queue as active items.
 FILE defaults to the path returned by `agent-shell-queue-archive-file-function';
@@ -2666,6 +2678,170 @@ when called interactively with a prefix argument, prompts for a file path."
         (forward-line 1))
       (agent-shell-queue-buffer-edit))))
 
+;;; Item raw inspect
+
+(defvar-local agent-shell-queue--inspect-id nil
+  "ID of the queue item shown in this inspect buffer.")
+
+(defvar-local agent-shell-queue--inspect-format nil
+  "Serialization format currently used in this inspect buffer (plist, json, or yaml).")
+
+(defvar agent-shell-queue-inspect-mode-map
+  (let ((m (make-sparse-keymap)))
+    (define-key m (kbd "p") #'agent-shell-queue-inspect-as-plist)
+    (define-key m (kbd "j") #'agent-shell-queue-inspect-as-json)
+    (define-key m (kbd "y") #'agent-shell-queue-inspect-as-yaml)
+    (define-key m (kbd "g") #'agent-shell-queue-inspect-refresh)
+    (define-key m (kbd "q") #'quit-window)
+    m)
+  "Keymap for `agent-shell-queue-inspect-mode'.")
+
+(define-minor-mode agent-shell-queue-inspect-mode
+  "Minor mode active in queue item inspect buffers.
+Binds p/j/y to switch formats, g to refresh, q to quit."
+  :lighter nil
+  :keymap agent-shell-queue-inspect-mode-map)
+
+(defun agent-shell-queue--inspect-buffer-name (id format)
+  "Buffer name for the raw inspect view of item ID in FORMAT."
+  (format "*agent-shell-queue-inspect: %s [%s]*" id format))
+
+(defun agent-shell-queue--serialize-single-item (item target format)
+  "Serialize ITEM from TARGET bucket to a string in FORMAT."
+  (pcase format
+    ('plist
+     (with-temp-buffer
+       (pp (list :buffer target :item (agent-shell-queue-item-to-plist item))
+           (current-buffer))
+       (buffer-string)))
+    ('json
+     (unless (fboundp 'json-serialize)
+       (user-error "json-serialize not available (requires Emacs 27+)"))
+     (with-temp-buffer
+       (insert (json-serialize (list :buffer target
+                                     :item (agent-shell-queue--item-to-json item))))
+       (when (fboundp 'json-pretty-print-buffer)
+         (json-pretty-print-buffer))
+       (buffer-string)))
+    ('yaml
+     (unless (fboundp 'yaml-encode)
+       (user-error "yaml-encode not available; install the `yaml' package"))
+     (let ((h (make-hash-table :test #'equal)))
+       (map-put! h "buffer" target)
+       (map-put! h "item" (agent-shell-queue--item-to-yaml item))
+       (yaml-encode h)))
+    (_ (user-error "Unknown inspect format: %S" format))))
+
+(defun agent-shell-queue-inspect-refresh ()
+  "Refresh the current inspect buffer from live queue state."
+  (interactive)
+  (let ((id agent-shell-queue--inspect-id)
+        (fmt agent-shell-queue--inspect-format))
+    (unless (and id fmt)
+      (user-error "Not in an agent-shell queue inspect buffer"))
+    (when-let* ((pair (agent-shell-queue--item-by-id id))
+                (inhibit-read-only t))
+      (erase-buffer)
+      (insert (agent-shell-queue--serialize-single-item (cdr pair) (car pair) fmt))
+      (goto-char (point-min)))))
+
+(defun agent-shell-queue--apply-inspect-format (format)
+  "Switch the current inspect buffer to FORMAT and re-render."
+  (unless agent-shell-queue--inspect-id
+    (user-error "Not in an agent-shell queue inspect buffer"))
+  (let ((saved-id agent-shell-queue--inspect-id))
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (when-let* ((pair (agent-shell-queue--item-by-id saved-id)))
+        (insert (agent-shell-queue--serialize-single-item
+                 (cdr pair) (car pair) format))))
+    (rename-buffer (agent-shell-queue--inspect-buffer-name saved-id format) t)
+    (pcase format
+      ('plist (emacs-lisp-mode))
+      ('json  (if (fboundp 'json-mode) (json-mode) (js-mode)))
+      ('yaml  (if (fboundp 'yaml-mode) (yaml-mode) (fundamental-mode))))
+    (setq-local agent-shell-queue--inspect-id saved-id)
+    (setq-local agent-shell-queue--inspect-format format)
+    (agent-shell-queue-inspect-mode 1)
+    (setq buffer-read-only t)
+    (goto-char (point-min))))
+
+(defun agent-shell-queue-inspect-as-plist ()
+  "Show the current inspect item as a plist."
+  (interactive)
+  (agent-shell-queue--apply-inspect-format 'plist))
+
+(defun agent-shell-queue-inspect-as-json ()
+  "Show the current inspect item as JSON."
+  (interactive)
+  (agent-shell-queue--apply-inspect-format 'json))
+
+(defun agent-shell-queue-inspect-as-yaml ()
+  "Show the current inspect item as YAML."
+  (interactive)
+  (agent-shell-queue--apply-inspect-format 'yaml))
+
+(defun agent-shell-queue--inspect-format-display ()
+  "Return an alist of (LABEL . ANNOTATION) for format completion.
+Labels are format symbol names; the on-disk format is annotated with [on-disk]."
+  (let ((on-disk (agent-shell-queue-store-format agent-shell-queue--store)))
+    (seq-filter
+     #'identity
+     (list (cons "plist" (if (eq on-disk 'plist) "[on-disk]" ""))
+           (cons "json"  (if (eq on-disk 'json)  "[on-disk]" ""))
+           (when (fboundp 'yaml-encode)
+             (cons "yaml" (if (eq on-disk 'yaml) "[on-disk]" "")))))))
+
+(defun agent-shell-queue--inspect-prompt-format ()
+  "Prompt for a serialization format; return the format symbol."
+  (intern (annotated-completing-read
+           (agent-shell-queue--inspect-format-display)
+           :prompt "inspect format => "
+           :category 'agent-shell-queue-inspect-format
+           :require-match t
+           :history 'agent-shell-queue-inspect-format)))
+
+(defun agent-shell-queue--inspect-open (id format)
+  "Open or refresh the inspect buffer for item ID in FORMAT."
+  (let* ((pair (or (agent-shell-queue--item-by-id id)
+                   (user-error "Item %s not found in queue" id)))
+         (buf (get-buffer-create (agent-shell-queue--inspect-buffer-name id format))))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (agent-shell-queue--serialize-single-item (cdr pair) (car pair) format)))
+      (pcase format
+        ('plist (emacs-lisp-mode))
+        ('json  (if (fboundp 'json-mode) (json-mode) (js-mode)))
+        ('yaml  (if (fboundp 'yaml-mode) (yaml-mode) (fundamental-mode))))
+      (setq-local agent-shell-queue--inspect-id id)
+      (setq-local agent-shell-queue--inspect-format format)
+      (agent-shell-queue-inspect-mode 1)
+      (setq buffer-read-only t)
+      (goto-char (point-min)))
+    (pop-to-buffer buf)))
+
+;;;###autoload
+(defun agent-shell-queue-buffer-inspect-item ()
+  "Open a read-only raw-serialization view of the queue item at point.
+Prompts for the serialization format (p=plist j=json y=yaml in the buffer)."
+  (interactive)
+  (unless (derived-mode-p 'agent-shell-queue-mode)
+    (user-error "Not in an agent-shell queue buffer"))
+  (agent-shell-queue--inspect-open
+   (or (tabulated-list-get-id) (user-error "No item at point"))
+   (agent-shell-queue--inspect-prompt-format)))
+
+;;;###autoload
+(defun agent-shell-queue-item-view-inspect ()
+  "Open a raw-serialization view of the item shown in this buffer.
+Prompts for the serialization format (p=plist j=json y=yaml in the buffer)."
+  (interactive)
+  (agent-shell-queue--inspect-open
+   (or agent-shell-queue--item-view-id
+       (user-error "Not in a queue item view buffer"))
+   (agent-shell-queue--inspect-prompt-format)))
+
 ;;; Running guard
 
 (defun agent-shell-queue--assert-not-running (item)
@@ -2788,7 +2964,11 @@ Items in aborted state remain editable; only running, done, or absent items are 
     ("A" "Archive" agent-shell-queue-item-view-archive
      :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))
     ("k" "Remove" agent-shell-queue-item-view-remove
-     :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))]])
+     :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))
+    ("x" "Disable archiving" agent-shell-queue-toggle-archive
+     :if (lambda () agent-shell-queue-archive-enabled))
+    ("x" "Enable archiving" agent-shell-queue-toggle-archive
+     :if (lambda () (not agent-shell-queue-archive-enabled)))]])
 
 (transient-define-prefix agent-shell-queue-item-menu ()
   "Actions for the item shown in the current item-view buffer."
@@ -2813,6 +2993,7 @@ Items in aborted state remain editable; only running, done, or absent items are 
     ("B" "Disable background task" agent-shell-queue-item-view-disable-background-task
      :if (lambda () (and (not (memq (agent-shell-queue--iv-status) '(done running aborted)))
                          (agent-shell-queue--iv-bg-p))))
+    ("i" "Inspect raw…" agent-shell-queue-item-view-inspect)
     ("C-d" "Destructive…" agent-shell-queue-item-destructive-menu
      :if (lambda () (not (eq (agent-shell-queue--iv-status) 'running))))]
    ["Move / Assign" :if (lambda () (not (memq (agent-shell-queue--iv-status) '(done running aborted nil))))
@@ -3060,7 +3241,11 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("A" "Archive" agent-shell-queue-buffer-archive
      :if agent-shell-queue--point-not-running-p)
     ("k" "Remove" agent-shell-queue-buffer-remove
-     :if agent-shell-queue--point-not-running-p)]])
+     :if agent-shell-queue--point-not-running-p)
+    ("x" "Disable archiving" agent-shell-queue-toggle-archive
+     :if (lambda () agent-shell-queue-archive-enabled))
+    ("x" "Enable archiving" agent-shell-queue-toggle-archive
+     :if (lambda () (not agent-shell-queue-archive-enabled)))]])
 
 (define-advice agent-shell-queue-destructive-menu (:before () guard-queue-buffer)
   "Signal an error when not invoked from an agent-shell queue overview buffer."
@@ -3137,6 +3322,8 @@ format switch.  Changes take effect immediately via `agent-shell-queue-buffer-re
     ("F" "Flush to disk" agent-shell-queue-flush)
     ("D" "Show disk state" agent-shell-queue-show-disk-state)
     ("O" "Open shell for item at point" agent-shell-queue-buffer-open-shell
+     :if agent-shell-queue--point-item)
+    ("=" "Inspect item raw…" agent-shell-queue-buffer-inspect-item
      :if agent-shell-queue--point-item)]
    ["Display"
     ("dv" "Column display options" agent-shell-queue-select-columns)

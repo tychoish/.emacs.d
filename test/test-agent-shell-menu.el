@@ -96,6 +96,56 @@
     (should (null (agent-shell--permission-buttons)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell--permission-button-action
+
+(ert-deftest agent-shell-menu/permission-button-action-invokes-command ()
+  "The lambda returned by permission-button-action calls the button's RET command."
+  (let* ((invoked nil)
+         (cmd (lambda () (interactive) (setq invoked t))))
+    (with-temp-buffer
+      (insert "x")
+      (put-text-property 1 2 'keymap
+                         (let ((m (make-sparse-keymap)))
+                           (define-key m (kbd "RET") cmd)
+                           m))
+      (let ((action (agent-shell--permission-button-action 1)))
+        (call-interactively action)))
+    (should invoked)))
+
+(ert-deftest agent-shell-menu/permission-button-action-ignores-non-command ()
+  "Regression: when lookup-key returns a non-commandp value (e.g. \"\"), the
+lambda must silently do nothing instead of signalling
+Wrong type argument: commandp, \"\"."
+  (with-temp-buffer
+    (insert "x")
+    (put-text-property 1 2 'keymap
+                       (let ((m (make-sparse-keymap)))
+                         (define-key m (kbd "RET") "")
+                         m))
+    (let ((action (agent-shell--permission-button-action 1)))
+      (should-not (condition-case err
+                      (progn (call-interactively action) nil)
+                    (error err))))))
+
+(ert-deftest agent-shell-menu/resolve-permission-uses-buttons-for-lookup ()
+  "Regression: agent-shell-resolve-permission must bind buttons before using it
+in assoc — previously buttons was a free variable causing pos to always be nil."
+  (let (invoked-pos)
+    (with-temp-buffer
+      (insert (make-string 50 ?x))
+      (cl-letf (((symbol-function 'derived-mode-p) (lambda (&rest _) t))
+                ((symbol-function 'agent-shell--permission-pending-p) (lambda () t))
+                ((symbol-function 'agent-shell--permission-buttons)
+                 (lambda () (list (cons "Allow" 1))))
+                ((symbol-function 'annotated-completing-read)
+                 (lambda (_table &rest _) "Allow"))
+                ((symbol-function 'agent-shell--permission-action-at)
+                 (lambda (pos) (setq invoked-pos pos) #'ignore))
+                ((symbol-function 'call-interactively) #'ignore))
+        (agent-shell-resolve-permission)))
+    (should (equal 1 invoked-pos))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-select-action
 
 (ert-deftest agent-shell-menu/select-action-calls-command-not-docstring ()
