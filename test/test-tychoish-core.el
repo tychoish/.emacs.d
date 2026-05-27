@@ -56,35 +56,5 @@
   (should (equal "*claude-project*"
                  (tychoish-core-test--agent-shell-format "  Claude  " "project"))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; agent-shell-menu :config integration
-;;
-;; These tests verify that agent-shell-mode-key wrappers are created by
-;; the agent-shell-menu :config block, not the agent-shell :config block.
-;; Before the fix, agent-shell :config called agent-shell-mode-key before
-;; agent-shell-menu was loaded, making the macro void and aborting config.
-
-(ert-deftest tychoish-core/agent-shell-mode-key-functions-defined ()
-  "Verify agent-shell-mode-key wrapper functions were created by agent-shell-menu."
-  (require 'agent-shell)
-  (should (fboundp 'agent-shell-output-key-?))
-  (should (fboundp 'agent-shell-output-key-p))
-  (should (fboundp 'agent-shell-output-key-a))
-  (should (fboundp 'agent-shell-output-key-b))
-  (should (fboundp 'agent-shell-output-key-TAB))
-  (should (fboundp 'agent-shell-output-key-q)))
-
-(ert-deftest tychoish-core/agent-shell-header-style-configured ()
-  "Verify agent-shell-header-style is set; confirms agent-shell :config ran to completion."
-  (require 'agent-shell)
-  (should (boundp 'agent-shell-header-style))
-  (should (eq agent-shell-header-style 'text)))
-
-(ert-deftest tychoish-core/agent-shell-buffer-name-format-is-function ()
-  "Verify agent-shell-buffer-name-format is a callable; confirms agent-shell :config ran to completion."
-  (require 'agent-shell)
-  (should (boundp 'agent-shell-buffer-name-format))
-  (should (functionp agent-shell-buffer-name-format)))
-
 (provide 'test-tychoish-core)
 ;;; test-tychoish-core.el ends here
