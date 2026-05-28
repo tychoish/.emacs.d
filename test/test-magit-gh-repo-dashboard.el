@@ -57,7 +57,14 @@
       (should (null (magit-gh-repo-tags r)))
       (should (null (magit-gh-repo-auto-commit r)))
       (should (null (magit-gh-repo-commands r)))
-      (should (null (magit-gh-repo-sort-hint r))))))
+      (should (null (magit-gh-repo-sort-hint r)))
+      (should (null (magit-gh-repo-worktree r)))))
+
+(ert-deftest magit-gh-repo-dashboard/register-worktree ()
+  ":worktree t is stored correctly."
+  (let ((magit-gh-repo-list nil))
+    (magit-gh-repo-register "r" "/tmp/r" :worktree t)
+    (should (eq t (magit-gh-repo-worktree (car magit-gh-repo-list)))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-include-prs-true ()
   ":include-prs t is stored correctly."
@@ -191,16 +198,22 @@
 ;;;; magit-gh-repo-dashboard--collect-stats (via mock)
 
 (ert-deftest magit-gh-repo-dashboard/collect-stats-extracts-fields ()
-  "collect-stats populates :branch :behind :dirty :head-hash :recent-log from shell output."
+  "collect-stats populates all stat fields using magit-git functions."
   (let ((repo (magit-gh-repo--make :name "test" :path "/tmp/test")))
-    (cl-letf (((symbol-function 'shell-command-to-string)
-               (lambda (cmd)
+    (cl-letf (((symbol-function 'magit-git-string)
+               (lambda (&rest args)
                  (cond
-                  ((string-match-p "branch --show-current" cmd) "main\n")
-                  ((string-match-p "rev-list" cmd) "2\n")
-                  ((string-match-p "status --porcelain" cmd) " M foo.el\n")
-                  ((string-match-p "log --oneline" cmd) "abc123 fix foo\ndef456 add bar\n")
-                  (t ""))))
+                  ((member "branch" args) "main")
+                  ((member "rev-list" args) "2")
+                  (t nil))))
+              ((symbol-function 'magit-get)
+               (lambda (&rest _) "git@github.com:user/test.git"))
+              ((symbol-function 'magit-git-lines)
+               (lambda (&rest args)
+                 (cond
+                  ((member "status" args) '(" M foo.el"))
+                  ((member "log" args) '("abc123 fix foo" "def456 add bar"))
+                  (t nil))))
               ((symbol-function 'magit-gh-repo-dashboard--fetch-age)
                (lambda (_) 3600.0))
               ((symbol-function 'magit-gh-repo-dashboard--head-hash)
@@ -208,23 +221,27 @@
       (let ((magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
         (let ((stats (magit-gh-repo-dashboard--collect-stats repo)))
           (should (equal "main" (plist-get stats :branch)))
+          (should (equal "git@github.com:user/test.git" (plist-get stats :remote-origin)))
           (should (= 2 (plist-get stats :behind)))
           (should (eq t (plist-get stats :dirty)))
+          (should (equal '(" M foo.el") (plist-get stats :uncommitted-files)))
           (should (= 3600.0 (plist-get stats :fetch-age)))
           (should (equal "abc123def456" (plist-get stats :head-hash)))
           (should (string-match-p "fix foo" (plist-get stats :recent-log))))))))
 
 (ert-deftest magit-gh-repo-dashboard/collect-stats-clean-workdir ()
-  "collect-stats sets :dirty nil when git status --porcelain is empty."
+  "collect-stats sets :dirty nil and :uncommitted-files nil when porcelain is empty."
   (let ((repo (magit-gh-repo--make :name "test" :path "/tmp/test")))
-    (cl-letf (((symbol-function 'shell-command-to-string)
-               (lambda (cmd)
+    (cl-letf (((symbol-function 'magit-git-string)
+               (lambda (&rest args)
                  (cond
-                  ((string-match-p "branch --show-current" cmd) "feat\n")
-                  ((string-match-p "rev-list" cmd) "0\n")
-                  ((string-match-p "status --porcelain" cmd) "")
-                  ((string-match-p "log --oneline" cmd) "abc commit\n")
-                  (t ""))))
+                  ((member "branch" args) "feat")
+                  ((member "rev-list" args) "0")
+                  (t nil))))
+              ((symbol-function 'magit-get)
+               (lambda (&rest _) nil))
+              ((symbol-function 'magit-git-lines)
+               (lambda (&rest _) nil))
               ((symbol-function 'magit-gh-repo-dashboard--fetch-age)
                (lambda (_) nil))
               ((symbol-function 'magit-gh-repo-dashboard--head-hash)
@@ -232,6 +249,8 @@
       (let ((magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
         (let ((stats (magit-gh-repo-dashboard--collect-stats repo)))
           (should (eq nil (plist-get stats :dirty)))
+          (should (null (plist-get stats :uncommitted-files)))
+          (should (null (plist-get stats :remote-origin)))
           (should (= 0 (plist-get stats :behind))))))))
 
 ;;;; magit-gh-repo-dashboard--get-stats (cache invalidation)
@@ -239,7 +258,8 @@
 (ert-deftest magit-gh-repo-dashboard/get-stats-uses-cache-on-same-hash ()
   "get-stats returns cached stats when HEAD hash matches."
   (let* ((repo (magit-gh-repo--make :name "test" :path "/tmp/test"))
-         (cached (list :branch "main" :behind 0 :dirty nil
+         (cached (list :branch "main" :remote-origin nil :behind 0
+                       :dirty nil :uncommitted-files nil
                        :fetch-age 60.0 :head-hash "abc123" :recent-log ""))
          (magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
     (puthash "/tmp/test" cached magit-gh-repo-dashboard--stats-cache)
@@ -250,14 +270,16 @@
 (ert-deftest magit-gh-repo-dashboard/get-stats-invalidates-on-new-hash ()
   "get-stats collects fresh stats when HEAD hash has changed."
   (let* ((repo (magit-gh-repo--make :name "test" :path "/tmp/test"))
-         (cached (list :branch "main" :behind 0 :dirty nil
+         (cached (list :branch "main" :remote-origin nil :behind 0
+                       :dirty nil :uncommitted-files nil
                        :fetch-age 60.0 :head-hash "old123" :recent-log ""))
          (magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
     (puthash "/tmp/test" cached magit-gh-repo-dashboard--stats-cache)
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--head-hash)
                (lambda (_) "new456"))
               ((symbol-function 'magit-gh-repo-dashboard--collect-stats)
-               (lambda (_) (list :branch "feat" :behind 1 :dirty t
+               (lambda (_) (list :branch "feat" :remote-origin nil :behind 1
+                                 :dirty t :uncommitted-files nil
                                  :fetch-age nil :head-hash "new456" :recent-log ""))))
       (let ((result (magit-gh-repo-dashboard--get-stats repo)))
         (should (equal "feat" (plist-get result :branch)))
@@ -266,11 +288,11 @@
 ;;;; magit-gh-repo-dashboard--auto-commit
 
 (ert-deftest magit-gh-repo-dashboard/auto-commit-uses-default-message ()
-  "With :auto-commit t, calls git add and git commit with the default message."
+  "With :auto-commit t, calls magit-call-git add then commit with the default message."
   (let ((repo (magit-gh-repo--make :name "test" :path "/tmp/test" :auto-commit t))
         (git-calls nil))
-    (cl-letf (((symbol-function 'call-process)
-               (lambda (_prog _in _out _err &rest args)
+    (cl-letf (((symbol-function 'magit-call-git)
+               (lambda (&rest args)
                  (push args git-calls)
                  0)))
       (should (magit-gh-repo-dashboard--auto-commit repo)))
@@ -288,8 +310,8 @@
          (repo (magit-gh-repo--make :name "test" :path "/tmp/test"
                                     :auto-commit (lambda (_r) custom-msg)))
          (commit-msg nil))
-    (cl-letf (((symbol-function 'call-process)
-               (lambda (_prog _in _out _err &rest args)
+    (cl-letf (((symbol-function 'magit-call-git)
+               (lambda (&rest args)
                  (when (equal "commit" (car args))
                    (setq commit-msg (cadr (member "-m" args))))
                  0)))
@@ -392,9 +414,12 @@
 ;;;; magit-gh-repo-dashboard--build-entry
 
 (ert-deftest magit-gh-repo-dashboard/build-entry-structure ()
-  "build-entry returns (REPO VECTOR) with 5 columns (no Path)."
+  "build-entry returns (REPO VECTOR) with columns matching active column count."
   (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
-        (magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
+        (magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal))
+        (magit-gh-repo-dashboard-columns
+         '((name . t) (branch . t) (fetched . t) (behind . t) (changes . t) (worktree . t)))
+        (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
                (lambda (_)
                  (list :branch "main" :behind 0 :dirty nil :fetch-age 120.0
@@ -403,7 +428,7 @@
              (id (car entry))
              (vec (cadr entry)))
         (should (magit-gh-repo-p id))
-        (should (= 5 (length vec)))
+        (should (= 6 (length vec)))
         (should (string-match-p "myrep" (aref vec 0)))
         (should (string-match-p "main" (aref vec 1)))
         (should (equal "2m" (aref vec 2)))
@@ -611,6 +636,727 @@
          (entry (magit-gh-pr-dashboard--build-entry pr "r"))
          (vec (cadr entry)))
     (should (<= (length (aref vec 2)) 37))))
+
+;;;; magit-gh-repo-overview--insert-kv
+
+(ert-deftest magit-gh-repo-dashboard/insert-kv-format ()
+  "insert-kv writes a bold padded key and value on one line."
+  (with-temp-buffer
+    (magit-gh-repo-overview--insert-kv "Branch" "main")
+    (let ((text (buffer-string)))
+      (should (string-match-p "Branch" text))
+      (should (string-match-p "main" text))
+      (should (string-match-p "\n" text)))))
+
+(ert-deftest magit-gh-repo-dashboard/insert-kv-key-bold ()
+  "insert-kv applies bold face to the key portion."
+  (with-temp-buffer
+    (magit-gh-repo-overview--insert-kv "Repository" "myrepo")
+    (let ((face (get-text-property 0 'face (buffer-string))))
+      (should (equal 'bold face)))))
+
+(ert-deftest magit-gh-repo-dashboard/insert-kv-value-face ()
+  "insert-kv applies VALUE-FACE to the value when supplied."
+  (with-temp-buffer
+    (magit-gh-repo-overview--insert-kv "Behind" "3 commits" 'warning)
+    (let* ((text (buffer-string))
+           (value-start (string-match "3 commits" text)))
+      (should value-start)
+      (should (equal 'warning (get-text-property value-start 'face text))))))
+
+(ert-deftest magit-gh-repo-dashboard/insert-kv-action-property ()
+  "insert-kv tags the line with `magit-gh-repo-overview-action' when action given."
+  (with-temp-buffer
+    (magit-gh-repo-overview--insert-kv "Repository" "r" nil (cons 'magit-status "/tmp/r"))
+    (goto-char (point-min))
+    (let ((action (get-text-property (point) 'magit-gh-repo-overview-action)))
+      (should (equal 'magit-status (car action)))
+      (should (equal "/tmp/r" (cdr action))))))
+
+(ert-deftest magit-gh-repo-dashboard/insert-kv-no-action-when-nil ()
+  "insert-kv does not set action property when ACTION is nil."
+  (with-temp-buffer
+    (magit-gh-repo-overview--insert-kv "Branch" "main")
+    (goto-char (point-min))
+    (should (null (get-text-property (point) 'magit-gh-repo-overview-action)))))
+
+;;;; magit-gh-repo-overview--render
+
+(defun magit-gh-repo-dashboard-test--make-stats (&rest overrides)
+  "Return a minimal stats plist with OVERRIDES taking precedence over defaults.
+Overrides are placed first so `plist-get' finds them before the defaults."
+  (append overrides
+          (list :branch "main"
+                :remote-origin "git@github.com:user/repo.git"
+                :behind 0
+                :dirty nil
+                :uncommitted-files nil
+                :fetch-age 60.0
+                :head-hash "abc123"
+                :recent-log "abc123 fix foo\ndef456 add bar")))
+
+(ert-deftest magit-gh-repo-dashboard/render-loading-state ()
+  "render with nil stats inserts a loading message."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep")))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo nil nil)
+      (should (string-match-p "[Ll]oading" (buffer-string))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-kv-fields ()
+  "render with stats inserts Repository, Path, Remote, Branch as KV pairs."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (let ((text (buffer-string)))
+        (should (string-match-p "Repository" text))
+        (should (string-match-p "myrep" text))
+        (should (string-match-p "Path" text))
+        (should (string-match-p "/tmp/myrep" text))
+        (should (string-match-p "Remote" text))
+        (should (string-match-p "git@github.com" text))
+        (should (string-match-p "Branch" text))
+        (should (string-match-p "main" text))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-pr-loading ()
+  "render with nil pr-counts shows loading placeholder for PRs."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (should (string-match-p "loading" (buffer-string))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-pr-counts ()
+  "render with pr-counts shows total and mine."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats (cons 5 2))
+      (let ((text (buffer-string)))
+        (should (string-match-p "5" text))
+        (should (string-match-p "2" text))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-dirty-shows-files ()
+  "render with dirty stats lists uncommitted files."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats
+                :dirty t
+                :uncommitted-files '(" M foo.el" "?? bar.el"))))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (let ((text (buffer-string)))
+        (should (string-match-p "foo.el" text))
+        (should (string-match-p "bar.el" text))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-recent-commits ()
+  "render inserts Recent Commits section when recent-log is non-empty."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (let ((text (buffer-string)))
+        (should (string-match-p "Recent Commits" text))
+        (should (string-match-p "fix foo" text))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-no-remote-origin ()
+  "render omits Remote row when :remote-origin is nil."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats :remote-origin nil)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (should-not (string-match-p "Remote" (buffer-string))))))
+
+;;;; magit-gh-repo-overview--classify-files
+
+(ert-deftest magit-gh-repo-dashboard/classify-files-staged ()
+  "Staged modifications appear under 'staged."
+  (let* ((lines '("M  foo.el" "A  bar.el"))
+         (result (magit-gh-repo-overview--classify-files lines)))
+    (should (member "foo.el" (alist-get 'staged result)))
+    (should (member "bar.el" (alist-get 'staged result)))))
+
+(ert-deftest magit-gh-repo-dashboard/classify-files-unstaged ()
+  "Worktree-only modifications appear under 'unstaged."
+  (let* ((lines '(" M foo.el"))
+         (result (magit-gh-repo-overview--classify-files lines)))
+    (should (member "foo.el" (alist-get 'unstaged result)))
+    (should (null (alist-get 'staged result)))))
+
+(ert-deftest magit-gh-repo-dashboard/classify-files-untracked ()
+  "?? lines appear under 'untracked."
+  (let* ((lines '("?? new.el"))
+         (result (magit-gh-repo-overview--classify-files lines)))
+    (should (member "new.el" (alist-get 'untracked result)))
+    (should (null (alist-get 'staged result)))))
+
+(ert-deftest magit-gh-repo-dashboard/classify-files-deleted-staged ()
+  "Staged deletions appear under 'deleted, not 'staged."
+  (let* ((lines '("D  gone.el"))
+         (result (magit-gh-repo-overview--classify-files lines)))
+    (should (member "gone.el" (alist-get 'deleted result)))
+    (should (null (alist-get 'staged result)))))
+
+(ert-deftest magit-gh-repo-dashboard/classify-files-deleted-unstaged ()
+  "Unstaged deletions appear under 'deleted, not 'unstaged."
+  (let* ((lines '(" D gone.el"))
+         (result (magit-gh-repo-overview--classify-files lines)))
+    (should (member "gone.el" (alist-get 'deleted result)))
+    (should (null (alist-get 'unstaged result)))))
+
+(ert-deftest magit-gh-repo-dashboard/classify-files-trims-filename ()
+  "Filenames have leading/trailing whitespace stripped."
+  (let* ((lines '("M  foo.el "))
+         (result (magit-gh-repo-overview--classify-files lines)))
+    (should (member "foo.el" (alist-get 'staged result)))))
+
+(ert-deftest magit-gh-repo-dashboard/classify-files-empty-input ()
+  "Empty input yields all-nil categories."
+  (let ((result (magit-gh-repo-overview--classify-files nil)))
+    (should (null (alist-get 'staged result)))
+    (should (null (alist-get 'unstaged result)))
+    (should (null (alist-get 'deleted result)))
+    (should (null (alist-get 'untracked result)))))
+
+;;;; Render: uncommitted file sections
+
+(ert-deftest magit-gh-repo-dashboard/render-dirty-sections ()
+  "render shows Staged/Unstaged/Untracked section headers when present."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+        (stats (magit-gh-repo-dashboard-test--make-stats
+                :dirty t
+                :uncommitted-files '("M  foo.el" " M bar.el" "?? baz.el"))))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (let ((text (buffer-string)))
+        (should (string-match-p "Staged" text))
+        (should (string-match-p "foo.el" text))
+        (should (string-match-p "Unstaged" text))
+        (should (string-match-p "bar.el" text))
+        (should (string-match-p "Untracked" text))
+        (should (string-match-p "baz.el" text))))))
+
+;;;; Render: PR counts
+
+(ert-deftest magit-gh-repo-dashboard/render-pr-counts-zero ()
+  "render shows None when PR count is zero."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats (cons 0 0))
+      (should (string-match-p "None" (buffer-string))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-pr-counts-nonzero ()
+  "render shows Open count and Yours when nonzero."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats (cons 5 2))
+      (let ((text (buffer-string)))
+        (should (string-match-p "Open" text))
+        (should (string-match-p "5" text))
+        (should (string-match-p "Yours" text))
+        (should (string-match-p "2" text))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-pr-counts-yours-zero ()
+  "render omits Yours line when mine=0."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats (cons 3 0))
+      (let ((text (buffer-string)))
+        (should (string-match-p "Open" text))
+        (should-not (string-match-p "Yours" text))))))
+
+;;;; Transient predicates
+
+(ert-deftest magit-gh-repo-dashboard/dirty-or-unknown-p-when-no-stats ()
+  "dirty-or-unknown-p returns t when stats not yet cached."
+  (let ((magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+               (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r"))))
+      (should (magit-gh-repo-dashboard--dirty-or-unknown-p)))))
+
+(ert-deftest magit-gh-repo-dashboard/dirty-or-unknown-p-when-clean ()
+  "dirty-or-unknown-p returns nil when stats are cached and clean."
+  (let ((magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
+    (puthash "/tmp/r" (list :dirty nil :branch "main" :behind 0) magit-gh-repo-dashboard--stats-cache)
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+               (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r"))))
+      (should-not (magit-gh-repo-dashboard--dirty-or-unknown-p)))))
+
+(ert-deftest magit-gh-repo-dashboard/has-commands-p-when-registered ()
+  "has-commands-p returns t when commands are registered."
+  (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+             (lambda ()
+               (magit-gh-repo--make :name "r" :path "/tmp/r"
+                                    :commands '(("run" . my-fn))))))
+    (should (magit-gh-repo-dashboard--has-commands-p))))
+
+(ert-deftest magit-gh-repo-dashboard/has-commands-p-when-none ()
+  "has-commands-p returns nil when no commands are registered."
+  (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+             (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r"))))
+    (should-not (magit-gh-repo-dashboard--has-commands-p))))
+
+(ert-deftest magit-gh-repo-dashboard/overview-has-changes-p-when-dirty ()
+  "overview-has-changes-p returns t when stats show dirty."
+  (with-temp-buffer
+    (setq-local magit-gh-repo-overview--stats (list :dirty t :branch "main"))
+    (should (magit-gh-repo-overview--has-changes-p))))
+
+(ert-deftest magit-gh-repo-dashboard/overview-has-changes-p-when-clean ()
+  "overview-has-changes-p returns nil when stats show clean."
+  (with-temp-buffer
+    (setq-local magit-gh-repo-overview--stats (list :dirty nil :branch "main"))
+    (should-not (magit-gh-repo-overview--has-changes-p))))
+
+;;;; magit-gh-repo-overview--render action properties
+
+(ert-deftest magit-gh-repo-dashboard/render-repository-line-action ()
+  "render tags the Repository line with a magit-status action."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (goto-char (point-min))
+      (let ((action (get-text-property (point) 'magit-gh-repo-overview-action)))
+        (should (equal 'magit-status (car action)))
+        (should (equal "/tmp/myrep" (cdr action)))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-path-line-action ()
+  "render tags the Path line with a dired action."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats)))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (goto-char (point-min))
+      (search-forward "Path")
+      (let ((action (get-text-property (point) 'magit-gh-repo-overview-action)))
+        (should (equal 'dired (car action)))
+        (should (equal "/tmp/myrep" (cdr action)))))))
+
+(ert-deftest magit-gh-repo-dashboard/render-commit-line-action ()
+  "render tags Recent Commits lines with magit-show-commit actions."
+  (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
+        (stats (magit-gh-repo-dashboard-test--make-stats
+                :recent-log "abc1234 fix something")))
+    (with-temp-buffer
+      (magit-gh-repo-overview--render repo stats nil)
+      (goto-char (point-min))
+      (search-forward "abc1234")
+      (let ((action (get-text-property (point) 'magit-gh-repo-overview-action)))
+        (should (equal 'magit-show-commit (car action)))
+        (should (equal "abc1234" (cdr action)))))))
+
+;;;; magit-gh-repo-overview-follow
+
+(ert-deftest magit-gh-repo-dashboard/follow-magit-status ()
+  "follow opens magit status when action is 'magit-status."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+        (visited-path nil))
+    (cl-letf (((symbol-function 'magit-status-setup-buffer)
+               (lambda (path) (setq visited-path path))))
+      (with-temp-buffer
+        (setq-local magit-gh-repo-overview--repo repo)
+        (let ((inhibit-read-only t))
+          (magit-gh-repo-overview--insert-kv
+           "Repository" "r" nil (cons 'magit-status "/tmp/r")))
+        (goto-char (point-min))
+        (magit-gh-repo-overview-follow)))
+    (should (equal "/tmp/r" visited-path))))
+
+(ert-deftest magit-gh-repo-dashboard/follow-dired ()
+  "follow opens dired when action is 'dired."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+        (visited-path nil))
+    (cl-letf (((symbol-function 'dired)
+               (lambda (path) (setq visited-path path))))
+      (with-temp-buffer
+        (setq-local magit-gh-repo-overview--repo repo)
+        (let ((inhibit-read-only t))
+          (magit-gh-repo-overview--insert-kv
+           "Path" "/tmp/r" nil (cons 'dired "/tmp/r")))
+        (goto-char (point-min))
+        (magit-gh-repo-overview-follow)))
+    (should (equal "/tmp/r" visited-path))))
+
+(ert-deftest magit-gh-repo-dashboard/follow-noop-on-untagged-line ()
+  "follow does nothing on lines without an action property."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r")))
+    (with-temp-buffer
+      (setq-local magit-gh-repo-overview--repo repo)
+      (let ((inhibit-read-only t))
+        (insert "no action here\n"))
+      (goto-char (point-min))
+      (should-not (get-text-property (point) 'magit-gh-repo-overview-action))
+      (magit-gh-repo-overview-follow)))) ; should not error
+
+;;;; magit-gh-repo-dashboard--batch-run
+
+(ert-deftest magit-gh-repo-dashboard/batch-run-collects-ok ()
+  "batch-run calls on-all-done with all results when each op returns 'ok."
+  (let* ((repos (list (magit-gh-repo--make :name "r1" :path "/tmp/r1")
+                      (magit-gh-repo--make :name "r2" :path "/tmp/r2")))
+         (all-results nil))
+    (magit-gh-repo-dashboard--batch-run
+     repos
+     (lambda (repo cb) (funcall cb 'ok))
+     "test"
+     (lambda (results) (setq all-results results)))
+    (should (= 2 (length all-results)))
+    (should (seq-every-p (lambda (r) (eq 'ok (cdr r))) all-results))))
+
+(ert-deftest magit-gh-repo-dashboard/batch-run-mixed-statuses ()
+  "batch-run handles a mix of 'ok, 'skipped, and 'error results."
+  (let* ((statuses '(ok skipped error))
+         (repos (list (magit-gh-repo--make :name "r1" :path "/tmp/r1")
+                      (magit-gh-repo--make :name "r2" :path "/tmp/r2")
+                      (magit-gh-repo--make :name "r3" :path "/tmp/r3")))
+         (all-results nil)
+         (idx 0))
+    (magit-gh-repo-dashboard--batch-run
+     repos
+     (lambda (repo cb)
+       (funcall cb (nth idx statuses))
+       (setq idx (1+ idx)))
+     "test"
+     (lambda (results) (setq all-results results)))
+    (should (= 1 (seq-count (lambda (r) (eq 'ok (cdr r))) all-results)))
+    (should (= 1 (seq-count (lambda (r) (eq 'skipped (cdr r))) all-results)))
+    (should (= 1 (seq-count (lambda (r) (eq 'error (cdr r))) all-results)))))
+
+(ert-deftest magit-gh-repo-dashboard/batch-run-calls-on-all-done ()
+  "batch-run calls on-all-done exactly once after the last repo completes."
+  (let* ((repos (list (magit-gh-repo--make :name "r1" :path "/tmp/r1")))
+         (call-count 0))
+    (magit-gh-repo-dashboard--batch-run
+     repos
+     (lambda (_repo cb) (funcall cb 'ok))
+     "test"
+     (lambda (_) (setq call-count (1+ call-count))))
+    (should (= 1 call-count))))
+
+;;;; magit-gh-repo-dashboard--auto-commit-async
+
+(ert-deftest magit-gh-repo-dashboard/auto-commit-async-skipped-when-clean ()
+  "auto-commit-async returns 'skipped when git status --porcelain is empty."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r" :auto-commit t))
+         (result nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--run-git)
+               (lambda (_path args on-success &optional _on-error)
+                 (when (member "status" args)
+                   (funcall on-success "")))))
+      (magit-gh-repo-dashboard--auto-commit-async repo (lambda (s) (setq result s))))
+    (should (eq 'skipped result))))
+
+(ert-deftest magit-gh-repo-dashboard/auto-commit-async-ok-when-dirty ()
+  "auto-commit-async returns 'ok after successful add+commit."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r" :auto-commit t))
+         (result nil)
+         (git-calls nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--run-git)
+               (lambda (_path args on-success &optional _on-error)
+                 (push (car args) git-calls)
+                 (cond
+                  ((member "status" args) (funcall on-success " M foo.el"))
+                  ((member "add" args) (funcall on-success ""))
+                  ((member "commit" args) (funcall on-success ""))))))
+      (magit-gh-repo-dashboard--auto-commit-async repo (lambda (s) (setq result s))))
+    (should (eq 'ok result))
+    (should (member "status" git-calls))
+    (should (member "add" git-calls))
+    (should (member "commit" git-calls))))
+
+(ert-deftest magit-gh-repo-dashboard/auto-commit-async-error-on-add-failure ()
+  "auto-commit-async returns 'error when git add fails."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r" :auto-commit t))
+         (result nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--run-git)
+               (lambda (_path args on-success on-error)
+                 (cond
+                  ((member "status" args) (funcall on-success " M foo.el"))
+                  ((member "add" args) (funcall on-error "error" 1))))))
+      (magit-gh-repo-dashboard--auto-commit-async repo (lambda (s) (setq result s))))
+    (should (eq 'error result))))
+
+(ert-deftest magit-gh-repo-dashboard/auto-commit-async-uses-message-function ()
+  "auto-commit-async uses the :auto-commit function to generate the commit message."
+  (let* ((custom-msg "custom: my message")
+         (repo (magit-gh-repo--make :name "r" :path "/tmp/r"
+                                    :auto-commit (lambda (_r) custom-msg)))
+         (commit-msg nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--run-git)
+               (lambda (_path args on-success &optional _on-error)
+                 (cond
+                  ((member "status" args) (funcall on-success " M foo.el"))
+                  ((member "add" args) (funcall on-success ""))
+                  ((member "commit" args)
+                   (setq commit-msg (cadr (member "-m" args)))
+                   (funcall on-success ""))))))
+      (magit-gh-repo-dashboard--auto-commit-async repo #'ignore))
+    (should (equal custom-msg commit-msg))))
+
+;;;; magit-gh-repo-dashboard-commit-all (async)
+
+(ert-deftest magit-gh-repo-dashboard/commit-all-async-user-error-when-none ()
+  "commit-all signals user-error when no repos have :auto-commit configured."
+  (let ((magit-gh-repo-list (list (magit-gh-repo--make :name "r" :path "/tmp/r"))))
+    (should-error (magit-gh-repo-dashboard-commit-all) :type 'user-error)))
+
+(ert-deftest magit-gh-repo-dashboard/commit-all-async-runs-batch ()
+  "commit-all dispatches --batch-run for repos with :auto-commit set."
+  (let* ((magit-gh-repo-list
+          (list (magit-gh-repo--make :name "r1" :path "/tmp/r1" :auto-commit t)
+                (magit-gh-repo--make :name "r2" :path "/tmp/r2")))
+         (batched-repos nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--batch-run)
+               (lambda (repos _op _label &optional _done)
+                 (setq batched-repos (seq-map #'magit-gh-repo-name repos)))))
+      (magit-gh-repo-dashboard-commit-all))
+    (should (= 1 (length batched-repos)))
+    (should (equal "r1" (car batched-repos)))))
+
+;;;; magit-gh-repo-dashboard-auto-sync
+
+(ert-deftest magit-gh-repo-dashboard/auto-sync-user-error-when-none ()
+  "autosync signals user-error when no repos have :auto-commit or :auto-sync."
+  (let ((magit-gh-repo-list (list (magit-gh-repo--make :name "r" :path "/tmp/r"))))
+    (should-error (magit-gh-repo-dashboard-auto-sync) :type 'user-error)))
+
+(ert-deftest magit-gh-repo-dashboard/auto-sync-dispatches-commit-and-sync ()
+  "autosync runs commit batch for :auto-commit repos and sync batch for :auto-sync repos."
+  (let* ((magit-gh-repo-list
+          (list (magit-gh-repo--make :name "c1" :path "/tmp/c1" :auto-commit t)
+                (magit-gh-repo--make :name "s1" :path "/tmp/s1" :auto-sync 'fetch)
+                (magit-gh-repo--make :name "n1" :path "/tmp/n1")))
+         (batch-labels nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--batch-run)
+               (lambda (_repos _op label &optional _done)
+                 (push label batch-labels))))
+      (magit-gh-repo-dashboard-auto-sync))
+    (should (= 2 (length batch-labels)))
+    (should (member "magit-gh autosync commit" batch-labels))
+    (should (member "magit-gh autosync sync" batch-labels))))
+
+(ert-deftest magit-gh-repo-dashboard/auto-sync-commit-only-when-no-sync ()
+  "autosync runs only the commit batch when no repos have :auto-sync."
+  (let* ((magit-gh-repo-list
+          (list (magit-gh-repo--make :name "c1" :path "/tmp/c1" :auto-commit t)))
+         (batch-labels nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--batch-run)
+               (lambda (_repos _op label &optional _done)
+                 (push label batch-labels))))
+      (magit-gh-repo-dashboard-auto-sync))
+    (should (= 1 (length batch-labels)))
+    (should (member "magit-gh autosync commit" batch-labels))))
+
+;;;; Builder and agent-shell commands
+
+(ert-deftest magit-gh-repo-dashboard/builder-delegates-to-builder ()
+  "builder command invokes builder-compile-project in the repo directory."
+  (let ((called-in nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+               (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r")))
+              ((symbol-function 'builder-compile-project)
+               (lambda () (interactive) (setq called-in default-directory))))
+      (magit-gh-repo-dashboard-builder))
+    (should (string-prefix-p "/tmp/r" (or called-in "")))))
+
+(ert-deftest magit-gh-repo-dashboard/agent-shell-queue-callable ()
+  "agent-shell-queue command calls agent-shell-queue-buffer-open."
+  (let ((called nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+               (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r")))
+              ((symbol-function 'agent-shell-queue-buffer-open)
+               (lambda () (interactive) (setq called t))))
+      (magit-gh-repo-dashboard-agent-shell-queue))
+    (should called)))
+
+(ert-deftest magit-gh-repo-dashboard/overview-builder-delegates ()
+  "overview builder command invokes builder-compile-project in the repo directory."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+         (called-in nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-overview--current-repo)
+               (lambda () repo))
+              ((symbol-function 'builder-compile-project)
+               (lambda () (interactive) (setq called-in default-directory))))
+      (magit-gh-repo-overview-builder))
+    (should (string-prefix-p "/tmp/r" (or called-in "")))))
+
+(ert-deftest magit-gh-repo-dashboard/overview-agent-shell-queue-callable ()
+  "overview agent-shell-queue command calls agent-shell-queue-buffer-open."
+  (let ((called nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-overview--current-repo)
+               (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r")))
+              ((symbol-function 'agent-shell-queue-buffer-open)
+               (lambda () (interactive) (setq called t))))
+      (magit-gh-repo-overview-agent-shell-queue))
+    (should called)))
+
+;;;; magit-gh-repo-dashboard--parse-worktrees
+
+(defconst magit-gh-repo-dashboard-test--worktree-output
+  '("worktree /tmp/main"
+    "HEAD abc123def456"
+    "branch refs/heads/main"
+    ""
+    "worktree /tmp/wt1"
+    "HEAD 111111aaaaaa"
+    "branch refs/heads/feature-1"
+    ""
+    "worktree /tmp/wt2"
+    "HEAD 222222bbbbbb"
+    "detached"
+    "")
+  "Sample `git worktree list --porcelain' output as a list of lines.")
+
+(ert-deftest magit-gh-repo-dashboard/parse-worktrees-skips-main ()
+  "parse-worktrees omits the main worktree (first block)."
+  (let ((result (magit-gh-repo-dashboard--parse-worktrees
+                 "/tmp/main"
+                 magit-gh-repo-dashboard-test--worktree-output)))
+    (should (= 2 (length result)))
+    (should-not (seq-find (lambda (r) (equal "/tmp/main" (magit-gh-repo-path r)))
+                          result))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-worktrees-paths ()
+  "parse-worktrees sets correct paths on returned structs."
+  (let ((result (magit-gh-repo-dashboard--parse-worktrees
+                 "/tmp/main"
+                 magit-gh-repo-dashboard-test--worktree-output)))
+    (should (equal "/tmp/wt1" (magit-gh-repo-path (nth 0 result))))
+    (should (equal "/tmp/wt2" (magit-gh-repo-path (nth 1 result))))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-worktrees-names ()
+  "parse-worktrees constructs names from main-repo basename and branch."
+  (let ((result (magit-gh-repo-dashboard--parse-worktrees
+                 "/tmp/main"
+                 magit-gh-repo-dashboard-test--worktree-output)))
+    (should (equal "main@feature-1" (magit-gh-repo-name (nth 0 result))))
+    (should (equal "main@detached" (magit-gh-repo-name (nth 1 result))))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-worktrees-worktree-flag ()
+  "parse-worktrees sets :worktree t on all returned structs."
+  (let ((result (magit-gh-repo-dashboard--parse-worktrees
+                 "/tmp/main"
+                 magit-gh-repo-dashboard-test--worktree-output)))
+    (should (seq-every-p #'magit-gh-repo-worktree result))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-worktrees-empty-output ()
+  "parse-worktrees returns nil when only the main worktree is listed."
+  (let ((result (magit-gh-repo-dashboard--parse-worktrees
+                 "/tmp/main"
+                 '("worktree /tmp/main" "HEAD abc123" "branch refs/heads/main" ""))))
+    (should (null result))))
+
+;;;; magit-gh-repo-dashboard--sorted-repos with worktrees
+
+(ert-deftest magit-gh-repo-dashboard/sorted-repos-appends-worktrees ()
+  "sorted-repos places discovered worktrees immediately after their parent."
+  (let* ((main (magit-gh-repo--make :name "main" :path "/tmp/main"))
+         (wt (magit-gh-repo--make :name "main@feat" :path "/tmp/wt" :worktree t))
+         (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
+    (puthash "/tmp/main" (list wt) magit-gh-repo-dashboard--worktree-map)
+    (let ((result (magit-gh-repo-dashboard--sorted-repos (list main))))
+      (should (= 2 (length result)))
+      (should (equal "main" (magit-gh-repo-name (nth 0 result))))
+      (should (equal "main@feat" (magit-gh-repo-name (nth 1 result)))))))
+
+;;;; Column configuration
+
+(ert-deftest magit-gh-repo-dashboard/column-enabled-defaults ()
+  "All columns are enabled by default."
+  (let ((magit-gh-repo-dashboard-columns
+         '((name . t) (branch . t) (fetched . t) (behind . t) (changes . t) (worktree . t))))
+    (should (seq-every-p #'magit-gh-repo-dashboard--column-enabled-p
+                         magit-gh-repo-dashboard--all-columns))))
+
+(ert-deftest magit-gh-repo-dashboard/column-disabled ()
+  "A disabled column is excluded from active-columns."
+  (let ((magit-gh-repo-dashboard-columns
+         '((name . t) (branch . nil) (fetched . t) (behind . t) (changes . t) (worktree . t))))
+    (should-not (magit-gh-repo-dashboard--column-enabled-p 'branch))
+    (should-not (member 'branch (magit-gh-repo-dashboard--active-columns)))))
+
+(ert-deftest magit-gh-repo-dashboard/build-format-omits-disabled-columns ()
+  "build-format produces a vector that excludes disabled columns."
+  (let ((magit-gh-repo-dashboard-columns
+         '((name . t) (branch . nil) (fetched . t) (behind . t) (changes . t) (worktree . nil)))
+        (repos (list (magit-gh-repo--make :name "r" :path "/tmp/r"))))
+    (let ((fmt (magit-gh-repo-dashboard--build-format repos)))
+      (should (= 4 (length fmt)))
+      (should-not (seq-find (lambda (col) (equal "Branch" (car col))) (append fmt nil)))
+      (should-not (seq-find (lambda (col) (equal "WT" (car col))) (append fmt nil))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-entry-matches-format ()
+  "build-entry vector length matches active-column count."
+  (let ((magit-gh-repo-dashboard-columns
+         '((name . t) (branch . t) (fetched . nil) (behind . nil) (changes . t) (worktree . nil)))
+        (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
+               (lambda (_)
+                 (list :branch "main" :behind 0 :dirty nil :fetch-age 60.0
+                       :head-hash "abc" :recent-log "" :remote-origin nil
+                       :uncommitted-files nil))))
+      (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+             (entry (magit-gh-repo-dashboard--build-entry repo))
+             (active (magit-gh-repo-dashboard--active-columns)))
+        (should (= (length active) (length (cadr entry))))))))
+
+;;;; New command user-error conditions
+
+(ert-deftest magit-gh-repo-dashboard/visit-buffer-user-error-when-none ()
+  "visit-buffer signals user-error when no buffers visit the repo."
+  (let ((magit-gh-repo-list nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+               (lambda () (magit-gh-repo--make :name "r" :path "/nonexistent/path")))
+              ((symbol-function 'buffer-list) (lambda () nil)))
+      (should-error (magit-gh-repo-dashboard-visit-buffer) :type 'user-error))))
+
+(ert-deftest magit-gh-repo-dashboard/worktree-delete-user-error-when-not-worktree ()
+  "worktree-delete signals user-error when the entry is not a worktree."
+  (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+             (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r"))))
+    (should-error (magit-gh-repo-dashboard-worktree-delete) :type 'user-error)))
+
+(ert-deftest magit-gh-repo-dashboard/worktree-add-user-error-when-at-worktree ()
+  "worktree-add signals user-error when the entry is itself a worktree."
+  (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+             (lambda () (magit-gh-repo--make :name "r@feat" :path "/tmp/wt" :worktree t))))
+    (should-error (magit-gh-repo-dashboard-worktree-add) :type 'user-error)))
+
+(ert-deftest magit-gh-repo-dashboard/overview-worktree-add-user-error-for-worktree ()
+  "overview-worktree-add signals user-error when the overview IS a worktree."
+  (let ((repo (magit-gh-repo--make :name "r@f" :path "/tmp/wt" :worktree t)))
+    (cl-letf (((symbol-function 'magit-gh-repo-overview--current-repo) (lambda () repo)))
+      (should-error (magit-gh-repo-overview-worktree-add) :type 'user-error))))
+
+(ert-deftest magit-gh-repo-dashboard/overview-worktree-delete-user-error-for-main ()
+  "overview-worktree-delete signals user-error when the overview is NOT a worktree."
+  (let ((repo (magit-gh-repo--make :name "r" :path "/tmp/r")))
+    (cl-letf (((symbol-function 'magit-gh-repo-overview--current-repo) (lambda () repo)))
+      (should-error (magit-gh-repo-overview-worktree-delete) :type 'user-error))))
+
+;;;; magit-gh-repo-overview--worktrees-for (lazy discovery)
+
+(ert-deftest magit-gh-repo-dashboard/overview-worktrees-for-uses-cache ()
+  "worktrees-for returns cached value without running git."
+  (let* ((wt (magit-gh-repo--make :name "r@feat" :path "/tmp/wt" :worktree t))
+         (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
+    (puthash "/tmp/main" (list wt) magit-gh-repo-dashboard--worktree-map)
+    (let ((result (magit-gh-repo-overview--worktrees-for "/tmp/main")))
+      (should (= 1 (length result)))
+      (should (equal "r@feat" (magit-gh-repo-name (car result)))))))
+
+(ert-deftest magit-gh-repo-dashboard/overview-worktrees-for-caches-nil ()
+  "worktrees-for caches nil when git finds no worktrees, avoiding re-runs."
+  (let* ((magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal))
+         (call-count 0))
+    (cl-letf (((symbol-function 'process-lines)
+               (lambda (&rest _) (setq call-count (1+ call-count)) nil)))
+      (magit-gh-repo-overview--worktrees-for "/tmp/main")
+      (magit-gh-repo-overview--worktrees-for "/tmp/main"))
+    (should (= 1 call-count))))
 
 (provide 'test-magit-gh-repo-dashboard)
 
