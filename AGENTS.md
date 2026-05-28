@@ -4,7 +4,7 @@ This file documents code style, organizational conventions, and development
 principles for this Emacs configuration. Follow these guidelines when making
 any changes.
 
-Elisp-specific coding rules (naming conventions, list operations, macros, cl-lib
+Emacs Lisp-specific coding rules (naming conventions, list operations, macros, cl-lib
 restrictions) live in `.claude/rules/lisp.md`.
 
 ---
@@ -13,7 +13,7 @@ restrictions) live in `.claude/rules/lisp.md`.
 
 ### Module structure
 
-The configuration is split into focused files:
+The configuration is split into:
 
 | File                                | Purpose                                                                                       |
 |-------------------------------------|-----------------------------------------------------------------------------------------------|
@@ -24,10 +24,10 @@ The configuration is split into focused files:
 | `lisp/tychoish-core.el`             | All `use-package` forms. Organized by functional area with section headers.                   |
 | `lisp/tychoish-mail.el`             | Mu4e and mail account configuration.                                                          |
 | `lisp/tychoish-org.el`              | Org-mode, org-roam, capture templates.                                                        |
-| `lisp/xtdlib.el`                      | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
+| `lisp/xtdlib.el`                    | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
 | `lisp/builder.el`                   | Compilation buffer system.                                                                    |
+| `lisp/annotated-completing-read.el` | annotated-completing-read (ACR) completion utility.                                           |
 | `elpa/agent-shell-menu/`            | ACR-based menus, transient prefixes, buffer/permission/command/collapse UI (own git repo)     |
-| `lisp/annotated-completing-read.el` | ACR completion UI.                                                                            |
 | `lisp/eglot-test-at-point.el`       | Eglot test runner helper.                                                                     |
 | `user/*.el`                         | Per-machine overrides. Loaded last; not committed.                                            |
 
@@ -55,7 +55,7 @@ Lexical binding is mandatory on every file.
 
 ### Defer everything possible
 
-- Use `use-package` with `:defer t` or `:commands` / `:hook` / `:bind` (which imply deferral) for packages that don't need to load at startup.
+- Use `use-package` with `:defer t` or `:commands` / `:hook` / `:bind` (which imply deferral) for packages that don't need to load at startup. Always specify `:commands` last.
 - Use `with-eval-after-load` (not `eval-after-load`) for configuration that depends on a package being loaded but doesn't need to trigger loading.
 - Use `declare-function` to suppress byte-compiler warnings for functions from deferred packages.
 
@@ -168,18 +168,15 @@ Every key sequence within a `transient-define-prefix` must be unique across all 
 
 ### Always use emacsclient
 
-Use `emacsclient` for all Emacs operations — byte-compilation, `check-parens`, ERT tests, arbitrary elisp evaluation. Never invoke `emacs` directly.
+Use `emacsclient` for all Emacs operations — byte-compilation, `check-parens`, ERT tests, and arbitrary elisp evaluation.
 
-### Elisp formatting: no alignment padding
-
-Never use extra spaces to align let-binding RHS values or any other elements. Write `(table (make-hash-table :test #'equal))` not `(table   (make-hash-table :test #'equal))`. One space after the symbol name, always. Applies to `let`/`let*`, `plist`, `alist`, and all multi-element forms.
+Only invoke emacs directly as a smoke test for the entire config **OR** to ensure that the current session does not have stale state.
 
 ### Byte-compilation hygiene
 
-After byte-compiling a file as a correctness check:
+After byte-compiling a file as correctness check clean up the `.elc` file. It is always safe to remove an `.elc` file. In general in `lisp`, `user` and `test` directories remove any/all `.elc` files. 
+
 - If the `.elc` did not exist before the compile, delete it afterward.
-- If it already existed, leave it alone.
-- Delete operations of unwanted elc files should be done in the same tool invocation
 
 Byte-compilation is used only to catch errors, not to produce artifacts.
 
@@ -215,7 +212,7 @@ some packages (annotated-completing-read, agent-shell-queue) should
 not pick up this dependency without consultation.
 
 Limit the use of the 'cl-lib package to `cl-defun`, `cl-defmacro` and
-`cl-defstruct` and generic-functions. Most code can.
+`cl-defstruct` and generic functions and methods. 
 
 Avoid deeply nested flow control.
 

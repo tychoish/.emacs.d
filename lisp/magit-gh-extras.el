@@ -330,6 +330,14 @@ in-memory cache is already populated."
 	    (setq magit-gh--prune-state
 		  (plist-put magit-gh--prune-state :closed-prs table))))))))
 
+;;; Shared utilities
+
+(defmacro magit-gh--with-repo-dir (path &rest body)
+  "Execute BODY with `default-directory' set to PATH."
+  (declare (indent 1))
+  `(let ((default-directory ,path))
+     ,@body))
+
 ;;; Collect infrastructure
 
 (defvar magit-gh-collect-base-dir nil
