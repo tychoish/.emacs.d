@@ -209,7 +209,7 @@
       (buffer-list))))
 
 (use-package annotated-completing-read
-  :load-path "elpa/annotated-completing-read.el")
+  :load-path "elpa/annotated-completing-read")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1864,7 +1864,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 	   (results (tychoish--compilation-read-command command))
 	   (name (car results))
 	   (candidates (cdr results))
-	   (command (builder-candidate-command (ht-get candidates name))))
+	   (command (builder-candidate-command (map-elt candidates name))))
       (read-from-minibuffer "edit command => " command)))
 
   (add-hook 'compilation-finish-functions #'alert-after-finish-in-background)
@@ -2368,10 +2368,12 @@ Useful after changing `eglot-workspace-configuration' or
     :key-alias "mcp-commands"
     :bind-key "/"
     :bind-map mcp-hub-mode-map)
+
   (flex-defun tychoish/mcp-hub-refresh ()
     "Recompute `mcp-hub-servers' from `tychoish/mcp-build-servers'."
     (setq mcp-hub-servers
 	  (mapcar #'tychoish/mcp-spec->hub (tychoish/mcp-build-servers))))
+
   (defun tychoish/mcp-hub-skip-disabled (orig-fn name &rest args)
     "Around advice: refuse to start a server marked :disabled in `tychoish/mcp-servers'."
     (let ((spec (cl-find name tychoish/mcp-servers
