@@ -476,9 +476,10 @@ more arguments than the function cares about."
 (defconst tychoish/conf-state-directory-name "state")
 
 (defun tychoish/conf-state-path (name)
-  (f-join user-emacs-directory
-	  tychoish/conf-state-directory-name
-	  (tychoish-get-config-file-prefix name)))
+  (file-name-concat
+   user-emacs-directory
+   tychoish/conf-state-directory-name
+   (tychoish-get-config-file-prefix name)))
 
 (defun tychoish-get-config-file-prefix (name)
   "Build a config file basename, for NAME.
@@ -494,7 +495,7 @@ This combines the host name and the dameon name."
 	       "-"))
 
 (with-eval-after-load 'eshell
-  (setq eshell-history-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))
+  (setq eshell-history-file-name (file-name-contact user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -542,7 +543,7 @@ This combines the host name and the dameon name."
   (unless (equal "solo" tychoish/emacs-instance-id)
     ;; TODO This should get a better runtime/feature flag (and have
     ;; a list of instance names that are epehemral)
-    (setq desktop-dirname (f-join user-emacs-directory tychoish/conf-state-directory-name))
+    (setq desktop-dirname (file-name-concat user-emacs-directory tychoish/conf-state-directory-name))
     (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
     (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
@@ -556,7 +557,7 @@ This combines the host name and the dameon name."
 
     (require 'desktop)
 
-    (when (file-exists-p (f-join desktop-dirname desktop-base-file-name))
+    (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
       (with-gc-suppressed
        (with-file-name-handler-disabled
 	(with-silence (desktop-read)))))
@@ -755,7 +756,7 @@ This combines the host name and the dameon name."
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
-  (->> (f-entries (f-join user-emacs-directory "user"))
+  (->> (f-entries (file-name-concat user-emacs-directory "user"))
        (--filter (string-suffix-p ".el" it))
        (-map #'f-filename)
        (-map #'f-base)
@@ -767,15 +768,15 @@ This combines the host name and the dameon name."
 
 (defun should-read-abbrev-file-p (path)
   (or (not (ht-contains-p tychoish/abbrev-files-cache path))
-      (time-less-p (ht-get tychoish/abbrev-files-cache path) (f-mtime path))))
+      (time-less-p (map-elt tychoish/abbrev-files-cache path) (f-mtime path))))
 
 (defun tychoish/load-abbrev-files ()
-  (->> (f-entries (f-join user-emacs-directory "abbrev"))
+  (->> (f-entries (file-name-concat user-emacs-directory "abbrev"))
        (--filter (f-ext-p it "el"))
        (-filter #'file-exists-p)
        (-filter #'should-read-abbrev-file-p)
        (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
-       (mapc (lambda (it) (ht-set tychoish/abbrev-files-cache it (f-mtime it)))))
+       (mapc (lambda (it) (setf (map-elt tychoish/abbrev-files-cache it) (f-mtime it)))))
 
   (delight 'abbrev-mode "abb")
   (setq save-abbrevs t))
@@ -804,7 +805,7 @@ This combines the host name and the dameon name."
 		((f-when-file-exists run-path))
 		((f-when-file-exists "/var/tmp"))
 		((f-when-file-exists (temporary-file-directory)))))
-	 (solo-lock-path (f-join path (format "emacs-%d" (emacs-pid)))))
+	 (solo-lock-path (file-name-concat path (format "emacs-%d" (emacs-pid)))))
     (setq lock-file-name-transforms
           `(("\\`/.*/\\([^/]+\\)\\'" ,(concat solo-lock-path "\\1") t)))
 
@@ -826,8 +827,8 @@ forcibly recompile all emacs files. Returns a list of all files that
 were recompiled."
   (interactive)
   (->> (list user-emacs-directory
-	     (f-join user-emacs-directory "lisp")
-	     (f-join user-emacs-directory "user"))
+	     (file-name-concat user-emacs-directory "lisp")
+	     (file-name-concat user-emacs-directory "user"))
        (--flat-map (f-entries it #'f-file-p))
        (--filter (f-ext-p it "el"))
        (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
@@ -840,7 +841,7 @@ were recompiled."
 (defun async-package-operation (op pkgs)
   (let* ((ops '(install upgrade 'reinstall))
 	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
-	 (filename (concat (f-join temporary-file-directory
+	 (filename (concat (file-name-concat temporary-file-directory
 			           (string-join (list
 						    "emacs" tychoish/emacs-instance-id
 						    "async-package"
@@ -1043,8 +1044,7 @@ each buffer, unless NO-ASK is non-nil."
 		      (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
 		      (--filter (cdr it))
 		      (--keep (car it))
-		      (apply #'append)
-		      (-non-nil))))
+		      (apply #'append))))
 
     (if (called-interactively-p 'any)
 	(message "killed %d buffers matching '%S'" (length killed) (string-join killed ", "))
@@ -1059,7 +1059,7 @@ each buffer, unless NO-ASK is non-nil."
 by jump-to-definition."
   (interactive)
   (let ((killed (->> reference-source-paths
-		     (-flat-map #'force-kill-buffers-matching-path)
+		     (-map #'force-kill-buffers-matching-path)
 		     (-non-nil)
 		     (-map #'f-collapse-homedir))))
     (if (called-interactively-p 'any)
@@ -1163,8 +1163,8 @@ Returns the number of buffers killed."
 (defun move-text-internal (arg)
   (cond
    ((and mark-active transient-mark-mode)
-    (if (> (point) (mark))
-        (exchange-point-and-mark))
+    (when (> (point) (mark))
+      (exchange-point-and-mark))
     (let ((column (current-column))
           (text (delete-and-extract-region (point) (mark))))
       (forward-line arg)
@@ -1224,7 +1224,8 @@ Returns the number of buffers killed."
 
 (defun toggle-word-wrap (&optional arg)
   (interactive)
-  (when arg (user-error "ambiguous argument to `toggle-word-wrap'"))
+  (when arg
+    (user-error "ambiguous argument to `toggle-word-wrap'"))
   (if auto-fill-function
       (turn-on-soft-wrap)
     (turn-on-hard-wrap)))
@@ -1374,7 +1375,7 @@ export but adds complexity with no interactive benefit.")
   "Create a new file for a post of with the specified TITLE."
   (interactive "sPost Title: ")
   (let* ((slug (f-make-slug title))
-         (draft-fn (f-join tychoish-blog-path (concat slug "-" tychoish-blog-extension))))
+         (draft-fn (file-name-concat tychoish-blog-path (concat slug "-" tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
       (kill-new title)
@@ -1388,7 +1389,7 @@ export but adds complexity with no interactive benefit.")
   (interactive "sName: ")
   (let* ((slug (f-make-slug title))
          (datetime (format-time-string "%Y-%02m-%02d"))
-         (draft-fn (f-join (or path
+         (draft-fn (file-name-concat (or path
 			       (annotated-completing-read-directory))
 			   (concat datetime "." slug "." tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
@@ -1404,9 +1405,9 @@ export but adds complexity with no interactive benefit.")
   "Move the blog post in the current buffer to the publication location.
 Does nothing if the current post is not in the drafts folder."
   (interactive)
-  (let* ((publish-directory (f-join tychoish-blog-path "content" "post"))
+  (let* ((publish-directory (file-name-concat tychoish-blog-path "content" "post"))
          (original-file-name (buffer-file-name (current-buffer)))
-         (published-file-name (f-join publish-directory (file-name-nondirectory original-file-name)))
+         (published-file-name (file-name-concat publish-directory (file-name-nondirectory original-file-name)))
          (current-point (point)))
     (cond
      ((not (equal (file-name-extension original-file-name t) tychoish-blog-extension))
@@ -1558,7 +1559,7 @@ interactively then remove duplicate items from the `kill-ring'."
   (when path
     (setq local-notes-directory (expand-file-name path)))
 
-  (setq org-directory (f-join local-notes-directory "org"))
+  (setq org-directory (file-name-concat local-notes-directory "org"))
   (setq org-agenda-files (->> (list org-directory user-org-directories)
                               (-flatten)
                               (-map #'expand-file-name)
@@ -1566,10 +1567,10 @@ interactively then remove duplicate items from the `kill-ring'."
 			      (-map #'string-trim)
 			      (-remove #'string-empty-p)
                               (-distinct)))
-  (setq org-annotate-file-storage-file (f-join org-directory "records.org"))
-  (setq org-default-notes-file (f-join org-directory "records.org"))
-  (setq org-archive-location (f-join org-directory "archive/%s::datetree/"))
-  (setq deft-directory (f-join local-notes-directory "deft"))
+  (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
+  (setq org-default-notes-file (file-name-concat org-directory "records.org"))
+  (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
+  (setq deft-directory (file-name-concat local-notes-directory "deft"))
   local-notes-directory)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1579,10 +1580,10 @@ interactively then remove duplicate items from the `kill-ring'."
 (defun find-ssh-agent-socket-candidates ()
   (let ((v (format "/run/user/%d/ssh-agent.socket" (user-uid))))
     (->> (if (listp v) v (list v))
-         (-concat (sort (copy-sequence (f-glob (f-join temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
-         (-distinct)
-         (-non-nil)
-         (-filter #'f-writable?)
+         (append (sort (copy-sequence (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
+         (seq-uniq)
+         (seq-remove #'null)
+         (seq-filter #'f-writable?)
          (nreverse))))
 
 (defun tychoish/set-up-ssh-agent ()
@@ -1611,7 +1612,6 @@ interactively then remove duplicate items from the `kill-ring'."
   (setq read-process-output-max (* 1024 1024))
   (setq x-alt-keysym 'meta)
   (setq x-super-keysym 'super))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

@@ -30,6 +30,32 @@
 
 ;;; Core helpers shared by all magit-gh-* modules
 
+(defvar magit-gh--cache (make-hash-table :test #'equal)
+  "Global cache for repository-specific data, keyed by repository path.
+Each value is a plist containing data like :stats, :pr-counts, :worktrees, etc.")
+
+(defun magit-gh--cache-get (path key)
+  "Return the value for KEY in the cache for repo at PATH."
+  (plist-get (map-elt magit-gh--cache path) key))
+
+(defun magit-gh--cache-set (path key value)
+  "Set the value for KEY in the cache for repo at PATH."
+  (let ((plist (map-elt magit-gh--cache path)))
+    (setf (map-elt magit-gh--cache path) (plist-put plist key value))))
+
+(defun magit-gh--cache-remove (path &optional key)
+  "Remove data for repo at PATH. If KEY is nil, remove all data."
+  (if key
+      (let* ((plist (map-elt magit-gh--cache path))
+             (new-plist nil))
+        (while plist
+          (let ((k (pop plist))
+                (v (pop plist)))
+            (unless (eq k key)
+              (setq new-plist (plist-put new-plist k v)))))
+	(setf (map-elt magit-gh--cache path) new-plist))
+    (map-delete magit-gh--cache path)))
+
 (defun magit-gh--check-gh ()
   "Signal `user-error' when the `gh' CLI is not found on PATH."
   (unless (executable-find "gh")
@@ -46,12 +72,6 @@ Signals `user-error' when not inside a git repository."
 
 (defvar magit-gh-prune-cache-dir nil
   "Directory for per-repo closed-PR cache files, or nil to disable disk caching.")
-
-(defvar-local magit-gh--prune-state nil
-  "Buffer-local prune state for the current repo.
-A plist with `:candidates' (alist of (BRANCH . PR-ALIST)) and
-`:marked' (list of branch names selected for batch pruning).
-Lives on a hidden state buffer per repository.")
 
 (defun magit-gh--pr-closed-p (pr)
   "Return non-nil when PR alist represents a merged or closed PR."
@@ -120,18 +140,6 @@ Uses a single gh call fetching up to `magit-gh-prune-pr-limit' PRs."
     (magit-gh--prune-save-cache table)
     table))
 
-(defun magit-gh--prune-state-buffer ()
-  "Return the hidden state buffer for the current repo, creating it if absent.
-Errors when not inside a git repository."
-  (let* ((dir (or (magit-toplevel)
-		  (user-error "Not inside a git repository")))
-	 (name (format " *magit-gh-prune:%s*" (directory-file-name dir)))
-	 (buf (get-buffer name)))
-    (or buf
-	(with-current-buffer (get-buffer-create name)
-	  (setq default-directory dir)
-	  (current-buffer)))))
-
 (defun magit-gh--prune-scan ()
   "Re-scan all local branches against the closed/merged PR cache.
 Merges fresh GitHub data into the in-memory table stored in `:closed-prs'
@@ -139,26 +147,31 @@ Merges fresh GitHub data into the in-memory table stored in `:closed-prs'
 `:candidates'. Excludes the default branch and the currently checked-out
 branch, catching squash-merged branches whose remote tracking ref is gone.
 Stale marked branches are dropped from `:marked'. Returns new candidates."
-  (let* ((default-directory (magit-gh--repo-dir))
-	 (prev-marked (plist-get magit-gh--prune-state :marked))
-	 (prev-prs (plist-get magit-gh--prune-state :closed-prs))
+  (let* ((path (magit-gh--repo-dir))
+         (default-directory path)
+         (state (magit-gh--cache-get path :prune-state))
+	 (prev-marked (plist-get state :marked))
+	 (prev-prs (plist-get state :closed-prs))
 	 (protected (list (magit-gh--default-branch)
 			  (magit-get-current-branch)))
 	 (closed-prs (magit-gh--fetch-closed-prs prev-prs))
 	 (candidates nil))
+
     (dolist (branch (magit-list-local-branch-names))
       (unless (member branch protected)
 	(let ((pr (map-elt closed-prs branch)))
 	  (when pr
 	    (push (cons branch pr) candidates)))))
+
     (setq candidates (nreverse candidates))
-    (setq magit-gh--prune-state
-	  (list :candidates candidates
-		:marked (cl-intersection prev-marked
-					 (mapcar #'car candidates)
-					 :test #'equal)
-		:closed-prs closed-prs))
-    candidates))
+
+    (magit-gh--cache-set path
+     :prune-state (list :candidates candidates
+			:marked (cl-intersection prev-marked
+						 (mapcar #'car candidates)
+						 :test #'equal)
+			:closed-prs closed-prs))
+      candidates))
 
 (defun magit-gh--prune-format-annotation (pr)
   "Return a one-line annotation string describing PR alist."
@@ -200,9 +213,9 @@ Returns nil when LABEL is not a branch entry."
   (when (string-match "\\`prune: \\(.+?\\)\\(?: \\[marked\\]\\)?\\'" label)
     (match-string 1 label)))
 
-(defun magit-gh--prune-delete-branches (branches buf &optional prompt-p)
-  "Delete each branch in BRANCHES, prompting only when PROMPT-P.
-After deletion, re-scan the cache in BUF.
+(defun magit-gh--prune-delete-branches (branches path &optional prompt-p)
+  "Delete each branch in BRANCHES for repo at PATH, prompting only when PROMPT-P.
+After deletion, re-scan the cache for PATH.
 Returns a plist (:deleted N :skipped M :quit BOOL).
 With PROMPT-P, the user is prompted y/n/q/! per branch; `!' enables
 yes-to-all for the remainder, `q' terminates the loop."
@@ -210,28 +223,29 @@ yes-to-all for the remainder, `q' terminates the loop."
 	(skipped 0)
 	(yes-to-all (not prompt-p))
 	(quit nil))
-    (catch 'done
-      (dolist (branch branches)
-	(let ((answer (if yes-to-all ?y
-			(read-char-choice
-			 (format "Delete %s? (y/n/q/!) " branch)
-			 '(?y ?n ?q ?!)))))
-	  (pcase answer
-	    (?y (magit-branch-delete (list branch) t) (cl-incf deleted))
-	    (?n (cl-incf skipped))
-	    (?q (setq quit t) (throw 'done nil))
-	    (?! (setq yes-to-all t)
-		(magit-branch-delete (list branch) t)
-		(cl-incf deleted))))))
-    (with-current-buffer buf (magit-gh--prune-scan))
+    (magit-gh--with-repo-dir path
+      (catch 'done
+        (dolist (branch branches)
+	  (let ((answer (if yes-to-all ?y
+			  (read-char-choice
+			   (format "Delete %s? (y/n/q/!) " branch)
+			   '(?y ?n ?q ?!)))))
+	    (pcase answer
+	      (?y (magit-branch-delete (list branch) t) (cl-incf deleted))
+	      (?n (cl-incf skipped))
+	      (?q (setq quit t) (throw 'done nil))
+	      (?! (setq yes-to-all t)
+		  (magit-branch-delete (list branch) t)
+		  (cl-incf deleted)))))))
+    (magit-gh--prune-scan)
     (message "magit-gh prune: deleted %d, skipped %d%s"
 	     deleted skipped (if quit " (quit)" ""))
     (list :deleted deleted :skipped skipped :quit quit)))
 
-(defun magit-gh--prune-toggle-mark (buf)
-  "Prompt for a branch from the cache in BUF and toggle its mark.
-Updates `:marked' in the buffer-local state of BUF."
-  (let* ((state (buffer-local-value 'magit-gh--prune-state buf))
+(defun magit-gh--prune-toggle-mark (path)
+  "Prompt for a branch from the cache for repo at PATH and toggle its mark.
+Updates `:marked' in the cached prune state."
+  (let* ((state (magit-gh--cache-get path :prune-state))
 	 (candidates (plist-get state :candidates))
 	 (marked (plist-get state :marked))
 	 (table (make-hash-table :test #'equal)))
@@ -251,32 +265,31 @@ Updates `:marked' in the buffer-local state of BUF."
 	   (new-marked (if (member branch marked)
 			   (delete branch (copy-sequence marked))
 			 (cons branch marked))))
-      (with-current-buffer buf
-	(setq magit-gh--prune-state
-	      (plist-put magit-gh--prune-state :marked new-marked))))))
+      (magit-gh--cache-set path :prune-state
+                           (plist-put state :marked new-marked)))))
 
-(defun magit-gh--prune-dispatch (label buf)
-  "Dispatch the menu action for LABEL given state buffer BUF.
+(defun magit-gh--prune-dispatch (label path)
+  "Dispatch the menu action for LABEL given repo PATH.
 Throws `magit-gh--prune-exit' to terminate the menu loop."
-  (let* ((state (buffer-local-value 'magit-gh--prune-state buf))
+  (let* ((state (magit-gh--cache-get path :prune-state))
 	 (candidates (plist-get state :candidates))
 	 (marked (plist-get state :marked)))
     (cond
      ((equal label "exit menu")
       (throw 'magit-gh--prune-exit nil))
      ((equal label "refresh")
-      (with-current-buffer buf (magit-gh--prune-scan)))
+      (magit-gh--prune-scan))
      ((equal label "prune all branches (no prompt)")
-      (magit-gh--prune-delete-branches (mapcar #'car candidates) buf nil))
+      (magit-gh--prune-delete-branches (mapcar #'car candidates) path nil))
      ((equal label "prune all branches (with prompt)")
-      (magit-gh--prune-delete-branches (mapcar #'car candidates) buf t))
+      (magit-gh--prune-delete-branches (mapcar #'car candidates) path t))
      ((equal label "mark branch for pruning")
-      (magit-gh--prune-toggle-mark buf))
+      (magit-gh--prune-toggle-mark path))
      ((equal label "prune marked branches")
-      (magit-gh--prune-delete-branches marked buf nil))
+      (magit-gh--prune-delete-branches marked path nil))
      ((magit-gh--prune-parse-branch-label label)
       (magit-gh--prune-delete-branches
-       (list (magit-gh--prune-parse-branch-label label)) buf nil))
+       (list (magit-gh--prune-parse-branch-label label)) path nil))
      (t
       (user-error "Unknown menu label: %s" label)))))
 
@@ -284,7 +297,7 @@ Throws `magit-gh--prune-exit' to terminate the menu loop."
 (defun magit-gh-prune-merged-branches ()
   "Open a menu to prune local branches whose PRs are merged or closed.
 
-Per-repo cache (candidates + marked list) lives on a hidden state buffer
+Per-repo cache (candidates + marked list) lives on the unified global cache
 keyed by repository toplevel. The menu loops until you select `exit
 menu'. The menu offers:
 
@@ -297,14 +310,13 @@ menu'. The menu offers:
   - prune: BRANCH [marked]   (one entry per candidate)"
   (interactive)
   (magit-gh--check-gh)
-  (let ((buf (magit-gh--prune-state-buffer)))
-    (with-current-buffer buf
-      (unless magit-gh--prune-state
-	(message "magit-gh prune: scanning for branches with closed PRs...")
-	(magit-gh--prune-scan)))
+  (let ((path (magit-gh--repo-dir)))
+    (unless (magit-gh--cache-get path :prune-state)
+      (message "magit-gh prune: scanning for branches with closed PRs...")
+      (magit-gh--prune-scan))
     (catch 'magit-gh--prune-exit
       (while t
-	(let* ((state (buffer-local-value 'magit-gh--prune-state buf))
+	(let* ((state (magit-gh--cache-get path :prune-state))
 	       (table (magit-gh--prune-build-menu
 		       (plist-get state :candidates)
 		       (plist-get state :marked)))
@@ -313,7 +325,7 @@ menu'. The menu offers:
 		       :prompt "magit-gh prune => "
 		       :category 'magit-gh-prune
 		       :require-match t)))
-	  (magit-gh--prune-dispatch label buf))))))
+	  (magit-gh--prune-dispatch label path))))))
 
 ;;;###autoload
 (defun magit-gh-prune-prefetch ()
@@ -323,12 +335,12 @@ Skips silently when caching is disabled, not in a git repo, or the
 in-memory cache is already populated."
   (when (and magit-gh-prune-cache-dir
 	     (ignore-errors (magit-toplevel)))
-    (let ((buf (magit-gh--prune-state-buffer)))
-      (unless (plist-get (buffer-local-value 'magit-gh--prune-state buf) :closed-prs)
-	(with-current-buffer buf
-	  (let ((table (magit-gh--prune-load-cache)))
-	    (setq magit-gh--prune-state
-		  (plist-put magit-gh--prune-state :closed-prs table))))))))
+    (let* ((path (magit-gh--repo-dir))
+           (state (magit-gh--cache-get path :prune-state)))
+      (unless (plist-get state :closed-prs)
+        (let ((table (magit-gh--prune-load-cache)))
+          (magit-gh--cache-set path :prune-state
+                               (plist-put state :closed-prs table)))))))
 
 ;;; Shared utilities
 
@@ -405,7 +417,8 @@ Format is controlled by `magit-gh-collect-index-format'."
 ON-SUCCESS is called with the output string when the process exits 0.
 ON-ERROR is called with the output string and exit code otherwise;
 when nil, a `message' is emitted instead."
-  (let* ((buf (generate-new-buffer " *magit-gh-proc*"))
+  (let* ((default-directory dir)
+         (buf (generate-new-buffer " *magit-gh-proc*"))
          (proc (make-process
                 :name "magit-gh"
                 :buffer buf
