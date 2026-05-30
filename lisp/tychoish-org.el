@@ -480,7 +480,6 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                    (list (concat key char)
                          (format "%s %s <%s>" name kind (f-filename path))))
       (push (list (concat char key) (car first-sub) (cdr first-sub)) specs))
-    ;; TODO re
     (dolist (entry (append specs
                            (--map (cons (concat key (car it)) (cdr it))
                                   default-subs)))
@@ -520,7 +519,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (tychoish/org-capture--add-flat-templates
    :kind "tasks" :char "t" :name name :path path :key key
    :target (list 'file+headline path "Tasks")
-   :body-fn (lambda (anchor) (concat "* %(~title~)\n" anchor "\n%?"))
+   :body-fn (lambda (anchor) (concat "* TODO %(~title~)\n" anchor "\n%?"))
    :first-sub (cons "%i" "selection")
    :default-subs '(("tt" "%i" "selection")
                    ("tx" "%x" "X11 buffer")

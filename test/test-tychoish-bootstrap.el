@@ -148,7 +148,7 @@
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
       (should (string-prefix-p (expand-file-name user-emacs-directory)
-                               (tychoish/conf-state-path "bookmarks"))))))
+                               (expand-file-name (tychoish/conf-state-path "bookmarks")))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; buffer-derived-mode-p

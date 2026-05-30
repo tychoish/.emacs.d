@@ -1,6 +1,6 @@
 ;;; magit-gh-repo-dashboard.el --- Repository and PR dashboards for magit-gh -*- lexical-binding: t -*-
 
-;; Author: tycho garen
+;; Author: sam kleinman
 ;; Maintainer: tychoish
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1") (magit "4.0") (transient "0.4") (magit-gh-extras "0.1"))
@@ -73,7 +73,7 @@
   "List of `magit-gh-repo' structs registered for dashboard display.
 Use `magit-gh-repo-register' to add entries.")
 
-(cl-defun magit-gh-repo-register (&optional &key name path include-prs auto-sync tags auto-commit commands sort-hint worktree)
+(cl-defun magit-gh-repo-register (name path &key include-prs auto-sync tags auto-commit commands sort-hint worktree)
   "Register or replace a repository with NAME at absolute PATH.
 Replaces any existing entry with the same name or path.
 
@@ -447,15 +447,17 @@ The first block (the main worktree) is always skipped."
 (defun magit-gh-repo-overview--worktrees-for (path)
   "Return worktree structs for the main repo at PATH, discovering lazily if needed."
   (let ((cached (magit-gh--cache-get path :worktrees)))
-    (if (null cached)
-        (let* ((lines (ignore-errors
-                        (let ((default-directory path))
-                          (process-lines magit-git-executable
-                                         "worktree" "list" "--porcelain"))))
-               (found (when lines (magit-gh-repo-dashboard--parse-worktrees path lines))))
-          (magit-gh--cache-set path :worktrees found)
-          found)
-      cached)))
+    (cond
+     ((eq cached 'none) nil)
+     (cached cached)
+     (t
+      (let* ((lines (ignore-errors
+                      (let ((default-directory path))
+                        (process-lines magit-git-executable
+                                       "worktree" "list" "--porcelain"))))
+             (found (when lines (magit-gh-repo-dashboard--parse-worktrees path lines))))
+        (magit-gh--cache-set path :worktrees (or found 'none))
+        found)))))
 
 ;;;; Column configuration
 
@@ -1694,8 +1696,8 @@ Returns nil when OUTPUT is not a JSON array."
   [["Pull Request"
     ("RET" "Open in browser" magit-gh-pr-dashboard-open-browser)]
    ["Filter"
-    ("f" "Set filter…" magit-gh-pr-dashboard-set-filter)
-    ("F" "Clear all filters" magit-gh-pr-dashboard-clear-filters)]
+    ("fs" "Set filter…" magit-gh-pr-dashboard-set-filter)
+    ("fc" "Clear all filters" magit-gh-pr-dashboard-clear-filters)]
    ["Dashboard"
     ("g" "Refresh" magit-gh-pr-dashboard-refresh)
     ("q" "Quit" quit-window)]])

@@ -189,9 +189,9 @@ with `eglot-test-at-point-command' and `eglot-test-at-point-name-fn'."
                 (lenses (eglot--request server
                                           :textDocument/codeLens
                                           `(:textDocument ,(eglot--TextDocumentIdentifier))
-                                          :cancel-on-input non-essential)))
-      (when-let* ((best (thread-last lenses
-                           (seq-filter (lambda (lens)
+                                          :cancel-on-input non-essential))
+		(best (thread-last lenses
+				   (seq-filter (lambda (lens)
                                          (let* ((cmd (plist-get lens :command))
                                                 (range (plist-get lens :range)))
                                            (and cmd range
@@ -199,8 +199,8 @@ with `eglot-test-at-point-command' and `eglot-test-at-point-name-fn'."
                                                 (<= (car (eglot-range-region range)) pos)))))
                            last
                            car))
-                   (best-args (plist-get (plist-get best :command) :arguments)))
-        (funcall name-fn best-args)))))
+                (best-args (plist-get (plist-get best :command) :arguments)))
+      (funcall name-fn best-args)))))
 
 ;;;###autoload
 (defun eglot-test-at-point ()

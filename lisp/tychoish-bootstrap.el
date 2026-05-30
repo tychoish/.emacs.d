@@ -457,6 +457,8 @@ more arguments than the function cares about."
 		    tychoish/emacs-instance-id
 		    "solo"))))))
 
+
+
 (defun tychoish/set-up-instance-name ()
   (unless tychoish/emacs-instance-id
     (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))))
@@ -1061,6 +1063,7 @@ by jump-to-definition."
   (let ((killed (->> reference-source-paths
 		     (-map #'force-kill-buffers-matching-path)
 		     (-non-nil)
+                     (-filter #'stringp)
 		     (-map #'f-collapse-homedir))))
     (if (called-interactively-p 'any)
 	(message "killed %s refrence/source buffers [%s]" (length killed) (string-join killed ", "))

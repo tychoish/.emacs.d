@@ -261,8 +261,8 @@
          (cached (list :branch "main" :remote-origin nil :behind 0
                        :dirty nil :uncommitted-files nil
                        :fetch-age 60.0 :head-hash "abc123" :recent-log ""))
-         (magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
-    (puthash "/tmp/test" cached magit-gh-repo-dashboard--stats-cache)
+         (magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/test" :stats cached)
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--head-hash)
                (lambda (_) "abc123")))
       (should (equal cached (magit-gh-repo-dashboard--get-stats repo))))))
@@ -273,8 +273,8 @@
          (cached (list :branch "main" :remote-origin nil :behind 0
                        :dirty nil :uncommitted-files nil
                        :fetch-age 60.0 :head-hash "old123" :recent-log ""))
-         (magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
-    (puthash "/tmp/test" cached magit-gh-repo-dashboard--stats-cache)
+         (magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/test" :stats cached)
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--head-hash)
                (lambda (_) "new456"))
               ((symbol-function 'magit-gh-repo-dashboard--collect-stats)
@@ -871,15 +871,15 @@ Overrides are placed first so `plist-get' finds them before the defaults."
 
 (ert-deftest magit-gh-repo-dashboard/dirty-or-unknown-p-when-no-stats ()
   "dirty-or-unknown-p returns t when stats not yet cached."
-  (let ((magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
                (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r"))))
       (should (magit-gh-repo-dashboard--dirty-or-unknown-p)))))
 
 (ert-deftest magit-gh-repo-dashboard/dirty-or-unknown-p-when-clean ()
   "dirty-or-unknown-p returns nil when stats are cached and clean."
-  (let ((magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal)))
-    (puthash "/tmp/r" (list :dirty nil :branch "main" :behind 0) magit-gh-repo-dashboard--stats-cache)
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/r" :stats (list :dirty nil :branch "main" :behind 0))
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
                (lambda () (magit-gh-repo--make :name "r" :path "/tmp/r"))))
       (should-not (magit-gh-repo-dashboard--dirty-or-unknown-p)))))
@@ -1255,8 +1255,8 @@ Overrides are placed first so `plist-get' finds them before the defaults."
   "sorted-repos places discovered worktrees immediately after their parent."
   (let* ((main (magit-gh-repo--make :name "main" :path "/tmp/main"))
          (wt (magit-gh-repo--make :name "main@feat" :path "/tmp/wt" :worktree t))
-         (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
-    (puthash "/tmp/main" (list wt) magit-gh-repo-dashboard--worktree-map)
+         (magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/main" :worktrees (list wt))
     (let ((result (magit-gh-repo-dashboard--sorted-repos (list main))))
       (should (= 2 (length result)))
       (should (equal "main" (magit-gh-repo-name (nth 0 result))))
@@ -1342,15 +1342,15 @@ Overrides are placed first so `plist-get' finds them before the defaults."
 (ert-deftest magit-gh-repo-dashboard/overview-worktrees-for-uses-cache ()
   "worktrees-for returns cached value without running git."
   (let* ((wt (magit-gh-repo--make :name "r@feat" :path "/tmp/wt" :worktree t))
-         (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
-    (puthash "/tmp/main" (list wt) magit-gh-repo-dashboard--worktree-map)
+         (magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/main" :worktrees (list wt))
     (let ((result (magit-gh-repo-overview--worktrees-for "/tmp/main")))
       (should (= 1 (length result)))
       (should (equal "r@feat" (magit-gh-repo-name (car result)))))))
 
 (ert-deftest magit-gh-repo-dashboard/overview-worktrees-for-caches-nil ()
   "worktrees-for caches nil when git finds no worktrees, avoiding re-runs."
-  (let* ((magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal))
+  (let* ((magit-gh--cache (make-hash-table :test #'equal))
          (call-count 0))
     (cl-letf (((symbol-function 'process-lines)
                (lambda (&rest _) (setq call-count (1+ call-count)) nil)))
