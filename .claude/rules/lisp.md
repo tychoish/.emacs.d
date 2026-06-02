@@ -51,35 +51,9 @@ Use `seq.el` equivalents instead of cl-lib or raw `mapcar`:
 
 #### Prefer `seq-do` over `dolist`
 
-Never use `dolist` for side-effectful iteration over a list. Use `seq-do` instead:
-
-```elisp
-;; Avoid:
-(dolist (item items)
-  (setf (item-status item) 'done))
-
-;; Prefer:
-(seq-do (lambda (item)
-          (setf (item-status item) 'done))
-        items)
-```
-
-When a `dolist` accumulates results via `push` into a local variable, replace the whole
-pattern with `thread-last` + `seq-map`/`seq-filter` instead:
-
-```elisp
-;; Avoid:
-(let (results)
-  (dolist (it items)
-    (when (pred it)
-      (push (transform it) results)))
-  (nreverse results))
-
-;; Prefer:
-(thread-last items
-  (seq-filter #'pred)
-  (seq-map #'transform))
-```
+Never use `dolist` for side-effectful iteration over a list. Use `seq-do` instead.
+When a `dolist` accumulates results via `push`, replace the whole pattern with
+`thread-last` + `seq-map`/`seq-filter` instead.
 
 The `while` form is acceptable only for buffer-traversal loops that use point-based
 operations (`forward-line`, `eobp`, etc.) — these have no `seq.el` equivalent.
@@ -87,15 +61,7 @@ operations (`forward-line`, `eobp`, etc.) — these have no `seq.el` equivalent.
 #### Threading macros over nesting
 
 Use `thread-last` from `subr-x` to express a series of transformations on the same value
-instead of nesting function calls:
-
-```elisp
-;; Avoid:
-(seq-map #'f (seq-remove #'pred (seq-map #'g list)))
-
-;; Prefer:
-(thread-last list (seq-map #'g) (seq-remove #'pred) (seq-map #'f))
-```
+instead of nesting function calls.
 
 ### Let bindings
 
@@ -104,34 +70,10 @@ site instead. Single-use bindings add visual indirection without clarity benefit
 Exceptions: the expression is complex enough that naming it aids readability, or it
 appears in a `when-let*`/`if-let*` chain where the binding is also the nil-guard.
 
-```elisp
-;; Avoid:
-(let ((result (process-item item)))
-  (insert result))
-
-;; Prefer:
-(insert (process-item item))
-```
-
 ### Conditionals and Bindings
 
 Use `when-let*` and `if-let*` to flatten binding+condition chains. Avoid
-`(let ((x (f))) (when x ...))` nesting:
-
-```elisp
-;; Avoid:
-(let ((pair (assoc id alist)))
-  (when pair
-    (let ((item (cdr pair)))
-      (when (eq (item-status item) 'active)
-        ...))))
-
-;; Prefer:
-(when-let* ((pair (assoc id alist))
-             (item (cdr pair))
-             ((eq (item-status item) 'active)))
-  ...)
-```
+`(let ((x (f))) (when x ...))` nesting.
 
 Use `if-let*` when there is an else branch, `when-let*` when there is none.
 
@@ -156,67 +98,22 @@ NEVER add lambdas to hooks — always use named functions.
 ### Lambdas
 
 Never write a lambda that only calls one function and could be replaced by a function
-reference. Pass the function directly with `#'`:
-
-```elisp
-;; Avoid:
-(seq-map (lambda (x) (upcase x)) list)
-(add-hook 'some-hook (lambda () (my-fn)))
-
-;; Prefer:
-(seq-map #'upcase list)
-(add-hook 'some-hook #'my-fn)
-```
+reference. Pass the function directly with `#'`.
 
 ### Conditionals
 
 #### Use `when`/`unless` for single-branch conditions
 
-Never use `(if COND BODY)` with no else branch. Use `when` or `unless` instead:
-
-```elisp
-;; Avoid:
-(if condition
-  (do-something))
-
-;; Prefer:
-(when condition
-  (do-something))
-```
+Never use `(if COND BODY)` with no else branch. Use `when` or `unless` instead.
 
 #### Use `cond` over nested `if`
 
-Avoid nesting `if` forms. Use `cond` when there are two or more branches:
-
-```elisp
-;; Avoid:
-(if (eq x 'a)
-  (handle-a)
-  (if (eq x 'b)
-    (handle-b)
-    (handle-default)))
-
-;; Prefer:
-(cond
-  ((eq x 'a) (handle-a))
-  ((eq x 'b) (handle-b))
-  (t (handle-default)))
-```
+Avoid nesting `if` forms. Use `cond` when there are two or more branches.
 
 #### Always break `if` across at least three lines
 
 Never write a one-line `if`. The condition, then-branch, and else-branch each get their
-own line:
-
-```elisp
-;; Avoid:
-(if condition (then-expr) (else-expr))
-
-;; Prefer:
-(if condition
-  (then-expr)
-  (else-expr))
-```
+own line.
 
 ### Naming Conventions
 
@@ -269,15 +166,4 @@ macros when the body is just a value transformation.
 #### `with-*` macros
 
 Macros that temporarily modify a dynamic variable must restore it with `let`, not `setq`.
-Always use `prog1` or `unwind-protect` to return the body's value:
-
-```elisp
-;; Correct:
-(defmacro with-foo (value &rest body)
-  `(let ((foo ,value))
-     ,@body))
-
-;; Wrong (leaks):
-(defmacro with-foo (value &rest body)
-  `(progn (setq foo ,value) ,@body (setq foo nil)))
-```
+Always use `prog1` or `unwind-protect` to return the body's value.

@@ -200,7 +200,7 @@ with `eglot-test-at-point-command' and `eglot-test-at-point-name-fn'."
                            last
                            car))
                 (best-args (plist-get (plist-get best :command) :arguments)))
-      (funcall name-fn best-args)))))
+      (funcall name-fn best-args))))
 
 ;;;###autoload
 (defun eglot-test-at-point ()

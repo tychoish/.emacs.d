@@ -174,24 +174,17 @@ Only invoke emacs directly as a smoke test for the entire config **OR** to ensur
 
 ### Byte-compilation hygiene
 
-After byte-compiling a file as correctness check clean up the `.elc` file. It is always safe to remove an `.elc` file. In general in `lisp`, `user` and `test` directories remove any/all `.elc` files. 
-
-- If the `.elc` did not exist before the compile, delete it afterward.
-
-Byte-compilation is used only to catch errors, not to produce artifacts.
+After byte-compiling a file as a correctness check, delete the `.elc` file — in `lisp/`,
+`user/`, and `test/` directories remove any/all `.elc` files. Byte-compilation is used
+only to catch errors, not to produce artifacts.
 
 ### Reload after changes
 
-After verifying an elisp file compiles cleanly, reload it into the live session:
+After verifying an elisp file compiles cleanly, reload it with
+`emacsclient --eval '(load-file "/path/to/file.el")'`. Changes don't take effect in the
+running Emacs until the file is reloaded.
 
-```
-emacsclient --eval '(load-file "/path/to/file.el")'
-```
-
-Changes don't take effect in the running Emacs until the file is reloaded.
-
-After loading or reloeading `lisp/tychoish-bootstrap.el` ALWAYS reload
-`lisp/tychoish-core.el`.
+After reloading `lisp/tychoish-bootstrap.el` ALWAYS reload `lisp/tychoish-core.el`.
 
 ### Testing
 
@@ -207,14 +200,7 @@ the relevant test suite passes with coverage for the new or fixed behaviour.
 
 Prefer standard library functions over reimplementing basic functionality.
 
-Using functionality from `xtdlib` is generally acceptable, though some
-some packages (annotated-completing-read, agent-shell-queue) should
-not pick up this dependency without consultation.
-
-Limit the use of the 'cl-lib package to `cl-defun`, `cl-defmacro` and
-`cl-defstruct` and generic functions and methods. 
-
-Avoid deeply nested flow control.
-
-Avoid single-use declarations.
+Using functionality from `xtdlib` is generally acceptable, though some packages
+(annotated-completing-read, agent-shell-queue) should not pick up this dependency without
+consultation. See `lisp.md` for cl-lib restrictions, list iteration, and naming rules.
 

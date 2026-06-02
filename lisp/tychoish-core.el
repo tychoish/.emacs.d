@@ -2358,34 +2358,6 @@ Useful after changing `eglot-workspace-configuration' or
    :map tychoish/robot-gptel-map
    ("a" . gptel-agent)))
 
-(use-package mcp
-  :ensure t
-  :commands (mcp-hub-start-all-servers)
-  :config
-  (require 'mcp-hub)
-  (tychoish/mcp-servers-init)
-  (make-read-extended-command-for-prefix "mcp"
-    :key-alias "mcp-commands"
-    :bind-key "/"
-    :bind-map mcp-hub-mode-map)
-
-  (flex-defun tychoish/mcp-hub-refresh ()
-    "Recompute `mcp-hub-servers' from `tychoish/mcp-build-servers'."
-    (setq mcp-hub-servers
-	  (mapcar #'tychoish/mcp-spec->hub (tychoish/mcp-build-servers))))
-
-  (defun tychoish/mcp-hub-skip-disabled (orig-fn name &rest args)
-    "Around advice: refuse to start a server marked :disabled in `tychoish/mcp-servers'."
-    (let ((spec (cl-find name tychoish/mcp-servers
-                         :key (lambda (s) (plist-get s :name))
-                         :test #'equal)))
-      (if (and spec (plist-get spec :disabled))
-          (message "mcp-hub: skipping disabled server %S" name)
-        (apply orig-fn name args))))
-  (tychoish/mcp-hub-refresh)
-  (advice-add 'mcp-hub-start-all-servers :before #'tychoish/mcp-hub-refresh)
-  (advice-add 'mcp-hub-start-server :around #'tychoish/mcp-hub-skip-disabled))
-
 (use-package copilot
   :ensure t
   :bind (:map tychoish/robot-map ;; "C-c r"
@@ -2717,6 +2689,7 @@ Useful after changing `eglot-workspace-configuration' or
           (if tychoish/agent-shell-terse-output
               (agent-shell-make-environment-variables
                "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona
+	       "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
                :inherit-env t)
             (agent-shell-make-environment-variables :inherit-env t))))
 
@@ -2731,11 +2704,6 @@ Useful after changing `eglot-workspace-configuration' or
   (defun agent-shell-dot-subdir (subdir)
     "Resolve SUBDIR under the per-instance agent-shell state path."
     (f-join (tychoish/conf-state-path "agent-shell") subdir))
-
-  (defun tychoish/agent-shell-mcp-refresh (&rest _)
-    "Recompute `agent-shell-mcp-servers' from `tychoish/mcp-build-servers'."
-    (setq agent-shell-mcp-servers
-	  (mapcar #'tychoish/mcp-spec->acp (tychoish/mcp-build-servers))))
 
   (defun agent-shell-corfu-setup ()
     "Configure corfu auto-completion for agent-shell buffers."
@@ -2763,7 +2731,7 @@ Useful after changing `eglot-workspace-configuration' or
                     slug))))
   :config
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
-  (setq agent-shell-anthropic-default-model-id "default")
+  (setq agent-shell-anthropic-default-model-id "sonnet")
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
   (require 'agent-shell-omp)
 
@@ -2790,9 +2758,18 @@ Useful after changing `eglot-workspace-configuration' or
 
   (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
   (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-corfu-setup)
-  (advice-add 'agent-shell :before #'tychoish/agent-shell-mcp-refresh)
 
-  (tychoish/mcp-servers-init)
+  (defun ad:agent-shell--refresh-session-title (orig-fn &optional event)
+    (let ((agent-name (map-nested-elt agent-shell--state '(:agent-config :mode-line-name)))
+          (title (map-nested-elt agent-shell--state '(:session :title))))
+      (unless (and (equal agent-name "Claude")
+                   (stringp title)
+                   (not (string-empty-p title)))
+        (funcall orig-fn event))))
+
+  (advice-add 'agent-shell--refresh-session-title :around
+              #'ad:agent-shell--refresh-session-title)
+
   (tychoish/agent-shell--apply-environment))
 
 (use-package agent-shell-menu
@@ -2910,12 +2887,11 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package sprite
   :load-path "lisp"
-  :commands (sprites-list sprites-create
-             sprites-get-next sprites-get-or-create-next)
+  :commands (sprite-list sprite-create
+             sprite-get-next sprite-get-or-create-next)
   :config
-  (when (sprite--full-name-p (sprite-resolve-instance-id))
-    (add-to-list 'mode-line-misc-info
-                 '(:eval (sprite--mode-line-string)))))
+  (add-to-list 'mode-line-misc-info
+               '(:eval (format " [%s]" (sprite--mode-line-string)))))
 
 (use-package agent-shell-workspace
   :load-path "elpa/agent-shell-workspace"

@@ -156,9 +156,10 @@
 
 ;;;; Identity: sprite--mode-line-string
 
-(ert-deftest sprite/mode-line-string-nil-for-top-level ()
+(ert-deftest sprite/mode-line-string-returns-id-for-top-level ()
+  "`sprite--mode-line-string' returns the instance id for non-sprite instances."
   (let ((sprite-instance-id "work"))
-    (should (null (sprite--mode-line-string)))))
+    (should (equal "work" (sprite--mode-line-string)))))
 
 (ert-deftest sprite/mode-line-string-abbreviated-for-sprite ()
   (let ((sprite-instance-id "work.0.render"))
@@ -271,7 +272,7 @@
     (should (= 3 (sprite--next-idx "work")))))
 
 (ert-deftest sprite/allocated-indices-excludes-decommissioned ()
-  "Indices from decommissioned sprites are not returned."
+  "Indices from decommissioned sprite are not returned."
   (sprite-test/with-temp-state-dir
     (let ((active-dir (file-name-concat (sprite-state-directory) "work.0.active"))
           (decomm-dir (file-name-concat (sprite-state-directory) "work.1.gone")))
@@ -438,6 +439,72 @@
       (let ((vec (cadr (sprite--build-list-entry s))))
         (should (equal "?" (aref vec 3)))))))
 
+;;;; Running status
+
+(ert-deftest sprite/known-dead-p-nil-when-unchecked ()
+  "`sprite-list--known-dead-p' returns nil when running-status is nil."
+  (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s)))
+      (should-not (sprite-list--known-dead-p)))))
+
+(ert-deftest sprite/known-dead-p-nil-when-running ()
+  "`sprite-list--known-dead-p' returns nil when sprite is known running."
+  (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
+                         :running-status 'running)))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s)))
+      (should-not (sprite-list--known-dead-p)))))
+
+(ert-deftest sprite/known-dead-p-true-when-dead ()
+  "`sprite-list--known-dead-p' returns t when sprite is known dead."
+  (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
+                         :running-status 'dead)))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s)))
+      (should (sprite-list--known-dead-p)))))
+
+(ert-deftest sprite/list-check-sets-running-status ()
+  "`sprite-list-check' sets running-status to 'running when ping succeeds."
+  (sprite-test/with-registry
+    (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
+                           :unique-name "render")))
+      (sprite--registry-put s)
+      (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s))
+                ((symbol-function 'sprite--running-p) (lambda (_) t))
+                ((symbol-function 'sprite-list-refresh) #'ignore))
+        (sprite-list-check)
+        (should (eq 'running (sprite-running-status s)))))))
+
+(ert-deftest sprite/list-check-sets-dead-status ()
+  "`sprite-list-check' sets running-status to 'dead when ping fails."
+  (sprite-test/with-registry
+    (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
+                           :unique-name "render")))
+      (sprite--registry-put s)
+      (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s))
+                ((symbol-function 'sprite--running-p) (lambda (_) nil))
+                ((symbol-function 'sprite-list-refresh) #'ignore))
+        (sprite-list-check)
+        (should (eq 'dead (sprite-running-status s)))))))
+
+(ert-deftest sprite/can-open-frame-p-false-when-dead ()
+  "`sprite-list--can-open-frame-p' returns nil for a known-dead sprite."
+  (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
+                         :running-status 'dead)))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s)))
+      (should-not (sprite-list--can-open-frame-p)))))
+
+(ert-deftest sprite/can-open-frame-p-true-when-unchecked ()
+  "`sprite-list--can-open-frame-p' returns t when running status is unknown."
+  (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s)))
+      (should (sprite-list--can-open-frame-p)))))
+
+(ert-deftest sprite/can-open-frame-p-true-when-running ()
+  "`sprite-list--can-open-frame-p' returns t when sprite is known running."
+  (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
+                         :running-status 'running)))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () s)))
+      (should (sprite-list--can-open-frame-p)))))
+
 ;;;; Transient key validation
 
 (ert-deftest sprite/transient-no-duplicate-keys ()
@@ -485,38 +552,38 @@
     (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
       (sprite--registry-put (sprite--make :name "work.0.render"
                                           :idx 0 :parent "work"))
-      (should (sprites-controller-p)))))
+      (should (sprite-controller-p)))))
 
 (ert-deftest sprite/controller-p-false-when-empty ()
   (sprite-test/with-registry
-    (should-not (sprites-controller-p))))
+    (should-not (sprite-controller-p))))
 
 (ert-deftest sprite/controller-p-false-when-all-decommissioned ()
   (sprite-test/with-registry
     (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) t)))
       (sprite--registry-put (sprite--make :name "work.0.render"
                                           :idx 0 :parent "work"))
-      (should-not (sprites-controller-p)))))
+      (should-not (sprite-controller-p)))))
 
 (ert-deftest sprite/worker-p-true-for-sprite-name ()
   (let ((sprite-instance-id "work.0.render"))
-    (should (sprites-worker-p))))
+    (should (sprite-worker-p))))
 
 (ert-deftest sprite/worker-p-false-for-top-level ()
   (let ((sprite-instance-id "work"))
-    (should-not (sprites-worker-p))))
+    (should-not (sprite-worker-p))))
 
-(ert-deftest sprite/available-p-false-when-no-sprites ()
+(ert-deftest sprite/available-p-false-when-no-sprite ()
   (sprite-test/with-registry
     (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
-      (should-not (sprites-available-p)))))
+      (should-not (sprite-available-p)))))
 
-(ert-deftest sprite/available-p-true-when-has-sprites ()
+(ert-deftest sprite/available-p-true-when-has-sprite ()
   (sprite-test/with-registry
     (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
       (sprite--registry-put (sprite--make :name "work.0.render"
                                           :idx 0 :parent "work"))
-      (should (sprites-available-p)))))
+      (should (sprite-available-p)))))
 
 (ert-deftest sprite/get-next-returns-available-sprite ()
   (sprite-test/with-registry
@@ -524,7 +591,7 @@
       (sprite--registry-put s)
       (cl-letf (((symbol-function 'sprite--running-p) (lambda (_) t))
                 ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
-        (let ((result (sprites-get-next)))
+        (let ((result (sprite-get-next)))
           (should (sprite-p result))
           (should (equal "work.0.render" (sprite-name result))))))))
 
@@ -536,7 +603,7 @@
       (cl-letf (((symbol-function 'sprite--running-p) (lambda (_) t))
                 ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil))
                 (sprite-active-threshold 3600))
-        (should (null (sprites-get-next)))))))
+        (should (null (sprite-get-next)))))))
 
 (ert-deftest sprite/get-next-skips-non-running ()
   (sprite-test/with-registry
@@ -544,7 +611,7 @@
       (sprite--registry-put s)
       (cl-letf (((symbol-function 'sprite--running-p) (lambda (_) nil))
                 ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
-        (should (null (sprites-get-next)))))))
+        (should (null (sprite-get-next)))))))
 
 (ert-deftest sprite/available-p-true-when-no-contact ()
   (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
@@ -572,19 +639,19 @@
                                             :last-contact (current-time)))
         (sprite--registry-put (sprite--make :name "work.1.b" :idx 1 :parent "work"
                                             :last-contact (current-time)))
-        (should-error (sprites-get-or-create-next) :type 'user-error)))))
+        (should-error (sprite-get-or-create-next) :type 'user-error)))))
 
 (ert-deftest sprite/resolve-list-includes-children-for-controller ()
   (sprite-test/with-registry
     (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
       (sprite--registry-put (sprite--make :name "work.0.render" :idx 0
                                           :parent "work"))
-      (let ((list (sprites-resolve-list)))
+      (let ((list (sprite-resolve-list)))
         (should (= 1 (length list)))
         (should (equal "work.0.render" (sprite-name (car list))))))))
 
 (ert-deftest sprite/resolve-list-includes-siblings-for-worker ()
-  "A sprite (worker) sees sibling sprites from the same parent."
+  "A sprite (worker) sees sibling sprite from the same parent."
   (sprite-test/with-registry
     (let ((sprite-instance-id "work.0.render"))
       (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
@@ -592,7 +659,7 @@
                                             :parent "work"))
         (sprite--registry-put (sprite--make :name "work.1.analysis" :idx 1
                                             :parent "work"))
-        (let ((list (sprites-resolve-list)))
+        (let ((list (sprite-resolve-list)))
           (should (= 2 (length list))))))))
 
 (ert-deftest sprite/resolve-list-excludes-decommissioned ()
@@ -603,7 +670,7 @@
                                           :parent "work"))
       (sprite--registry-put (sprite--make :name "work.1.active" :idx 1
                                           :parent "work"))
-      (let ((list (sprites-resolve-list)))
+      (let ((list (sprite-resolve-list)))
         (should (= 1 (length list)))
         (should (equal "work.1.active" (sprite-name (car list))))))))
 

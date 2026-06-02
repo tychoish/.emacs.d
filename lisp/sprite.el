@@ -28,11 +28,11 @@
 ;; idx is the lowest integer not already in use for that parent.
 ;;
 ;; Entry points:
-;;   `sprites-list'              — open the overview buffer
-;;   `sprites-create'            — spawn a new sprite daemon
+;;   `sprite-list'              — open the overview buffer
+;;   `sprite-create'            — spawn a new sprite daemon
 ;;   `with-sprite'               — evaluate a form in a sprite
-;;   `sprites-get-next'          — get the next available sprite
-;;   `sprites-get-or-create-next' — get or create a sprite
+;;   `sprite-get-next'          — get the next available sprite
+;;   `sprite-get-or-create-next' — get or create a sprite
 ;;
 
 ;;; Code:
@@ -52,7 +52,7 @@
 (defconst sprite--conf-state-directory "state"
   "Name of the state subdirectory under `user-emacs-directory'.")
 
-(defconst sprite--state-subdir "sprites"
+(defconst sprite--state-subdir "sprite"
   "Subdirectory name under the state path where sprite state lives.")
 
 (defvar sprite-instance-id nil
@@ -164,13 +164,13 @@ For top-level names, returns FULL-NAME unchanged."
     full-name))
 
 (defun sprite--mode-line-string ()
-  "Return abbreviated mode-line string if running as a sprite, or nil."
-  (when-let* ((id (sprite-instance-name))
-              ((sprite--full-name-p id)))
-    (sprite--mode-line-id id)))
+  "Return mode-line display string for the current Emacs instance.
+Always returns a non-nil string: abbreviated for sprite instances,
+the raw instance id for top-level instances."
+  (sprite--mode-line-id (sprite-instance-name)))
 
 (defun sprite-state-directory (&optional full-name)
-  "Return the state directory for sprite FULL-NAME, or the sprites root if nil."
+  "Return the state directory for sprite FULL-NAME, or the sprite root if nil."
   (let ((base (file-name-as-directory (sprite-state-path sprite--state-subdir))))
     (if full-name
         (file-name-concat base full-name)
@@ -178,7 +178,7 @@ For top-level names, returns FULL-NAME unchanged."
 
 (defun sprite-conf-state-path (name &optional full-name)
   "Return path for NAME within FULL-NAME's state directory.
-If FULL-NAME is nil, returns path under the sprites root."
+If FULL-NAME is nil, returns path under the sprite root."
   (file-name-concat (sprite-state-directory full-name) name))
 
 (defun sprite--live-p (s)
@@ -197,7 +197,8 @@ If FULL-NAME is nil, returns path under the sprites root."
   state-dir
   spawned-by
   start-time
-  last-contact)
+  last-contact
+  running-status)
 
 (defvar sprite--registry (make-hash-table :test #'equal)
   "In-memory registry mapping full-name strings to `sprite' structs.")
@@ -313,7 +314,7 @@ A list of plists; populated by `sprite--registry-serialize'.")
 
 (defun sprite--discover-and-sync-registry ()
   "Reconcile the registry with the filesystem.
-Adds discovered sprites not in the registry.  Does not remove entries."
+Adds discovered sprite not in the registry.  Does not remove entries."
   (seq-do (lambda (name)
             (unless (sprite--registry-get name)
               (sprite--registry-put (sprite--make-from-state-dir name))))
@@ -380,7 +381,7 @@ Times out after TIMEOUT-SECS seconds (default 10).  Returns t on success."
         (sleep-for 0.5)))
     ready))
 
-(defun sprites-create (unique-name)
+(defun sprite-create (unique-name)
   "Spawn a new sprite daemon with UNIQUE-NAME under the current instance.
 The current instance's ID becomes the parent.
 Returns the new sprite struct."
@@ -415,29 +416,28 @@ Each candidate is annotated with its index and uptime."
    :prompt prompt
    :require-match t))
 
-(defun sprites-stop (name)
+(defun sprite-stop (name)
   "Send (kill-emacs) to sprite NAME via emacsclient."
   (interactive (list (sprite--completing-read "Stop sprite: ")))
   (with-sprite (sprite--resolve-name name) (kill-emacs)))
-
-(defun sprites-restart (name)
+(defun sprite-restart (name)
   "Restart sprite NAME: stop it then create a new daemon with the same unique-name."
   (interactive (list (sprite--completing-read "Restart sprite: ")))
   (let* ((full-name (sprite--resolve-name name))
          (s (sprite--registry-get full-name)))
     (when (sprite--decommissioned-p full-name)
       (user-error "Cannot restart decommissioned sprite: %s" full-name))
-    (sprites-stop full-name)
+    (sprite-stop full-name)
     (sprite--ensure-state-dir full-name)
     (sprite--spawn full-name)
     (when s
       (setf (sprite-start-time (sprite--registry-get full-name)) (current-time)))))
 
-(defun sprites-decommission (name)
+(defun sprite-decommission (name)
   "Decommission sprite NAME: stop it and write the DECOMMISSIONED marker."
   (interactive (list (sprite--completing-read "Decommission sprite: ")))
   (let ((full-name (sprite--resolve-name name)))
-    (condition-case _ (sprites-stop full-name) (error nil))
+    (condition-case _ (sprite-stop full-name) (error nil))
     (sprite--ensure-state-dir full-name)
     (unless (sprite--write-decommissioned-file full-name)
       (error "Failed to write DECOMMISSIONED file for %s" full-name))
@@ -503,7 +503,7 @@ Unless NO-LOG is non-nil, logs the exchange and updates last-contact."
                  (setf (sprite-last-contact s) (current-time)))))
          ,gresult))))
 
-(defun sprites-open-log (name)
+(defun sprite-open-log (name)
   "Switch to the communication log buffer for sprite NAME."
   (interactive (list (completing-read "Sprite log: "
                                       (seq-map #'sprite-name (sprite--registry-all)))))
@@ -549,24 +549,44 @@ Returns \"?\" when SECONDS is nil."
            (sprite--format-uptime last-seen)
            spawned-by))))
 
-(defconst sprite--list-buffer-name "*Sprites*"
+(defun sprite--build-parent-entry ()
+  "Build a `tabulated-list' entry representing the current parent instance."
+  (let* ((name (sprite-instance-name))
+         (uptime (when (boundp 'before-init-time)
+                   (float-time (time-since before-init-time))))
+         (buffers (length (buffer-list))))
+    (list (sprite--make :name name
+                        :idx nil
+                        :parent nil
+                        :unique-name name)
+          (vector
+           "-"
+           (propertize name 'face 'bold)
+           (sprite--format-uptime uptime)
+           (number-to-string buffers)
+           "(self)"
+           "system"))))
+
+(defconst sprite--list-buffer-name "*sprite-list*"
   "Name of the sprite overview buffer.")
 
 (defvar sprite-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
-    (define-key map (kbd "c") #'sprites-list-create)
-    (define-key map (kbd "d") #'sprites-list-decommission)
-    (define-key map (kbd "r") #'sprites-list-restart)
-    (define-key map (kbd "s") #'sprites-list-stop)
-    (define-key map (kbd "o") #'sprites-list-open-log)
-    (define-key map (kbd "f") #'sprites-list-open-frame)
-    (define-key map (kbd "g") #'sprites-list-refresh)
+    (define-key map (kbd "c") #'sprite-list-create)
+    (define-key map (kbd "d") #'sprite-list-decommission)
+    (define-key map (kbd "r") #'sprite-list-restart)
+    (define-key map (kbd "s") #'sprite-list-stop)
+    (define-key map (kbd "p") #'sprite-list-check)
+    (define-key map (kbd "o") #'sprite-list-open-log)
+    (define-key map (kbd "f") #'sprite-list-open-frame)
+    (define-key map (kbd "g") #'sprite-list-refresh)
     (define-key map (kbd "?") #'sprite-list-menu)
+    (define-key map (kbd "m") #'sprite-list-menu)
     map)
   "Keymap for `sprite-list-mode'.")
 
-(define-derived-mode sprite-list-mode tabulated-list-mode "Sprites"
+(define-derived-mode sprite-list-mode tabulated-list-mode "sprite"
   "Major mode for viewing and managing sprite daemons.
 
 \\{sprite-list-mode-map}"
@@ -581,88 +601,129 @@ Returns \"?\" when SECONDS is nil."
   (setq tabulated-list-sort-key '("Name" . nil))
   (tabulated-list-init-header))
 
-(defun sprites-list-refresh ()
-  "Refresh the sprites overview buffer."
+(defun sprite-list-refresh ()
+  "Refresh the sprite overview buffer."
   (interactive)
   (sprite--discover-and-sync-registry)
   (setq tabulated-list-entries
-        (thread-last (sprite--registry-all)
-          (seq-filter (lambda (s)
-                        (and (sprite--for-current-parent-p s)
-                             (sprite--live-p s))))
-          (seq-map #'sprite--build-list-entry)))
+        (cons (sprite--build-parent-entry)
+              (thread-last (sprite--registry-all)
+                (seq-filter (lambda (s)
+                              (and (sprite--for-current-parent-p s)
+                                   (sprite--live-p s))))
+                (seq-map #'sprite--build-list-entry))))
   (tabulated-list-print t))
 
-(defun sprites-list ()
-  "Open the sprites overview buffer."
+(defun sprite-list ()
+  "Open the sprite overview buffer."
   (interactive)
   (with-current-buffer (get-buffer-create sprite--list-buffer-name)
-    (sprite-list-mode)
-    (sprites-list-refresh))
-  (pop-to-buffer sprite--list-buffer-name))
+    (unless (derived-mode-p 'sprite-list-mode)
+      (sprite-list-mode))
+    (sprite-list-refresh)
+    (pop-to-buffer (current-buffer))))
 
 (defun sprite-list--sprite-at-point-p ()
-  "Return non-nil if there is a sprite struct at point in the overview buffer."
-  (tabulated-list-get-id))
+  "Return non-nil if there is a managed sprite at point (not the parent row)."
+  (when-let* ((s (tabulated-list-get-id)))
+    (not (null (sprite-idx s)))))
 
 (defun sprite-list--log-exists-at-point-p ()
   "Return non-nil if a log buffer exists for the sprite at point."
   (when-let* ((s (tabulated-list-get-id)))
     (get-buffer (sprite--log-buffer-name (sprite-name s)))))
 
-(defun sprites-list--sprite-at-point ()
-  "Return the sprite struct at point, or signal `user-error'."
-  (or (tabulated-list-get-id)
-      (user-error "No sprite at point")))
+(defun sprite-list--known-dead-p ()
+  "Return non-nil if the sprite at point has been checked and is not running."
+  (when-let* ((s (tabulated-list-get-id))
+              ((sprite-idx s)))
+    (eq (sprite-running-status s) 'dead)))
 
-(defun sprites-list-create ()
+(defun sprite-list--can-open-frame-p ()
+  "Return non-nil if a frame can be opened for the sprite at point.
+True when point is on a sprite row that is not known to be dead."
+  (and (sprite-list--sprite-at-point-p)
+       (not (sprite-list--known-dead-p))))
+
+(defun sprite-list--sprite-at-point ()
+  "Return the managed sprite struct at point, or signal `user-error'.
+Signals an error if point is on the parent-instance row."
+  (if-let* ((s (tabulated-list-get-id))
+            ((sprite-idx s)))
+    s
+    (user-error "No sprite at point")))
+
+(defun sprite-list-create ()
   "Create a new sprite from the overview buffer."
   (interactive)
-  (call-interactively #'sprites-create)
-  (sprites-list-refresh))
+  (call-interactively #'sprite-create)
+  (sprite-list-refresh))
 
-(defun sprites-list-decommission ()
+(defun sprite-list-decommission ()
   "Decommission the sprite at point."
   (interactive)
-  (when-let* ((name (sprite-name (sprites-list--sprite-at-point)))
+  (when-let* ((name (sprite-name (sprite-list--sprite-at-point)))
               ((yes-or-no-p (format "Decommission sprite %s? " name))))
-    (sprites-decommission name)
-    (sprites-list-refresh)))
+    (sprite-decommission name)
+    (sprite-list-refresh)))
 
-(defun sprites-list-restart ()
+(defun sprite-list-restart ()
   "Restart the sprite at point."
   (interactive)
-  (sprites-restart (sprite-name (sprites-list--sprite-at-point)))
-  (sprites-list-refresh))
+  (sprite-restart (sprite-name (sprite-list--sprite-at-point)))
+  (sprite-list-refresh))
 
-(defun sprites-list-stop ()
+(defun sprite-list-stop ()
   "Stop the sprite at point."
   (interactive)
-  (sprites-stop (sprite-name (sprites-list--sprite-at-point)))
-  (sprites-list-refresh))
+  (sprite-stop (sprite-name (sprite-list--sprite-at-point)))
+  (sprite-list-refresh))
 
-(defun sprites-list-open-log ()
+(defun sprite-list-open-log ()
   "Open the communication log for the sprite at point."
   (interactive)
-  (sprites-open-log (sprite-name (sprites-list--sprite-at-point))))
+  (sprite-open-log (sprite-name (sprite-list--sprite-at-point))))
 
-(defun sprites-list-open-frame ()
+(defun sprite-list-check ()
+  "Verify whether the sprite at point is reachable via emacsclient.
+Updates the sprite's running status and refreshes the list."
+  (interactive)
+  (let* ((s (sprite-list--sprite-at-point))
+         (name (sprite-name s))
+         (running (sprite--running-p name)))
+    (setf (sprite-running-status s) (if running 'running 'dead))
+    (sprite-list-refresh)
+    (message "Sprite %s: %s" name (if running "running" "not running"))))
+
+(defun sprite-list-open-frame ()
   "Open a new Emacs frame connected to the sprite at point."
   (interactive)
-  (start-process "sprite-frame" nil "emacsclient"
-                 "-c" "--socket-name" (sprite-name (sprites-list--sprite-at-point))))
+  (let ((name (sprite-name (sprite-list--sprite-at-point))))
+    (with-environment-variables (("DISPLAY" (or (getenv "DISPLAY") ":0"))
+				 ("TERM" nil))
+    (start-process
+     (format "sprite-frame-%s" name)
+     (get-buffer-create (sprite--log-buffer-name name))
+     "emacsclient" "--no-wait" "--create-frame" "--server-file" name))))
 
 (transient-define-prefix sprite-list-menu ()
   "Actions for the sprite overview buffer."
   [["Sprite"
-    ("c" "Create"       sprites-list-create)
-    ("d" "Decommission" sprites-list-decommission :inapt-if-not sprite-list--sprite-at-point-p)
-    ("r" "Restart"      sprites-list-restart :inapt-if-not sprite-list--sprite-at-point-p)
-    ("s" "Stop"         sprites-list-stop :inapt-if-not sprite-list--sprite-at-point-p)]
+    ("c" "Create"       sprite-list-create)
+    ("d" "Decommission" sprite-list-decommission
+     :inapt-if-not sprite-list--sprite-at-point-p)
+    ("r" "Restart"      sprite-list-restart
+     :inapt-if-not sprite-list--sprite-at-point-p)
+    ("s" "Stop"         sprite-list-stop
+     :inapt-if-not sprite-list--sprite-at-point-p)
+    ("p" "Check/ping"   sprite-list-check
+     :inapt-if-not sprite-list--sprite-at-point-p)]
    ["Navigate"
-    ("o" "Open log"     sprites-list-open-log :inapt-if-not sprite-list--log-exists-at-point-p)
-    ("f" "New frame"    sprites-list-open-frame :inapt-if-not sprite-list--sprite-at-point-p)
-    ("g" "Refresh"      sprites-list-refresh)
+    ("o" "Open log"     sprite-list-open-log
+     :inapt-if-not sprite-list--log-exists-at-point-p)
+    ("f" "New frame"    sprite-list-open-frame
+     :inapt-if-not sprite-list--can-open-frame-p)
+    ("g" "Refresh"      sprite-list-refresh)
     ("q" "Quit"         quit-window)]])
 
 ;;;; Fleet API
@@ -674,7 +735,7 @@ A sprite is \"active\" if it was contacted within this many seconds."
   :group 'sprite)
 
 (defcustom sprite-max-count 4
-  "Maximum number of sprites `sprites-get-or-create-next' will spawn."
+  "Maximum number of sprite `sprite-get-or-create-next' will spawn."
   :type 'integer
   :group 'sprite)
 
@@ -683,16 +744,16 @@ A sprite is \"active\" if it was contacted within this many seconds."
   :type 'integer
   :group 'sprite)
 
-(defun sprites-worker-p ()
+(defun sprite-worker-p ()
   "Return t if this instance is itself a sprite (has a parent)."
   (sprite--full-name-p (sprite-instance-name)))
 
-(defun sprites-resolve-list ()
+(defun sprite-resolve-list ()
   "Return list of sprite structs accessible to this instance.
 Includes direct children.  If this instance is itself a sprite (worker),
-also includes sibling sprites from the same parent."
+also includes sibling sprite from the same parent."
   (let ((own-id (sprite-instance-name)))
-    (if (sprites-worker-p)
+    (if (sprite-worker-p)
       (let ((parts (sprite--parse-full-name own-id)))
         (thread-last (sprite--registry-all)
           (seq-filter (lambda (s)
@@ -704,16 +765,16 @@ also includes sibling sprites from the same parent."
                       (and (equal own-id (sprite-parent s))
                            (sprite--live-p s))))))))
 
-(defun sprites-controller-p ()
+(defun sprite-controller-p ()
   "Return t if this instance has at least one non-decommissioned sprite."
   (not (null (thread-last (sprite--registry-all)
                (seq-filter (lambda (s)
                               (and (equal (sprite-instance-name) (sprite-parent s))
                                    (sprite--live-p s))))))))
 
-(defun sprites-available-p ()
-  "Return t if any accessible sprites are configured."
-  (not (null (sprites-resolve-list))))
+(defun sprite-available-p ()
+  "Return t if any accessible sprite are configured."
+  (not (null (sprite-resolve-list))))
 
 (defun sprite--available-p (s)
   "Return t if sprite S has not been contacted recently."
@@ -721,23 +782,23 @@ also includes sibling sprites from the same parent."
       (> (float-time (time-since (sprite-last-contact s)))
          sprite-active-threshold)))
 
-(defun sprites-get-next ()
+(defun sprite-get-next ()
   "Return the struct of the next available sprite, or nil.
 \"Available\" means running and not recently contacted."
   (seq-find (lambda (s)
               (and (sprite--running-p (sprite-name s))
                    (sprite--available-p s)))
-            (sprites-resolve-list)))
+            (sprite-resolve-list)))
 
-(defun sprites-get-or-create-next ()
+(defun sprite-get-or-create-next ()
   "Return the next available sprite, creating one if none are free.
 Signals `user-error' if `sprite-max-count' would be exceeded."
-  (or (sprites-get-next)
-      (let ((active-count (length (sprites-resolve-list))))
+  (or (sprite-get-next)
+      (let ((active-count (length (sprite-resolve-list))))
         (if (>= active-count sprite-max-count)
-            (user-error "All %d sprites are busy and max-count (%d) reached"
+            (user-error "All %d sprite are busy and max-count (%d) reached"
                         active-count sprite-max-count)
-          (sprites-create (format "worker-%d" active-count))))))
+          (sprite-create (format "worker-%d" active-count))))))
 
 ;;;; Mode-line and savehist wiring
 
