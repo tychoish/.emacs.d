@@ -73,7 +73,7 @@
   "List of `magit-gh-repo' structs registered for dashboard display.
 Use `magit-gh-repo-register' to add entries.")
 
-(cl-defun magit-gh-repo-register (name path &key include-prs auto-sync tags auto-commit commands sort-hint worktree)
+(cl-defun magit-gh-repo-register (&key name path include-prs auto-sync tags auto-commit commands sort-hint worktree)
   "Register or replace a repository with NAME at absolute PATH.
 Replaces any existing entry with the same name or path.
 
