@@ -34,6 +34,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'xtdlib))
+(require 'sprite)
 (require 'fn)
 (require 'dash)
 (require 'subr-x)
@@ -438,63 +439,36 @@ more arguments than the function cares about."
 
 (defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
 
-(defvar-local tychoish-cache--resolved-instance-id nil)
-
 (defvar cli/instance-id nil
-  "CLI-specified daemon/instance name; set from command-line args in init.el.")
+  "CLI-specified daemon/instance name; set from command-line args in init.el.
+Compatibility shim — sprite reads this via `sprite-resolve-instance-id'.")
 
 (defvar tychoish/emacs-instance-id nil
-  "Name of the running Emacs instance; resolved from daemon state or CLI args.")
+  "Name of the running Emacs instance.
+Compatibility shim kept for callers in tychoish-core and mode-line config.
+Authoritative value lives in `sprite-instance-id'.")
 
 (defun tychoish/resolve-instance-id ()
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (or tychoish-cache--resolved-instance-id
-	(setq tychoish-cache--resolved-instance-id
-	      (let ((daemon (daemonp)))
-		(or (when (eq daemon t) "primary")
-		    (and daemon (setenv "EMACS_SERVER_FILE" daemon))
-		    cli/instance-id
-		    tychoish/emacs-instance-id
-		    "solo"))))))
-
-
+  "Return the current Emacs instance ID.  Delegates to sprite."
+  (sprite-resolve-instance-id))
 
 (defun tychoish/set-up-instance-name ()
-  (unless tychoish/emacs-instance-id
-    (setq tychoish/emacs-instance-id (tychoish/resolve-instance-id))))
+  "Initialise instance name.  Delegates to sprite; syncs compat var."
+  (setq tychoish/emacs-instance-id (sprite-instance-name)))
 
-(defvar-local tychoish-cache--conf-emacs-host-and-instance nil)
 (defun tychoish/conf-emacs-host-and-instance ()
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (or tychoish-cache--conf-emacs-host-and-instance
-	(setq-local tychoish-cache--conf-emacs-host-and-instance
-	            (list
-	             (if (eq system-type 'darwin)
-		         (car (split-string (system-name) "\\."))
-		       (system-name))
-	             (or tychoish/emacs-instance-id
-		         (tychoish/resolve-instance-id)))))))
+  "Return (HOSTNAME INSTANCE-ID).  Delegates to sprite."
+  (sprite-conf-host-and-instance))
 
-(defconst tychoish/conf-state-directory-name "state")
+(defconst tychoish/conf-state-directory-name sprite--conf-state-directory)
 
 (defun tychoish/conf-state-path (name)
-  (file-name-concat
-   user-emacs-directory
-   tychoish/conf-state-directory-name
-   (tychoish-get-config-file-prefix name)))
+  "Return state path for NAME.  Delegates to sprite."
+  (sprite-state-path name))
 
 (defun tychoish-get-config-file-prefix (name)
-  "Build a config file basename, for NAME.
-This combines the host name and the dameon name."
-  (string-join (->> (tychoish/conf-emacs-host-and-instance)
-		    (reverse)
-		    (-concat (-l (when (or (equal "root" user-login-name)
-					   (f-symlink-p user-emacs-directory))
-				   user-login-name)
-				 name))
-		    (reverse)
-		    (-non-nil))
-	       "-"))
+  "Return instance-scoped file prefix for NAME.  Delegates to sprite."
+  (sprite-state-file-prefix name))
 
 (with-eval-after-load 'eshell
   (setq eshell-history-file-name (file-name-contact user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))

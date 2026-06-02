@@ -5,7 +5,7 @@
 ;;
 ;; Batch run:
 ;;   emacs --batch -L ~/.emacs.d/lisp \
-;;     --eval '(progn (setq package-user-dir "~/.emacs.d/elpa") (package-initialize))' \
+;;     -L ~/.emacs.d/elpa/annotated-completing-read \
 ;;     -l ~/.emacs.d/test/test-sprite.el \
 ;;     --eval '(ert-run-tests-batch-and-exit "sprite/")'
 
@@ -21,15 +21,18 @@
 (require 'cl-lib)
 (require 'map)
 
-;; Stub tychoish functions before loading sprite so declarations resolve.
-(unless (fboundp 'tychoish/conf-state-path)
-  (defun tychoish/conf-state-path (name)
-    (expand-file-name (concat "state/" name) temporary-file-directory)))
-
-(unless (fboundp 'tychoish/resolve-instance-id)
-  (defun tychoish/resolve-instance-id () "work"))
+;; Declare argi/argv as special so let-bindings in tests create dynamic
+;; bindings visible to sprite-cli-resolve-id (which is compiled under
+;; lexical-binding but reads these as free dynamic variables).
+(defvar argi)
+(defvar argv)
 
 (require 'sprite)
+
+;; In batch/test mode there is no running daemon and no CLI override, so
+;; sprite-resolve-instance-id would fall through to "solo".  Pin it to "work"
+;; so tests that check parent/instance logic get a predictable value.
+(setq sprite-instance-id "work")
 
 ;;;; Helpers
 
@@ -49,6 +52,38 @@
                         (file-name-as-directory tmpdir)))))
            ,@body)
        (delete-directory tmpdir t))))
+
+;;;; Identity: sprite-instance-name
+
+(ert-deftest sprite/instance-name-returns-instance-id ()
+  "`sprite-instance-name' returns `sprite-instance-id' when already set."
+  (let ((sprite-instance-id "test-inst"))
+    (should (equal "test-inst" (sprite-instance-name)))))
+
+(ert-deftest sprite/instance-name-initializes-when-nil ()
+  "`sprite-instance-name' initialises `sprite-instance-id' and returns a string."
+  (let ((sprite-instance-id nil)
+        (sprite-cli-instance-id nil))
+    (should (stringp (sprite-instance-name)))
+    (should (stringp sprite-instance-id))))
+
+(ert-deftest sprite/instance-name-caches-result ()
+  "`sprite-instance-name' returns the cached value on subsequent calls."
+  (let ((sprite-instance-id "cached"))
+    (should (equal "cached" (sprite-instance-name)))
+    (should (equal "cached" (sprite-instance-name)))))
+
+;;;; Identity: sprite--live-p
+
+(ert-deftest sprite/live-p-true-when-not-decommissioned ()
+  (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
+    (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
+      (should (sprite--live-p s)))))
+
+(ert-deftest sprite/live-p-false-when-decommissioned ()
+  (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) t)))
+    (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
+      (should-not (sprite--live-p s)))))
 
 ;;;; Identity: sprite--format-full-name
 
@@ -79,8 +114,7 @@
   (should (null (sprite--parse-full-name "work.abc.render"))))
 
 (ert-deftest sprite/parse-full-name-too-many-parts-returns-nil ()
-  "Names with more than one dot in the unique-name portion are still valid."
-  ;; Pattern allows any non-dot prefix for the unique-name segment with 2+ chars
+  "Names with more than three dot-separated segments return nil."
   (should (null (sprite--parse-full-name "a.1.b.c.d"))))
 
 ;;;; Identity: sprite--full-name-p
@@ -123,12 +157,11 @@
 ;;;; Identity: sprite--mode-line-string
 
 (ert-deftest sprite/mode-line-string-nil-for-top-level ()
-  (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work")))
+  (let ((sprite-instance-id "work"))
     (should (null (sprite--mode-line-string)))))
 
 (ert-deftest sprite/mode-line-string-abbreviated-for-sprite ()
-  (cl-letf (((symbol-function 'tychoish/resolve-instance-id)
-             (lambda () "work.0.render")))
+  (let ((sprite-instance-id "work.0.render"))
     (should (equal "w.0.render" (sprite--mode-line-string)))))
 
 ;;;; Registry
@@ -297,25 +330,57 @@
       (when (get-buffer buf-name)
         (kill-buffer buf-name)))))
 
-(ert-deftest sprite/with-sprite-binds-env ()
-  "with-sprite sets EMACS_SERVER_FILE in process-environment."
-  (cl-letf (((symbol-function 'sprite--server-file) (lambda (n) n)))
-    (let ((captured nil))
-      (with-sprite "work.0.render"
-        (setq captured (getenv "EMACS_SERVER_FILE")))
-      (should (equal "work.0.render" captured)))))
+(ert-deftest sprite/sprite-call-invokes-emacsclient ()
+  "`sprite--call' passes --socket-name and --eval to call-process."
+  (let (captured-args)
+    (cl-letf (((symbol-function 'call-process)
+               (lambda (prog _in buf _disp &rest args)
+                 (setq captured-args (cons prog args))
+                 0)))
+      (sprite--call "work.0.render" '(+ 1 2) nil)
+      (should (equal "emacsclient" (car captured-args)))
+      (should (member "--socket-name" captured-args))
+      (should (member "work.0.render" captured-args))
+      (should (member "--eval" captured-args))
+      (should (member "(+ 1 2)" captured-args)))))
 
-(ert-deftest sprite/with-sprite-returns-body-value ()
-  (cl-letf (((symbol-function 'sprite--server-file) (lambda (n) n)))
-    (should (= 42 (with-sprite "work.0.render"
-                    (+ 1 41))))))
+(ert-deftest sprite/call-and-read-returns-result-on-success ()
+  "`sprite--call-and-read' reads the result when sprite--call succeeds."
+  (cl-letf (((symbol-function 'sprite--call)
+             (lambda (_name _form buf)
+               (when buf (with-current-buffer buf (insert "42")))
+               0)))
+    (should (= 42 (sprite--call-and-read "work.0.render" '(+ 1 41))))))
 
-(ert-deftest sprite/with-sprite-does-not-pollute-env ()
-  "EMACS_SERVER_FILE is not set after with-sprite exits."
-  (let ((before (getenv "EMACS_SERVER_FILE")))
-    (cl-letf (((symbol-function 'sprite--server-file) (lambda (n) n)))
-      (with-sprite "work.0.render" t))
-    (should (equal before (getenv "EMACS_SERVER_FILE")))))
+(ert-deftest sprite/call-and-read-returns-nil-on-failure ()
+  "`sprite--call-and-read' returns nil when sprite--call returns non-zero."
+  (cl-letf (((symbol-function 'sprite--call) (lambda (&rest _) 1)))
+    (should (null (sprite--call-and-read "work.0.render" 't)))))
+
+(ert-deftest sprite/with-sprite-logs-and-returns-result ()
+  "`with-sprite' (logged) logs sent/received and returns the result."
+  (let (logged)
+    (cl-letf (((symbol-function 'sprite--log)
+               (lambda (_n dir _c) (push dir logged)))
+              ((symbol-function 'sprite--call-and-read)
+               (lambda (_n _f) 'the-result))
+              ((symbol-function 'sprite--registry-get) (lambda (_) nil)))
+      (should (eq 'the-result (with-sprite "work.0.render" (foo))))
+      (should (member 'sent logged))
+      (should (member 'received logged)))))
+
+(ert-deftest sprite/with-sprite-no-log-returns-nil-on-failure ()
+  "`with-sprite' :no-log returns nil when `sprite--call' returns non-zero."
+  (cl-letf (((symbol-function 'sprite--call) (lambda (&rest _) 1)))
+    (should (null (with-sprite "work.0.render" t :no-log t)))))
+
+(ert-deftest sprite/with-sprite-no-log-reads-result ()
+  "`with-sprite' :no-log reads and returns the emacsclient output."
+  (cl-letf (((symbol-function 'sprite--call)
+             (lambda (_name _form buf)
+               (when buf (with-current-buffer buf (insert "t")))
+               0)))
+    (should (eq t (with-sprite "work.0.render" t :no-log t)))))
 
 ;;;; Overview buffer
 
@@ -387,48 +452,68 @@
     (let ((keys (transient-test/collect-keys 'sprite-list-menu)))
       (should (null (transient-test/key-prefix-conflicts keys))))))
 
+;;;; CLI parsing
+
+(ert-deftest sprite/cli-resolve-id-long-form ()
+  "Parses --id=NAME."
+  (let ((sprite-cli-instance-id nil)
+        (argi "--id=worker")
+        (argv nil))
+    (sprite-cli-resolve-id)
+    (should (equal "worker" sprite-cli-instance-id))))
+
+(ert-deftest sprite/cli-resolve-id-space-form ()
+  "Parses --id NAME (space separated)."
+  (let ((sprite-cli-instance-id nil)
+        (argi "--id")
+        (argv '("worker")))
+    (sprite-cli-resolve-id)
+    (should (equal "worker" sprite-cli-instance-id))))
+
+(ert-deftest sprite/cli-resolve-id-no-match ()
+  "Non-matching argi leaves sprite-cli-instance-id unchanged."
+  (let ((sprite-cli-instance-id nil)
+        (argi "--other")
+        (argv nil))
+    (sprite-cli-resolve-id)
+    (should (null sprite-cli-instance-id))))
+
 ;;;; Fleet API
 
 (ert-deftest sprite/controller-p-true-when-has-children ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-              ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
+    (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
       (sprite--registry-put (sprite--make :name "work.0.render"
                                           :idx 0 :parent "work"))
       (should (sprites-controller-p)))))
 
 (ert-deftest sprite/controller-p-false-when-empty ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work")))
-      (should-not (sprites-controller-p)))))
+    (should-not (sprites-controller-p))))
 
 (ert-deftest sprite/controller-p-false-when-all-decommissioned ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-              ((symbol-function 'sprite--decommissioned-p) (lambda (_) t)))
+    (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) t)))
       (sprite--registry-put (sprite--make :name "work.0.render"
                                           :idx 0 :parent "work"))
       (should-not (sprites-controller-p)))))
 
 (ert-deftest sprite/worker-p-true-for-sprite-name ()
-  (cl-letf (((symbol-function 'tychoish/resolve-instance-id)
-             (lambda () "work.0.render")))
+  (let ((sprite-instance-id "work.0.render"))
     (should (sprites-worker-p))))
 
 (ert-deftest sprite/worker-p-false-for-top-level ()
-  (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work")))
+  (let ((sprite-instance-id "work"))
     (should-not (sprites-worker-p))))
 
 (ert-deftest sprite/available-p-false-when-no-sprites ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-              ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
+    (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
       (should-not (sprites-available-p)))))
 
 (ert-deftest sprite/available-p-true-when-has-sprites ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-              ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
+    (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
       (sprite--registry-put (sprite--make :name "work.0.render"
                                           :idx 0 :parent "work"))
       (should (sprites-available-p)))))
@@ -437,8 +522,7 @@
   (sprite-test/with-registry
     (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
       (sprite--registry-put s)
-      (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-                ((symbol-function 'sprite--running-p) (lambda (_) t))
+      (cl-letf (((symbol-function 'sprite--running-p) (lambda (_) t))
                 ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
         (let ((result (sprites-get-next)))
           (should (sprite-p result))
@@ -449,43 +533,40 @@
     (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
                            :last-contact (current-time))))
       (sprite--registry-put s)
-      (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-                ((symbol-function 'sprite--running-p) (lambda (_) t))
+      (cl-letf (((symbol-function 'sprite--running-p) (lambda (_) t))
                 ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil))
-                (sprite-busy-threshold 3600))
+                (sprite-active-threshold 3600))
         (should (null (sprites-get-next)))))))
 
 (ert-deftest sprite/get-next-skips-non-running ()
   (sprite-test/with-registry
     (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
       (sprite--registry-put s)
-      (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-                ((symbol-function 'sprite--running-p) (lambda (_) nil))
+      (cl-letf (((symbol-function 'sprite--running-p) (lambda (_) nil))
                 ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
         (should (null (sprites-get-next)))))))
 
-(ert-deftest sprite/not-busy-p-true-when-no-contact ()
+(ert-deftest sprite/available-p-true-when-no-contact ()
   (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work")))
-    (should (sprite--not-busy-p s))))
+    (should (sprite--available-p s))))
 
-(ert-deftest sprite/not-busy-p-false-when-recent-contact ()
+(ert-deftest sprite/available-p-false-when-recent-contact ()
   (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
                          :last-contact (current-time))))
-    (let ((sprite-busy-threshold 3600))
-      (should-not (sprite--not-busy-p s)))))
+    (let ((sprite-active-threshold 3600))
+      (should-not (sprite--available-p s)))))
 
-(ert-deftest sprite/not-busy-p-true-when-old-contact ()
+(ert-deftest sprite/available-p-true-when-old-contact ()
   (let ((s (sprite--make :name "work.0.render" :idx 0 :parent "work"
                          :last-contact (time-subtract (current-time) 120))))
-    (let ((sprite-busy-threshold 30))
-      (should (sprite--not-busy-p s)))))
+    (let ((sprite-active-threshold 30))
+      (should (sprite--available-p s)))))
 
 (ert-deftest sprite/get-or-create-errors-at-max ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-              ((symbol-function 'sprite--running-p) (lambda (_) t))
+    (cl-letf (((symbol-function 'sprite--running-p) (lambda (_) t))
               ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil))
-              (sprite-busy-threshold 3600))
+              (sprite-active-threshold 3600))
       (let ((sprite-max-count 2))
         (sprite--registry-put (sprite--make :name "work.0.a" :idx 0 :parent "work"
                                             :last-contact (current-time)))
@@ -495,8 +576,7 @@
 
 (ert-deftest sprite/resolve-list-includes-children-for-controller ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-              ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
+    (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
       (sprite--registry-put (sprite--make :name "work.0.render" :idx 0
                                           :parent "work"))
       (let ((list (sprites-resolve-list)))
@@ -506,20 +586,18 @@
 (ert-deftest sprite/resolve-list-includes-siblings-for-worker ()
   "A sprite (worker) sees sibling sprites from the same parent."
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id)
-               (lambda () "work.0.render"))
-              ((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
-      (sprite--registry-put (sprite--make :name "work.0.render" :idx 0
-                                          :parent "work"))
-      (sprite--registry-put (sprite--make :name "work.1.analysis" :idx 1
-                                          :parent "work"))
-      (let ((list (sprites-resolve-list)))
-        (should (= 2 (length list)))))))
+    (let ((sprite-instance-id "work.0.render"))
+      (cl-letf (((symbol-function 'sprite--decommissioned-p) (lambda (_) nil)))
+        (sprite--registry-put (sprite--make :name "work.0.render" :idx 0
+                                            :parent "work"))
+        (sprite--registry-put (sprite--make :name "work.1.analysis" :idx 1
+                                            :parent "work"))
+        (let ((list (sprites-resolve-list)))
+          (should (= 2 (length list))))))))
 
 (ert-deftest sprite/resolve-list-excludes-decommissioned ()
   (sprite-test/with-registry
-    (cl-letf (((symbol-function 'tychoish/resolve-instance-id) (lambda () "work"))
-              ((symbol-function 'sprite--decommissioned-p)
+    (cl-letf (((symbol-function 'sprite--decommissioned-p)
                (lambda (name) (string= name "work.0.gone"))))
       (sprite--registry-put (sprite--make :name "work.0.gone" :idx 0
                                           :parent "work"))

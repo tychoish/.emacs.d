@@ -2,7 +2,7 @@
 
 ;; Author: Sam Kleinman
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (seq "2.24") (transient "0.4"))
+;; Package-Requires: ((emacs "29.1") (seq "2.24") (transient "0.4") (annotated-completing-read "0.1"))
 ;; Keywords: tools, daemon, processes
 
 ;; This package is free software; you can redistribute it and/or modify
@@ -30,7 +30,7 @@
 ;; Entry points:
 ;;   `sprites-list'              — open the overview buffer
 ;;   `sprites-create'            — spawn a new sprite daemon
-;;   `sprites-eval'              — evaluate a form in a sprite
+;;   `with-sprite'               — evaluate a form in a sprite
 ;;   `sprites-get-next'          — get the next available sprite
 ;;   `sprites-get-or-create-next' — get or create a sprite
 ;;
@@ -45,26 +45,87 @@
 (require 'tabulated-list)
 (require 'transient)
 
-(declare-function tychoish/conf-state-path "tychoish-bootstrap")
-(declare-function tychoish/resolve-instance-id "tychoish-bootstrap")
+(declare-function annotated-completing-read "annotated-completing-read")
+
+;;;; Instance identity and state paths
+
+(defconst sprite--conf-state-directory "state"
+  "Name of the state subdirectory under `user-emacs-directory'.")
+
+(defconst sprite--state-subdir "sprites"
+  "Subdirectory name under the state path where sprite state lives.")
+
+(defvar sprite-instance-id nil
+  "Name of the running Emacs instance.
+Set by `sprite-set-up-instance-name' at startup.")
+
+(defvar sprite-cli-instance-id nil
+  "CLI-specified instance name; set from --id command-line arguments.")
+
+(defun sprite-resolve-instance-id ()
+  "Return the current Emacs instance ID.
+Resolution order: daemon name, `sprite-cli-instance-id',
+`sprite-instance-id', then \"solo\"."
+  (let ((daemon (daemonp)))
+    (or (when (eq daemon t) "primary")
+        (when (stringp daemon)
+          (setenv "EMACS_SERVER_FILE" daemon)
+          daemon)
+        sprite-cli-instance-id
+        (and (boundp 'cli/instance-id) cli/instance-id)
+        sprite-instance-id
+        "solo")))
+
+(defun sprite-instance-name ()
+  "Return the current Emacs instance name, initialising it if needed.
+Caches the result in `sprite-instance-id'.  This is the preferred public
+accessor; call `sprite-resolve-instance-id' only when the raw resolution
+chain must be re-evaluated."
+  (unless sprite-instance-id
+    (setq sprite-instance-id (sprite-resolve-instance-id)))
+  sprite-instance-id)
+
+(defun sprite-conf-host-and-instance ()
+  "Return (HOSTNAME INSTANCE-ID) for state-path construction."
+  (list (if (eq system-type 'darwin)
+            (car (string-split (system-name) "\\."))
+          (system-name))
+        (sprite-instance-name)))
+
+(defun sprite-state-file-prefix (name)
+  "Return the instance-scoped filename prefix for NAME.
+Produces HOSTNAME-INSTANCE-NAME[-USERNAME] where USERNAME is included
+only when running as root or under a symlinked `user-emacs-directory'."
+  (pcase-let ((`(,host ,instance) (sprite-conf-host-and-instance)))
+    (string-join
+     (seq-filter #'identity
+                 (list host instance name
+                       (when (or (equal "root" user-login-name)
+                                 (file-symlink-p user-emacs-directory))
+                         user-login-name)))
+     "-")))
+
+(defun sprite-state-path (name)
+  "Return the full state-directory path for NAME, scoped to this host and instance."
+  (file-name-concat
+   user-emacs-directory
+   sprite--conf-state-directory
+   (sprite-state-file-prefix name)))
 
 ;;;; Identity
 
-(defconst sprite--state-subdir "sprites"
-  "Subdirectory name under the parent's state path where sprite state lives.")
-
-(defvar sprite/cli-instance-id nil
-  "CLI-specified sprite instance name; set from command-line args via --id.")
-
-(defun sprite/cli-resolve-id ()
+(defun sprite-cli-resolve-id ()
   "Parse --id=NAME or --id NAME from `command-line-functions' context.
-Sets `sprite/cli-instance-id' when found.  Mirrors `cli/resolve-id' in init.el."
-  (or (when (string-equal "--id" argi)
-        (setq sprite/cli-instance-id (pop argv)))
-      (when (and (> (length argi) 5)
-                 (or (string-prefix-p "--id=" argi)
-                     (string-prefix-p "--id " argi)))
-        (setq sprite/cli-instance-id (substring argi 5)))))
+Sets `sprite-cli-instance-id' when found."
+  (cond
+   ((string-equal "--id" argi)
+    (setq sprite-cli-instance-id (pop argv)))
+   ((and (> (length argi) 5)
+         (or (string-prefix-p "--id=" argi)
+             (string-prefix-p "--id " argi)))
+    (setq sprite-cli-instance-id (substring argi 5)))))
+
+(add-to-list 'command-line-functions #'sprite-cli-resolve-id)
 
 (defun sprite--format-full-name (parent idx unique-name)
   "Format PARENT, IDX, and UNIQUE-NAME into a sprite full name."
@@ -73,10 +134,13 @@ Sets `sprite/cli-instance-id' when found.  Mirrors `cli/resolve-id' in init.el."
 (defun sprite--parse-full-name (full-name)
   "Parse FULL-NAME into (PARENT IDX UNIQUE-NAME) or nil if malformed.
 All three segments must be non-empty and contain no dots."
-  (when (string-match "^\\([^.]+\\)\\.\\([0-9]+\\)\\.\\([^.]+\\)$" full-name)
-    (list (match-string 1 full-name)
-          (string-to-number (match-string 2 full-name))
-          (match-string 3 full-name))))
+  (when-let* ((parts (string-split full-name "\\."))
+              ((= (length parts) 3))
+              ((seq-every-p (lambda (p) (not (string-empty-p p))) parts))
+              ((string-match-p "^[0-9]+$" (nth 1 parts))))
+    (list (nth 0 parts)
+          (string-to-number (nth 1 parts))
+          (nth 2 parts))))
 
 (defun sprite--full-name-p (name)
   "Return t if NAME matches the sprite full-name pattern <parent>.<idx>.<unique>."
@@ -101,15 +165,13 @@ For top-level names, returns FULL-NAME unchanged."
 
 (defun sprite--mode-line-string ()
   "Return abbreviated mode-line string if running as a sprite, or nil."
-  (when-let* ((id (tychoish/resolve-instance-id))
+  (when-let* ((id (sprite-instance-name))
               ((sprite--full-name-p id)))
     (sprite--mode-line-id id)))
 
 (defun sprite-state-directory (&optional full-name)
-  "Return the state directory for sprite FULL-NAME, or the sprites root if nil.
-The sprites root is nested under the parent instance's state path."
-  (let ((base (file-name-as-directory
-               (tychoish/conf-state-path sprite--state-subdir))))
+  "Return the state directory for sprite FULL-NAME, or the sprites root if nil."
+  (let ((base (file-name-as-directory (sprite-state-path sprite--state-subdir))))
     (if full-name
         (file-name-concat base full-name)
       base)))
@@ -118,6 +180,10 @@ The sprites root is nested under the parent instance's state path."
   "Return path for NAME within FULL-NAME's state directory.
 If FULL-NAME is nil, returns path under the sprites root."
   (file-name-concat (sprite-state-directory full-name) name))
+
+(defun sprite--live-p (s)
+  "Return t if sprite S is not decommissioned."
+  (not (sprite--decommissioned-p (sprite-name s))))
 
 ;;;; Struct and registry
 
@@ -138,15 +204,15 @@ If FULL-NAME is nil, returns path under the sprites root."
 
 (defun sprite--registry-get (name)
   "Return the sprite struct for NAME, or nil."
-  (gethash name sprite--registry))
+  (map-elt sprite--registry name))
 
 (defun sprite--registry-put (s)
   "Store sprite struct S in the registry under its name."
-  (puthash (sprite-name s) s sprite--registry))
+  (setf (map-elt sprite--registry (sprite-name s)) s))
 
 (defun sprite--registry-remove (name)
   "Remove the registry entry for NAME."
-  (remhash name sprite--registry))
+  (map-delete sprite--registry name))
 
 (defun sprite--registry-all ()
   "Return a list of all sprite structs in the registry."
@@ -188,7 +254,7 @@ A list of plists; populated by `sprite--registry-serialize'.")
 
 (defun sprite--registry-deserialize ()
   "Restore the registry hash table from `sprite--registry-saved'."
-  (clrhash sprite--registry)
+  (setq sprite--registry (make-hash-table :test #'equal))
   (seq-do (lambda (plist)
             (sprite--registry-put (sprite--plist-to-struct plist)))
           (or sprite--registry-saved nil)))
@@ -237,11 +303,12 @@ A list of plists; populated by `sprite--registry-serialize'.")
 (defun sprite--make-from-state-dir (full-name)
   "Create a minimal sprite struct from a discovered state directory name FULL-NAME."
   (if-let* ((parts (sprite--parse-full-name full-name)))
-    (sprite--make :name full-name
-                  :idx (cadr parts)
-                  :parent (car parts)
-                  :unique-name (caddr parts)
-                  :state-dir (sprite-state-directory full-name))
+    (pcase-let ((`(,parent ,idx ,unique-name) parts))
+      (sprite--make :name full-name
+                    :idx idx
+                    :parent parent
+                    :unique-name unique-name
+                    :state-dir (sprite-state-directory full-name)))
     (error "Cannot parse sprite name: %s" full-name)))
 
 (defun sprite--discover-and-sync-registry ()
@@ -267,11 +334,6 @@ Signals `user-error' if NAME cannot be resolved."
       (sprite-name found)
       (user-error "No sprite found with name: %s" name)))))
 
-(defun sprite--server-file (full-name)
-  "Return the server identifier for FULL-NAME sprite.
-Used as the value of EMACS_SERVER_FILE when calling emacsclient."
-  full-name)
-
 (defun sprite--ensure-state-dir (full-name)
   "Create the state directory for FULL-NAME if it does not exist.
 Returns the state directory path."
@@ -282,32 +344,37 @@ Returns the state directory path."
 (defun sprite--spawn (full-name)
   "Low-level: start an Emacs daemon named FULL-NAME.
 Returns the sprite struct with `start-time' set.  Updates the registry."
-  (let ((s (or (sprite--registry-get full-name)
-               (sprite--make-from-state-dir full-name))))
-    (let ((proc (start-process "sprite-daemon" nil "emacs"
-                               (concat "--daemon=" full-name))))
-      (setf (sprite-pid s) (process-id proc))
-      (setf (sprite-start-time s) (current-time))
-      (sprite--registry-put s)
-      s)))
+  (let* ((s (or (sprite--registry-get full-name)
+                (sprite--make-from-state-dir full-name)))
+         (log-buf (get-buffer-create (sprite--log-buffer-name full-name)))
+         (proc (start-process "sprite-daemon" log-buf
+                              (expand-file-name invocation-name invocation-directory)
+                              (concat "--daemon=" full-name))))
+    (setf (sprite-pid s) (process-id proc))
+    (setf (sprite-start-time s) (current-time))
+    (sprite--registry-put s)
+    s))
 
 (defun sprite--running-p (full-name)
-  "Return t if the sprite FULL-NAME appears to be live."
-  (when-let* ((s (sprite--registry-get full-name))
-              (pid (sprite-pid s)))
-    (= 0 (condition-case _
-             (signal-process pid 0)
-           (error 1)))))
+  "Return t if the sprite FULL-NAME appears to be live.
+Checks whether the log buffer's associated process is still alive with a
+matching PID first; falls back to an emacsclient ping."
+  (or (when-let* ((buf (get-buffer (sprite--log-buffer-name full-name)))
+                  (proc (get-buffer-process buf))
+                  ((process-live-p proc))
+                  (s (sprite--registry-get full-name))
+                  (pid (sprite-pid s))
+                  ((= pid (process-id proc))))
+        t)
+      (not (null (with-sprite full-name t :no-log t)))))
 
 (defun sprite--wait-for-server (full-name &optional timeout-secs)
   "Poll until sprite FULL-NAME's server is accepting connections.
 Times out after TIMEOUT-SECS seconds (default 10).  Returns t on success."
   (let ((deadline (time-add (current-time) (or timeout-secs 10)))
-        (ready nil))
+        ready)
     (while (and (not ready) (time-less-p (current-time) deadline))
-      (when (= 0 (call-process "emacsclient" nil nil nil
-                               "--socket-name" full-name
-                               "--eval" "t"))
+      (when (with-sprite full-name t :no-log t)
         (setq ready t))
       (unless ready
         (sleep-for 0.5)))
@@ -318,7 +385,7 @@ Times out after TIMEOUT-SECS seconds (default 10).  Returns t on success."
 The current instance's ID becomes the parent.
 Returns the new sprite struct."
   (interactive "sSprite unique name: ")
-  (let* ((parent (tychoish/resolve-instance-id))
+  (let* ((parent (sprite-instance-name))
          (idx (sprite--next-idx parent))
          (full-name (sprite--format-full-name parent idx unique-name)))
     (when (sprite--decommissioned-p full-name)
@@ -328,21 +395,34 @@ Returns the new sprite struct."
       (setf (sprite-spawned-by s)
             (buffer-name (current-buffer)))
       (sprite--registry-put s)
+      (unless (sprite--wait-for-server full-name sprite-startup-timeout)
+        (user-error "Sprite %s did not become ready within %ds"
+                    full-name sprite-startup-timeout))
       s)))
+
+(defun sprite--completing-read (prompt)
+  "Read a sprite name from the registry using annotated completion.
+Each candidate is annotated with its index and uptime."
+  (annotated-completing-read
+   (seq-map (lambda (s)
+              (cons (sprite-name s)
+                    (format "idx:%d uptime:%s"
+                            (sprite-idx s)
+                            (if (sprite-start-time s)
+                                (sprite--format-uptime (float-time (time-since (sprite-start-time s))))
+                              "?"))))
+            (sprite--registry-all))
+   :prompt prompt
+   :require-match t))
 
 (defun sprites-stop (name)
   "Send (kill-emacs) to sprite NAME via emacsclient."
-  (interactive (list (completing-read "Stop sprite: "
-                                      (seq-map #'sprite-name (sprite--registry-all)))))
-  (let ((full-name (sprite--resolve-name name)))
-    (call-process "emacsclient" nil nil nil
-                  "--socket-name" full-name
-                  "--eval" "(kill-emacs)")))
+  (interactive (list (sprite--completing-read "Stop sprite: ")))
+  (with-sprite (sprite--resolve-name name) (kill-emacs)))
 
 (defun sprites-restart (name)
   "Restart sprite NAME: stop it then create a new daemon with the same unique-name."
-  (interactive (list (completing-read "Restart sprite: "
-                                      (seq-map #'sprite-name (sprite--registry-all)))))
+  (interactive (list (sprite--completing-read "Restart sprite: ")))
   (let* ((full-name (sprite--resolve-name name))
          (s (sprite--registry-get full-name)))
     (when (sprite--decommissioned-p full-name)
@@ -355,8 +435,7 @@ Returns the new sprite struct."
 
 (defun sprites-decommission (name)
   "Decommission sprite NAME: stop it and write the DECOMMISSIONED marker."
-  (interactive (list (completing-read "Decommission sprite: "
-                                      (seq-map #'sprite-name (sprite--registry-all)))))
+  (interactive (list (sprite--completing-read "Decommission sprite: ")))
   (let ((full-name (sprite--resolve-name name)))
     (condition-case _ (sprites-stop full-name) (error nil))
     (sprite--ensure-state-dir full-name)
@@ -366,6 +445,9 @@ Returns the new sprite struct."
       (setf (sprite-last-contact s) (current-time)))))
 
 ;;;; Communication
+
+(defconst sprite--log-time-format "%H:%M:%S"
+  "Format string for timestamps in sprite log buffers.")
 
 (defun sprite--log-buffer-name (name)
   "Return the name of the log buffer for sprite NAME."
@@ -377,44 +459,49 @@ DIRECTION is the symbol `sent' or `received'.  CONTENT is a string."
   (with-current-buffer (get-buffer-create (sprite--log-buffer-name name))
     (let ((inhibit-read-only t))
       (goto-char (point-max))
-      (insert (format "[%s] %s: %s\n"
-                      (format-time-string "%H:%M:%S")
-                      direction
+      (insert (propertize (format "%s" direction) 'face 'bold))
+      (insert (format " [%s]: %s\n"
+                      (format-time-string sprite--log-time-format)
                       content)))))
 
-(cl-defmacro with-sprite (name &rest body)
-  "Execute BODY with EMACS_SERVER_FILE set to the server identifier for NAME.
-Returns the value of the last form in BODY."
-  (declare (indent 1))
-  (let ((gname (make-symbol "name")))
-    `(let* ((,gname ,name)
-            (process-environment
-             (cons (concat "EMACS_SERVER_FILE=" (sprite--server-file ,gname))
-                   process-environment)))
-       ,@body)))
+(defun sprite--call (name form &optional buffer)
+  "The single site where emacsclient is invoked for eval-based communication.
+Evaluates FORM in sprite NAME; captures output in BUFFER when non-nil.
+Returns the emacsclient exit code."
+  (call-process "emacsclient" nil buffer nil
+                "--socket-name" name "--eval" (format "%S" form)))
 
-(defun sprites-eval (name form)
-  "Evaluate FORM in the sprite NAME via emacsclient.
-Returns the read result, or nil on failure.  Logs to the sprite's log buffer."
-  (sprite--log name 'sent (format "%S" form))
-  (let ((result
-         (with-sprite name
-           (condition-case err
-               (with-temp-buffer
-                 (let ((exit-code (call-process "emacsclient" nil t nil
-                                                "--eval" (format "%S" form))))
-                   (when (= exit-code 0)
-                     (condition-case _
-                         (read (buffer-string))
-                       (error (string-trim (buffer-string)))))))
-             (error
-              (sprite--log name 'error (error-message-string err))
-              nil)))))
-    (when result
-      (sprite--log name 'received (format "%S" result))
-      (when-let* ((s (sprite--registry-get name)))
-        (setf (sprite-last-contact s) (current-time))))
-    result))
+(defun sprite--call-and-read (name form)
+  "Invoke emacsclient against NAME evaluating FORM; return the read result.
+Returns the read Lisp value on success, nil if the call fails or output is
+unreadable.  Process errors propagate to the caller."
+  (with-temp-buffer
+    (when (= 0 (sprite--call name form (current-buffer)))
+      (condition-case _ (read (buffer-string))
+        (error nil)))))
+
+(cl-defmacro with-sprite (name form &key no-log)
+  "Evaluate FORM in sprite NAME via emacsclient.
+Returns the read result, or nil if the connection fails.
+Unless NO-LOG is non-nil, logs the exchange and updates last-contact."
+  (declare (indent 1))
+  (let ((gname (make-symbol "name"))
+        (gresult (make-symbol "result")))
+    `(let ((,gname ,name))
+       ,(unless no-log `(sprite--log ,gname 'sent (format "%S" ',form)))
+       (let ((,gresult
+              (condition-case ,(if no-log '_ 'err)
+                  (sprite--call-and-read ,gname ',form)
+                (error
+                 ,(unless no-log
+                    `(sprite--log ,gname 'error (error-message-string err)))
+                 nil))))
+         ,(unless no-log
+            `(when ,gresult
+               (sprite--log ,gname 'received (format "%S" ,gresult))
+               (when-let* ((s (sprite--registry-get ,gname)))
+                 (setf (sprite-last-contact s) (current-time)))))
+         ,gresult))))
 
 (defun sprites-open-log (name)
   "Switch to the communication log buffer for sprite NAME."
@@ -436,17 +523,13 @@ Returns \"?\" when SECONDS is nil."
 
 (defun sprite--query-buffer-count (full-name)
   "Try to get the buffer count from sprite FULL-NAME.  Returns integer or nil."
-  (condition-case _
-      (with-sprite full-name
-        (with-temp-buffer
-          (when (= 0 (call-process "emacsclient" nil t nil
-                                   "--eval" "(length (buffer-list))"))
-            (string-to-number (string-trim (buffer-string))))))
-    (error nil)))
+  (when-let* ((n (with-sprite full-name (length (buffer-list)) :no-log t))
+              ((numberp n)))
+    n))
 
 (defun sprite--for-current-parent-p (s)
   "Return t if sprite S belongs to the current parent instance."
-  (equal (sprite-parent s) (tychoish/resolve-instance-id)))
+  (equal (sprite-parent s) (sprite-instance-name)))
 
 (defun sprite--build-list-entry (s)
   "Build a `tabulated-list' entry for sprite struct S."
@@ -465,6 +548,9 @@ Returns \"?\" when SECONDS is nil."
            (if (numberp buffers) (number-to-string buffers) "?")
            (sprite--format-uptime last-seen)
            spawned-by))))
+
+(defconst sprite--list-buffer-name "*Sprites*"
+  "Name of the sprite overview buffer.")
 
 (defvar sprite-list-mode-map
   (let ((map (make-sparse-keymap)))
@@ -503,18 +589,26 @@ Returns \"?\" when SECONDS is nil."
         (thread-last (sprite--registry-all)
           (seq-filter (lambda (s)
                         (and (sprite--for-current-parent-p s)
-                             (not (sprite--decommissioned-p (sprite-name s))))))
+                             (sprite--live-p s))))
           (seq-map #'sprite--build-list-entry)))
   (tabulated-list-print t))
 
 (defun sprites-list ()
   "Open the sprites overview buffer."
   (interactive)
-  (let ((buf (get-buffer-create "*Sprites*")))
-    (with-current-buffer buf
-      (sprite-list-mode)
-      (sprites-list-refresh))
-    (pop-to-buffer buf)))
+  (with-current-buffer (get-buffer-create sprite--list-buffer-name)
+    (sprite-list-mode)
+    (sprites-list-refresh))
+  (pop-to-buffer sprite--list-buffer-name))
+
+(defun sprite-list--sprite-at-point-p ()
+  "Return non-nil if there is a sprite struct at point in the overview buffer."
+  (tabulated-list-get-id))
+
+(defun sprite-list--log-exists-at-point-p ()
+  "Return non-nil if a log buffer exists for the sprite at point."
+  (when-let* ((s (tabulated-list-get-id)))
+    (get-buffer (sprite--log-buffer-name (sprite-name s)))))
 
 (defun sprites-list--sprite-at-point ()
   "Return the sprite struct at point, or signal `user-error'."
@@ -530,10 +624,10 @@ Returns \"?\" when SECONDS is nil."
 (defun sprites-list-decommission ()
   "Decommission the sprite at point."
   (interactive)
-  (let ((name (sprite-name (sprites-list--sprite-at-point))))
-    (when (yes-or-no-p (format "Decommission sprite %s? " name))
-      (sprites-decommission name)
-      (sprites-list-refresh))))
+  (when-let* ((name (sprite-name (sprites-list--sprite-at-point)))
+              ((yes-or-no-p (format "Decommission sprite %s? " name))))
+    (sprites-decommission name)
+    (sprites-list-refresh)))
 
 (defun sprites-list-restart ()
   "Restart the sprite at point."
@@ -555,28 +649,27 @@ Returns \"?\" when SECONDS is nil."
 (defun sprites-list-open-frame ()
   "Open a new Emacs frame connected to the sprite at point."
   (interactive)
-  (let ((name (sprite-name (sprites-list--sprite-at-point))))
-    (start-process "sprite-frame" nil "emacsclient"
-                   "-c" "--socket-name" name)))
+  (start-process "sprite-frame" nil "emacsclient"
+                 "-c" "--socket-name" (sprite-name (sprites-list--sprite-at-point))))
 
 (transient-define-prefix sprite-list-menu ()
   "Actions for the sprite overview buffer."
   [["Sprite"
     ("c" "Create"       sprites-list-create)
-    ("d" "Decommission" sprites-list-decommission)
-    ("r" "Restart"      sprites-list-restart)
-    ("s" "Stop"         sprites-list-stop)]
+    ("d" "Decommission" sprites-list-decommission :inapt-if-not sprite-list--sprite-at-point-p)
+    ("r" "Restart"      sprites-list-restart :inapt-if-not sprite-list--sprite-at-point-p)
+    ("s" "Stop"         sprites-list-stop :inapt-if-not sprite-list--sprite-at-point-p)]
    ["Navigate"
-    ("o" "Open log"     sprites-list-open-log)
-    ("f" "New frame"    sprites-list-open-frame)
+    ("o" "Open log"     sprites-list-open-log :inapt-if-not sprite-list--log-exists-at-point-p)
+    ("f" "New frame"    sprites-list-open-frame :inapt-if-not sprite-list--sprite-at-point-p)
     ("g" "Refresh"      sprites-list-refresh)
     ("q" "Quit"         quit-window)]])
 
 ;;;; Fleet API
 
-(defcustom sprite-busy-threshold 30
+(defcustom sprite-active-threshold 30
   "Seconds since last-contact after which a sprite is considered available.
-A sprite is \"busy\" if it was contacted within this many seconds."
+A sprite is \"active\" if it was contacted within this many seconds."
   :type 'integer
   :group 'sprite)
 
@@ -585,52 +678,55 @@ A sprite is \"busy\" if it was contacted within this many seconds."
   :type 'integer
   :group 'sprite)
 
+(defcustom sprite-startup-timeout 10
+  "Seconds to wait for a newly spawned sprite server to accept connections."
+  :type 'integer
+  :group 'sprite)
+
+(defun sprites-worker-p ()
+  "Return t if this instance is itself a sprite (has a parent)."
+  (sprite--full-name-p (sprite-instance-name)))
+
 (defun sprites-resolve-list ()
   "Return list of sprite structs accessible to this instance.
 Includes direct children.  If this instance is itself a sprite (worker),
 also includes sibling sprites from the same parent."
-  (let ((own-id (tychoish/resolve-instance-id)))
-    (if (sprite--full-name-p own-id)
+  (let ((own-id (sprite-instance-name)))
+    (if (sprites-worker-p)
       (let ((parts (sprite--parse-full-name own-id)))
         (thread-last (sprite--registry-all)
           (seq-filter (lambda (s)
-                        (and (not (sprite--decommissioned-p (sprite-name s)))
+                        (and (sprite--live-p s)
                              (or (equal own-id (sprite-parent s))
                                  (equal (car parts) (sprite-parent s))))))))
       (thread-last (sprite--registry-all)
         (seq-filter (lambda (s)
                       (and (equal own-id (sprite-parent s))
-                           (not (sprite--decommissioned-p (sprite-name s))))))))))
+                           (sprite--live-p s))))))))
 
 (defun sprites-controller-p ()
   "Return t if this instance has at least one non-decommissioned sprite."
   (not (null (thread-last (sprite--registry-all)
                (seq-filter (lambda (s)
-                              (and (equal (tychoish/resolve-instance-id)
-                                         (sprite-parent s))
-                                   (not (sprite--decommissioned-p
-                                          (sprite-name s))))))))))
-
-(defun sprites-worker-p ()
-  "Return t if this instance is itself a sprite (has a parent)."
-  (sprite--full-name-p (tychoish/resolve-instance-id)))
+                              (and (equal (sprite-instance-name) (sprite-parent s))
+                                   (sprite--live-p s))))))))
 
 (defun sprites-available-p ()
   "Return t if any accessible sprites are configured."
   (not (null (sprites-resolve-list))))
 
-(defun sprite--not-busy-p (s)
+(defun sprite--available-p (s)
   "Return t if sprite S has not been contacted recently."
   (or (null (sprite-last-contact s))
       (> (float-time (time-since (sprite-last-contact s)))
-         sprite-busy-threshold)))
+         sprite-active-threshold)))
 
 (defun sprites-get-next ()
   "Return the struct of the next available sprite, or nil.
 \"Available\" means running and not recently contacted."
   (seq-find (lambda (s)
               (and (sprite--running-p (sprite-name s))
-                   (sprite--not-busy-p s)))
+                   (sprite--available-p s)))
             (sprites-resolve-list)))
 
 (defun sprites-get-or-create-next ()
@@ -645,14 +741,10 @@ Signals `user-error' if `sprite-max-count' would be exceeded."
 
 ;;;; Mode-line and savehist wiring
 
-(defun sprite--on-savehist-load ()
-  "Restore the sprite registry after savehist loads."
-  (sprite--registry-deserialize))
-
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'sprite--registry-saved)
   (add-hook 'savehist-save-hook #'sprite--registry-serialize)
-  (add-hook 'savehist-mode-hook #'sprite--on-savehist-load))
+  (add-hook 'savehist-mode-hook #'sprite--registry-deserialize))
 
 (provide 'sprite)
 ;;; sprite.el ends here

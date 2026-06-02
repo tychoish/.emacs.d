@@ -18,7 +18,11 @@ Rules for writing and editing Emacs Lisp in this configuration.
 
 ### Elisp formatting: no alignment padding
 
-Never use extra spaces to align let-binding RHS values or any other elements. Write `(table (make-hash-table :test #'equal))` not `(table   (make-hash-table :test #'equal))`. One space after the symbol name, always. Applies to `let`/`let*`, `plist`, `alist`, and all multi-element forms.
+Never use extra spaces to align let-binding RHS values or any other
+elements. Write `(table (make-hash-table :test #'equal))` not `(table
+(make-hash-table :test #'equal))`. One space after the symbol name,
+always. Applies to `let`/`let*`, `plist`, `alist`, and all
+multi-element forms.
 
 ## Form
 

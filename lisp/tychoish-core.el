@@ -2764,6 +2764,9 @@ Useful after changing `eglot-workspace-configuration' or
   :config
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-anthropic-default-model-id "default")
+  (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
+  (require 'agent-shell-omp)
+
   (bind-keys
    :map agent-shell-mode-map
    ("C-c C-c" . agent-shell-submit)
@@ -2815,6 +2818,8 @@ Useful after changing `eglot-workspace-configuration' or
          ("/" . agent-shell-queue-capture)
          ("P" . agent-shell-queue-pause)
          ("-" . agent-shell-queue-edit-task))
+  :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
+         (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
   :commands (agent-shell-queue-buffer-open
              agent-shell-queue-enqueue
              agent-shell-queue-edit-task
@@ -2836,8 +2841,6 @@ Useful after changing `eglot-workspace-configuration' or
              agent-shell-queue-enqueue-emacs
              agent-shell-queue-insert-wait
              agent-shell-queue-item-menu)
-  :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
-         (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
   :init
   (make-read-extended-command-for-prefix "agent-shell-queue"
     :bind-map tychoish/robot-agent-shell-map
@@ -2904,6 +2907,15 @@ Useful after changing `eglot-workspace-configuration' or
 	      ("," . agent-shell-manager-toggle))
   :config
   (setq agent-shell-manager-side 'bottom))
+
+(use-package sprite
+  :load-path "lisp"
+  :commands (sprites-list sprites-create
+             sprites-get-next sprites-get-or-create-next)
+  :config
+  (when (sprite--full-name-p (sprite-resolve-instance-id))
+    (add-to-list 'mode-line-misc-info
+                 '(:eval (sprite--mode-line-string)))))
 
 (use-package agent-shell-workspace
   :load-path "elpa/agent-shell-workspace"

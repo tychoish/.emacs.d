@@ -36,8 +36,6 @@
  (defvar tychoish/emacs-instance-id nil
    "Name of emacs instance. `work', `personal', and `hud' are common long
 lived instances. Other ephemeral instance names ones may be useful.")
- (defvar cli/instance-id  nil
-   "cli specified daemon/instance name")
 
  (defvar local-notes-directory (expand-file-name "~/notes")
    "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
@@ -60,14 +58,6 @@ lived instances. Other ephemeral instance names ones may be useful.")
  ;; (setq server-host "127.0.0.1")
  ;; (setq server-port 2286)
 
- (defun cli/resolve-id ()
-   (or (when (string-equal "--id" argi)
-	 (setq cli/instance-id (pop argv)))
-       (when (and (> (length argi) 5)
-		  (or (string-prefix-p "--id=" argi)
-		      (string-prefix-p "--id " argi)))
-	 (setq cli/instance-id (substring argi 5)))))
-
  (defun cli/bootstrap ()
    (when (string-prefix-p "--bootstrap" argi)
      (let ((packages '(f s dash ht cond-let))
@@ -87,7 +77,6 @@ lived instances. Other ephemeral instance names ones may be useful.")
      (setq slow-op-reporting t)))
 
  (add-to-list 'command-line-functions 'cli/time-reporting)
- (add-to-list 'command-line-functions 'cli/resolve-id)
  (add-to-list 'command-line-functions 'cli/bootstrap)
 
  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
@@ -122,6 +111,9 @@ lived instances. Other ephemeral instance names ones may be useful.")
  (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
 
  (with-file-name-handler-disabled
+  (with-slow-op-timer "<init> sprite"
+   (require 'sprite))
+
   (with-slow-op-timer "<init> tychoish-bootstrap"
    (require 'tychoish-bootstrap)
    (declare-function tychoish/conf-state-path "tychoish-bootstrap")
