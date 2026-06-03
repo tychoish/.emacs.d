@@ -127,9 +127,18 @@ Keyword arguments:
 
 ;;;; Registry helpers
 
+(defvar magit-gh-repo-dashboard-sync-trigger 'interactive
+  "How the current auto-sync was triggered.
+Bind to `timer' when invoking auto-sync from a timer; defaults to `interactive'.")
+
 (defun magit-gh-repo-dashboard--default-commit-message (repo)
-  "Return a default auto-commit message for REPO."
-  (format "chore: auto-commit changes in %s" (magit-gh-repo-name repo)))
+  "Return a default auto-commit message for REPO.
+Includes hostname, Emacs instance ID, and the current sync trigger."
+  (format "chore: auto-commit changes in %s [%s:%s, %s]"
+          (magit-gh-repo-name repo)
+          (system-name)
+          (or (and (boundp 'sprite-instance-id) sprite-instance-id) "unknown")
+          (symbol-name magit-gh-repo-dashboard-sync-trigger)))
 
 (defun magit-gh-repo-dashboard--stage-all (repo)
   "Stage all changes in REPO. Returns t on success."
