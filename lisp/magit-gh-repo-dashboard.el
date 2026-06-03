@@ -43,6 +43,7 @@
 (declare-function magit-commit-create "magit-commit")
 (declare-function magit-fetch "magit-fetch")
 (declare-function magit-pull-from-upstream "magit-pull")
+(declare-function magit-push-current-to-pushremote "magit-push")
 (declare-function magit-log-current "magit-log")
 (declare-function magit-log "magit-log")
 (declare-function magit-show-commit "magit-diff")
@@ -371,6 +372,13 @@ or `error' when git add or commit fails."
           (lambda (_ _code) (funcall on-complete 'error)))))
      (lambda (_ _code) (funcall on-complete 'error)))))
 
+(defun magit-gh-repo-dashboard--log-operation (repo-name operation status)
+  "Log REPO-NAME OPERATION with STATUS to *Messages*.
+The current timestamp is attached as a tooltip (help-echo) on REPO-NAME."
+  (let* ((ts (format-time-string "%Y-%m-%d %H:%M:%S"))
+         (name (propertize repo-name 'help-echo ts)))
+    (message "magit-gh: %s %s → %s" name operation (symbol-name status))))
+
 (defun magit-gh-repo-dashboard--batch-run (repos op-fn label &optional on-all-done)
   "Run OP-FN asynchronously on each repo in REPOS.
 OP-FN is called as (op-fn REPO CALLBACK) where CALLBACK receives a status
@@ -384,6 +392,8 @@ ON-ALL-DONE with an alist of (NAME . STATUS)."
      (lambda (repo)
        (funcall op-fn repo
                 (lambda (status)
+                  (magit-gh-repo-dashboard--log-operation
+                   (magit-gh-repo-name repo) label status)
                   (push (cons (magit-gh-repo-name repo) status) results)
                   (setcar remaining (1- (car remaining)))
                   (when (= 0 (car remaining))
@@ -866,10 +876,10 @@ Signals `user-error' when :auto-commit is not configured for this repo."
       (message "magit-gh: stage all failed in %s" (magit-gh-repo-name repo)))))
 
 (defun magit-gh-repo-dashboard-push ()
-  "Push changes in the repository at point via magit."
+  "Push current branch to its push remote for the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
-    (call-interactively #'magit-push)))
+  (let ((default-directory (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))))
+    (magit-push-current-to-pushremote nil)))
 
 (defun magit-gh-repo-dashboard-commit-all ()
   "Auto-commit repos with :auto-commit configured, asynchronously.
@@ -893,10 +903,18 @@ Uses magit's interactive fetch/pull for the current repo."
     (when (null repos)
       (user-error "No repositories have :auto-sync configured"))
     (seq-do (lambda (repo)
-               (magit-gh--with-repo-dir (magit-gh-repo-path repo)
-                 (pcase (magit-gh-repo-auto-sync repo)
-                   ('fetch (call-interactively #'magit-fetch))
-                   ('pull (call-interactively #'magit-pull-from-upstream)))))
+               (let* ((op (magit-gh-repo-auto-sync repo))
+                      (op-name (symbol-name op))
+                      (status (condition-case _
+                                  (progn
+                                    (magit-gh--with-repo-dir (magit-gh-repo-path repo)
+                                      (pcase op
+                                        ('fetch (call-interactively #'magit-fetch))
+                                        ('pull (call-interactively #'magit-pull-from-upstream))))
+                                    'ok)
+                                (error 'error))))
+                 (magit-gh-repo-dashboard--log-operation
+                  (magit-gh-repo-name repo) op-name status)))
              repos))
   (magit-gh-repo-dashboard-refresh))
 
@@ -1168,10 +1186,10 @@ Signals `user-error' when :auto-commit is not configured for this repo."
       (message "magit-gh: stage all failed in %s" (magit-gh-repo-name repo)))))
 
 (defun magit-gh-repo-overview-push ()
-  "Push changes in the current overview's repository via magit."
+  "Push current branch to its push remote for this overview's repository."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-overview--current-repo))
-    (call-interactively #'magit-push)))
+  (let ((default-directory (magit-gh-repo-path (magit-gh-repo-overview--current-repo))))
+    (magit-push-current-to-pushremote nil)))
 
 (defun magit-gh-repo-overview-run-command ()
   "Open ACR picker for this overview's repository and invoke the selected command."
@@ -1694,6 +1712,11 @@ Returns nil when OUTPUT is not a JSON array."
   (and magit-gh-repo-overview--stats
        (plist-get magit-gh-repo-overview--stats :dirty)))
 
+(defun magit-gh-repo-overview--ahead-p ()
+  "Return non-nil when this overview's repository has commits ahead of upstream."
+  (and magit-gh-repo-overview--stats
+       (> (or (plist-get magit-gh-repo-overview--stats :ahead) 0) 0)))
+
 (defun magit-gh-repo-overview--has-auto-commit-p ()
   "Return non-nil when this overview's repository has :auto-commit configured."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
@@ -1709,6 +1732,12 @@ Returns nil when OUTPUT is not a JSON array."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point)))
               (stats (magit-gh-repo-dashboard--get-stats repo)))
     (and (> (or (plist-get stats :behind) 0) 0) t)))
+
+(defun magit-gh-repo-dashboard--repo-at-point-ahead-p ()
+  "Return non-nil when the repo at point has commits ahead of its upstream."
+  (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point)))
+              (stats (magit-gh-repo-dashboard--get-stats repo)))
+    (and (> (or (plist-get stats :ahead) 0) 0) t)))
 
 (defun magit-gh-repo-dashboard--can-add-worktree-p ()
   "Return non-nil when at a registered non-worktree repo (can add a worktree)."
@@ -1817,7 +1846,7 @@ Returns nil when OUTPUT is not a JSON array."
     ("rp"   "Pull"             magit-gh-repo-dashboard-pull
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("rs"   "Push (repo send)" magit-gh-repo-dashboard-push
-     :inapt-if magit-gh-repo-dashboard--repo-at-point-behind-p)]
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-ahead-p)]
    ["Navigate"
     ("b"   "Visit buffer"    magit-gh-repo-dashboard-visit-buffer
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
@@ -1881,7 +1910,8 @@ Returns nil when OUTPUT is not a JSON array."
      :if magit-gh-repo-overview--has-changes-p)
     ("fr"   "Fetch"            magit-gh-repo-overview-fetch)
     ("rp"   "Pull"             magit-gh-repo-overview-pull)
-    ("rs"   "Push (repo send)" magit-gh-repo-overview-push)]
+    ("rs"   "Push (repo send)" magit-gh-repo-overview-push
+     :inapt-if-not magit-gh-repo-overview--ahead-p)]
    ["Navigate"
     ("b"   "Visit buffer"    magit-gh-repo-overview-visit-buffer)
     ("ff"  "Find file"       magit-gh-repo-overview-find-file)
