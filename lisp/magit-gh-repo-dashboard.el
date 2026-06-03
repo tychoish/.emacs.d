@@ -1817,7 +1817,7 @@ Returns nil when OUTPUT is not a JSON array."
     ("rp"   "Pull"             magit-gh-repo-dashboard-pull
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("rs"   "Push (repo send)" magit-gh-repo-dashboard-push
-     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-behind-p)]
+     :inapt-if magit-gh-repo-dashboard--repo-at-point-behind-p)]
    ["Navigate"
     ("b"   "Visit buffer"    magit-gh-repo-dashboard-visit-buffer
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
