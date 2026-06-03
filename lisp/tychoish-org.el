@@ -172,7 +172,7 @@
 (defun tychoish-org--install-auxiliary-packages ()
   "Install all of the auxiliary packages."
   (->> tychoish-org--auxiliary-packages
-       (-remove #'package-installed-p)
+       (seq-remove #'package-installed-p)
        (-map #'package-install-async)
        (length)))
 
@@ -355,7 +355,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 	 (--mapc (let* ((template it)
 			(key-char    (nth 0 template))
 			(description (nth 1 template))
-			(file        (f-filename (cadr (nth 3 template))))
+			(file        (file-name-nondirectory (cadr (nth 3 template))))
 			(body        (let ((s (string-replace "\n" " " (nth 4 template))))
 				       (string-trim (if (> (length s) 32) (concat (substring s 0 29) "...") s)))))
 		   (ht-set key-table description key-char)
@@ -413,7 +413,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (when (string-equal "r" key)
     (user-error "cannot define routine (loops) %s org-capture-templates with key `r'" name))
 
-  (when-let* ((description (format "%s routines <%s>" name (f-filename path)))
+  (when-let* ((description (format "%s routines <%s>" name (file-name-nondirectory path)))
 	      (_ (not (string-equal "" key))))
     (add-to-list 'org-capture-templates (list (concat "r" key) description))
     (add-to-list 'org-capture-templates (list (concat key "r") description)))
@@ -478,7 +478,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
       (setq append-item t)
       (add-to-list 'org-capture-templates
                    (list (concat key char)
-                         (format "%s %s <%s>" name kind (f-filename path))))
+                         (format "%s %s <%s>" name kind (file-name-nondirectory path))))
       (push (list (concat char key) (car first-sub) (cdr first-sub)) specs))
     (dolist (entry (append specs
                            (--map (cons (concat key (car it)) (cdr it))
@@ -562,7 +562,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 		 (f-expand path)
 	       (concat (f-make-slug name) ".org")))
 
-  (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (f-filename path))) t)
+  (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (file-name-nondirectory path))) t)
 
   (let ((org-filename (if (or (file-exists-p path)
 			      (and

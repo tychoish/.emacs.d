@@ -168,7 +168,7 @@ Stale marked branches are dropped from `:marked'. Returns new candidates."
     (magit-gh--cache-set path
      :prune-state (list :candidates candidates
 			:marked (cl-intersection prev-marked
-						 (mapcar #'car candidates)
+						 (seq-map #'car candidates)
 						 :test #'equal)
 			:closed-prs closed-prs))
       candidates))
@@ -280,9 +280,9 @@ Throws `magit-gh--prune-exit' to terminate the menu loop."
      ((equal label "refresh")
       (magit-gh--prune-scan))
      ((equal label "prune all branches (no prompt)")
-      (magit-gh--prune-delete-branches (mapcar #'car candidates) path nil))
+      (magit-gh--prune-delete-branches (seq-map #'car candidates) path nil))
      ((equal label "prune all branches (with prompt)")
-      (magit-gh--prune-delete-branches (mapcar #'car candidates) path t))
+      (magit-gh--prune-delete-branches (seq-map #'car candidates) path t))
      ((equal label "mark branch for pruning")
       (magit-gh--prune-toggle-mark path))
      ((equal label "prune marked branches")

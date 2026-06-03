@@ -470,7 +470,7 @@ call `builder-add-candidates'."
   (unless (or builder--cache-bypass
 	      builder--cached-candidates)
     (let* ((project-root-directory (approximate-project-root))
-	   (project-name (f-filename project-root-directory))
+	   (project-name (file-name-nondirectory project-root-directory))
 	   (default-directory (or directory default-directory))
            (directories (seq-uniq
 			    (append
@@ -716,7 +716,7 @@ call `builder-add-candidates'."
 		       (exists (file-exists-p filename))
 		       (is-golang (f-ext-p filename "go"))
 		       (short-filename (f-collapse-homedir filename))
-		       (basename (f-filename filename)))
+		       (basename (file-name-nondirectory filename)))
 	     (-l (make-builder-candidate
 		  :name (format "gofumpt +extra %s" basename)
 		  :directory (f-dirname filename)
@@ -749,7 +749,7 @@ call `builder-add-candidates'."
              (_         (derived-mode-p '(go-mode go-ts-mode)))
              (_         (string-suffix-p "_test.go" filename))
              (directory (f-dirname filename))
-             (basename  (f-filename filename))
+             (basename  (file-name-nondirectory filename))
              (short-path (f-collapse-homedir directory))
              (test-names (eglot-test-at-point--go-names-in-buffer)))
    (seq-mapcat
@@ -783,7 +783,7 @@ call `builder-add-candidates'."
  :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
 	     (seq-mapcat
 	      (lambda (it)
-		(let ((filename (f-filename it))
+		(let ((filename (file-name-nondirectory it))
 		      (directory it))
 		  (seq-filter
 		   #'identity
@@ -882,7 +882,7 @@ call `builder-add-candidates'."
 			  :annotation (format "run cargo target '%s' in project root (%s)" it annotation-directory))
 		       (make-builder-candidate
 			:directory directory
-			:name (format "cargo %s <%s>" it (f-base directory))
+			:name (format "cargo %s <%s>" it (file-name-sans-extension (file-name-nondirectory directory)))
 			:command (format "cd %s; cargo %s" directory it)
 			:annotation (format "run cargo target '%s' in package (%s)" it annotation-directory))))
 		   '("build" "check" "test" "fix" "fmt" "clippy" "clippy --fix"))))
@@ -940,7 +940,7 @@ call `builder-add-candidates'."
  (when-let* ((filename (buffer-file-name))
              (_ (derived-mode-p 'emacs-lisp-mode))
              (short-name (f-collapse-homedir filename))
-             (basename (f-filename filename))
+             (basename (file-name-nondirectory filename))
              (directory (f-dirname filename))
              (lisp-dir (f-join user-emacs-directory "lisp")))
    (-l (make-builder-candidate
@@ -1022,7 +1022,7 @@ call `builder-add-candidates'."
   "Return the package name for the elisp project at ROOT.
 Strips a trailing \".el\" from the directory name so a project in
 \"xtdlib.el/\" packages as \"xtdlib\"."
-  (let ((basename (f-filename (directory-file-name root))))
+  (let ((basename (file-name-nondirectory (directory-file-name root))))
     (if (string-suffix-p ".el" basename)
         (string-remove-suffix ".el" basename)
       basename)))
@@ -1051,7 +1051,7 @@ byte-compiled as ordinary sources."
   (let* ((name (builder-elisp-package--name root))
          (skip (list (concat name "-pkg.el")
                      (concat name "-autoloads.el"))))
-    (seq-remove (lambda (it) (member (f-filename it) skip))
+    (seq-remove (lambda (it) (member (file-name-nondirectory it) skip))
 		 (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries root #'f-file-p)))))
 
 (defun builder-elisp-package--test-files (root)
@@ -1059,7 +1059,7 @@ byte-compiled as ordinary sources."
   (let ((test-dir (f-join root "test")))
     (when (f-directory-p test-dir)
       (seq-filter (lambda (it)
-		     (let ((name (f-filename it)))
+		     (let ((name (file-name-nondirectory it)))
 		       (or (string-prefix-p "test-" name)
 			   (string-suffix-p "-test.el" name))))
 		   (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries test-dir #'f-file-p))))))
@@ -1221,7 +1221,7 @@ Reads `Package-Requires' via `package-desc-reqs' on the entry in
 when PACKAGE is not installed."
   (when-let* ((desc (cadr (assq package package-alist))))
     (seq-remove (lambda (it) (eq it 'emacs))
-		 (mapcar #'car (package-desc-reqs desc)))))
+		 (seq-map #'car (package-desc-reqs desc)))))
 
 (defun builder-package-deps-map (packages)
   "Return a hash-table mapping each symbol in PACKAGES to its direct deps.
@@ -1256,7 +1256,7 @@ comparable with `package-alist' keys."
   (when (file-directory-p package-user-dir)
     (seq-uniq
      (seq-remove (lambda (it) (memq it builder-package-installed-exclude))
-		 (mapcar #'intern
+		 (seq-map #'intern
 			  (seq-map (lambda (it) (replace-regexp-in-string "-[0-9.]+\\'" "" it))
 				   (seq-filter (lambda (it) (file-directory-p (expand-file-name it package-user-dir)))
 					      (directory-files package-user-dir nil "\\`[^.]"))))))))

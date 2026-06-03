@@ -167,13 +167,13 @@
   (defun projectile-get-project-roots-for-current-buffers ()
     (->>
      (buffer-list)
-     (-map #'buffer-file-name)
-     (-non-nil)
-     (-map #'f-dirname)
+     (seq-map #'buffer-file-name)
+     (seq-filter 'identity)
+     (seq-map #'f-dirname)
      (-sort #'string<)
-     (-map #'projectile-project-root)
-     (-distinct)
-     (-non-nil)))
+     (seq-map #'projectile-project-root)
+     (seq-uniq)
+     (seq-filter 'identity)))
 
   (defun tychoish/save-project-buffers ()
     (interactive)
@@ -271,8 +271,6 @@
 	    :prompt "rg(init):")
 	 initial))))
 
-
-
   (cl-defun consult-rg-project (&optional initial &key context)
     "Start an iterative rg session in the project root, if possible, falling back as necessary."
     (interactive "P")
@@ -284,7 +282,6 @@
 
   (cl-defun consult-rg-pwd (&optional initial &key context)
     "Start an iterative rg session for the current directory."
-    ;; (let ((base-directory (f-base default-directory)))
     (interactive "P")
 
     (consult-rg
@@ -319,7 +316,7 @@
     (interactive)
     (ripgrep-compile
      :directory default-directory
-     :buffer-name (format "*%s-rg*" (f-filename default-directory))
+     :buffer-name (format "*%s-rg*" (file-name-nondirectory default-directory))
      :regexp (find-ripgrep--resolve-regexp
 	      :directory default-directory)))
 
@@ -443,8 +440,8 @@
   (defun tychoish/get-available-word-capfs ()
     (->> (list (tychoish/maybe-capf-wordfreq)
 	       (tychoish/maybe-capf-dict))
-	 (-non-nil)
-	 (-filter #'symbolp)))
+	 (seq-filter 'identity)
+	 (seq-filter #'symbolp)))
 
   (defun tychoish/text-mode-capf-setup ()
     "so here is the"
@@ -457,7 +454,7 @@
 			    #'cape-emoji
 			    #'cape-file))
 		     (-flatten)
-		     (-non-nil))))
+		     (seq-filter 'identity))))
 
   (defun tychoish/elisp-capf-setup  ()
     (setq-local completion-at-point-functions
@@ -467,15 +464,15 @@
 			   (cape-capf-wrapper cape-capf-inside-code cape-keyword)
 			   #'yasnippet-capf
 			   (->> (tychoish/get-available-word-capfs)
-				(-map (lambda (in)
+				(seq-map (lambda (in)
 					`(progn
 					   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
 						 (cape-capf-wrapper cape-capf-inside-string ,in)))))
-				(-map 'eval))
+				(seq-map 'eval))
 			   #'cape-emoji)
 		     (-flatten)
-		     (-non-nil)
-		     (-distinct))))
+		     (seq-filter 'identity)
+		     (seq-uniq))))
 
   (defun tychoish/eglot-capf-setup ()
     (interactive) ;; todo remove
@@ -484,17 +481,17 @@
 		(-> (list #'eglot-completion-at-point
 			  #'cape-dabbrev
 			  (->> (tychoish/get-available-word-capfs)
-			       (-map (lambda (in)
+			       (seq-map (lambda (in)
 				       `(progn
 					  (list (cape-capf-wrapper cape-capf-inside-comment ,in)
 						(cape-capf-wrapper cape-capf-inside-string ,in)))))
-			       (-map 'eval))
+			       (seq-map 'eval))
 			  #'yasnippet-capf
 			  #'cape-emoji
 			  #'cape-file)
 		    (-flatten)
-		    (-non-nil)
-		    (-distinct))))
+		    (seq-filter 'identity)
+		    (seq-uniq))))
 
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
@@ -2199,7 +2196,7 @@ Useful after changing `eglot-workspace-configuration' or
     (async-start
      `(lambda ()
 	,(async-inject-variables "treesit-language-source-alist")
-	(mapc #'treesit-install-language-grammar (mapcar #'car treesit-language-source-alist)))
+	(mapc #'treesit-install-language-grammar (seq-map #'car treesit-language-source-alist)))
      (lambda (result)
        (message "rebuilt treesit grammars for %s" result)))))
 
@@ -2850,7 +2847,7 @@ Useful after changing `eglot-workspace-configuration' or
 	(let ((end (point)))
           (when (re-search-backward "/" (line-beginning-position) t)
             (list (1+ (point)) end
-                  (mapcar (lambda (c) (map-elt c 'name)) commands)
+                  (seq-map (lambda (c) (map-elt c 'name)) commands)
                   :annotation-function
                   (lambda (name)
                     (let ((cmd (seq-find (lambda (c) (equal (map-elt c 'name) name)) commands)))

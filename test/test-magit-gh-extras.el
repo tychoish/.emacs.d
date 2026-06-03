@@ -126,9 +126,9 @@
               ((symbol-function 'magit-gh--fetch-closed-prs) (lambda (&optional _) prs))
               ((symbol-function 'magit-list-local-branch-names) (lambda () '("a" "b" "c" "d"))))
       (let ((result (magit-gh--prune-scan)))
-        (should (equal '("a" "c") (mapcar #'car result)))
+        (should (equal '("a" "c") (seq-map #'car result)))
         (should (equal '("a" "c")
-                       (mapcar #'car (plist-get (magit-gh--cache-get "/tmp/r" :prune-state) :candidates))))))))
+                       (seq-map #'car (plist-get (magit-gh--cache-get "/tmp/r" :prune-state) :candidates))))))))
 
 (ert-deftest magit-gh-extras/scan-drops-stale-marked ()
   "Marked branches no longer in candidate set are dropped."
