@@ -390,7 +390,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
        :name account-name
        :form `(when (or ,default
 			(and
-			 (or (member tychoish/emacs-instance-id ',instances)
+			 (or (member sprite-instance-id ',instances)
 			     (null ',instances))
 			 (or (member (system-name) ',systems)
 			     (null ',systems))))

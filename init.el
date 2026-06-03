@@ -33,7 +33,7 @@
  (defvar tychoish/eglot-default-server-configuration nil
    "Define eglot Server configuration variable early for use later.")
 
- (defvar tychoish/emacs-instance-id nil
+ (defvar sprite-instance-id nil
    "Name of emacs instance. `work', `personal', and `hud' are common long
 lived instances. Other ephemeral instance names ones may be useful.")
 
@@ -98,10 +98,10 @@ lived instances. Other ephemeral instance names ones may be useful.")
 		      startup-time
 		      init-time
 		      wall-time)))
-     (message "[emacs]: <%s> wall time %s" tychoish/emacs-instance-id wall-time)
-     (message "[emacs]: <%s> user time %s" tychoish/emacs-instance-id startup-time)
-     (message "[emacs]: <%s> init time %s" tychoish/emacs-instance-id init-time)
-     (alert msg :title (format "emacs-%s" tychoish/emacs-instance-id))))
+     (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
+     (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
+     (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
+     (alert msg :title (format "emacs-%s" sprite-instance-id))))
 
  (defun tychoish/startup-mark-complete ()
    (unless tychoish/startup-complete-time
@@ -114,11 +114,10 @@ lived instances. Other ephemeral instance names ones may be useful.")
   (with-slow-op-timer "<init> sprite"
    (require 'sprite))
 
+  (setq custom-file (sprite-state-path "custom.el"))
+
   (with-slow-op-timer "<init> tychoish-bootstrap"
-   (require 'tychoish-bootstrap)
-   (declare-function tychoish/conf-state-path "tychoish-bootstrap")
-   (setq custom-file (tychoish/conf-state-path "custom.el"))
-   'tychoish-bootstrap)
+   (require 'tychoish-bootstrap))
 
   ;; remaining use-package declarations.
   (with-slow-op-timer "<init> tychoish-core"

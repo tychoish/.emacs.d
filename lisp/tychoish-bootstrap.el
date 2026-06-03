@@ -443,35 +443,8 @@ more arguments than the function cares about."
   "CLI-specified daemon/instance name; set from command-line args in init.el.
 Compatibility shim — sprite reads this via `sprite-resolve-instance-id'.")
 
-(defvar tychoish/emacs-instance-id nil
-  "Name of the running Emacs instance.
-Compatibility shim kept for callers in tychoish-core and mode-line config.
-Authoritative value lives in `sprite-instance-id'.")
-
-(defun tychoish/resolve-instance-id ()
-  "Return the current Emacs instance ID.  Delegates to sprite."
-  (sprite-resolve-instance-id))
-
-(defun tychoish/set-up-instance-name ()
-  "Initialise instance name.  Delegates to sprite; syncs compat var."
-  (setq tychoish/emacs-instance-id (sprite-instance-name)))
-
-(defun tychoish/conf-emacs-host-and-instance ()
-  "Return (HOSTNAME INSTANCE-ID).  Delegates to sprite."
-  (sprite-conf-host-and-instance))
-
-(defconst tychoish/conf-state-directory-name sprite--conf-state-directory)
-
-(defun tychoish/conf-state-path (name)
-  "Return state path for NAME.  Delegates to sprite."
-  (sprite-state-path name))
-
-(defun tychoish-get-config-file-prefix (name)
-  "Return instance-scoped file prefix for NAME.  Delegates to sprite."
-  (sprite-state-file-prefix name))
-
 (with-eval-after-load 'eshell
-  (setq eshell-history-file-name (file-name-contact user-emacs-directory tychoish/conf-state-directory-name (tychoish-get-config-file-prefix "eshell"))))
+  (setq eshell-history-file-name (file-name-contact user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -481,18 +454,18 @@ Authoritative value lives in `sprite-instance-id'.")
 (defvar desktop-dirname nil)
 
 (defun tychoish/set-up-emacs-instance-persistence ()
-  (setq project-list-file (tychoish/conf-state-path "projects.el"))
-  (setq auto-save-list-file-prefix (tychoish/conf-state-path (concat "auto-safe-list" (f-path-separator))))
-  (setq savehist-file (tychoish/conf-state-path "history.el"))
-  (setq bookmark-default-file (tychoish/conf-state-path "bookmarks.el"))
-  (setq tramp-persistency-file-name (tychoish/conf-state-path "tramp.el"))
+  (setq project-list-file (sprite-state-path "projects.el"))
+  (setq auto-save-list-file-prefix (sprite-state-path (concat "auto-safe-list" (f-path-separator))))
+  (setq savehist-file (sprite-state-path "history.el"))
+  (setq bookmark-default-file (sprite-state-path "bookmarks.el"))
+  (setq tramp-persistency-file-name (sprite-state-path "tramp.el"))
 
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
   (setq recentf-max-menu-items 100)
-  (setq recentf-save-file (tychoish/conf-state-path "recentf.el"))
+  (setq recentf-save-file (sprite-state-path "recentf.el"))
 
   (with-silence
     (recentf-mode 1)
@@ -507,7 +480,7 @@ Authoritative value lives in `sprite-instance-id'.")
 (defun tychoish/desktop-save ()
   "Save desktop... sometimes"
   (interactive)
-  (unless (equal "solo" tychoish/emacs-instance-id)
+  (unless (equal "solo" sprite-instance-id)
     (when (or (> 40 (random 100))
               (< 150 (float-time (time-since desktop/last-save-time))))
       (desktop-save desktop-dirname)
@@ -516,12 +489,12 @@ Authoritative value lives in `sprite-instance-id'.")
 (defun tychoish/desktop-read-init ()
   ;; only read the desktop if we're not in the "solo" (no ID) emacs
   ;; instance.
-  (unless (equal "solo" tychoish/emacs-instance-id)
+  (unless (equal "solo" sprite-instance-id)
     ;; TODO This should get a better runtime/feature flag (and have
     ;; a list of instance names that are epehemral)
-    (setq desktop-dirname (file-name-concat user-emacs-directory tychoish/conf-state-directory-name))
-    (setq desktop-base-file-name (tychoish-get-config-file-prefix "desktop.el"))
-    (setq desktop-base-lock-name (tychoish-get-config-file-prefix (format "desktop-%d.lock" (emacs-pid))))
+    (setq desktop-dirname (file-name-concat user-emacs-directory sprite--conf-state-directory))
+    (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
+    (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
     (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
     (if (daemonp)
         (progn
@@ -634,9 +607,8 @@ Authoritative value lives in `sprite-instance-id'.")
 (defun tychoish/init-late-set-up-naming ()
   (with-slow-op-timer
     "<bootstrap.el> after-init [theme setup]"
-    (tychoish/set-up-instance-name)
-    (setq frame-title-format '(:eval (format "%s:%s" tychoish/emacs-instance-id (buffer-name))))
-    (add-to-list 'mode-line-misc-info '(:eval (format "[%s]" (sprite--mode-line-string))))))
+
+ ))
 
 (defun tychoish/init-late-enable-modes ()
   (with-slow-op-timer
@@ -687,7 +659,7 @@ Authoritative value lives in `sprite-instance-id'.")
  :name "emacs-lockfile-setup"
  :form (progn
          (tychoish/init-late-set-up-naming)
-         (if (equal "solo" tychoish/emacs-instance-id)
+         (if (equal "solo" sprite-instance-id)
 	     (tychoish/set-up-ephemeral-instance-file-locks)
 	   (tychoish/set-up-named-instance-file-locks)))
  :hook emacs-startup-hook)
@@ -758,7 +730,7 @@ Authoritative value lives in `sprite-instance-id'.")
   (setq save-abbrevs t))
 
 (defun tychoish/set-up-auto-save ()
-  (let ((path (tychoish/conf-state-path "backup/")))
+  (let ((path (sprite-state-path "backup/")))
     (setq auto-save-file-name-transforms `((".*" ,path t)))
     (add-to-list 'backup-directory-alist (cons "." path))
 
@@ -767,7 +739,7 @@ Authoritative value lives in `sprite-instance-id'.")
     (chmod path #o700)))
 
 (defun tychoish/set-up-named-instance-file-locks ()
-  (let ((path (tychoish/conf-state-path "locks/")))
+  (let ((path (sprite-state-path "locks/")))
     (setq lock-file-name-transforms
           `(("\\`/.*/\\([^/]+\\)\\'" ,(concat path "\\1") t)))
 
@@ -819,7 +791,7 @@ were recompiled."
 	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
 	 (filename (concat (file-name-concat temporary-file-directory
 			           (string-join (list
-						    "emacs" tychoish/emacs-instance-id
+						    "emacs" sprite-instance-id
 						    "async-package"
 						    (symbol-name op))
 					           "-")) ".log")))

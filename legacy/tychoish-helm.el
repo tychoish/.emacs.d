@@ -147,7 +147,7 @@
   (setq helm-input-idle-delay 0.0)
   (setq helm-man-or-woman-function 'woman)
   (setq helm-split-window-inside-p t)
-  (setq helm-c-adaptive-history-file (tychoish/conf-state-path "helm-c-adaptive-history.el"))
+  (setq helm-c-adaptive-history-file (sprite-state-path "helm-c-adaptive-history.el"))
   (setq helm-c-adaptive-sorting t)
   (helm-autoresize-mode 1)
   (when (window-system)

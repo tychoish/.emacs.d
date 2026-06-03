@@ -37,21 +37,21 @@
     (should (gui-p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish/resolve-instance-id
+;;; sprite-resolve-instance-id
 
 (ert-deftest bootstrap/resolve-instance-id-daemon-t ()
   "Returns \"primary\" when daemonp returns t."
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (setq tychoish-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () t)))
-    (should (equal "primary" (tychoish/resolve-instance-id)))))
+    (should (equal "primary" (sprite-resolve-instance-id)))))
 
 (ert-deftest bootstrap/resolve-instance-id-named-daemon ()
   "Returns daemon name when daemonp returns a string."
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (setq tychoish-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () "work")))
-    (should (equal "work" (tychoish/resolve-instance-id)))))
+    (should (equal "work" (sprite-resolve-instance-id)))))
 
 (ert-deftest bootstrap/resolve-instance-id-falls-back-to-solo ()
   "Returns \"solo\" as final fallback when no daemon or known ID."
@@ -59,96 +59,96 @@
     (setq tychoish-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () nil)))
     (let ((cli/instance-id nil)
-          (tychoish/emacs-instance-id nil))
-      (should (equal "solo" (tychoish/resolve-instance-id))))))
+          (sprite-instance-id nil))
+      (should (equal "solo" (sprite-resolve-instance-id))))))
 
 (ert-deftest bootstrap/resolve-instance-id-uses-cache ()
   "Returns the cached value without recomputing."
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (setq tychoish-cache--resolved-instance-id "cached-value"))
-  (should (equal "cached-value" (tychoish/resolve-instance-id))))
+  (should (equal "cached-value" (sprite-resolve-instance-id))))
 
 (ert-deftest bootstrap/resolve-instance-id-returns-string ()
   "Return value is always a string."
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (setq tychoish-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () nil)))
-    (let ((cli/instance-id nil) (tychoish/emacs-instance-id nil))
-      (should (stringp (tychoish/resolve-instance-id))))))
+    (let ((cli/instance-id nil) (sprite-instance-id nil))
+      (should (stringp (sprite-resolve-instance-id))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish-get-config-file-prefix
+;;; sprite-state-file-prefix
 
 (ert-deftest bootstrap/config-file-prefix-basic ()
   "Joins host, instance, and name with hyphens."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "myhost" "solo")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
       (should (equal "myhost-solo-eshell"
-                     (tychoish-get-config-file-prefix "eshell"))))))
+                     (sprite-state-file-prefix "eshell"))))))
 
 (ert-deftest bootstrap/config-file-prefix-root-includes-login ()
   "Prefix includes login name when running as root."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "myhost" "solo")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "root"))
-      (should (string-match-p "root" (tychoish-get-config-file-prefix "bookmarks"))))))
+      (should (string-match-p "root" (sprite-state-file-prefix "bookmarks"))))))
 
 (ert-deftest bootstrap/config-file-prefix-returns-string ()
   "Return value is always a string."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "host" "inst")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
-      (should (stringp (tychoish-get-config-file-prefix "test"))))))
+      (should (stringp (sprite-state-file-prefix "test"))))))
 
 (ert-deftest bootstrap/config-file-prefix-no-empty-segments ()
   "Prefix does not produce leading, trailing, or consecutive hyphens."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "host" "daemon")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
-      (let ((result (tychoish-get-config-file-prefix "bookmarks")))
+      (let ((result (sprite-state-file-prefix "bookmarks")))
         (should-not (string-match-p "^-\\|--\\|-$" result))))))
 
 (ert-deftest bootstrap/config-file-prefix-contains-name ()
   "The NAME argument appears in the result."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "host" "inst")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
-      (should (string-match-p "recentf" (tychoish-get-config-file-prefix "recentf"))))))
+      (should (string-match-p "recentf" (sprite-state-file-prefix "recentf"))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish/conf-state-path
+;;; sprite-state-path
 
 (ert-deftest bootstrap/conf-state-path-returns-string ()
   "Returns a string path."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "host" "inst")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
-      (should (stringp (tychoish/conf-state-path "bookmarks"))))))
+      (should (stringp (sprite-state-path "bookmarks"))))))
 
 (ert-deftest bootstrap/conf-state-path-contains-state-dir ()
   "Result path contains the state directory name."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "host" "inst")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
-      (should (string-match-p tychoish/conf-state-directory-name
-                              (tychoish/conf-state-path "bookmarks"))))))
+      (should (string-match-p sprite--conf-state-directory
+                              (sprite-state-path "bookmarks"))))))
 
 (ert-deftest bootstrap/conf-state-path-rooted-in-emacs-dir ()
   "Result path is under `user-emacs-directory'."
-  (cl-letf (((symbol-function 'tychoish/conf-emacs-host-and-instance)
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
              (lambda () (list "host" "inst")))
             ((symbol-function 'f-symlink-p) (lambda (_) nil)))
     (let ((user-login-name "user"))
       (should (string-prefix-p (expand-file-name user-emacs-directory)
-                               (expand-file-name (tychoish/conf-state-path "bookmarks")))))))
+                               (expand-file-name (sprite-state-path "bookmarks")))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; buffer-derived-mode-p
@@ -852,7 +852,7 @@
 
 (ert-deftest bootstrap/desktop-save-skips-solo-instance ()
   "Does not call `desktop-save' when instance-id is \"solo\"."
-  (let ((tychoish/emacs-instance-id "solo")
+  (let ((sprite-instance-id "solo")
         (called nil))
     (cl-letf (((symbol-function 'desktop-save) (lambda (&rest _) (setq called t))))
       (tychoish/desktop-save)
@@ -860,7 +860,7 @@
 
 (ert-deftest bootstrap/desktop-save-runs-for-named-instance ()
   "Calls `desktop-save' for a named instance when time threshold is exceeded."
-  (let ((tychoish/emacs-instance-id "work")
+  (let ((sprite-instance-id "work")
         (desktop/last-save-time (time-subtract (current-time) (seconds-to-time 300)))
         (desktop-dirname "/tmp")
         (called nil))
@@ -871,7 +871,7 @@
 
 (ert-deftest bootstrap/desktop-save-updates-last-save-time ()
   "Updates `desktop/last-save-time' after saving."
-  (let ((tychoish/emacs-instance-id "work")
+  (let ((sprite-instance-id "work")
         (desktop/last-save-time (time-subtract (current-time) (seconds-to-time 300)))
         (desktop-dirname "/tmp"))
     (cl-letf (((symbol-function 'desktop-save) #'ignore)

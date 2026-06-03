@@ -120,14 +120,14 @@
 	     (pa "emacs-process-name" :is process-name)
 	     (pa "program" :is program)
 	     (pa "on-finish" :is (lambda (out) (message "INFO: notify process for %s completed [%s] with %s" (buffer-name buffer) out compile-result-message)))
-	     (append args (-strings (format "<%s> %s -- %s" tychoish/emacs-instance-id (buffer-name buffer) msg)))))
+	     (append args (-strings (format "<%s> %s -- %s" sprite-instance-id (buffer-name buffer) msg)))))
 
     (when (or send-when
 	      (> (/ alert-threshold 2) (float-time (time-since (current-idle-time))))
 	      (> alert-threshold (ffloor (float-time duration))))
       (alert
        msg
-       :title (format "%s:%s:%s" tychoish/emacs-instance-id (buffer-name buffer) compile-result-message)
+       :title (format "%s:%s:%s" sprite-instance-id (buffer-name buffer) compile-result-message)
        :buffer buffer))
 
     (with-current-buffer buffer

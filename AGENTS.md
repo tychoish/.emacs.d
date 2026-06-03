@@ -101,7 +101,7 @@ The `after-first-frame-created` pseudo-hook resolves to `server-after-make-frame
 
 ### State file paths
 
-Always use `tychoish/conf-state-path` to build paths under the state directory. Never hardcode `~/.emacs.d/` paths directly in configuration. This function incorporates the hostname and instance name to keep multi-instance state isolated.
+Always use `sprite-state-path` to build paths under the state directory. Never hardcode `~/.emacs.d/` paths directly in configuration. This function incorporates the hostname and instance name to keep multi-instance state isolated.
 
 ### `custom-file`
 

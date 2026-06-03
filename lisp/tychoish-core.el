@@ -162,7 +162,7 @@
   (defun tychoish/save-buffers-in-project-directory (dir)
     (let ((default-directory (expand-file-name dir)))
       (alert (projectile-save-project-buffers)
-	     :title (format "emacs<%s> (%s)" tychoish/emacs-instance-id dir))))
+	     :title (format "emacs<%s> (%s)" sprite-instance-id dir))))
 
   (defun projectile-get-project-roots-for-current-buffers ()
     (->>
@@ -190,7 +190,7 @@
   (setq projectile-use-git-grep t)
   (setq projectile-completion-system 'auto)
   (setq projectile-require-project-root nil)
-  (setq projectile-known-projects-file (tychoish/conf-state-path "projectile-bookmarks.el"))
+  (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
   (add-hook 'prog-mode-hook #'projectile-mode)
   (add-hook 'text-mode-hook #'projectile-mode)
 
@@ -583,7 +583,7 @@
   ;; by the completion-flavor system below.
   (setq prescient-completion-highlight-matches t)
   (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
-  (setq prescient-save-file (tychoish/conf-state-path "prescient.el"))
+  (setq prescient-save-file (sprite-state-path "prescient.el"))
   (setq prescient-sort-full-matches-first t)
   (setq prescient-sort-length-enable nil))
 
@@ -1030,7 +1030,7 @@
   (require 'magit-gh-extras)
   (require 'magit-gh-ci)
   (require 'magit-gh-pr)
-  (setq magit-gh-prune-cache-dir (tychoish/conf-state-path "magit-gh-prune"))
+  (setq magit-gh-prune-cache-dir (sprite-state-path "magit-gh-prune"))
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-gh-prune-prefetch)))
@@ -1086,7 +1086,7 @@
   :after (ghub magit)
   :commands (forge-dispatch forge-configure)
   :config
-  (setq forge-database-file (expand-file-name (f-join user-emacs-directory tychoish/conf-state-directory-name "forge-database.sqlite")))
+  (setq forge-database-file (expand-file-name (f-join user-emacs-directory sprite--conf-state-directory "forge-database.sqlite")))
   (make-read-extended-command-for-prefix  "forge"
     :bind-map tychoish/magit-map
     :bind-key "r")
@@ -1290,7 +1290,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 		       (if (= count 1)
 			   "buffer"
 			 "buffers"))
-	       :title (format "emacs.%s.telega" tychoish/emacs-instance-id)
+	       :title (format "emacs.%s.telega" sprite-instance-id)
 	       :persistent t))))
 
   (defun telega-kill-chat-buffers ()
@@ -2445,8 +2445,8 @@ Useful after changing `eglot-workspace-configuration' or
   (defvar aidermacs-model-settings-path (f-join user-emacs-directory "aider.model.settings.yml"))
 
   (mapc (make-add-to-list-fn aidermacs-extra-args :append t)
-	(list (concat "--input-history-file=" (tychoish/conf-state-path "aider.input-history.md"))
-	      (concat "--chat-history-file=" (tychoish/conf-state-path "aider.chat-history.md"))
+	(list (concat "--input-history-file=" (sprite-state-path "aider.input-history.md"))
+	      (concat "--chat-history-file=" (sprite-state-path "aider.chat-history.md"))
 	      (concat "--model-settings-file=" aidermacs-model-settings-path)
 	       "--editor-edit-format=udiff" "--edit-format=udiff"
 	       "--notifications" "--cache-prompts"))
@@ -2628,7 +2628,7 @@ Useful after changing `eglot-workspace-configuration' or
   (setq efrit-max-tokens 2048)
 
   ;; Data directory
-  (setq efrit-data-directory (tychoish/conf-state-path "efrit"))
+  (setq efrit-data-directory (sprite-state-path "efrit"))
   (unless (file-exists-p efrit-data-directory)
     (make-directory efrit-data-directory t))
 
@@ -2645,7 +2645,7 @@ Useful after changing `eglot-workspace-configuration' or
   :ensure t
   :config
   (defalias 'shell-maker-map 'shell-maker-major-mode-map)
-  (setq shell-maker-root-path (tychoish/conf-state-path "shell-maker")))
+  (setq shell-maker-root-path (sprite-state-path "shell-maker")))
 
 (use-package agent-shell
   :ensure t
@@ -2708,7 +2708,7 @@ Useful after changing `eglot-workspace-configuration' or
 
   (defun agent-shell-dot-subdir (subdir)
     "Resolve SUBDIR under the per-instance agent-shell state path."
-    (f-join (tychoish/conf-state-path "agent-shell") subdir))
+    (f-join (sprite-state-path "agent-shell") subdir))
 
   (defun agent-shell-corfu-setup ()
     "Configure corfu auto-completion for agent-shell buffers."
@@ -2866,12 +2866,12 @@ Useful after changing `eglot-workspace-configuration' or
                  ('yaml "yaml")
                  (_ "el"))))
       (expand-file-name (concat "queue." ext)
-                        (tychoish/conf-state-path "agent-shell"))))
+                        (sprite-state-path "agent-shell"))))
 
   (defun tychoish--agent-shell-queue-archive-file ()
     "Archive file under the per-instance agent-shell state directory."
     (expand-file-name "queue-archive.jsonl"
-                      (tychoish/conf-state-path "agent-shell")))
+                      (sprite-state-path "agent-shell")))
 
   (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-capture-corfu-setup)
   (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-capture-corfu-setup)
@@ -2895,8 +2895,8 @@ Useful after changing `eglot-workspace-configuration' or
   :commands (sprite-list sprite-create
              sprite-get-next sprite-get-or-create-next)
   :config
-  (add-to-list 'mode-line-misc-info
-               '(:eval (format " [%s]" (sprite--mode-line-string)))))
+  (add-to-list 'mode-line-misc-info '(:eval (format " [%s]" (sprite--mode-line-string))))
+  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
 
 (use-package agent-shell-workspace
   :load-path "elpa/agent-shell-workspace"
@@ -2982,7 +2982,7 @@ call-site that has access to SHELL-BUFFER."
 	      ("d" . meta-agent-shell-jump-to-dispatcher)
 	      ("!" . meta-agent-shell-big-red-button))
   :config
-  (setq meta-agent-shell-heartbeat-file (tychoish/conf-state-path "meta-agent-shell-heartbeat.org"))
+  (setq meta-agent-shell-heartbeat-file (sprite-state-path "meta-agent-shell-heartbeat.org"))
   (setq meta-agent-shell-start-function #'agent-shell))
 
 (use-package beads
