@@ -1044,6 +1044,8 @@
 (use-package magit-gh-repo-dashboard
   :load-path "lisp"
   :after (magit-gh magit)
+  :bind (:map tychoish/magit-map
+	      ("d" . magit-gh-repo-dashboard-open))
   :commands (magit-gh-repo-dashboard-view magit-gh-pr-dashboard-open))
 
 (use-package smerge-mode
@@ -1368,10 +1370,6 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
   :init
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
-  (add-hook 'markdown-mode-hook 'turn-on-soft-wrap)
-  (add-hook 'markdown-mode-hook (lambda ()
-                                  (when (bound-and-true-p visual-fill-column-mode)
-                                    (tychoish-vfc-heading-truncation-mode 1))))
   (defun tychoish/markdown-setup-imenu ()
     (setq imenu-generic-expression markdown-imenu-generic-expression))
   (add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)

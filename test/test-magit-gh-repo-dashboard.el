@@ -168,26 +168,31 @@
   "60 seconds formats as 1 minute."
   (should (equal "1m" (magit-gh-repo-dashboard--format-age 60.0))))
 
-;;;; magit-gh-repo-dashboard--format-behind
+;;;; magit-gh-repo-dashboard--format-status
 
-(ert-deftest magit-gh-repo-dashboard/format-behind-zero ()
-  "Behind=0 returns empty string."
-  (should (equal "" (magit-gh-repo-dashboard--format-behind 0))))
+(ert-deftest magit-gh-repo-dashboard/format-status-all-clean ()
+  "All-zero/nil returns empty string."
+  (should (equal "" (magit-gh-repo-dashboard--format-status 0 0 nil))))
 
-(ert-deftest magit-gh-repo-dashboard/format-behind-nonzero ()
-  "Behind > 0 returns a propertized number string."
-  (let ((result (magit-gh-repo-dashboard--format-behind 3)))
-    (should (equal "3" (substring-no-properties result)))))
+(ert-deftest magit-gh-repo-dashboard/format-status-dirty-only ()
+  "Dirty with no divergence shows only \"!\"."
+  (should (equal "!" (substring-no-properties
+                      (magit-gh-repo-dashboard--format-status 0 0 t)))))
 
-;;;; magit-gh-repo-dashboard--format-dirty
+(ert-deftest magit-gh-repo-dashboard/format-status-ahead-only ()
+  "Ahead count shows ↑N."
+  (should (equal "↑3" (substring-no-properties
+                       (magit-gh-repo-dashboard--format-status 3 0 nil)))))
 
-(ert-deftest magit-gh-repo-dashboard/format-dirty-clean ()
-  (should (equal "" (magit-gh-repo-dashboard--format-dirty nil))))
+(ert-deftest magit-gh-repo-dashboard/format-status-behind-only ()
+  "Behind count shows ↓N."
+  (should (equal "↓5" (substring-no-properties
+                       (magit-gh-repo-dashboard--format-status 0 5 nil)))))
 
-(ert-deftest magit-gh-repo-dashboard/format-dirty-dirty ()
-  "Dirty returns a non-empty propertized string."
-  (let ((result (magit-gh-repo-dashboard--format-dirty t)))
-    (should (not (string-empty-p result)))))
+(ert-deftest magit-gh-repo-dashboard/format-status-all-set ()
+  "All three indicators appear in order ↑ ↓ ! separated by spaces."
+  (should (equal "↑2 ↓3 !" (substring-no-properties
+                             (magit-gh-repo-dashboard--format-status 2 3 t)))))
 
 ;;;; magit-gh-repo-dashboard--head-hash
 
@@ -418,22 +423,21 @@
   (let ((repo (magit-gh-repo--make :name "myrep" :path "/tmp/myrep"))
         (magit-gh-repo-dashboard--stats-cache (make-hash-table :test #'equal))
         (magit-gh-repo-dashboard-columns
-         '((name . t) (branch . t) (fetched . t) (behind . t) (changes . t) (worktree . t)))
+         '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t)))
         (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
                (lambda (_)
-                 (list :branch "main" :behind 0 :dirty nil :fetch-age 120.0
+                 (list :branch "main" :ahead 0 :behind 0 :dirty nil :fetch-age 120.0
                        :head-hash "abc" :recent-log ""))))
       (let* ((entry (magit-gh-repo-dashboard--build-entry repo))
              (id (car entry))
              (vec (cadr entry)))
         (should (magit-gh-repo-p id))
-        (should (= 6 (length vec)))
+        (should (= 5 (length vec)))
         (should (string-match-p "myrep" (aref vec 0)))
         (should (string-match-p "main" (aref vec 1)))
         (should (equal "2m" (aref vec 2)))
-        (should (equal "" (aref vec 3)))
-        (should (equal "" (aref vec 4)))))))
+        (should (equal "" (aref vec 3)))))))
 
 ;;;; magit-gh-pr-dashboard--build-args
 
@@ -1267,35 +1271,35 @@ Overrides are placed first so `plist-get' finds them before the defaults."
 (ert-deftest magit-gh-repo-dashboard/column-enabled-defaults ()
   "All columns are enabled by default."
   (let ((magit-gh-repo-dashboard-columns
-         '((name . t) (branch . t) (fetched . t) (behind . t) (changes . t) (worktree . t))))
+         '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t))))
     (should (seq-every-p #'magit-gh-repo-dashboard--column-enabled-p
                          magit-gh-repo-dashboard--all-columns))))
 
 (ert-deftest magit-gh-repo-dashboard/column-disabled ()
   "A disabled column is excluded from active-columns."
   (let ((magit-gh-repo-dashboard-columns
-         '((name . t) (branch . nil) (fetched . t) (behind . t) (changes . t) (worktree . t))))
+         '((name . t) (branch . nil) (fetched . t) (status . t) (worktree . t))))
     (should-not (magit-gh-repo-dashboard--column-enabled-p 'branch))
     (should-not (member 'branch (magit-gh-repo-dashboard--active-columns)))))
 
 (ert-deftest magit-gh-repo-dashboard/build-format-omits-disabled-columns ()
   "build-format produces a vector that excludes disabled columns."
   (let ((magit-gh-repo-dashboard-columns
-         '((name . t) (branch . nil) (fetched . t) (behind . t) (changes . t) (worktree . nil)))
+         '((name . t) (branch . nil) (fetched . t) (status . t) (worktree . nil)))
         (repos (list (magit-gh-repo--make :name "r" :path "/tmp/r"))))
     (let ((fmt (magit-gh-repo-dashboard--build-format repos)))
-      (should (= 4 (length fmt)))
+      (should (= 3 (length fmt)))
       (should-not (seq-find (lambda (col) (equal "Branch" (car col))) (append fmt nil)))
-      (should-not (seq-find (lambda (col) (equal "WT" (car col))) (append fmt nil))))))
+      (should-not (seq-find (lambda (col) (equal "Type" (car col))) (append fmt nil))))))
 
 (ert-deftest magit-gh-repo-dashboard/build-entry-matches-format ()
   "build-entry vector length matches active-column count."
   (let ((magit-gh-repo-dashboard-columns
-         '((name . t) (branch . t) (fetched . nil) (behind . nil) (changes . t) (worktree . nil)))
+         '((name . t) (branch . t) (fetched . nil) (status . t) (worktree . nil)))
         (magit-gh-repo-dashboard--worktree-map (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
                (lambda (_)
-                 (list :branch "main" :behind 0 :dirty nil :fetch-age 60.0
+                 (list :branch "main" :ahead 0 :behind 0 :dirty nil :fetch-age 60.0
                        :head-hash "abc" :recent-log "" :remote-origin nil
                        :uncommitted-files nil))))
       (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
@@ -1357,6 +1361,211 @@ Overrides are placed first so `plist-get' finds them before the defaults."
       (magit-gh-repo-overview--worktrees-for "/tmp/main")
       (magit-gh-repo-overview--worktrees-for "/tmp/main"))
     (should (= 1 call-count))))
+
+;;;; worktree branch field
+
+(ert-deftest magit-gh-repo-dashboard/parse-worktrees-stores-branch ()
+  "parse-worktrees stores branch name in the :branch struct slot."
+  (let ((result (magit-gh-repo-dashboard--parse-worktrees
+                 "/tmp/main"
+                 magit-gh-repo-dashboard-test--worktree-output)))
+    (should (equal "feature-1" (magit-gh-repo-branch (nth 0 result))))
+    (should (equal "detached"  (magit-gh-repo-branch (nth 1 result))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-entry-branch-falls-back-to-struct ()
+  "build-entry uses struct :branch when stats return empty string."
+  (let ((magit-gh-repo-dashboard-columns
+         '((name . t) (branch . t) (fetched . nil) (behind . nil) (changes . nil) (worktree . nil)))
+        (magit-gh--cache (make-hash-table :test #'equal)))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
+               (lambda (_) (list :branch "" :ahead 0 :behind 0 :dirty nil :fetch-age nil
+                                 :head-hash "abc" :recent-log "" :remote-origin nil
+                                 :uncommitted-files nil))))
+      (let* ((repo (magit-gh-repo--make :name "r@feat" :path "/tmp/wt"
+                                        :worktree t :branch "feat"))
+             (entry (magit-gh-repo-dashboard--build-entry repo))
+             (branch-cell (aref (cadr entry) 1)))
+        (should (equal "feat" (substring-no-properties branch-cell)))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-entry-branch-uses-stats-when-available ()
+  "build-entry uses stats :branch when non-empty, even for worktrees."
+  (let ((magit-gh-repo-dashboard-columns
+         '((name . t) (branch . t) (fetched . nil) (behind . nil) (changes . nil) (worktree . nil)))
+        (magit-gh--cache (make-hash-table :test #'equal)))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
+               (lambda (_) (list :branch "live-branch" :ahead 0 :behind 0 :dirty nil :fetch-age nil
+                                 :head-hash "abc" :recent-log "" :remote-origin nil
+                                 :uncommitted-files nil))))
+      (let* ((repo (magit-gh-repo--make :name "r@old" :path "/tmp/wt"
+                                        :worktree t :branch "old"))
+             (entry (magit-gh-repo-dashboard--build-entry repo))
+             (branch-cell (aref (cadr entry) 1)))
+        (should (equal "live-branch" (substring-no-properties branch-cell)))))))
+
+;;;; magit-gh-repo-dashboard--parse-submodules
+
+(defconst magit-gh-repo-dashboard-test--submodule-output
+  '(" abc1234def5 vendor/lib (v1.2)"
+    " 0000000000a sub/other (HEAD)"
+    "-deadbeef00b uninit-mod"
+    "+cafebabe001 modified-sub (HEAD)")
+  "Sample `git submodule status' output as a list of lines.")
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-count ()
+  "parse-submodules returns one struct per accessible submodule."
+  (cl-letf (((symbol-function 'file-directory-p) (lambda (_) t)))
+    (let ((result (magit-gh-repo-dashboard--parse-submodules
+                   "/tmp/main"
+                   magit-gh-repo-dashboard-test--submodule-output)))
+      (should (= 4 (length result))))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-paths ()
+  "parse-submodules sets absolute paths on returned structs."
+  (cl-letf (((symbol-function 'file-directory-p) (lambda (_) t)))
+    (let ((result (magit-gh-repo-dashboard--parse-submodules
+                   "/tmp/main"
+                   magit-gh-repo-dashboard-test--submodule-output)))
+      (should (equal "/tmp/main/vendor/lib" (magit-gh-repo-path (nth 0 result))))
+      (should (equal "/tmp/main/sub/other"  (magit-gh-repo-path (nth 1 result)))))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-names ()
+  "parse-submodules formats names as \"parent<submod>\"."
+  (cl-letf (((symbol-function 'file-directory-p) (lambda (_) t)))
+    (let ((result (magit-gh-repo-dashboard--parse-submodules
+                   "/tmp/main"
+                   magit-gh-repo-dashboard-test--submodule-output)))
+      (should (equal "main<lib>"      (magit-gh-repo-name (nth 0 result))))
+      (should (equal "main<other>"    (magit-gh-repo-name (nth 1 result))))
+      (should (equal "main<uninit-mod>"  (magit-gh-repo-name (nth 2 result))))
+      (should (equal "main<modified-sub>" (magit-gh-repo-name (nth 3 result)))))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-submodule-flag ()
+  "parse-submodules sets :submodule t on all returned structs."
+  (cl-letf (((symbol-function 'file-directory-p) (lambda (_) t)))
+    (let ((result (magit-gh-repo-dashboard--parse-submodules
+                   "/tmp/main"
+                   magit-gh-repo-dashboard-test--submodule-output)))
+      (should (seq-every-p #'magit-gh-repo-submodule result)))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-skips-missing-paths ()
+  "parse-submodules omits entries whose paths don't exist on disk."
+  (cl-letf (((symbol-function 'file-directory-p) (lambda (_) nil)))
+    (let ((result (magit-gh-repo-dashboard--parse-submodules
+                   "/tmp/main"
+                   magit-gh-repo-dashboard-test--submodule-output)))
+      (should (null result)))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-empty-output ()
+  "parse-submodules returns nil for empty output."
+  (cl-letf (((symbol-function 'file-directory-p) (lambda (_) t)))
+    (should (null (magit-gh-repo-dashboard--parse-submodules "/tmp/main" '())))))
+
+;;;; --sorted-repos with submodules
+
+(ert-deftest magit-gh-repo-dashboard/sorted-repos-appends-submodules ()
+  "sorted-repos places discovered submodules after their parent."
+  (let* ((main (magit-gh-repo--make :name "main" :path "/tmp/main"))
+         (mod (magit-gh-repo--make :name "main<lib>" :path "/tmp/main/lib" :submodule t))
+         (magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/main" :worktrees nil)
+    (magit-gh--cache-set "/tmp/main" :submodules (list mod))
+    (let ((result (magit-gh-repo-dashboard--sorted-repos (list main))))
+      (should (= 2 (length result)))
+      (should (equal "main"      (magit-gh-repo-name (nth 0 result))))
+      (should (equal "main<lib>" (magit-gh-repo-name (nth 1 result)))))))
+
+(ert-deftest magit-gh-repo-dashboard/sorted-repos-appends-worktrees-and-submodules ()
+  "sorted-repos appends both worktrees and submodules after parent, in that order."
+  (let* ((main (magit-gh-repo--make :name "main" :path "/tmp/main"))
+         (wt   (magit-gh-repo--make :name "main@feat" :path "/tmp/wt" :worktree t))
+         (mod  (magit-gh-repo--make :name "main<lib>" :path "/tmp/main/lib" :submodule t))
+         (magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/main" :worktrees (list wt))
+    (magit-gh--cache-set "/tmp/main" :submodules (list mod))
+    (let ((result (magit-gh-repo-dashboard--sorted-repos (list main))))
+      (should (= 3 (length result)))
+      (should (equal "main"      (magit-gh-repo-name (nth 0 result))))
+      (should (equal "main@feat" (magit-gh-repo-name (nth 1 result))))
+      (should (equal "main<lib>" (magit-gh-repo-name (nth 2 result)))))))
+
+(ert-deftest magit-gh-repo-dashboard/sorted-repos-deduplicates-registered-submodules ()
+  "sorted-repos suppresses auto-discovered submodule rows whose path is already
+in magit-gh-repo-list, preventing duplicate rows."
+  (let* ((main (magit-gh-repo--make :name "main" :path "/tmp/main"))
+         (lib  (magit-gh-repo--make :name "lib"  :path "/tmp/main/lib"))
+         (mod  (magit-gh-repo--make :name "main<lib>" :path "/tmp/main/lib" :submodule t))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (magit-gh-repo-list (list main lib))
+         (magit-gh-repo-dashboard-show-discovered-submodules t))
+    (magit-gh--cache-set "/tmp/main" :worktrees nil)
+    (magit-gh--cache-set "/tmp/main" :submodules (list mod))
+    (let ((result (magit-gh-repo-dashboard--sorted-repos (list main lib))))
+      (should (= 2 (length result)))
+      (should (equal "main" (magit-gh-repo-name (nth 0 result))))
+      (should (equal "lib"  (magit-gh-repo-name (nth 1 result)))))))
+
+(ert-deftest magit-gh-repo-dashboard/sorted-repos-keeps-unregistered-submodules ()
+  "sorted-repos still appends auto-discovered submodules that are not in magit-gh-repo-list."
+  (let* ((main (magit-gh-repo--make :name "main" :path "/tmp/main"))
+         (mod  (magit-gh-repo--make :name "main<lib>" :path "/tmp/main/lib" :submodule t))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (magit-gh-repo-list (list main))
+         (magit-gh-repo-dashboard-show-discovered-submodules t))
+    (magit-gh--cache-set "/tmp/main" :worktrees nil)
+    (magit-gh--cache-set "/tmp/main" :submodules (list mod))
+    (let ((result (magit-gh-repo-dashboard--sorted-repos (list main))))
+      (should (= 2 (length result)))
+      (should (equal "main"      (magit-gh-repo-name (nth 0 result))))
+      (should (equal "main<lib>" (magit-gh-repo-name (nth 1 result)))))))
+
+;;;; Transient menu key conflict detection
+
+(defun test-magit-gh-repo-dashboard--transient-keys (prefix)
+  "Collect all key strings from transient PREFIX layout.
+Layout shape: [2 nil (ROW)] where ROW = [transient-columns nil (COL...)]
+and each COL = [transient-column PROPS ((transient-suffix :key K ...) ...)]."
+  (when-let* ((layout (get prefix 'transient--layout))
+              ((vectorp layout))
+              (rows (aref layout 2))
+              (row (car rows))
+              ((vectorp row))
+              (cols (aref row 2)))
+    (thread-last (if (vectorp cols) (append cols nil) cols)
+      (seq-filter #'vectorp)
+      (seq-mapcat (lambda (col) (aref col 2)))
+      (seq-filter (lambda (s) (and (listp s) (eq (car s) 'transient-suffix))))
+      (seq-map (lambda (s) (plist-get (cdr s) :key)))
+      (seq-remove #'null))))
+
+(ert-deftest magit-gh-repo-dashboard/transient-predicates-safe-with-no-repo ()
+  "All transient :inapt-if-not predicates return nil (not error) with no repo at point."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh--cache (make-hash-table :test #'equal)))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () nil))
+              ((symbol-function 'derived-mode-p) (lambda (&rest _) t)))
+      (should (null (magit-gh-repo-dashboard--repo-at-point-p)))
+      (should (null (magit-gh-repo-dashboard--dirty-or-unknown-p)))
+      (should (null (magit-gh-repo-dashboard--has-auto-commit-p)))
+      (should (null (magit-gh-repo-dashboard--has-commands-p)))
+      (should (null (magit-gh-repo-dashboard--repo-at-point-behind-p)))
+      (should (null (magit-gh-repo-dashboard--at-worktree-p)))
+      (should (null (magit-gh-repo-dashboard--can-add-worktree-p))))))
+
+(ert-deftest magit-gh-repo-dashboard/menu-no-key-prefix-conflicts ()
+  "No key in the dashboard transient menu is a string prefix of another key.
+A conflict (e.g. \"b\" and \"bp\" coexisting) causes transient to raise
+\"Wrong type argument: command, (keymap ...), command\" when the menu is opened."
+  (let ((keys (test-magit-gh-repo-dashboard--transient-keys
+               'magit-gh-repo-dashboard-menu)))
+    (should (> (length keys) 0))
+    (seq-do
+     (lambda (k)
+       (let ((conflict (seq-find (lambda (other)
+                                   (and (not (equal k other))
+                                        (string-prefix-p k other)))
+                                 keys)))
+         (should (equal nil conflict))))
+     keys)))
 
 (provide 'test-magit-gh-repo-dashboard)
 

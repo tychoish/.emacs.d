@@ -67,7 +67,9 @@
   (auto-commit nil)
   (commands nil)
   (sort-hint nil)
-  (worktree nil))
+  (worktree nil)
+  (submodule nil)
+  (branch nil))
 
 (defvar magit-gh-repo-list '()
   "List of `magit-gh-repo' structs registered for dashboard display.
@@ -173,7 +175,7 @@ Returns nil if the repo has no commits yet."
 
 (defun magit-gh-repo-dashboard--collect-stats (repo)
   "Synchronously collect git stats for REPO and store them in the cache.
-Returns a plist with keys :branch :remote-origin :behind :dirty
+Returns a plist with keys :branch :remote-origin :behind :ahead :dirty
 :uncommitted-files :fetch-age :head-hash :recent-log."
   (let* ((path (magit-gh-repo-path repo))
          (default-directory path)
@@ -182,6 +184,9 @@ Returns a plist with keys :branch :remote-origin :behind :dirty
          (behind (string-to-number
                   (or (ignore-errors (magit-git-string "rev-list" "--count" "HEAD..@{u}"))
                       "0")))
+         (ahead (string-to-number
+                 (or (ignore-errors (magit-git-string "rev-list" "--count" "@{u}..HEAD"))
+                     "0")))
          (porcelain-lines (magit-git-lines "status" "--porcelain"))
          (dirty (not (null porcelain-lines)))
          (uncommitted-files (when dirty porcelain-lines))
@@ -191,6 +196,7 @@ Returns a plist with keys :branch :remote-origin :behind :dirty
          (stats (list :branch branch
                       :remote-origin remote-origin
                       :behind behind
+                      :ahead ahead
                       :dirty dirty
                       :uncommitted-files uncommitted-files
                       :fetch-age (magit-gh-repo-dashboard--fetch-age path)
@@ -207,6 +213,7 @@ accumulating their outputs before assembling the stats plist."
          (commands (list '("branch" "--show-current")
                          '("remote" "get-url" "origin")
                          '("rev-list" "--count" "HEAD..@{u}")
+                         '("rev-list" "--count" "@{u}..HEAD")
                          '("status" "--porcelain")
                          '("log" "--oneline" "-10")))
 	 outputs run)
@@ -219,15 +226,19 @@ accumulating their outputs before assembling the stats plist."
                        (behind-str (string-trim (or (nth 2 outputs) "0")))
                        (behind (string-to-number
                                 (if (string-empty-p behind-str) "0" behind-str)))
-                       (porcelain (or (nth 3 outputs) ""))
+                       (ahead-str (string-trim (or (nth 3 outputs) "0")))
+                       (ahead (string-to-number
+                               (if (string-empty-p ahead-str) "0" ahead-str)))
+                       (porcelain (or (nth 4 outputs) ""))
                        (porcelain-lines (seq-remove #'string-empty-p
                                                     (split-string porcelain "\n")))
                        (dirty (not (null porcelain-lines)))
                        (uncommitted-files (when dirty porcelain-lines))
-                       (recent-log (string-trim (or (nth 4 outputs) "")))
+                       (recent-log (string-trim (or (nth 5 outputs) "")))
                        (stats (list :branch branch
                                     :remote-origin remote-origin
                                     :behind behind
+                                    :ahead ahead
                                     :dirty dirty
                                     :uncommitted-files uncommitted-files
                                     :fetch-age (magit-gh-repo-dashboard--fetch-age path)
@@ -427,7 +438,8 @@ The first block (the main worktree) is always skipped."
              (magit-gh-repo--make
               :name (format "%s@%s" main-name (or branch "detached"))
               :path wt-path
-              :worktree t)))))
+              :worktree t
+              :branch (or branch "detached"))))))
       (seq-remove #'null))))
 
 (defun magit-gh-repo-dashboard--discover-worktrees ()
@@ -442,6 +454,40 @@ The first block (the main worktree) is always skipped."
                                         "worktree" "list" "--porcelain"))))
               (found (when lines (magit-gh-repo-dashboard--parse-worktrees path lines))))
          (magit-gh--cache-set path :worktrees found))))
+   magit-gh-repo-list))
+
+(defun magit-gh-repo-dashboard--parse-submodules (main-path lines)
+  "Parse LINES from `git submodule status' for repo at MAIN-PATH.
+Returns a list of `magit-gh-repo' structs, one per initialized submodule.
+Name is formatted as \"parent<submod>\" where parent is the basename of MAIN-PATH."
+  (let ((main-name (file-name-nondirectory (directory-file-name main-path))))
+    (thread-last lines
+      (seq-filter (lambda (l) (not (string-empty-p l))))
+      (seq-map
+       (lambda (line)
+         (when (string-match "^[-+U ]\\([0-9a-f]+\\) \\([^ ]+\\)" line)
+           (let* ((rel-path (match-string 2 line))
+                  (abs-path (expand-file-name rel-path main-path))
+                  (submod-name (file-name-nondirectory (directory-file-name rel-path))))
+             (when (file-directory-p abs-path)
+               (magit-gh-repo--make
+                :name (format "%s<%s>" main-name submod-name)
+                :path abs-path
+                :submodule t))))))
+      (seq-remove #'null))))
+
+(defun magit-gh-repo-dashboard--discover-submodules ()
+  "Populate the unified cache with submodules for all registered main repos."
+  (seq-do
+   (lambda (repo)
+     (unless (or (magit-gh-repo-worktree repo) (magit-gh-repo-submodule repo))
+       (let* ((path (magit-gh-repo-path repo))
+              (lines (ignore-errors
+                       (let ((default-directory path))
+                         (process-lines magit-git-executable
+                                        "submodule" "status"))))
+              (found (when lines (magit-gh-repo-dashboard--parse-submodules path lines))))
+         (magit-gh--cache-set path :submodules found))))
    magit-gh-repo-list))
 
 (defun magit-gh-repo-overview--worktrees-for (path)
@@ -462,20 +508,19 @@ The first block (the main worktree) is always skipped."
 ;;;; Column configuration
 
 (defvar magit-gh-repo-dashboard-columns
-  '((name . t) (branch . t) (fetched . t) (behind . t) (changes . t) (worktree . t))
+  '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t))
   "Alist of (COLUMN-SYMBOL . ENABLED) for the repository dashboard.
 Persisted across sessions via `savehist-additional-variables'.")
 
 (defconst magit-gh-repo-dashboard--all-columns
-  '(name branch fetched behind changes worktree)
+  '(name branch fetched status worktree)
   "All available dashboard columns in display order.")
 
 (defconst magit-gh-repo-dashboard--column-defs
   '((branch   . ("Branch"  18 t))
     (fetched  . ("Fetched"  8 nil))
-    (behind   . ("Behind"   6 nil))
-    (changes  . ("Changes"  7 nil))
-    (worktree . ("WT"       3 nil)))
+    (status   . ("Status"  10 nil))
+    (worktree . ("Type"    10 nil)))
   "Alist of COLUMN-SYMBOL to (LABEL WIDTH SORTABLE) for non-name columns.")
 
 (defun magit-gh-repo-dashboard--column-enabled-p (col)
@@ -498,6 +543,13 @@ Persisted across sessions via `savehist-additional-variables'.")
         (not (magit-gh-repo-dashboard--column-enabled-p col)))
   (magit-gh-repo-dashboard-refresh))
 
+(defun magit-gh-repo-dashboard-toggle-discovered-submodules ()
+  "Toggle visibility of auto-discovered submodules in the dashboard and refresh."
+  (interactive)
+  (setq magit-gh-repo-dashboard-show-discovered-submodules
+        (not magit-gh-repo-dashboard-show-discovered-submodules))
+  (magit-gh-repo-dashboard-refresh))
+
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'magit-gh-repo-dashboard-columns))
 
@@ -512,21 +564,33 @@ Persisted across sessions via `savehist-additional-variables'.")
    ((< seconds 86400) (format "%dh" (round (/ seconds 3600))))
    (t (format "%dd" (round (/ seconds 86400))))))
 
-(defun magit-gh-repo-dashboard--format-behind (n)
-  "Format behind commit count N; empty string when zero."
-  (if (> n 0) (propertize (number-to-string n) 'face 'warning) ""))
-
-(defun magit-gh-repo-dashboard--format-dirty (dirty)
-  "Format DIRTY flag as a short display string."
-  (if dirty (propertize "*" 'face 'warning) ""))
+(defun magit-gh-repo-dashboard--format-status (ahead behind dirty)
+  "Format AHEAD, BEHIND, and DIRTY into a compact status indicator.
+Each non-zero/non-nil value contributes a segment; segments are joined with
+a single space.  Returns an empty string when everything is clean and synced."
+  (let ((parts nil))
+    (when (> ahead 0)
+      (push (propertize (format "↑%d" ahead) 'face 'warning) parts))
+    (when (> behind 0)
+      (push (propertize (format "↓%d" behind) 'face 'font-lock-comment-face) parts))
+    (when dirty
+      (push (propertize "!" 'face 'error) parts))
+    (mapconcat #'identity (nreverse parts) " ")))
 
 (defun magit-gh-repo-dashboard--format-worktree (repo)
-  "Format the worktree indicator for REPO.
-Shows \"WT\" for worktree entries, or a count for main repos with worktrees."
-  (if (magit-gh-repo-worktree repo)
-      (propertize "WT" 'face 'magit-gh-repo-branch-face)
-    (let ((n (length (magit-gh--cache-get (magit-gh-repo-path repo) :worktrees))))
-      (if (> n 0) (propertize (number-to-string n) 'face 'shadow) ""))))
+  "Format the type indicator for REPO.
+Shows \"WT\" for worktrees, \"SUBM\" for submodules (auto-discovered or
+explicitly-registered), and \"REPO\" for ordinary working-tree repos."
+  (let ((path (magit-gh-repo-path repo)))
+    (cond
+     ((magit-gh-repo-worktree repo)
+      (propertize "WT" 'face 'magit-gh-repo-branch-face))
+     ((magit-gh-repo-submodule repo)
+      (propertize "SUBM" 'face 'magit-gh-repo-branch-face))
+     ((and magit-gh-repo-dashboard--submodule-path-set
+           (gethash path magit-gh-repo-dashboard--submodule-path-set))
+      (propertize "SUBM.TRACK" 'face 'magit-gh-repo-branch-face))
+     (t (propertize "REPO" 'face 'shadow)))))
 
 ;;;; Repo dashboard mode
 
@@ -556,6 +620,7 @@ The Name column width is elastic: wide enough for the longest name in REPOS."
     (define-key m (kbd "RET") #'magit-gh-repo-dashboard-view)
     (define-key m (kbd "g")   #'magit-gh-repo-dashboard-refresh)
     (define-key m (kbd "r")   #'magit-gh-repo-dashboard-refresh)
+    (define-key m (kbd "!")   #'magit-gh-repo-dashboard-magit-dispatch)
     (define-key m (kbd "s")   #'magit-gh-repo-dashboard-magit-status)
     (define-key m (kbd "d")   #'magit-gh-repo-dashboard-magit-diff)
     (define-key m (kbd "D")   #'magit-gh-repo-dashboard-magit-diff-full)
@@ -580,10 +645,15 @@ The Name column width is elastic: wide enough for the longest name in REPOS."
     (define-key m (kbd "w")   #'magit-gh-repo-dashboard-worktree-add)
     (define-key m (kbd "k")   #'magit-gh-repo-dashboard-worktree-delete)
     (define-key m (kbd "T")   #'magit-gh-repo-dashboard-toggle-column)
+    (define-key m (kbd "M-s") #'magit-gh-repo-dashboard-toggle-discovered-submodules)
     (define-key m (kbd "j")   #'magit-gh-repo-dashboard-builder)
     (define-key m (kbd "z")   #'magit-gh-repo-dashboard-agent-shell)
     (define-key m (kbd "Z")   #'magit-gh-repo-dashboard-agent-shell-new)
     (define-key m (kbd "Q")   #'magit-gh-repo-dashboard-agent-shell-queue)
+    (define-key m (kbd "SPC") #'magit-gh-repo-dashboard-toggle-mark)
+    (define-key m (kbd "*")   #'magit-gh-repo-dashboard-unmark-all)
+    (define-key m (kbd "F")   #'magit-gh-repo-dashboard-fetch-all)
+    (define-key m (kbd "U")   #'magit-gh-repo-dashboard-pull-all)
     (define-key m (kbd "m")   #'magit-gh-repo-dashboard-menu)
     (define-key m (kbd "?")   #'magit-gh-repo-dashboard-menu)
     (define-key m (kbd "q")   #'quit-window)
@@ -592,6 +662,17 @@ The Name column width is elastic: wide enough for the longest name in REPOS."
 
 (defvar-local magit-gh-repo-dashboard--tag-filter nil
   "When non-nil, a symbol: only repos tagged with this symbol are shown.")
+
+(defvar-local magit-gh-repo-dashboard--marked-paths nil
+  "List of repo paths currently marked for batch operations.")
+
+(defvar magit-gh-repo-dashboard-show-discovered-submodules t
+  "When non-nil, auto-discovered submodules appear below their parent in the dashboard.")
+
+(defvar magit-gh-repo-dashboard--submodule-path-set nil
+  "Hash table mapping auto-discovered submodule path → \"parent<mod>\" display name.
+Rebuilt on each refresh. Used to detect explicitly-registered repos that are also
+submodules and to derive their parent<mod> display name.")
 
 (define-derived-mode magit-gh-repo-dashboard-mode tabulated-list-mode "Repos"
   "Major mode for the registered repository dashboard."
@@ -609,37 +690,59 @@ The Name column width is elastic: wide enough for the longest name in REPOS."
                   (lambda (col)
                     (pcase col
                       ('name
-                       (propertize (magit-gh-repo-name repo) 'face 'magit-gh-repo-name-face))
+                       (let* ((subm-name (and magit-gh-repo-dashboard--submodule-path-set
+                                              (gethash (magit-gh-repo-path repo)
+                                                       magit-gh-repo-dashboard--submodule-path-set)))
+                              (display (or subm-name (magit-gh-repo-name repo))))
+                         (propertize display
+                                     'face (if (member (magit-gh-repo-path repo)
+                                                       magit-gh-repo-dashboard--marked-paths)
+                                               '(bold magit-gh-repo-name-face)
+                                             'magit-gh-repo-name-face))))
                       ('branch
-                       (propertize (or (plist-get stats :branch) "?")
+                       (propertize (let ((b (plist-get stats :branch)))
+                                     (if (and b (not (string-empty-p b)))
+                                         b
+                                       (or (magit-gh-repo-branch repo) "?")))
                                    'face 'magit-gh-repo-branch-face))
                       ('fetched
                        (magit-gh-repo-dashboard--format-age (plist-get stats :fetch-age)))
-                      ('behind
-                       (magit-gh-repo-dashboard--format-behind
-                        (or (plist-get stats :behind) 0)))
-                      ('changes
-                       (magit-gh-repo-dashboard--format-dirty (plist-get stats :dirty)))
+                      ('status
+                       (magit-gh-repo-dashboard--format-status
+                        (or (plist-get stats :ahead) 0)
+                        (or (plist-get stats :behind) 0)
+                        (plist-get stats :dirty)))
                       ('worktree
                        (magit-gh-repo-dashboard--format-worktree repo))))
                   active)))))
 
 (defun magit-gh-repo-dashboard--sorted-repos (repos)
   "Return REPOS sorted by :sort-hint, with discovered worktrees following each parent.
-Repos without a sort-hint follow all sorted ones."
-  (let ((sorted (seq-sort (lambda (a b)
-                            (let ((ha (magit-gh-repo-sort-hint a))
-                                  (hb (magit-gh-repo-sort-hint b)))
-                              (cond
-                               ((and ha hb) (< ha hb))
-                               (ha t)
-                               (hb nil)
-                               (t nil))))
-                          repos)))
+Repos without a sort-hint follow all sorted ones.
+Auto-discovered submodules whose path is already in `magit-gh-repo-list' are
+suppressed to avoid duplicate rows — the registered entry is shown instead."
+  (let* ((sorted (seq-sort (lambda (a b)
+                             (let ((ha (magit-gh-repo-sort-hint a))
+                                   (hb (magit-gh-repo-sort-hint b)))
+                               (cond
+                                ((and ha hb) (< ha hb))
+                                (ha t)
+                                (hb nil)
+                                (t nil))))
+                           repos))
+         (registered-paths (let ((paths (make-hash-table :test #'equal)))
+                             (seq-do (lambda (r)
+                                       (puthash (magit-gh-repo-path r) t paths))
+                                     magit-gh-repo-list)
+                             paths)))
     (seq-mapcat (lambda (repo)
                   (cons repo
-                        (magit-gh--cache-get (magit-gh-repo-path repo)
-                                             :worktrees)))
+                        (append (magit-gh--cache-get (magit-gh-repo-path repo) :worktrees)
+                                (when magit-gh-repo-dashboard-show-discovered-submodules
+                                  (seq-remove
+                                   (lambda (sm)
+                                     (gethash (magit-gh-repo-path sm) registered-paths))
+                                   (magit-gh--cache-get (magit-gh-repo-path repo) :submodules))))))
                 sorted)))
 
 (defun magit-gh-repo-dashboard-refresh ()
@@ -649,6 +752,15 @@ Repos are ordered by :sort-hint; discovered worktrees follow their parent."
   (interactive)
   (clrhash magit-gh--cache)
   (magit-gh-repo-dashboard--discover-worktrees)
+  (magit-gh-repo-dashboard--discover-submodules)
+  (setq magit-gh-repo-dashboard--submodule-path-set
+        (let ((paths (make-hash-table :test #'equal)))
+          (seq-do (lambda (repo)
+                    (seq-do (lambda (sm)
+                              (puthash (magit-gh-repo-path sm) (magit-gh-repo-name sm) paths))
+                            (or (magit-gh--cache-get (magit-gh-repo-path repo) :submodules) '())))
+                  magit-gh-repo-list)
+          paths))
   (let ((repos (magit-gh-repo-dashboard--sorted-repos
                 (if magit-gh-repo-dashboard--tag-filter
                     (seq-filter (lambda (r)
@@ -678,6 +790,12 @@ Repos are ordered by :sort-hint; discovered worktrees follow their parent."
   "Open the overview buffer for the repository at point."
   (interactive)
   (magit-gh-repo-overview--open (magit-gh-repo-dashboard--repo-at-point)))
+
+(defun magit-gh-repo-dashboard-magit-dispatch ()
+  "Open `magit-dispatch' in the context of the repository at point."
+  (interactive)
+  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+    (call-interactively #'magit-dispatch)))
 
 (defun magit-gh-repo-dashboard-magit-status ()
   "Open a magit status buffer for the repository at point."
@@ -936,6 +1054,7 @@ Signals `user-error' when `magit-gh-repo-list' is empty."
 (defvar magit-gh-repo-overview-mode-map
   (let ((m (make-sparse-keymap)))
     (define-key m (kbd "RET") #'magit-gh-repo-overview-follow)
+    (define-key m (kbd "!")   #'magit-gh-repo-overview-magit-dispatch)
     (define-key m (kbd "s")   #'magit-gh-repo-overview-magit-status)
     (define-key m (kbd "d")   #'magit-gh-repo-overview-magit-diff)
     (define-key m (kbd "D")   #'magit-gh-repo-overview-magit-diff-full)
@@ -969,6 +1088,12 @@ Signals `user-error' when `magit-gh-repo-list' is empty."
   "Return the repo for the current overview buffer or signal `user-error'."
   (or magit-gh-repo-overview--repo
       (user-error "No repository associated with this buffer")))
+
+(defun magit-gh-repo-overview-magit-dispatch ()
+  "Open `magit-dispatch' in the context of this overview's repository."
+  (interactive)
+  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-overview--current-repo))
+    (call-interactively #'magit-dispatch)))
 
 (defun magit-gh-repo-overview-magit-status ()
   "Open magit status for this overview's repository."
@@ -1406,12 +1531,9 @@ Keys: :state (\"open\"/\"closed\"), :author, :repo (OWNER/NAME), :org.")
       (error "?"))))
 
 (defun magit-gh-pr-dashboard--comments-count (pr)
-  "Return the comment count from PR alist, handling both number and object forms."
-  (let ((c (map-elt pr 'comments)))
-    (cond
-     ((numberp c) c)
-     ((listp c) (or (map-elt c 'totalCount) 0))
-     (t 0))))
+  "Return the comment count from PR alist."
+  (let ((c (map-elt pr 'commentsCount)))
+    (if (numberp c) c 0)))
 
 (defun magit-gh-pr-dashboard--build-args (filters)
   "Return a gh args list for fetching PRs matching FILTERS plist.
@@ -1425,13 +1547,13 @@ Otherwise uses `gh search prs' for cross-repo listing."
         (append
          (list "pr" "list" "-R" repo "--state" state
                "--json"
-               "number,title,state,author,updatedAt,comments,reviewDecision,statusCheckRollup,isDraft,url")
+               "number,title,state,author,updatedAt,commentsCount,reviewDecision,statusCheckRollup,isDraft,url")
          (when author (list "--author" author)))
       (append
        (list "search" "prs"
              "--state" (if (member state '("open" "closed")) state "open")
              "--json"
-             "number,title,state,repository,author,updatedAt,comments,reviewDecision,isDraft,url")
+             "number,title,state,repository,author,updatedAt,commentsCount,reviewDecision,isDraft,url")
        (when author
 	 (list "--author" author))
        (when org
@@ -1582,61 +1704,155 @@ Returns nil when OUTPUT is not a JSON array."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
     (not (null (magit-gh-repo-commands repo)))))
 
-(defun magit-gh-repo-dashboard--has-commands-p ()
-  "Return non-nil when this overview's repository has commands registered."
-  (when-let* ((repo (magit-gh-repo-dashboard--repo-at-point)))
-    (and (magit-gh-repo-commands repo) t)))
-
 (defun magit-gh-repo-dashboard--repo-at-point-behind-p ()
-  "Returns t when the current repo is behind the origin"
-  (when-let* ((repo (magit-gh-repo-dashboard--repo-at-point))
-	      (stats (magit-gh-repo-dashboard--get-stats repo)))
-    (and (plist-get stats :behind) t)))
+  "Return non-nil when the repo at point has commits behind its upstream."
+  (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point)))
+              (stats (magit-gh-repo-dashboard--get-stats repo)))
+    (and (> (or (plist-get stats :behind) 0) 0) t)))
+
+(defun magit-gh-repo-dashboard--can-add-worktree-p ()
+  "Return non-nil when at a registered non-worktree repo (can add a worktree)."
+  (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
+    (not (magit-gh-repo-worktree repo))))
+
+;;;; Mark/select support
+
+(defun magit-gh-repo-dashboard--update-entry-for (repo)
+  "Regenerate the tabulated-list entry for REPO in place in `tabulated-list-entries'."
+  (let ((new-entry (magit-gh-repo-dashboard--build-entry repo))
+        (path (magit-gh-repo-path repo)))
+    (setq tabulated-list-entries
+          (seq-map (lambda (entry)
+                     (if (equal (magit-gh-repo-path (car entry)) path)
+                         new-entry
+                       entry))
+                   tabulated-list-entries))))
+
+(defun magit-gh-repo-dashboard-toggle-mark ()
+  "Toggle the mark on the repository at point and advance to the next line."
+  (interactive)
+  (let* ((repo (magit-gh-repo-dashboard--repo-at-point))
+         (path (magit-gh-repo-path repo)))
+    (setq magit-gh-repo-dashboard--marked-paths
+          (if (member path magit-gh-repo-dashboard--marked-paths)
+              (delete path magit-gh-repo-dashboard--marked-paths)
+            (cons path magit-gh-repo-dashboard--marked-paths)))
+    (magit-gh-repo-dashboard--update-entry-for repo)
+    (tabulated-list-print t)
+    (forward-line 1)))
+
+(defun magit-gh-repo-dashboard-unmark-all ()
+  "Clear all marks from the dashboard."
+  (interactive)
+  (setq magit-gh-repo-dashboard--marked-paths nil)
+  (setq tabulated-list-entries
+        (seq-map (lambda (entry)
+                   (magit-gh-repo-dashboard--build-entry (car entry)))
+                 tabulated-list-entries))
+  (tabulated-list-print t))
+
+(defun magit-gh-repo-dashboard--effective-repos ()
+  "Return marked repos if any are marked, else all repos currently in the table."
+  (let ((all (seq-map #'car tabulated-list-entries)))
+    (if magit-gh-repo-dashboard--marked-paths
+        (seq-filter (lambda (r)
+                      (member (magit-gh-repo-path r)
+                              magit-gh-repo-dashboard--marked-paths))
+                    all)
+      all)))
+
+(defun magit-gh-repo-dashboard--has-marks-p ()
+  "Return non-nil when at least one repository is marked."
+  (not (null magit-gh-repo-dashboard--marked-paths)))
+
+(defun magit-gh-repo-dashboard-fetch-all ()
+  "Asynchronously fetch marked repos, or all visible repos when none are marked."
+  (interactive)
+  (let ((repos (magit-gh-repo-dashboard--effective-repos)))
+    (when (null repos)
+      (user-error "No repositories to fetch"))
+    (magit-gh-repo-dashboard--batch-run
+     repos
+     #'magit-gh-repo-dashboard--fetch-async
+     "magit-gh fetch"
+     (lambda (_) (magit-gh-repo-dashboard--maybe-refresh)))))
+
+(defun magit-gh-repo-dashboard-pull-all ()
+  "Asynchronously pull marked repos, or all visible repos when none are marked."
+  (interactive)
+  (let ((repos (magit-gh-repo-dashboard--effective-repos)))
+    (when (null repos)
+      (user-error "No repositories to pull"))
+    (magit-gh-repo-dashboard--batch-run
+     repos
+     #'magit-gh-repo-dashboard--pull-async
+     "magit-gh pull"
+     (lambda (_) (magit-gh-repo-dashboard--maybe-refresh)))))
 
 ;;;; Transient menus
 
 (transient-define-prefix magit-gh-repo-dashboard-menu ()
   "Actions for the repository at point in the repo dashboard."
   [["Repository"
-    :if magit-gh-repo-dashboard--repo-at-point-p
-    ("RET" "Open overview"   magit-gh-repo-dashboard-view)
-    ("gs"   "Status"          magit-gh-repo-dashboard-magit-status)
+    ("!"  "Magit dispatch"   magit-gh-repo-dashboard-magit-dispatch
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("RET" "Open overview"   magit-gh-repo-dashboard-view
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("gs"   "Status"          magit-gh-repo-dashboard-magit-status
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("d"   "Diff (dwim)"     magit-gh-repo-dashboard-magit-diff
-     :if magit-gh-repo-dashboard--dirty-or-unknown-p)
+     :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
     ("D"   "Diff…"           magit-gh-repo-dashboard-magit-diff-full
-     :if magit-gh-repo-dashboard--dirty-or-unknown-p)
-    ("lc"   "Log (current)"   magit-gh-repo-dashboard-magit-log)
-    ("lf"   "Log…"            magit-gh-repo-dashboard-magit-log-full)
+     :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
+    ("lc"   "Log (current)"   magit-gh-repo-dashboard-magit-log
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("lf"   "Log…"            magit-gh-repo-dashboard-magit-log-full
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("c"    "Commit"          magit-gh-repo-dashboard-magit-commit
-     :if magit-gh-repo-dashboard--dirty-or-unknown-p)
+     :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
     ("sa"   "Stage all"       magit-gh-repo-dashboard-stage-all
-     :if magit-gh-repo-dashboard--dirty-or-unknown-p)
-    ("fr"   "Fetch"            magit-gh-repo-dashboard-fetch)
-    ("rp"   "Pull"             magit-gh-repo-dashboard-pull)
+     :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
+    ("fr"   "Fetch"            magit-gh-repo-dashboard-fetch
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("rp"   "Pull"             magit-gh-repo-dashboard-pull
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("rs"   "Push (repo send)" magit-gh-repo-dashboard-push
-     :if magit-gh-repo-dashboard--repo-at-point-behind-p)]
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-behind-p)]
    ["Navigate"
-    ("b"   "Visit buffer"    magit-gh-repo-dashboard-visit-buffer)
-    ("ff"  "Find file"       magit-gh-repo-dashboard-find-file)
-    ("gb"  "Switch branch"   magit-gh-repo-dashboard-switch-branch)
-    ("mp"  "Prune branches"  magit-gh-repo-dashboard-prune-branches)]
+    ("b"   "Visit buffer"    magit-gh-repo-dashboard-visit-buffer
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("ff"  "Find file"       magit-gh-repo-dashboard-find-file
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("gb"  "Switch branch"   magit-gh-repo-dashboard-switch-branch
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("y"   "Prune branches"  magit-gh-repo-dashboard-prune-branches
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)]
    ["Manage"
-    ("mc"   "Auto-commit"     magit-gh-repo-dashboard-commit
-     :if magit-gh-repo-dashboard--has-auto-commit-p)
+    ("ac"   "Auto-commit"     magit-gh-repo-dashboard-commit
+     :inapt-if-not magit-gh-repo-dashboard--has-auto-commit-p)
     ("t"    "Compile Project (builder)"  magit-gh-repo-dashboard-builder
-     :if magit-gh-repo-dashboard--has-auto-commit-p)
+     :inapt-if-not magit-gh-repo-dashboard--has-auto-commit-p)
     ("x"   "Run command"     magit-gh-repo-dashboard-run-command
-     :if magit-gh-repo-dashboard--has-commands-p)]
+     :inapt-if-not magit-gh-repo-dashboard--has-commands-p)]
    ["Build & Shell"
     ("as"   "Agent shell (project)"      magit-gh-repo-dashboard-agent-shell
-     :if agent-shell-extras--same-project-buffers)
+     :inapt-if-not agent-shell-extras--same-project-buffers)
     ("an"   "New agent shell"            magit-gh-repo-dashboard-agent-shell-new)
     ("aq"   "Agent shell queue"          magit-gh-repo-dashboard-agent-shell-queue)]
    ["Worktree"
     ("w"   "Add worktree"    magit-gh-repo-dashboard-worktree-add
-     :if-not magit-gh-repo-dashboard--at-worktree-p)
+     :inapt-if-not magit-gh-repo-dashboard--can-add-worktree-p)
     ("k"   "Delete worktree" magit-gh-repo-dashboard-worktree-delete
-     :if magit-gh-repo-dashboard--at-worktree-p)]
+     :inapt-if-not magit-gh-repo-dashboard--at-worktree-p)]
+   ["Batch"
+    ("SPC"  "Toggle mark"       magit-gh-repo-dashboard-toggle-mark
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("mt"   "Toggle mark"       magit-gh-repo-dashboard-toggle-mark
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("mc"   "Clear marks"       magit-gh-repo-dashboard-unmark-all
+     :inapt-if-not magit-gh-repo-dashboard--has-marks-p)
+    ("mfa"  "Fetch all/marked"  magit-gh-repo-dashboard-fetch-all)
+    ("mpa"  "Pull all/marked"   magit-gh-repo-dashboard-pull-all)]
    ["Dashboard"
     ("mbpr" "Open PR dashboard" magit-gh-pr-dashboard-open)
     ("ras"  "Autosync"          magit-gh-repo-dashboard-auto-sync)
@@ -1644,14 +1860,15 @@ Returns nil when OUTPUT is not a JSON array."
     ("rca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
     ("nt"   "Filter by tag"     magit-gh-repo-dashboard-filter-by-tag)
     ("C-t"  "Toggle column"     magit-gh-repo-dashboard-toggle-column)
+    ("M-s"  "Toggle submodules" magit-gh-repo-dashboard-toggle-discovered-submodules)
     ("gg"   "Refresh"           magit-gh-repo-dashboard-refresh)
     ("q"    "Quit"              quit-window)]])
 
 (transient-define-prefix magit-gh-repo-overview-menu ()
   "Magit actions for the repository shown in this overview buffer."
   [["Magit"
-    ("gs"   "Status"          magit-gh-repo-overview-magit-status
-     :if magit-gh-repo-dashboard--repo-at-point)
+    ("!"  "Magit dispatch"   magit-gh-repo-overview-magit-dispatch)
+    ("gs"   "Status"          magit-gh-repo-overview-magit-status)
     ("d"   "Diff (dwim)"     magit-gh-repo-overview-magit-diff
      :if magit-gh-repo-overview--has-changes-p)
     ("D"   "Diff…"           magit-gh-repo-overview-magit-diff-full
@@ -1701,6 +1918,19 @@ Returns nil when OUTPUT is not a JSON array."
    ["Dashboard"
     ("g" "Refresh" magit-gh-pr-dashboard-refresh)
     ("q" "Quit" quit-window)]])
+
+(defun ad:magit-gh-repo-dashboard--quit-window (orig-fn &optional kill window)
+  "Around advice for `quit-window': delete split window in dashboard buffers.
+Only applies in `magit-gh-repo-dashboard-mode', `magit-gh-repo-overview-mode',
+and `magit-gh-pr-dashboard-mode'.  Falls through otherwise."
+  (if (or kill (one-window-p)
+          (not (derived-mode-p 'magit-gh-repo-dashboard-mode
+                               'magit-gh-repo-overview-mode
+                               'magit-gh-pr-dashboard-mode)))
+      (funcall orig-fn kill window)
+    (delete-window (or window (selected-window)))))
+
+(advice-add 'quit-window :around #'ad:magit-gh-repo-dashboard--quit-window)
 
 (provide 'magit-gh-repo-dashboard)
 

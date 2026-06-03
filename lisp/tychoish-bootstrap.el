@@ -158,6 +158,7 @@ more arguments than the function cares about."
 
 (bind-keys
  ;; these are all from tychoish-common.el
+ :map global-map
  ("M-<up>" . move-text-up)
  ("M-<down>" . move-text-down)
  :prefix "C-c f"
@@ -258,6 +259,7 @@ more arguments than the function cares about."
  ("f" . tychoish/completion-select-flavor))
 
 (bind-keys
+ :map global-map
  ("M-." . xref-find-definitions)
  :prefix "C-c l"
  :prefix-map tychoish/ide-map
@@ -595,16 +597,9 @@ more arguments than the function cares about."
     (load "tychoish-mail.el")
     (load "tychoish-org.el")
     (tychoish/init-late-enable-modes)
-    (tychoish/init-late-set-up-naming)
     (tychoish/ensure-default-font)
     (tychoish/ensure-light-theme)
     (tychoish-set-up-user-local-config)))
-
-(defun tychoish/init-late-set-up-naming ()
-  (with-slow-op-timer
-    "<bootstrap.el> after-init [theme setup]"
-
- ))
 
 (defun tychoish/init-late-enable-modes ()
   (with-slow-op-timer
@@ -654,7 +649,6 @@ more arguments than the function cares about."
 (add-one-shot-hook
  :name "emacs-lockfile-setup"
  :form (progn
-         (tychoish/init-late-set-up-naming)
          (if (equal "solo" sprite-instance-id)
 	     (tychoish/set-up-ephemeral-instance-file-locks)
 	   (tychoish/set-up-named-instance-file-locks)))
