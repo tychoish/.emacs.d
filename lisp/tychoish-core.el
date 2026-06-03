@@ -1041,6 +1041,11 @@
   (transient-append-suffix 'magit-gh "L"
     '("R" "Fetch PR comments" magit-gh-pr-fetch)))
 
+(use-package magit-gh-repo-dashboard
+  :load-path "lisp"
+  :after (magit-gh magit)
+  :commands (magit-gh-repo-dashboard-view magit-gh-pr-dashboard-open))
+
 (use-package smerge-mode
   :after (magit)
   :init

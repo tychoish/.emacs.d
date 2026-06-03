@@ -121,13 +121,13 @@ lived instances. Other ephemeral instance names ones may be useful.")
    'tychoish-bootstrap)
 
   ;; remaining use-package declarations.
-  (with-slow-op-timer "<init> load tychoish-core"
+  (with-slow-op-timer "<init> tychoish-core"
    (require 'tychoish-core))
 
   (with-slow-op-timer "<init> tychoish-mail"
    (require 'tychoish-mail))
 
-  (with-slow-op-timer "<init> load tychoish-org"
+  (with-slow-op-timer "<init> tychoish-org"
    (require 'tychoish-org))
 
   ;; load the user/*.el files
