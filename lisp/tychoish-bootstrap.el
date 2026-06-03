@@ -439,12 +439,8 @@ more arguments than the function cares about."
 
 (defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
 
-(defvar cli/instance-id nil
-  "CLI-specified daemon/instance name; set from command-line args in init.el.
-Compatibility shim — sprite reads this via `sprite-resolve-instance-id'.")
-
 (with-eval-after-load 'eshell
-  (setq eshell-history-file-name (file-name-contact user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
+  (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -72,7 +72,6 @@ Resolution order: daemon name, `sprite-cli-instance-id',
           (setenv "EMACS_SERVER_FILE" daemon)
           daemon)
         sprite-cli-instance-id
-        (and (boundp 'cli/instance-id) cli/instance-id)
         sprite-instance-id
         "solo")))
 

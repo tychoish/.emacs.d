@@ -58,8 +58,7 @@
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (setq tychoish-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () nil)))
-    (let ((cli/instance-id nil)
-          (sprite-instance-id nil))
+    (let ((sprite-instance-id nil))
       (should (equal "solo" (sprite-resolve-instance-id))))))
 
 (ert-deftest bootstrap/resolve-instance-id-uses-cache ()
@@ -73,7 +72,7 @@
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (setq tychoish-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () nil)))
-    (let ((cli/instance-id nil) (sprite-instance-id nil))
+    (let ((sprite-instance-id nil))
       (should (stringp (sprite-resolve-instance-id))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
