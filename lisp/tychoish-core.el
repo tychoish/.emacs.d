@@ -18,10 +18,11 @@
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
 
+;; (toggle-debug-on-error)
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
 ;; (setq use-package-compute-statistics t)
-;; (setq use-package-minimum-reported-time 0.5)
+;; (setq use-package-minimum-reported-time 0.005)
 
 (use-package async
   :ensure t
@@ -209,7 +210,9 @@
       (buffer-list))))
 
 (use-package annotated-completing-read
-  :load-path "elpa/annotated-completing-read")
+  :load-path "elpa/annotated-completing-read"
+  :commands (annotated-completing-read
+	     annotated-completing-read-directory))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -349,7 +352,7 @@
 (use-package deadgrep
   :ensure t
   :bind (:map tychoish/ecclectic-rg-map
-	 ("x" . #'deadgrep))
+	      ("x" . #'deadgrep))
   :commands (deadgrep))
 
 (use-package wgrep
@@ -438,60 +441,60 @@
 		#'capf-wordfreq-completion-at-point-function)))
 
   (defun tychoish/get-available-word-capfs ()
-    (->> (list (tychoish/maybe-capf-wordfreq)
-	       (tychoish/maybe-capf-dict))
-	 (seq-filter 'identity)
-	 (seq-filter #'symbolp)))
+    (thread-last (list (tychoish/maybe-capf-wordfreq)
+		       (tychoish/maybe-capf-dict))
+		 (seq-filter 'identity)
+		 (seq-filter #'symbolp)))
 
   (defun tychoish/text-mode-capf-setup ()
     "so here is the"
     (setq-local completion-at-point-functions
-		(->> (-concat
-		      (tychoish/get-available-word-capfs)
-		      (list #'cape-dabbrev
-			    #'yasnippet-capf
-			    #'cape-rfc1345
-			    #'cape-emoji
-			    #'cape-file))
-		     (-flatten)
-		     (seq-filter 'identity))))
+		(thread-last (append
+			      (tychoish/get-available-word-capfs)
+			      (list #'cape-dabbrev
+				    #'yasnippet-capf
+				    #'cape-rfc1345
+				    #'cape-emoji
+				    #'cape-file))
+			     (-flatten)
+			     (seq-filter 'identity))))
 
   (defun tychoish/elisp-capf-setup  ()
     (setq-local completion-at-point-functions
-		(->> (list #'cape-elisp-symbol
-			   (cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
-			   #'cape-dabbrev
-			   (cape-capf-wrapper cape-capf-inside-code cape-keyword)
-			   #'yasnippet-capf
-			   (->> (tychoish/get-available-word-capfs)
-				(seq-map (lambda (in)
-					`(progn
-					   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
-						 (cape-capf-wrapper cape-capf-inside-string ,in)))))
-				(seq-map 'eval))
-			   #'cape-emoji)
-		     (-flatten)
-		     (seq-filter 'identity)
-		     (seq-uniq))))
+		(thread-last (list #'cape-elisp-symbol
+				   (cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
+				   #'cape-dabbrev
+				   (cape-capf-wrapper cape-capf-inside-code cape-keyword)
+				   #'yasnippet-capf
+				   (thread-last (tychoish/get-available-word-capfs)
+						(seq-map (lambda (in)
+							   `(progn
+							      (list (cape-capf-wrapper cape-capf-inside-comment ,in)
+								    (cape-capf-wrapper cape-capf-inside-string ,in)))))
+						(seq-map 'eval))
+				   #'cape-emoji)
+			     (-flatten)
+			     (seq-filter 'identity)
+			     (seq-uniq))))
 
   (defun tychoish/eglot-capf-setup ()
     (interactive) ;; todo remove
     (setq-local completion-category-defaults nil)
     (setq-local completion-at-point-functions
-		(-> (list #'eglot-completion-at-point
-			  #'cape-dabbrev
-			  (->> (tychoish/get-available-word-capfs)
-			       (seq-map (lambda (in)
-				       `(progn
-					  (list (cape-capf-wrapper cape-capf-inside-comment ,in)
-						(cape-capf-wrapper cape-capf-inside-string ,in)))))
-			       (seq-map 'eval))
-			  #'yasnippet-capf
-			  #'cape-emoji
-			  #'cape-file)
-		    (-flatten)
-		    (seq-filter 'identity)
-		    (seq-uniq))))
+		(thread-last (list #'eglot-completion-at-point
+				   #'cape-dabbrev
+				   (thread-last (tychoish/get-available-word-capfs)
+						(seq-map (lambda (in)
+							   `(progn
+							      (list (cape-capf-wrapper cape-capf-inside-comment ,in)
+								    (cape-capf-wrapper cape-capf-inside-string ,in)))))
+						(seq-map 'eval))
+				   #'yasnippet-capf
+				   #'cape-emoji
+				   #'cape-file)
+			     (-flatten)
+			     (seq-filter 'identity)
+			     (seq-uniq))))
 
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
@@ -537,14 +540,17 @@
 (use-package vertico
   :ensure t
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
-  :commands (vertico-mode)
+  :commands (vertico-mode vertico-multiform-mode)
   :init
-  (add-one-shot-hook
-   :name "vertico"
-   :operation 'vertico-mode
-   :hook 'doom-modeline-mode-hook)
+  (add-lazy-init
+   :name "<core> vertico primary"
+   :delay 0.5
+   :operation 'vertico-mode)
 
-  (add-hook 'vertico-mode-hook 'vertico-multiform-mode)
+  (add-lazy-init
+   :name "<core> vertico multiform"
+   :delay 2
+   :operation 'vertico-multiform-mode)
 
   (setq vertico-resize t)
   (setq vertico-count 25)
@@ -571,10 +577,10 @@
   :ensure t
   :commands (prescient-persist-mode)
   :init
-  (add-one-shot-hook
-   :name "prescient"
-   :operation 'prescient-persist-mode
-   :hook '(vertico-mode-hook corfu-mode-hook))
+  (add-lazy-init
+   :name "<core> prescient-persist"
+   :delay 1
+   :operation 'prescient-persist-mode)
   :config
   ;; Prescient's own knobs; cross-cutting filter/sort selection is owned
   ;; by the completion-flavor system below.
@@ -586,7 +592,12 @@
 
 (use-package vertico-prescient
   :ensure t
-  :hook (vertico-mode . vertico-prescient-mode)
+  :defer t
+  :init
+  (add-lazy-init
+   :name "<core> vertico prescient"
+   :delay 1
+   :operation 'vertico-prescient-mode)
   :config
   ;; Sort-override stays on so prescient can win when a flavor enables it.
   ;; Filtering is owned by the completion-flavor system below.
@@ -749,10 +760,10 @@
   :hook ((marginalia-mode . nerd-icons-completion-marginalia-setup))
   :commands (nerd-icons-completion-mode)
   :init
-  (add-one-shot-hook
-   :name "nerd-icons-completion"
-   :operation #'nerd-icons-completion-mode
-   :hook '(corfu-mode-hook vertico-mode-hook)))
+  (add-lazy-init
+   :name "<core> nerd icons"
+   :delay 0.8
+   :operation 'nerd-icons-completion-mode))
 
 (use-package consult
   :ensure t
@@ -1040,7 +1051,7 @@
 
 (use-package magit-gh-repo-dashboard
   :bind (:map tychoish/magit-map
-         ("d" . magit-gh-repo-dashboard-open))
+              ("d" . magit-gh-repo-dashboard-open))
   :commands (magit-gh-repo-dashboard-view magit-gh-pr-dashboard-open))
 
 (use-package smerge-mode
@@ -1646,7 +1657,7 @@ all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
 
   (bind-key "M-<left>" 'balle-python-shift-left python-ts-mode-map)
   (bind-key "M-<right>" 'balle-python-shift-right python-ts-mode-map)
-; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
+					; (setenv "PYTHON_KEYRING_BACKEND" "keyring.backends.null.Keyring")
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
@@ -2441,8 +2452,8 @@ Useful after changing `eglot-workspace-configuration' or
 	(list (concat "--input-history-file=" (sprite-state-path "aider.input-history.md"))
 	      (concat "--chat-history-file=" (sprite-state-path "aider.chat-history.md"))
 	      (concat "--model-settings-file=" aidermacs-model-settings-path)
-	       "--editor-edit-format=udiff" "--edit-format=udiff"
-	       "--notifications" "--cache-prompts"))
+	      "--editor-edit-format=udiff" "--edit-format=udiff"
+	      "--notifications" "--cache-prompts"))
 
   (make-aidermacs-model-selection-function
    :name "claude-max"
@@ -2636,6 +2647,7 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package shell-maker
   :ensure t
+  :defer t
   :config
   (defalias 'shell-maker-map 'shell-maker-major-mode-map)
   (setq shell-maker-root-path (sprite-state-path "shell-maker")))
@@ -2684,12 +2696,15 @@ Useful after changing `eglot-workspace-configuration' or
   (defun tychoish/agent-shell--apply-environment ()
     "Set `agent-shell-anthropic-claude-environment' from current toggle state."
     (setq agent-shell-anthropic-claude-environment
-          (if tychoish/agent-shell-terse-output
-              (agent-shell-make-environment-variables
-               "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona
-	       "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
-               :inherit-env t)
-            (agent-shell-make-environment-variables :inherit-env t))))
+          (agent-shell-make-environment-variables
+           "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona
+	   "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
+           :inherit-env t))
+
+    (setq agent-shell-omp-environment
+	  (agent-shell-make-environment-variables
+	   "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
+	   "OMP_DOCS_DIR" (file-name-concat local-notes-directory "omp" "projects"))))
 
   (defun tychoish/agent-shell-toggle-terse-output ()
     "Toggle terse agent output on or off and update the running environment."
@@ -2732,6 +2747,7 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-anthropic-default-model-id "sonnet")
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
   (require 'agent-shell-omp)
+  (add-to-list 'agent-shell-agent-configs (agent-shell-omp-make-agent-config))
 
   (bind-keys
    :map agent-shell-mode-map
@@ -2788,11 +2804,6 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-queue
   :load-path "elpa/agent-shell-queue"
-  :bind (:map tychoish/robot-agent-shell-map
-         ("." . agent-shell-queue-menu)
-         ("/" . agent-shell-queue-capture)
-         ("P" . agent-shell-queue-pause)
-         ("-" . agent-shell-queue-edit-task))
   :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
          (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
   :commands (agent-shell-queue-buffer-open
@@ -2817,13 +2828,19 @@ Useful after changing `eglot-workspace-configuration' or
              agent-shell-queue-insert-wait
              agent-shell-queue-item-menu)
   :init
+  (defvar-keymap tychoish/robot-agent-shell-map)
   (make-read-extended-command-for-prefix "agent-shell-queue"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "q")
   :config
   (bind-keys
    :map agent-shell-queue-mode-map
-   ("C-c j" . tychoish/robot-agent-shell-map))
+   ("C-c j" . tychoish/robot-agent-shell-map)
+   :map tychoish/robot-agent-shell-map
+   ("." . agent-shell-queue-menu)
+   ("/" . agent-shell-queue-capture)
+   ("P" . agent-shell-queue-pause)
+   ("-" . agent-shell-queue-edit-task))
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
@@ -2886,7 +2903,7 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package sprite
   :load-path "lisp"
   :commands (sprite-list sprite-create
-             sprite-get-next sprite-get-or-create-next)
+			 sprite-get-next sprite-get-or-create-next)
   :config
   (add-to-list 'mode-line-misc-info '(:eval (format " [%s]" (sprite--mode-line-string))))
   (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))

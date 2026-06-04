@@ -53,7 +53,7 @@
 Falls back to `which-key-add-key-based-replacements' on Emacs versions that lack
 the keymap-scoped variant."
   (if (and map (fboundp 'which-key-add-keymap-based-replacements))
-    (which-key-add-keymap-based-replacements map key new-text)
+      (which-key-add-keymap-based-replacements map key new-text)
     (which-key-add-key-based-replacements key new-text)))
 
 (cl-defmacro which-key-customize (new-text &key map key form)
@@ -424,7 +424,7 @@ more arguments than the function cares about."
         newline-mark))
 
 (make-read-extended-command-for-prefix  "clipboard"
- :bind-key "C-x x c")
+  :bind-key "C-x x c")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -602,20 +602,18 @@ more arguments than the function cares about."
     (tychoish-set-up-user-local-config)))
 
 (defun tychoish/init-late-enable-modes ()
-  (with-slow-op-timer
-    "<bootstrap.el> after-init [enable-modes]"
-    (global-auto-revert-mode 1)
-    (column-number-mode 1)
-    (delete-selection-mode 1)
-    (winner-mode 1)
-    (transient-mark-mode 1)
-    (xterm-mouse-mode 1)
-    (electric-pair-mode 1)
-    (when (fboundp 'which-key-mode)
-      (which-key-mode 1))
+  (global-auto-revert-mode 1)
+  (column-number-mode 1)
+  (delete-selection-mode 1)
+  (winner-mode 1)
+  (transient-mark-mode 1)
+  (xterm-mouse-mode 1)
+  (electric-pair-mode 1)
+  (when (fboundp 'which-key-mode)
+    (which-key-mode 1))
 
-    (with-silence
-      (repeat-mode 1))))
+  (with-silence
+    (repeat-mode 1)))
 
 (unless (gui-p)
   (push '(background-color . nil) default-frame-alist))
@@ -634,11 +632,21 @@ more arguments than the function cares about."
     (delight 'visual-line-mode " wr")
     (delight 'fundamental-mode "fun")))
 
+(add-lazy-init
+ :name "<bootstrap> late enable modes"
+ :operation 'tychoish/init-late-enable-modes
+ :delay 0.67)
+
+(add-lazy-init
+ :name "<bootstrap> ensure default font"
+ :operation 'tychoish/ensure-default-font
+ :delay 0.1)
+
 (add-one-shot-hook
  :name "delight-modeline"
  :function tychoish/set-up-delightful-mode-lighters
- :hook '(doom-modeline-mode-hook nerd-icons-completion-mode-hook)
- :idle-timer 0.2)
+ :hook doom-modeline-mode-hook
+ :idle-timer 0.75)
 
 (add-one-shot-hook
  :name "restore-desktop"
@@ -662,21 +670,9 @@ more arguments than the function cares about."
  :idle-timer 0.5)
 
 (add-one-shot-hook
- :name "enable-modes"
- :function tychoish/init-late-enable-modes
- :hook 'emacs-startup-hook
- :idle-timer 0.3)
-
-(add-one-shot-hook
  :name "ssh-agent"
  :form (tychoish/set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
-
-(add-one-shot-hook
- :name "ensure-default-font"
- :function tychoish/ensure-default-font
- :hook after-first-frame-created
- :idle-timer 0.1)
 
 (add-one-shot-hook
  :name "completion-flavor-init"
@@ -694,12 +690,12 @@ more arguments than the function cares about."
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
-  (->> (f-entries (file-name-concat user-emacs-directory "user"))
-       (seq-filter (lambda (it) (string-suffix-p ".el" it)))
-       (seq-map #'file-name-nondirectory)
-       (seq-map #'file-name-sans-extension)
-       (seq-map #'intern)
-       (seq-map #'tychoish--load-user-file)))
+  (thread-last  (f-entries (file-name-concat user-emacs-directory "user"))
+                (seq-filter (lambda (it) (string-suffix-p ".el" it)))
+                (seq-map #'file-name-nondirectory)
+                (seq-map #'file-name-sans-extension)
+                (seq-map #'intern)
+                (seq-map #'tychoish--load-user-file)))
 
 (defvar tychoish/abbrev-files-cache (make-hash-table :test #'equal)
   "cache mapping file names to files' mtime to avoid re-importing files")
@@ -709,12 +705,12 @@ more arguments than the function cares about."
       (time-less-p (map-elt tychoish/abbrev-files-cache path) (f-mtime path))))
 
 (defun tychoish/load-abbrev-files ()
-  (->> (f-entries (file-name-concat user-emacs-directory "abbrev"))
-       (--filter (f-ext-p it "el"))
-       (seq-filter #'file-exists-p)
-       (seq-filter #'should-read-abbrev-file-p)
-       (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
-       (mapc (lambda (it) (setf (map-elt tychoish/abbrev-files-cache it) (f-mtime it)))))
+  (thread-last  (f-entries (file-name-concat user-emacs-directory "abbrev"))
+                (--filter (f-ext-p it "el"))
+                (seq-filter #'file-exists-p)
+                (seq-filter #'should-read-abbrev-file-p)
+                (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
+                (mapc (lambda (it) (setf (map-elt tychoish/abbrev-files-cache it) (f-mtime it)))))
 
   (delight 'abbrev-mode "abb")
   (setq save-abbrevs t))
@@ -764,12 +760,12 @@ installation that need to be recompiled. Call with a prefix argument to
 forcibly recompile all emacs files. Returns a list of all files that
 were recompiled."
   (interactive)
-  (->> (list user-emacs-directory
-	     (file-name-concat user-emacs-directory "lisp")
-	     (file-name-concat user-emacs-directory "user"))
-       (--flat-map (f-entries it #'f-file-p))
-       (--filter (f-ext-p it "el"))
-       (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
+  (thread-last  (list user-emacs-directory
+	              (file-name-concat user-emacs-directory "lisp")
+	              (file-name-concat user-emacs-directory "user"))
+                (--flat-map (f-entries it #'f-file-p))
+                (--filter (f-ext-p it "el"))
+                (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
 
 (declare-function package-installed-p "package")
 (declare-function package-desc-p "package")
@@ -780,11 +776,11 @@ were recompiled."
   (let* ((ops '(install upgrade 'reinstall))
 	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
 	 (filename (concat (file-name-concat temporary-file-directory
-			           (string-join (list
-						    "emacs" sprite-instance-id
-						    "async-package"
-						    (symbol-name op))
-					           "-")) ".log")))
+			                     (string-join (list
+						           "emacs" sprite-instance-id
+						           "async-package"
+						           (symbol-name op))
+					                  "-")) ".log")))
     (unless (member op ops)
       (user-error "%s is not a valid operation %S" op ops))
 
@@ -919,17 +915,17 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (save-some-buffers t t))
 
 (defun buffers-matching-path (regexp &optional internal-too)
-  (->> (buffer-list)
-       (--keep (let* ((buffer it)
-		      (name (buffer-file-name buffer)))
-		 (when (and name (not (string-equal name ""))
-			    (or internal-too (/= (aref name 0) ?\s))
-			    (string-match regexp name))
-		   buffer)))))
+  (thread-last  (buffer-list)
+                (--keep (let* ((buffer it)
+		               (name (buffer-file-name buffer)))
+		          (when (and name (not (string-equal name ""))
+			             (or internal-too (/= (aref name 0) ?\s))
+			             (string-match regexp name))
+		            buffer)))))
 
 (defun buffers-matching-mode (mode)
-  (->> (buffer-list)
-       (--select (with-current-buffer it (eq major-mode mode)))))
+  (thread-last  (buffer-list)
+                (--select (with-current-buffer it (eq major-mode mode)))))
 
 (defun kill-buffers-in-directory (&optional directory)
   "Kill all buffers in `directory'. When not defined, a directory can be selected interactively."
@@ -938,15 +934,15 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (unless directory
     (setq directory (annotated-completing-read-directory)))
 
-  (let ((killed (->> (buffer-list)
-		     (--filter (buffer-file-name it))
-		     (--select (f-ancestor-of-p directory (buffer-file-name it)))
-		     (--map (cons (buffer-file-name it) (kill-buffer it)))
-		     (--filter (cdr it))
-		     (--keep (car it))
-		     (apply #'append)
-		     (seq-filter 'identity)
-		     (--map (f-collapse-homedir it)))))
+  (let ((killed (thread-last  (buffer-list)
+		              (--filter (buffer-file-name it))
+		              (--select (f-ancestor-of-p directory (buffer-file-name it)))
+		              (--map (cons (buffer-file-name it) (kill-buffer it)))
+		              (--filter (cdr it))
+		              (--keep (car it))
+		              (apply #'append)
+		              (seq-filter 'identity)
+		              (--map (f-collapse-homedir it)))))
 
     (if (called-interactively-p 'any)
 	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (string-join killed ", "))
@@ -960,10 +956,10 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
       (buffers-matching-path (approximate-project-root))))
    ((and (stringp thing)
 	 (file-exists-p thing))
-    (->> (buffer-list)
-	 (--keep (f-equal-p thing (buffer-file-name it)))
-	 (seq-uniq)
-	 (--flat-map (with-current-buffer it (buffers-matching-path (approximate-project-root))))))))
+    (thread-last  (buffer-list)
+	          (--keep (f-equal-p thing (buffer-file-name it)))
+	          (seq-uniq)
+	          (--flat-map (with-current-buffer it (buffers-matching-path (approximate-project-root))))))))
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 
@@ -978,11 +974,11 @@ prefix argument INTERNAL-TOO is non-nil.  Asks before killing
 each buffer, unless NO-ASK is non-nil."
   (interactive "sKill buffers visiting a path matching this regular expression: \n")
   (let* ((buffers (buffers-matching-path regexp internal-too))
-	 (killed (->> buffers
-		      (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
-		      (--filter (cdr it))
-		      (--keep (car it))
-		      (apply #'append))))
+	 (killed (thread-last  buffers
+		               (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
+		               (--filter (cdr it))
+		               (--keep (car it))
+		               (apply #'append))))
 
     (if (called-interactively-p 'any)
 	(message "killed %d buffers matching '%S'" (length killed) (string-join killed ", "))
@@ -996,11 +992,11 @@ each buffer, unless NO-ASK is non-nil."
   "Kill all buffers for files in external (upstream) sources, likely opened
 by jump-to-definition."
   (interactive)
-  (let ((killed (->> reference-source-paths
-		     (seq-map #'force-kill-buffers-matching-path)
-		     (seq-filter 'identity)
-                     (seq-filter #'stringp)
-		     (seq-map #'f-collapse-homedir))))
+  (let ((killed (thread-last  reference-source-paths
+		              (seq-map #'force-kill-buffers-matching-path)
+		              (seq-filter 'identity)
+                              (seq-filter #'stringp)
+		              (seq-map #'f-collapse-homedir))))
     (if (called-interactively-p 'any)
 	(message "killed %s refrence/source buffers [%s]" (length killed) (string-join killed ", "))
       killed)))
@@ -1061,7 +1057,7 @@ Returns the number of buffers killed."
   (with-current-buffer (or (when (bufferp buffer) buffer)
 			   (when (and (stringp buffer) (get-buffer buffer)) buffer)
 			   (current-buffer))
-    (apply #'run-mode-hooks (--keep (-concat (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
+    (apply #'run-mode-hooks (--keep (append (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
 
 (defun buffer-directory (buf)
   "Return the `default-directory' of the provide buffer."
@@ -1329,8 +1325,8 @@ export but adds complexity with no interactive benefit.")
   (let* ((slug (f-make-slug title))
          (datetime (format-time-string "%Y-%02m-%02d"))
          (draft-fn (file-name-concat (or path
-			       (annotated-completing-read-directory))
-			   (concat datetime "." slug "." tychoish-blog-extension))))
+			                 (annotated-completing-read-directory))
+			             (concat datetime "." slug "." tychoish-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
       (find-file draft-fn)
@@ -1499,13 +1495,13 @@ interactively then remove duplicate items from the `kill-ring'."
     (setq local-notes-directory (expand-file-name path)))
 
   (setq org-directory (file-name-concat local-notes-directory "org"))
-  (setq org-agenda-files (->> (list org-directory user-org-directories)
-                              (-flatten)
-                              (seq-map #'expand-file-name)
-			      (seq-filter 'identity)
-			      (seq-map #'string-trim)
-			      (seq-remove #'string-empty-p)
-                              (seq-uniq)))
+  (setq org-agenda-files (thread-last (list org-directory user-org-directories)
+                                      (-flatten)
+                                      (seq-map #'expand-file-name)
+			              (seq-filter 'identity)
+			              (seq-map #'string-trim)
+			              (seq-remove #'string-empty-p)
+                                      (seq-uniq)))
   (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
   (setq org-default-notes-file (file-name-concat org-directory "records.org"))
   (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
@@ -1518,12 +1514,12 @@ interactively then remove duplicate items from the `kill-ring'."
 
 (defun find-ssh-agent-socket-candidates ()
   (let ((v (format "/run/user/%d/ssh-agent.socket" (user-uid))))
-    (->> (if (listp v) v (list v))
-         (append (sort (copy-sequence (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
-         (seq-uniq)
-         (seq-remove #'null)
-         (seq-filter #'f-writable?)
-         (nreverse))))
+    (thread-last  (if (listp v) v (list v))
+                  (append (sort (copy-sequence (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
+                  (seq-uniq)
+                  (seq-remove #'null)
+                  (seq-filter #'f-writable?)
+                  (nreverse))))
 
 (defun tychoish/set-up-ssh-agent ()
   (let (env-value sockets)
@@ -1665,11 +1661,11 @@ BODY is skipped."
                                  (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
                                          (nth 2 entry))))
                          tychoish/completion-flavors)
-		  :prompt "completion flavor => "
-		  :category 'tychoish-completion-flavor
-		  :require-match t))
-	   (entry (assq (intern name) tychoish/completion-flavors)))
-      (when entry (funcall (nth 1 entry)))))
+		:prompt "completion flavor => "
+		:category 'tychoish-completion-flavor
+		:require-match t))
+	 (entry (assq (intern name) tychoish/completion-flavors)))
+    (when entry (funcall (nth 1 entry)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -171,10 +171,10 @@
 
 (defun tychoish-org--install-auxiliary-packages ()
   "Install all of the auxiliary packages."
-  (->> tychoish-org--auxiliary-packages
-       (seq-remove #'package-installed-p)
-       (-map #'package-install-async)
-       (length)))
+  (thread-last tychoish-org--auxiliary-packages
+	       (seq-remove #'package-installed-p)
+	       (mapcar #'package-install-async)
+	       (length)))
 
 (with-eval-after-load 'ox-rst
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
@@ -219,14 +219,14 @@
 (defun org-agenda-files-open ()
   "Open all agenda files if not already open."
   (interactive)
-  (let* ((files (->> (org-agenda-files)
-		     (--flat-map (if (f-directory-p it)
-				     (f-glob "*.org" it)
-				   (list it)))
-		     (--remove (string-suffix-p "archive.org" it))))
-	 (buffers (->> files
-		       (--map (or (get-file-buffer it)
-				  (find-file-noselect it t))))))
+  (let* ((files (thread-last (org-agenda-files)
+			     (--flat-map (if (f-directory-p it)
+					     (f-glob "*.org" it)
+					   (list it)))
+			     (--remove (string-suffix-p "archive.org" it))))
+	 (buffers (thread-last files
+			       (--map (or (get-file-buffer it)
+					  (find-file-noselect it t))))))
     (message "opened %d agenda files [%s]" (length files) (string-join files ", "))
     buffers))
 
@@ -234,10 +234,10 @@
 (defun org-agenda-files-reload ()
   "Open all agenda files, and reverting to the version on disk as needed."
   (interactive)
-  (->> (org-agenda-files-open)
-       (--map (with-current-buffer it
-		(revert-buffer nil (or current-prefix-arg (not (called-interactively-p 'interactive))) t)
-		(buffer-file-name)))))
+  (thread-last (org-agenda-files-open)
+	       (--map (with-current-buffer it
+			(revert-buffer nil (or current-prefix-arg (not (called-interactively-p 'interactive))) t)
+			(buffer-file-name)))))
 
 (defun tychoish/background-revbufs-for-hook ()
   "Run `revbufs' without disturbing the current window configuration."
@@ -280,7 +280,7 @@ canonical form, which has the side effect of appending the weekday."
     t))
 
 (defun tychoish/org-use-speed-commands ()
-    (and (looking-at org-outline-regexp) (looking-back "^\\**" nil)))
+  (and (looking-at org-outline-regexp) (looking-back "^\\**" nil)))
 
 (defvar tychoish-org-project-tags '("PROJECT" "EPIC")
   "Tags that suppress their children from all agenda views.
@@ -350,21 +350,21 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (interactive)
   (let ((key-table (make-hash-table :test #'equal))
 	(annotation-table (make-hash-table :test #'equal)))
-    (->> org-capture-templates
-	 (--filter (< 4 (length it)))
-	 (--mapc (let* ((template it)
-			(key-char    (nth 0 template))
-			(description (nth 1 template))
-			(file        (file-name-nondirectory (cadr (nth 3 template))))
-			(body        (let ((s (string-replace "\n" " " (nth 4 template))))
-				       (string-trim (if (> (length s) 32) (concat (substring s 0 29) "...") s)))))
-		   (ht-set key-table description key-char)
-		   (ht-set annotation-table description (format "[%s] <%s> '%s'" key-char file body)))))
-      (org-capture nil (ht-get key-table (annotated-completing-read
-		      annotation-table
-		      :prompt "org-capture => "
-		      :category 'org-capture
-		      :require-match nil)))))
+    (thread-last org-capture-templates
+		 (--filter (< 4 (length it)))
+		 (--mapc (let* ((template it)
+				(key-char    (nth 0 template))
+				(description (nth 1 template))
+				(file        (file-name-nondirectory (cadr (nth 3 template))))
+				(body        (let ((s (string-replace "\n" " " (nth 4 template))))
+					       (string-trim (if (> (length s) 32) (concat (substring s 0 29) "...") s)))))
+			   (ht-set key-table description key-char)
+			   (ht-set annotation-table description (format "[%s] <%s> '%s'" key-char file body)))))
+    (org-capture nil (ht-get key-table (annotated-completing-read
+					annotation-table
+					:prompt "org-capture => "
+					:category 'org-capture
+					:require-match nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -418,33 +418,33 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
     (add-to-list 'org-capture-templates (list (concat "r" key) description))
     (add-to-list 'org-capture-templates (list (concat key "r") description)))
 
-  (->> '(("1d" .  "Daily")
-         ("1w" .  "Weekly")
-         ("4w" . "Monthly")
-         ("12w" . "Quarterly")
-         ("26w" . "Half Yearly")
-         ("52w" . "Yearly"))
-       (--flat-map (let* ((interval (car it))
-			  (heading (cdr it))
-			  (interval-key (downcase (substring-no-properties heading 0 1))))
-		     (->> (list (concat key "r" interval-key)
-				(concat "r" key interval-key))
-			  (-map (lambda (prefix) (cons prefix (cons interval heading)))))))
+  (thread-last '(("1d" .  "Daily")
+		 ("1w" .  "Weekly")
+		 ("4w" . "Monthly")
+		 ("12w" . "Quarterly")
+		 ("26w" . "Half Yearly")
+		 ("52w" . "Yearly"))
+	       (--flat-map (let* ((interval (car it))
+				  (heading (cdr it))
+				  (interval-key (downcase (substring-no-properties heading 0 1))))
+			     (thread-last (list (concat key "r" interval-key)
+						(concat "r" key interval-key))
+					  (mapcar (lambda (prefix) (cons prefix (cons interval heading)))))))
 
-       (--map (let* ((prefix (car it))
-		     (interval (cadr it))
-		     (heading (cddr it))
-		     (lower-heading (downcase heading))
-		     (menu-name (format "routine (%s; %s)" name lower-heading)))
+	       (--map (let* ((prefix (car it))
+			     (interval (cadr it))
+			     (heading (cddr it))
+			     (lower-heading (downcase heading))
+			     (menu-name (format "routine (%s; %s)" name lower-heading)))
 
-		(add-to-list
-		 'org-capture-templates
-		 (list prefix menu-name
-		       'entry (list 'file+olp path "Loops" heading)
-		       (concat "* %(~title~)\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")
-		       :prepend t
-		       :kill-buffer t
-		       :empty-lines-after 1))))))
+			(add-to-list
+			 'org-capture-templates
+			 (list prefix menu-name
+			       'entry (list 'file+olp path "Loops" heading)
+			       (concat "* %(~title~)\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")
+			       :prepend t
+			       :kill-buffer t
+			       :empty-lines-after 1))))))
 
 (defun ~title~ ()
   "Read a title string interactively during `org-capture' template expansion."

@@ -13,7 +13,7 @@
   "A toggle that, when enabled is supports more verbose timing reporting.
 Turns `with-slow-op-timer' from a noop to reporting on the duration of enclosed operations.")
 
-(defvar slow-op-threshold 0.01
+(defvar slow-op-threshold 0.005
   "Threshold in seconds, or fractions thereof. Controls the behavior of `with-slow-op-timer'. Any operation below this threshold (faster) are ignored. Use this to control verbosity.")
 
 (defmacro with-slow-op-timer (name &rest body)
