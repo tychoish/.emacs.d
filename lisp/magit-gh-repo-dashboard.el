@@ -813,10 +813,12 @@ The Name column width is elastic: wide enough for the longest name in REPOS."
     (define-key m (kbd "f")   #'magit-gh-repo-dashboard-fetch)
     (define-key m (kbd "u")   #'magit-gh-repo-dashboard-pull)
     (define-key m (kbd "a")   #'magit-gh-repo-dashboard-auto-sync)
+    (define-key m (kbd "n")   #'magit-gh-repo-dashboard-sync)
     (define-key m (kbd "S")   #'magit-gh-repo-dashboard-sync-all)
     (define-key m (kbd "A")   #'magit-gh-repo-dashboard-commit-all)
     (define-key m (kbd "x")   #'magit-gh-repo-dashboard-run-command)
     (define-key m (kbd "t")   #'magit-gh-repo-dashboard-filter-by-tag)
+    (define-key m (kbd "i")   #'magit-gh-repo-dashboard-add-tag)
     (define-key m (kbd "p")   #'magit-gh-pr-dashboard-open)
     (define-key m (kbd "b")   #'magit-gh-repo-dashboard-visit-buffer)
     (define-key m (kbd "e")   #'magit-gh-repo-dashboard-find-file)
@@ -844,6 +846,19 @@ The Name column width is elastic: wide enough for the longest name in REPOS."
 
 (defvar-local magit-gh-repo-dashboard--tag-filter nil
   "When non-nil, a symbol: only repos tagged with this symbol are shown.")
+
+(defvar magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)
+  "Hash table mapping repo path strings to lists of ephemeral tag symbols.
+These tags are session-local and are not saved to the repo registry.")
+
+(defun magit-gh-repo-dashboard--all-tags-for (repo)
+  "Return the combined permanent and ephemeral tags for REPO."
+  (append (magit-gh-repo-tags repo)
+          (gethash (magit-gh-repo-path repo) magit-gh-repo-dashboard--ephemeral-tags)))
+
+(defun magit-gh-repo-dashboard--permanent-tag-set ()
+  "Return deduplicated list of all permanent tag symbols across registered repos."
+  (delete-dups (seq-mapcat #'magit-gh-repo-tags magit-gh-repo-list)))
 
 (defvar-local magit-gh-repo-dashboard--marked-paths nil
   "List of repo paths currently marked for batch operations.")
@@ -947,7 +962,7 @@ Repos are ordered by :sort-hint; discovered worktrees follow their parent."
                 (if magit-gh-repo-dashboard--tag-filter
                     (seq-filter (lambda (r)
                                   (memq magit-gh-repo-dashboard--tag-filter
-                                        (magit-gh-repo-tags r)))
+                                        (magit-gh-repo-dashboard--all-tags-for r)))
                                 magit-gh-repo-list)
                   magit-gh-repo-list))))
     (setq tabulated-list-format (magit-gh-repo-dashboard--build-format repos))
@@ -1053,6 +1068,20 @@ Signals `user-error' when :auto-commit is not configured for this repo."
   (let ((default-directory (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))))
     (magit-push-current-to-pushremote nil)))
 
+(defun magit-gh-repo-dashboard-sync ()
+  "Run the auto-sync operation for the repository at point asynchronously.
+Signals `user-error' when :auto-sync is not configured for this repo."
+  (interactive)
+  (let ((repo (magit-gh-repo-dashboard--repo-at-point)))
+    (unless (magit-gh-repo-auto-sync repo)
+      (user-error "Auto-sync is not configured for %s" (magit-gh-repo-name repo)))
+    (magit-gh-repo-dashboard--dispatch-sync-op
+     repo
+     (lambda (status &optional error-text)
+       (magit-gh-repo-dashboard--log-operation
+        (magit-gh-repo-name repo) "sync" status error-text)
+       (magit-gh-repo-dashboard--maybe-refresh)))))
+
 (defun magit-gh-repo-dashboard-commit-all ()
   "Auto-commit repos with :auto-commit configured, asynchronously.
 Uses each repo's :auto-commit message function (or the default chore message).
@@ -1106,18 +1135,132 @@ Each batch displays a summary message; the dashboard refreshes when sync complet
   (interactive)
   (magit-gh-repo-dashboard--run-command-for (magit-gh-repo-dashboard--repo-at-point)))
 
+(defun magit-gh-repo-dashboard--build-tag-table ()
+  "Build an ACR alist mapping tag-name strings to annotation strings.
+Each annotation lists the count of repos using the tag and up to four names.
+Permanent tags (from repo :tags fields) are sorted before ephemeral-only tags."
+  (let* ((permanent-set (magit-gh-repo-dashboard--permanent-tag-set))
+         (tag-repo-map (let ((ht (make-hash-table :test #'eq)))
+                         (seq-do
+                          (lambda (repo)
+                            (seq-do
+                             (lambda (tag)
+                               (puthash tag (cons repo (gethash tag ht)) ht))
+                             (magit-gh-repo-dashboard--all-tags-for repo)))
+                          magit-gh-repo-list)
+                         ht))
+         (all-tags (delete-dups
+                    (seq-mapcat #'magit-gh-repo-dashboard--all-tags-for
+                                magit-gh-repo-list)))
+         (sorted-tags (seq-sort
+                       (lambda (a b)
+                         (let ((a-perm (memq a permanent-set))
+                               (b-perm (memq b permanent-set)))
+                           (cond
+                            ((and a-perm (not b-perm)) t)
+                            ((and b-perm (not a-perm)) nil)
+                            (t (string< (symbol-name a) (symbol-name b))))))
+                       all-tags)))
+    (seq-map
+     (lambda (tag)
+       (let* ((repos (nreverse (gethash tag tag-repo-map)))
+              (count (length repos))
+              (shown (seq-take (seq-map #'magit-gh-repo-name repos) 4)))
+         (cons (symbol-name tag)
+               (format "%d repo%s: %s%s"
+                       count
+                       (if (= count 1) "" "s")
+                       (mapconcat #'identity shown ", ")
+                       (if (> count (length shown)) "…" "")))))
+     sorted-tags)))
+
+(cl-defun magit-gh-repo-dashboard--read-tag (prompt &key include-clear require-match)
+  "Read a tag using annotated-completing-read with PROMPT.
+Shows permanent tags (from repo :tags fields) before ephemeral-only tags.
+Each candidate is annotated with a repo count and up to four repo names.
+
+When INCLUDE-CLEAR is non-nil a \"(clear)\" option is prepended; selecting it
+returns the symbol `clear'.  When REQUIRE-MATCH is non-nil only existing tags
+are accepted; otherwise arbitrary input is allowed for new ephemeral tags.
+Returns an interned symbol, `clear', or nil on quit."
+  (let* ((permanent-set (magit-gh-repo-dashboard--permanent-tag-set))
+         (full-table (if include-clear
+                         (cons '("(clear)" . "remove tag filter")
+                               (magit-gh-repo-dashboard--build-tag-table))
+                       (magit-gh-repo-dashboard--build-tag-table)))
+         (group-fn (lambda (candidate)
+                     (cond
+                      ((equal candidate "(clear)") " ")
+                      ((memq (intern candidate) permanent-set) "permanent")
+                      (t "ephemeral"))))
+         (sort-fn (lambda (candidates)
+                    (let ((perm permanent-set))
+                      (seq-sort
+                       (lambda (a b)
+                         (cond
+                          ((equal a "(clear)") t)
+                          ((equal b "(clear)") nil)
+                          (t (let ((a-perm (memq (intern a) perm))
+                                   (b-perm (memq (intern b) perm)))
+                               (cond
+                                ((and a-perm (not b-perm)) t)
+                                ((and b-perm (not a-perm)) nil)
+                                (t (string< a b)))))))
+                       candidates))))
+         (result (annotated-completing-read
+                  full-table
+                  :prompt prompt
+                  :group-name group-fn
+                  :sort-fn sort-fn
+                  :require-match require-match
+                  :or-nil t)))
+    (cond
+     ((null result) nil)
+     ((equal result "(clear)") 'clear)
+     (t (intern result)))))
+
 (defun magit-gh-repo-dashboard-filter-by-tag ()
-  "Filter the dashboard to show repos with a specific tag.
-With an empty selection, clears the filter and shows all repos."
+  "Filter the dashboard by tag using annotated completion.
+Select \"(clear)\" to show all repos; quitting leaves the current filter unchanged."
   (interactive)
-  (let* ((all-tags (delete-dups
-                    (seq-mapcat #'magit-gh-repo-tags magit-gh-repo-list)))
-         (choice (completing-read "Filter by tag (empty to clear): "
-                                  (seq-map #'symbol-name all-tags)
-                                  nil nil)))
+  (when-let* ((tag (magit-gh-repo-dashboard--read-tag "Filter by tag: "
+                                                       :include-clear t)))
     (setq magit-gh-repo-dashboard--tag-filter
-          (if (string-empty-p choice) nil (intern choice)))
+          (unless (eq tag 'clear) tag))
     (magit-gh-repo-dashboard-refresh)))
+
+(defun magit-gh-repo-dashboard-add-tag ()
+  "Add an ephemeral session-local tag to the repository at point.
+The tag is stored in memory for this session and is not saved to the registry.
+Pick from existing tags or type a new symbol name."
+  (interactive)
+  (let* ((repo (magit-gh-repo-dashboard--repo-at-point))
+         (tag (magit-gh-repo-dashboard--read-tag
+               (format "Add tag to %s: " (magit-gh-repo-name repo)))))
+    (when tag
+      (let* ((path (magit-gh-repo-path repo))
+             (existing (gethash path magit-gh-repo-dashboard--ephemeral-tags)))
+        (unless (memq tag existing)
+          (puthash path (cons tag existing) magit-gh-repo-dashboard--ephemeral-tags))
+        (magit-gh-repo-dashboard-refresh)))))
+
+(defun magit-gh-repo-dashboard-mark-by-tag ()
+  "Mark all repos sharing a tag chosen via annotated completion.
+Adds to any existing marks rather than replacing them."
+  (interactive)
+  (when-let* ((tag (magit-gh-repo-dashboard--read-tag "Mark by tag: " :require-match t)))
+    (let* ((tagged (seq-filter
+                    (lambda (r)
+                      (memq tag (magit-gh-repo-dashboard--all-tags-for r)))
+                    magit-gh-repo-list))
+           (paths (seq-map #'magit-gh-repo-path tagged)))
+      (setq magit-gh-repo-dashboard--marked-paths
+            (delete-dups (append paths magit-gh-repo-dashboard--marked-paths)))
+      (magit-gh-repo-dashboard-refresh)
+      (message "Marked %d repo%s with tag '%s"
+               (length paths)
+               (if (= (length paths) 1) "" "s")
+               (symbol-name tag)))))
 
 (defun magit-gh-repo-dashboard-visit-buffer ()
   "Switch to a buffer visiting a file in the repository at point."
@@ -1859,6 +2002,11 @@ Returns nil when OUTPUT is not a JSON array."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
     (not (null (magit-gh-repo-auto-commit repo)))))
 
+(defun magit-gh-repo-dashboard--has-auto-sync-p ()
+  "Return non-nil when the repo at point has :auto-sync configured."
+  (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
+    (not (null (magit-gh-repo-auto-sync repo)))))
+
 (defun magit-gh-repo-dashboard--has-commands-p ()
   "Return non-nil when the repo at point has commands registered."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
@@ -2016,6 +2164,10 @@ Returns nil when OUTPUT is not a JSON array."
    ["Manage"
     ("ac"   "Auto-commit"     magit-gh-repo-dashboard-commit
      :inapt-if-not magit-gh-repo-dashboard--has-auto-commit-p)
+    ("sy"   "Sync"            magit-gh-repo-dashboard-sync
+     :inapt-if-not magit-gh-repo-dashboard--has-auto-sync-p)
+    ("et"   "Add tag"         magit-gh-repo-dashboard-add-tag
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("t"    "Compile Project (builder)"  magit-gh-repo-dashboard-builder
      :inapt-if-not magit-gh-repo-dashboard--has-auto-commit-p)
     ("x"   "Run command"     magit-gh-repo-dashboard-run-command
@@ -2035,15 +2187,16 @@ Returns nil when OUTPUT is not a JSON array."
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("mt"   "Toggle mark"       magit-gh-repo-dashboard-toggle-mark
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
-    ("mc"   "Clear marks"       magit-gh-repo-dashboard-unmark-all
+    ("mu"   "Clear marks"       magit-gh-repo-dashboard-unmark-all
      :inapt-if-not magit-gh-repo-dashboard--has-marks-p)
     ("mfa"  "Fetch all/marked"  magit-gh-repo-dashboard-fetch-all)
-    ("mpa"  "Pull all/marked"   magit-gh-repo-dashboard-pull-all)]
+    ("mpa"  "Pull all/marked"   magit-gh-repo-dashboard-pull-all)
+    ("msa"  "Sync all"          magit-gh-repo-dashboard-sync-all)
+    ("mca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
+    ("maa"  "Autosync all"      magit-gh-repo-dashboard-auto-sync)
+    ("mbt"  "Mark by tag"       magit-gh-repo-dashboard-mark-by-tag)]
    ["Dashboard"
     ("mbpr" "Open PR dashboard" magit-gh-pr-dashboard-open)
-    ("ras"  "Autosync"          magit-gh-repo-dashboard-auto-sync)
-    ("C-s"  "Sync all"          magit-gh-repo-dashboard-sync-all)
-    ("rca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
     ("nt"   "Filter by tag"     magit-gh-repo-dashboard-filter-by-tag)
     ("C-t"  "Toggle column"     magit-gh-repo-dashboard-toggle-column)
     ("M-s"  "Toggle submodules" magit-gh-repo-dashboard-toggle-discovered-submodules)

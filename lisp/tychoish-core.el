@@ -1039,10 +1039,8 @@
     '("R" "Fetch PR comments" magit-gh-pr-fetch)))
 
 (use-package magit-gh-repo-dashboard
-  :load-path "lisp"
-  :after (magit-gh magit)
   :bind (:map tychoish/magit-map
-	      ("d" . magit-gh-repo-dashboard-open))
+         ("d" . magit-gh-repo-dashboard-open))
   :commands (magit-gh-repo-dashboard-view magit-gh-pr-dashboard-open))
 
 (use-package smerge-mode

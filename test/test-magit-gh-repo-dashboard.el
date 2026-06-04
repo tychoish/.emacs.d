@@ -19,7 +19,7 @@
 (ert-deftest magit-gh-repo-dashboard/register-adds-to-list ()
   "register creates a struct and prepends it to `magit-gh-repo-list'."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "foo" "/tmp/foo")
+    (magit-gh-repo-register :name "foo" :path "/tmp/foo")
     (should (= 1 (length magit-gh-repo-list)))
     (let ((r (car magit-gh-repo-list)))
       (should (magit-gh-repo-p r))
@@ -29,28 +29,28 @@
 (ert-deftest magit-gh-repo-dashboard/register-expands-path ()
   "register expands the path with `expand-file-name'."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "bar" "~/bar")
+    (magit-gh-repo-register :name "bar" :path "~/bar")
     (should (string-prefix-p "/" (magit-gh-repo-path (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-replaces-existing ()
   "Registering the same name replaces the previous entry."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "dup" "/tmp/dup1")
-    (magit-gh-repo-register "dup" "/tmp/dup2")
+    (magit-gh-repo-register :name "dup" :path "/tmp/dup1")
+    (magit-gh-repo-register :name "dup" :path "/tmp/dup2")
     (should (= 1 (length magit-gh-repo-list)))
     (should (equal "/tmp/dup2" (magit-gh-repo-path (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-multiple ()
   "Multiple distinct names accumulate in the list."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "a" "/tmp/a")
-    (magit-gh-repo-register "b" "/tmp/b")
+    (magit-gh-repo-register :name "a" :path "/tmp/a")
+    (magit-gh-repo-register :name "b" :path "/tmp/b")
     (should (= 2 (length magit-gh-repo-list)))))
 
 (ert-deftest magit-gh-repo-dashboard/register-defaults ()
   "Registering with only name+path yields correct defaults for new fields."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r")
+    (magit-gh-repo-register :name "r" :path "/tmp/r")
     (let ((r (car magit-gh-repo-list)))
       (should (null (magit-gh-repo-include-prs r)))
       (should (null (magit-gh-repo-auto-sync r)))
@@ -63,56 +63,56 @@
 (ert-deftest magit-gh-repo-dashboard/register-worktree ()
   ":worktree t is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :worktree t)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :worktree t)
     (should (eq t (magit-gh-repo-worktree (car magit-gh-repo-list)))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-include-prs-true ()
   ":include-prs t is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :include-prs t)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :include-prs t)
     (should (eq t (magit-gh-repo-include-prs (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-auto-sync-fetch ()
   ":auto-sync 'fetch is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :auto-sync 'fetch)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-sync 'fetch)
     (should (eq 'fetch (magit-gh-repo-auto-sync (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-auto-sync-pull ()
   ":auto-sync 'pull is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :auto-sync 'pull)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-sync 'pull)
     (should (eq 'pull (magit-gh-repo-auto-sync (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-tags ()
   ":tags list of symbols is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :tags '(work personal))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :tags '(work personal))
     (should (equal '(work personal) (magit-gh-repo-tags (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-auto-commit-bool ()
   ":auto-commit t is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :auto-commit t)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-commit t)
     (should (eq t (magit-gh-repo-auto-commit (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-auto-commit-function ()
   ":auto-commit function is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :auto-commit #'ignore)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-commit #'ignore)
     (should (eq #'ignore (magit-gh-repo-auto-commit (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-commands ()
   ":commands alist is stored correctly."
   (let ((magit-gh-repo-list nil)
         (cmds '(("run tests" . my-test-fn) ("lint" . my-lint-fn))))
-    (magit-gh-repo-register "r" "/tmp/r" :commands cmds)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :commands cmds)
     (should (equal cmds (magit-gh-repo-commands (car magit-gh-repo-list))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-sort-hint ()
   ":sort-hint number is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register "r" "/tmp/r" :sort-hint 10)
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :sort-hint 10)
     (should (= 10 (magit-gh-repo-sort-hint (car magit-gh-repo-list))))))
 
 ;;;; magit-gh-repo-dashboard--sorted-repos
@@ -1566,6 +1566,88 @@ A conflict (e.g. \"b\" and \"bp\" coexisting) causes transient to raise
                                  keys)))
          (should (equal nil conflict))))
      keys)))
+
+;;;; Ephemeral tag tests
+
+(ert-deftest magit-gh-repo-dashboard/all-tags-for-permanent-only ()
+  "all-tags-for returns permanent tags when no ephemeral tags exist."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :tags '(work personal))
+    (should (equal '(work personal)
+                   (magit-gh-repo-dashboard--all-tags-for (car magit-gh-repo-list))))))
+
+(ert-deftest magit-gh-repo-dashboard/all-tags-for-combines-ephemeral ()
+  "all-tags-for appends ephemeral tags after permanent ones."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :tags '(work))
+    (puthash "/tmp/r" '(temp) magit-gh-repo-dashboard--ephemeral-tags)
+    (should (equal '(work temp)
+                   (magit-gh-repo-dashboard--all-tags-for (car magit-gh-repo-list))))))
+
+(ert-deftest magit-gh-repo-dashboard/all-tags-for-ephemeral-only ()
+  "all-tags-for returns ephemeral tags for a repo with no permanent tags."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)))
+    (magit-gh-repo-register :name "r" :path "/tmp/r")
+    (puthash "/tmp/r" '(draft) magit-gh-repo-dashboard--ephemeral-tags)
+    (should (equal '(draft)
+                   (magit-gh-repo-dashboard--all-tags-for (car magit-gh-repo-list))))))
+
+(ert-deftest magit-gh-repo-dashboard/permanent-tag-set-collects-all ()
+  "permanent-tag-set returns deduplicated symbols from all repo :tags fields."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)))
+    (magit-gh-repo-register :name "a" :path "/tmp/a" :tags '(work))
+    (magit-gh-repo-register :name "b" :path "/tmp/b" :tags '(work personal))
+    (let ((tags (magit-gh-repo-dashboard--permanent-tag-set)))
+      (should (memq 'work tags))
+      (should (memq 'personal tags))
+      (should (= 2 (length tags))))))
+
+(ert-deftest magit-gh-repo-dashboard/permanent-tag-set-excludes-ephemeral ()
+  "permanent-tag-set does not include ephemeral-only tags."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :tags '(work))
+    (puthash "/tmp/r" '(ephemeral-only) magit-gh-repo-dashboard--ephemeral-tags)
+    (let ((tags (magit-gh-repo-dashboard--permanent-tag-set)))
+      (should (memq 'work tags))
+      (should (null (memq 'ephemeral-only tags))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-tag-table-format ()
+  "build-tag-table returns a dotted alist of (name . annotation) strings."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)))
+    (magit-gh-repo-register :name "alpha" :path "/tmp/a" :tags '(work))
+    (magit-gh-repo-register :name "beta"  :path "/tmp/b" :tags '(work personal))
+    (let* ((table (magit-gh-repo-dashboard--build-tag-table))
+           (work-entry (seq-find (lambda (e) (equal (car e) "work")) table))
+           (personal-entry (seq-find (lambda (e) (equal (car e) "personal")) table)))
+      (should (consp work-entry))
+      (should (string-match-p "2 repos" (cdr work-entry)))
+      (should (consp personal-entry))
+      (should (string-match-p "1 repo:" (cdr personal-entry))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-tag-table-permanent-before-ephemeral ()
+  "build-tag-table lists permanent tags before ephemeral-only tags."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh-repo-dashboard--ephemeral-tags (make-hash-table :test #'equal)))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :tags '(permanent))
+    (puthash "/tmp/r" '(ephemeral) magit-gh-repo-dashboard--ephemeral-tags)
+    (let* ((table (magit-gh-repo-dashboard--build-tag-table))
+           (names (seq-map #'car table)))
+      (should (< (seq-position names "permanent")
+                 (seq-position names "ephemeral"))))))
+
+(ert-deftest magit-gh-repo-dashboard/transient-predicates-include-auto-sync ()
+  "has-auto-sync-p returns nil when no repo is at point."
+  (let ((magit-gh-repo-list nil)
+        (magit-gh--cache (make-hash-table :test #'equal)))
+    (cl-letf (((symbol-function 'tabulated-list-get-id) (lambda () nil))
+              ((symbol-function 'derived-mode-p) (lambda (&rest _) t)))
+      (should (null (magit-gh-repo-dashboard--has-auto-sync-p))))))
 
 (provide 'test-magit-gh-repo-dashboard)
 
