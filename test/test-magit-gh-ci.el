@@ -76,17 +76,6 @@
          (ann (magit-gh-ci--run-annotation run)))
     (should (string-match-p "in_progress" ann))))
 
-;;; magit-gh-ci--branch-slug
-
-(ert-deftest magit-gh-ci/branch-slug-simple ()
-  (should (equal "main" (magit-gh-ci--branch-slug "main"))))
-
-(ert-deftest magit-gh-ci/branch-slug-feature ()
-  (should (equal "feature-my-thing" (magit-gh-ci--branch-slug "feature/my-thing"))))
-
-(ert-deftest magit-gh-ci/branch-slug-uppercase ()
-  (should (equal "fix-bug-123" (magit-gh-ci--branch-slug "Fix/Bug-123"))))
-
 ;;; magit-gh-ci--select-run
 
 (ert-deftest magit-gh-ci/select-run-single ()
@@ -106,29 +95,6 @@
       (let ((result (magit-gh-ci--select-run (list run1 run2))))
         (should called)
         (should (= 2 (map-elt result 'databaseId)))))))
-
-;;; magit-gh-ci--add-file
-
-(ert-deftest magit-gh-ci/add-file-empty ()
-  (let* ((ctx '(:files nil))
-         (ctx2 (magit-gh-ci--add-file ctx "foo.txt" "logs")))
-    (should (equal '((:path "foo.txt" :type "logs"))
-                   (plist-get ctx2 :files)))))
-
-(ert-deftest magit-gh-ci/add-file-accumulates ()
-  (let* ((ctx '(:files ((:path "a.txt" :type "metadata"))))
-         (ctx2 (magit-gh-ci--add-file ctx "b.txt" "logs")))
-    (should (= 2 (length (plist-get ctx2 :files))))))
-
-;;; magit-gh--collect-default-name
-
-(ert-deftest magit-gh-ci/collect-default-name-basic ()
-  (should (equal "ci-main-12345"
-                 (magit-gh--collect-default-name 'ci "main" 12345))))
-
-(ert-deftest magit-gh-ci/collect-default-name-slugifies ()
-  (should (equal "ci-feature-my-thing-99"
-                 (magit-gh--collect-default-name 'ci "feature/my-thing" 99))))
 
 ;;; Pipeline: step-finalize index structure
 

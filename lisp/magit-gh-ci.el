@@ -101,22 +101,6 @@ When RUNS has exactly one entry it is returned directly without prompting."
                    (string-to-number (match-string 1 choice)))))
         (seq-find (lambda (r) (= (map-elt r 'databaseId) id)) sorted)))))
 
-(defun magit-gh-ci--make-error-handler (label)
-  "Return an on-error callback that messages the user for step LABEL."
-  (lambda (output code)
-    (message "magit-gh-ci: %s step failed (exit %d): %s"
-             label code (string-trim output))))
-
-(defun magit-gh-ci--add-file (ctx path type)
-  "Return CTX with a new {:path PATH :type TYPE} entry appended to :files."
-  (plist-put ctx :files
-             (append (plist-get ctx :files)
-                     (list (list :path path :type type)))))
-
-(defun magit-gh-ci--branch-slug (branch)
-  "Return BRANCH lowercased with non-alphanumeric chars replaced by hyphens."
-  (downcase (replace-regexp-in-string "[^a-z0-9]+" "-" branch)))
-
 ;;; Pipeline steps
 
 (defun magit-gh-ci--step-finalize (ctx)
@@ -163,8 +147,8 @@ When RUNS has exactly one entry it is returned directly without prompting."
                (with-temp-file (expand-file-name file (plist-get ctx :dir))
                  (insert output))
                (magit-gh-ci--step-finalize
-                (magit-gh-ci--add-file ctx file "failed-logs"))))
-           (magit-gh-ci--make-error-handler "failed-logs")))
+                (magit-gh--add-file ctx file "failed-logs"))))
+           (magit-gh--make-error-handler "magit-gh-ci" "failed-logs")))
       (magit-gh-ci--step-finalize ctx))))
 
 (defun magit-gh-ci--step-logs (ctx)
@@ -181,8 +165,8 @@ When RUNS has exactly one entry it is returned directly without prompting."
          (with-temp-file (expand-file-name file (plist-get ctx :dir))
            (insert output))
          (magit-gh-ci--step-failed-logs
-          (magit-gh-ci--add-file ctx file "logs"))))
-     (magit-gh-ci--make-error-handler "logs"))))
+          (magit-gh--add-file ctx file "logs"))))
+     (magit-gh--make-error-handler "magit-gh-ci" "logs"))))
 
 (defun magit-gh-ci--step-run-info (ctx)
   "Fetch full run metadata, write run-info.json, then fetch logs."
@@ -196,7 +180,7 @@ When RUNS has exactly one entry it is returned directly without prompting."
      (lambda (output)
        (let* ((run-info (json-parse-string output :object-type 'alist))
               (file     "run-info.json")
-              (slug     (magit-gh-ci--branch-slug
+              (slug     (magit-gh--branch-slug
                          (or (map-elt run-info 'headBranch)
                              (plist-get ctx :branch))))
               (dir      (magit-gh--collect-dir
@@ -207,8 +191,8 @@ When RUNS has exactly one entry it is returned directly without prompting."
          (with-temp-file (expand-file-name file dir)
            (insert output))
          (magit-gh-ci--step-logs
-          (magit-gh-ci--add-file ctx2 file "metadata"))))
-     (magit-gh-ci--make-error-handler "run-info"))))
+          (magit-gh--add-file ctx2 file "metadata"))))
+     (magit-gh--make-error-handler "magit-gh-ci" "run-info"))))
 
 (defun magit-gh-ci--step-list (ctx)
   "List recent CI runs for the current branch and let the user select one."
@@ -229,7 +213,7 @@ When RUNS has exactly one entry it is returned directly without prompting."
                 (run-id (map-elt run 'databaseId)))
            (magit-gh-ci--step-run-info
             (plist-put ctx :run-id run-id)))))
-     (magit-gh-ci--make-error-handler "run-list"))))
+     (magit-gh--make-error-handler "magit-gh-ci" "run-list"))))
 
 ;;; Public API
 

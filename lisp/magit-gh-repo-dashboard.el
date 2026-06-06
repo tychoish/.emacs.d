@@ -55,6 +55,7 @@
 (declare-function agent-shell-switch-project-session "agent-shell-menu")
 (declare-function agent-shell-new-shell "agent-shell")
 (declare-function agent-shell-queue-buffer-open "agent-shell-queue")
+(declare-function magit-gh-bump-submodules-menu "magit-gh-bump-submodules")
 
 ;;;; Repository registry
 
@@ -191,12 +192,12 @@ Returns nil if the repo has no commits yet."
                                         (insert-file-contents head-file)
                                         (buffer-string))))))
     (if-let* ((_ (string-prefix-p "ref: " head))
-	      (ref-path (expand-file-name (concat ".git/" (substring head 5)) path))
+              (ref-path (expand-file-name (concat ".git/" (substring head 5)) path))
               (_ (file-exists-p ref-path)))
         (string-trim (with-temp-buffer
                        (insert-file-contents ref-path)
-                       (buffer-string))))
-      head))
+                       (buffer-string)))
+      head)))
 
 (defun magit-gh-repo-dashboard--collect-stats (repo)
   "Synchronously collect git stats for REPO and store them in the cache.
@@ -1382,6 +1383,7 @@ Signals `user-error' when `magit-gh-repo-list' is empty."
     (define-key m (kbd "C")   #'magit-gh-repo-overview-commit)
     (define-key m (kbd "f")   #'magit-gh-repo-overview-fetch)
     (define-key m (kbd "u")   #'magit-gh-repo-overview-pull)
+    (define-key m (kbd "n")   #'magit-gh-repo-overview-sync)
     (define-key m (kbd "x")   #'magit-gh-repo-overview-run-command)
     (define-key m (kbd "g")   #'magit-gh-repo-overview-refresh)
     (define-key m (kbd "b")   #'magit-gh-repo-overview-visit-buffer)
@@ -1474,6 +1476,20 @@ Signals `user-error' when :auto-commit is not configured for this repo."
           (magit-gh-repo-overview-refresh))
       (message "magit-gh: nothing to commit or commit failed in %s"
                (magit-gh-repo-name repo)))))
+
+(defun magit-gh-repo-overview-sync ()
+  "Run the auto-sync operation for this overview's repository asynchronously.
+Signals `user-error' when :auto-sync is not configured for this repo."
+  (interactive)
+  (let ((repo (magit-gh-repo-overview--current-repo)))
+    (unless (magit-gh-repo-auto-sync repo)
+      (user-error "Auto-sync is not configured for %s" (magit-gh-repo-name repo)))
+    (magit-gh-repo-dashboard--dispatch-sync-op
+     repo
+     (lambda (status &optional error-text)
+       (magit-gh-repo-dashboard--log-operation
+        (magit-gh-repo-name repo) "sync" status error-text)
+       (magit-gh-repo-overview-refresh)))))
 
 (defun magit-gh-repo-overview-stage-all ()
   "Stage all changes in the current overview's repository."
@@ -2027,6 +2043,11 @@ Returns nil when OUTPUT is not a JSON array."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
     (not (null (magit-gh-repo-auto-commit repo)))))
 
+(defun magit-gh-repo-overview--has-auto-sync-p ()
+  "Return non-nil when this overview's repository has :auto-sync configured."
+  (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
+    (not (null (magit-gh-repo-auto-sync repo)))))
+
 (defun magit-gh-repo-overview--has-commands-p ()
   "Return non-nil when this overview's repository has commands registered."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
@@ -2171,7 +2192,9 @@ Returns nil when OUTPUT is not a JSON array."
     ("t"    "Compile Project (builder)"  magit-gh-repo-dashboard-builder
      :inapt-if-not magit-gh-repo-dashboard--has-auto-commit-p)
     ("x"   "Run command"     magit-gh-repo-dashboard-run-command
-     :inapt-if-not magit-gh-repo-dashboard--has-commands-p)]
+     :inapt-if-not magit-gh-repo-dashboard--has-commands-p)
+    ("sb"  "Bump submodules..." magit-gh-bump-submodules-menu
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)]
    ["Build & Shell"
     ("as"   "Agent shell (project)"      magit-gh-repo-dashboard-agent-shell
      :inapt-if-not agent-shell-extras--same-project-buffers)
@@ -2233,7 +2256,14 @@ Returns nil when OUTPUT is not a JSON array."
      :if magit-gh-repo-overview--has-commands-p)
     ("mp"   "Prune branches"  magit-gh-repo-overview-prune-branches)
     ("mc"   "Auto-commit"     magit-gh-repo-overview-commit
-     :if magit-gh-repo-overview--has-auto-commit-p)]
+     :if magit-gh-repo-overview--has-auto-commit-p)
+    ("sy"   "Sync"            magit-gh-repo-overview-sync
+     :if magit-gh-repo-overview--has-auto-sync-p)
+    ("sb"  "Bump submodules..." magit-gh-bump-submodules-menu)]
+   ["Batch"
+    ("mca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
+    ("msa"  "Sync all"          magit-gh-repo-dashboard-sync-all)
+    ("maa"  "Autosync all"      magit-gh-repo-dashboard-auto-sync)]
    ["Agent Shell"
     ("as"   "Agent shell (project)"  magit-gh-repo-overview-agent-shell
      :if agent-shell-extras--same-project-buffers)

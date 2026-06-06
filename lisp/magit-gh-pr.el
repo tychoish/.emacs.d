@@ -37,22 +37,6 @@
 
 ;;; Internal helpers
 
-(defun magit-gh-pr--make-error-handler (label)
-  "Return an on-error callback that messages the user for step LABEL."
-  (lambda (output code)
-    (message "magit-gh-pr: %s step failed (exit %d): %s"
-             label code (string-trim output))))
-
-(defun magit-gh-pr--add-file (ctx path type)
-  "Return CTX with a new {:path PATH :type TYPE} entry appended to :files."
-  (plist-put ctx :files
-             (append (plist-get ctx :files)
-                     (list (list :path path :type type)))))
-
-(defun magit-gh-pr--branch-slug (branch)
-  "Return BRANCH lowercased with non-alphanumeric chars replaced by hyphens."
-  (downcase (replace-regexp-in-string "[^a-z0-9]+" "-" branch)))
-
 (defun magit-gh-pr--parse-threads (graphql-response)
   "Extract thread summaries from GRAPHQL-RESPONSE alist.
 Returns a list of plists :id :resolved :path :creator :last-commentor.
@@ -151,8 +135,8 @@ Returns a list of plists :id :resolved :path :creator :last-commentor.
          (with-temp-file (expand-file-name file (plist-get ctx :dir))
            (insert output))
          (magit-gh-pr--step-finalize
-          (magit-gh-pr--add-file ctx file "issue-comments"))))
-     (magit-gh-pr--make-error-handler "issue-comments"))))
+          (magit-gh--add-file ctx file "issue-comments"))))
+     (magit-gh--make-error-handler "magit-gh-pr" "issue-comments"))))
 
 (defun magit-gh-pr--step-threads (ctx)
   "Fetch review threads via GraphQL, write pr-review-threads.json."
@@ -177,10 +161,10 @@ Returns a list of plists :id :resolved :path :creator :last-commentor.
          (with-temp-file (expand-file-name file (plist-get ctx :dir))
            (insert output))
          (magit-gh-pr--step-comments
-          (magit-gh-pr--add-file
+          (magit-gh--add-file
            (plist-put ctx :threads threads)
            file "review-threads"))))
-     (magit-gh-pr--make-error-handler "review-threads"))))
+     (magit-gh--make-error-handler "magit-gh-pr" "review-threads"))))
 
 (defun magit-gh-pr--step-info (ctx)
   "Fetch PR metadata, write pr-info.json, then continue to threads."
@@ -200,7 +184,7 @@ Returns a list of plists :id :resolved :path :creator :last-commentor.
               (pr-num   (map-elt pr-info 'number))
               (branch   (or (map-elt pr-info 'headRefName)
                             (plist-get ctx :branch)))
-              (slug     (magit-gh-pr--branch-slug branch))
+              (slug     (magit-gh--branch-slug branch))
               (dir      (magit-gh--collect-dir
                          (plist-get ctx :root) 'pr slug pr-num))
               (file     "pr-info.json")
@@ -211,8 +195,8 @@ Returns a list of plists :id :resolved :path :creator :last-commentor.
          (with-temp-file (expand-file-name file dir)
            (insert output))
          (magit-gh-pr--step-threads
-          (magit-gh-pr--add-file ctx2 file "metadata"))))
-     (magit-gh-pr--make-error-handler "pr-info"))))
+          (magit-gh--add-file ctx2 file "metadata"))))
+     (magit-gh--make-error-handler "magit-gh-pr" "pr-info"))))
 
 ;;; Public API
 

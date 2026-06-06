@@ -105,29 +105,6 @@
          (ht (magit-gh-pr--thread-table th)))
     (should (eq :false (gethash "resolved" ht)))))
 
-;;; magit-gh-pr--branch-slug
-
-(ert-deftest magit-gh-pr/branch-slug-simple ()
-  (should (equal "main" (magit-gh-pr--branch-slug "main"))))
-
-(ert-deftest magit-gh-pr/branch-slug-slash ()
-  (should (equal "fix-the-thing" (magit-gh-pr--branch-slug "fix/the-thing"))))
-
-(ert-deftest magit-gh-pr/branch-slug-uppercase ()
-  (should (equal "feature-foo-123" (magit-gh-pr--branch-slug "Feature/Foo-123"))))
-
-;;; magit-gh-pr--add-file
-
-(ert-deftest magit-gh-pr/add-file-empty ()
-  (let* ((ctx '(:files nil))
-         (ctx2 (magit-gh-pr--add-file ctx "pr-info.json" "metadata")))
-    (should (equal '((:path "pr-info.json" :type "metadata"))
-                   (plist-get ctx2 :files)))))
-
-(ert-deftest magit-gh-pr/add-file-accumulates ()
-  (let* ((ctx '(:files ((:path "pr-info.json" :type "metadata"))))
-         (ctx2 (magit-gh-pr--add-file ctx "pr-review-threads.json" "review-threads")))
-    (should (= 2 (length (plist-get ctx2 :files))))))
 
 ;;; has_unresolved_threads derivation
 

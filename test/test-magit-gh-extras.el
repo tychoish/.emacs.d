@@ -110,8 +110,7 @@
 (defun magit-gh-extras-test--make-pr-table (alist)
   "Build a hash table of branch→pr-alist from ALIST for use in scan mocks."
   (let ((table (make-hash-table :test #'equal)))
-    (pcase-dolist (`(,branch . ,pr) alist)
-      (puthash branch pr table))
+    (seq-do (lambda (pair) (puthash (car pair) (cdr pair) table)) alist)
     table))
 
 (ert-deftest magit-gh-extras/scan-collects-closed-prs ()
@@ -221,7 +220,7 @@
                (lambda (branches &optional _)
                  (setq deleted (append deleted branches))))
               ((symbol-function 'read-char-choice)
-               (lambda (&rest _) (cl-incf calls) (if (= calls 1) ?y ?q)))
+               (lambda (&rest _) (setq calls (1+ calls)) (if (= calls 1) ?y ?q)))
               ((symbol-function 'magit-gh--prune-scan)
                (lambda () nil)))
       (let ((result (magit-gh--prune-delete-branches '("a" "b" "c") "/tmp/r" t)))
@@ -238,7 +237,7 @@
                (lambda (branches &optional _)
                  (setq deleted (append deleted branches))))
               ((symbol-function 'read-char-choice)
-               (lambda (&rest _) (cl-incf calls) ?!))
+               (lambda (&rest _) (setq calls (1+ calls)) ?!))
               ((symbol-function 'magit-gh--prune-scan)
                (lambda () nil)))
       (let ((result (magit-gh--prune-delete-branches '("a" "b" "c") "/tmp/r" t)))
@@ -253,7 +252,7 @@
         (magit-gh--cache (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'magit-branch-delete) (lambda (&rest _) nil))
               ((symbol-function 'magit-gh--prune-scan)
-               (lambda () (cl-incf scanned) (setq scanned-in-path (magit-gh--repo-dir)) nil))
+               (lambda () (setq scanned (1+ scanned)) (setq scanned-in-path (magit-gh--repo-dir)) nil))
               ((symbol-function 'magit-gh--repo-dir) (lambda () "/tmp/r")))
       (magit-gh--prune-delete-branches '("a") "/tmp/r" nil)
       (should (= 1 scanned))
@@ -321,7 +320,7 @@
   (let ((scanned 0)
         (magit-gh--cache (make-hash-table :test #'equal)))
     (cl-letf (((symbol-function 'magit-gh--prune-scan)
-               (lambda () (cl-incf scanned) nil)))
+               (lambda () (setq scanned (1+ scanned)) nil)))
       (magit-gh--cache-set "/tmp/r" :prune-state (list :candidates nil :marked nil))
       (magit-gh--prune-dispatch "refresh" "/tmp/r")
       (should (= 1 scanned)))))
@@ -428,5 +427,136 @@
     (magit-gh--cache-set "/tmp/r" :prune-state (list :candidates nil :marked nil))
     (should-error (magit-gh--prune-dispatch "bogus" "/tmp/r")
                   :type 'user-error)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; magit-gh--cache-get, magit-gh--cache-set, magit-gh--cache-remove
+
+(ert-deftest magit-gh-extras/cache-set-and-get ()
+  "set stores a value; get retrieves it."
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/r" :foo "bar")
+    (should (equal "bar" (magit-gh--cache-get "/tmp/r" :foo)))))
+
+(ert-deftest magit-gh-extras/cache-get-missing-key ()
+  "get returns nil for a key that was never set."
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/r" :x 1)
+    (should (null (magit-gh--cache-get "/tmp/r" :y)))))
+
+(ert-deftest magit-gh-extras/cache-remove-key ()
+  "remove with a key deletes only that key."
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/r" :a 1)
+    (magit-gh--cache-set "/tmp/r" :b 2)
+    (magit-gh--cache-remove "/tmp/r" :a)
+    (should (null (magit-gh--cache-get "/tmp/r" :a)))
+    (should (= 2 (magit-gh--cache-get "/tmp/r" :b)))))
+
+(ert-deftest magit-gh-extras/cache-remove-all ()
+  "remove without a key deletes all data for the repo."
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/r" :x 99)
+    (magit-gh--cache-remove "/tmp/r")
+    (should (null (magit-gh--cache-get "/tmp/r" :x)))))
+
+(ert-deftest magit-gh-extras/cache-isolated-by-path ()
+  "Different repo paths have independent cache entries."
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (magit-gh--cache-set "/tmp/a" :k "a-value")
+    (magit-gh--cache-set "/tmp/b" :k "b-value")
+    (should (equal "a-value" (magit-gh--cache-get "/tmp/a" :k)))
+    (should (equal "b-value" (magit-gh--cache-get "/tmp/b" :k)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; magit-gh--add-file
+
+(ert-deftest magit-gh-extras/add-file-empty ()
+  "Adding to empty :files list produces a single-entry list."
+  (let* ((ctx '(:files nil))
+         (ctx2 (magit-gh--add-file ctx "pr-info.json" "metadata")))
+    (should (equal '((:path "pr-info.json" :type "metadata"))
+                   (plist-get ctx2 :files)))))
+
+(ert-deftest magit-gh-extras/add-file-accumulates ()
+  "Each add-file appends; order is preserved."
+  (let* ((ctx '(:files nil))
+         (ctx2 (magit-gh--add-file ctx "a.json" "x"))
+         (ctx3 (magit-gh--add-file ctx2 "b.json" "y")))
+    (should (= 2 (length (plist-get ctx3 :files))))
+    (should (equal "a.json" (plist-get (nth 0 (plist-get ctx3 :files)) :path)))
+    (should (equal "b.json" (plist-get (nth 1 (plist-get ctx3 :files)) :path)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; magit-gh--branch-slug
+
+(ert-deftest magit-gh-extras/branch-slug-simple ()
+  (should (equal "main" (magit-gh--branch-slug "main"))))
+
+(ert-deftest magit-gh-extras/branch-slug-slash ()
+  (should (equal "fix-the-thing" (magit-gh--branch-slug "fix/the-thing"))))
+
+(ert-deftest magit-gh-extras/branch-slug-uppercase ()
+  (should (equal "feature-foo-123" (magit-gh--branch-slug "Feature/Foo-123"))))
+
+(ert-deftest magit-gh-extras/branch-slug-multiple-separators ()
+  "Consecutive non-alphanumeric chars collapse to a single hyphen."
+  (should (equal "a-b" (magit-gh--branch-slug "a_/_b"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; magit-gh--make-error-handler
+
+(ert-deftest magit-gh-extras/make-error-handler-formats-message ()
+  "The returned lambda emits a correctly formatted message."
+  (let (msg)
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args) (setq msg (apply #'format fmt args)))))
+      (let ((handler (magit-gh--make-error-handler "magit-gh-test" "my-step")))
+        (funcall handler "oops\n" 1)))
+    (should (string-match-p "magit-gh-test" msg))
+    (should (string-match-p "my-step" msg))
+    (should (string-match-p "exit 1" msg))
+    (should (string-match-p "oops" msg))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; magit-gh--index-table, magit-gh--file-table, magit-gh--write-index
+
+(ert-deftest magit-gh-extras/index-table-basic ()
+  "index-table builds a hash-table from alternating key-value pairs."
+  (let ((ht (magit-gh--index-table "type" "ci" "count" 3)))
+    (should (equal "ci" (gethash "type" ht)))
+    (should (= 3 (gethash "count" ht)))))
+
+(ert-deftest magit-gh-extras/file-table-basic ()
+  "file-table builds a two-key hash-table."
+  (let ((ht (magit-gh--file-table "run-info.json" "metadata")))
+    (should (equal "run-info.json" (gethash "path" ht)))
+    (should (equal "metadata" (gethash "type" ht)))))
+
+(ert-deftest magit-gh-extras/write-index-json ()
+  "write-index writes valid JSON to index.json inside DIR."
+  (let ((dir (make-temp-file "magit-gh-extras-test" t)))
+    (unwind-protect
+        (let ((data (magit-gh--index-table "type" "test" "n" 7)))
+          (magit-gh--write-index dir data)
+          (let* ((file (expand-file-name "index.json" dir))
+                 (raw (with-temp-buffer
+                        (insert-file-contents file)
+                        (buffer-string)))
+                 (parsed (json-parse-string raw :object-type 'alist)))
+            (should (file-exists-p file))
+            (should (equal "test" (map-elt parsed 'type)))
+            (should (= 7 (map-elt parsed 'n)))))
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; magit-gh--collect-default-name
+
+(ert-deftest magit-gh-extras/collect-default-name-basic ()
+  (should (equal "ci-main-12345"
+                 (magit-gh--collect-default-name 'ci "main" 12345))))
+
+(ert-deftest magit-gh-extras/collect-default-name-slugifies ()
+  (should (equal "ci-feature-my-thing-99"
+                 (magit-gh--collect-default-name 'ci "feature/my-thing" 99))))
 
 ;;; test-magit-gh-extras.el ends here
