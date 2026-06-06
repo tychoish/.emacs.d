@@ -542,15 +542,11 @@
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
   :commands (vertico-mode vertico-multiform-mode)
   :init
+  (add-hook 'vertico-mode-hook #'vertico-multiform-mode)
   (add-lazy-init
    :name "<core> vertico primary"
    :delay 0.5
    :operation 'vertico-mode)
-
-  (add-lazy-init
-   :name "<core> vertico multiform"
-   :delay 2
-   :operation 'vertico-multiform-mode)
 
   (setq vertico-resize t)
   (setq vertico-count 25)
@@ -1052,7 +1048,9 @@
 (use-package magit-gh-repo-dashboard
   :bind (:map tychoish/magit-map
               ("d" . magit-gh-repo-dashboard-open))
-  :commands (magit-gh-repo-dashboard-view magit-gh-pr-dashboard-open))
+  :commands (magit-gh-repo-dashboard-view magit-gh-pr-dashboard-open)
+  :config
+  (require 'magit-gh-bump-submodules))
 
 (use-package smerge-mode
   :after (magit)
@@ -2654,10 +2652,8 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell
   :ensure t
-  :after (shell-maker)
   :delight ((agent-shell-completion-mode "")
 	    (agent-shell-ui-mode ""))
-  :hook ((agent-shell-viewport-edit-mode . agent-shell-corfu-setup))
   :init
   (bind-keys
    :map tychoish/robot-map
@@ -2665,19 +2661,10 @@ Useful after changing `eglot-workspace-configuration' or
    :prefix-map tychoish/robot-agent-shell-map
    ("o" . agent-shell)
    ("t" . agent-shell-toggle)
-   ("RET" . agent-shell-submit)
-   ("C-g" . agent-shell-interrupt)
-   ("m" . execute-extended-agent-shell-command)
-   ("r" . agent-shell-rename-buffer)
-   ("e" . agent-shell-jump-to-latest-permission-button-row)
    ("b" . agent-shell-switch-buffer)
-   ("a" . agent-shell-select-action)
-   ("f" . agent-shell-select-collapse)
-   ("p" . agent-shell-resolve-permission)
-   ("c" . agent-shell-select-command)
    ("n" . agent-shell-new-shell)
-   ("w" . agent-shell-new-worktree-shell)
-   ("t" . agent-shell-new-temp-shell)
+   ("T" . agent-shell-new-temp-shell)
+   ("W" . agent-shell-new-worktree-shell)
    ("V" . tychoish/agent-shell-toggle-terse-output))
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
@@ -2763,15 +2750,7 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-<tab>" . agent-shell-next-item)
    ("S-SPC" . agent-shell-cycle-session-mode))
 
-  (with-eval-after-load 'agent-shell-viewport
-    (bind-keys
-     :map agent-shell-viewport-view-mode-map
-     ("C-c TAB" . agent-shell-select-collapse)
-     ("C-<tab>" . agent-shell-viewport-next-item)
-     ("S-SPC" . agent-shell-viewport-cycle-session-mode)))
-
   (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
-  (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-corfu-setup)
 
   (defun ad:agent-shell--refresh-session-title (orig-fn &optional event)
     (let ((agent-name (map-nested-elt agent-shell--state '(:agent-config :mode-line-name)))
@@ -2798,7 +2777,7 @@ Useful after changing `eglot-workspace-configuration' or
   (agent-shell-mode-key "x" execute-extended-agent-shell-command)
   (agent-shell-mode-key "f" agent-shell-select-collapse)
   (agent-shell-mode-key "c" agent-shell-select-command)
-  (agent-shell-mode-key "m" agent-shell-global-menu)
+  (agent-shell-mode-key "m" agent-shell-dispatch)
   (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
   (agent-shell-mode-key "q" agent-shell-queue-buffer-open))
 
@@ -2829,18 +2808,13 @@ Useful after changing `eglot-workspace-configuration' or
              agent-shell-queue-item-menu)
   :init
   (defvar-keymap tychoish/robot-agent-shell-map)
-  (make-read-extended-command-for-prefix "agent-shell-queue"
-    :bind-map tychoish/robot-agent-shell-map
-    :bind-key "q")
   :config
   (bind-keys
    :map agent-shell-queue-mode-map
    ("C-c j" . tychoish/robot-agent-shell-map)
    :map tychoish/robot-agent-shell-map
-   ("." . agent-shell-queue-menu)
-   ("/" . agent-shell-queue-capture)
-   ("P" . agent-shell-queue-pause)
-   ("-" . agent-shell-queue-edit-task))
+   ("q" . agent-shell-queue-buffer-open)
+   ("/" . agent-shell-queue-capture))
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
@@ -2894,7 +2868,7 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package agent-shell-manager
   :load-path "elpa/agent-shell-manager"
   :after (agent-shell)
-  :commands (agent-shell-manager-toggle)
+  :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
   :bind (:map tychoish/robot-agent-shell-map
 	      ("," . agent-shell-manager-toggle))
   :config
