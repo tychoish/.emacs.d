@@ -56,6 +56,7 @@
 (declare-function agent-shell-new-shell "agent-shell")
 (declare-function agent-shell-queue-buffer-open "agent-shell-queue")
 (declare-function magit-gh-bump-submodules-menu "magit-gh-bump-submodules")
+(declare-function agent-shell-menu-project-buffers "agent-shell-menu")
 
 ;;;; Repository registry
 
@@ -2289,7 +2290,7 @@ Returns nil when OUTPUT is not a JSON array."
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)]
    ["Build & Shell"
     ("as"   "Agent shell (project)"      magit-gh-repo-dashboard-agent-shell
-     :inapt-if-not agent-shell-extras--same-project-buffers)
+     :inapt-if-not agent-shell-menu-project-buffers)
     ("an"   "New agent shell"            magit-gh-repo-dashboard-agent-shell-new)
     ("aq"   "Agent shell queue"          magit-gh-repo-dashboard-agent-shell-queue)]
    ["Worktree"
@@ -2363,7 +2364,7 @@ Returns nil when OUTPUT is not a JSON array."
     ("maa"  "Autosync all"      magit-gh-repo-dashboard-auto-sync)]
    ["Agent Shell"
     ("as"   "Agent shell (project)"  magit-gh-repo-overview-agent-shell
-     :if agent-shell-extras--same-project-buffers)
+     :if agent-shell-menu-project-buffers)
     ("an"   "New agent shell"        magit-gh-repo-overview-agent-shell-new)
     ("aq"   "Agent shell queue"      magit-gh-repo-overview-agent-shell-queue)]
    ["Worktree"
