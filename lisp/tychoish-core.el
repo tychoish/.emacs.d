@@ -210,7 +210,7 @@
       (buffer-list))))
 
 (use-package annotated-completing-read
-  :load-path "elpa/annotated-completing-read"
+  :load-path "external/annotated-completing-read"
   :commands (annotated-completing-read
 	     annotated-completing-read-directory))
 
@@ -2238,7 +2238,6 @@ Useful after changing `eglot-workspace-configuration' or
 	     google-gemini-model-info))
 
 (use-package gptel
-  :load-path "elpa/gptel"
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands (gptel gptel-rewrite)
   :init
@@ -2351,13 +2350,11 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
-  :load-path "elpa/gptel-aibo-20250709.851"
   :bind (:map tychoish/robot-gptel-map
 	      ("w" . gptel-aibo-summon))
   :commands (gptel-aibo-summon gptel-aibo))
 
 (use-package gptel-agent
-  :load-path "elpa/gptel-agent-20260308.2122"
   :after (gptel)
   :commands (gptel-agent)
   :init
@@ -2527,7 +2524,7 @@ Useful after changing `eglot-workspace-configuration' or
    :weak-model "github_copilot/claude-haiku-4.5"))
 
 (use-package claude-code-ide
-  :load-path "elpa/claude-code-ide"
+  :load-path "external/claude-code-ide"
   ;; :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
   :bind (:map tychoish/robot-claude-code-ide-map
 	      ("l" . claude-code-ide-list-sessions)
@@ -2590,7 +2587,7 @@ Useful after changing `eglot-workspace-configuration' or
     :bind-key "m"))
 
 (use-package efrit
-  :load-path "elpa/efrit/lisp"
+  :load-path "external/efrit/lisp"
   :bind (:map tychoish/robot-map
 	      :prefix "e"
 	      :prefix-map tychoish/robot-efrit-map
@@ -2766,8 +2763,8 @@ Useful after changing `eglot-workspace-configuration' or
   (tychoish/agent-shell--apply-environment))
 
 (use-package agent-shell-menu
-  :load-path "elpa/agent-shell-menu"
-  :after (agent-shell)
+  :load-path "external/agent-shell-queue"
+  :after (agent-shell agent-shell-queue)
   :demand t
   :config
   (agent-shell-mode-key "?" agent-shell-resolve-permission)
@@ -2782,7 +2779,7 @@ Useful after changing `eglot-workspace-configuration' or
   (agent-shell-mode-key "q" agent-shell-queue-buffer-open))
 
 (use-package agent-shell-queue
-  :load-path "elpa/agent-shell-queue"
+  :load-path "external/agent-shell-queue"
   :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
          (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
   :commands (agent-shell-queue-buffer-open
@@ -2866,7 +2863,7 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-queue-show-ordinal-column nil))
 
 (use-package agent-shell-manager
-  :load-path "elpa/agent-shell-manager"
+  :load-path "external/agent-shell-manager"
   :after (agent-shell)
   :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
   :bind (:map tychoish/robot-agent-shell-map
@@ -2882,22 +2879,8 @@ Useful after changing `eglot-workspace-configuration' or
   (add-to-list 'mode-line-misc-info '(:eval (format " [%s]" (sprite--mode-line-string))))
   (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
 
-(use-package agent-shell-workspace
-  :load-path "elpa/agent-shell-workspace"
-  :after (agent-shell)
-  :commands (agent-shell-workspace-toggle)
-  :bind (:map tychoish/robot-agent-shell-map
-	      ("w" . agent-shell-workspace-toggle)))
-
-(use-package agent-review
-  :load-path "elpa/agent-review"
-  :after (agent-shell)
-  :commands (agent-review)
-  :bind (:map tychoish/robot-agent-shell-map
-	      ("v" . agent-review)))
-
 (use-package agent-shell-notifications
-  :load-path "elpa/agent-shell-notifications"
+  :load-path "external/agent-shell-notifications"
   :after (agent-shell alert)
   :delight (agent-shell-notifications-mode "")
   :hook ((agent-shell-mode . agent-shell-notifications-mode)
@@ -2951,39 +2934,6 @@ call-site that has access to SHELL-BUFFER."
   (advice-add 'agent-shell-notifications--make-notification-plist :around
 	      #'tychoish/agent-shell-notifications--add-buffer-name)
   (setq agent-shell-notifications-timeout 30))
-
-(use-package meta-agent-shell
-  :load-path "elpa/meta-agent-shell"
-  :after (agent-shell)
-  :commands (meta-agent-shell-start
-	     meta-agent-shell-jump-to-dispatcher
-	     meta-agent-shell-start-dispatcher
-	     meta-agent-shell-heartbeat-start
-	     meta-agent-shell-heartbeat-stop
-	     meta-agent-shell-big-red-button)
-  :bind (:map tychoish/robot-agent-shell-map
-	      ("M-s" . meta-agent-shell-start)
-	      ("d" . meta-agent-shell-jump-to-dispatcher)
-	      ("!" . meta-agent-shell-big-red-button))
-  :config
-  (setq meta-agent-shell-heartbeat-file (sprite-state-path "meta-agent-shell-heartbeat.org"))
-  (setq meta-agent-shell-start-function #'agent-shell))
-
-(use-package beads
-  ;; :vc (:url "https://codeberg.org/ctietze/beads.el" :rev :newest)
-  :load-path "elpa/beads"
-  :commands (beads-list beads-menu beads-create-issue)
-  :init
-  (bind-keys
-   :map tychoish/robot-map
-   :prefix "b"
-   :prefix-map tychoish/robot-beads-map
-   ("l" . beads-list)
-   ("n" . beads-create-issue)
-   ("m" . beads-menu))
-  (make-read-extended-command-for-prefix "beads"
-    :bind-map tychoish/robot-beads-map
-    :bind-key "x"))
 
 (use-package uuidgen
   :ensure t
