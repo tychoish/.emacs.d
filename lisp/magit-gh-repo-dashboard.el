@@ -2252,17 +2252,17 @@ Returns nil when OUTPUT is not a JSON array."
      :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
     ("D"   "Diff…"           magit-gh-repo-dashboard-magit-diff-full
      :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
-    ("lc"   "Log (current)"   magit-gh-repo-dashboard-magit-log
+    ("lc"   "Log (current)"  magit-gh-repo-dashboard-magit-log
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
-    ("lf"   "Log…"            magit-gh-repo-dashboard-magit-log-full
+    ("lf"   "Log…"           magit-gh-repo-dashboard-magit-log-full
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
-    ("C-c"    "Commit"          magit-gh-repo-dashboard-magit-commit
+    ("C-c"    "Commit"       magit-gh-repo-dashboard-magit-commit
      :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
-    ("sa"   "Stage all"       magit-gh-repo-dashboard-stage-all
+    ("sa"   "Stage all"      magit-gh-repo-dashboard-stage-all
      :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
-    ("fr"   "Fetch"            magit-gh-repo-dashboard-fetch
+    ("fr"   "Fetch"          magit-gh-repo-dashboard-fetch
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
-    ("rp"   "Pull"             magit-gh-repo-dashboard-pull
+    ("rp"   "Pull"            magit-gh-repo-dashboard-pull
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("rs"   "Push (repo send)" magit-gh-repo-dashboard-push
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-ahead-p)]
