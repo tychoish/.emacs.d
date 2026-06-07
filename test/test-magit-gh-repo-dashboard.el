@@ -1652,3 +1652,355 @@ A conflict (e.g. \"b\" and \"bp\" coexisting) causes transient to raise
 (provide 'test-magit-gh-repo-dashboard)
 
 ;;; test-magit-gh-repo-dashboard.el ends here
+
+;;;; Cache reset and rendering (regression tests)
+
+(ert-deftest magit-gh-repo-dashboard/cache-reset-rendering ()
+  "Regression: rendering after cache reset should not fail.
+Simulates the user's issue where a cache reset caused rendering problems."
+  (let* ((repo (magit-gh-repo--make :name "test" :path "/tmp/test"))
+         (magit-gh-repo-list (list repo))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (build-entry-called nil))
+    ;; Pre-populate cache with valid stats
+    (magit-gh--cache-set "/tmp/test" :stats
+                         (list :branch "main"
+                               :remote-origin "git@github.com:user/test.git"
+                               :behind 0
+                               :ahead 0
+                               :dirty nil
+                               :uncommitted-files nil
+                               :fetch-age 3600.0
+                               :head-hash "abc123"
+                               :recent-log "abc123 initial commit"))
+    ;; Reset cache (this is what user did)
+    (clrhash magit-gh--cache)
+    ;; Mock git functions to return valid data
+    (cl-letf (((symbol-function 'magit-git-string)
+               (lambda (&rest args)
+                 (cond
+                  ((member "branch" args) "main")
+                  ((member "rev-list" args) "0")
+                  (t nil))))
+              ((symbol-function 'magit-get)
+               (lambda (&rest _) "git@github.com:user/test.git"))
+              ((symbol-function 'magit-git-lines)
+               (lambda (&rest args)
+                 (cond
+                  ((member "status" args) nil)
+                  ((member "log" args) '("abc123 initial commit"))
+                  (t nil))))
+              ((symbol-function 'magit-gh-repo-dashboard--fetch-age)
+               (lambda (_) 3600.0))
+              ((symbol-function 'magit-gh-repo-dashboard--head-hash)
+               (lambda (_) "abc123"))
+              ((symbol-function 'magit-gh-repo-dashboard--build-entry)
+               (lambda (r)
+                 (setq build-entry-called t)
+                 ;; Call the real function to test it
+                 (let* ((stats (magit-gh-repo-dashboard--get-stats r))
+                        (active '(name branch fetched status worktree)))
+                   ;; Verify stats are valid
+                   (should (plist-get stats :branch))
+                   (should (plist-get stats :head-hash))
+                   ;; Return a minimal valid entry
+                   (list r (vector "test" "main" "1h" "" "REPO")))))
+              ((symbol-function 'tabulated-list-print) (lambda (&rest _) nil))
+              ((symbol-function 'tabulated-list-init-header) (lambda () nil)))
+      (with-temp-buffer
+        (magit-gh-repo-dashboard-mode)
+        ;; This should not fail even though cache is empty
+        (magit-gh-repo-dashboard-refresh)
+        (should build-entry-called)))))
+
+(ert-deftest magit-gh-repo-dashboard/cache-reset-all-repopulates ()
+  "cache-reset-all should repopulate stats for all repos."
+  (let* ((r1 (magit-gh-repo--make :name "r1" :path "/tmp/r1"))
+         (r2 (magit-gh-repo--make :name "r2" :path "/tmp/r2"))
+         (magit-gh-repo-list (list r1 r2))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (collect-calls nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--collect-stats)
+               (lambda (repo)
+                 (push (magit-gh-repo-name repo) collect-calls)
+                 (list :branch "main" :dirty nil :head-hash "abc123"
+                       :behind 0 :ahead 0 :uncommitted-files nil
+                       :fetch-age 60.0 :recent-log "")))
+              ((symbol-function 'magit-gh-repo-dashboard--discover-worktrees)
+               (lambda () nil))
+              ((symbol-function 'magit-gh-repo-dashboard--discover-submodules)
+               (lambda () nil))
+              ((symbol-function 'magit-gh-repo-dashboard-refresh)
+               (lambda () nil)))
+      (magit-gh-repo-dashboard-cache-reset-all)
+      ;; Should have collected stats for both repos
+      (should (= 2 (length collect-calls)))
+      (should (member "r1" collect-calls))
+      (should (member "r2" collect-calls))
+      ;; Cache should now have stats
+      (should (magit-gh--cache-get "/tmp/r1" :stats))
+      (should (magit-gh--cache-get "/tmp/r2" :stats)))))
+
+(ert-deftest magit-gh-repo-dashboard/cache-diagnose-finds-missing-stats ()
+  "cache-diagnose should detect repos with missing stats."
+  (let* ((repo (magit-gh-repo--make :name "r1" :path "/tmp/r1"))
+         (magit-gh-repo-list (list repo))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (messages nil))
+    ;; No stats in cache
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages)))
+              ((symbol-function 'pop-to-buffer) (lambda (_) nil))
+              ((symbol-function 'view-mode) (lambda (_) nil)))
+      (magit-gh-repo-dashboard-cache-diagnose)
+      ;; Should report 1 warning
+      (should (seq-some (lambda (msg) (string-match-p "1 warning" msg)) messages)))))
+
+(ert-deftest magit-gh-repo-dashboard/cache-diagnose-finds-malformed-stats ()
+  "cache-diagnose should detect stats missing required fields."
+  (let* ((repo (magit-gh-repo--make :name "r1" :path "/tmp/r1"))
+         (magit-gh-repo-list (list repo))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (messages nil))
+    ;; Add malformed stats (missing :head-hash)
+    (magit-gh--cache-set "/tmp/r1" :stats (list :branch "main" :dirty nil))
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages)))
+              ((symbol-function 'pop-to-buffer) (lambda (_) nil))
+              ((symbol-function 'view-mode) (lambda (_) nil)))
+      (magit-gh-repo-dashboard-cache-diagnose)
+      ;; Should report errors
+      (should (seq-some (lambda (msg) (string-match-p "error" msg)) messages)))))
+
+(ert-deftest magit-gh-repo-dashboard/cache-stats-shows-summary ()
+  "cache-stats should display a summary of cached data."
+  (let* ((repo (magit-gh-repo--make :name "r1" :path "/tmp/r1"))
+         (magit-gh-repo-list (list repo))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (buffer-shown nil))
+    (magit-gh--cache-set "/tmp/r1" :stats
+                         (list :branch "main" :head-hash "abc123"
+                               :dirty nil :behind 0 :ahead 0))
+    (magit-gh--cache-set "/tmp/r1" :pr-counts (cons 5 2))
+    (cl-letf (((symbol-function 'pop-to-buffer)
+               (lambda (buf) (setq buffer-shown buf)))
+              ((symbol-function 'view-mode) (lambda (_) nil)))
+      (magit-gh-repo-dashboard-cache-stats)
+      (should buffer-shown)
+      (with-current-buffer buffer-shown
+        (let ((text (buffer-string)))
+          (should (string-match-p "Repository: r1" text))
+          (should (string-match-p "Stats cached: yes" text))
+          (should (string-match-p "PR counts cached: yes" text)))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-entry-handles-missing-stats ()
+  "build-entry should handle repos with no cached stats gracefully."
+  (let* ((repo (magit-gh-repo--make :name "test" :path "/tmp/test"))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard--submodule-path-set (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard-columns
+          '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t))))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
+               (lambda (_)
+                 ;; Simulate fresh collection
+                 (list :branch "main" :ahead 0 :behind 0 :dirty nil
+                       :fetch-age nil :head-hash "abc" :recent-log ""))))
+      (let* ((entry (magit-gh-repo-dashboard--build-entry repo))
+             (vec (cadr entry)))
+        (should (= 5 (length vec)))
+        (should (string-match-p "test" (aref vec 0)))
+        (should (equal "main" (substring-no-properties (aref vec 1))))
+        (should (equal "never" (aref vec 2)))))))
+
+(ert-deftest magit-gh-repo-dashboard/cache-reset-at-point-refreshes ()
+  "cache-reset-at-point should clear cache for one repo and refresh."
+  (let* ((repo (magit-gh-repo--make :name "test" :path "/tmp/test"))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (refresh-called nil)
+         (collect-called nil))
+    ;; Pre-populate cache
+    (magit-gh--cache-set "/tmp/test" :stats (list :branch "main" :dirty nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--repo-at-point)
+               (lambda () repo))
+              ((symbol-function 'magit-gh-repo-dashboard--collect-stats)
+               (lambda (r)
+                 (setq collect-called t)
+                 (list :branch "feat" :dirty t :head-hash "new")))
+              ((symbol-function 'magit-gh-repo-dashboard--maybe-refresh)
+               (lambda () (setq refresh-called t))))
+      (magit-gh-repo-dashboard-cache-reset-at-point)
+      (should collect-called)
+      (should refresh-called)
+      ;; Stats should be updated
+      (let ((stats (magit-gh--cache-get "/tmp/test" :stats)))
+        (should (equal "feat" (plist-get stats :branch)))))))
+
+(ert-deftest magit-gh-repo-dashboard/format-age-consistent-after-cache-reset ()
+  "Regression: format-age should work consistently after cache reset."
+  ;; Test that formatting functions don't depend on cache state
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (should (equal "never" (magit-gh-repo-dashboard--format-age nil)))
+    (should (equal "1h" (magit-gh-repo-dashboard--format-age 3600.0)))
+    (clrhash magit-gh--cache)
+    (should (equal "never" (magit-gh-repo-dashboard--format-age nil)))
+    (should (equal "1h" (magit-gh-repo-dashboard--format-age 3600.0)))))
+
+(ert-deftest magit-gh-repo-dashboard/format-status-consistent-after-cache-reset ()
+  "Regression: format-status should work consistently after cache reset."
+  (let ((magit-gh--cache (make-hash-table :test #'equal)))
+    (should (equal "" (magit-gh-repo-dashboard--format-status 0 0 nil)))
+    (should (equal "↑2 ↓3 !" (substring-no-properties
+                              (magit-gh-repo-dashboard--format-status 2 3 t))))
+    (clrhash magit-gh--cache)
+    (should (equal "" (magit-gh-repo-dashboard--format-status 0 0 nil)))
+    (should (equal "↑2 ↓3 !" (substring-no-properties
+                              (magit-gh-repo-dashboard--format-status 2 3 t))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-entry-name-returns-string ()
+  "Regression: name column must return a string, not the result of add-text-properties.
+The bug was that add-text-properties returns t, not the modified string."
+  (let* ((repo (magit-gh-repo--make :name "test" :path "/tmp/test"))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard--submodule-path-set (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard--marked-paths nil)
+         (magit-gh-repo-dashboard-columns
+          '((name . t))))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
+               (lambda (_)
+                 (list :branch "main" :ahead 0 :behind 0 :dirty nil
+                       :fetch-age nil :head-hash "abc" :recent-log ""))))
+      (let* ((entry (magit-gh-repo-dashboard--build-entry repo))
+             (vec (cadr entry))
+             (name-col (aref vec 0)))
+        ;; The name column must be a string
+        (should (stringp name-col))
+        (should (equal "test" (substring-no-properties name-col)))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-entry-all-columns-are-strings ()
+  "All column values must be strings for tabulated-list-mode."
+  (let* ((repo (magit-gh-repo--make :name "test" :path "/tmp/test"))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard--submodule-path-set (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard-columns
+          '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t))))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
+               (lambda (_)
+                 (list :branch "main" :ahead 0 :behind 0 :dirty nil
+                       :fetch-age 3600.0 :head-hash "abc123" :recent-log ""))))
+      (let* ((entry (magit-gh-repo-dashboard--build-entry repo))
+             (vec (cadr entry)))
+        (should (= 5 (length vec)))
+        ;; Every column value must be a string
+        (dotimes (i (length vec))
+          (let ((val (aref vec i)))
+            (should (stringp val))))))))
+
+(ert-deftest magit-gh-repo-dashboard/head-hash-nil-is-valid ()
+  "Repos with no commits can have nil :head-hash without being malformed."
+  (let* ((repo (magit-gh-repo--make :name "empty" :path "/tmp/empty"))
+         (magit-gh-repo-list (list repo))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (messages nil))
+    ;; Set up stats with nil head-hash (valid for repos with no commits)
+    (magit-gh--cache-set "/tmp/empty" :stats
+                         (list :branch "" :head-hash nil :dirty nil
+                               :behind 0 :ahead 0 :uncommitted-files nil
+                               :fetch-age nil :recent-log ""))
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages)))
+              ((symbol-function 'pop-to-buffer) (lambda (_) nil))
+              ((symbol-function 'view-mode) (lambda (_) nil))
+              ((symbol-function 'magit-gh-repo-dashboard--head-hash)
+               (lambda (_) nil)))
+      (magit-gh-repo-dashboard-cache-diagnose)
+      ;; Should not report this as an error (nil is in the plist, just has nil value)
+      (should (seq-some (lambda (msg) (string-match-p "0 error" msg)) messages)))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-includes-missing ()
+  "parse-submodules should include uninitialized (missing) submodules."
+  (cl-letf (((symbol-function 'file-directory-p)
+             (lambda (path)
+               ;; Only "present-mod" directory exists
+               (string-match-p "present-mod" path))))
+    (let* ((lines '("-abc123 external/missing-mod"
+                    " def456 external/present-mod"))
+           (repos (magit-gh-repo-dashboard--parse-submodules "/tmp/parent" lines)))
+      (should (= 2 (length repos)))
+      (let ((missing (seq-find (lambda (r) (string-match-p "missing-mod" (magit-gh-repo-name r))) repos))
+            (present (seq-find (lambda (r) (string-match-p "present-mod" (magit-gh-repo-name r))) repos)))
+        (should (eq 'missing (magit-gh-repo-submodule missing)))
+        (should (eq t (magit-gh-repo-submodule present)))))))
+
+(ert-deftest magit-gh-repo-dashboard/format-worktree-missing-submodule ()
+  "Missing submodules should display as SUBM.EMPTY with warning face."
+  (let ((repo (magit-gh-repo--make :name "test<sub>" :path "/tmp/missing"
+                                   :submodule 'missing)))
+    (let ((result (magit-gh-repo-dashboard--format-worktree repo)))
+      (should (equal "SUBM.EMPTY" (substring-no-properties result)))
+      (should (equal 'warning (get-text-property 0 'face result))))))
+
+(ert-deftest magit-gh-repo-dashboard/format-worktree-present-submodule ()
+  "Initialized submodules should display as SUBM."
+  (let ((repo (magit-gh-repo--make :name "test<sub>" :path "/tmp/present"
+                                   :submodule t)))
+    (let ((result (magit-gh-repo-dashboard--format-worktree repo)))
+      (should (equal "SUBM" (substring-no-properties result)))
+      (should (equal 'magit-gh-repo-branch-face (get-text-property 0 'face result))))))
+
+(ert-deftest magit-gh-repo-dashboard/get-stats-missing-submodule ()
+  "Missing submodules should return placeholder stats without calling git."
+  (let ((repo (magit-gh-repo--make :name "test<sub>" :path "/nonexistent"
+                                   :submodule 'missing))
+        (magit-gh--cache (make-hash-table :test #'equal))
+        (collect-called nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--collect-stats)
+               (lambda (_) (setq collect-called t) (error "Should not be called"))))
+      (let ((stats (magit-gh-repo-dashboard--get-stats repo)))
+        (should-not collect-called)
+        (should (plist-get stats :branch))
+        (should (equal "" (plist-get stats :branch)))
+        (should (eq nil (plist-get stats :head-hash)))))))
+
+(ert-deftest magit-gh-repo-dashboard/build-entry-missing-submodule-strikethrough ()
+  "Missing submodules should have strikethrough face on the name."
+  (let* ((repo (magit-gh-repo--make :name "parent<missing>" :path "/tmp/missing"
+                                    :submodule 'missing))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard--submodule-path-set (make-hash-table :test #'equal))
+         (magit-gh-repo-dashboard--marked-paths nil)
+         (magit-gh-repo-dashboard-columns '((name . t) (worktree . t))))
+    ;; Add to submodule path set so it gets the special display name
+    (puthash "/tmp/missing" "parent<missing>" magit-gh-repo-dashboard--submodule-path-set)
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--get-stats)
+               (lambda (_)
+                 (list :branch "" :ahead 0 :behind 0 :dirty nil
+                       :fetch-age nil :head-hash nil :recent-log ""))))
+      (let* ((entry (magit-gh-repo-dashboard--build-entry repo))
+             (vec (cadr entry))
+             (name-col (aref vec 0))
+             (type-col (aref vec 1)))
+        ;; Check name has strikethrough
+        (should (stringp name-col))
+        (should (equal "parent<missing>" (substring-no-properties name-col)))
+        (let ((face (get-text-property 0 'face name-col)))
+          (should (listp face))
+          (should (member '(:strike-through t) face)))
+        ;; Check type is SUBM.EMPTY
+        (should (equal "SUBM.EMPTY" (substring-no-properties type-col)))))))
+
+(ert-deftest magit-gh-repo-dashboard/parse-submodules-prefix-detection ()
+  "parse-submodules should detect missing submodules by - prefix."
+  (let* ((lines '("-abc123 missing/sub1"
+                  "+def456 modified/sub2"
+                  " 123abc current/sub3"
+                  "Uabc123 conflict/sub4"))
+         (repos (magit-gh-repo-dashboard--parse-submodules "/tmp/test" lines)))
+    (should (= 4 (length repos)))
+    ;; - prefix means missing
+    (let ((missing (seq-find (lambda (r) (string-match-p "sub1" (magit-gh-repo-name r))) repos)))
+      (should (eq 'missing (magit-gh-repo-submodule missing))))
+    ;; Other prefixes should still create repos, marked as missing if dir doesn't exist
+    (should (seq-every-p #'magit-gh-repo-p repos))))

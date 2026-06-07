@@ -608,15 +608,74 @@ ON-ALL-DONE with an alist of (NAME . STATUS)."
     (with-current-buffer buf
       (magit-gh-repo-dashboard-refresh))))
 
+;;;; Cache management
+
+(defun magit-gh-repo-dashboard-cache-info ()
+  "Display cache statistics in the minibuffer."
+  (interactive)
+  (let* ((total (length magit-gh-repo-list))
+         (discovered-wt (seq-count #'magit-gh-repo-worktree magit-gh-repo-list))
+         (discovered-subm (seq-count (lambda (r) 
+                                       (and (magit-gh-repo-submodule r)
+                                            (not (eq (magit-gh-repo-submodule r) 'missing))))
+                                     magit-gh-repo-list))
+         (configured (- total discovered-wt discovered-subm))
+         (cached (hash-table-count magit-gh--cache)))
+    (message "Repos: %d configured + %d worktrees + %d submodules = %d tracked | Cache: %d entries"
+             configured discovered-wt discovered-subm total cached)))
+
+(defun magit-gh-repo-dashboard-cache-reset (&optional repo-path)
+  "Reset cache for REPO-PATH (or all repos if nil)."
+  (interactive)
+  (if repo-path
+      (progn
+        (magit-gh--cache-remove repo-path)
+        (message "Cleared cache for %s" repo-path))
+    (clrhash magit-gh--cache)
+    (message "Cleared entire cache")))
+
+(defun magit-gh-repo-dashboard-cache-reset-all ()
+  "Clear cache and repopulate stats for all repos."
+  (interactive)
+  (clrhash magit-gh--cache)
+  (magit-gh-repo-dashboard--discover-worktrees)
+  (magit-gh-repo-dashboard--discover-submodules)
+  (let ((failed nil))
+    (dolist (repo magit-gh-repo-list)
+      (condition-case err
+          (magit-gh-repo-dashboard--collect-stats repo)
+        (error
+         (push (cons (magit-gh-repo-name repo) (error-message-string err)) failed))))
+    (message "Cache reset: %d/%d repos updated%s"
+             (- (length magit-gh-repo-list) (length failed))
+             (length magit-gh-repo-list)
+             (if failed (format " (%d failed)" (length failed)) "")))
+  (when (get-buffer "*magit-gh-repos*")
+    (magit-gh-repo-dashboard-refresh)))
+
+(defun magit-gh-repo-dashboard-cache-reset-at-point ()
+  "Reset cache for repository at point."
+  (interactive)
+  (when-let ((repo (magit-gh-repo-dashboard--repo-at-point)))
+    (let ((path (magit-gh-repo-path repo))
+          (name (magit-gh-repo-name repo)))
+      (magit-gh--cache-remove path)
+      (condition-case err
+          (progn
+            (magit-gh-repo-dashboard--collect-stats repo)
+            (magit-gh-repo-dashboard--maybe-refresh)
+            (message "Cache reset for %s" name))
+        (error
+         (message "Failed to collect stats for %s: %s" name (error-message-string err)))))))
+
 ;;;; Worktree support
 
 (defun magit-gh-repo-dashboard--parse-worktrees (main-path lines)
   "Parse LINES from `git worktree list --porcelain' for repo at MAIN-PATH.
 Returns a list of `magit-gh-repo' structs for additional worktrees.
 The first block (the main worktree) is always skipped."
-  (let* ((main-name (file-name-nondirectory (directory-file-name main-path)))
-         (blocks nil)
-         (current nil))
+  (let ((main-name (file-name-nondirectory (directory-file-name main-path)))
+	blocks current)
     (seq-do (lambda (line)
               (if (string-empty-p line)
                   (progn
@@ -713,19 +772,20 @@ Missing/uninitialized submodules are marked with :submodule 'missing."
 ;;;; Column configuration
 
 (defvar magit-gh-repo-dashboard-columns
-  '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t))
+  '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t) (cached . nil))
   "Alist of (COLUMN-SYMBOL . ENABLED) for the repository dashboard.
 Persisted across sessions via `savehist-additional-variables'.")
 
 (defconst magit-gh-repo-dashboard--all-columns
-  '(name branch fetched status worktree)
+  '(name branch fetched status worktree cached)
   "All available dashboard columns in display order.")
 
 (defconst magit-gh-repo-dashboard--column-defs
   '((branch   . ("Branch"  18 t))
     (fetched  . ("Fetched"  8 nil))
     (status   . ("Status"  10 nil))
-    (worktree . ("Type"    10 nil)))
+    (worktree . ("Type"    10 nil))
+    (cached   . ("Cached"   7 nil)))
   "Alist of COLUMN-SYMBOL to (LABEL WIDTH SORTABLE) for non-name columns.")
 
 (defun magit-gh-repo-dashboard--column-enabled-p (col)
@@ -940,7 +1000,11 @@ submodules and to derive their parent<mod> display name.")
                         (or (plist-get stats :behind) 0)
                         (plist-get stats :dirty)))
                       ('worktree
-                       (magit-gh-repo-dashboard--format-worktree repo))))
+                       (magit-gh-repo-dashboard--format-worktree repo))
+                      ('cached
+                       (if (magit-gh--cache-get (magit-gh-repo-path repo) :stats)
+                           (propertize "✓" 'face 'success)
+                         (propertize "·" 'face 'shadow)))))
                   active)))))
 
 (defun magit-gh-repo-dashboard--sorted-repos (repos)
@@ -2252,7 +2316,12 @@ Returns nil when OUTPUT is not a JSON array."
     ("C-t"  "Toggle column"     magit-gh-repo-dashboard-toggle-column)
     ("M-s"  "Toggle submodules" magit-gh-repo-dashboard-toggle-discovered-submodules)
     ("gg"   "Refresh"           magit-gh-repo-dashboard-refresh)
-    ("q"    "Quit"              quit-window)]])
+    ("q"    "Quit"              quit-window)]
+   ["Cache"
+    ("ci"   "Cache info"            magit-gh-repo-dashboard-cache-info)
+    ("ccr"   "Reset cache at point" magit-gh-repo-dashboard-cache-reset-at-point
+     :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
+    ("cca"   "Reset all caches"     magit-gh-repo-dashboard-cache-reset-all)]])
 
 (transient-define-prefix magit-gh-repo-overview-menu ()
   "Magit actions for the repository shown in this overview buffer."
