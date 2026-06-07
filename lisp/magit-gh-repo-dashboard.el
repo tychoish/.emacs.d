@@ -316,14 +316,31 @@ Checks the in-memory cache first; calls CALLBACK with (TOTAL . MINE)."
 
 (defun magit-gh-repo-dashboard--get-stats (repo)
   "Return cached stats for REPO, collecting synchronously if absent or stale.
-The cache is invalidated when the HEAD commit hash changes."
+The cache is invalidated when the HEAD commit hash changes.
+For missing submodules, returns minimal placeholder stats."
   (let* ((path (magit-gh-repo-path repo))
          (cached (magit-gh--cache-get path :stats)))
-    (if (and cached
-             (equal (magit-gh-repo-dashboard--head-hash path)
-                    (plist-get cached :head-hash)))
-        cached
-      (magit-gh-repo-dashboard--collect-stats repo))))
+    (cond
+     ;; Missing submodules get placeholder stats
+     ((eq (magit-gh-repo-submodule repo) 'missing)
+      (list :branch "" :remote-origin nil :behind 0 :ahead 0
+            :dirty nil :uncommitted-files nil :fetch-age nil
+            :head-hash nil :recent-log ""))
+     ;; Use cached if valid
+     ((and cached
+           (equal (magit-gh-repo-dashboard--head-hash path)
+                  (plist-get cached :head-hash)))
+      cached)
+     ;; Otherwise collect fresh stats
+     (t (condition-case err
+            (magit-gh-repo-dashboard--collect-stats repo)
+          (error
+           (message "magit-gh: failed to collect stats for %s: %s"
+                    (magit-gh-repo-name repo) (error-message-string err))
+           ;; Return minimal stats on error
+           (list :branch "?" :remote-origin nil :behind 0 :ahead 0
+                 :dirty nil :uncommitted-files nil :fetch-age nil
+                 :head-hash nil :recent-log "")))))))
 
 ;;;; Async git operations
 
@@ -641,37 +658,42 @@ The first block (the main worktree) is always skipped."
 
 (defun magit-gh-repo-dashboard--parse-submodules (main-path lines)
   "Parse LINES from `git submodule status' for repo at MAIN-PATH.
-Returns a list of `magit-gh-repo' structs, one per initialized submodule.
-Name is formatted as \"parent<submod>\" where parent is the basename of MAIN-PATH."
+Returns a list of `magit-gh-repo' structs, one per submodule (initialized or not).
+Name is formatted as \"parent<submod>\" where parent is the basename of MAIN-PATH.
+Missing/uninitialized submodules are marked with :submodule 'missing."
   (let ((main-name (file-name-nondirectory (directory-file-name main-path))))
     (thread-last lines
       (seq-filter (lambda (l) (not (string-empty-p l))))
       (seq-map
        (lambda (line)
-         (when (string-match "^[-+U ]\\([0-9a-f]+\\) \\([^ ]+\\)" line)
-           (let* ((rel-path (match-string 2 line))
+         (when (string-match "^\\([-+U ]\\)\\([0-9a-f]+\\) \\([^ ]+\\)" line)
+           (let* ((prefix (match-string 1 line))
+                  (rel-path (match-string 3 line))
                   (abs-path (expand-file-name rel-path main-path))
-                  (submod-name (file-name-nondirectory (directory-file-name rel-path))))
-             (when (file-directory-p abs-path)
-               (magit-gh-repo--make
-                :name (format "%s<%s>" main-name submod-name)
-                :path abs-path
-                :submodule t))))))
+                  (submod-name (file-name-nondirectory (directory-file-name rel-path)))
+                  (missing-p (or (string= prefix "-")
+                                 (not (file-directory-p abs-path)))))
+             (magit-gh-repo--make
+              :name (format "%s<%s>" main-name submod-name)
+              :path abs-path
+              :submodule (if missing-p 'missing t))))))
       (seq-remove #'null))))
 
 (defun magit-gh-repo-dashboard--discover-submodules ()
   "Populate the unified cache with submodules for all registered main repos."
-  (seq-do
-   (lambda (repo)
-     (unless (or (magit-gh-repo-worktree repo) (magit-gh-repo-submodule repo))
+  (thread-last
+    magit-gh-repo-list
+    (seq-remove (lambda (repo) (or (magit-gh-repo-worktree repo) (magit-gh-repo-submodule repo))))
+    (seq-do
+     (lambda (repo)
        (let* ((path (magit-gh-repo-path repo))
               (lines (ignore-errors
                        (let ((default-directory path))
                          (process-lines magit-git-executable
-                                        "submodule" "status"))))
-              (found (when lines (magit-gh-repo-dashboard--parse-submodules path lines))))
-         (magit-gh--cache-set path :submodules found))))
-   magit-gh-repo-list))
+                                        "submodule" "status")))))
+         (magit-gh--cache-set path
+	  :submodules (when lines
+			(magit-gh-repo-dashboard--parse-submodules path lines))))))))
 
 (defun magit-gh-repo-overview--worktrees-for (path)
   "Return worktree structs for the main repo at PATH, discovering lazily if needed."
@@ -762,13 +784,17 @@ a single space.  Returns an empty string when everything is clean and synced."
 
 (defun magit-gh-repo-dashboard--format-worktree (repo)
   "Format the type indicator for REPO.
-Shows \"WT\" for worktrees, \"SUBM\" for submodules (auto-discovered or
-explicitly-registered), and \"REPO\" for ordinary working-tree repos."
-  (let ((path (magit-gh-repo-path repo)))
+Shows \"WT\" for worktrees, \"SUBM\" for initialized submodules,
+\"SUBM.EMPTY\" for missing/uninitialized submodules, \"SUBM.TRACK\" for
+explicitly-registered submodules, and \"REPO\" for ordinary working-tree repos."
+  (let ((path (magit-gh-repo-path repo))
+        (submodule (magit-gh-repo-submodule repo)))
     (cond
      ((magit-gh-repo-worktree repo)
       (propertize "WT" 'face 'magit-gh-repo-branch-face))
-     ((magit-gh-repo-submodule repo)
+     ((eq submodule 'missing)
+      (propertize "SUBM.EMPTY" 'face 'warning))
+     (submodule
       (propertize "SUBM" 'face 'magit-gh-repo-branch-face))
      ((and magit-gh-repo-dashboard--submodule-path-set
            (gethash path magit-gh-repo-dashboard--submodule-path-set))
@@ -889,14 +915,17 @@ submodules and to derive their parent<mod> display name.")
                     (pcase col
                       ('name
                        (let* ((subm-name (and magit-gh-repo-dashboard--submodule-path-set
-                                              (gethash (magit-gh-repo-path repo)
-                                                       magit-gh-repo-dashboard--submodule-path-set)))
-                              (display (or subm-name (magit-gh-repo-name repo))))
-                         (propertize display
-                                     'face (if (member (magit-gh-repo-path repo)
-                                                       magit-gh-repo-dashboard--marked-paths)
-                                               '(bold magit-gh-repo-name-face)
-                                             'magit-gh-repo-name-face))))
+                                              (gethash (magit-gh-repo-path repo) magit-gh-repo-dashboard--submodule-path-set)))
+                              (is-missing (eq (magit-gh-repo-submodule repo) 'missing))
+                              (is-marked (member (magit-gh-repo-path repo) magit-gh-repo-dashboard--marked-paths))
+                              (display (if subm-name subm-name (magit-gh-repo-name repo)))
+                              (base-face (if is-marked
+                                            '(bold magit-gh-repo-name-face)
+                                          'magit-gh-repo-name-face))
+                              (final-face (if (and subm-name is-missing)
+                                             (list '(:strike-through t) base-face)
+                                           base-face)))
+                         (propertize display 'face final-face)))
                       ('branch
                        (propertize (let ((b (plist-get stats :branch)))
                                      (if (and b (not (string-empty-p b)))
@@ -968,8 +997,7 @@ Repos are ordered by :sort-hint; discovered worktrees follow their parent."
                   magit-gh-repo-list))))
     (setq tabulated-list-format (magit-gh-repo-dashboard--build-format repos))
     (tabulated-list-init-header)
-    (setq tabulated-list-entries
-          (seq-map #'magit-gh-repo-dashboard--build-entry repos))
+    (setq tabulated-list-entries (seq-map #'magit-gh-repo-dashboard--build-entry repos))
     (tabulated-list-print t)))
 
 (defun magit-gh-repo-dashboard--repo-at-point ()

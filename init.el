@@ -20,7 +20,7 @@
   (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
   (package-initialize)
   (unless (package-installed-p 'xtdlib)
-    (let ((checkout (expand-file-name "elpa/xtdlib" user-emacs-directory)))
+    (let ((checkout (expand-file-name "external/xtdlib" user-emacs-directory)))
       (if (file-directory-p checkout)
           (add-to-list 'load-path checkout)
         (package-vc-install '(xtdlib :url "https://github.com/tychoish/xtdlib.el"))))))

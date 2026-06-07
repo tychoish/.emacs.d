@@ -2762,22 +2762,6 @@ Useful after changing `eglot-workspace-configuration' or
 
   (tychoish/agent-shell--apply-environment))
 
-(use-package agent-shell-menu
-  :load-path "external/agent-shell-queue"
-  :after (agent-shell agent-shell-queue)
-  :demand t
-  :config
-  (agent-shell-mode-key "?" agent-shell-resolve-permission)
-  (agent-shell-mode-key "p" agent-shell-resolve-permission)
-  (agent-shell-mode-key "a" agent-shell-select-action)
-  (agent-shell-mode-key "b" agent-shell-switch-buffer)
-  (agent-shell-mode-key "x" execute-extended-agent-shell-command)
-  (agent-shell-mode-key "f" agent-shell-select-collapse)
-  (agent-shell-mode-key "c" agent-shell-select-command)
-  (agent-shell-mode-key "m" agent-shell-dispatch)
-  (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
-  (agent-shell-mode-key "q" agent-shell-queue-buffer-open))
-
 (use-package agent-shell-queue
   :load-path "external/agent-shell-queue"
   :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
@@ -2806,12 +2790,24 @@ Useful after changing `eglot-workspace-configuration' or
   :init
   (defvar-keymap tychoish/robot-agent-shell-map)
   :config
+  (require 'agent-shell-menu)
   (bind-keys
    :map agent-shell-queue-mode-map
    ("C-c j" . tychoish/robot-agent-shell-map)
    :map tychoish/robot-agent-shell-map
    ("q" . agent-shell-queue-buffer-open)
    ("/" . agent-shell-queue-capture))
+
+  (agent-shell-mode-key "?" agent-shell-resolve-permission)
+  (agent-shell-mode-key "p" agent-shell-resolve-permission)
+  (agent-shell-mode-key "a" agent-shell-select-action)
+  (agent-shell-mode-key "b" agent-shell-switch-buffer)
+  (agent-shell-mode-key "x" execute-extended-agent-shell-command)
+  (agent-shell-mode-key "f" agent-shell-select-collapse)
+  (agent-shell-mode-key "c" agent-shell-select-command)
+  (agent-shell-mode-key "m" agent-shell-dispatch)
+  (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
+  (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."

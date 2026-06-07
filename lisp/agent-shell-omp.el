@@ -39,7 +39,7 @@
 (declare-function agent-shell--dwim "agent-shell")
 
 (defcustom agent-shell-omp-acp-command
-  '("omp")
+  '("omp" "acp")
   "Command and parameters for the Oh My Pi (omp) ACP client.
 
 The first element is the command name, and the rest are command parameters."
