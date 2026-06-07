@@ -496,7 +496,7 @@ more arguments than the function cares about."
     (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
     (if (daemonp)
         (progn
-          (setq desktop-restore-frames t)
+          (setq desktop-restore-frames nil)
           (setq desktop-load-locked-desktop t)
           (setq desktop-restore-eager nil))
       (setq desktop-restore-eager t)
@@ -550,8 +550,7 @@ more arguments than the function cares about."
   "Noop definition of function to speed up startup" "")
 
 (defun ad:suppress-message (f &rest arg)
-  (let ((inhibit-message t)
-        (message-log-max nil))
+  (with-silence
     (apply f arg)))
 
 (when (fboundp 'emacs-repository-branch-git)
@@ -642,17 +641,21 @@ more arguments than the function cares about."
  :operation 'tychoish/ensure-default-font
  :delay 0.1)
 
+(add-lazy-init
+ :name "restore-desktop"
+ :operation 'tychoish/desktop-read-init
+ :delay 0.25)
+
+(add-lazy-init
+ :name "emacs-instance-persistence"
+ :operation 'tychoish/set-up-emacs-instance-persistence
+ :delay 0.25)
+
 (add-one-shot-hook
  :name "delight-modeline"
  :function tychoish/set-up-delightful-mode-lighters
  :hook doom-modeline-mode-hook
  :idle-timer 0.75)
-
-(add-one-shot-hook
- :name "restore-desktop"
- :function tychoish/desktop-read-init
- :hook after-first-frame-created
- :idle-timer 0.2)
 
 (add-one-shot-hook
  :name "emacs-lockfile-setup"
@@ -661,13 +664,6 @@ more arguments than the function cares about."
 	     (tychoish/set-up-ephemeral-instance-file-locks)
 	   (tychoish/set-up-named-instance-file-locks)))
  :hook emacs-startup-hook)
-
-(add-one-shot-hook
- :name "emacs-instance-persistence"
- :form (tychoish/set-up-emacs-instance-persistence)
- :depth 75
- :hook after-first-frame-created
- :idle-timer 0.5)
 
 (add-one-shot-hook
  :name "ssh-agent"
