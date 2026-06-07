@@ -2255,7 +2255,7 @@ Returns nil when OUTPUT is not a JSON array."
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("lf"   "Log…"            magit-gh-repo-dashboard-magit-log-full
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
-    ("c"    "Commit"          magit-gh-repo-dashboard-magit-commit
+    ("C-c"    "Commit"          magit-gh-repo-dashboard-magit-commit
      :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
     ("sa"   "Stage all"       magit-gh-repo-dashboard-stage-all
      :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
