@@ -58,6 +58,8 @@
 (declare-function magit-gh-bump-submodules-menu "magit-gh-bump-submodules")
 (declare-function agent-shell-menu-project-buffers "agent-shell-menu")
 
+(defconst magit-gh-repo-dashboard-buffer-name "*magit-gh-repos*")
+
 ;;;; Repository registry
 
 (cl-defstruct (magit-gh-repo (:constructor magit-gh-repo--make) (:copier nil))
@@ -604,7 +606,7 @@ ON-ALL-DONE with an alist of (NAME . STATUS)."
 
 (defun magit-gh-repo-dashboard--maybe-refresh ()
   "Refresh the repo dashboard buffer if it is currently live."
-  (when-let* ((buf (get-buffer "*magit-gh-repos*"))
+  (when-let* ((buf (get-buffer magit-gh-repo-dashboard-buffer-name))
               ((buffer-live-p buf)))
     (with-current-buffer buf
       (magit-gh-repo-dashboard-refresh))))
@@ -651,7 +653,7 @@ ON-ALL-DONE with an alist of (NAME . STATUS)."
              (- (length magit-gh-repo-list) (length failed))
              (length magit-gh-repo-list)
              (if failed (format " (%d failed)" (length failed)) "")))
-  (when (get-buffer "*magit-gh-repos*")
+  (when (get-buffer magit-gh-repo-dashboard-buffer-name)
     (magit-gh-repo-dashboard-refresh)))
 
 (defun magit-gh-repo-dashboard-cache-reset-at-point ()
@@ -1085,7 +1087,7 @@ Repos are ordered by :sort-hint; discovered worktrees follow their parent."
 (defun magit-gh-repo-dashboard-magit-dispatch ()
   "Open `magit-dispatch' in the context of the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-dispatch)))
 
 (defun magit-gh-repo-dashboard-magit-status ()
@@ -1097,43 +1099,43 @@ Repos are ordered by :sort-hint; discovered worktrees follow their parent."
 (defun magit-gh-repo-dashboard-magit-diff ()
   "Open a magit diff (dwim) buffer for the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-diff-dwim)))
 
 (defun magit-gh-repo-dashboard-magit-diff-full ()
   "Open the full magit diff menu for the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-diff)))
 
 (defun magit-gh-repo-dashboard-magit-log ()
   "Open magit log for the current branch in the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-log-current)))
 
 (defun magit-gh-repo-dashboard-magit-log-full ()
   "Open the full magit log menu for the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-log)))
 
 (defun magit-gh-repo-dashboard-magit-commit ()
   "Open a magit commit buffer for the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-commit-create)))
 
 (defun magit-gh-repo-dashboard-fetch ()
   "Run git fetch for the repository at point via magit."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-fetch)))
 
 (defun magit-gh-repo-dashboard-pull ()
   "Pull from upstream for the repository at point via magit."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-pull-from-upstream)))
 
 (defun magit-gh-repo-dashboard-commit ()
@@ -1159,7 +1161,7 @@ Signals `user-error' when :auto-commit is not configured for this repo."
 (defun magit-gh-repo-dashboard-push ()
   "Push current branch to its push remote for the repository at point."
   (interactive)
-  (let ((default-directory (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (magit-push-current-to-pushremote nil)))
 
 (defun magit-gh-repo-dashboard-sync ()
@@ -1182,7 +1184,7 @@ Uses each repo's :auto-commit message function (or the default chore message).
 Displays a summary message and refreshes the dashboard when all complete."
   (interactive)
   (let ((repos (seq-filter #'magit-gh-repo-auto-commit magit-gh-repo-list)))
-    (when (null repos)
+    (unless repos
       (user-error "No repositories have :auto-commit configured"))
     (magit-gh-repo-dashboard--batch-run
      repos
@@ -1194,7 +1196,7 @@ Displays a summary message and refreshes the dashboard when all complete."
   "Run auto-sync operation for all configured repos asynchronously, then refresh."
   (interactive)
   (let ((repos (seq-filter #'magit-gh-repo-auto-sync magit-gh-repo-list)))
-    (when (null repos)
+    (unless repos
       (user-error "No repositories have :auto-sync configured"))
     (magit-gh-repo-dashboard--batch-run
      repos
@@ -1210,7 +1212,7 @@ Each batch displays a summary message; the dashboard refreshes when sync complet
   (interactive)
   (let ((commit-repos (seq-filter #'magit-gh-repo-auto-commit magit-gh-repo-list))
         (sync-repos (seq-filter #'magit-gh-repo-auto-sync magit-gh-repo-list)))
-    (when (and (null commit-repos) (null sync-repos))
+    (unless (or commit-repos sync-repos)
       (user-error "No repos have :auto-commit or :auto-sync configured"))
     (when commit-repos
       (magit-gh-repo-dashboard--batch-run
@@ -1364,7 +1366,7 @@ Adds to any existing marks rather than replacing them."
          (bufs (seq-filter (lambda (b)
                              (string-prefix-p path (or (buffer-file-name b) "")))
                            (buffer-list))))
-    (when (null bufs)
+    (unless bufs
       (user-error "No open buffers visiting files in %s" (magit-gh-repo-name repo)))
     (switch-to-buffer
      (completing-read "Visit buffer: " (seq-map #'buffer-name bufs) nil t))))
@@ -1380,13 +1382,13 @@ Adds to any existing marks rather than replacing them."
 (defun magit-gh-repo-dashboard-switch-branch ()
   "Switch branch in the repository at point via magit."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-checkout)))
 
 (defun magit-gh-repo-dashboard-prune-branches ()
   "Prune merged branches in the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (magit-gh-prune-merged-branches)))
 
 (defun magit-gh-repo-dashboard--at-worktree-p ()
@@ -1400,7 +1402,7 @@ Adds to any existing marks rather than replacing them."
   (let ((repo (magit-gh-repo-dashboard--repo-at-point)))
     (when (magit-gh-repo-worktree repo)
       (user-error "Cannot add a worktree from a worktree entry"))
-    (magit-gh--with-repo-dir (magit-gh-repo-path repo)
+    (with-magit-from-dashboard repo
       (call-interactively #'magit-worktree-checkout))
     (magit-gh-repo-dashboard-refresh)))
 
@@ -1411,26 +1413,26 @@ Signals `user-error' when the current row is not a worktree."
   (let ((repo (magit-gh-repo-dashboard--repo-at-point)))
     (unless (magit-gh-repo-worktree repo)
       (user-error "Not a worktree row; use 'k' only on worktree entries"))
-    (magit-gh--with-repo-dir (magit-gh-repo-path repo)
+    (with-magit-from-dashboard repo
       (call-interactively #'magit-worktree-delete))
     (magit-gh-repo-dashboard-refresh)))
 
 (defun magit-gh-repo-dashboard-builder ()
   "Run `builder-compile-project' in the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'builder-compile-project)))
 
 (defun magit-gh-repo-dashboard-agent-shell ()
   "Switch to an agent-shell session for the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'agent-shell-switch-project-session)))
 
 (defun magit-gh-repo-dashboard-agent-shell-new ()
   "Start a new agent-shell session in the repository at point."
   (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'agent-shell-new-shell)))
 
 (defun magit-gh-repo-dashboard-agent-shell-queue ()
@@ -1444,13 +1446,38 @@ Signals `user-error' when the current row is not a worktree."
   "Open the repository dashboard buffer.
 Signals `user-error' when `magit-gh-repo-list' is empty."
   (interactive)
-  (when (null magit-gh-repo-list)
+  (unless magit-gh-repo-list
     (user-error "No repositories registered; use `magit-gh-repo-register'"))
-  (let ((buf (get-buffer-create "*magit-gh-repos*")))
+  (let ((buf (get-buffer-create magit-gh-repo-dashboard-buffer-name)))
     (with-current-buffer buf
       (magit-gh-repo-dashboard-mode)
       (magit-gh-repo-dashboard-refresh))
     (pop-to-buffer buf)))
+
+(defun magit-gh-repo-dashboard-create ()
+  (unless magit-gh-repo-list
+    (user-error "No repositories registered; use `magit-gh-repo-register'"))
+  (with-magit-gh-repo-dashboard
+   (message "magit-gh-repo-dashobard: your (miss)adventure awaits!")))
+
+(defmacro with-magit-gh-repo-dashboard (&rest body)
+  `(let* ((buf (get-buffer-create magit-gh-repo-dashboard-buffer-name))
+	  (default-directory (if (eq (current-buffer) buf)
+				 (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+			       default-directory)))
+     (with-current-buffer buf
+       (unless (derived-mode-p 'magit-gh-repo-dashboard-mode)
+	 (magit-gh-repo-dashboard-mode))
+       (magit-gh-repo-dashboard-refresh)
+       ,@body)))
+
+(defmacro with-magit-from-dashboard (repo &rest body)
+  "Execute BODY with default-directory set to REPO path.
+Designed for magit operations invoked from the dashboard.
+Lighter than `with-magit-gh-repo-dashboard'; repo is already fetched."
+  (declare (indent 1))
+  `(let ((default-directory (magit-gh-repo-path ,repo)))
+     ,@body))
 
 ;;;; Repo overview buffer
 
@@ -1613,7 +1640,7 @@ Signals `user-error' when :auto-sync is not configured for this repo."
          (bufs (seq-filter (lambda (b)
                              (string-prefix-p path (or (buffer-file-name b) "")))
                            (buffer-list))))
-    (when (null bufs)
+    (unless bufs
       (user-error "No open buffers visiting files in %s" (magit-gh-repo-name repo)))
     (switch-to-buffer
      (completing-read "Visit buffer: " (seq-map #'buffer-name bufs) nil t))))
@@ -2217,7 +2244,7 @@ Returns nil when OUTPUT is not a JSON array."
   "Asynchronously fetch marked repos, or all visible repos when none are marked."
   (interactive)
   (let ((repos (magit-gh-repo-dashboard--effective-repos)))
-    (when (null repos)
+    (unless repos
       (user-error "No repositories to fetch"))
     (magit-gh-repo-dashboard--batch-run
      repos
@@ -2229,7 +2256,7 @@ Returns nil when OUTPUT is not a JSON array."
   "Asynchronously pull marked repos, or all visible repos when none are marked."
   (interactive)
   (let ((repos (magit-gh-repo-dashboard--effective-repos)))
-    (when (null repos)
+    (unless repos
       (user-error "No repositories to pull"))
     (magit-gh-repo-dashboard--batch-run
      repos
