@@ -320,6 +320,7 @@ more arguments than the function cares about."
 (setq tab-always-indent t)
 (setq cursor-in-non-selected-windows nil)
 (setq comment-auto-fill-only-comments t)
+(setq electric-indent-chars '(?\n ?:))
 
 (setq backup-by-copying t)
 (setq make-backup-files t)

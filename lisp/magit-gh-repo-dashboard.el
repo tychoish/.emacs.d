@@ -895,7 +895,6 @@ The Name column width is elastic: wide enough for the longest name in REPOS."
     (define-key m (kbd "!")   #'magit-gh-repo-dashboard-magit-dispatch)
     (define-key m (kbd "s")   #'magit-gh-repo-dashboard-magit-status)
     (define-key m (kbd "d")   #'magit-gh-repo-dashboard-magit-diff)
-    (define-key m (kbd "D")   #'magit-gh-repo-dashboard-magit-diff-full)
     (define-key m (kbd "l")   #'magit-gh-repo-dashboard-magit-log)
     (define-key m (kbd "L")   #'magit-gh-repo-dashboard-magit-log-full)
     (define-key m (kbd "c")   #'magit-gh-repo-dashboard-magit-commit)
@@ -1098,12 +1097,6 @@ Repos are ordered by :sort-hint; discovered worktrees follow their parent."
 
 (defun magit-gh-repo-dashboard-magit-diff ()
   "Open a magit diff (dwim) buffer for the repository at point."
-  (interactive)
-  (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
-    (call-interactively #'magit-diff-dwim)))
-
-(defun magit-gh-repo-dashboard-magit-diff-full ()
-  "Open the full magit diff menu for the repository at point."
   (interactive)
   (with-magit-from-dashboard (magit-gh-repo-dashboard--repo-at-point)
     (call-interactively #'magit-diff)))
@@ -1440,36 +1433,45 @@ Signals `user-error' when the current row is not a worktree."
   (interactive)
   (call-interactively #'agent-shell-queue-buffer-open))
 
+;;;###autoload
+(defun magit-gh-repo-dashboard-open-other-window ()
+  "Open the repository dashboard buffer in another window.
+Signals `user-error' when `magit-gh-repo-list' is empty."
+  (let ((current-prefix-arg t))
+    (magit-gh-repo-dashboard-open)))
 
 ;;;###autoload
 (defun magit-gh-repo-dashboard-open ()
-  "Open the repository dashboard buffer.
+  "Open the repository dashboard buffer in another window.
 Signals `user-error' when `magit-gh-repo-list' is empty."
   (interactive)
+
+  (with-magit-gh-repo-dashboard
+   (if current-prefix-arg
+       (pop-to-buffer buf))
+   (pop-to-buffer-same-window buf)))
+
+(defun magit-gh-repo-ensure-configuration ()
+  "Raises `user-error' when there is not `magit-gh-repo-list' defined."
   (unless magit-gh-repo-list
-    (user-error "No repositories registered; use `magit-gh-repo-register'"))
-  (let ((buf (get-buffer-create magit-gh-repo-dashboard-buffer-name)))
-    (with-current-buffer buf
-      (magit-gh-repo-dashboard-mode)
-      (magit-gh-repo-dashboard-refresh))
-    (pop-to-buffer buf)))
+    (user-error "No repositories registered; use `magit-gh-repo-register'")))
 
 (defun magit-gh-repo-dashboard-create ()
-  (unless magit-gh-repo-list
-    (user-error "No repositories registered; use `magit-gh-repo-register'"))
   (with-magit-gh-repo-dashboard
    (message "magit-gh-repo-dashobard: your (miss)adventure awaits!")))
 
 (defmacro with-magit-gh-repo-dashboard (&rest body)
-  `(let* ((buf (get-buffer-create magit-gh-repo-dashboard-buffer-name))
-	  (default-directory (if (eq (current-buffer) buf)
-				 (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
-			       default-directory)))
+  `(progn
+     (magit-gh-repo-ensure-configuration)
+     (let* ((buf (get-buffer-create magit-gh-repo-dashboard-buffer-name))
+	    (default-directory (if (eq (current-buffer) buf)
+				   (magit-gh-repo-path (magit-gh-repo-dashboard--repo-at-point))
+				 default-directory)))
      (with-current-buffer buf
        (unless (derived-mode-p 'magit-gh-repo-dashboard-mode)
 	 (magit-gh-repo-dashboard-mode))
        (magit-gh-repo-dashboard-refresh)
-       ,@body)))
+       ,@body))))
 
 (defmacro with-magit-from-dashboard (repo &rest body)
   "Execute BODY with default-directory set to REPO path.
@@ -1496,7 +1498,6 @@ Lighter than `with-magit-gh-repo-dashboard'; repo is already fetched."
     (define-key m (kbd "!")   #'magit-gh-repo-overview-magit-dispatch)
     (define-key m (kbd "s")   #'magit-gh-repo-overview-magit-status)
     (define-key m (kbd "d")   #'magit-gh-repo-overview-magit-diff)
-    (define-key m (kbd "D")   #'magit-gh-repo-overview-magit-diff-full)
     (define-key m (kbd "l")   #'magit-gh-repo-overview-magit-log)
     (define-key m (kbd "L")   #'magit-gh-repo-overview-magit-log-full)
     (define-key m (kbd "c")   #'magit-gh-repo-overview-magit-commit)
@@ -1543,12 +1544,6 @@ Lighter than `with-magit-gh-repo-dashboard'; repo is already fetched."
 
 (defun magit-gh-repo-overview-magit-diff ()
   "Open magit diff (dwim) for this overview's repository."
-  (interactive)
-  (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-overview--current-repo))
-    (call-interactively #'magit-diff-dwim)))
-
-(defun magit-gh-repo-overview-magit-diff-full ()
-  "Open the full magit diff menu for this overview's repository."
   (interactive)
   (magit-gh--with-repo-dir (magit-gh-repo-path (magit-gh-repo-overview--current-repo))
     (call-interactively #'magit-diff)))
@@ -2275,9 +2270,7 @@ Returns nil when OUTPUT is not a JSON array."
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("gs"   "Status"          magit-gh-repo-dashboard-magit-status
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
-    ("d"   "Diff (dwim)"     magit-gh-repo-dashboard-magit-diff
-     :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
-    ("D"   "Diff…"           magit-gh-repo-dashboard-magit-diff-full
+    ("d"   "Diff…"           magit-gh-repo-dashboard-magit-diff
      :inapt-if-not magit-gh-repo-dashboard--dirty-or-unknown-p)
     ("lc"   "Log (current)"  magit-gh-repo-dashboard-magit-log
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
@@ -2346,8 +2339,8 @@ Returns nil when OUTPUT is not a JSON array."
     ("gg"   "Refresh"           magit-gh-repo-dashboard-refresh)
     ("q"    "Quit"              quit-window)]
    ["Cache"
-    ("ci"   "Cache info"            magit-gh-repo-dashboard-cache-info)
-    ("ccr"   "Reset cache at point" magit-gh-repo-dashboard-cache-reset-at-point
+    ("ci"   "Cache info"        magit-gh-repo-dashboard-cache-info)
+    ("ccr"   "Reset cache"      magit-gh-repo-dashboard-cache-reset-at-point
      :inapt-if-not magit-gh-repo-dashboard--repo-at-point-p)
     ("cca"   "Reset all caches"     magit-gh-repo-dashboard-cache-reset-all)]])
 
@@ -2355,10 +2348,8 @@ Returns nil when OUTPUT is not a JSON array."
   "Magit actions for the repository shown in this overview buffer."
   [["Magit"
     ("!"  "Magit dispatch"   magit-gh-repo-overview-magit-dispatch)
-    ("gs"   "Status"          magit-gh-repo-overview-magit-status)
-    ("d"   "Diff (dwim)"     magit-gh-repo-overview-magit-diff
-     :if magit-gh-repo-overview--has-changes-p)
-    ("D"   "Diff…"           magit-gh-repo-overview-magit-diff-full
+    ("gs"   "Status"         magit-gh-repo-overview-magit-status)
+    ("d"   "Diff"            magit-gh-repo-overview-magit-diff
      :if magit-gh-repo-overview--has-changes-p)
     ("lc"  "Log (current)"   magit-gh-repo-overview-magit-log)
     ("lf"  "Log…"            magit-gh-repo-overview-magit-log-full)
@@ -2386,8 +2377,8 @@ Returns nil when OUTPUT is not a JSON array."
      :if magit-gh-repo-overview--has-auto-sync-p)
     ("sb"  "Bump submodules..." magit-gh-bump-submodules-menu)]
    ["Batch"
-    ("mca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
     ("msa"  "Sync all"          magit-gh-repo-dashboard-sync-all)
+    ("mca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
     ("maa"  "Autosync all"      magit-gh-repo-dashboard-auto-sync)]
    ["Agent Shell"
     ("as"   "Agent shell (project)"  magit-gh-repo-overview-agent-shell

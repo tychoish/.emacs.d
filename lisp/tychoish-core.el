@@ -1027,7 +1027,6 @@
 
 (use-package magit-gh
   :ensure t
-  :after magit
   :commands (magit-gh-prune-merged-branches magit-gh-ci-fetch magit-gh-pr-fetch)
   :config
   (setq magit-gh-pr-limit 50)
@@ -1046,8 +1045,11 @@
     '("R" "Fetch PR comments" magit-gh-pr-fetch)))
 
 (use-package magit-gh-repo-dashboard
-  :bind (:map tychoish/magit-map
-              ("d" . magit-gh-repo-dashboard-open))
+  :bind
+    (:map tychoish/magit-map
+	  ("d" . magit-gh-repo-dashboard-open)
+	  :map magit-mode-map
+	  ("C-c C-d" . magit-gh-repo-dashboard-open-other-window))
   :commands (magit-gh-repo-dashboard-view magit-gh-pr-dashboard-open)
   :config
   (require 'magit-gh-bump-submodules))
@@ -2762,7 +2764,20 @@ Useful after changing `eglot-workspace-configuration' or
 
   (tychoish/agent-shell--apply-environment))
 
+(use-package annotated-completing-read
+  :ensure nil
+  :load-path "external/annotated-completing-read"
+  :commands (annotated-completing-read
+	     annotated-completing-read-context-from-point
+	     annotated-completing-read-directory))
+
+(use-package agent-shell-menu
+  :ensure nil
+  :load-path "external/agent-shell-queue"
+  :commands (magit-gh-repo-dashboard-open))
+
 (use-package agent-shell-queue
+  :ensure nil
   :load-path "external/agent-shell-queue"
   :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
          (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
@@ -2860,6 +2875,7 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-manager
   :load-path "external/agent-shell-manager"
+  :ensure nil
   :after (agent-shell)
   :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
   :bind (:map tychoish/robot-agent-shell-map
@@ -2869,6 +2885,7 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package sprite
   :load-path "lisp"
+  :ensure nil
   :commands (sprite-list sprite-create
 			 sprite-get-next sprite-get-or-create-next)
   :config
@@ -2877,6 +2894,7 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-notifications
   :load-path "external/agent-shell-notifications"
+  :ensure nil
   :after (agent-shell alert)
   :delight (agent-shell-notifications-mode "")
   :hook ((agent-shell-mode . agent-shell-notifications-mode)
