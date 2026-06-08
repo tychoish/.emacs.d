@@ -127,7 +127,11 @@ Keyword arguments:
                            :sort-hint sort-hint
                            :worktree worktree
                            :sync-branches sync-branches
-                           :sync-command sync-command)))))))
+                           :sync-command sync-command)))
+	    (mapc (lambda (repo)
+		    (let ((sync-option (magit-gh-repo-auto-sync repo)))
+		      (unless (member sync-option '(nil auto-getch auto-pull auto-commit-and-push auto-sync-command))
+			(message "magit-gh-repo-dashboard: repo %s has invalid sync option %s" (magit-gh-repo-name repo) sync-option)))))))))
 
 ;;;; Registry helpers
 
@@ -288,33 +292,35 @@ accumulating their outputs before assembling the stats plist."
 (defun magit-gh-repo-overview--pr-counts-async (path callback)
   "Fetch open PR counts for repo at PATH asynchronously.
 Checks the in-memory cache first; calls CALLBACK with (TOTAL . MINE)."
-  (if-let* ((cached (magit-gh--cache-get path :pr-counts)))
-      (funcall callback cached)
-    (magit-gh--run-process
-     '("api" "user" "--jq" ".login")
-     path
-     (lambda (viewer-output)
-       (let ((viewer (string-trim viewer-output)))
-         (magit-gh--run-process
-          (list "pr" "list" "--json" "number,author"
-                "--state" "open" "--limit" "200")
-          path
-          (lambda (pr-output)
-            (let* ((trimmed (string-trim pr-output))
-                   (counts
-                    (if (string-prefix-p "[" trimmed)
-                        (let ((prs (json-parse-string trimmed
-                                                      :array-type 'list
-                                                      :object-type 'alist)))
-                          (cons (length prs)
-                                (seq-count
-                                 (lambda (pr)
-                                   (equal viewer
-                                          (map-elt (map-elt pr 'author) 'login)))
-                                 prs)))
-                      (cons 0 0))))
-              (magit-gh--cache-set path :pr-counts counts)
-              (funcall callback counts)))))))))
+  (cond ((magit-gh--cache-get path :include-prs)
+	 (if-let* ((cached (magit-gh--cache-get path :pr-counts)))
+	     (funcall callback cached)
+	   (magit-gh--run-process
+	    '("api" "user" "--jq" ".login")
+	    path
+	    (lambda (viewer-output)
+	      (let ((viewer (string-trim viewer-output)))
+		(magit-gh--run-process
+		 (list "pr" "list" "--json" "number,author"
+                       "--state" "open" "--limit" "200")
+		 path
+		 (lambda (pr-output)
+		   (let* ((trimmed (string-trim pr-output))
+			  (counts
+			   (if (string-prefix-p "[" trimmed)
+                               (let ((prs (json-parse-string trimmed
+							     :array-type 'list
+							     :object-type 'alist)))
+				 (cons (length prs)
+                                       (seq-count
+					(lambda (pr)
+					  (equal viewer
+						 (map-elt (map-elt pr 'author) 'login)))
+					prs)))
+			     (cons 0 0))))
+		     (magit-gh--cache-set path :pr-counts counts)
+		     (funcall callback counts)))))))))
+	(t 'disabled)))
 
 
 (defun magit-gh-repo-dashboard--get-stats (repo)
@@ -1780,11 +1786,13 @@ when still loading.  PR-COUNTS is a cons (TOTAL . MINE), or nil when loading."
        "Branch" branch 'magit-gh-repo-branch-face)
       (magit-gh-repo-overview--insert-kv
        "Behind"
-       (if (> behind 0) (format "%d commits" behind) "up to date")
+       (if (> behind 0)
+	   (format "%d commits" behind)
+	 "up to date")
        (when (> behind 0) 'warning))
-      (insert "\n")
       (if dirty
           (let* ((classified (magit-gh-repo-overview--classify-files uncommitted-files)))
+	    (insert "\n")
             (insert (propertize "Uncommitted Files:\n" 'face 'bold))
             (magit-gh-repo-overview--insert-file-section "Staged"    (alist-get 'staged    classified))
             (magit-gh-repo-overview--insert-file-section "Unstaged"  (alist-get 'unstaged  classified))
@@ -1793,14 +1801,16 @@ when still loading.  PR-COUNTS is a cons (TOTAL . MINE), or nil when loading."
             (unless (seq-some #'cdr classified)
               (insert (propertize "  (none)\n" 'face 'shadow))))
         (magit-gh-repo-overview--insert-kv "Changes" "clean"))
-      (insert "\n")
-      (insert (propertize "Pull Requests:\n" 'face 'bold))
       (cond
+       ((eq pr-counts 'disabled) t)
        ((null pr-counts)
+	(insert (propertize "\nPull Requests:\n" 'face 'bold))
         (insert (propertize "  loading...\n" 'face 'shadow)))
        ((= (car pr-counts) 0)
+	(insert (propertize "\nPull Requests:\n" 'face 'bold))
         (insert (propertize "  None\n" 'face 'shadow)))
        (t
+	(insert (propertize "\nPull Requests:\n" 'face 'bold))
         (insert (format "  Open:   %d\n" (car pr-counts)))
         (when (> (cdr pr-counts) 0)
           (insert (format "  Yours:  %d\n" (cdr pr-counts))))))
@@ -1855,7 +1865,9 @@ On a Recent Commits line: show the commit in magit."
     (magit-gh-repo-overview--render
      magit-gh-repo-overview--repo
      magit-gh-repo-overview--stats
-     magit-gh-repo-overview--pr-counts)
+     (or (when (magit-gh-repo-include-prs magit-gh-repo-overview--repo)
+	   magit-gh-repo-overview--pr-counts)
+	 'disabled))
     (goto-char (point-min))))
 
 (defun magit-gh-repo-overview--start-async-load (repo buf)
