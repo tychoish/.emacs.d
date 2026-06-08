@@ -130,7 +130,7 @@ Keyword arguments:
                            :sync-command sync-command)))
 	    (mapc (lambda (repo)
 		    (let ((sync-option (magit-gh-repo-auto-sync repo)))
-		      (unless (member sync-option '(nil auto-getch auto-pull auto-commit-and-push auto-sync-command))
+		      (unless (member sync-option '(nil auto-fetch auto-pull auto-commit-and-push auto-sync-command))
 			(message "magit-gh-repo-dashboard: repo %s has invalid sync option %s" (magit-gh-repo-name repo) sync-option)))))))))
 
 ;;;; Registry helpers
