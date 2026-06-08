@@ -941,5 +941,64 @@
   (with-temp-buffer
     (should (eq t (tychoish/set-up-show-whitespace)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; kill-buffers-visiting-missing-files
+
+(ert-deftest bootstrap/kill-missing-file-buffers-finds-missing ()
+  "Kills and returns path for a buffer whose file no longer exists."
+  (let ((tmp (make-temp-file "ert-kill-missing-")))
+    (unwind-protect
+        (let ((buf (find-file-noselect tmp)))
+          (unwind-protect
+              (progn
+                (delete-file tmp)
+                (cl-letf (((symbol-function 'kill-buffer-ask)
+                           (lambda (b) (kill-buffer b) t)))
+                  (should (member tmp (kill-buffers-visiting-missing-files)))))
+            (when (buffer-live-p buf) (kill-buffer buf))))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
+(ert-deftest bootstrap/kill-missing-file-buffers-skips-existing ()
+  "Does not include buffers whose file still exists."
+  (let ((tmp (make-temp-file "ert-kill-existing-")))
+    (unwind-protect
+        (let ((buf (find-file-noselect tmp)))
+          (unwind-protect
+              (cl-letf (((symbol-function 'kill-buffer-ask)
+                         (lambda (_) (error "should not be called"))))
+                (should-not (member tmp (kill-buffers-visiting-missing-files))))
+            (kill-buffer buf)))
+      (delete-file tmp))))
+
+(ert-deftest bootstrap/kill-missing-file-buffers-skips-scratch ()
+  "Does not prompt for scratch buffers that have no file name."
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'kill-buffer-ask)
+               (lambda (_) (error "should not be called"))))
+      (kill-buffers-visiting-missing-files))))
+
+(ert-deftest bootstrap/kill-missing-file-buffers-respects-no ()
+  "Excludes buffers from the return value when kill-buffer-ask returns nil."
+  (let ((tmp (make-temp-file "ert-kill-no-")))
+    (unwind-protect
+        (let ((buf (find-file-noselect tmp)))
+          (unwind-protect
+              (progn
+                (delete-file tmp)
+                (cl-letf (((symbol-function 'kill-buffer-ask) (lambda (_) nil)))
+                  (should-not (kill-buffers-visiting-missing-files))))
+            (when (buffer-live-p buf) (kill-buffer buf))))
+      (when (file-exists-p tmp) (delete-file tmp)))))
+
+(ert-deftest bootstrap/kill-missing-file-buffers-empty ()
+  "Returns nil when there are no missing-file buffers."
+  (cl-letf (((symbol-function 'buffer-list) (lambda () nil)))
+    (should-not (kill-buffers-visiting-missing-files))))
+
+(ert-deftest bootstrap/kill-missing-file-buffers-returns-list ()
+  "Return value is always a list."
+  (cl-letf (((symbol-function 'buffer-list) (lambda () nil)))
+    (should (listp (kill-buffers-visiting-missing-files)))))
+
 (provide 'test-tychoish-bootstrap)
 ;;; test-tychoish-bootstrap.el ends here

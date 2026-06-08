@@ -984,6 +984,26 @@
   (defalias 'revbufs-kill
     (kmacro "C-f C-f C-f C-k")))
 
+(use-package popper
+  :ensure t
+  :bind (("C-c '"   . popper-toggle)
+         ("C-c C-'" . popper-cycle)
+         ("C-c \""  . popper-toggle-type))
+  :init
+  (setq popper-reference-buffers
+        '("\\*Messages\\*"
+          "\\*Warnings\\*"
+          "\\*Backtrace\\*"
+          "\\*Compile-Log\\*"
+          "\\*compilation\\*"
+          "\\*grep\\*"
+          "\\*xref\\*"
+          "\\*Flymake diagnostics.*\\*"
+          help-mode
+          compilation-mode))
+  (popper-mode +1)
+  (popper-echo-mode +1))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; version control
@@ -997,7 +1017,8 @@
    :prefix-map tychoish/magit-map
    ("s" . magit-status)
    ("f" . magit-branch)
-   ("b" . magit-blame))
+   ("b" . magit-blame)
+   ("o" . magit-open-repo))
   (make-read-extended-command-for-prefix "magit"
     :bind-map tychoish/magit-map
     :bind-key "x")
@@ -1018,6 +1039,8 @@
 
   (which-key-customize "(s)merge-commands" :map 'magit-command-mode-map :key "m")
   (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x")
+
+  (require 'magit-open-repo)
 
   (let* ((dir (package-desc-dir (package-get-descriptor 'transient)))
 	 (path (f-join dir "transient.el")))
@@ -1172,18 +1195,25 @@
   :bind (:map telega-prefix-map
 	      :prefix "d"
 	      :prefix-map tychoish/telega-buffer-management-map
-	      ("h" . telega-bury-chat-buffers)
-	      ("k" . telega-kill-chat-buffers)
+	      ("h" . telega-extras-bury-chat-buffers)
+	      ("k" . telega-extras-kill-chat-buffers)
 	      :map telega-chat-mode-map
 	      ("C-c C-f" . telega-chat-buffer-auto-fill)
 	      :map telega-root-mode-map
 	      ("C-c C-f" . telega-root-buffer-auto-fill)
-	      ("<tab>" . telega-root-cycle-next))
+	      ("<tab>" . telega-extras-root-cycle-next)
+	      ("h" . telega-extras-bury-chat-buffers)
+	      ("C-k" . telega-extras-kill-chat-buffers)
+	      ("d" . telega-extras-disconnect))
   :commands (telega
 	     telega-chat-mode
-	     tychoish/telega-switch-to-root
-	     tychoish/telega-force-kill)
+	     telega-extras-switch-to-root
+	     telega-extras-force-kill
+	     telega-extras-disconnect)
   :init
+  (defun tychoish--telega-require-extras ()
+    (require 'telega-extras))
+  (add-hook 'telega-load-hook #'tychoish--telega-require-extras)
   (which-key-customize "telega-prefix" :key "C-c n")
   (which-key-customize "telega-prefix" :key "C-c v")
   (make-read-extended-command-for-prefix "telega"
@@ -1191,10 +1221,6 @@
     :bind-key "x"
     :key-alias "telega-commands")
   :config
-  (add-hook 'telega-load-hook 'tychoish/make-telega-root-default-buffer)
-  (add-hook 'telega-load-hook 'tychoish/telega-start-idle-bury-timer)
-  (add-hook 'telega-kill-hook 'tychoish/remove-telega-root-as-default-buffer)
-  (add-hook 'telega-kill-hook 'tychoish/telega-stop-idle-bury-timer)
   (add-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
 
   (when (eq system-type 'darwin)
@@ -1238,94 +1264,7 @@
 
   (require 'telega-alert)
   (telega-mode-line-mode 1)
-  (telega-alert-mode 1)
-
-  (defun telega-chat-folders (_chat) nil)
-
-  (defun telega-root-cycle-next (chat)
-    "Either expand if forum or cycle to next `CHAT' at point."
-    (interactive (list (telega-chat-at (point))))
-
-    (if (telega-chat-match-p chat 'is-forum)
-	(telega-chat-button-toggle-view chat)
-      (ignore-errors
-	(telega-root-next-important (point))
-	(telega-root-next-mention (point))
-	(telega-root-next-reaction (point))
-	(telega-root-next-unread (point)))))
-
-  (defvar tychoish/telega-idle-bury-timer nil
-    "Timer that buries telega chat buffers after idle.")
-
-  (defun tychoish/telega-start-idle-bury-timer ()
-    "Start a repeating timer to bury telega chat buffers after 1 hour of idle."
-    (setq tychoish/telega-idle-bury-timer
-	  (run-with-idle-timer 3600 t #'telega-bury-chat-buffers)))
-
-  (defun tychoish/telega-stop-idle-bury-timer ()
-    "Stop telega timer."
-    (when tychoish/telega-idle-bury-timer
-      (setq tychoish/telega-idle-bury-timer (cancel-timer tychoish/telega-idle-bury-timer))))
-
-  (defun telega-toggle-debug ()
-    (interactive)
-    (setq telega-debug (not telega-debug))
-    (if telega-debug
-	(message "telega-debug mode enabled")
-      (message "telega-debug mode disabled")))
-
-  (defun tychoish/telega-notify-skip-own (orig-fn msg)
-    (and (not (telega-msg-match-p msg '(sender me)))
-	 (funcall orig-fn msg)))
-  (advice-add 'telega-notifications-msg-notify-p :around #'tychoish/telega-notify-skip-own)
-
-  (defun telega-bury-chat-buffers ()
-    "iterates through all currently visable frames and windows and changes
-all visable `telega-chat-mode buffers' to the `*Telega Root*` buffer."
-    (interactive)
-    (let ((target-buffer (get-buffer "*Telega Root*"))
-	  (count 0))
-      (when target-buffer
-	(dolist (frame (frame-list))
-	  (dolist (window (window-list frame))
-	    (let ((buf (window-buffer window)))
-	      (when (eq (buffer-local-value 'major-mode buf) 'telega-chat-mode)
-		(bury-buffer buf)
-		(set-window-buffer window target-buffer)
-		(setq count (+ count 1)))))))
-      (unless (zerop count)
-	(alert (format "burried %d telega-chat-%s" count
-		       (if (= count 1)
-			   "buffer"
-			 "buffers"))
-	       :title (format "emacs.%s.telega" sprite-instance-id)
-	       :persistent t))))
-
-  (defun telega-kill-chat-buffers ()
-    (interactive)
-    (kill-buffers-matching-mode 'telega-chat-mode))
-
-  (defun telega-force-kill ()
-    (interactive)
-    (telega-kill t))
-
-  (defun tychoish/make-telega-root-default-buffer ()
-    (add-hook 'after-make-frame-functions #'tychoish/telega-switch-to-root)
-    (add-hook 'server-after-make-frame-hook #'tychoish/telega-switch-to-root)
-    (setq initial-buffer-choice #'tychoish/telega-switch-to-root))
-
-  (defun tychoish/remove-telega-root-as-default-buffer ()
-    (remove-hook 'after-make-frame-functions #'tychoish/telega-switch-to-root)
-    (remove-hook 'server-after-make-frame-hook #'tychoish/telega-switch-to-root)
-    (setq initial-buffer-choice nil))
-
-  (defun tychoish/telega-switch-to-root ()
-    (interactive)
-    (switch-to-buffer (or (get-buffer telega-root-buffer-name)
-			  (when (bufferp initial-buffer-choice) initial-buffer-choice)
-			  (when (stringp initial-buffer-choice) (get-buffer initial-buffer-choice))
-			  (last-buffer)
-			  (get-buffer "*scratch*")))))
+  (telega-alert-mode 1))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

@@ -1,28 +1,41 @@
 [submodule "elpa"]
 	path = elpa
 	url = https://github.com/tychoish/elpa.git
+	branch = main
 [submodule "xtdlib"]
 	path = external/xtdlib
 	url = https://github.com/tychoish/xtdlib.el
+	branch = main
 [submodule "annotated-completing-read"]
 	path = external/annotated-completing-read
 	url = https://github.com/tychoish/annotated-completing-read
+	branch = main
 [submodule "agent-shell-queue"]
 	path = external/agent-shell-queue
 	url = https://github.com/tychoish/agent-shell-queue
+	branch = main
 [submodule "agent-shell-manager"]
 	path = external/agent-shell-manager
 	url = https://github.com/ElleNajt/agent-shell-manager.git
+	ignore = untracked
+	branch = main
 [submodule "agent-shell-notifications"]
 	path = external/agent-shell-notifications
 	url = https://github.com/zackattackz/agent-shell-notifications.git
+	ignore = untracked
+	branch = main
 [submodule "claude-code-ide"]
 	path = external/claude-code-ide
 	url = https://github.com/manzaltu/claude-code-ide.el
 	ignore = untracked
+	branch = main
 [submodule "consult-mu"]
 	path = external/consult-mu
 	url = https://github.com/armindarvish/consult-mu.git
+	ignore = untracked
+	branch = main
 [submodule "efrit"]
 	path = external/efrit
 	url = https://github.com/steveyegge/efrit.git
+	ignore = untracked
+	branch = main

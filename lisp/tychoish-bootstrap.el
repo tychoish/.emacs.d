@@ -48,6 +48,10 @@
 (declare-function approximate-project-name "xtdlib")
 (declare-function approximate-project-buffers "xtdlib")
 
+(defvar tychoish-fallback-buffer-name "*scratch*"
+  "Buffer name used as a last-resort fallback when no other buffer is available.
+Override in user/*.el to customize per machine or instance.")
+
 (defun tychoish--which-key-add-replacement (map key new-text)
   "Register a which-key annotation for KEY with NEW-TEXT, scoped to MAP when supported.
 Falls back to `which-key-add-key-based-replacements' on Emacs versions that lack
@@ -1013,6 +1017,27 @@ Returns the number of buffers killed."
     (message "killing all buffers (%d) with mode \"%s\"" count mode)
     (mapc #'kill-buffer buffers)
     count))
+
+(defun kill-buffers-visiting-missing-files ()
+  "Kill buffers visiting files that no longer exist on disk.
+Prompts before killing each buffer.  Returns the list of killed file paths
+when called non-interactively."
+  (interactive)
+  (let ((killed (thread-last (buffer-list)
+                             (seq-filter (lambda (buf)
+                                           (when-let* ((file (buffer-file-name buf)))
+                                             (not (file-exists-p file)))))
+                             (seq-map (lambda (buf)
+                                        (cons (buffer-file-name buf) (kill-buffer-ask buf))))
+                             (seq-filter #'cdr)
+                             (seq-map #'car))))
+    (if (called-interactively-p 'any)
+        (message "killed %d buffers visiting missing files%s"
+                 (length killed)
+                 (if killed
+                     (format ": %s" (string-join (seq-map #'f-collapse-homedir killed) ", "))
+                   ""))
+      killed)))
 
 (defun tychoish/super-abort-minibuffers ()
   (interactive)
