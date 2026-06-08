@@ -691,12 +691,14 @@ more arguments than the function cares about."
 
 (defun tychoish-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
-  (thread-last  (f-entries (file-name-concat user-emacs-directory "user"))
-                (seq-filter (lambda (it) (string-suffix-p ".el" it)))
-                (seq-map #'file-name-nondirectory)
-                (seq-map #'file-name-sans-extension)
-                (seq-map #'intern)
-                (seq-map #'tychoish--load-user-file)))
+    (thread-last
+      (file-name-concat user-emacs-directory "user")
+      (funcall (lambda (path) (when (file-directory-p path) (f-entries path))))
+      (seq-filter (lambda (it) (string-suffix-p ".el" it)))
+      (seq-map #'file-name-nondirectory)
+      (seq-map #'file-name-sans-extension)
+      (seq-map #'intern)
+      (seq-map #'tychoish--load-user-file)))
 
 (defvar tychoish/abbrev-files-cache (make-hash-table :test #'equal)
   "cache mapping file names to files' mtime to avoid re-importing files")
