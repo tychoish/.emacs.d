@@ -40,9 +40,6 @@
 (require 'subr-x)
 (require 'map)
 
-(use-package xtdlib
-  :demand t)
-
 (declare-function which-key-add-key-based-replacements "which-key")
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
@@ -646,10 +643,10 @@ more arguments than the function cares about."
  :operation 'tychoish/ensure-default-font
  :delay 0.1)
 
-(add-lazy-init
+(add-one-shot-hook
  :name "restore-desktop"
- :operation 'tychoish/desktop-read-init
- :delay 0.25)
+ :hook after-first-frame-created
+ :operation 'tychoish/desktop-read-init)
 
 (add-lazy-init
  :name "emacs-instance-persistence"
@@ -950,7 +947,6 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
     (if (called-interactively-p 'any)
 	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (string-join killed ", "))
       killed)))
-
 
 (defun buffers-matching-project (thing)
   (cond

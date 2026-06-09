@@ -541,15 +541,12 @@
   :ensure t
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
   :commands (vertico-mode vertico-multiform-mode)
+  :hook (vertico-mode . vertico-multiform-mode)
   :init
   (add-lazy-init
    :name "<core> vertico primary"
    :delay 0.5
    :operation 'vertico-mode)
-  (add-lazy-init
-   :name "<core> vertico multiform"
-   :delay 1.0
-   :operation 'vertico-multiform-mode)
 
   (setq vertico-resize t)
   (setq vertico-count 25)
