@@ -496,18 +496,17 @@ more arguments than the function cares about."
     (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
     (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
+
     (if (daemonp)
-        (progn
-          (setq desktop-restore-frames nil)
-          (setq desktop-load-locked-desktop t)
-          (setq desktop-restore-eager nil))
-      (setq desktop-restore-eager t)
-      (setq desktop-load-locked-desktop nil))
+        (setq desktop-restore-frames nil
+              desktop-load-locked-desktop t
+              desktop-restore-eager nil)
+      (setq desktop-restore-eager t
+            desktop-load-locked-desktop nil))
 
-    (require 'desktop)
-
-    (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
-      (with-gc-suppressed
+    (with-gc-suppressed
+     (require 'desktop)
+     (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
        (with-file-name-handler-disabled
 	(with-silence (desktop-read)))))
 
