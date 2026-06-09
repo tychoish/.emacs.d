@@ -2671,10 +2671,11 @@ Useful after changing `eglot-workspace-configuration' or
                     (car (split-string (downcase (string-trim agent-name))))
                     slug))))
   :config
+  (require 'agent-shell-omp)
+
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-anthropic-default-model-id "sonnet")
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
-  (require 'agent-shell-omp)
   (add-to-list 'agent-shell-agent-configs (agent-shell-omp-make-agent-config))
 
   (bind-keys

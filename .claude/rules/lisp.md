@@ -33,6 +33,24 @@ from cl-lib. Do **not** use `cl-flet`, `cl-labels`, `cl-loop`, `cl-some`, `cl-ev
 `cl-find-if`, `cl-remove-if`, `cl-remove-if-not`, `cl-reduce`, or any other CL iteration
 or collection function.
 
+### Hash Table Access
+
+Never use `gethash` or `puthash` directly. Use `map.el` accessors instead — they work
+uniformly across hash tables, alists, and plists, and read more naturally in pipelines.
+
+| Avoid                         | Use instead                      |
+|-------------------------------|----------------------------------|
+| `(gethash key table)`         | `(map-elt table key)`            |
+| `(puthash key val table)`     | `(setf (map-elt table key) val)` |
+
+Use `map-into` to convert a list of cons cells (or an alist) into a hash table without
+an explicit loop:
+
+```elisp
+(map-into (seq-map (lambda (x) (cons (key-fn x) x)) items)
+          '(hash-table :test equal))
+```
+
 ### List Operations and Iteration
 
 Use `seq.el` equivalents instead of cl-lib or raw `mapcar`:

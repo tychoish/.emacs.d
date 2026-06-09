@@ -1,6 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (eval-when-compile (require 'xtdlib))
+(require 'map)
 
 (require 'mu4e-autoloads nil t)
 
@@ -28,7 +29,7 @@
 (declare-function cape-capf-prefix-length "cape")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
-(defvar tychoish/mail-accounts-table (ht-create #'equal))
+(defvar tychoish/mail-accounts-table (make-hash-table :test #'equal))
 (defvar tychoish/mail-account-current nil)
 
 (bind-keys
@@ -226,22 +227,22 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 (defun consult-mu-bookmark ()
   "Select `consult-mu' initial query from mu4e-bookmarks."
   (interactive)
-  (let* ((bookmarks (ht-create #'equal))
-         (_ (mapc (lambda (bm) (setf (ht-get bookmarks (plist-get bm :name)) bm))
-                  mu4e-bookmarks))
-         (annotation-table (let ((tbl (make-hash-table :test #'equal)))
-                              (ht-each (lambda (name bm)
-                                         (ht-set tbl name
-                                                 (format "[%s] %s"
-                                                         (char-to-string (plist-get bm :key))
-                                                         (plist-get bm :query))))
-                                       bookmarks)
-                              tbl))
+  (let* ((bookmarks (map-into
+                     (seq-map (lambda (bm) (cons (plist-get bm :name) bm)) mu4e-bookmarks)
+                     '(hash-table :test equal)))
+         (annotation-table (map-into
+                             (seq-map (lambda (bm)
+                                        (cons (plist-get bm :name)
+                                              (format "[%s] %s"
+                                                      (char-to-string (plist-get bm :key))
+                                                      (plist-get bm :query))))
+                                      mu4e-bookmarks)
+                             '(hash-table :test equal)))
          (selection (annotated-completing-read
                      annotation-table
                      :prompt "mu4e query =>> "
                      :category 'consult-mu)))
-    (consult-mu (plist-get (ht-get bookmarks selection) :query))))
+    (consult-mu (plist-get (map-elt bookmarks selection) :query))))
 
 (defun tychoish/consult-mu-headers-template ()
   (concat "%f" (number-to-string
@@ -334,24 +335,19 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
   "Use consult to select an account/mail configuration."
 
   (interactive
-   (list (let ((table (make-hash-table :test #'equal)))
-	   (ht-map
-	    (lambda (key account)
-	      (ht-set
-	       table key
-	       (format
-		"%s <%s>%s"
-		(tychoish/mail-account-name account)
-		(tychoish/mail-account-address account)
-		(if (equal tychoish/mail-account-current key)
-		    " -- CURRENT"
-		  ""))))
-	    tychoish/mail-accounts-table)
-	   (annotated-completing-read
-	    table
+   (list (annotated-completing-read
+	    (thread-last
+	      tychoish/mail-accounts-table
+	      (map-apply (lambda (key value)
+			 (cons key (format
+ 			  "%s <%s>%s"
+ 			  (tychoish/mail-account-name value)
+ 			  (tychoish/mail-account-address value)
+ 			  (if (equal tychoish/mail-account-current key)
+ 			      " -- CURRENT"
+ 			    ""))) )))
 	    :prompt "mail-account => "
-	    :require-match nil
-	    :category 'consult-mu))))
+	    :require-match nil)))
 
   (let ((select-account-operation (intern account-id)))
     (funcall select-account-operation)))
@@ -373,8 +369,8 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
     (define-key tychoish/mail-map (kbd key) configure-account-symbol)
 
-    (ht-set tychoish/mail-accounts-table account-name
-            (tychoish/mail-make-account
+    (setf (map-elt tychoish/mail-accounts-table account-name)
+          (tychoish/mail-make-account
              :name name
              :address address
              :keybinding key
@@ -404,7 +400,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
        (let* ((account-id ,id)
 	      (account-name ,account-name)
 	      ;; nothing beyond this point should access compilation env ->
-	      (conf (ht-get tychoish/mail-accounts-table account-name))
+	      (conf (map-elt tychoish/mail-accounts-table account-name))
 	      (maildir (tychoish/mail-account-maildir conf)))
 
 	 (setq tychoish/mail-account-current account-name)

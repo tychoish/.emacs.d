@@ -7,6 +7,27 @@ any changes.
 Emacs Lisp-specific coding rules (naming conventions, list operations, macros, cl-lib
 restrictions) live in `.claude/rules/lisp.md`.
 
+### Hash Table Access
+
+Never use `gethash`, `puthash`, or any `ht.el` function. Use `map.el` accessors instead —
+they work uniformly across hash tables, alists, and plists.
+
+| Avoid                             | Use instead                       |
+|-----------------------------------|-----------------------------------|
+| `(gethash key table)`             | `(map-elt table key)`             |
+| `(puthash key val table)`         | `(setf (map-elt table key) val)`  |
+| `(ht-get table key)`              | `(map-elt table key)`             |
+| `(ht-set table key val)`          | `(setf (map-elt table key) val)`  |
+| `(ht-create #'equal)`             | `(make-hash-table :test #'equal)` |
+| `(ht-each (lambda (k v) ...) t)`  | `(map-do (lambda (k v) ...) t)`   |
+
+Use `map-into` to build a hash table from a list of cons cells without an explicit loop:
+
+```elisp
+(map-into (seq-map (lambda (x) (cons (key-fn x) x)) items)
+          '(hash-table :test equal))
+```
+
 ---
 
 ## File Organization
