@@ -2717,7 +2717,7 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package agent-shell-menu
   :ensure nil
   :load-path "external/agent-shell-queue"
-  :commands (magit-gh-repo-dashboard-open))
+  :commands (agent-shell-menu-project-buffers))
 
 (use-package agent-shell-queue
   :ensure nil
