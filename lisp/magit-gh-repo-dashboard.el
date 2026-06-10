@@ -401,6 +401,16 @@ Calls ON-COMPLETE with symbol `ok' on success or `error' and error text on failu
    (lambda (output code)
      (funcall on-complete 'error (format "exit %d: %s" code output)))))
 
+(defun magit-gh-repo-dashboard--push-async (repo on-complete)
+  "Run git push for REPO asynchronously.
+Calls ON-COMPLETE with symbol `ok' on success or `error' and error text on failure."
+  (magit-gh-repo-dashboard--run-git
+   (magit-gh-repo-path repo)
+   '("push")
+   (lambda (_) (funcall on-complete 'ok))
+   (lambda (output code)
+     (funcall on-complete 'error (format "exit %d: %s" code output)))))
+
 (defun magit-gh-repo-dashboard--auto-commit-async (repo on-complete)
   "Stage all changes in REPO and commit using its :auto-commit message function.
 Calls ON-COMPLETE with `ok' when committed, `skipped' when workdir is clean,
@@ -1015,19 +1025,34 @@ submodules and to derive their parent<mod> display name.")
                          (propertize "·" 'face 'shadow)))))
                   active)))))
 
+(defun magit-gh-repo-dashboard--repo-type-rank (repo)
+  "Return a sort rank for REPO based on its git context type.
+0 = plain repo, 1 = worktree, 2 = tracked submodule, 3 = missing submodule."
+  (cond
+   ((magit-gh-repo-worktree repo) 1)
+   ((eq (magit-gh-repo-submodule repo) 'missing) 3)
+   ((magit-gh-repo-submodule repo) 2)
+   (t 0)))
+
 (defun magit-gh-repo-dashboard--sorted-repos (repos)
-  "Return REPOS sorted by :sort-hint, with discovered worktrees following each parent.
-Repos without a sort-hint follow all sorted ones.
+  "Return REPOS sorted by :sort-hint then type, with discovered worktrees following each parent.
+Primary sort is :sort-hint ascending (nil hints follow all sorted ones).
+Secondary sort within equal hints is by type: repo < worktree < submodule < missing.
 Auto-discovered submodules whose path is already in `magit-gh-repo-list' are
 suppressed to avoid duplicate rows — the registered entry is shown instead."
   (let* ((sorted (seq-sort (lambda (a b)
                              (let ((ha (magit-gh-repo-sort-hint a))
                                    (hb (magit-gh-repo-sort-hint b)))
                                (cond
-                                ((and ha hb) (< ha hb))
+                                ((and ha hb)
+                                 (if (= ha hb)
+                                     (< (magit-gh-repo-dashboard--repo-type-rank a)
+                                        (magit-gh-repo-dashboard--repo-type-rank b))
+                                   (< ha hb)))
                                 (ha t)
                                 (hb nil)
-                                (t nil))))
+                                (t (< (magit-gh-repo-dashboard--repo-type-rank a)
+                                      (magit-gh-repo-dashboard--repo-type-rank b))))))
                            repos))
          (registered-paths (let ((paths (make-hash-table :test #'equal)))
                              (seq-do (lambda (r)
@@ -2271,6 +2296,18 @@ Returns nil when OUTPUT is not a JSON array."
      "magit-gh pull"
      (lambda (_) (magit-gh-repo-dashboard--maybe-refresh)))))
 
+(defun magit-gh-repo-dashboard-push-all ()
+  "Asynchronously push marked repos, or all visible repos when none are marked."
+  (interactive)
+  (let ((repos (magit-gh-repo-dashboard--effective-repos)))
+    (unless repos
+      (user-error "No repositories to push"))
+    (magit-gh-repo-dashboard--batch-run
+     repos
+     #'magit-gh-repo-dashboard--push-async
+     "magit-gh push"
+     (lambda (_) (magit-gh-repo-dashboard--maybe-refresh)))))
+
 ;;;; Transient menus
 
 (transient-define-prefix magit-gh-repo-dashboard-menu ()
@@ -2339,6 +2376,7 @@ Returns nil when OUTPUT is not a JSON array."
      :inapt-if-not magit-gh-repo-dashboard--has-marks-p)
     ("mfa"  "Fetch all/marked"  magit-gh-repo-dashboard-fetch-all)
     ("mpa"  "Pull all/marked"   magit-gh-repo-dashboard-pull-all)
+    ("mpu"  "Push all/marked"   magit-gh-repo-dashboard-push-all)
     ("msa"  "Sync all"          magit-gh-repo-dashboard-sync-all)
     ("mca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
     ("maa"  "Autosync all"      magit-gh-repo-dashboard-auto-sync)
@@ -2391,7 +2429,8 @@ Returns nil when OUTPUT is not a JSON array."
    ["Batch"
     ("msa"  "Sync all"          magit-gh-repo-dashboard-sync-all)
     ("mca"  "Commit all"        magit-gh-repo-dashboard-commit-all)
-    ("maa"  "Autosync all"      magit-gh-repo-dashboard-auto-sync)]
+    ("maa"  "Autosync all"      magit-gh-repo-dashboard-auto-sync)
+    ("mpa"  "Push all"          magit-gh-repo-dashboard-push-all)]
    ["Agent Shell"
     ("as"   "Agent shell (project)"  magit-gh-repo-overview-agent-shell
      :if agent-shell-menu-project-buffers)

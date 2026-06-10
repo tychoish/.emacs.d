@@ -2004,3 +2004,111 @@ The bug was that add-text-properties returns t, not the modified string."
       (should (eq 'missing (magit-gh-repo-submodule missing))))
     ;; Other prefixes should still create repos, marked as missing if dir doesn't exist
     (should (seq-every-p #'magit-gh-repo-p repos))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; magit-gh-repo-dashboard--repo-type-rank
+
+(ert-deftest magit-gh-repo-dashboard/repo-type-rank-plain-repo ()
+  "Plain repo (no worktree, no submodule) gets rank 0."
+  (let ((r (magit-gh-repo--make :name "r" :path "/tmp/r")))
+    (should (= 0 (magit-gh-repo-dashboard--repo-type-rank r)))))
+
+(ert-deftest magit-gh-repo-dashboard/repo-type-rank-worktree ()
+  "Worktree gets rank 1."
+  (let ((r (magit-gh-repo--make :name "r" :path "/tmp/r" :worktree t)))
+    (should (= 1 (magit-gh-repo-dashboard--repo-type-rank r)))))
+
+(ert-deftest magit-gh-repo-dashboard/repo-type-rank-tracked-submodule ()
+  "Tracked submodule (non-missing :submodule) gets rank 2."
+  (let ((r (magit-gh-repo--make :name "r" :path "/tmp/r" :submodule "/tmp/parent")))
+    (should (= 2 (magit-gh-repo-dashboard--repo-type-rank r)))))
+
+(ert-deftest magit-gh-repo-dashboard/repo-type-rank-missing-submodule ()
+  "Missing submodule gets rank 3."
+  (let ((r (magit-gh-repo--make :name "r" :path "/tmp/r" :submodule 'missing)))
+    (should (= 3 (magit-gh-repo-dashboard--repo-type-rank r)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; magit-gh-repo-dashboard--sorted-repos type-based ordering
+
+(ert-deftest magit-gh-repo-dashboard/sorted-repos-type-order-no-hints ()
+  "Without sort-hints, repos are ordered by type: repo < wt < subm < missing."
+  (let* ((repo (magit-gh-repo--make :name "repo" :path "/tmp/repo"))
+         (wt (magit-gh-repo--make :name "wt" :path "/tmp/wt" :worktree t))
+         (subm (magit-gh-repo--make :name "subm" :path "/tmp/subm" :submodule "/p"))
+         (miss (magit-gh-repo--make :name "miss" :path "/tmp/miss" :submodule 'missing))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (result (magit-gh-repo-dashboard--sorted-repos (list miss wt repo subm))))
+    (should (equal "repo" (magit-gh-repo-name (nth 0 result))))
+    (should (equal "wt"   (magit-gh-repo-name (nth 1 result))))
+    (should (equal "subm" (magit-gh-repo-name (nth 2 result))))
+    (should (equal "miss" (magit-gh-repo-name (nth 3 result))))))
+
+(ert-deftest magit-gh-repo-dashboard/sorted-repos-type-order-within-same-hint ()
+  "Repos sharing the same sort-hint are ordered by type as secondary key."
+  (let* ((repo (magit-gh-repo--make :name "repo" :path "/tmp/repo" :sort-hint 5))
+         (wt (magit-gh-repo--make :name "wt" :path "/tmp/wt" :worktree t :sort-hint 5))
+         (magit-gh--cache (make-hash-table :test #'equal))
+         (result (magit-gh-repo-dashboard--sorted-repos (list wt repo))))
+    (should (equal "repo" (magit-gh-repo-name (nth 0 result))))
+    (should (equal "wt"   (magit-gh-repo-name (nth 1 result))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; magit-gh-repo-dashboard--push-async
+
+(ert-deftest magit-gh-repo-dashboard/push-async-calls-run-git-with-push ()
+  "Calls --run-git with the repo path and (\"push\") args."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+         (captured-path nil)
+         (captured-args nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--run-git)
+               (lambda (path args _on-success &optional _on-error)
+                 (setq captured-path path
+                       captured-args args))))
+      (magit-gh-repo-dashboard--push-async repo #'ignore))
+    (should (equal "/tmp/r" captured-path))
+    (should (equal '("push") captured-args))))
+
+(ert-deftest magit-gh-repo-dashboard/push-async-calls-callback-ok-on-success ()
+  "Callback receives `ok' when --run-git calls on-success."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+         (result nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--run-git)
+               (lambda (_path _args on-success &optional _on-error)
+                 (funcall on-success ""))))
+      (magit-gh-repo-dashboard--push-async repo (lambda (status &rest _) (setq result status))))
+    (should (eq 'ok result))))
+
+(ert-deftest magit-gh-repo-dashboard/push-async-calls-callback-error-on-failure ()
+  "Callback receives `error' when --run-git calls on-error."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+         (result nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--run-git)
+               (lambda (_path _args _on-success &optional on-error)
+                 (funcall on-error "remote error" 1))))
+      (magit-gh-repo-dashboard--push-async repo (lambda (status &rest _) (setq result status))))
+    (should (eq 'error result))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; magit-gh-repo-dashboard-push-all
+
+(ert-deftest magit-gh-repo-dashboard/push-all-errors-when-no-repos ()
+  "Signals user-error when --effective-repos returns nil."
+  (cl-letf (((symbol-function 'magit-gh-repo-dashboard--effective-repos)
+             (lambda () nil)))
+    (should-error (magit-gh-repo-dashboard-push-all) :type 'user-error)))
+
+(ert-deftest magit-gh-repo-dashboard/push-all-calls-batch-run-with-push-async ()
+  "Calls --batch-run with the effective repos and --push-async as op-fn."
+  (let* ((repo (magit-gh-repo--make :name "r" :path "/tmp/r"))
+         (batch-repos nil)
+         (batch-op nil))
+    (cl-letf (((symbol-function 'magit-gh-repo-dashboard--effective-repos)
+               (lambda () (list repo)))
+              ((symbol-function 'magit-gh-repo-dashboard--batch-run)
+               (lambda (repos op-fn _label &optional _done)
+                 (setq batch-repos repos
+                       batch-op op-fn))))
+      (magit-gh-repo-dashboard-push-all))
+    (should (equal (list repo) batch-repos))
+    (should (eq #'magit-gh-repo-dashboard--push-async batch-op))))
