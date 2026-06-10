@@ -1357,15 +1357,14 @@ Select \"(clear)\" to show all repos; quitting leaves the current filter unchang
 The tag is stored in memory for this session and is not saved to the registry.
 Pick from existing tags or type a new symbol name."
   (interactive)
-  (let* ((repo (magit-gh-repo-dashboard--repo-at-point))
-         (tag (magit-gh-repo-dashboard--read-tag
-               (format "Add tag to %s: " (magit-gh-repo-name repo)))))
-    (when tag
-      (let* ((path (magit-gh-repo-path repo))
-             (existing (gethash path magit-gh-repo-dashboard--ephemeral-tags)))
-        (unless (memq tag existing)
-          (puthash path (cons tag existing) magit-gh-repo-dashboard--ephemeral-tags))
-        (magit-gh-repo-dashboard-refresh)))))
+  (when-let* ((repo (magit-gh-repo-dashboard--repo-at-point))
+              (tag (magit-gh-repo-dashboard--read-tag
+                    (format "Add tag to %s: " (magit-gh-repo-name repo)))))
+    (let* ((path (magit-gh-repo-path repo))
+           (existing (map-elt magit-gh-repo-dashboard--ephemeral-tags path)))
+      (unless (memq tag existing)
+        (setf (map-elt magit-gh-repo-dashboard--ephemeral-tags path) (cons tag existing)))
+      (magit-gh-repo-dashboard-refresh))))
 
 (defun magit-gh-repo-dashboard-mark-by-tag ()
   "Mark all repos sharing a tag chosen via annotated completion.
@@ -2165,23 +2164,24 @@ Returns nil when OUTPUT is not a JSON array."
 (defun magit-gh-repo-dashboard--dirty-or-unknown-p ()
   "Return non-nil when the repo at point is dirty or its stats are not yet cached."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
-    (let ((stats (magit-gh--cache-get (magit-gh-repo-path repo) :stats)))
-      (or (null stats) (plist-get stats :dirty)))))
+    (if-let* ((stats (magit-gh--cache-get (magit-gh-repo-path repo) :stats)))
+        (plist-get stats :dirty)
+      t)))
 
 (defun magit-gh-repo-dashboard--has-auto-commit-p ()
   "Return non-nil when the repo at point has :auto-commit configured."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
-    (not (null (magit-gh-repo-auto-commit repo)))))
+    (and (magit-gh-repo-auto-commit repo) t)))
 
 (defun magit-gh-repo-dashboard--has-auto-sync-p ()
   "Return non-nil when the repo at point has :auto-sync configured."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
-    (not (null (magit-gh-repo-auto-sync repo)))))
+    (and (magit-gh-repo-auto-sync repo) t)))
 
 (defun magit-gh-repo-dashboard--has-commands-p ()
   "Return non-nil when the repo at point has commands registered."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
-    (not (null (magit-gh-repo-commands repo)))))
+    (and (magit-gh-repo-commands repo) t)))
 
 (defun magit-gh-repo-overview--has-changes-p ()
   "Return non-nil when this overview's repository has uncommitted changes."
@@ -2196,17 +2196,17 @@ Returns nil when OUTPUT is not a JSON array."
 (defun magit-gh-repo-overview--has-auto-commit-p ()
   "Return non-nil when this overview's repository has :auto-commit configured."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
-    (not (null (magit-gh-repo-auto-commit repo)))))
+    (and (magit-gh-repo-auto-commit repo) t)))
 
 (defun magit-gh-repo-overview--has-auto-sync-p ()
   "Return non-nil when this overview's repository has :auto-sync configured."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
-    (not (null (magit-gh-repo-auto-sync repo)))))
+    (and (magit-gh-repo-auto-sync repo) t)))
 
 (defun magit-gh-repo-overview--has-commands-p ()
   "Return non-nil when this overview's repository has commands registered."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
-    (not (null (magit-gh-repo-commands repo)))))
+    (and (magit-gh-repo-commands repo) t)))
 
 (defun magit-gh-repo-dashboard--repo-at-point-behind-p ()
   "Return non-nil when the repo at point has commits behind its upstream."
@@ -2273,7 +2273,7 @@ Returns nil when OUTPUT is not a JSON array."
 
 (defun magit-gh-repo-dashboard--has-marks-p ()
   "Return non-nil when at least one repository is marked."
-  (not (null magit-gh-repo-dashboard--marked-paths)))
+  (and magit-gh-repo-dashboard--marked-paths t))
 
 (defun magit-gh-repo-dashboard-fetch-all ()
   "Asynchronously fetch marked repos, or all visible repos when none are marked."
