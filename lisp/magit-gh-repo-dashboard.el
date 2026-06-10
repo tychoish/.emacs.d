@@ -1028,11 +1028,14 @@ submodules and to derive their parent<mod> display name.")
 (defun magit-gh-repo-dashboard--repo-type-rank (repo)
   "Return a sort rank for REPO based on its git context type.
 0 = plain repo, 1 = worktree, 2 = tracked submodule, 3 = missing submodule."
-  (cond
-   ((magit-gh-repo-worktree repo) 1)
-   ((eq (magit-gh-repo-submodule repo) 'missing) 3)
-   ((magit-gh-repo-submodule repo) 2)
-   (t 0)))
+  (+ (magit-gh-repo-sort-hint repo)
+     (cond
+      ((magit-gh-repo-worktree repo) 1)
+      ((eq (magit-gh-repo-submodule repo) 'missing) 5)
+      ((and magit-gh-repo-dashboard--submodule-path-set
+            (map-elt magit-gh-repo-dashboard--submodule-path-set (magit-gh-repo-path repo))) 5)
+      ((magit-gh-repo-submodule repo) 2)
+      (t 0))))
 
 (defun magit-gh-repo-dashboard--sorted-repos (repos)
   "Return REPOS sorted by :sort-hint then type, with discovered worktrees following each parent.
