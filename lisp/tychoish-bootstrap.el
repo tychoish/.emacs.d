@@ -437,10 +437,6 @@ more arguments than the function cares about."
   (when (or (daemonp) (window-system))
     t))
 
-(defun tychoish-system-name ()
-  (interactive)
-  (message "system: %s" (system-name)))
-
 (defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
 
 (with-eval-after-load 'eshell

@@ -36,7 +36,9 @@
 (require 'magit)
 (require 'magit-gh-extras)
 
-(declare-function annotated-completing-read "annotated-completing-read")
+(require 'annotated-completing-read)
+(require 'sprite)
+
 (declare-function magit-status-setup-buffer "magit-status")
 (declare-function magit-diff-dwim "magit-diff")
 (declare-function magit-diff "magit-diff")
@@ -50,13 +52,14 @@
 (declare-function magit-checkout "magit-branch")
 (declare-function magit-worktree-checkout "magit-worktree")
 (declare-function magit-worktree-delete "magit-worktree")
-(declare-function builder-compile-project "builder")
 (declare-function agent-shell-switch-buffer "agent-shell-menu")
 (declare-function agent-shell-switch-project-session "agent-shell-menu")
 (declare-function agent-shell-new-shell "agent-shell")
 (declare-function agent-shell-queue-buffer-open "agent-shell-queue")
-(declare-function magit-gh-bump-submodules-menu "magit-gh-bump-submodules")
 (declare-function agent-shell-menu-project-buffers "agent-shell-menu")
+
+(declare-function builder-compile-project "builder")
+(declare-function magit-gh-bump-submodules-menu "magit-gh-bump-submodules")
 
 (defconst magit-gh-repo-dashboard-buffer-name "*magit-gh-repos*")
 
@@ -144,7 +147,7 @@ Bind to `timer' when invoking auto-sync from a timer; defaults to `interactive'.
 Includes hostname, Emacs instance ID, and the current sync trigger."
   (format "chore: auto-commit changes in %s [%s:%s, %s]"
           (magit-gh-repo-name repo)
-          (system-name)
+          (sprite-system-name)
           (or (and (boundp 'sprite-instance-id) sprite-instance-id) "unknown")
           (symbol-name magit-gh-repo-dashboard-sync-trigger)))
 

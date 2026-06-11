@@ -59,6 +59,9 @@
   "Name of the running Emacs instance.
 Set by `sprite-set-up-instance-name' at startup.")
 
+(defvar sprite--system-name-cached nil
+  "Cached value of the output of `system-name' for use in system management contexts")
+
 (defvar sprite-cli-instance-id nil
   "CLI-specified instance name; set from --id command-line arguments.")
 
@@ -84,10 +87,13 @@ chain must be re-evaluated."
     (setq sprite-instance-id (sprite-resolve-instance-id)))
   sprite-instance-id)
 
+(defun sprite-system-name ()
+  (or sprite--system-name-cached (setq sprite--system-name-cached (system-name))))
+
 (defun sprite-conf-host-and-instance ()
   "Return (HOSTNAME INSTANCE-ID) for state-path construction."
   (list (if (eq system-type 'darwin)
-            (car (string-split (system-name) "\\."))
+            (car (string-split (sprite-system-name) "\\."))
           (system-name))
         (sprite-instance-name)))
 

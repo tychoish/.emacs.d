@@ -388,7 +388,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 			(and
 			 (or (member sprite-instance-id ',instances)
 			     (null ',instances))
-			 (or (member (system-name) ',systems)
+			 (or (member (sprite-system-name) ',systems)
 			     (null ',systems))))
 		 (,configure-account-symbol))
        :hook 'after-first-frame-created
