@@ -72,7 +72,9 @@ Resolution order: daemon name, `sprite-cli-instance-id',
   (let ((daemon (daemonp)))
     (or (when (eq daemon t) "primary")
         (when (stringp daemon)
-          (setenv "EMACS_SERVER_FILE" daemon)
+	  (if server-use-tcp
+	      (setenv "EMACS_SERVER_FILE" daemon)
+	    (setenv "EMACS_SOCKET_FILE" (expand-file-name daemon server-socket-dir)))
           daemon)
         sprite-cli-instance-id
         sprite-instance-id
