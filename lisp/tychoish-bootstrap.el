@@ -440,7 +440,11 @@ more arguments than the function cares about."
 (defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
 
 (with-eval-after-load 'eshell
-  (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
+  (setq eshell-history-file-name (file-name-concat user-emacs-directory (sprite-state-file-prefix "eshell"))))
+
+(with-eval-after-load 'transient
+  (setq transient-history-file (file-name-concat user-emacs-directory (sprite-state-file-prefix "transient-history.el")))
+  (setq transient-values-file  (file-name-concat user-emacs-directory (sprite-state-file-prefix "transient-values.el"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -491,7 +495,7 @@ more arguments than the function cares about."
     (setq desktop-dirname (file-name-concat user-emacs-directory sprite--conf-state-directory))
     (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-    (setq desktop-path (list desktop-dirname user-emacs-directory (f-expand "~")))
+    (setq desktop-path (list desktop-dirname user-emacs-directory user-home-directory))
 
     (if (daemonp)
         (setq desktop-restore-frames nil

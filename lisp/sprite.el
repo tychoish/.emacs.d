@@ -177,7 +177,7 @@ the raw instance id for top-level instances."
   (sprite--mode-line-id (sprite-instance-name)))
 
 (defun sprite-state-directory (&optional full-name)
-  "Return the state directory for sprite FULL-NAME, or the sprite root if nil."
+  "Return the state directory for sprite instance FULL-NAME, or the sprite root if nil."
   (let ((base (file-name-as-directory (sprite-state-path sprite--state-subdir))))
     (if full-name
         (file-name-concat base full-name)
