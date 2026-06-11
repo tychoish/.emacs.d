@@ -96,7 +96,7 @@ chain must be re-evaluated."
   "Return (HOSTNAME INSTANCE-ID) for state-path construction."
   (list (if (eq system-type 'darwin)
             (car (string-split (sprite-system-name) "\\."))
-          (system-name))
+          (sprite-system-name))
         (sprite-instance-name)))
 
 (defun sprite-state-file-prefix (name)
