@@ -989,9 +989,9 @@
 
 (use-package popper
   :ensure t
-  :bind (("C-c '"   . popper-toggle)
-         ("C-c C-'" . popper-cycle)
-         ("C-c \""  . popper-toggle-type))
+  :bind (("C-c '" . popper-toggle)
+         ("C-c \\" . popper-cycle)
+         ("C-c C-'"  . popper-toggle-type))
   :init
   (setq popper-reference-buffers
         '("\\*Messages\\*"
@@ -1004,6 +1004,9 @@
           "\\*Flymake diagnostics.*\\*"
           help-mode
           compilation-mode))
+  (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
+  (setq popper-display-control nil)
+  (setq popper-group-function #'popper-group-by-projectile)
   (popper-mode +1)
   (popper-echo-mode +1))
 
@@ -2674,7 +2677,6 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'agent-shell-omp)
 
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
-  (setq agent-shell-anthropic-default-model-id "sonnet")
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
   (add-to-list 'agent-shell-agent-configs (agent-shell-omp-make-agent-config))
 
