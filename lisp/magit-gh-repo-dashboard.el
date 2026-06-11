@@ -311,7 +311,7 @@ Checks the in-memory cache first; calls CALLBACK with (TOTAL . MINE)."
                                (let ((prs (json-parse-string trimmed
 							     :array-type 'list
 							     :object-type 'alist)))
-				 (cons (length prs)
+				 (cons (h prs)
                                        (seq-count
 					(lambda (pr)
 					  (equal viewer
@@ -791,12 +791,12 @@ Missing/uninitialized submodules are marked with :submodule 'missing."
 ;;;; Column configuration
 
 (defvar magit-gh-repo-dashboard-columns
-  '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t) (cached . nil))
+  '((name . t) (branch . t) (fetched . t) (status . t) (worktree . t) (sync . t) (cached . nil))
   "Alist of (COLUMN-SYMBOL . ENABLED) for the repository dashboard.
 Persisted across sessions via `savehist-additional-variables'.")
 
 (defconst magit-gh-repo-dashboard--all-columns
-  '(name branch fetched status worktree cached)
+  '(name branch fetched status worktree sync cached)
   "All available dashboard columns in display order.")
 
 (defconst magit-gh-repo-dashboard--column-defs
@@ -804,6 +804,7 @@ Persisted across sessions via `savehist-additional-variables'.")
     (fetched  . ("Fetched"  8 nil))
     (status   . ("Status"  10 nil))
     (worktree . ("Type"    10 nil))
+    (sync     . ("Sync"     8 nil))
     (cached   . ("Cached"   7 nil)))
   "Alist of COLUMN-SYMBOL to (LABEL WIDTH SORTABLE) for non-name columns.")
 
@@ -879,6 +880,18 @@ explicitly-registered submodules, and \"REPO\" for ordinary working-tree repos."
            (gethash path magit-gh-repo-dashboard--submodule-path-set))
       (propertize "SUBM.TRACK" 'face 'magit-gh-repo-branch-face))
      (t (propertize "REPO" 'face 'shadow)))))
+
+(defun magit-gh-repo-dashboard--format-sync (repo)
+  "Format the sync mode indicator for REPO.
+Shows the configured auto-sync mode, auto-commit status, or blank when none."
+  (pcase (magit-gh-repo-auto-sync repo)
+    ('auto-fetch          (propertize "fetch"  'face 'shadow))
+    ('auto-pull           (propertize "pull"   'face 'magit-gh-repo-branch-face))
+    ('auto-commit-and-push (propertize "push"  'face 'success))
+    ('auto-sync-command   (propertize "cmd"    'face 'magit-gh-repo-branch-face))
+    (_ (if (magit-gh-repo-auto-commit repo)
+           (propertize "commit" 'face 'shadow)
+         ""))))
 
 ;;;; Repo dashboard mode
 
@@ -1019,6 +1032,8 @@ submodules and to derive their parent<mod> display name.")
                         (plist-get stats :dirty)))
                       ('worktree
                        (magit-gh-repo-dashboard--format-worktree repo))
+                      ('sync
+                       (magit-gh-repo-dashboard--format-sync repo))
                       ('cached
                        (if (magit-gh--cache-get (magit-gh-repo-path repo) :stats)
                            (propertize "✓" 'face 'success)
