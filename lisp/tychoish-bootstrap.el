@@ -440,11 +440,11 @@ more arguments than the function cares about."
 (defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
 
 (with-eval-after-load 'eshell
-  (setq eshell-history-file-name (file-name-concat user-emacs-directory (sprite-state-file-prefix "eshell"))))
+  (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
 
 (with-eval-after-load 'transient
-  (setq transient-history-file (file-name-concat user-emacs-directory (sprite-state-file-prefix "transient-history.el")))
-  (setq transient-values-file  (file-name-concat user-emacs-directory (sprite-state-file-prefix "transient-values.el"))))
+  (setq transient-history-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-history.el")))
+  (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
