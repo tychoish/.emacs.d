@@ -1082,6 +1082,7 @@
   :commands (magit-dash-view magit-gh-pr-dashboard-open)
   :config
   (require 'magit-dash-bump-submodules)
+  (require 'magit-gh-pr)
   (setq magit-dash-show-discovered-submodules nil))
 
 (use-package smerge-mode
