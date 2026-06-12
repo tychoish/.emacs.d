@@ -25,10 +25,15 @@
 
 (require 'cl-lib)
 (require 'map)
+(require 'seq)
+(require 'subr-x)
+(require 'tabulated-list)
+(require 'transient)
 (require 'magit-gh-extras)
 
 (declare-function magit-toplevel "magit-git")
 (declare-function magit-get-current-branch "magit-git")
+(declare-function magit-dash--format-age "magit-dash")
 
 ;;; Configuration
 
@@ -226,6 +231,232 @@ Creates an artifact directory under plans/ containing:
                           :files    nil
                           :threads  nil)))
     (magit-gh-pr--step-info ctx)))
+
+;;;; PR dashboard mode
+
+(defvar-local magit-gh-pr-dashboard--filters
+  (list :state "open" :author "@me" :repo nil :org nil)
+  "Current PR dashboard filters plist.
+Keys: :state (\"open\"/\"closed\"), :author, :repo (OWNER/NAME), :org.")
+
+(defface magit-gh-pr-ci-pass-face
+  '((t :inherit success))
+  "Face for passing CI status in the PR dashboard.")
+
+(defface magit-gh-pr-ci-fail-face
+  '((t :inherit error))
+  "Face for failing CI status in the PR dashboard.")
+
+(defface magit-gh-pr-ci-pending-face
+  '((t :inherit warning))
+  "Face for pending CI status in the PR dashboard.")
+
+(defconst magit-gh-pr-dashboard--format
+  [("Repo" 22 t)
+   ("PR#" 5 nil)
+   ("Title" 38 t)
+   ("CI" 8 t)
+   ("Age" 6 nil)
+   ("Cmts" 4 nil)
+   ("Review" 14 t)]
+  "Column format for `magit-gh-pr-dashboard-mode'.")
+
+(defvar magit-gh-pr-dashboard-mode-map
+  (let ((m (make-sparse-keymap)))
+    (define-key m (kbd "RET") #'magit-gh-pr-dashboard-open-browser)
+    (define-key m (kbd "g")   #'magit-gh-pr-dashboard-refresh)
+    (define-key m (kbd "r")   #'magit-gh-pr-dashboard-refresh)
+    (define-key m (kbd "f")   #'magit-gh-pr-dashboard-set-filter)
+    (define-key m (kbd "F")   #'magit-gh-pr-dashboard-clear-filters)
+    (define-key m (kbd "m")   #'magit-gh-pr-dashboard-menu)
+    (define-key m (kbd "?")   #'magit-gh-pr-dashboard-menu)
+    (define-key m (kbd "q")   #'quit-window)
+    m)
+  "Keymap for `magit-gh-pr-dashboard-mode'.")
+
+(define-derived-mode magit-gh-pr-dashboard-mode tabulated-list-mode "PRs"
+  "Major mode for the pull request dashboard."
+  (setq tabulated-list-format magit-gh-pr-dashboard--format)
+  (setq tabulated-list-sort-key nil)
+  (tabulated-list-init-header)
+  (setq-local magit-gh-pr-dashboard--filters
+              (list :state "open" :author "@me" :repo nil :org nil)))
+
+(defun magit-gh-pr-dashboard--format-ci (rollup-state)
+  "Format CI ROLLUP-STATE string for display."
+  (pcase rollup-state
+    ("SUCCESS" (propertize "pass" 'face 'magit-gh-pr-ci-pass-face))
+    ("FAILURE" (propertize "fail" 'face 'magit-gh-pr-ci-fail-face))
+    ("PENDING" (propertize "pending" 'face 'magit-gh-pr-ci-pending-face))
+    ("ERROR" (propertize "error" 'face 'magit-gh-pr-ci-fail-face))
+    (_ "—")))
+
+(defun magit-gh-pr-dashboard--format-review (decision)
+  "Format review DECISION string for display."
+  (pcase decision
+    ("APPROVED" (propertize "approved" 'face 'success))
+    ("CHANGES_REQUESTED" (propertize "changes req" 'face 'error))
+    ("REVIEW_REQUIRED" (propertize "needed" 'face 'warning))
+    (_ "")))
+
+(defun magit-gh-pr-dashboard--format-age (updated-at)
+  "Format UPDATED-AT ISO timestamp as a human-readable age string."
+  (when (and updated-at (not (equal updated-at "")))
+    (condition-case nil
+        (magit-dash--format-age
+         (float-time (time-since (date-to-time updated-at))))
+      (error "?"))))
+
+(defun magit-gh-pr-dashboard--comments-count (pr)
+  "Return the comment count from PR alist."
+  (let ((c (map-elt pr 'commentsCount)))
+    (if (numberp c) c 0)))
+
+(defun magit-gh-pr-dashboard--build-args (filters)
+  "Return a gh args list for fetching PRs matching FILTERS plist.
+When :repo is set, uses `gh pr list -R REPO' (includes CI status).
+Otherwise uses `gh search prs' for cross-repo listing."
+  (let* ((state (or (plist-get filters :state) "open"))
+         (repo (plist-get filters :repo))
+         (author (plist-get filters :author))
+         (org (plist-get filters :org)))
+    (if repo
+        (append
+         (list "pr" "list" "-R" repo "--state" state
+               "--json"
+               "number,title,state,author,updatedAt,commentsCount,reviewDecision,statusCheckRollup,isDraft,url")
+         (when author (list "--author" author)))
+      (append
+       (list "search" "prs"
+             "--state" (if (member state '("open" "closed")) state "open")
+             "--json"
+             "number,title,state,repository,author,updatedAt,commentsCount,isDraft,url")
+       (when author
+         (list "--author" author))
+       (when org
+         (list "--owner" org))))))
+
+(defconst magit-gh-pr-dashboard--title-width 36
+  "Maximum display width for PR title column.")
+
+(defun magit-gh-pr-dashboard--build-entry (pr repo-name)
+  "Return a `tabulated-list-entries' entry for PR alist in REPO-NAME."
+  (let ((number (map-elt pr 'number)))
+    (list (list :number number :repo repo-name :pr pr)
+          (vector
+           repo-name
+           (number-to-string number)
+           (truncate-string-to-width
+            (or (map-elt pr 'title) "") magit-gh-pr-dashboard--title-width nil nil "…")
+           (magit-gh-pr-dashboard--format-ci
+            (map-elt (map-elt pr 'statusCheckRollup) 'state))
+           (or (magit-gh-pr-dashboard--format-age (map-elt pr 'updatedAt)) "?")
+           (number-to-string (magit-gh-pr-dashboard--comments-count pr))
+           (magit-gh-pr-dashboard--format-review (map-elt pr 'reviewDecision))))))
+
+(defun magit-gh-pr-dashboard--parse-output (output filters)
+  "Parse gh JSON OUTPUT into tabulated list entries using FILTERS for context.
+Returns nil when OUTPUT is not a JSON array."
+  (let ((trimmed (string-trim output)))
+    (when (string-prefix-p "[" trimmed)
+      (when-let* ((prs (json-parse-string trimmed :array-type 'list :object-type 'alist)))
+        (let ((per-repo-p (plist-get filters :repo)))
+          (seq-map (lambda (pr)
+                     (magit-gh-pr-dashboard--build-entry
+                      pr
+                      (if per-repo-p
+                          (plist-get filters :repo)
+                        (or (map-elt (map-elt pr 'repository) 'nameWithOwner)
+                            "unknown"))))
+                   prs))))))
+
+(defun magit-gh-pr-dashboard-refresh ()
+  "Fetch PRs matching current filters and repopulate the PR table."
+  (interactive)
+  (let* ((filters magit-gh-pr-dashboard--filters)
+         (args (magit-gh-pr-dashboard--build-args filters))
+         (buf (current-buffer))
+         (dir (or (ignore-errors (magit-gh--repo-dir))
+                  (expand-file-name "~"))))
+    (setq tabulated-list-entries nil)
+    (tabulated-list-print t)
+    (message "magit-gh: fetching PRs...")
+    (magit-gh--run-process
+     args dir
+     (lambda (output)
+       (when (buffer-live-p buf)
+         (with-current-buffer buf
+           (setq tabulated-list-entries
+                 (or (magit-gh-pr-dashboard--parse-output output filters) nil))
+           (tabulated-list-print t)
+           (message "magit-gh: %d PR(s)"
+                    (length tabulated-list-entries))))))))
+
+(defun magit-gh-pr-dashboard--entry-at-point ()
+  "Return the PR entry plist at point or signal `user-error'."
+  (or (tabulated-list-get-id)
+      (user-error "No pull request at point")))
+
+(defun magit-gh-pr-dashboard-open-browser ()
+  "Open the pull request at point in a web browser."
+  (interactive)
+  (when-let* ((entry (magit-gh-pr-dashboard--entry-at-point))
+              (pr (plist-get entry :pr))
+              (url (map-elt pr 'url)))
+    (browse-url url)))
+
+(defun magit-gh-pr-dashboard-set-filter ()
+  "Interactively set one PR dashboard filter field."
+  (interactive)
+  (let* ((current magit-gh-pr-dashboard--filters)
+         (field (completing-read "Filter field: "
+                                 '("state" "author" "repo" "org") nil t))
+         (value (pcase field
+                  ("state"
+                   (completing-read "State: " '("open" "closed") nil t))
+                  ("author"
+                   (read-string "Author (@me for current user): "
+                                (or (plist-get current :author) "@me")))
+                  ("repo"
+                   (read-string "Repo (OWNER/NAME, empty to clear): "
+                                (or (plist-get current :repo) "")))
+                  ("org"
+                   (read-string "Org (empty to clear): "
+                                (or (plist-get current :org) "")))))
+         (key (intern (format ":%s" field)))
+         (new-val (if (string-empty-p value) nil value)))
+    (setq magit-gh-pr-dashboard--filters
+          (plist-put (copy-sequence current) key new-val))
+    (magit-gh-pr-dashboard-refresh)))
+
+(defun magit-gh-pr-dashboard-clear-filters ()
+  "Reset PR dashboard filters to defaults (open PRs, current user)."
+  (interactive)
+  (setq magit-gh-pr-dashboard--filters
+        (list :state "open" :author "@me" :repo nil :org nil))
+  (magit-gh-pr-dashboard-refresh))
+
+;;;###autoload
+(defun magit-gh-pr-dashboard-open ()
+  "Open the pull request dashboard buffer."
+  (interactive)
+  (magit-gh--check-gh)
+  (let ((buf (get-buffer-create "*magit-gh-prs*")))
+    (with-current-buffer buf
+      (magit-gh-pr-dashboard-mode)
+      (magit-gh-pr-dashboard-refresh))
+    (pop-to-buffer buf)))
+
+(transient-define-prefix magit-gh-pr-dashboard-menu ()
+  "Actions for the PR dashboard."
+  [["Pull Request"
+    ("RET" "Open in browser" magit-gh-pr-dashboard-open-browser)]
+   ["Filter"
+    ("fs" "Set filter…" magit-gh-pr-dashboard-set-filter)
+    ("fc" "Clear all filters" magit-gh-pr-dashboard-clear-filters)]
+   ["Dashboard"
+    ("g" "Refresh" magit-gh-pr-dashboard-refresh)
+    ("q" "Quit" quit-window)]])
 
 (provide 'magit-gh-pr)
 
