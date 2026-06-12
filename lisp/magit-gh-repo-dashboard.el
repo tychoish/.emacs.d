@@ -70,42 +70,39 @@
   name
   path
   (include-prs nil)
-  (auto-sync nil)
-  (tags nil)
+  (auto-fetch nil)
+  (auto-pull nil)
   (auto-commit nil)
+  (auto-push nil)
+  (tags nil)
   (commands nil)
   (sort-hint nil)
   (worktree nil)
   (submodule nil)
   (branch nil)
-  (sync-branches nil)
-  (sync-command nil))
+  (sync-branches nil))
 
 (defvar magit-gh-repo-list '()
   "List of `magit-gh-repo' structs registered for dashboard display.
 Use `magit-gh-repo-register' to add entries.")
 
-(cl-defun magit-gh-repo-register (&key name path include-prs auto-sync tags auto-commit commands sort-hint worktree sync-branches sync-command)
+(cl-defun magit-gh-repo-register (&key name path include-prs auto-fetch auto-pull auto-commit auto-push tags commands sort-hint worktree sync-branches)
   "Register or replace a repository with NAME at absolute PATH.
 Replaces any existing entry with the same name or path.
 
 Keyword arguments:
   :include-prs    include in PR dashboard fetches.
-  :auto-sync      nil | `auto-fetch' | `auto-pull' | `auto-commit-and-push' |
-                  `auto-sync-command' — participate in dashboard-wide sync.
-                  `auto-fetch' runs git fetch --all.
-                  `auto-pull' runs git pull (requires :sync-branches).
-                  `auto-commit-and-push' pulls, commits, and pushes
-                  (requires :sync-branches and :auto-commit).
-                  `auto-sync-command' runs :sync-command.
-  :sync-branches  list of branch names on which auto-pull and
-                  auto-commit-and-push are permitted; nil means any branch.
-  :sync-command   string or function for `auto-sync-command'.
-                  A string is run as a shell command in the repo directory.
-                  A function is called with (REPO CALLBACK).
+  :auto-fetch     non-nil — run git fetch --all during auto-sync.
+  :auto-pull      non-nil — run git pull during auto-sync (implies fetch).
+                  Respects :sync-branches.
+  :auto-commit    nil | t | FUNCTION — stage and commit dirty working tree.
+                  FUNCTION receives the repo struct and returns a commit
+                  message string.
+  :auto-push      non-nil — run git push during auto-sync.
+                  Respects :sync-branches.
+  :sync-branches  list of branch names on which auto-pull and auto-push are
+                  permitted; nil means any branch.
   :tags           list of symbols for filtering in the dashboard.
-  :auto-commit    nil | t | FUNCTION — FUNCTION receives the repo struct and
-                  returns a commit message string.
   :commands       alist of (LABEL . FUNCTION) for the repo command picker.
   :sort-hint      number controlling display order; lower values appear first.
                   Repos without a sort-hint appear after all sorted repos.
@@ -123,18 +120,15 @@ Keyword arguments:
                            :name name
                            :path abs-path
                            :include-prs include-prs
-                           :auto-sync auto-sync
-                           :tags tags
+                           :auto-fetch auto-fetch
+                           :auto-pull auto-pull
                            :auto-commit auto-commit
+                           :auto-push auto-push
+                           :tags tags
                            :commands commands
                            :sort-hint sort-hint
                            :worktree worktree
-                           :sync-branches sync-branches
-                           :sync-command sync-command)))
-	    (mapc (lambda (repo)
-		    (let ((sync-option (magit-gh-repo-auto-sync repo)))
-		      (unless (member sync-option '(nil auto-fetch auto-pull auto-commit-and-push auto-sync-command))
-			(message "magit-gh-repo-dashboard: repo %s has invalid sync option %s" (magit-gh-repo-name repo) sync-option)))))))))
+                           :sync-branches sync-branches)))))))
 
 ;;;; Registry helpers
 
@@ -499,95 +493,72 @@ and a message of the form \"LABEL failed, exit N: output\"."
          (funcall on-complete 'error
                   (format "%s failed, exit %d: %s" label code output)))))))
 
-(defun magit-gh-repo-dashboard--auto-commit-and-push-async (repo on-complete)
-  "Pull --rebase, stage, commit, and push REPO if branch is in sync-branches.
-Calls ON-COMPLETE with `ok', `skipped' (branch not allowed or workdir
-clean after pull), or `error' with error text."
+(defun magit-gh-repo-dashboard--auto-push-async (repo on-complete)
+  "Run git push for REPO if current branch is in sync-branches.
+Calls ON-COMPLETE with `ok', `skipped' (branch not allowed), or `error'."
   (if-let* ((branch (magit-gh-repo-dashboard--branch-allowed-p repo)))
-      (let* ((path (magit-gh-repo-path repo))
-             (auto-commit (magit-gh-repo-auto-commit repo))
-             (msg (if (functionp auto-commit)
-                      (funcall auto-commit repo)
-                    (magit-gh-repo-dashboard--default-commit-message repo))))
-        (magit-gh-repo-dashboard--run-git
-         path '("pull" "--rebase")
-         (lambda (_)
-           (magit-gh-repo-dashboard--run-git
-            path '("status" "--porcelain")
-            (lambda (porcelain)
-              (if (string-empty-p porcelain)
-                  (funcall on-complete 'skipped "workdir clean after pull")
-                (magit-gh-repo-dashboard--run-git-chain
-                 path
-                 `((("add" "-A") . "add")
-                   (,(list "commit" "-m" msg) . "commit")
-                   (("push") . "push"))
-                 (lambda () (funcall on-complete 'ok))
-                 on-complete)))
-            (lambda (output code)
-              (funcall on-complete 'error
-                       (format "status failed, exit %d: %s" code output)))))
-         (lambda (output code)
-           (funcall on-complete 'error
-                    (format "pull --rebase failed, exit %d: %s" code output)))))
+      (magit-gh-repo-dashboard--run-git
+       (magit-gh-repo-path repo)
+       '("push")
+       (lambda (_) (funcall on-complete 'ok))
+       (lambda (output code)
+         (funcall on-complete 'error (format "exit %d: %s" code output))))
     (funcall on-complete 'skipped
              (format "branch %s not in sync-branches"
                      (magit-gh-repo-dashboard--current-branch
                       (magit-gh-repo-path repo))))))
 
-(defun magit-gh-repo-dashboard--auto-sync-command-async (repo on-complete)
-  "Run REPO's sync-command asynchronously.
-sync-command may be a string (run as shell command in the repo directory)
-or a function called with (REPO ON-COMPLETE).
-Calls ON-COMPLETE with `ok', `skipped', or `error' and optional error text."
-  (let ((cmd (magit-gh-repo-sync-command repo)))
-    (cond
-     ((null cmd)
-      (funcall on-complete 'skipped "no sync-command configured"))
-     ((functionp cmd)
-      (funcall cmd repo on-complete))
-     ((stringp cmd)
-      (let* ((path (magit-gh-repo-path repo))
-             (proc-buf (generate-new-buffer " *magit-gh-sync-cmd*")))
-        (with-current-buffer proc-buf
-          (setq default-directory path))
-        (make-process
-         :name "magit-gh-sync-cmd"
-         :buffer proc-buf
-         :command (list shell-file-name shell-command-switch cmd)
-         :connection-type 'pipe
-         :noquery t
-         :sentinel
-         (lambda (proc _event)
-           (when (memq (process-status proc) '(exit signal))
-             (let ((output (with-current-buffer (process-buffer proc)
-                             (string-trim-right (buffer-string))))
-                   (code (process-exit-status proc)))
-               (kill-buffer (process-buffer proc))
-               (if (= code 0)
-                   (funcall on-complete 'ok)
-                 (funcall on-complete 'error
-                          (format "exit %d: %s" code output)))))))))
-     (t
-      (funcall on-complete 'error "sync-command must be a string or function")))))
+(defun magit-gh-repo-dashboard--auto-sync-steps (repo)
+  "Return an ordered list of (LABEL . FN) pairs for REPO's configured auto ops.
+Steps are: fetch (when :auto-fetch or :auto-pull), pull (when :auto-pull),
+commit (when :auto-commit), push (when :auto-push)."
+  (seq-filter
+   #'identity
+   (list
+    (when (or (magit-gh-repo-auto-fetch repo) (magit-gh-repo-auto-pull repo))
+      (cons "fetch" (lambda (cb) (magit-gh-repo-dashboard--auto-fetch-async repo cb))))
+    (when (magit-gh-repo-auto-pull repo)
+      (cons "pull" (lambda (cb) (magit-gh-repo-dashboard--auto-pull-async repo cb))))
+    (when (magit-gh-repo-auto-commit repo)
+      (cons "commit" (lambda (cb) (magit-gh-repo-dashboard--auto-commit-async repo cb))))
+    (when (magit-gh-repo-auto-push repo)
+      (cons "push" (lambda (cb) (magit-gh-repo-dashboard--auto-push-async repo cb)))))))
 
-(defun magit-gh-repo-dashboard--dispatch-sync-op (repo cb)
-  "Dispatch REPO's auto-sync operation asynchronously; call CB with result."
-  (pcase (magit-gh-repo-auto-sync repo)
-    ('auto-fetch (magit-gh-repo-dashboard--auto-fetch-async repo cb))
-    ('auto-pull (magit-gh-repo-dashboard--auto-pull-async repo cb))
-    ('auto-commit-and-push (magit-gh-repo-dashboard--auto-commit-and-push-async repo cb))
-    ('auto-sync-command (magit-gh-repo-dashboard--auto-sync-command-async repo cb))
-    ('fetch (magit-gh-repo-dashboard--auto-fetch-async repo cb))
-    ('pull (magit-gh-repo-dashboard--auto-pull-async repo cb))
-    (_ (funcall cb 'skipped))))
+(defun magit-gh-repo-dashboard--run-step-chain (repo-name steps on-complete)
+  "Run STEPS sequentially, logging each with bold REPO-NAME.
+STEPS is a list of (LABEL . FN) pairs; FN is called with a callback.
+Aborts on `error'; continues on `ok' or `skipped'.
+Calls ON-COMPLETE with `ok' after all steps, or `error' on first failure."
+  (if (null steps)
+      (funcall on-complete 'ok)
+    (let* ((step (car steps))
+           (label (car step))
+           (fn (cdr step)))
+      (funcall fn
+               (lambda (status &optional error-text)
+                 (magit-gh-repo-dashboard--log-operation repo-name label status error-text)
+                 (pcase status
+                   ('error (funcall on-complete 'error error-text))
+                   (_ (magit-gh-repo-dashboard--run-step-chain
+                       repo-name (cdr steps) on-complete))))))))
+
+(defun magit-gh-repo-dashboard--auto-sync-async (repo on-complete)
+  "Run all configured auto operations for REPO sequentially.
+Steps run in order: fetch, pull, commit, push — each only when configured.
+auto-pull implies fetch. Each step is logged individually with the repo name.
+Calls ON-COMPLETE with `ok', `skipped', or `error'."
+  (let ((steps (magit-gh-repo-dashboard--auto-sync-steps repo)))
+    (if (null steps)
+        (funcall on-complete 'skipped "no auto operations configured")
+      (magit-gh-repo-dashboard--run-step-chain
+       (magit-gh-repo-name repo) steps on-complete))))
 
 (defun magit-gh-repo-dashboard--log-operation (repo-name operation status &optional error-text)
   "Log REPO-NAME OPERATION with STATUS to *Messages*.
 The current timestamp is attached as a tooltip (help-echo) on REPO-NAME.
 When ERROR-TEXT is non-nil it is appended to the message."
   (let* ((ts (format-time-string "%Y-%m-%d %H:%M:%S"))
-         (name (propertize repo-name 'help-echo ts))
+         (name (propertize repo-name 'face 'bold 'help-echo ts))
          (detail (if error-text (format " — %s" error-text) "")))
     (message "magit-gh: %s %s → %s%s" name operation (symbol-name status) detail)))
 
@@ -885,16 +856,19 @@ explicitly-registered submodules, and \"REPO\" for ordinary working-tree repos."
      (t (propertize "REPO" 'face 'shadow)))))
 
 (defun magit-gh-repo-dashboard--format-sync (repo)
-  "Format the sync mode indicator for REPO.
-Shows the configured auto-sync mode, auto-commit status, or blank when none."
-  (pcase (magit-gh-repo-auto-sync repo)
-    ('auto-fetch          (propertize "fetch"  'face 'shadow))
-    ('auto-pull           (propertize "pull"   'face 'magit-gh-repo-branch-face))
-    ('auto-commit-and-push (propertize "push"  'face 'success))
-    ('auto-sync-command   (propertize "cmd"    'face 'magit-gh-repo-branch-face))
-    (_ (if (magit-gh-repo-auto-commit repo)
-           (propertize "commit" 'face 'shadow)
-         ""))))
+  "Format a compact sync indicator for REPO based on configured auto operations.
+Each enabled operation contributes a letter: f=fetch p=pull c=commit P=push.
+Letters are joined with \"+\". Returns an empty string when nothing is set."
+  (let ((parts (seq-filter
+                #'identity
+                (list
+                 (when (magit-gh-repo-auto-fetch repo) "fetch")
+                 (when (magit-gh-repo-auto-pull repo)  "pull")
+                 (when (magit-gh-repo-auto-commit repo) "write")
+                 (when (magit-gh-repo-auto-push repo)  "push")))))
+    (if parts
+        (propertize (mapconcat #'identity parts "+") 'face 'magit-gh-repo-branch-face)
+      "")))
 
 ;;;; Repo dashboard mode
 
@@ -1210,17 +1184,15 @@ Signals `user-error' when :auto-commit is not configured for this repo."
     (magit-push-current-to-pushremote nil)))
 
 (defun magit-gh-repo-dashboard-sync ()
-  "Run the auto-sync operation for the repository at point asynchronously.
-Signals `user-error' when :auto-sync is not configured for this repo."
+  "Run the configured auto operations for the repository at point asynchronously.
+Signals `user-error' when no auto operations are configured for this repo."
   (interactive)
   (let ((repo (magit-gh-repo-dashboard--repo-at-point)))
-    (unless (magit-gh-repo-auto-sync repo)
-      (user-error "Auto-sync is not configured for %s" (magit-gh-repo-name repo)))
-    (magit-gh-repo-dashboard--dispatch-sync-op
+    (unless (magit-gh-repo-dashboard--auto-sync-steps repo)
+      (user-error "No auto operations configured for %s" (magit-gh-repo-name repo)))
+    (magit-gh-repo-dashboard--auto-sync-async
      repo
-     (lambda (status &optional error-text)
-       (magit-gh-repo-dashboard--log-operation
-        (magit-gh-repo-name repo) "sync" status error-text)
+     (lambda (_status &optional _error-text)
        (magit-gh-repo-dashboard--maybe-refresh)))))
 
 (defun magit-gh-repo-dashboard-commit-all ()
@@ -1238,38 +1210,30 @@ Displays a summary message and refreshes the dashboard when all complete."
      (lambda (_) (magit-gh-repo-dashboard--maybe-refresh)))))
 
 (defun magit-gh-repo-dashboard-sync-all ()
-  "Run auto-sync operation for all configured repos asynchronously, then refresh."
+  "Run auto operations for all configured repos asynchronously, then refresh."
   (interactive)
-  (let ((repos (seq-filter #'magit-gh-repo-auto-sync magit-gh-repo-list)))
+  (let ((repos (seq-filter #'magit-gh-repo-dashboard--auto-sync-steps magit-gh-repo-list)))
     (unless repos
-      (user-error "No repositories have :auto-sync configured"))
+      (user-error "No repositories have auto operations configured"))
     (magit-gh-repo-dashboard--batch-run
      repos
-     #'magit-gh-repo-dashboard--dispatch-sync-op
+     #'magit-gh-repo-dashboard--auto-sync-async
      "magit-gh sync"
      (lambda (_) (magit-gh-repo-dashboard--maybe-refresh)))))
 
 (defun magit-gh-repo-dashboard-auto-sync ()
-  "Auto-commit and auto-sync all configured repos asynchronously.
-Runs git commit for repos with :auto-commit set (using their message function)
-and the configured auto-sync operation for repos with :auto-sync set, concurrently.
-Each batch displays a summary message; the dashboard refreshes when sync completes."
+  "Run all configured auto operations for every eligible repo asynchronously.
+Each repo's steps (fetch, pull, commit, push) run sequentially; each step is
+logged individually. Dashboard refreshes when all repos complete."
   (interactive)
-  (let ((commit-repos (seq-filter #'magit-gh-repo-auto-commit magit-gh-repo-list))
-        (sync-repos (seq-filter #'magit-gh-repo-auto-sync magit-gh-repo-list)))
-    (unless (or commit-repos sync-repos)
-      (user-error "No repos have :auto-commit or :auto-sync configured"))
-    (when commit-repos
-      (magit-gh-repo-dashboard--batch-run
-       commit-repos
-       #'magit-gh-repo-dashboard--auto-commit-async
-       "magit-gh autosync commit"))
-    (when sync-repos
-      (magit-gh-repo-dashboard--batch-run
-       sync-repos
-       #'magit-gh-repo-dashboard--dispatch-sync-op
-       "magit-gh autosync sync"
-       (lambda (_) (magit-gh-repo-dashboard--maybe-refresh))))))
+  (let ((repos (seq-filter #'magit-gh-repo-dashboard--auto-sync-steps magit-gh-repo-list)))
+    (unless repos
+      (user-error "No repos have auto operations configured"))
+    (magit-gh-repo-dashboard--batch-run
+     repos
+     #'magit-gh-repo-dashboard--auto-sync-async
+     "magit-gh autosync"
+     (lambda (_) (magit-gh-repo-dashboard--maybe-refresh)))))
 
 (defun magit-gh-repo-dashboard-run-command ()
   "Open ACR picker for the repo at point and invoke the selected command."
@@ -1644,17 +1608,15 @@ Signals `user-error' when :auto-commit is not configured for this repo."
                (magit-gh-repo-name repo)))))
 
 (defun magit-gh-repo-overview-sync ()
-  "Run the auto-sync operation for this overview's repository asynchronously.
-Signals `user-error' when :auto-sync is not configured for this repo."
+  "Run the configured auto operations for this overview's repository asynchronously.
+Signals `user-error' when no auto operations are configured for this repo."
   (interactive)
   (let ((repo (magit-gh-repo-overview--current-repo)))
-    (unless (magit-gh-repo-auto-sync repo)
-      (user-error "Auto-sync is not configured for %s" (magit-gh-repo-name repo)))
-    (magit-gh-repo-dashboard--dispatch-sync-op
+    (unless (magit-gh-repo-dashboard--auto-sync-steps repo)
+      (user-error "No auto operations configured for %s" (magit-gh-repo-name repo)))
+    (magit-gh-repo-dashboard--auto-sync-async
      repo
-     (lambda (status &optional error-text)
-       (magit-gh-repo-dashboard--log-operation
-        (magit-gh-repo-name repo) "sync" status error-text)
+     (lambda (_status &optional _error-text)
        (magit-gh-repo-overview-refresh)))))
 
 (defun magit-gh-repo-overview-stage-all ()
@@ -2059,7 +2021,7 @@ Otherwise uses `gh search prs' for cross-repo listing."
        (list "search" "prs"
              "--state" (if (member state '("open" "closed")) state "open")
              "--json"
-             "number,title,state,repository,author,updatedAt,commentsCount,reviewDecision,isDraft,url")
+             "number,title,state,repository,author,updatedAt,commentsCount,isDraft,url")
        (when author
 	 (list "--author" author))
        (when org
@@ -2192,9 +2154,9 @@ Returns nil when OUTPUT is not a JSON array."
     (and (magit-gh-repo-auto-commit repo) t)))
 
 (defun magit-gh-repo-dashboard--has-auto-sync-p ()
-  "Return non-nil when the repo at point has :auto-sync configured."
+  "Return non-nil when the repo at point has any auto operation configured."
   (when-let* ((repo (ignore-errors (magit-gh-repo-dashboard--repo-at-point))))
-    (and (magit-gh-repo-auto-sync repo) t)))
+    (and (magit-gh-repo-dashboard--auto-sync-steps repo) t)))
 
 (defun magit-gh-repo-dashboard--has-commands-p ()
   "Return non-nil when the repo at point has commands registered."
@@ -2217,9 +2179,9 @@ Returns nil when OUTPUT is not a JSON array."
     (and (magit-gh-repo-auto-commit repo) t)))
 
 (defun magit-gh-repo-overview--has-auto-sync-p ()
-  "Return non-nil when this overview's repository has :auto-sync configured."
+  "Return non-nil when this overview's repository has any auto operation configured."
   (when-let* ((repo (ignore-errors (magit-gh-repo-overview--current-repo))))
-    (and (magit-gh-repo-auto-sync repo) t)))
+    (and (magit-gh-repo-dashboard--auto-sync-steps repo) t)))
 
 (defun magit-gh-repo-overview--has-commands-p ()
   "Return non-nil when this overview's repository has commands registered."

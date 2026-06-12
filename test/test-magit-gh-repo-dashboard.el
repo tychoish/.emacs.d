@@ -72,17 +72,40 @@
     (magit-gh-repo-register :name "r" :path "/tmp/r" :include-prs t)
     (should (eq t (magit-gh-repo-include-prs (car magit-gh-repo-list))))))
 
-(ert-deftest magit-gh-repo-dashboard/register-auto-sync-fetch ()
-  ":auto-sync 'fetch is stored correctly."
+(ert-deftest magit-gh-repo-dashboard/register-auto-fetch ()
+  ":auto-fetch t is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-sync 'fetch)
-    (should (eq 'fetch (magit-gh-repo-auto-sync (car magit-gh-repo-list))))))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-fetch t)
+    (should (magit-gh-repo-auto-fetch (car magit-gh-repo-list)))))
 
-(ert-deftest magit-gh-repo-dashboard/register-auto-sync-pull ()
-  ":auto-sync 'pull is stored correctly."
+(ert-deftest magit-gh-repo-dashboard/register-auto-pull ()
+  ":auto-pull t is stored correctly."
   (let ((magit-gh-repo-list nil))
-    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-sync 'pull)
-    (should (eq 'pull (magit-gh-repo-auto-sync (car magit-gh-repo-list))))))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-pull t)
+    (should (magit-gh-repo-auto-pull (car magit-gh-repo-list)))))
+
+(ert-deftest magit-gh-repo-dashboard/register-auto-push ()
+  ":auto-push t is stored correctly."
+  (let ((magit-gh-repo-list nil))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-push t)
+    (should (magit-gh-repo-auto-push (car magit-gh-repo-list)))))
+
+(ert-deftest magit-gh-repo-dashboard/auto-sync-steps-fetch-only ()
+  ":auto-fetch produces a single fetch step."
+  (let ((magit-gh-repo-list nil))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-fetch t)
+    (let ((steps (magit-gh-repo-dashboard--auto-sync-steps (car magit-gh-repo-list))))
+      (should (= 1 (length steps)))
+      (should (equal "fetch" (caar steps))))))
+
+(ert-deftest magit-gh-repo-dashboard/auto-sync-steps-pull-implies-fetch ()
+  ":auto-pull produces fetch then pull steps."
+  (let ((magit-gh-repo-list nil))
+    (magit-gh-repo-register :name "r" :path "/tmp/r" :auto-pull t)
+    (let ((steps (magit-gh-repo-dashboard--auto-sync-steps (car magit-gh-repo-list))))
+      (should (= 2 (length steps)))
+      (should (equal "fetch" (caar steps)))
+      (should (equal "pull" (car (cadr steps)))))))
 
 (ert-deftest magit-gh-repo-dashboard/register-tags ()
   ":tags list of symbols is stored correctly."
