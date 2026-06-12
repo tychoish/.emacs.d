@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'map)
 (require 'magit-gh-pr)
+(require 'magit-gh-ci)
 
 ;;; Test helpers
 
@@ -223,6 +224,58 @@
         (should comments-called)
         (should (member "graphql" gh-args))
         (should (file-exists-p (expand-file-name "pr-review-threads.json" dir)))))))
+
+;;; magit-gh-pr-dashboard--find-local-path
+
+(defvar magit-dash-repo-list)
+
+(defun magit-gh-pr-test/make-repos (&rest path-pairs)
+  "Return a list of magit-dash-repo structs from PATH-PAIRS (name path ...)."
+  (let (repos)
+    (while path-pairs
+      (push (magit-dash-repo--make :name (pop path-pairs) :path (pop path-pairs)) repos))
+    (nreverse repos)))
+
+(ert-deftest magit-gh-pr/find-local-path-match ()
+  "Returns path when repo name matches a registered entry's directory."
+  (let ((magit-dash-repo-list
+         (magit-gh-pr-test/make-repos "test-1" "/home/user/projects/myrepo"
+                                      "test-2" "/home/user/projects/other-repo")))
+    (should (equal "/home/user/projects/myrepo"
+                   (magit-gh-pr-dashboard--find-local-path "owner/myrepo")))))
+
+(ert-deftest magit-gh-pr/find-local-path-no-match ()
+  "Returns nil when no registered entry matches."
+  (let ((magit-dash-repo-list
+         (magit-gh-pr-test/make-repos "test" "/home/user/projects/myrepo")))
+    (should-not (magit-gh-pr-dashboard--find-local-path "owner/unknown"))))
+
+(ert-deftest magit-gh-pr/find-local-path-empty-list ()
+  "Returns nil when magit-dash-repo-list is empty."
+  (let ((magit-dash-repo-list nil))
+    (should-not (magit-gh-pr-dashboard--find-local-path "owner/repo"))))
+
+;;; magit-gh-pr-dashboard-fetch-ci
+
+(ert-deftest magit-gh-pr/dashboard-fetch-ci-calls-ci-fetch ()
+  "fetch-ci extracts pr-number and local path, then calls magit-gh-ci-fetch-for-pr."
+  (let ((fetch-args nil))
+    (cl-letf (((symbol-function 'magit-gh-pr-dashboard--entry-at-point)
+               (lambda () '(:number 42 :repo "owner/myrepo" :pr nil)))
+              ((symbol-function 'magit-gh-pr-dashboard--find-local-path)
+               (lambda (_) "/repos/myrepo"))
+              ((symbol-function 'magit-gh-ci-fetch-for-pr)
+               (lambda (num path) (setq fetch-args (list num path)))))
+      (magit-gh-pr-dashboard-fetch-ci)
+      (should (equal '(42 "/repos/myrepo") fetch-args)))))
+
+(ert-deftest magit-gh-pr/dashboard-fetch-ci-no-local-path ()
+  "fetch-ci signals user-error when no local checkout is registered."
+  (cl-letf (((symbol-function 'magit-gh-pr-dashboard--entry-at-point)
+             (lambda () '(:number 5 :repo "owner/unknown-repo" :pr nil)))
+            ((symbol-function 'magit-gh-pr-dashboard--find-local-path)
+             (lambda (_) nil)))
+    (should-error (magit-gh-pr-dashboard-fetch-ci) :type 'user-error)))
 
 (provide 'test-magit-gh-pr)
 ;;; test-magit-gh-pr.el ends here

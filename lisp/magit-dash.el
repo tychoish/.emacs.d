@@ -59,7 +59,7 @@
 (declare-function agent-shell-menu-project-buffers "agent-shell-menu")
 
 (declare-function builder-compile-project "builder")
-(declare-function magit-gh-bump-submodules-menu "magit-gh-bump-submodules")
+(declare-function magit-dash-bump-submodules-menu "magit-dash-bump-submodules")
 (declare-function magit-gh-pr-dashboard-open "magit-gh-pr")
 (declare-function magit-gh-pr-dashboard-mode "magit-gh-pr")
 
@@ -2189,7 +2189,7 @@ On a Recent Commits line: show the commit in magit."
      :inapt-if-not magit-dash--has-auto-commit-p)
     ("x"   "Run command"     magit-dash-run-command
      :inapt-if-not magit-dash--has-commands-p)
-    ("sb"  "Bump submodules..." magit-gh-bump-submodules-menu
+    ("sb"  "Bump submodules..." magit-dash-bump-submodules-menu
      :inapt-if-not magit-dash--repo-at-point-p)]
    ["Build & Shell"
     ("as"   "Agent shell (project)"      magit-dash-agent-shell
@@ -2259,7 +2259,7 @@ On a Recent Commits line: show the commit in magit."
      :if magit-dash-overview--has-auto-commit-p)
     ("sy"   "Sync"            magit-dash-overview-sync
      :if magit-dash-overview--has-auto-sync-p)
-    ("sb"  "Bump submodules..." magit-gh-bump-submodules-menu)]
+    ("sb"  "Bump submodules..." magit-dash-bump-submodules-menu)]
    ["Batch"
     ("msa"  "Sync all"          magit-dash-sync-all)
     ("mca"  "Commit all"        magit-dash-commit-all)

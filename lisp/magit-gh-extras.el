@@ -11,7 +11,7 @@
 
 ;;; Commentary:
 
-;; Provides `magit-gh-prune-merged-branches', an interactive menu for
+;; Provides `magit-gh', an interactive menu for
 ;; pruning local branches whose remote-tracking PRs are merged or
 ;; closed. Per-repo candidate and marked-branch state is cached on a
 ;; hidden state buffer keyed by repository toplevel.
@@ -32,7 +32,7 @@
 
 (defvar magit-gh--cache (make-hash-table :test #'equal)
   "Global cache for repository-specific data, keyed by repository path.
-Each value is a plist containing data like :stats, :pr-counts, :worktrees, etc.")
+Each value is a plist containing data like :stats, :pr-counts, etc.")
 
 (defun magit-gh--cache-get (path key)
   "Return the value for KEY in the cache for repo at PATH."

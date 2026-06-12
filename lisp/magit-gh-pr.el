@@ -34,6 +34,9 @@
 (declare-function magit-toplevel "magit-git")
 (declare-function magit-get-current-branch "magit-git")
 (declare-function magit-dash--format-age "magit-dash")
+(declare-function magit-dash-repo-p "magit-dash")
+(declare-function magit-dash-repo-path "magit-dash")
+(declare-function magit-gh-ci-fetch-for-pr "magit-gh-ci")
 
 ;;; Configuration
 
@@ -268,6 +271,7 @@ Keys: :state (\"open\"/\"closed\"), :author, :repo (OWNER/NAME), :org.")
     (define-key m (kbd "r")   #'magit-gh-pr-dashboard-refresh)
     (define-key m (kbd "f")   #'magit-gh-pr-dashboard-set-filter)
     (define-key m (kbd "F")   #'magit-gh-pr-dashboard-clear-filters)
+    (define-key m (kbd "c")   #'magit-gh-pr-dashboard-fetch-ci)
     (define-key m (kbd "m")   #'magit-gh-pr-dashboard-menu)
     (define-key m (kbd "?")   #'magit-gh-pr-dashboard-menu)
     (define-key m (kbd "q")   #'quit-window)
@@ -447,10 +451,38 @@ Returns nil when OUTPUT is not a JSON array."
       (magit-gh-pr-dashboard-refresh))
     (pop-to-buffer buf)))
 
+(defun magit-gh-pr-dashboard--find-local-path (repo-slug)
+  "Return a local checkout path for REPO-SLUG (owner/name), or nil.
+Searches `magit-dash-repo-list' when bound, matching the repo name
+component of REPO-SLUG against the final directory component of each entry."
+  (when (and (boundp 'magit-dash-repo-list)
+             (string-match ".*/\\([^/]+\\)$" repo-slug))
+    (let ((repo-name (match-string 1 repo-slug)))
+      (seq-some (lambda (r)
+                  (when (and (magit-dash-repo-p r)
+                             (string= repo-name
+                                      (file-name-nondirectory
+                                       (directory-file-name
+                                        (magit-dash-repo-path r)))))
+                    (magit-dash-repo-path r)))
+                magit-dash-repo-list))))
+
+(defun magit-gh-pr-dashboard-fetch-ci ()
+  "Fetch GitHub Actions CI logs for the pull request at point."
+  (interactive)
+  (require 'magit-gh-ci)
+  (let* ((entry (magit-gh-pr-dashboard--entry-at-point))
+         (repo (plist-get entry :repo))
+         (path (or (magit-gh-pr-dashboard--find-local-path repo)
+                   (user-error "No registered local checkout for %s" repo))))
+    (magit-gh-ci-fetch-for-pr (plist-get entry :number) path)))
+
 (transient-define-prefix magit-gh-pr-dashboard-menu ()
   "Actions for the PR dashboard."
   [["Pull Request"
     ("RET" "Open in browser" magit-gh-pr-dashboard-open-browser)]
+   ["CI"
+    ("ci" "Fetch CI logs" magit-gh-pr-dashboard-fetch-ci)]
    ["Filter"
     ("fs" "Set filter…" magit-gh-pr-dashboard-set-filter)
     ("fc" "Clear all filters" magit-gh-pr-dashboard-clear-filters)]

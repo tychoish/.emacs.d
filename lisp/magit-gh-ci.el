@@ -215,7 +215,44 @@ When RUNS has exactly one entry it is returned directly without prompting."
             (plist-put ctx :run-id run-id)))))
      (magit-gh--make-error-handler "magit-gh-ci" "run-list"))))
 
+;;; PR-scoped pipeline entry
+
+(defun magit-gh-ci--step-list-pr (ctx)
+  "List CI runs for a pull request and let the user select one."
+  (let* ((pr-number (plist-get ctx :pr-number))
+         (repo-dir (plist-get ctx :repo-dir)))
+    (message "magit-gh-ci: listing runs for PR #%d..." pr-number)
+    (magit-gh--run-process
+     (list "run" "list"
+           "--pr" (number-to-string pr-number)
+           "--limit" (number-to-string magit-gh-ci-run-limit)
+           "--json" "databaseId,name,status,conclusion,createdAt,headBranch,headSha,event,workflowName")
+     repo-dir
+     (lambda (output)
+       (let ((runs (json-parse-string output :array-type 'list :object-type 'alist)))
+         (when (null runs)
+           (user-error "magit-gh-ci: no CI runs found for PR #%d" pr-number))
+         (let* ((run (magit-gh-ci--select-run runs))
+                (run-id (map-elt run 'databaseId))
+                (branch (or (map-elt run 'headBranch) "")))
+           (magit-gh-ci--step-run-info
+            (plist-put (plist-put ctx :run-id run-id) :branch branch)))))
+     (magit-gh--make-error-handler "magit-gh-ci" "pr-run-list"))))
+
 ;;; Public API
+
+;;;###autoload
+(defun magit-gh-ci-fetch-for-pr (pr-number repo-dir)
+  "Fetch GitHub Actions CI logs for PR-NUMBER using REPO-DIR as the working directory.
+PR-NUMBER is an integer.  REPO-DIR must be a local checkout of the repository
+so that `gh' can resolve the remote when listing and downloading runs."
+  (magit-gh--check-gh)
+  (let ((ctx (list :pr-number pr-number
+                   :branch ""
+                   :root repo-dir
+                   :repo-dir repo-dir
+                   :files nil)))
+    (magit-gh-ci--step-list-pr ctx)))
 
 ;;;###autoload
 (defun magit-gh-ci-fetch (&optional run-id)

@@ -174,5 +174,51 @@
         (should (equal "run" gh-called))
         (should (file-exists-p (expand-file-name "run-failed-logs.ghlog" dir)))))))
 
+;;; Pipeline: step-list-pr
+
+(ert-deftest magit-gh-ci/step-list-pr-calls-gh-with-pr-flag ()
+  "step-list-pr invokes gh run list with --pr flag."
+  (magit-gh-ci-test/with-temp-dir
+    (let* ((run (magit-gh-ci-test/make-run 99 "CI" "completed" "success" "Build"))
+           (gh-args nil)
+           (step-run-info-called nil)
+           (ctx (list :pr-number 42 :branch "" :root dir :repo-dir dir :files nil)))
+      (cl-letf (((symbol-function 'magit-gh--run-process)
+                 (lambda (args _dir on-success &optional _on-error)
+                   (setq gh-args args)
+                   (funcall on-success (json-serialize (vector run)))))
+                ((symbol-function 'magit-gh-ci--step-run-info)
+                 (lambda (_) (setq step-run-info-called t))))
+        (magit-gh-ci--step-list-pr ctx)
+        (should step-run-info-called)
+        (should (member "--pr" gh-args))
+        (should (member "42" gh-args))
+        (should (member "run" gh-args))
+        (should (member "list" gh-args))))))
+
+(ert-deftest magit-gh-ci/step-list-pr-passes-run-id-and-branch ()
+  "step-list-pr forwards the selected run-id and headBranch to step-run-info."
+  (magit-gh-ci-test/with-temp-dir
+    (let* ((run (magit-gh-ci-test/make-run 77 "CI" "completed" "success" "Build"))
+           (captured-ctx nil)
+           (ctx (list :pr-number 7 :branch "" :root dir :repo-dir dir :files nil)))
+      (cl-letf (((symbol-function 'magit-gh--run-process)
+                 (lambda (_args _dir on-success &optional _on-error)
+                   (funcall on-success (json-serialize (vector run)))))
+                ((symbol-function 'magit-gh-ci--step-run-info)
+                 (lambda (c) (setq captured-ctx c))))
+        (magit-gh-ci--step-list-pr ctx)
+        (should (= 77 (plist-get captured-ctx :run-id)))
+        (should (equal "feature/test" (plist-get captured-ctx :branch)))))))
+
+(ert-deftest magit-gh-ci/step-list-pr-errors-on-empty-runs ()
+  "step-list-pr signals user-error when no runs are found."
+  (magit-gh-ci-test/with-temp-dir
+    (let ((ctx (list :pr-number 1 :branch "" :root dir :repo-dir dir :files nil)))
+      (cl-letf (((symbol-function 'magit-gh--run-process)
+                 (lambda (_args _dir on-success &optional _on-error)
+                   (funcall on-success "[]"))))
+        (should-error (magit-gh-ci--step-list-pr ctx) :type 'user-error)))))
+
 (provide 'test-magit-gh-ci)
 ;;; test-magit-gh-ci.el ends here

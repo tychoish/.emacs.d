@@ -351,15 +351,15 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (let ((key-table (make-hash-table :test #'equal))
 	(annotation-table (make-hash-table :test #'equal)))
     (thread-last org-capture-templates
-		 (--filter (< 4 (length it)))
-		 (--mapc (let* ((template it)
-				(key-char    (nth 0 template))
-				(description (nth 1 template))
-				(file        (file-name-nondirectory (cadr (nth 3 template))))
-				(body        (let ((s (string-replace "\n" " " (nth 4 template))))
-					       (string-trim (if (> (length s) 32) (concat (substring s 0 29) "...") s)))))
-			   (ht-set key-table description key-char)
-			   (ht-set annotation-table description (format "[%s] <%s> '%s'" key-char file body)))))
+		 (seq-filter (lambda (it) (< 4 (length it))))
+		 (seq-map (lambda (it) (let* ((template it)
+					      (key-char (nth 0 template))
+					      (description (nth 1 template))
+					      (file (file-name-nondirectory (cadr (nth 3 template))))
+					      (btrm (string-replace "\n" " " (nth 4 template)))
+					      (body (string-trim (if (> (length btrm) 32) (concat (substring btrm 0 29) "...") btrm))))
+				      (setf (map-elt key-table description) key-char)
+				      (setf (map-elt annotation-table description) (format "[%s] <%s> '%s'" key-char file body))))))
     (org-capture nil (ht-get key-table (annotated-completing-read
 					annotation-table
 					:prompt "org-capture => "

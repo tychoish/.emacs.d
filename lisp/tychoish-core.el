@@ -1081,7 +1081,7 @@
 	  ("C-c C-d" . magit-dash-open-other-window))
   :commands (magit-dash-view magit-gh-pr-dashboard-open)
   :config
-  (require 'magit-gh-bump-submodules)
+  (require 'magit-dash-bump-submodules)
   (setq magit-dash-show-discovered-submodules nil))
 
 (use-package smerge-mode
