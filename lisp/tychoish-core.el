@@ -1056,33 +1056,34 @@
 
 (use-package magit-gh
   :ensure t
-  :commands (magit-gh-prune-merged-branches magit-gh-ci-fetch magit-gh-pr-fetch)
+  :commands (magit-dash-gh-prune-merged-branches magit-dash-gh-actions-fetch magit-dash-gh-pr-fetch)
   :config
   (setq magit-gh-pr-limit 50)
-  (require 'magit-gh-extras)
-  (require 'magit-gh-ci)
-  (require 'magit-gh-pr)
-  (setq magit-gh-prune-cache-dir (sprite-state-path "magit-gh-prune"))
+  (require 'magit-dash-gh)
+  (require 'magit-dash-gh-actions)
+  (require 'magit-dash-gh-pr)
+  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
-	      (run-with-idle-timer 3 nil #'magit-gh-prune-prefetch)))
+	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
   (transient-append-suffix 'magit-gh "v"
-    '("P" "Prune merged/closed PR branches" magit-gh-prune-merged-branches))
+    '("P" "Prune merged/closed PR branches" magit-dash-gh-prune-merged-branches))
   (transient-append-suffix 'magit-gh "P"
-    '("L" "Fetch CI logs" magit-gh-ci-fetch))
+    '("L" "Fetch CI logs" magit-dash-gh-actions-fetch))
   (transient-append-suffix 'magit-gh "L"
-    '("R" "Fetch PR comments" magit-gh-pr-fetch)))
+    '("R" "Fetch PR comments" magit-dash-gh-pr-fetch)))
 
 (use-package magit-dash
+  :load-path "external/external/magit-dash"
   :bind
     (:map tychoish/magit-map
 	  ("d" . magit-dash-open)
 	  :map magit-mode-map
 	  ("C-c C-d" . magit-dash-open-other-window))
-  :commands (magit-dash-view magit-gh-pr-dashboard-open)
+  :commands (magit-dash-view magit-dash-gh-pr-dashboard-open)
   :config
-  (require 'magit-dash-bump-submodules)
-  (require 'magit-gh-pr)
+  (require 'magit-dash-submodules)
+  (require 'magit-dash-gh-pr)
   (setq magit-dash-show-discovered-submodules nil))
 
 (use-package smerge-mode
