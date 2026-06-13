@@ -700,7 +700,7 @@ more arguments than the function cares about."
   "cache mapping file names to files' mtime to avoid re-importing files")
 
 (defun should-read-abbrev-file-p (path)
-  (or (not (ht-contains-p tychoish/abbrev-files-cache path))
+  (or (not (map-contains-key tychoish/abbrev-files-cache path))
       (time-less-p (map-elt tychoish/abbrev-files-cache path) (f-mtime path))))
 
 (defun tychoish/load-abbrev-files ()

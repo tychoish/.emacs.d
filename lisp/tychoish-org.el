@@ -360,7 +360,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 					      (body (string-trim (if (> (length btrm) 32) (concat (substring btrm 0 29) "...") btrm))))
 				      (setf (map-elt key-table description) key-char)
 				      (setf (map-elt annotation-table description) (format "[%s] <%s> '%s'" key-char file body))))))
-    (org-capture nil (ht-get key-table (annotated-completing-read
+    (org-capture nil (map-elt key-table (annotated-completing-read
 					annotation-table
 					:prompt "org-capture => "
 					:category 'org-capture
