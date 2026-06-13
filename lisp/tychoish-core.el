@@ -1031,10 +1031,10 @@
   :config
   (setq vc-follow-symlinks t)
   (setq version-control t)
-  (setq magit-module-sections-nested nil)
+  (setq magit-module-sections-nested t)
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
-  (add-hook 'magit-status-sections-hook 'magit-insert-worktrees)
-  (add-hook 'magit-status-sections-hook 'magit-insert-modules)
+  (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
+  (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
 
   (bind-keys
    :map magit-mode-map
@@ -1046,7 +1046,7 @@
   (which-key-customize "(s)merge-commands" :map 'magit-command-mode-map :key "m")
   (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x")
 
-  (require 'magit-open-repo)
+  (require 'magit-dash-open)
 
   (let* ((dir (package-desc-dir (package-get-descriptor 'transient)))
 	 (path (f-join dir "transient.el")))
