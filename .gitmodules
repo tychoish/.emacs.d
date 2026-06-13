@@ -14,6 +14,11 @@
 	path = external/agent-shell-queue
 	url = https://github.com/tychoish/agent-shell-queue
 	branch = main
+[submodule "magit-dash"]
+	path = external/magit-dash
+	url = https://github.com/tychoish/magit-dash.git
+	ignore = untracked
+	branch = main
 [submodule "agent-shell-manager"]
 	path = external/agent-shell-manager
 	url = https://github.com/ElleNajt/agent-shell-manager.git

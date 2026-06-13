@@ -1074,7 +1074,7 @@
     '("R" "Fetch PR comments" magit-dash-gh-pr-fetch)))
 
 (use-package magit-dash
-  :load-path "external/external/magit-dash"
+  :load-path "external/magit-dash"
   :bind
     (:map tychoish/magit-map
 	  ("d" . magit-dash-open)

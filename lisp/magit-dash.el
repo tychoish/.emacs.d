@@ -220,7 +220,7 @@ Returns a plist with keys :branch :remote-origin :behind :ahead :dirty
   (let* ((path (magit-dash-repo-path repo))
          (default-directory path)
          (branch (or (magit-git-string "branch" "--show-current") ""))
-         (remote-origin (magit-get "remote" "origin" "url"))
+         (remote-origin (magit-git-string "config" "remote.origin.url"))
          (behind (string-to-number
                   (or (ignore-errors (magit-git-string "rev-list" "--count" "HEAD..@{u}"))
                       "0")))
@@ -318,7 +318,7 @@ Checks the in-memory cache first; calls CALLBACK with (TOTAL . MINE)."
                                (let ((prs (json-parse-string trimmed
 							     :array-type 'list
 							     :object-type 'alist)))
-				 (cons (h prs)
+				 (cons (length prs)
                                        (seq-count
 					(lambda (pr)
 					  (equal viewer
@@ -351,7 +351,7 @@ For missing submodules, returns minimal placeholder stats."
      (t (condition-case err
             (magit-dash--collect-stats repo)
           (error
-           (message "magit-gh: failed to collect stats for %s: %s"
+           (message "magit-dash: failed to collect stats for %s: %s"
                     (magit-dash-repo-name repo) (error-message-string err))
            ;; Return minimal stats on error
            (list :branch "?" :remote-origin nil :behind 0 :ahead 0
@@ -385,7 +385,7 @@ ON-ERROR is called with stdout and exit-code on non-zero exit; defaults to a mes
                (funcall on-success output)
              (if on-error
                  (funcall on-error output code)
-               (message "magit-gh: git %s failed (%d): %s"
+               (message "magit-dash: git %s failed (%d): %s"
                         (car args) code output)))))))))
 
 (defun magit-dash--fetch-async (repo on-complete)
@@ -626,7 +626,7 @@ When ERROR-TEXT is non-nil it is appended to the message."
   (let* ((ts (format-time-string "%Y-%m-%d %H:%M:%S"))
          (name (propertize repo-name 'face 'bold 'help-echo ts))
          (detail (if error-text (format " — %s" error-text) "")))
-    (message "magit-gh: %s %s → %s%s" name operation (symbol-name status) detail)))
+    (message "magit-dash: %s %s → %s%s" name operation (symbol-name status) detail)))
 
 (defun magit-dash--batch-run (repos op-fn label &optional on-all-done)
   "Run OP-FN asynchronously on each repo in REPOS.
@@ -636,7 +636,7 @@ When all repos finish, display a LABEL summary message and optionally call
 ON-ALL-DONE with an alist of (NAME . STATUS)."
   (let* ((remaining (list (length repos)))
          (results nil))
-    (message "%s: starting %d repo(s)..." label (length repos))
+    (message "magit-dash: starting %s batch operation" label)
     (seq-do
      (lambda (repo)
        (funcall op-fn repo
@@ -656,6 +656,7 @@ ON-ALL-DONE with an alist of (NAME . STATUS)."
                                            (length errors)
                                            (mapconcat #'car errors ", "))
                                  ""))
+                      (message "magit-dash: ending %s batch operation" label)
                       (when on-all-done
                         (funcall on-all-done results)))))))
      repos)))
@@ -1232,8 +1233,8 @@ Signals `user-error' when :auto-commit is not configured for this repo."
     (unless (magit-dash-repo-auto-commit repo)
       (user-error "Auto-commit is not configured for %s" (magit-dash-repo-name repo)))
     (if (magit-dash--auto-commit repo)
-        (message "magit-gh: committed changes in %s" (magit-dash-repo-name repo))
-      (message "magit-gh: nothing to commit or commit failed in %s"
+        (message "magit-dash: committed changes in %s" (magit-dash-repo-name repo))
+      (message "magit-dash: nothing to commit or commit failed in %s"
                (magit-dash-repo-name repo)))))
 
 (defun magit-dash-stage-all ()
@@ -1241,8 +1242,8 @@ Signals `user-error' when :auto-commit is not configured for this repo."
   (interactive)
   (let ((repo (magit-dash--repo-at-point)))
     (if (magit-dash--stage-all repo)
-        (message "magit-gh: staged all changes in %s" (magit-dash-repo-name repo))
-      (message "magit-gh: stage all failed in %s" (magit-dash-repo-name repo)))))
+        (message "magit-dash: staged all changes in %s" (magit-dash-repo-name repo))
+      (message "magit-dash: stage all failed in %s" (magit-dash-repo-name repo)))))
 
 (defun magit-dash-push ()
   "Push current branch to its push remote for the repository at point."
@@ -1273,7 +1274,7 @@ Displays a summary message and refreshes the dashboard when all complete."
     (magit-dash--batch-run
      repos
      #'magit-dash--auto-commit-async
-     "magit-gh commit"
+     "magit-dash commit"
      (lambda (_) (magit-dash--maybe-refresh)))))
 
 (defun magit-dash-sync-all ()
@@ -1285,7 +1286,7 @@ Displays a summary message and refreshes the dashboard when all complete."
     (magit-dash--batch-run
      repos
      #'magit-dash--auto-sync-async
-     "magit-gh sync"
+     "magit-dash sync"
      (lambda (_) (magit-dash--maybe-refresh)))))
 
 (defun magit-dash-auto-sync ()
@@ -1299,7 +1300,7 @@ logged individually. Dashboard refreshes when all repos complete."
     (magit-dash--batch-run
      repos
      #'magit-dash--auto-sync-async
-     "magit-gh autosync"
+     "magit-dash autosync"
      (lambda (_) (magit-dash--maybe-refresh)))))
 
 (defun magit-dash-run-command ()
@@ -1669,9 +1670,9 @@ Signals `user-error' when :auto-commit is not configured for this repo."
       (user-error "Auto-commit is not configured for %s" (magit-dash-repo-name repo)))
     (if (magit-dash--auto-commit repo)
         (progn
-          (message "magit-gh: committed changes in %s" (magit-dash-repo-name repo))
+          (message "magit-dash: committed changes in %s" (magit-dash-repo-name repo))
           (magit-dash-overview-refresh))
-      (message "magit-gh: nothing to commit or commit failed in %s"
+      (message "magit-dash: nothing to commit or commit failed in %s"
                (magit-dash-repo-name repo)))))
 
 (defun magit-dash-overview-sync ()
@@ -1692,9 +1693,9 @@ Signals `user-error' when no auto operations are configured for this repo."
   (let ((repo (magit-dash-overview--current-repo)))
     (if (magit-dash--stage-all repo)
         (progn
-          (message "magit-gh: staged all changes in %s" (magit-dash-repo-name repo))
+          (message "magit-dash: staged all changes in %s" (magit-dash-repo-name repo))
           (magit-dash-overview-refresh))
-      (message "magit-gh: stage all failed in %s" (magit-dash-repo-name repo)))))
+      (message "magit-dash: stage all failed in %s" (magit-dash-repo-name repo)))))
 
 (defun magit-dash-overview-push ()
   "Push current branch to its push remote for this overview's repository."
