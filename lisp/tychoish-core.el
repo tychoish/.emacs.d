@@ -1063,12 +1063,6 @@
   (which-key-customize "(s)merge-commands" :map 'magit-command-mode-map :key "m")
   (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x"))
 
-(use-package magit-gh
-  :ensure t
-  :commands (magit-dash-gh-prune-merged-branches magit-dash-gh-actions-fetch magit-dash-gh-pr-fetch)
-  :config
-  (setq magit-gh-pr-limit 50))
-
 (use-package magit-dash
   :load-path "external/magit-dash"
   :bind
@@ -1085,16 +1079,11 @@
   (require 'magit-dash-gh)
   (require 'magit-dash-gh-actions)
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
+  (setq magit-dash-gh-prune-pr-limit 50)
   (setq magit-dash-show-discovered-submodules nil)
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
-	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
-  (transient-append-suffix 'magit-gh "v"
-    '("P" "Prune merged/closed PR branches" magit-dash-gh-prune-merged-branches))
-  (transient-append-suffix 'magit-gh "P"
-    '("L" "Fetch CI logs" magit-dash-gh-actions-fetch))
-  (transient-append-suffix 'magit-gh "L"
-    '("R" "Fetch PR comments" magit-dash-gh-pr-fetch)))
+	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch))))
 
 (use-package smerge-mode
   :after (magit)
