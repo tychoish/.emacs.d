@@ -1023,8 +1023,7 @@
    :prefix-map tychoish/magit-map
    ("s" . magit-status)
    ("f" . magit-branch)
-   ("b" . magit-blame)
-   ("o" . magit-open-repo))
+   ("b" . magit-blame))
   (make-read-extended-command-for-prefix "magit"
     :bind-map tychoish/magit-map
     :bind-key "x")
@@ -1044,25 +1043,31 @@
    ("m" . execute-extended-smerge-command))
 
   (which-key-customize "(s)merge-commands" :map 'magit-command-mode-map :key "m")
-  (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x")
-
-  (require 'magit-dash-open)
-
-  (let* ((dir (package-desc-dir (package-get-descriptor 'transient)))
-	 (path (f-join dir "transient.el")))
-    (if (file-exists-p path)
-	(load-file path)
-      (message "could not force-load %s" path))))
+  (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x"))
 
 (use-package magit-gh
   :ensure t
   :commands (magit-dash-gh-prune-merged-branches magit-dash-gh-actions-fetch magit-dash-gh-pr-fetch)
   :config
-  (setq magit-gh-pr-limit 50)
+  (setq magit-gh-pr-limit 50))
+
+(use-package magit-dash
+  :load-path "external/magit-dash"
+  :bind
+    (:map tychoish/magit-map
+	  ("d" . magit-dash-open)
+	  ("o" . magit-dash-open-repo)
+	  :map magit-mode-map
+	  ("C-c C-d" . magit-dash-open-other-window))
+  :commands (magit-dash-view magit-dash-gh-pr-dashboard-open)
+  :config
+  (require 'magit-dash-open)
+  (require 'magit-dash-submodules)
+  (require 'magit-dash-gh-pr)
   (require 'magit-dash-gh)
   (require 'magit-dash-gh-actions)
-  (require 'magit-dash-gh-pr)
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
+  (setq magit-dash-show-discovered-submodules nil)
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
@@ -1072,19 +1077,6 @@
     '("L" "Fetch CI logs" magit-dash-gh-actions-fetch))
   (transient-append-suffix 'magit-gh "L"
     '("R" "Fetch PR comments" magit-dash-gh-pr-fetch)))
-
-(use-package magit-dash
-  :load-path "external/magit-dash"
-  :bind
-    (:map tychoish/magit-map
-	  ("d" . magit-dash-open)
-	  :map magit-mode-map
-	  ("C-c C-d" . magit-dash-open-other-window))
-  :commands (magit-dash-view magit-dash-gh-pr-dashboard-open)
-  :config
-  (require 'magit-dash-submodules)
-  (require 'magit-dash-gh-pr)
-  (setq magit-dash-show-discovered-submodules nil))
 
 (use-package smerge-mode
   :after (magit)
