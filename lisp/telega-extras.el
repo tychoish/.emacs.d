@@ -1,8 +1,12 @@
-;;; telega-extras.el --- Idle-disconnect and lifecycle extras for telega -*- lexical-binding: t; -*-
+;;; telega-extras.el --- Configurable idle actions and lifecycle extras for telega -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Idle-disconnect timer, systemd-logind sleep integration, buffer
+;; Configurable idle actions, systemd-logind sleep integration, buffer
 ;; management, and notification filtering for the telega Telegram client.
+;;
+;; Trigger mechanisms (idle timer, logind PrepareForSleep) are handled by
+;; `sprite-session'; this file registers telega-specific responses on those
+;; hooks and provides per-instance configuration helpers for personal.el.
 ;;
 ;; Load order: required from use-package telega :config block, after telega
 ;; is loaded.  All setup runs via `telega-extras-setup' on `telega-ready-hook'
@@ -11,6 +15,7 @@
 ;;; Code:
 
 (require 'sprite)
+(require 'sprite-session)
 (require 'alert)
 (require 'tychoish-bootstrap)
 (require 'telega)
@@ -18,83 +23,65 @@
 (require 'telega-chat)
 (require 'telega-msg)
 (require 'telega-root)
-(require 'dbus nil t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; Idle-disconnect timer
+;; Configurable idle action
 
-(defvar telega-extras--idle-timer nil
-  "Timer that disconnects telega after extended Emacs idle.")
+(defcustom telega-extras-idle-action 'switch-to-root
+  "Action taken when `sprite-session-idle-hook' fires while telega is live.
+Possible values:
+  `switch-to-root'     — switch the current frame to the telega root buffer
+  `bury-chat-buffers'  — bury visible chat windows and replace with root
+  `kill-chat-buffers'  — kill all telega-chat-mode buffers
+  `disconnect'         — stop the telega server (soft disconnect)"
+  :type '(choice (const :tag "Switch to root buffer" switch-to-root)
+                 (const :tag "Bury chat buffers" bury-chat-buffers)
+                 (const :tag "Kill chat buffers" kill-chat-buffers)
+                 (const :tag "Disconnect from Telegram" disconnect))
+  :group 'telega)
 
-(defun telega-extras-disconnect ()
-  "Soft-disconnect from Telegram: stop the server, keep buffers.
-Calls `telega-server-kill', which stops the tdlib subprocess and fires
-`telega-kill-hook' but leaves the root and chat buffers alive.
-Reconnect with \\[telega]."
-  (interactive)
-  (telega-server-kill))
-
-(defun telega-extras--idle-disconnect ()
-  "Disconnect from Telegram when Emacs idle threshold is reached."
+(defun telega-extras--on-idle ()
+  "Perform `telega-extras-idle-action' when the session idle hook fires."
   (when (telega-server-live-p)
-    (message "telega-extras: idle disconnect")
-    (telega-extras-disconnect)))
+    (message "telega-extras: idle action: %s" telega-extras-idle-action)
+    (pcase telega-extras-idle-action
+      ('switch-to-root (telega-extras-switch-to-root))
+      ('bury-chat-buffers (telega-extras-bury-chat-buffers))
+      ('kill-chat-buffers (telega-extras-kill-chat-buffers))
+      ('disconnect (telega-extras-disconnect)))))
 
 (defun telega-extras-start-idle-timer ()
-  "Start a repeating idle timer to disconnect telega after 1 hour of idle."
-  (telega-extras-stop-idle-timer)
-  (setq telega-extras--idle-timer
-        (run-with-idle-timer 3600 t #'telega-extras--idle-disconnect)))
+  "Register `telega-extras--on-idle' on the session idle hook and start the timer if needed."
+  (sprite-session-add-on-idle #'telega-extras--on-idle))
 
 (defun telega-extras-stop-idle-timer ()
-  "Cancel the idle disconnect timer."
-  (when telega-extras--idle-timer
-    (cancel-timer telega-extras--idle-timer)
-    (setq telega-extras--idle-timer nil)))
+  "Remove `telega-extras--on-idle' from the session idle hook and stop the timer if empty."
+  (sprite-session-remove-on-idle #'telega-extras--on-idle))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; systemd-logind PrepareForSleep integration
 ;;
-;; On Linux with DBus support, Emacs can subscribe to the logind Manager
-;; PrepareForSleep signal.  This fires (with arg t) just before the system
-;; suspends or hibernates, giving us a chance to disconnect before the
-;; network disappears.  This is complementary to the idle timer: the idle
-;; timer handles "left laptop open but walked away"; logind handles
-;; "closed the lid".
+;; Sleep always disconnects regardless of `telega-extras-idle-action': once
+;; the lid closes the network is gone, so any lighter action would leave
+;; telega in a broken state.
 
-(defvar telega-extras--logind-signal nil
-  "DBus registration object for the logind PrepareForSleep signal.")
-
-(defun telega-extras--logind-available-p ()
-  "Return non-nil when systemd-logind DBus integration is usable."
-  (and (fboundp 'dbus-register-signal)
-       (eq system-type 'gnu/linux)))
-
-(defun telega-extras--on-prepare-for-sleep (going-to-sleep)
-  "Disconnect telega before sleep when GOING-TO-SLEEP is non-nil."
-  (when (and going-to-sleep (telega-server-live-p))
+(defun telega-extras--on-before-sleep ()
+  "Disconnect telega before system sleep or suspend."
+  (when (telega-server-live-p)
     (message "telega-extras: disconnecting before sleep/suspend")
     (telega-extras-disconnect)))
 
 (defun telega-extras-start-logind-watch ()
-  "Register a DBus signal to disconnect telega on system sleep or suspend."
-  (when (telega-extras--logind-available-p)
-    (setq telega-extras--logind-signal
-          (dbus-register-signal
-           :system
-           "org.freedesktop.login1"
-           "/org/freedesktop/login1"
-           "org.freedesktop.login1.Manager"
-           "PrepareForSleep"
-           #'telega-extras--on-prepare-for-sleep))))
+  "Register `telega-extras--on-before-sleep' on the session sleep hook and start watch."
+  (add-hook 'sprite-session-before-sleep-hook #'telega-extras--on-before-sleep)
+  (sprite-session-start-logind-watch))
 
 (defun telega-extras-stop-logind-watch ()
-  "Unregister the logind PrepareForSleep DBus signal."
-  (when telega-extras--logind-signal
-    (dbus-unregister-object telega-extras--logind-signal)
-    (setq telega-extras--logind-signal nil)))
+  "Remove `telega-extras--on-before-sleep' from the session sleep hook and stop watch."
+  (remove-hook 'sprite-session-before-sleep-hook #'telega-extras--on-before-sleep)
+  (sprite-session-stop-logind-watch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -180,6 +167,17 @@ non-interactive callers never see a prompt."
   (remove-hook 'server-after-make-frame-hook #'telega-extras-switch-to-root)
   (setq initial-buffer-choice nil))
 
+(defun telega-extras-root-default-for-instances (instance-ids)
+  "Enable telega root as the default buffer on new frames for INSTANCE-IDS.
+Call this from personal.el before telega loads.  When the running Emacs
+instance (per `sprite-instance-name') is a member of INSTANCE-IDS,
+`telega-extras-make-root-default' is registered on `telega-ready-hook'
+and undone on `telega-kill-hook'.
+Example: (telega-extras-root-default-for-instances \\='(\"telega\" \"primary\"))"
+  (when (member (sprite-instance-name) instance-ids)
+    (add-hook 'telega-ready-hook #'telega-extras-make-root-default)
+    (add-hook 'telega-kill-hook #'telega-extras-remove-root-default)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Root buffer navigation
@@ -231,7 +229,6 @@ non-interactive callers never see a prompt."
 
 (defun telega-extras-setup ()
   "Set up telega extras.  Called on `telega-ready-hook'."
-  (telega-extras-make-root-default)
   (telega-extras-start-idle-timer)
   (telega-extras-start-logind-watch)
   (advice-add 'telega-notifications-msg-notify-p

@@ -674,6 +674,60 @@
         (should (= 1 (length list)))
         (should (equal "work.1.active" (sprite-name (car list))))))))
 
+;;;; State paths: sprite-conf-host-and-instance, sprite-state-file-prefix
+
+(ert-deftest sprite/conf-host-and-instance-returns-two-element-list ()
+  "`sprite-conf-host-and-instance' returns a list of exactly (HOSTNAME INSTANCE-ID)."
+  (let ((sprite-instance-id "myinst"))
+    (let ((result (sprite-conf-host-and-instance)))
+      (should (listp result))
+      (should (= 2 (length result)))
+      (should (stringp (car result)))
+      (should (equal "myinst" (cadr result))))))
+
+(ert-deftest sprite/conf-host-and-instance-truncates-on-darwin ()
+  "`sprite-conf-host-and-instance' uses only the first hostname component on Darwin."
+  (let ((system-type 'darwin)
+        (sprite-instance-id "myinst"))
+    (cl-letf (((symbol-function 'sprite-system-name)
+               (lambda () "host.local.example")))
+      (should (equal "host" (car (sprite-conf-host-and-instance)))))))
+
+(ert-deftest sprite/conf-host-and-instance-full-hostname-on-linux ()
+  "`sprite-conf-host-and-instance' uses the full system-name on Linux."
+  (let ((system-type 'gnu/linux)
+        (sprite-instance-id "myinst"))
+    (cl-letf (((symbol-function 'sprite-system-name)
+               (lambda () "host.local.example")))
+      (should (equal "host.local.example" (car (sprite-conf-host-and-instance)))))))
+
+(ert-deftest sprite/state-file-prefix-basic-components ()
+  "`sprite-state-file-prefix' produces HOSTNAME-INSTANCE-NAME for a normal user."
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
+             (lambda () (list "myhost" "myinst")))
+            ((symbol-function 'file-symlink-p) (lambda (_) nil))
+            (user-login-name "alice"))
+    (should (equal "myhost-myinst-myfile"
+                   (sprite-state-file-prefix "myfile")))))
+
+(ert-deftest sprite/state-file-prefix-appends-username-for-root ()
+  "`sprite-state-file-prefix' appends the username when running as root."
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
+             (lambda () (list "myhost" "myinst")))
+            ((symbol-function 'file-symlink-p) (lambda (_) nil))
+            (user-login-name "root"))
+    (should (equal "myhost-myinst-myfile-root"
+                   (sprite-state-file-prefix "myfile")))))
+
+(ert-deftest sprite/state-file-prefix-appends-username-for-symlinked-dir ()
+  "`sprite-state-file-prefix' appends username when `user-emacs-directory' is a symlink."
+  (cl-letf (((symbol-function 'sprite-conf-host-and-instance)
+             (lambda () (list "myhost" "myinst")))
+            ((symbol-function 'file-symlink-p) (lambda (_) t))
+            (user-login-name "alice"))
+    (should (equal "myhost-myinst-myfile-alice"
+                   (sprite-state-file-prefix "myfile")))))
+
 ;;;; Savehist wiring
 
 (ert-deftest sprite/savehist-variable-registered ()

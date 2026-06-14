@@ -1016,6 +1016,7 @@
 
 (use-package magit
   :ensure t
+  :after (cond-let)
   :commands (magit-toplevel magit-status magit-branch magit-blame)
   :init
   (bind-keys
@@ -1034,6 +1035,23 @@
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
   (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
   (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
+
+  ;; magit-20260609+ uses `thread$' from cond-let which requires cond-let>=0.3;
+  ;; the installed cond-let doesn't define cond-let--thread$ yet.  Redefine the
+  ;; one affected function using nested calls until cond-let catches up.
+  (defun magit-config-get-from-cached-list (key)
+    (gethash
+     (replace-regexp-in-string "[^.]+\\'" #'downcase
+       (replace-regexp-in-string "\\`[^.]+" #'downcase key t t)
+       t t)
+     (magit--with-refresh-cache (cons (magit-toplevel) 'config)
+       (let ((configs (make-hash-table :test #'equal)))
+         (dolist (conf (magit-git-items "config" "--list" "-z"))
+           (let* ((nl-pos (cl-position ?\n conf))
+                  (key (substring conf 0 nl-pos))
+                  (val (if nl-pos (substring conf (1+ nl-pos)) "")))
+             (puthash key (nconc (gethash key configs) (list val)) configs)))
+         configs))))
 
   (bind-keys
    :map magit-mode-map
@@ -1246,7 +1264,7 @@
   (setq telega-filters-custom '(("main" main)
 				("groups" type basicgroup supergroup)
 				("broadcast" type channel)
-				("archive" . archive)))
+				("archive" archive)))
   (setq telega-root-view-top-categories
 	'(("Users" . 10) ("Groups" . 10) ("Channels" . 10) ("Bots" . 10)
 	  ("InlineBots" . 10) ("Calls" . 10)))
