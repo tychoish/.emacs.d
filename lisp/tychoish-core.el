@@ -2779,7 +2779,7 @@ Useful after changing `eglot-workspace-configuration' or
   (agent-shell-mode-key "f" agent-shell-select-collapse)
   (agent-shell-mode-key "c" agent-shell-select-command)
   (agent-shell-mode-key "m" agent-shell-dispatch)
-  (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment-at-point)
+  (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment)
   (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
 
   (defun agent-shell-queue-capture-corfu-setup ()
