@@ -17,7 +17,7 @@
 (require 'sprite)
 (require 'sprite-session)
 (require 'alert)
-(require 'tychoish-bootstrap)
+(require 'bootstrap)
 (require 'telega)
 (require 'telega-server)
 (require 'telega-chat)
