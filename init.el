@@ -8,7 +8,7 @@
 ;;; Code:
 
 ;; Load-path setup and package bootstrap.  lisp/ and user/ are added so the
-;; configuration modules (tychoish-bootstrap, tychoish-core, …) can be found.
+;; configuration modules (bootstrap, tychoish-core, …) can be found.
 ;; xtdlib is bootstrapped here because it must be on load-path before the
 ;; modules are compiled — their eval-when-compile forms need it at byte-compile
 ;; time, and package-initialize alone will not install a missing package.
@@ -82,11 +82,10 @@ lived instances. Other ephemeral instance names ones may be useful.")
 
  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
  (add-to-list 'package-archives '( "jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/") t)
- (add-to-list 'package-archives '("nongnu" . "https://elpa.nongnu.org/nongnu/"))
- (setq package-archive-priorities '(("melpa"    . 1)
-				    ("nongnu"    . 3)
-				    ("gnu"    . 2)
-				    ("jcs-elpa" . 4)))
+ (setq package-archive-priorities '(("melpa"    . 100)
+				    ("nongnu"    . 50)
+				    ("gnu"    . 25)
+				    ("jcs-elpa" . 10)))
 
  (declare-function alert "alert")
 
@@ -117,8 +116,8 @@ lived instances. Other ephemeral instance names ones may be useful.")
 
   (setq custom-file (sprite-state-path "custom.el"))
 
-  (with-slow-op-timer "<init> tychoish-bootstrap"
-   (require 'tychoish-bootstrap))
+  (with-slow-op-timer "<init> bootstrap"
+   (require 'bootstrap))
 
   ;; remaining use-package declarations.
   (with-slow-op-timer "<init> tychoish-core"
@@ -132,7 +131,7 @@ lived instances. Other ephemeral instance names ones may be useful.")
 
   ;; load the user/*.el files
   (with-slow-op-timer "<init> user-files"
-   (declare-function tychoish-set-up-user-local-config 'tychoish-bootstrap)
+   (declare-function tychoish-set-up-user-local-config 'bootstrap)
    (tychoish-set-up-user-local-config))))
 
 (provide 'init)

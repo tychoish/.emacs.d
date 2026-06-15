@@ -1,4 +1,4 @@
-;;; tychoish-bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
+;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -592,7 +592,7 @@ more arguments than the function cares about."
 
 (defun tychoish/init-force-relaod ()
   (with-slow-op-timer "<bootstrap.el>: force reload"
-    (load "tychoish-bootstrap.el")
+    (load "bootstrap.el")
     (load "tychoish-core.el")
     (load "tychoish-mail.el")
     (load "tychoish-org.el")
@@ -1829,9 +1829,10 @@ than a real drift:
          :warning)
         missing))))
 
-(add-hook 'emacs-startup-hook
-          (lambda ()
-            (run-with-idle-timer 5 nil #'tychoish/elpa-check-submodules)))
+(add-lazy-init
+ :name "<bootstrap> elpa check submodules"
+ :delay 5
+ :operation #'tychoish/elpa-check-submodules)
 
 (defun tychoish/elpa-pull-submodules ()
   "Run `git pull origin' in each submodule under `.emacs.d/elpa/'.
@@ -1886,5 +1887,45 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
     (let ((stats (ert-run-tests-batch t)))
       (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
 
-(provide 'tychoish-bootstrap)
-;;; tychoish-bootstrap.el ends here
+;;; Config analysis
+
+(defun tychoish-core-use-package-sizes ()
+  "Return (PACKAGE-NAME . LINE-COUNT) pairs for every top-level use-package
+block in tychoish-core.el, sorted by LINE-COUNT descending."
+  (let ((file (expand-file-name "lisp/tychoish-core.el" user-emacs-directory))
+        results)
+    (with-temp-buffer
+      (set-syntax-table emacs-lisp-mode-syntax-table)
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (while (re-search-forward "^(use-package \\([^ \t\n]+\\)" nil t)
+        (let* ((name (match-string-no-properties 1))
+               (start (match-beginning 0)))
+          (goto-char start)
+          (condition-case nil
+              (progn
+                (forward-sexp 1)
+                (push (cons name (count-lines start (point))) results))
+            (scan-error
+             (forward-line 1))))))
+    (sort results (lambda (a b) (> (cdr a) (cdr b))))))
+
+;;;###autoload
+(defun tychoish-core-use-package-sizes-report ()
+  "Display use-package blocks from tychoish-core.el sorted by line count."
+  (interactive)
+  (let* ((results (tychoish-core-use-package-sizes))
+         (buf (get-buffer-create "*use-package-sizes*")))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "%-40s %s\n" "Package" "Lines"))
+        (insert (make-string 48 ?-) "\n")
+        (dolist (entry results)
+          (insert (format "%-40s %d\n" (car entry) (cdr entry))))
+        (goto-char (point-min)))
+      (special-mode))
+    (pop-to-buffer buf)))
+
+(provide 'bootstrap)
+;;; bootstrap.el ends here
