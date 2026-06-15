@@ -12,6 +12,9 @@
   (add-to-list 'load-path (expand-file-name "lisp" root))
   (dolist (dir (directory-files (expand-file-name "elpa" root) t "\\`[^.]"))
     (when (file-directory-p dir)
+      (add-to-list 'load-path dir)))
+  (dolist (dir (directory-files (expand-file-name "external" root) t "\\`[^.]"))
+    (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 
 ;;; Transient key introspection helpers
