@@ -21,7 +21,7 @@
 	branch = main
 [submodule "sprite"]
 	path = external/sprite
-	url = https://github.com/tychoish/sprite.el
+	url = https://github.com/tychoish/sprite
 	branch = main
 [submodule "agent-shell-manager"]
 	path = external/agent-shell-manager
