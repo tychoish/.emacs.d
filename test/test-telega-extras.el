@@ -8,6 +8,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'server)
 (require 'test-helper)
 (require 'telega-extras)
 

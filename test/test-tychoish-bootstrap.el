@@ -50,7 +50,8 @@
   "Returns daemon name when daemonp returns a string."
   (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
     (setq tychoish-cache--resolved-instance-id nil))
-  (cl-letf (((symbol-function 'daemonp) (lambda () "work")))
+  (cl-letf (((symbol-function 'daemonp) (lambda () "work"))
+            ((symbol-function 'setenv) #'ignore))
     (should (equal "work" (sprite-resolve-instance-id)))))
 
 (ert-deftest bootstrap/resolve-instance-id-falls-back-to-solo ()
