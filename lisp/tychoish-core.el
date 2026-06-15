@@ -1061,7 +1061,12 @@
    ("m" . execute-extended-smerge-command))
 
   (which-key-customize "(s)merge-commands" :map 'magit-command-mode-map :key "m")
-  (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x"))
+  (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x")
+
+  (bind-keys
+   :map magit-status-mode-map
+   ("C-n" . next-line)
+   ("C-p" . previous-line)))
 
 (use-package magit-dash
   :load-path "external/magit-dash"

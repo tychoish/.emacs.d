@@ -59,15 +59,11 @@ Possible values:
   "Remove `telega-extras--on-idle' from the session idle hook and stop the timer if empty."
   (sprite-session-remove-on-idle #'telega-extras--on-idle))
 
-(defun telega-extras--idle-disconnect ()
-  "Disconnect from Telegram if the server is currently live."
-  (when (telega-server-live-p)
-    (telega-server-kill)))
-
 (defun telega-extras-disconnect ()
   "Disconnect from Telegram.  No-op when the server is not live."
   (interactive)
-  (telega-extras--idle-disconnect))
+  (when (telega-server-live-p)
+    (telega-server-kill)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -86,7 +82,7 @@ Possible values:
   "Disconnect telega before system sleep.
 GOING-TO-SLEEP is t when entering sleep, nil on wake."
   (when going-to-sleep
-    (telega-extras--idle-disconnect)))
+    (telega-extras-disconnect)))
 
 (defun telega-extras--on-before-sleep ()
   "Disconnect telega before system sleep or suspend."

@@ -49,19 +49,19 @@
 ;;; idle disconnect
 
 (ert-deftest telega-extras/idle-disconnect-does-nothing-when-server-dead ()
-  "`telega-extras--idle-disconnect' is a no-op when the server is not live."
+  "`telega-extras-disconnect' is a no-op when the server is not live."
   (let (kill-called)
     (cl-letf (((symbol-function 'telega-server-live-p) (lambda () nil))
               ((symbol-function 'telega-kill) (lambda (&rest _) (setq kill-called t))))
-      (telega-extras--idle-disconnect)
+      (telega-extras-disconnect)
       (should-not kill-called))))
 
 (ert-deftest telega-extras/idle-disconnect-kills-when-server-live ()
-  "`telega-extras--idle-disconnect' calls `telega-server-kill' when server is live."
+  "`telega-extras-disconnect' calls `telega-server-kill' when server is live."
   (let (kill-called)
     (cl-letf (((symbol-function 'telega-server-live-p) (lambda () t))
               ((symbol-function 'telega-server-kill) (lambda () (setq kill-called t))))
-      (telega-extras--idle-disconnect)
+      (telega-extras-disconnect)
       (should kill-called))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
