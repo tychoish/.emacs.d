@@ -62,10 +62,9 @@
       (should (equal "solo" (sprite-resolve-instance-id))))))
 
 (ert-deftest bootstrap/resolve-instance-id-uses-cache ()
-  "Returns the cached value without recomputing."
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (setq tychoish-cache--resolved-instance-id "cached-value"))
-  (should (equal "cached-value" (sprite-resolve-instance-id))))
+  "sprite-instance-name returns sprite-instance-id without recomputing."
+  (let ((sprite-instance-id "cached-value"))
+    (should (equal "cached-value" (sprite-instance-name)))))
 
 (ert-deftest bootstrap/resolve-instance-id-returns-string ()
   "Return value is always a string."

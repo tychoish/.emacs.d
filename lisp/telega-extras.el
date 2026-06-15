@@ -59,6 +59,16 @@ Possible values:
   "Remove `telega-extras--on-idle' from the session idle hook and stop the timer if empty."
   (sprite-session-remove-on-idle #'telega-extras--on-idle))
 
+(defun telega-extras--idle-disconnect ()
+  "Disconnect from Telegram if the server is currently live."
+  (when (telega-server-live-p)
+    (telega-server-kill)))
+
+(defun telega-extras-disconnect ()
+  "Disconnect from Telegram.  No-op when the server is not live."
+  (interactive)
+  (telega-extras--idle-disconnect))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; systemd-logind PrepareForSleep integration
@@ -66,6 +76,17 @@ Possible values:
 ;; Sleep always disconnects regardless of `telega-extras-idle-action': once
 ;; the lid closes the network is gone, so any lighter action would leave
 ;; telega in a broken state.
+
+(defun telega-extras--logind-available-p ()
+  "Return non-nil when systemd-logind DBus integration is available."
+  (and (eq system-type 'gnu/linux)
+       (fboundp 'dbus-register-signal)))
+
+(defun telega-extras--on-prepare-for-sleep (going-to-sleep)
+  "Disconnect telega before system sleep.
+GOING-TO-SLEEP is t when entering sleep, nil on wake."
+  (when going-to-sleep
+    (telega-extras--idle-disconnect)))
 
 (defun telega-extras--on-before-sleep ()
   "Disconnect telega before system sleep or suspend."

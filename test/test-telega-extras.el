@@ -15,32 +15,34 @@
 ;;; idle timer lifecycle
 
 (ert-deftest telega-extras/start-idle-timer-creates-timer ()
-  "`telega-extras-start-idle-timer' stores a timer object."
-  (let ((telega-extras--idle-timer nil))
+  "`telega-extras-start-idle-timer' registers the handler on the session idle hook."
+  (let ((sprite-session-idle-hook nil)
+        (sprite-session--idle-timer nil))
     (unwind-protect
         (progn
           (telega-extras-start-idle-timer)
-          (should (timerp telega-extras--idle-timer)))
+          (should (memq #'telega-extras--on-idle sprite-session-idle-hook)))
       (telega-extras-stop-idle-timer))))
 
 (ert-deftest telega-extras/stop-idle-timer-cancels-and-nils ()
-  "`telega-extras-stop-idle-timer' cancels the timer and sets the var to nil."
-  (let ((telega-extras--idle-timer nil))
+  "`telega-extras-stop-idle-timer' removes the handler from the session idle hook."
+  (let ((sprite-session-idle-hook nil)
+        (sprite-session--idle-timer nil))
     (telega-extras-start-idle-timer)
     (telega-extras-stop-idle-timer)
-    (should (null telega-extras--idle-timer))))
+    (should-not (memq #'telega-extras--on-idle sprite-session-idle-hook))))
 
 (ert-deftest telega-extras/start-idle-timer-idempotent ()
-  "Calling start twice does not accumulate timers; second call replaces first."
-  (let ((telega-extras--idle-timer nil))
+  "Calling start twice registers the handler exactly once."
+  (let ((sprite-session-idle-hook nil)
+        (sprite-session--idle-timer nil))
     (unwind-protect
         (progn
           (telega-extras-start-idle-timer)
-          (let ((first telega-extras--idle-timer))
-            (telega-extras-start-idle-timer)
-            (should (timerp telega-extras--idle-timer))
-            ;; First timer was cancelled; the variable now holds a new object.
-            (should-not (eq first telega-extras--idle-timer))))
+          (telega-extras-start-idle-timer)
+          (should (= 1 (length (seq-filter
+                                (lambda (f) (eq f #'telega-extras--on-idle))
+                                sprite-session-idle-hook)))))
       (telega-extras-stop-idle-timer))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
