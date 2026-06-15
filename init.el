@@ -18,6 +18,7 @@
 (eval-and-compile
   (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
   (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
+  (add-to-list 'load-path (expand-file-name "external/sprite" user-emacs-directory))
   (package-initialize)
   (unless (package-installed-p 'xtdlib)
     (let ((checkout (expand-file-name "external/xtdlib" user-emacs-directory)))

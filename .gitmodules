@@ -19,6 +19,10 @@
 	url = https://github.com/tychoish/magit-dash.git
 	ignore = untracked
 	branch = main
+[submodule "sprite"]
+	path = external/sprite
+	url = https://github.com/tychoish/sprite.el
+	branch = main
 [submodule "agent-shell-manager"]
 	path = external/agent-shell-manager
 	url = https://github.com/ElleNajt/agent-shell-manager.git

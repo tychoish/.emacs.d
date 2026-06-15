@@ -2831,7 +2831,7 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-manager-side 'bottom))
 
 (use-package sprite
-  :load-path "lisp"
+  :load-path "external/sprite"
   :ensure nil
   :commands (sprite-list sprite-create
 			 sprite-get-next sprite-get-or-create-next)
