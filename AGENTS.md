@@ -41,7 +41,7 @@ The configuration is split into:
 | `early-init.el`                     | GC suppression, native-comp settings only. No `require` calls.                                |
 | `init.el`                           | Entry point. Sets global variables, loads modules sequentially.                               |
 | `lisp/tychoish-common.el`           | Instance ID, display utils, buffer/file helpers. No UI config.                                |
-| `lisp/tychoish-bootstrap.el`        | Keybindings, global `setq` settings, hooks, startup functions. Loaded before `tychoish-core`. |
+| `lisp/bootstrap.el`                 | Keybindings, global `setq` settings, hooks, startup functions. Loaded before `tychoish-core`. |
 | `lisp/tychoish-core.el`             | All `use-package` forms. Organized by functional area with section headers.                   |
 | `lisp/tychoish-mail.el`             | Mu4e and mail account configuration.                                                          |
 | `lisp/tychoish-org.el`              | Org-mode, org-roam, capture templates.                                                        |
@@ -86,7 +86,7 @@ Lexical binding is mandatory on every file.
 early-init.el
   └─ init.el (inside with-gc-suppressed)
        ├─ xtdlib (eval-when-compile + load-path setup)
-       ├─ tychoish-bootstrap (keybindings, settings, hooks)
+       ├─ bootstrap (keybindings, settings, hooks)
        ├─ tychoish-core (use-package forms)
        ├─ tychoish-mail
        ├─ tychoish-org
@@ -115,7 +115,7 @@ The `after-first-frame-created` pseudo-hook resolves to `server-after-make-frame
 
 ### `setq` placement
 
-- Global defaults and UI settings belong in `tychoish-bootstrap.el`, in clearly labeled sections.
+- Global defaults and UI settings belong in `bootstrap.el`, in clearly labeled sections.
 - Package-specific settings belong in the `:init` or `:config` block of the corresponding `use-package` form.
 - Per-buffer settings use `setq-local` inside mode hooks.
 - Do not set the same variable twice. Check before adding new `setq` calls.
@@ -179,7 +179,7 @@ Every key sequence within a `transient-define-prefix` must be unique across all 
 ## Commit and Change Hygiene
 
 - Keep changes to a single concern per commit. Mixing a bug fix with a refactor makes bisecting harder.
-- After changing `tychoish-bootstrap.el` or `xtdlib.el`, byte-compile with `M-x byte-compile-all-user-emacs-files` (bound by default) to catch warnings.
+- After changing `bootstrap.el` or `xtdlib.el`, byte-compile with `M-x byte-compile-all-user-emacs-files` (bound by default) to catch warnings.
 - Removing a keybinding: check all other files for references to the bound command before removing its map entry.
 - The `user/` directory is gitignored. Machine-specific overrides go there, not in the committed files.
 
@@ -205,7 +205,7 @@ After verifying an elisp file compiles cleanly, reload it with
 `emacsclient --eval '(load-file "/path/to/file.el")'`. Changes don't take effect in the
 running Emacs until the file is reloaded.
 
-After reloading `lisp/tychoish-bootstrap.el` ALWAYS reload `lisp/tychoish-core.el`.
+After reloading `lisp/bootstrap.el` ALWAYS reload `lisp/tychoish-core.el`.
 
 ### Testing
 

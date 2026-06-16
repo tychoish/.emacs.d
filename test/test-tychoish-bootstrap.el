@@ -1,4 +1,4 @@
-;;; test-tychoish-bootstrap.el --- ERT tests for tychoish-bootstrap.el -*- lexical-binding: t -*-
+;;; test-bootstrap.el --- ERT tests for bootstrap.el -*- lexical-binding: t -*-
 
 ;; Run inside a live Emacs session with full config loaded:
 ;;   M-x ert RET t RET
@@ -7,7 +7,7 @@
 
 (require 'ert)
 (require 'cl-lib)
-(require 'tychoish-bootstrap)
+(require 'bootstrap)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; gui-p
@@ -1000,5 +1000,5 @@
   (cl-letf (((symbol-function 'buffer-list) (lambda () nil)))
     (should (listp (kill-buffers-visiting-missing-files)))))
 
-(provide 'test-tychoish-bootstrap)
-;;; test-tychoish-bootstrap.el ends here
+(provide 'test-bootstrap)
+;;; test-bootstrap.el ends here
