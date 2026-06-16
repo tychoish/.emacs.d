@@ -21,8 +21,8 @@
 ;; (toggle-debug-on-error)
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
-;; (setq use-package-compute-statistics t)
-;; (setq use-package-minimum-reported-time 0.005)
+(setq use-package-compute-statistics t)
+(setq use-package-minimum-reported-time 0.005)
 
 (use-package async
   :ensure t
@@ -992,7 +992,8 @@
   :bind (("C-c '" . popper-toggle)
          ("C-c \\" . popper-cycle)
          ("C-c C-'"  . popper-toggle-type))
-  :init
+  :commands (popper-mode popper-echo-mode popper-cycle popper-toggle)
+  :config
   (setq popper-reference-buffers
         '("\\*Messages\\*"
           "\\*Warnings\\*"
@@ -1006,9 +1007,7 @@
           compilation-mode))
   (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
   (setq popper-display-control nil)
-  (setq popper-group-function #'popper-group-by-projectile)
-  (popper-mode +1)
-  (popper-echo-mode +1))
+  (setq popper-group-function #'popper-group-by-projectile))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2605,6 +2604,8 @@ Useful after changing `eglot-workspace-configuration' or
   :ensure t
   :delight ((agent-shell-completion-mode "")
 	    (agent-shell-ui-mode ""))
+  :defer t
+  :commands (agent-shell agent-shell-new-shell agent-shell-toggle)
   :init
   (bind-keys
    :map tychoish/robot-map

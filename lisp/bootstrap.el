@@ -612,6 +612,10 @@ more arguments than the function cares about."
   (when (fboundp 'which-key-mode)
     (which-key-mode 1))
 
+  (when (fboundp 'popper-mode)
+    (popper-mode +1)
+    (popper-echo-mode +1))
+
   (with-silence
     (repeat-mode 1)))
 
