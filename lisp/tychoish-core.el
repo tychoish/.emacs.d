@@ -1067,6 +1067,10 @@
    ("C-n" . next-line)
    ("C-p" . previous-line)))
 
+(use-package magit-gh
+  :ensure t
+  :commands (magit-gh))
+
 (use-package magit-dash
   :load-path "external/magit-dash"
   :bind
@@ -1077,6 +1081,7 @@
 	  ("C-c C-d" . magit-dash-open-other-window))
   :commands (magit-dash-view magit-dash-gh-pr-dashboard-open)
   :config
+  (require 'magit-gh)
   (require 'magit-dash-open)
   (require 'magit-dash-submodules)
   (require 'magit-dash-gh-pr)
