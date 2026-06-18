@@ -1223,9 +1223,6 @@
 	     telega-extras-force-kill
 	     telega-extras-disconnect)
   :init
-  (defun tychoish--telega-require-extras ()
-    (require 'telega-extras))
-  (add-hook 'telega-load-hook #'tychoish--telega-require-extras)
   (which-key-customize "telega-prefix" :key "C-c n")
   (which-key-customize "telega-prefix" :key "C-c v")
   (make-read-extended-command-for-prefix "telega"
@@ -1275,6 +1272,7 @@
 	'((display-buffer-reuse-window display-buffer-use-some-window)))
 
   (require 'telega-alert)
+  (require 'telega-extras)
   (telega-mode-line-mode 1)
   (telega-alert-mode 1))
 
@@ -2727,15 +2725,17 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package agent-shell-menu
   :ensure nil
   :load-path "external/agent-shell-queue"
+  :after agent-shell
   :commands (agent-shell-menu-project-buffers))
 
 (use-package agent-shell-queue
   :ensure nil
   :load-path "external/agent-shell-queue"
+  :after agent-shell
   :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
          (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
   :commands (agent-shell-queue-buffer-open
-             agent-shell-queue-enqueue
+             agent-shell-queue-enqueue4
              agent-shell-queue-edit-task
              agent-shell-queue-pause
              agent-shell-queue-resume
@@ -2758,7 +2758,6 @@ Useful after changing `eglot-workspace-configuration' or
   :init
   (defvar-keymap tychoish/robot-agent-shell-map)
   :config
-  (require 'agent-shell-menu)
   (bind-keys
    :map agent-shell-queue-mode-map
    ("C-c j" . tychoish/robot-agent-shell-map)
