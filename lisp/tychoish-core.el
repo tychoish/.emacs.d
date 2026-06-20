@@ -767,7 +767,6 @@
 (use-package consult
   :ensure t
   :bind (("C-c C-x C-m" . consult-mode-command)
-	 ("C-c i" . consult-info)
 	 ("C-c C-; m" . consult-kmacro)
 	 ("C-c C-x r r" . consult-register)
 	 ("C-c C-x r s" . consult-register-store)
@@ -809,6 +808,7 @@
 	 :map tychoish/completion-map
 	 ("c" . consult-at-point)
 	 :map tychoish/docs-map
+	 ("i" . consult-info)
 	 ("m" . consult-man)
 	 ;; Minibuffer history
 	 :map minibuffer-local-map
@@ -1322,6 +1322,29 @@
   (setq deft-use-filename-as-title t)
   (setq deft-auto-save-interval 0)
   (setq deft-auto-save-interval nil))
+
+(use-package denote
+  :ensure t
+  :commands (denote denote-open-or-create denote-link denote-backlinks
+             denote-rename-file denote-dired denote-org-capture)
+  :bind (:map tychoish/denote-map
+              ("n" . denote)
+              ("o" . denote-open-or-create)
+              ("l" . denote-link)
+              ("b" . denote-backlinks)
+              ("r" . denote-rename-file)
+              ("d" . denote-dired))
+  :config
+  (setq denote-directory (file-name-concat local-notes-directory "denote"))
+  (setq denote-id-format "%Y-%m-%d.%H%M%S")
+  (setq denote-date-format "%Y-%m-%d")
+  (setq denote-known-keywords '("org" "project" "reference" "journal" "idea"))
+  (setq denote-infer-keywords t)
+  (setq denote-sort-keywords t)
+  (setq denote-prompts '(title keywords))
+  (with-eval-after-load 'savehist
+    (add-to-list 'savehist-additional-variables 'denote--title-history)
+    (add-to-list 'savehist-additional-variables 'denote--keywords-history)))
 
 (use-package markdown-mode
   :ensure t

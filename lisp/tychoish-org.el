@@ -619,4 +619,69 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
  :operation #'tychoish-org--setup-standard-capture-templates
  :idle-timer 1.0)
 
+(defun ad:org-agenda--open-files (&rest _)
+  "Pre-load all agenda files before `org-agenda'."
+  (org-agenda-files-open))
+
+(advice-add 'org-agenda :before #'ad:org-agenda--open-files)
+
+;;;###autoload
+(defun tychoish-org-jump-to-heading ()
+  "Jump to any org heading across all agenda files via `org-refile-targets'."
+  (interactive)
+  (let* ((targets (org-refile-get-targets))
+         (choice (annotated-completing-read
+                  (seq-map (lambda (target)
+                             (cons (car target)
+                                   (format "%s:%d" (nth 1 target) (nth 3 target))))
+                           targets)
+                  :prompt "heading:"
+                  :require-match t)))
+    (when-let* ((target (seq-find (lambda (tgt) (equal (car tgt) choice)) targets)))
+      (find-file (nth 1 target))
+      (goto-char (nth 3 target))
+      (org-show-context 'agenda))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; denote org-capture integration
+
+(declare-function denote-org-capture "denote")
+(declare-function denote-last-path "denote")
+
+(with-eval-after-load 'denote
+  (add-to-list 'org-capture-templates
+               '("dn" "denote note" plain
+                 (file denote-last-path)
+                 #'denote-org-capture
+                 :no-save t
+                 :immediate-finish nil
+                 :kill-buffer t
+                 :jump-to-captured t)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; agent-shell-queue org-capture integration
+
+(declare-function agent-shell-queue-capture-from-region "agent-shell-queue")
+
+(with-eval-after-load 'agent-shell-queue
+  (add-to-list 'org-capture-templates
+               '("q" "agent queue item" plain
+                 (function ignore)
+                 ""
+                 :immediate-finish t
+                 :before-finalize (lambda ()
+                                    (call-interactively
+                                     #'agent-shell-queue-capture-from-context)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; refile current org heading to agent-shell-queue
+
+(declare-function agent-shell-queue-org-refile-from-heading "agent-shell-queue-org")
+
+(with-eval-after-load 'agent-shell-queue-org
+  (bind-key "C-c o q" #'agent-shell-queue-org-refile-from-heading org-mode-map))
+
 (provide 'tychoish-org)

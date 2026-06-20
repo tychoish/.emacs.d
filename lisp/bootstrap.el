@@ -198,7 +198,7 @@ more arguments than the function cares about."
  ("l" . tychoish-load-light-theme))
 
 (bind-keys
- :prefix "C-c d"
+ :prefix "C-c h"
  :prefix-map tychoish/docs-map
  ("s" . describe-symbol)
  ("v" . describe-variable)
@@ -206,6 +206,10 @@ more arguments than the function cares about."
  ("j" . jump-to-elisp-help)
  ("e" . eldoc)
  ("b" . eldoc-doc-buffer))
+
+(bind-keys
+ :prefix "C-c d"
+ :prefix-map tychoish/denote-map)
 
 (bind-keys
  :prefix "C-c k"
@@ -1529,6 +1533,7 @@ interactively then remove duplicate items from the `kill-ring'."
   (setq org-default-notes-file (file-name-concat org-directory "records.org"))
   (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
   (setq deft-directory (file-name-concat local-notes-directory "deft"))
+  (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
