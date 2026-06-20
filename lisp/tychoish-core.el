@@ -2709,6 +2709,7 @@ Useful after changing `eglot-workspace-configuration' or
                     slug))))
   :config
   (require 'agent-shell-omp)
+  (require 'agent-shell-queue)
 
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
@@ -2771,6 +2772,7 @@ Useful after changing `eglot-workspace-configuration' or
              agent-shell-queue-capture-unassigned
              agent-shell-queue-capture-from-region
              agent-shell-queue-capture-from-context
+             agent-shell-queue-org-refile-from-heading
              agent-shell-queue-capture-from-clipboard
              agent-shell-queue-insert-pause
              agent-shell-queue-insert-clear-context
@@ -2866,7 +2868,7 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package sprite
   :load-path "external/sprite"
   :ensure nil
-  :commands (sprite-list sprite-create
+  :commands (sprite-list sprite-create sprite-open-frame
 			 sprite-get-next sprite-get-or-create-next)
   :config
   (add-to-list 'mode-line-misc-info '(:eval (format " [%s]" (sprite--mode-line-string))))
