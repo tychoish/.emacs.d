@@ -352,14 +352,14 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 	(annotation-table (make-hash-table :test #'equal)))
     (thread-last org-capture-templates
 		 (seq-filter (lambda (it) (< 4 (length it))))
-		 (seq-map (lambda (it) (let* ((template it)
-					      (key-char (nth 0 template))
-					      (description (nth 1 template))
-					      (file (file-name-nondirectory (cadr (nth 3 template))))
-					      (btrm (string-replace "\n" " " (nth 4 template)))
-					      (body (string-trim (if (> (length btrm) 32) (concat (substring btrm 0 29) "...") btrm))))
+		 (seq-map (lambda (template) (let ((key-char (nth 0 template))
+						   (description (nth 1 template))
+						   (btrm (string-replace "\n" " " (nth 4 template))))
 				      (setf (map-elt key-table description) key-char)
-				      (setf (map-elt annotation-table description) (format "[%s] <%s> '%s'" key-char file body))))))
+				      (setf (map-elt annotation-table description)
+					    (format "[%s] <%s> '%s'" key-char
+						    (file-name-nondirectory (cadr (nth 3 template)))
+						    (string-trim (if (> (length btrm) 32) (concat (substring btrm 0 29) "...") btrm))))))))
     (org-capture nil (map-elt key-table (annotated-completing-read
 					annotation-table
 					:prompt "org-capture => "

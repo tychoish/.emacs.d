@@ -165,21 +165,23 @@
       (alert (projectile-save-project-buffers)
 	     :title (format "emacs<%s> (%s)" sprite-instance-id dir))))
 
-  (defun projectile-get-project-roots-for-current-buffers ()
-    (->>
-     (buffer-list)
-     (seq-map #'buffer-file-name)
-     (seq-filter 'identity)
-     (seq-map #'f-dirname)
-     (-sort #'string<)
-     (seq-map #'projectile-project-root)
-     (seq-uniq)
-     (seq-filter 'identity)))
-
   (defun tychoish/save-project-buffers ()
     (interactive)
     (tychoish/save-buffers-in-project-directory
-     (completing-read "directories: " (projectile-get-project-roots-for-current-buffers))))
+     (annotated-completing-read
+      (thread-last
+	(buffer-list)
+	(seq-map #'buffer-file-name)
+	(seq-filter 'identity)
+	(seq-sort #'string<)
+	(seq-map #'projectile-project-root)
+	(seq-uniq)
+	(seq-filter 'identity)
+	(seq-map (lambda (dir) (cons dir nil))))
+      :prompt "directories =>"
+      :category 'file)))
+
+completing-read "directories: " )))
 
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
@@ -192,27 +194,33 @@
   (setq projectile-completion-system 'auto)
   (setq projectile-require-project-root nil)
   (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
+
   (add-hook 'prog-mode-hook #'projectile-mode)
   (add-hook 'text-mode-hook #'projectile-mode)
+
+  (defun projectile-mode-enable-for-buffer (buf)
+    (with-current-buffer buf
+      (projectile-mode 1)))
+
+  (defun projectile-mode-disable-for-buffer (buf)
+    (with-current-buffer buf
+      (projectile-mode -1)))
 
   (defun projectile-enable-all-buffers ()
     "Enable `projectile-mode' in all live buffers."
     (interactive)
-    (--mapc (with-current-buffer it
-	      (projectile-mode 1))
-      (buffer-list)))
+    (seq-do #'projectile-mode-enable-for-buffer (buffer-list)))
 
   (defun projectile-disable-all-buffers ()
     "Disable `projectile-mode' in all live buffers."
     (interactive)
-    (--mapc (with-current-buffer it
-	      (projectile-mode 11))
-      (buffer-list))))
+    (seq-do #'projectile-mode-disable-for-buffer (buffer-list))))
 
 (use-package annotated-completing-read
   :load-path "external/annotated-completing-read"
   :commands (annotated-completing-read
-	     annotated-completing-read-directory))
+	     annotated-completing-read-directory
+	     annotated-completing-read--project-root))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

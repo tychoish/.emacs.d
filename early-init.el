@@ -2,7 +2,8 @@
 (defmacro with-gc-suppressed (&rest body)
   `(let ((gc-cons-threshold 800000000000000)
          (gc-cons-percentage 1.0))
-     (prog1 (progn ,@body)
+     (prog1
+	 (progn ,@body)
        (garbage-collect))))
 
 (defmacro with-file-name-handler-disabled (&rest body)
