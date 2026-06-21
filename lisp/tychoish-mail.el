@@ -9,7 +9,7 @@
 (declare-function s-trimmed-or-nil "xtdlib")
 
 (use-package consult-mu
-  :load-path "elpa/consult-mu"
+  :load-path "external/consult-mu"
   :commands (consult-mu))
 
 (autoload 'mu4e-update-index "mu4e-update")
