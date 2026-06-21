@@ -2716,8 +2716,8 @@ Useful after changing `eglot-workspace-configuration' or
                     (car (split-string (downcase (string-trim agent-name))))
                     slug))))
   :config
-  (require 'agent-shell-omp)
   (require 'agent-shell-queue)
+  (require 'agent-shell-menu)
 
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
@@ -2759,12 +2759,6 @@ Useful after changing `eglot-workspace-configuration' or
 	     annotated-completing-read-context-from-point
 	     annotated-completing-read-directory))
 
-(use-package agent-shell-menu
-  :ensure nil
-  :load-path "external/agent-shell-queue"
-  :after agent-shell
-  :commands (agent-shell-menu-project-buffers))
-
 (use-package agent-shell-queue
   :ensure nil
   :load-path "external/agent-shell-queue"
@@ -2792,10 +2786,12 @@ Useful after changing `eglot-workspace-configuration' or
              agent-shell-queue-export
              agent-shell-queue-enqueue-emacs
              agent-shell-queue-insert-wait
-             agent-shell-queue-item-menu)
+             agent-shell-queue-item-menu
+	     agent-shell-menu-project-buffers)
   :init
   (defvar-keymap tychoish/robot-agent-shell-map)
   :config
+  (require 'agent-shell-menu)
   (bind-keys
    :map agent-shell-queue-mode-map
    ("C-c j" . tychoish/robot-agent-shell-map)
