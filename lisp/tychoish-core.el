@@ -1340,6 +1340,8 @@
   :ensure t
   :commands (denote denote-open-or-create denote-link denote-backlinks
              denote-rename-file denote-dired denote-org-capture)
+  :init
+  (defvar-keymap tychoish/denote-map)
   :bind (:map tychoish/denote-map
               ("n" . denote)
               ("o" . denote-open-or-create)
@@ -2796,6 +2798,7 @@ Useful after changing `eglot-workspace-configuration' or
   :init
   (defvar-keymap tychoish/robot-agent-shell-map)
   :config
+  (setq agent-shell-queue-write-log-enabled t)
   (require 'agent-shell-menu)
   (bind-keys
    :map agent-shell-queue-mode-map
