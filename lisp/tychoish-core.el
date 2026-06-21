@@ -42,6 +42,13 @@
   :ensure t
   :commands (package-build-archive package-build-all))
 
+(use-package hud
+  :ensure nil
+  :commands (hud-menu hud-select)
+  :bind (:map tychoish/core-map
+	      ("m" . hud-menu)
+	      ("," . hud-select)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; UI, Display, Rendering, Window Management
@@ -180,8 +187,6 @@
 	(seq-map (lambda (dir) (cons dir nil))))
       :prompt "directories =>"
       :category 'file)))
-
-completing-read "directories: " )))
 
   (defun tychoish-projectile-modeline-string ()
     (let ((pname (projectile-project-name)))
