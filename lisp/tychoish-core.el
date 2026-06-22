@@ -471,7 +471,7 @@
 				    #'cape-rfc1345
 				    #'cape-emoji
 				    #'cape-file))
-			     (-flatten)
+			     (flatten-tree)
 			     (seq-filter 'identity))))
 
   (defun tychoish/elisp-capf-setup  ()
@@ -488,7 +488,7 @@
 								    (cape-capf-wrapper cape-capf-inside-string ,in)))))
 						(seq-map 'eval))
 				   #'cape-emoji)
-			     (-flatten)
+			     (flatten-tree)
 			     (seq-filter 'identity)
 			     (seq-uniq))))
 
@@ -507,7 +507,7 @@
 				   #'yasnippet-capf
 				   #'cape-emoji
 				   #'cape-file)
-			     (-flatten)
+			     (flatten-tree)
 			     (seq-filter 'identity)
 			     (seq-uniq))))
 
