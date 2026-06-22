@@ -21,8 +21,8 @@
 ;; (toggle-debug-on-error)
 ;; (setq use-package-expand-minimally t)
 ;; (setq use-package-verbose t)
-(setq use-package-compute-statistics t)
-(setq use-package-minimum-reported-time 0.005)
+;; (setq use-package-compute-statistics t)
+;; (setq use-package-minimum-reported-time 0.005)
 
 (use-package async
   :ensure t
@@ -45,9 +45,11 @@
 (use-package hud
   :ensure nil
   :commands (hud-menu hud-select)
-  :bind (:map tychoish/core-map
-	      ("m" . hud-menu)
-	      ("," . hud-select)))
+  :bind (("C-x ." . hud-menu)
+	 ("C-x ," . hud-select)
+	 :map tychoish/core-map
+         ("m" . hud-menu)
+         ("," . hud-select)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
