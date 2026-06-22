@@ -761,18 +761,20 @@ more arguments than the function cares about."
 
 ;; package.el management and elisp tools
 
-(defun byte-compile-all-user-emacs-files ()
-  "Recompile all most relevant emacs lisp files in the current
-installation that need to be recompiled. Call with a prefix argument to
-forcibly recompile all emacs files. Returns a list of all files that
-were recompiled."
+(defun tychoish-byte-recompile-emacs-directory ()
+  "Recompile all `.el' files in `user-emacs-directory' and its direct subdirectories.
+With a prefix argument, force recompilation of every file regardless of timestamps.
+Returns the list of files that were recompiled."
   (interactive)
-  (thread-last  (list user-emacs-directory
-	              (file-name-concat user-emacs-directory "lisp")
-	              (file-name-concat user-emacs-directory "user"))
-                (--flat-map (f-entries it #'f-file-p))
-                (--filter (f-ext-p it "el"))
-                (--keep (when (not (eq 'no-byte-compile (byte-recompile-file it current-prefix-arg))) it))))
+  (thread-last (cons user-emacs-directory
+                     (seq-filter #'file-directory-p
+                                 (directory-files user-emacs-directory t "^[^.]")))
+    (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
+    (seq-filter #'file-regular-p)
+    (seq-keep (lambda (f)
+                (unless (eq 'no-byte-compile
+                            (byte-recompile-file f current-prefix-arg))
+                  f)))))
 
 (declare-function package-installed-p "package")
 (declare-function package-desc-p "package")
@@ -1523,7 +1525,7 @@ interactively then remove duplicate items from the `kill-ring'."
 
   (setq org-directory (file-name-concat local-notes-directory "org"))
   (setq org-agenda-files (thread-last (list org-directory user-org-directories)
-                                      (-flatten)
+                                      (flatten-tree)
                                       (seq-map #'expand-file-name)
 			              (seq-filter 'identity)
 			              (seq-map #'string-trim)
@@ -1800,64 +1802,53 @@ Parses the file directly so this works without magit or git."
   "Return non-nil when submodule SUB under ROOT is checked out."
   (tychoish/--git-repo-p (expand-file-name sub root)))
 
-(defun tychoish/elpa-uninstalled-submodules ()
-  "Return elpa submodule paths that are registered but not checked out."
-  (let ((elpa-root (expand-file-name "elpa" user-emacs-directory)))
-    (cl-remove-if (lambda (sub) (tychoish/--submodule-checked-out-p elpa-root sub))
-                  (tychoish/--gitmodules-paths elpa-root))))
+(defun bootstrap--emacs-conf-uninstalled-submodules ()
+  "Return submodule paths in `user-emacs-directory' that are registered but not checked out."
+  (let ((root (expand-file-name user-emacs-directory)))
+    (seq-remove (lambda (sub) (tychoish/--submodule-checked-out-p root sub))
+                (tychoish/--gitmodules-paths root))))
 
-(defun tychoish/elpa-check-submodules ()
-  "Warn if any elpa submodules are registered but not checked out.
+(defun bootstrap--emacs-conf-check-submodules ()
+  "Warn if any `user-emacs-directory' submodules are registered but not checked out.
 
 Missing submodules referenced via `:load-path' in `use-package' forms
 otherwise fail silently when their autoloaded hooks fire, e.g. aborting
 the rest of a mode-hook chain.
 
-No-ops when the surrounding state suggests a partial bootstrap rather
-than a real drift:
-- `.emacs.d' exists but is not a git working tree
-- any top-level submodule of `.emacs.d' (notably `elpa') is not checked out
-- `elpa/' exists but is not a git working tree"
+No-ops when `.emacs.d' is not itself a git working tree, which suggests
+a non-git or partial bootstrap installation."
   (interactive)
-  (let* ((emacs-d (expand-file-name user-emacs-directory))
-         (elpa (expand-file-name "elpa" emacs-d)))
-    (unless (or (and (file-directory-p emacs-d)
-                     (not (tychoish/--git-repo-p emacs-d)))
-                (cl-some (lambda (sub)
-                           (not (tychoish/--submodule-checked-out-p emacs-d sub)))
-                         (tychoish/--gitmodules-paths emacs-d))
-                (and (file-directory-p elpa)
-                     (not (tychoish/--git-repo-p elpa))))
-      (when-let ((missing (tychoish/elpa-uninstalled-submodules)))
+  (let ((root (expand-file-name user-emacs-directory)))
+    (when (tychoish/--git-repo-p root)
+      (when-let* ((missing (bootstrap--emacs-conf-uninstalled-submodules)))
         (display-warning
-         'tychoish/elpa
-         (format "uninstalled elpa submodules: %s\nrun: (cd %s && git submodule update --init %s)"
+         'bootstrap--emacs-conf-submodules
+         (format "uninstalled submodules in %s: %s\nrun: (cd %s && git submodule update --init %s)"
+                 root
                  (mapconcat #'identity missing " ")
-                 elpa
+                 root
                  (mapconcat #'identity missing " "))
          :warning)
         missing))))
 
 (add-lazy-init
- :name "<bootstrap> elpa check submodules"
+ :name "<bootstrap> check submodules"
  :delay 5
- :operation #'tychoish/elpa-check-submodules)
+ :operation #'bootstrap--emacs-conf-check-submodules)
 
-(defun tychoish/elpa-pull-submodules ()
-  "Run `git pull origin' in each submodule under `.emacs.d/elpa/'.
-Submodules are enumerated via `magit-list-module-paths' against the
-elpa repository.  For each one, prompts y/n/a (yes/no/abort).  Pulls
-run synchronously via `magit-run-git'; per-pull output lands in the
-magit process buffer for that submodule."
+(defun bootstrap--emacs-conf-pull-submodules ()
+  "Run `git pull origin' in each submodule of `user-emacs-directory'.
+Submodules are enumerated via `magit-list-module-paths'.  For each one,
+prompts y/n/a (yes/no/abort).  Pulls run synchronously via
+`magit-run-git'; per-pull output lands in the magit process buffer."
   (interactive)
   (require 'magit-submodule)
   (require 'magit-process)
-  (let* ((elpa-root (file-name-as-directory
-                     (expand-file-name "elpa" user-emacs-directory)))
-         (default-directory elpa-root)
+  (let* ((root (file-name-as-directory (expand-file-name user-emacs-directory)))
+         (default-directory root)
          (modules (magit-list-module-paths)))
     (unless modules
-      (user-error "no submodules registered under %s" elpa-root))
+      (user-error "no submodules registered under %s" root))
     (catch 'abort
       (dolist (sub modules)
         (pcase (car (read-multiple-choice
@@ -1865,15 +1856,14 @@ magit process buffer for that submodule."
                      '((?y "yes"   "git pull origin in this submodule")
                        (?n "no"    "skip this submodule")
                        (?a "abort" "stop iterating"))))
-          (?a (message "elpa submodule pull aborted")
+          (?a (message "submodule pull aborted")
               (throw 'abort nil))
           (?n (message "skip %s" sub))
           (?y (let ((default-directory
-                     (file-name-as-directory
-                      (expand-file-name sub elpa-root))))
+                     (file-name-as-directory (expand-file-name sub root))))
                 (message "pulling %s..." sub)
                 (magit-run-git "pull" "origin"))))))
-    (message "elpa submodule pull complete")))
+    (message "submodule pull complete")))
 
 (defun tychoish/run-ci-tests (&optional timeout)
   "Discover and run all ERT tests under test/, then exit.
