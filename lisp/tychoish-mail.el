@@ -56,7 +56,7 @@
 (with-eval-after-load 'consult-mu
   (with-slow-op-timer
    "<mail.el> consult-mu extensions"
-   (add-to-list 'load-path (f-join package-user-dir "consult-mu/extras/"))
+   (add-to-list 'load-path (expand-file-name "external/consult-mu/extras/" user-emacs-directory))
    (require 'consult-mu-compose)
    (require 'consult-mu-contacts)
    (require 'consult-mu-embark)
