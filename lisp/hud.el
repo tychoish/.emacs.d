@@ -18,8 +18,9 @@
 ;;
 ;; Commands are grouped by category.  When :category is omitted,
 ;; `hud--derive-category' infers it from the command's defining file.
-;; The ACR selector annotates each candidate with the description and groups
-;; candidates by category, so vertico/marginalia display them correctly.
+;; The annotated-completing-read selector annotates each candidate
+;; with the description and groups candidates by category, so
+;; vertico/marginalia display them correctly.
 
 ;;; Code:
 
@@ -132,7 +133,7 @@ category+command combination."
                               (cdr bucket))))
             hud-command-table)))
 
-;;;; ACR selector
+;;;; annotated-completing-read selector
 
 (defun hud--flat-entries ()
   "Return a flat list of (CATEGORY . HUD-COMMAND) pairs from `hud-command-table'."
@@ -173,28 +174,41 @@ the description."
 
 (hud-register-command
  :category 'agent-shell
- :command 'agent-shell-new-shell
+ :command #'agent-shell-new-shell
  :description "new agent shell"
  :transient-key "an")
 
 (hud-register-command
  :category 'agent-shell
- :command 'agent-shell-queue-buffer-open
+ :command #'agent-shell-menu-new-shell-in-dir
+ :description "new agent shell (dir)"
+ :transient-key "ad")
+
+(hud-register-command
+ :category 'agent-shell
+ :command #'agent-shell-switch-buffer
+ :transient-key "ab"
+ :description "switch agent shell buffer")
+
+(hud-register-command
+ :category 'agent-shell
+ :command #'agent-shell-queue-buffer-open
  :description "open queue"
  :transient-key "aq")
 
 (hud-register-command
- :command 'magit-dash-open
+ :command #'magit-dash-open
  :description "repo dashboard"
  :transient-key "rd")
 
 (hud-register-command
  :category 'magit-dash
- :command 'magit-dash-open-repo
+ :command #'magit-dash-open-repo
  :description "magit open repo"
  :transient-key "rr")
 
 (hud-register-command
+<<<<<<< HEAD
  :command 'magit-dash-sync-all
  :description "sync all configured repos"
  :transient-key "rs")
@@ -202,62 +216,76 @@ the description."
 (hud-register-command
  :command 'magit-dash-sync-repo
  :description "sync one configured repo"
+=======
+ :command #'magit-dash-sync-all
+ :description "sync all dashboard repos"
+ :transient-key "rs")
+
+(hud-register-command
+ :command #'magit-dash-sync-repo
+ :description "sync one dashboard repo"
+>>>>>>> d0f5d4c (feat: add additional agent shell commands, update descriptions)
  :transient-key "ru")
 
 (hud-register-command
  :category 'org-mode
- :command 'consult-org-capture
+ :command #'consult-org-capture
  :description "org-capture with template"
  :transient-key "oc")
 
 (hud-register-command
  :category 'org-mode
- :command 'org-agenda
+ :command #'org-agenda
  :description "org-agenda view dispatch"
  :transient-key "oa")
 
 (hud-register-command
  :category 'org-mode
- :command 'tychoish-org-jump-to-heading
+ :command #'tychoish-org-jump-to-heading
  :description "jump to org heading"
  :transient-key "oh")
 
 (hud-register-command
  :category 'mu4e
- :command 'mu4e-compose-mail
+ :command #'mu4e-compose-mail
  :description "compose new email"
  :transient-key "mc")
 
 (hud-register-command
- :command 'mu4e
+ :command #'mu4e
  :description "open mu4e dashboard"
  :transient-key "mm")
 
 (hud-register-command
  :category 'mu4e
+<<<<<<< HEAD
  :command 'consult-mu-bookmark
  :description "select mu4e bookmark"
+=======
+ :command #'consult-mu-bookmark
+ :description "select mu4e bookmark to view"
+>>>>>>> d0f5d4c (feat: add additional agent shell commands, update descriptions)
  :transient-key "mb")
 
 (hud-register-command
  :category 'mu4e
- :command 'tychoish-mail-select-account
+ :command #'tychoish-mail-select-account
  :display-name "mail-select-account"
  :description "select mail account"
  :transient-key "ma")
 
 (hud-register-command
- :command 'sprite-list
+ :command #'sprite-list
  :description "sprite dashboard"
  :transient-key "sd")
 
 (hud-register-command
- :command 'sprite-create
+ :command #'sprite-create
  :description "spawn sprite"
  :transient-key "ss")
 
 (hud-register-command
- :command 'sprite-open-frame
+ :command #'sprite-open-frame
  :description "open frame in sprite"
  :transient-key "sf")
 
