@@ -131,7 +131,7 @@ lived instances. Other ephemeral instance names ones may be useful.")
 
   ;; load the user/*.el files
   (with-slow-op-timer "<init> user-files"
-   (declare-function tychoish-set-up-user-local-config 'bootstrap)
-   (tychoish-set-up-user-local-config))))
+   (declare-function bootstrap-set-up-user-local-config 'bootstrap)
+   (bootstrap-set-up-user-local-config))))
 
 (provide 'init)

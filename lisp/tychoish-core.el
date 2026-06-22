@@ -1476,7 +1476,7 @@
 			 :hover t
 			 :completion t))))
   :config
-  (add-hook 'yaml-mode-hook (tychoish/set-tab-width 2)))
+  (add-hook 'yaml-mode-hook (bootstrap-set-tab-width 2)))
 
 (use-package yaml-pro
   :ensure t

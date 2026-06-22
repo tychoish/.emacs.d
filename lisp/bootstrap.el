@@ -5,7 +5,7 @@
 ;; Version: 1.0-pre
 ;; Package-Requires: ((emacs "24.4"))
 ;; Keywords: internal maint emacs startup dotemacs config
-;; Homepage: https://github.com/tychoish/.eamcs.d
+;; Homepage: https://github.com/bootstrap-.eamcs.d
 
 ;; This file is not part of GNU Emacs
 
@@ -45,11 +45,11 @@
 (declare-function approximate-project-name "xtdlib")
 (declare-function approximate-project-buffers "xtdlib")
 
-(defvar tychoish-fallback-buffer-name "*scratch*"
+(defvar bootstrap-fallback-buffer-name "*scratch*"
   "Buffer name used as a last-resort fallback when no other buffer is available.
 Override in user/*.el to customize per machine or instance.")
 
-(defun tychoish--which-key-add-replacement (map key new-text)
+(defun bootstrap--which-key-add-replacement (map key new-text)
   "Register a which-key annotation for KEY with NEW-TEXT, scoped to MAP when supported.
 Falls back to `which-key-add-key-based-replacements' on Emacs versions that lack
 the keymap-scoped variant."
@@ -87,7 +87,7 @@ All constraints are validated at macro-expansion time."
   (cond
    (form `(with-eval-after-load 'which-key ,form))
    (map `(with-eval-after-load 'which-key
-           (tychoish--which-key-add-replacement ,map ,key ,new-text)))
+           (bootstrap--which-key-add-replacement ,map ,key ,new-text)))
    (t `(with-eval-after-load 'which-key
          (which-key-add-key-based-replacements ,key ,new-text)))))
 
@@ -154,11 +154,11 @@ more arguments than the function cares about."
 
 (bind-keys
  :map minibuffer-local-map
- ("C-g" . tychoish/super-abort-minibuffers)
+ ("C-g" . bootstrap-super-abort-minibuffers)
  ("C-l" . backward-kill-word))
 
 (bind-keys
- ;; these are all from tychoish-common.el
+ ;; these are all from bootstrap-common.el
  :map global-map
  ("M-<up>" . move-text-up)
  ("M-<down>" . move-text-down)
@@ -175,7 +175,7 @@ more arguments than the function cares about."
  ("0" . opacity-reset))
 
 (bind-keys
- ;; these are all from tychoish-common.el
+ ;; these are all from bootstrap-common.el
  :prefix "C-c t"
  :prefix-map tychoish/core-map
  ("w" . toggle-local-whitespace-cleanup)
@@ -186,16 +186,16 @@ more arguments than the function cares about."
  :map tychoish/core-map ;; "C-c t"
  :prefix "b"
  :prefix-map tychoish/blogging-map
- ("m" . tychoish-insert-date)
- ("p" . tychoish-blog-publish-post)
- ("n" . tychoish-blog-create-post)
- ("d" . tychoish-blog-open-drafts-dired)
+ ("m" . bootstrap-insert-date)
+ ("p" . bootstrap-blog-publish-post)
+ ("n" . bootstrap-blog-create-post)
+ ("d" . bootstrap-blog-open-drafts-dired)
  :map tychoish/core-map ;; "C-c t"
  :prefix "t"
  :prefix-map tychoish/theme-map
  ("r" . disable-all-themes) ;; reset
- ("d" . tychoish-load-dark-theme)
- ("l" . tychoish-load-light-theme))
+ ("d" . bootstrap-load-dark-theme)
+ ("l" . bootstrap-load-light-theme))
 
 (bind-keys
  :prefix "C-c h"
@@ -261,7 +261,7 @@ more arguments than the function cares about."
  ("." . completion-at-point)
  ("/" . dabbrev-completion)
  ("p" . completion-at-point)
- ("f" . tychoish/completion-select-flavor))
+ ("f" . bootstrap-completion-select-flavor))
 
 (bind-keys
  :map global-map
@@ -393,7 +393,7 @@ more arguments than the function cares about."
 
 (setq lpr-add-switches "-T ''")
 
-(setq electric-pair-inhibit-predicate #'tychoish/electric-pair-inhibition)
+(setq electric-pair-inhibit-predicate #'bootstrap-electric-pair-inhibition)
 
 (setq byte-compile-warnings
       ;; OMIT: free-vars docstrings-wide
@@ -441,7 +441,7 @@ more arguments than the function cares about."
   (when (or (daemonp) (window-system))
     t))
 
-(defconst tychoish-cache--buffer-name " tychoish-cache-buffer")
+(defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
 (with-eval-after-load 'eshell
   (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
@@ -457,7 +457,7 @@ more arguments than the function cares about."
 (defvar desktop/last-save-time nil)
 (defvar desktop-dirname nil)
 
-(defun tychoish/set-up-emacs-instance-persistence ()
+(defun bootstrap-set-up-emacs-instance-persistence ()
   (setq project-list-file (sprite-state-path "projects.el"))
   (setq auto-save-list-file-prefix (sprite-state-path (concat "auto-safe-list" (f-path-separator))))
   (setq savehist-file (sprite-state-path "history.el"))
@@ -481,7 +481,7 @@ more arguments than the function cares about."
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" 'consult-recent-file 'global-map)))
 
-(defun tychoish/desktop-save ()
+(defun bootstrap-desktop-save ()
   "Save desktop... sometimes"
   (interactive)
   (unless (equal "solo" sprite-instance-id)
@@ -490,7 +490,7 @@ more arguments than the function cares about."
       (desktop-save desktop-dirname)
       (setq desktop/last-save-time (current-time)))))
 
-(defun tychoish/desktop-read-init ()
+(defun bootstrap-desktop-read-init ()
   ;; only read the desktop if we're not in the "solo" (no ID) emacs
   ;; instance.
   (unless (equal "solo" sprite-instance-id)
@@ -517,7 +517,7 @@ more arguments than the function cares about."
     (setq desktop-save t)
     (setq desktop/last-save-time (current-time))
 
-    (run-with-idle-timer 120 t #'tychoish/desktop-save)
+    (run-with-idle-timer 120 t #'bootstrap-desktop-save)
 
     (add-to-list 'desktop-globals-to-save 'register-alist)
     (add-to-list 'desktop-globals-to-save 'file-name-history)
@@ -582,7 +582,7 @@ more arguments than the function cares about."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; hooks -- functions that run in hooks configured in 'tychoish-core
+;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
 (defun with-hook-timing (inner &rest args)
   (mapc (lambda (it)
@@ -594,18 +594,18 @@ more arguments than the function cares about."
   (advice-add 'run-hooks :around 'with-hook-timing)
   (advice-add 'run-hooks-with-args :around 'with-hook-timing))
 
-(defun tychoish/init-force-relaod ()
+(defun bootstrap-init-force-reload ()
   (with-slow-op-timer "<bootstrap.el>: force reload"
     (load "bootstrap.el")
-    (load "tychoish-core.el")
-    (load "tychoish-mail.el")
-    (load "tychoish-org.el")
-    (tychoish/init-late-enable-modes)
-    (tychoish/ensure-default-font)
-    (tychoish/ensure-light-theme)
-    (tychoish-set-up-user-local-config)))
+    (load "bootstrap-core.el")
+    (load "bootstrap-mail.el")
+    (load "bootstrap-org.el")
+    (bootstrap-init-late-enable-modes)
+    (bootstrap-ensure-default-font)
+    (bootstrap-ensure-light-theme)
+    (bootstrap-set-up-user-local-config)))
 
-(defun tychoish/init-late-enable-modes ()
+(defun bootstrap-init-late-enable-modes ()
   (global-auto-revert-mode 1)
   (column-number-mode 1)
   (delete-selection-mode 1)
@@ -626,7 +626,7 @@ more arguments than the function cares about."
 (unless (gui-p)
   (push '(background-color . nil) default-frame-alist))
 
-(defun tychoish/set-up-delightful-mode-lighters ()
+(defun bootstrap-set-up-delightful-mode-lighters ()
   (with-slow-op-timer
     "<bootstrap.el> after-init [delight]"
     (delight 'org-mode "org")
@@ -642,27 +642,27 @@ more arguments than the function cares about."
 
 (add-lazy-init
  :name "<bootstrap> late enable modes"
- :operation 'tychoish/init-late-enable-modes
+ :operation 'bootstrap-init-late-enable-modes
  :delay 0.67)
 
 (add-lazy-init
  :name "<bootstrap> ensure default font"
- :operation 'tychoish/ensure-default-font
+ :operation 'bootstrap-ensure-default-font
  :delay 0.1)
 
 (add-one-shot-hook
  :name "restore-desktop"
  :hook after-first-frame-created
- :operation 'tychoish/desktop-read-init)
+ :operation 'bootstrap-desktop-read-init)
 
 (add-lazy-init
  :name "emacs-instance-persistence"
- :operation 'tychoish/set-up-emacs-instance-persistence
+ :operation 'bootstrap-set-up-emacs-instance-persistence
  :delay 0.25)
 
 (add-one-shot-hook
  :name "delight-modeline"
- :function tychoish/set-up-delightful-mode-lighters
+ :function bootstrap-set-up-delightful-mode-lighters
  :hook doom-modeline-mode-hook
  :idle-timer 0.75)
 
@@ -670,30 +670,30 @@ more arguments than the function cares about."
  :name "emacs-lockfile-setup"
  :form (progn
          (if (equal "solo" sprite-instance-id)
-	     (tychoish/set-up-ephemeral-instance-file-locks)
-	   (tychoish/set-up-named-instance-file-locks)))
+	     (bootstrap-set-up-ephemeral-instance-file-locks)
+	   (bootstrap-set-up-named-instance-file-locks)))
  :hook emacs-startup-hook)
 
 (add-one-shot-hook
  :name "ssh-agent"
- :form (tychoish/set-up-ssh-agent)
+ :form (bootstrap-set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (add-one-shot-hook
  :name "completion-flavor-init"
  :form (with-silence
-	 (tychoish/completion-use-hybrid))
+	 (bootstrap-completion-use-hybrid))
  :hook '(vertico-prescient-mode-hook corfu-prescient-mode-hook))
 
-(add-hook 'emacs-startup-hook #'tychoish/ensure-light-theme)
-(add-hook 'auto-save-mode-hook #'tychoish/set-up-auto-save)
+(add-hook 'emacs-startup-hook #'bootstrap-ensure-light-theme)
+(add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 
-(defun tychoish--load-user-file (feat)
+(defun bootstrap--load-user-file (feat)
   (with-slow-op-timer
     (format "<%s.el> load user directory file" feat)
     (require feat)))
 
-(defun tychoish-set-up-user-local-config ()
+(defun bootstrap-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
     (thread-last
       (file-name-concat user-emacs-directory "user")
@@ -702,27 +702,27 @@ more arguments than the function cares about."
       (seq-map #'file-name-nondirectory)
       (seq-map #'file-name-sans-extension)
       (seq-map #'intern)
-      (seq-map #'tychoish--load-user-file)))
+      (seq-map #'bootstrap--load-user-file)))
 
-(defvar tychoish/abbrev-files-cache (make-hash-table :test #'equal)
+(defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
   "cache mapping file names to files' mtime to avoid re-importing files")
 
 (defun should-read-abbrev-file-p (path)
-  (or (not (map-contains-key tychoish/abbrev-files-cache path))
-      (time-less-p (map-elt tychoish/abbrev-files-cache path) (f-mtime path))))
+  (or (not (map-contains-key bootstrap-abbrev-files-cache path))
+      (time-less-p (map-elt bootstrap-abbrev-files-cache path) (f-mtime path))))
 
-(defun tychoish/load-abbrev-files ()
+(defun bootstrap-load-abbrev-files ()
   (thread-last  (f-entries (file-name-concat user-emacs-directory "abbrev"))
                 (--filter (f-ext-p it "el"))
                 (seq-filter #'file-exists-p)
                 (seq-filter #'should-read-abbrev-file-p)
                 (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
-                (mapc (lambda (it) (setf (map-elt tychoish/abbrev-files-cache it) (f-mtime it)))))
+                (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it) (f-mtime it)))))
 
   (delight 'abbrev-mode "abb")
   (setq save-abbrevs t))
 
-(defun tychoish/set-up-auto-save ()
+(defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))
     (setq auto-save-file-name-transforms `((".*" ,path t)))
     (add-to-list 'backup-directory-alist (cons "." path))
@@ -731,7 +731,7 @@ more arguments than the function cares about."
       (make-directory path))
     (chmod path #o700)))
 
-(defun tychoish/set-up-named-instance-file-locks ()
+(defun bootstrap-set-up-named-instance-file-locks ()
   (let ((path (sprite-state-path "locks/")))
     (setq lock-file-name-transforms
           `(("\\`/.*/\\([^/]+\\)\\'" ,(concat path "\\1") t)))
@@ -740,7 +740,7 @@ more arguments than the function cares about."
       (make-directory path))
     (chmod path #o700)))
 
-(defun tychoish/set-up-ephemeral-instance-file-locks ()
+(defun bootstrap-set-up-ephemeral-instance-file-locks ()
   (let* ((run-path (format "/run/user/%d" (user-uid)))
 	 (path (cond
 		((f-when-file-exists run-path))
@@ -754,14 +754,14 @@ more arguments than the function cares about."
       (make-directory solo-lock-path))
     (chmod solo-lock-path #o700)))
 
-(defun tychoish/set-up-show-whitespace ()
+(defun bootstrap-set-up-show-whitespace ()
   (setq-local show-trailing-whitespace t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; package.el management and elisp tools
 
-(defun tychoish-byte-recompile-emacs-directory ()
+(defun bootstrap-byte-recompile-emacs-directory ()
   "Recompile all `.el' files in `user-emacs-directory' and its direct subdirectories.
 With a prefix argument, force recompilation of every file regardless of timestamps.
 Returns the list of files that were recompiled."
@@ -868,7 +868,7 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (interactive)
   (mapc #'disable-theme custom-enabled-themes))
 
-(defun tychoish-load-light-theme ()
+(defun bootstrap-load-light-theme ()
   (interactive)
 
   (unless (member 'modus-operandi custom-enabled-themes)
@@ -882,22 +882,22 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (unless (map-elt default-frame-alist 'alpha)
     (add-to-list 'default-frame-alist '(alpha . 97))))
 
-(defun tychoish/ensure-light-theme ()
+(defun bootstrap-ensure-light-theme ()
   (unless custom-enabled-themes
-    (tychoish-load-light-theme)))
+    (bootstrap-load-light-theme)))
 
-(defun tychoish/ensure-dark-theme ()
+(defun bootstrap-ensure-dark-theme ()
   (unless custom-enabled-themes
-    (tychoish-load-dark-theme)))
+    (bootstrap-load-dark-theme)))
 
-(defun tychoish-load-dark-theme ()
+(defun bootstrap-load-dark-theme ()
   (interactive)
   (disable-all-themes)
   (when (load-theme 'modus-vivendi t t)
     (enable-theme 'modus-vivendi))
   (add-to-list 'default-frame-alist '(alpha . 95)))
 
-(defun tychoish-setup-font (font-face-name size)
+(defun bootstrap-setup-font (font-face-name size)
   (interactive "sName: \nNSize: ")
   (let ((new-font-name (concat font-face-name "-" (number-to-string size)))
 	(font-cell (assoc 'font default-frame-alist)))
@@ -908,12 +908,12 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
       (set-frame-font new-font-name nil t)))
   (assoc 'font default-frame-alist))
 
-(defun tychoish/ensure-font (font-face-name size)
+(defun bootstrap-ensure-font (font-face-name size)
   (unless (assoc 'font default-frame-alist)
-    (tychoish-setup-font font-face-name size)))
+    (bootstrap-setup-font font-face-name size)))
 
-(defun tychoish/ensure-default-font ()
-  (tychoish/ensure-font "Source Code Pro" 13))
+(defun bootstrap-ensure-default-font ()
+  (bootstrap-ensure-font "Source Code Pro" 13))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1046,7 +1046,7 @@ when called non-interactively."
                    ""))
       killed)))
 
-(defun tychoish/super-abort-minibuffers ()
+(defun bootstrap-super-abort-minibuffers ()
   (interactive)
   (if (not (minibuffer-selected-window))
       (keyboard-quit)
@@ -1080,7 +1080,7 @@ when called non-interactively."
   "Return the number of lines in the specified buffer (name or buffer), defaulting to the current buffer."
   (car (buffer-line-statistics buf)))
 
-(defun tychoish-run-current-major-mode-hooks (&optional buffer)
+(defun bootstrap-run-current-major-mode-hooks (&optional buffer)
   "Run all mode-hooks for the current major mode."
   (interactive)
   (with-current-buffer (or (when (bufferp buffer) buffer)
@@ -1109,7 +1109,7 @@ when called non-interactively."
 (defvar electric-pair-inhibition nil)
 (defvar electric-pair-eagerness t)
 
-(defun tychoish/electric-pair-inhibition (char)
+(defun bootstrap-electric-pair-inhibition (char)
   (if electric-pair-inhibition
       nil
     (if electric-pair-eagerness
@@ -1174,7 +1174,7 @@ when called non-interactively."
       (visual-fill-column-mode 1))
     (visual-line-mode 1)
     (when was-hard-wrapping
-      (tychoish-show-wrapping-mode))))
+      (bootstrap-show-wrapping-mode))))
 
 (defun turn-off-soft-wrap ()
   (interactive)
@@ -1184,7 +1184,7 @@ when called non-interactively."
     (visual-line-mode -1)
     (auto-fill-mode 1)
     (when was-soft-wrapping
-      (tychoish-show-wrapping-mode))))
+      (bootstrap-show-wrapping-mode))))
 
 (defun toggle-word-wrap (&optional arg)
   (interactive)
@@ -1194,7 +1194,7 @@ when called non-interactively."
       (turn-on-soft-wrap)
     (turn-on-hard-wrap)))
 
-(defun tychoish-show-wrapping-mode ()
+(defun bootstrap-show-wrapping-mode ()
   (let ((buf (current-buffer))
 	(wrapping-mode (if auto-fill-function
                            "hard"
@@ -1215,29 +1215,29 @@ when called non-interactively."
        (setq-default fill-column previous-default))
      (setq-local fill-column new-value)))
 
- (defun tychoish--vfc-fill-column-watcher (_sym _newval op where)
+ (defun bootstrap--vfc-fill-column-watcher (_sym _newval op where)
    "Re-apply visual-fill-column-mode when fill-column is set in an active buffer."
    (when (and (eq op 'set) (buffer-live-p where))
      (with-current-buffer where
        (when (bound-and-true-p visual-fill-column-mode)
          (visual-fill-column-mode 0)))))
 
- (add-variable-watcher 'fill-column #'tychoish--vfc-fill-column-watcher)
+ (add-variable-watcher 'fill-column #'bootstrap--vfc-fill-column-watcher)
 
- (defconst tychoish--vfc-heading-patterns
+ (defconst bootstrap--vfc-heading-patterns
    '((org-mode      . "^\\*+\\s-")
      (markdown-mode . "^#+\\s-"))
    "Alist mapping major-mode symbols to heading regexp patterns.")
 
- (defconst tychoish--vfc-wrap-prefix
+ (defconst bootstrap--vfc-wrap-prefix
    (propertize " " 'display '(space :width 9999))
    "wrap-prefix value that pushes continuation lines off-screen.
 A fixed large integer is used; (frame-width) would be more precise during
 export but adds complexity with no interactive benefit.")
 
- (defun tychoish--vfc-jit-lock (start end)
+ (defun bootstrap--vfc-jit-lock (start end)
    "Apply heading truncation wrap-prefix in the region START to END."
-   (let ((pattern (cdr (assq major-mode tychoish--vfc-heading-patterns))))
+   (let ((pattern (cdr (assq major-mode bootstrap--vfc-heading-patterns))))
      (when pattern
        (save-excursion
          (goto-char start)
@@ -1246,24 +1246,24 @@ export but adds complexity with no interactive benefit.")
            (when (looking-at pattern)
              (put-text-property (line-beginning-position)
 				(line-end-position)
-				'wrap-prefix tychoish--vfc-wrap-prefix))
+				'wrap-prefix bootstrap--vfc-wrap-prefix))
            (forward-line 1))))))
 
- (define-minor-mode tychoish-vfc-heading-truncation-mode
+ (define-minor-mode bootstrap-vfc-heading-truncation-mode
    "Simulate truncation on heading lines when visual-fill-column is active."
    :lighter nil
-   (if tychoish-vfc-heading-truncation-mode
+   (if bootstrap-vfc-heading-truncation-mode
        (progn
-         (jit-lock-register #'tychoish--vfc-jit-lock)
+         (jit-lock-register #'bootstrap--vfc-jit-lock)
          (jit-lock-refontify))
-     (jit-lock-unregister #'tychoish--vfc-jit-lock)
+     (jit-lock-unregister #'bootstrap--vfc-jit-lock)
      (with-silent-modifications
        (remove-text-properties (point-min) (point-max) '(wrap-prefix nil)))))
 
  (add-hook 'visual-fill-column-mode-hook
            (lambda ()
-             (when (assq major-mode tychoish--vfc-heading-patterns)
-               (tychoish-vfc-heading-truncation-mode
+             (when (assq major-mode bootstrap--vfc-heading-patterns)
+               (bootstrap-vfc-heading-truncation-mode
 		(if (bound-and-true-p visual-fill-column-mode) 1 -1))))))
 
 (defun unfill-region (begin end)
@@ -1274,13 +1274,13 @@ export but adds complexity with no interactive benefit.")
 
 ;; whitespace  --
 
-(defmacro tychoish/set-tab-width (num)
+(defmacro bootstrap-set-tab-width (num)
   (unless (integerp num)
     (signal 'wrong-type-argument num))
   (unless (< num 32)
     (warn "INVALID cannot create tab width hook function to >= 32 (%s)" num))
 
-  (let ((generated-name (intern (format "tychoish/set-local-tab-width-%d" num))))
+  (let ((generated-name (intern (format "bootstrap-set-local-tab-width-%d" num))))
     `(defun ,generated-name ()
        (set-tab-width ,num))))
 
@@ -1324,22 +1324,22 @@ export but adds complexity with no interactive benefit.")
 
 ;; files and notes
 
-(defun tychoish-insert-date ()
+(defun bootstrap-insert-date ()
   "Insert date string."
   (interactive)
   (insert (format-time-string "%Y-%m-%d")))
 
-(defvar tychoish-blog-path (expand-file-name "~/blog")
+(defvar bootstrap-blog-path (expand-file-name "~/blog")
   "Path to the blog's project directory.")
 
-(defvar tychoish-blog-extension ".md"
+(defvar bootstrap-blog-extension ".md"
   "File extension for the blog files.")
 
-(defun tychoish-blog-create-post (title)
+(defun bootstrap-blog-create-post (title)
   "Create a new file for a post of with the specified TITLE."
   (interactive "sPost Title: ")
   (let* ((slug (f-make-slug title))
-         (draft-fn (file-name-concat tychoish-blog-path (concat slug "-" tychoish-blog-extension))))
+         (draft-fn (file-name-concat bootstrap-blog-path (concat slug "-" bootstrap-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
       (kill-new title)
@@ -1348,14 +1348,14 @@ export but adds complexity with no interactive benefit.")
        (yas-lookup-snippet "hugo")))
     (message "working on post: %s" draft-fn)))
 
-(defun tychoish-create-note-file (title &optional &key path)
+(defun bootstrap-create-note-file (title &optional &key path)
   "Create a new file for a post of with the specified TITLE."
   (interactive "sName: ")
   (let* ((slug (f-make-slug title))
          (datetime (format-time-string "%Y-%02m-%02d"))
          (draft-fn (file-name-concat (or path
 			                 (annotated-completing-read-directory))
-			             (concat datetime "." slug "." tychoish-blog-extension))))
+			             (concat datetime "." slug "." bootstrap-blog-extension))))
     (if (file-exists-p draft-fn)
         (find-file draft-fn)
       (find-file draft-fn)
@@ -1365,16 +1365,16 @@ export but adds complexity with no interactive benefit.")
       (insert "\n"))
     (message "new note: %s" draft-fn)))
 
-(defun tychoish-blog-publish-post ()
+(defun bootstrap-blog-publish-post ()
   "Move the blog post in the current buffer to the publication location.
 Does nothing if the current post is not in the drafts folder."
   (interactive)
-  (let* ((publish-directory (file-name-concat tychoish-blog-path "content" "post"))
+  (let* ((publish-directory (file-name-concat bootstrap-blog-path "content" "post"))
          (original-file-name (buffer-file-name (current-buffer)))
          (published-file-name (file-name-concat publish-directory (file-name-nondirectory original-file-name)))
          (current-point (point)))
     (cond
-     ((not (equal (file-name-extension original-file-name t) tychoish-blog-extension))
+     ((not (equal (file-name-extension original-file-name t) bootstrap-blog-extension))
       (message "post %s has incorrect extension" original-file-name))
      ((buffer-modified-p)
       (message "file %s is modified. please save before publishing" original-file-name))
@@ -1388,10 +1388,10 @@ Does nothing if the current post is not in the drafts folder."
       (set-window-point (selected-window) current-point)
       (message "published %s to %s" original-file-name publish-directory)))))
 
-(defun tychoish-blog-open-drafts-dired ()
+(defun bootstrap-blog-open-drafts-dired ()
   "Open a dired buffer for the drafts folder."
   (interactive)
-  (find-file (expand-file-name tychoish-blog-path)))
+  (find-file (expand-file-name bootstrap-blog-path)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1458,13 +1458,13 @@ interactively then remove duplicate items from the `kill-ring'."
 
 ;; macros -- configuration and setup
 
-(cl-defmacro tychoish-define-project-notes (&key project path)
-  (let ((symbol (intern (format "tychoish/create-%s-note" project)))
+(cl-defmacro bootstrap-define-project-notes (&key project path)
+  (let ((symbol (intern (format "bootstrap-create-%s-note" project)))
 	(path (expand-file-name path)))
     `(defun ,symbol (name)
        ,(format "Create a date prefixed note file in the %s project in %s." project path)
        (interactive "sName: ")
-       (tychoish-create-note-file name :path ,path))))
+       (bootstrap-create-note-file name :path ,path))))
 
 (cl-defmacro make-aidermacs-model-selection-function (&optional &key name default-model weak-model editor-model architect-model copilot)
   "Define a command to switch the aider model settings, including changing the live session."
@@ -1519,7 +1519,7 @@ interactively then remove duplicate items from the `kill-ring'."
                   :map tychoish/robot-gptel-set-default-model-map
 		  (,(downcase key) . ,default-function-symbol)))))
 
-(defun tychoish-set-notes-directory (&optional path)
+(defun bootstrap-set-notes-directory (&optional path)
   (when path
     (setq local-notes-directory (expand-file-name path)))
 
@@ -1551,7 +1551,7 @@ interactively then remove duplicate items from the `kill-ring'."
                   (seq-filter #'f-writable?)
                   (nreverse))))
 
-(defun tychoish/set-up-ssh-agent ()
+(defun bootstrap-set-up-ssh-agent ()
   (let (env-value sockets)
     (unless (setq env-value (getenv "SSH_AUTH_SOCK"))
       (setq sockets (find-ssh-agent-socket-candidates))
@@ -1582,28 +1582,28 @@ interactively then remove duplicate items from the `kill-ring'."
 ;;
 ;; completion flavor -- switch between orderless / prescient / hybrid at runtime.
 
-(defvar tychoish/completion-flavor 'hybrid
+(defvar bootstrap-completion-flavor 'hybrid
   "Currently active completion flavor.
 One of `hybrid', `orderless', `prescient'.  Set by the
-`tychoish/completion-use-*' commands; do not setq directly.")
+`bootstrap-completion-use-*' commands; do not setq directly.")
 
-(defvar tychoish/completion-flavors
-  '((hybrid tychoish/completion-use-hybrid
+(defvar bootstrap-completion-flavors
+  '((hybrid bootstrap-completion-use-hybrid
 	    "orderless filter + prescient sort (frecency)")
-    (orderless tychoish/completion-use-orderless
+    (orderless bootstrap-completion-use-orderless
 	       "pure orderless filter; default sort, no frecency")
-    (prescient tychoish/completion-use-prescient
+    (prescient bootstrap-completion-use-prescient
 	       "prescient filter + sort (frecency)"))
   "Alist of (NAME ACTIVATOR DESCRIPTION) for completion flavors.
 ACTIVATOR is the interactive command that installs the flavor.")
 
-(defvar tychoish/completion--applying nil
-  "Re-entry guard for the `tychoish/completion-use-*' functions.
+(defvar bootstrap-completion--applying nil
+  "Re-entry guard for the `bootstrap-completion-use-*' functions.
 Cycling `vertico-prescient-mode' / `corfu-prescient-mode' fires their
 mode hooks, which can re-invoke a flavor function (e.g. via the
 startup one-shot hook below).  The guard makes the inner call a no-op.")
 
-(defun tychoish/completion--set-category-overrides (kind)
+(defun bootstrap-completion--set-category-overrides (kind)
   "Set `completion-category-overrides' for KIND (`orderless' or `prescient')."
   (setq completion-category-overrides
 	(pcase kind
@@ -1615,7 +1615,7 @@ startup one-shot hook below).  The guard makes the inner call a no-op.")
 	  ('prescient '((file (styles basic partial-completion))
 			(consult-grep (styles basic)))))))
 
-(defun tychoish/completion--reload-prescient-mode (mode-symbol)
+(defun bootstrap-completion--reload-prescient-mode (mode-symbol)
   "Cycle MODE-SYMBOL off and back on so it picks up new `*-enable-*' values.
 `vertico-prescient' and `corfu-prescient' read the filtering/sorting flags
 only at mode activation, so changing the variables alone has no effect
@@ -1625,21 +1625,21 @@ on an already-enabled mode."
       (funcall mode-symbol -1))
     (funcall mode-symbol 1)))
 
-(defmacro tychoish/completion--with-guard (&rest body)
-  "Run BODY with `tychoish/completion--applying' bound non-nil.
+(defmacro bootstrap-completion--with-guard (&rest body)
+  "Run BODY with `bootstrap-completion--applying' bound non-nil.
 If already non-nil (we are re-entering from a prescient mode hook),
 BODY is skipped."
   (declare (indent defun))
-  `(unless tychoish/completion--applying
-     (let ((tychoish/completion--applying t))
+  `(unless bootstrap-completion--applying
+     (let ((bootstrap-completion--applying t))
        ,@body)))
 
-(defun tychoish/completion-use-hybrid ()
+(defun bootstrap-completion-use-hybrid ()
   "Install the hybrid flavor: orderless filters, prescient sorts."
   (interactive)
-  (tychoish/completion--with-guard
+  (bootstrap-completion--with-guard
     (setq completion-styles '(orderless basic))
-    (tychoish/completion--set-category-overrides 'orderless)
+    (bootstrap-completion--set-category-overrides 'orderless)
     (when (boundp 'vertico-prescient-enable-filtering)
       (setq vertico-prescient-enable-filtering nil
 	    vertico-prescient-enable-sorting   t))
@@ -1647,29 +1647,29 @@ BODY is skipped."
       (setq corfu-prescient-enable-filtering nil
 	    corfu-prescient-enable-sorting   t))
     (setq completion-preview-sort-function #'prescient-completion-sort)
-    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
-    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
-    (setq tychoish/completion-flavor 'hybrid)
+    (bootstrap-completion--reload-prescient-mode 'vertico-prescient-mode)
+    (bootstrap-completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq bootstrap-completion-flavor 'hybrid)
     (message "completion: orderless filter + prescient sort")))
 
-(defun tychoish/completion-use-orderless ()
+(defun bootstrap-completion-use-orderless ()
   "Install pure orderless; prescient disabled (no frecency)."
   (interactive)
-  (tychoish/completion--with-guard
+  (bootstrap-completion--with-guard
     (setq completion-styles '(orderless basic))
-    (tychoish/completion--set-category-overrides 'orderless)
+    (bootstrap-completion--set-category-overrides 'orderless)
     (setq completion-preview-sort-function nil)
     (when (fboundp 'vertico-prescient-mode) (vertico-prescient-mode -1))
     (when (fboundp 'corfu-prescient-mode)   (corfu-prescient-mode -1))
-    (setq tychoish/completion-flavor 'orderless)
+    (setq bootstrap-completion-flavor 'orderless)
     (message "completion: pure orderless")))
 
-(defun tychoish/completion-use-prescient ()
+(defun bootstrap-completion-use-prescient ()
   "Install prescient for both filter and sort; orderless inert."
   (interactive)
-  (tychoish/completion--with-guard
+  (bootstrap-completion--with-guard
     (setq completion-styles '(basic partial-completion emacs22))
-    (tychoish/completion--set-category-overrides 'prescient)
+    (bootstrap-completion--set-category-overrides 'prescient)
     (when (boundp 'vertico-prescient-enable-filtering)
       (setq vertico-prescient-enable-filtering t
 	    vertico-prescient-enable-sorting   t))
@@ -1677,24 +1677,24 @@ BODY is skipped."
       (setq corfu-prescient-enable-filtering t
 	    corfu-prescient-enable-sorting   t))
     (setq completion-preview-sort-function #'prescient-completion-sort)
-    (tychoish/completion--reload-prescient-mode 'vertico-prescient-mode)
-    (tychoish/completion--reload-prescient-mode 'corfu-prescient-mode)
-    (setq tychoish/completion-flavor 'prescient)
+    (bootstrap-completion--reload-prescient-mode 'vertico-prescient-mode)
+    (bootstrap-completion--reload-prescient-mode 'corfu-prescient-mode)
+    (setq bootstrap-completion-flavor 'prescient)
     (message "completion: prescient filter + sort")))
 
-(defun tychoish/completion-select-flavor ()
+(defun bootstrap-completion-select-flavor ()
   "Pick a completion flavor via `annotated-completing-read'."
   (interactive)
   (let* ((name (annotated-completing-read
                 (seq-map (lambda (entry)
                            (cons (symbol-name (car entry))
-                                 (concat (if (eq (car entry) tychoish/completion-flavor) "[active] " "")
+                                 (concat (if (eq (car entry) bootstrap-completion-flavor) "[active] " "")
                                          (nth 2 entry))))
-                         tychoish/completion-flavors)
+                         bootstrap-completion-flavors)
 		:prompt "completion flavor => "
-		:category 'tychoish-completion-flavor
+		:category 'bootstrap-completion-flavor
 		:require-match t))
-	 (entry (assq (intern name) tychoish/completion-flavors)))
+	 (entry (assq (intern name) bootstrap-completion-flavors)))
     (when entry (funcall (nth 1 entry)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1718,11 +1718,11 @@ BODY is skipped."
   (add-to-list 'compilation-error-regexp-alist-alist
                '(go-panic . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2))))
 
-(add-hook 'text-mode-hook 'tychoish/set-up-show-whitespace)
-(add-hook 'prog-mode-hook 'tychoish/set-up-show-whitespace)
+(add-hook 'text-mode-hook 'bootstrap-set-up-show-whitespace)
+(add-hook 'prog-mode-hook 'bootstrap-set-up-show-whitespace)
 
 (add-hook 'which-key-mode-hook 'which-key-setup-side-window-bottom)
-(add-hook 'abbrev-mode-hook 'tychoish/load-abbrev-files)
+(add-hook 'abbrev-mode-hook 'bootstrap-load-abbrev-files)
 
 (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
 
@@ -1779,13 +1779,13 @@ BODY is skipped."
 (declare-function magit-list-module-paths "magit-submodule")
 (declare-function magit-run-git "magit-process")
 
-(defun tychoish/--git-repo-p (dir)
+(defun bootstrap--git-repo-p (dir)
   "Return non-nil when DIR is the top of a git working tree.
 Both worktree roots and submodule directories qualify: in either case
 DIR contains a `.git' entry (a directory or a gitlink file)."
   (file-exists-p (expand-file-name ".git" dir)))
 
-(defun tychoish/--gitmodules-paths (root)
+(defun bootstrap--gitmodules-paths (root)
   "Return submodule paths declared in ROOT/.gitmodules.
 Parses the file directly so this works without magit or git."
   (let ((path (expand-file-name ".gitmodules" root))
@@ -1798,15 +1798,15 @@ Parses the file directly so this works without magit or git."
           (push (match-string 1) out))))
     (nreverse out)))
 
-(defun tychoish/--submodule-checked-out-p (root sub)
+(defun bootstrap--submodule-checked-out-p (root sub)
   "Return non-nil when submodule SUB under ROOT is checked out."
-  (tychoish/--git-repo-p (expand-file-name sub root)))
+  (bootstrap--git-repo-p (expand-file-name sub root)))
 
 (defun bootstrap--emacs-conf-uninstalled-submodules ()
   "Return submodule paths in `user-emacs-directory' that are registered but not checked out."
   (let ((root (expand-file-name user-emacs-directory)))
-    (seq-remove (lambda (sub) (tychoish/--submodule-checked-out-p root sub))
-                (tychoish/--gitmodules-paths root))))
+    (seq-remove (lambda (sub) (bootstrap--submodule-checked-out-p root sub))
+                (bootstrap--gitmodules-paths root))))
 
 (defun bootstrap--emacs-conf-check-submodules ()
   "Warn if any `user-emacs-directory' submodules are registered but not checked out.
@@ -1819,7 +1819,7 @@ No-ops when `.emacs.d' is not itself a git working tree, which suggests
 a non-git or partial bootstrap installation."
   (interactive)
   (let ((root (expand-file-name user-emacs-directory)))
-    (when (tychoish/--git-repo-p root)
+    (when (bootstrap--git-repo-p root)
       (when-let* ((missing (bootstrap--emacs-conf-uninstalled-submodules)))
         (display-warning
          'bootstrap--emacs-conf-submodules
@@ -1865,7 +1865,7 @@ prompts y/n/a (yes/no/abort).  Pulls run synchronously via
                 (magit-run-git "pull" "origin"))))))
     (message "submodule pull complete")))
 
-(defun tychoish/run-ci-tests (&optional timeout)
+(defun bootstrap-run-ci-tests (&optional timeout)
   "Discover and run all ERT tests under test/, then exit.
 Intended for CI invocations via --fg-daemon --eval.
 Installs a TIMEOUT-second kill guard (default 240) before running."
@@ -1878,7 +1878,7 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
         (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
           (load file nil t))
       (error
-       (message "tychoish/run-ci-tests: error loading test files: %S" err)
+       (message "bootstrap-run-ci-tests: error loading test files: %S" err)
        (kill-emacs 1)))
     ;; ert-run-tests-batch-and-exit requires noninteractive=t (--batch only).
     ;; In --fg-daemon mode we call ert-run-tests-batch directly and kill-emacs
@@ -1888,10 +1888,10 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
 
 ;;; Config analysis
 
-(defun tychoish-core-use-package-sizes ()
+(defun bootstrap-core-use-package-sizes ()
   "Return (PACKAGE-NAME . LINE-COUNT) pairs for every top-level use-package
-block in tychoish-core.el, sorted by LINE-COUNT descending."
-  (let ((file (expand-file-name "lisp/tychoish-core.el" user-emacs-directory))
+block in bootstrap-core.el, sorted by LINE-COUNT descending."
+  (let ((file (expand-file-name "lisp/bootstrap-core.el" user-emacs-directory))
         results)
     (with-temp-buffer
       (set-syntax-table emacs-lisp-mode-syntax-table)
@@ -1910,10 +1910,10 @@ block in tychoish-core.el, sorted by LINE-COUNT descending."
     (sort results (lambda (a b) (> (cdr a) (cdr b))))))
 
 ;;;###autoload
-(defun tychoish-core-use-package-sizes-report ()
-  "Display use-package blocks from tychoish-core.el sorted by line count."
+(defun bootstrap-core-use-package-sizes-report ()
+  "Display use-package blocks from bootstrap-core.el sorted by line count."
   (interactive)
-  (let* ((results (tychoish-core-use-package-sizes))
+  (let* ((results (bootstrap-core-use-package-sizes))
          (buf (get-buffer-create "*use-package-sizes*")))
     (with-current-buffer buf
       (let ((inhibit-read-only t))

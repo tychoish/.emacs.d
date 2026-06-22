@@ -170,7 +170,7 @@ non-interactive callers never see a prompt."
   (switch-to-buffer
    (or (get-buffer telega-root-buffer-name)
        (last-buffer)
-       (get-buffer-create tychoish-fallback-buffer-name))))
+       (get-buffer-create bootstrap-fallback-buffer-name))))
 
 (defun telega-extras-make-root-default ()
   "Make `telega-extras-switch-to-root' the default buffer for new frames."
