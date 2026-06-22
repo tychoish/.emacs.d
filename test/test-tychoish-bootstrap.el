@@ -41,23 +41,24 @@
 
 (ert-deftest bootstrap/resolve-instance-id-daemon-t ()
   "Returns \"primary\" when daemonp returns t."
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (setq tychoish-cache--resolved-instance-id nil))
+  (with-current-buffer (get-buffer-create bootstrap-cache--buffer-name)
+    (setq bootstrap-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () t)))
     (should (equal "primary" (sprite-resolve-instance-id)))))
 
 (ert-deftest bootstrap/resolve-instance-id-named-daemon ()
   "Returns daemon name when daemonp returns a string."
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (setq tychoish-cache--resolved-instance-id nil))
+  (skip-unless (not noninteractive))
+  (with-current-buffer (get-buffer-create bootstrap-cache--buffer-name)
+    (setq bootstrap-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () "work"))
             ((symbol-function 'setenv) #'ignore))
     (should (equal "work" (sprite-resolve-instance-id)))))
 
 (ert-deftest bootstrap/resolve-instance-id-falls-back-to-solo ()
   "Returns \"solo\" as final fallback when no daemon or known ID."
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (setq tychoish-cache--resolved-instance-id nil))
+  (with-current-buffer (get-buffer-create bootstrap-cache--buffer-name)
+    (setq bootstrap-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () nil)))
     (let ((sprite-instance-id nil))
       (should (equal "solo" (sprite-resolve-instance-id))))))
@@ -69,8 +70,8 @@
 
 (ert-deftest bootstrap/resolve-instance-id-returns-string ()
   "Return value is always a string."
-  (with-current-buffer (get-buffer-create tychoish-cache--buffer-name)
-    (setq tychoish-cache--resolved-instance-id nil))
+  (with-current-buffer (get-buffer-create bootstrap-cache--buffer-name)
+    (setq bootstrap-cache--resolved-instance-id nil))
   (cl-letf (((symbol-function 'daemonp) (lambda () nil)))
     (let ((sprite-instance-id nil))
       (should (stringp (sprite-resolve-instance-id))))))
@@ -522,35 +523,35 @@
       (kill-buffer other))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish/set-tab-width (macro)
+;;; bootstrap-set-tab-width (macro)
 
 (ert-deftest bootstrap/set-tab-width-macro-defines-function ()
   "Macro defines a function with the expected name."
-  (tychoish/set-tab-width 4)
-  (should (fboundp 'tychoish/set-local-tab-width-4)))
+  (bootstrap-set-tab-width 4)
+  (should (fboundp 'bootstrap-set-local-tab-width-4)))
 
 (ert-deftest bootstrap/set-tab-width-macro-generated-fn-works ()
   "Generated function sets `tab-width' buffer-locally."
-  (tychoish/set-tab-width 6)
+  (bootstrap-set-tab-width 6)
   (with-temp-buffer
-    (tychoish/set-local-tab-width-6)
+    (bootstrap-set-local-tab-width-6)
     (should (= 6 tab-width))))
 
 (ert-deftest bootstrap/set-tab-width-macro-rejects-non-integer ()
   "Macro signals `wrong-type-argument' for a non-integer argument."
-  (should-error (eval '(tychoish/set-tab-width "four") t)
+  (should-error (eval '(bootstrap-set-tab-width "four") t)
                 :type 'wrong-type-argument))
 
 (ert-deftest bootstrap/set-tab-width-macro-rejects-float ()
   "Macro signals `wrong-type-argument' for a float argument."
-  (should-error (eval '(tychoish/set-tab-width 4.0) t)
+  (should-error (eval '(bootstrap-set-tab-width 4.0) t)
                 :type 'wrong-type-argument))
 
 (ert-deftest bootstrap/set-tab-width-macro-large-warns ()
   "Macro calls `warn' for a tab width >= 32."
   (let ((warned nil))
     (cl-letf (((symbol-function 'warn) (lambda (&rest _) (setq warned t))))
-      (eval '(tychoish/set-tab-width 32) t))
+      (eval '(bootstrap-set-tab-width 32) t))
     (should warned)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -631,83 +632,83 @@
     (should-not (unfill-region (point-min) (point-max)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish-setup-font
+;;; bootstrap-setup-font
 
 (ert-deftest bootstrap/setup-font-adds-entry ()
   "Adds a font entry to `default-frame-alist' when absent."
   (let ((default-frame-alist nil))
-    (tychoish-setup-font "Monospace" 12)
+    (bootstrap-setup-font "Monospace" 12)
     (should (assoc 'font default-frame-alist))))
 
 (ert-deftest bootstrap/setup-font-name-size-format ()
   "Font value is \"NAME-SIZE\"."
   (let ((default-frame-alist nil))
-    (tychoish-setup-font "Monospace" 12)
+    (bootstrap-setup-font "Monospace" 12)
     (should (equal "Monospace-12" (cdr (assoc 'font default-frame-alist))))))
 
 (ert-deftest bootstrap/setup-font-updates-existing-in-place ()
   "Updates an existing font entry without creating a duplicate."
   (let ((default-frame-alist (list (cons 'font "OldFont-10"))))
-    (tychoish-setup-font "NewFont" 14)
+    (bootstrap-setup-font "NewFont" 14)
     (should (= 1 (length (--filter (eq (car it) 'font) default-frame-alist))))
     (should (equal "NewFont-14" (cdr (assoc 'font default-frame-alist))))))
 
 (ert-deftest bootstrap/setup-font-returns-alist-entry ()
   "Returns a cons cell of the form (font . string)."
   (let ((default-frame-alist nil))
-    (let ((result (tychoish-setup-font "Mono" 11)))
+    (let ((result (bootstrap-setup-font "Mono" 11)))
       (should (consp result))
       (should (eq 'font (car result)))
       (should (stringp (cdr result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish/ensure-font
+;;; bootstrap-ensure-font
 
 (ert-deftest bootstrap/ensure-font-sets-when-absent ()
   "Sets font when no font entry exists in `default-frame-alist'."
   (let ((default-frame-alist nil))
-    (tychoish/ensure-font "Mono" 12)
+    (bootstrap-ensure-font "Mono" 12)
     (should (assoc 'font default-frame-alist))))
 
 (ert-deftest bootstrap/ensure-font-noop-when-present ()
   "Does nothing when a font entry already exists."
   (let ((default-frame-alist (list (cons 'font "Existing-10"))))
-    (tychoish/ensure-font "Other" 14)
+    (bootstrap-ensure-font "Other" 14)
     (should (equal "Existing-10" (cdr (assoc 'font default-frame-alist))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; disable-all-themes / tychoish/ensure-*-theme
+;;; disable-all-themes / bootstrap-ensure-*-theme
 
 (ert-deftest bootstrap/ensure-light-theme-noop-when-active ()
   "Does not call load function when a theme is already enabled."
   (let ((custom-enabled-themes '(modus-operandi)))
-    (cl-letf (((symbol-function 'tychoish-load-light-theme)
+    (cl-letf (((symbol-function 'bootstrap-load-light-theme)
                (lambda () (error "should not be called"))))
-      (should-not (tychoish/ensure-light-theme)))))
+      (should-not (bootstrap-ensure-light-theme)))))
 
 (ert-deftest bootstrap/ensure-light-theme-loads-when-empty ()
-  "Calls `tychoish-load-light-theme' when no theme is active."
+  "Calls `bootstrap-load-light-theme' when no theme is active."
   (let ((custom-enabled-themes nil)
         (called nil))
-    (cl-letf (((symbol-function 'tychoish-load-light-theme)
+    (cl-letf (((symbol-function 'bootstrap-load-light-theme)
                (lambda () (setq called t))))
-      (tychoish/ensure-light-theme)
+      (bootstrap-ensure-light-theme)
       (should called))))
 
 (ert-deftest bootstrap/ensure-dark-theme-noop-when-active ()
   "Does not call load function when a theme is already enabled."
   (let ((custom-enabled-themes '(modus-vivendi)))
-    (cl-letf (((symbol-function 'tychoish-load-dark-theme)
+    (cl-letf (((symbol-function 'bootstrap-load-dark-theme)
                (lambda () (error "should not be called"))))
-      (should-not (tychoish/ensure-dark-theme)))))
+      (should-not (bootstrap-ensure-dark-theme)))))
 
 (ert-deftest bootstrap/ensure-dark-theme-loads-when-empty ()
-  "Calls `tychoish-load-dark-theme' when no theme is active."
+  "Calls `bootstrap-load-dark-theme' when no theme is active."
   (let ((custom-enabled-themes nil)
         (called nil))
-    (cl-letf (((symbol-function 'tychoish-load-dark-theme)
+    (cl-letf (((symbol-function 'bootstrap-load-dark-theme)
                (lambda () (setq called t))))
-      (tychoish/ensure-dark-theme)
+      (bootstrap-ensure-dark-theme)
       (should called))))
 
 (ert-deftest bootstrap/disable-all-themes-calls-disable-for-each ()
@@ -817,15 +818,15 @@
 
 (ert-deftest bootstrap/should-read-abbrev-not-in-cache ()
   "Returns t when path is absent from cache."
-  (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
+  (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
     (should (should-read-abbrev-file-p "/some/path.el"))))
 
 (ert-deftest bootstrap/should-read-abbrev-fresh-cache-entry ()
   "Returns nil when cache entry is newer than the file."
   (let ((tmp (make-temp-file "ert-abbrev-")))
     (unwind-protect
-        (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
-          (ht-set tychoish/abbrev-files-cache tmp
+        (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
+          (ht-set bootstrap-abbrev-files-cache tmp
                   (time-add (current-time) (seconds-to-time 3600)))
           (should-not (should-read-abbrev-file-p tmp)))
       (delete-file tmp))))
@@ -834,27 +835,27 @@
   "Returns t when the file is newer than the cache entry."
   (let ((tmp (make-temp-file "ert-abbrev-stale-")))
     (unwind-protect
-        (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
-          (ht-set tychoish/abbrev-files-cache tmp
+        (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
+          (ht-set bootstrap-abbrev-files-cache tmp
                   (time-subtract (current-time) (seconds-to-time 3600)))
           (should (should-read-abbrev-file-p tmp)))
       (delete-file tmp))))
 
 (ert-deftest bootstrap/should-read-abbrev-returns-boolean ()
   "Return value is t or nil."
-  (let ((tychoish/abbrev-files-cache (make-hash-table :test #'equal)))
+  (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
     (let ((result (should-read-abbrev-file-p "/nope")))
       (should (or (eq result t) (eq result nil))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish/desktop-save
+;;; bootstrap-desktop-save
 
 (ert-deftest bootstrap/desktop-save-skips-solo-instance ()
   "Does not call `desktop-save' when instance-id is \"solo\"."
   (let ((sprite-instance-id "solo")
         (called nil))
     (cl-letf (((symbol-function 'desktop-save) (lambda (&rest _) (setq called t))))
-      (tychoish/desktop-save)
+      (bootstrap-desktop-save)
       (should-not called))))
 
 (ert-deftest bootstrap/desktop-save-runs-for-named-instance ()
@@ -865,7 +866,7 @@
         (called nil))
     (cl-letf (((symbol-function 'desktop-save) (lambda (&rest _) (setq called t)))
               ((symbol-function 'random) (lambda (_) 0)))
-      (tychoish/desktop-save)
+      (bootstrap-desktop-save)
       (should called))))
 
 (ert-deftest bootstrap/desktop-save-updates-last-save-time ()
@@ -876,11 +877,11 @@
     (cl-letf (((symbol-function 'desktop-save) #'ignore)
               ((symbol-function 'random) (lambda (_) 0)))
       (let ((before desktop/last-save-time))
-        (tychoish/desktop-save)
+        (bootstrap-desktop-save)
         (should (time-less-p before desktop/last-save-time))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish/set-up-ssh-agent
+;;; bootstrap-set-up-ssh-agent
 
 (ert-deftest bootstrap/ssh-agent-returns-existing-env ()
   "Returns the current SSH_AUTH_SOCK value when already set."
@@ -889,13 +890,13 @@
                (when (equal var "SSH_AUTH_SOCK")
                  "/run/user/1000/ssh-agent.socket"))))
     (should (equal "/run/user/1000/ssh-agent.socket"
-                   (tychoish/set-up-ssh-agent)))))
+                   (bootstrap-set-up-ssh-agent)))))
 
 (ert-deftest bootstrap/ssh-agent-returns-nil-when-no-socket ()
   "Returns nil when env is unset and no socket candidates exist."
   (cl-letf (((symbol-function 'getenv) (lambda (_) nil))
             ((symbol-function 'find-ssh-agent-socket-candidates) (lambda () nil)))
-    (should-not (tychoish/set-up-ssh-agent))))
+    (should-not (bootstrap-set-up-ssh-agent))))
 
 (ert-deftest bootstrap/ssh-agent-sets-env-from-candidate ()
   "Sets and returns SSH_AUTH_SOCK from first socket candidate."
@@ -905,23 +906,23 @@
                (lambda () (list socket)))
               ((symbol-function 'setenv)
                (lambda (_var val) val)))
-      (should (equal socket (tychoish/set-up-ssh-agent))))))
+      (should (equal socket (bootstrap-set-up-ssh-agent))))))
 
 (ert-deftest bootstrap/ssh-agent-return-type ()
   "Return value is always a string or nil."
   (cl-letf (((symbol-function 'getenv) (lambda (_) nil))
             ((symbol-function 'find-ssh-agent-socket-candidates) (lambda () nil)))
-    (let ((result (tychoish/set-up-ssh-agent)))
+    (let ((result (bootstrap-set-up-ssh-agent)))
       (should (or (null result) (stringp result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish/set-up-show-whitespace
+;;; bootstrap-set-up-show-whitespace
 
 (ert-deftest bootstrap/show-whitespace-enables ()
   "Sets `show-trailing-whitespace' to t in the current buffer."
   (with-temp-buffer
     (setq-local show-trailing-whitespace nil)
-    (tychoish/set-up-show-whitespace)
+    (bootstrap-set-up-show-whitespace)
     (should show-trailing-whitespace)))
 
 (ert-deftest bootstrap/show-whitespace-is-buffer-local ()
@@ -932,14 +933,14 @@
           (with-current-buffer other
             (setq-local show-trailing-whitespace nil))
           (with-temp-buffer
-            (tychoish/set-up-show-whitespace))
+            (bootstrap-set-up-show-whitespace))
           (should-not (buffer-local-value 'show-trailing-whitespace other)))
       (kill-buffer other))))
 
 (ert-deftest bootstrap/show-whitespace-returns-t ()
   "Return value is t."
   (with-temp-buffer
-    (should (eq t (tychoish/set-up-show-whitespace)))))
+    (should (eq t (bootstrap-set-up-show-whitespace)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-buffers-visiting-missing-files
