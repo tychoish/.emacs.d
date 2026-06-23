@@ -174,7 +174,7 @@ the description."
 (hud-register-command
  :category 'agent-shell
  :command 'agent-shell-new-shell
- :description "new agent shell session"
+ :description "new agent shell"
  :transient-key "an")
 
 (hud-register-command
@@ -196,12 +196,12 @@ the description."
 
 (hud-register-command
  :command 'magit-dash-sync-all
- :description "sync all configured dashboard repos"
+ :description "sync all configured repos"
  :transient-key "rs")
 
 (hud-register-command
  :command 'magit-dash-sync-repo
- :description "sync one configured repository"
+ :description "sync one configured repo"
  :transient-key "ru")
 
 (hud-register-command
@@ -236,7 +236,7 @@ the description."
 (hud-register-command
  :category 'mu4e
  :command 'consult-mu-bookmark
- :description "select mu4e bookmark to view"
+ :description "select mu4e bookmark"
  :transient-key "mb")
 
 (hud-register-command
