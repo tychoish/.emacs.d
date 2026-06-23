@@ -70,4 +70,4 @@ jobs:
         run: find ~/.emacs.d/elpa -name "*.elc" -delete
 
       - name: Run integration tests
-        run: emacs --fg-daemon --eval '(tychoish/run-ci-tests)'
+        run: emacs --fg-daemon --eval '(bootstrap-run-ci-tests)'
