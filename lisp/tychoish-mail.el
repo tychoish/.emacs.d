@@ -151,7 +151,7 @@ folder string or nil to fall through to the next rule."
     (cond
      ((null val) "(none)")
      ((and (listp val) (consp (car val)))
-      (mapconcat #'cdr val ", "))
+      (mapconcat #'cadr val ", "))
      ((stringp val) val)
      (t (format "%S" val)))))
 
@@ -178,7 +178,7 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
          (body (pcase field-type
                  ('address
                   `(when (seq-some (lambda (addr)
-                                     (string-match-p ,regex (cdr addr)))
+                                     (string-match-p ,regex (cadr addr)))
                                    (mu4e-message-field msg ,field))
                      ,folder))
                  ('string
@@ -458,7 +458,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
   (when-let* ((msg mu4e-compose-parent-message)
               (recipients (append (mu4e-message-field msg :to)
                                   (mu4e-message-field msg :cc)))
-              (addrs (seq-map (lambda (a) (downcase (cdr a))) recipients))
+              (addrs (seq-map (lambda (a) (downcase (cadr a))) recipients))
               (account-name (map-some
                              (lambda (name conf)
                                (when (member (downcase (tychoish/mail-account-address conf))
