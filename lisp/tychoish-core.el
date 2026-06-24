@@ -2950,5 +2950,26 @@ call-site that has access to SHELL-BUFFER."
   :defer t)
 
 
+(use-package arch
+  :ensure nil
+  :commands (arch-cache-drop
+             arch-cache-reload
+             arch-dispatch
+             arch-find-package
+             arch-install
+             arch-kill-info-buffers
+             arch-list
+             arch-remove
+             arch-search
+             arch-show-info
+             arch-sync
+             arch-sync-force
+             arch-upgrade
+             arch-upgrade-all
+             arch-upgrade-all-yay
+             arch-upgrade-system
+             arch-abs-install
+             arch-abs-rebuild))
+
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

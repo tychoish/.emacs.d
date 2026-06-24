@@ -261,5 +261,17 @@ the description."
  :description "open frame in sprite"
  :transient-key "sf")
 
+(hud-register-command
+ :category 'arch
+ :command 'arch-find-package
+ :description "arch package info"
+ :transient-key "li")
+
+(hud-register-command
+ :category 'arch
+ :command 'arch-list
+ :description "arch package list"
+ :transient-key "ll")
+
 (provide 'hud)
 ;;; hud.el ends here

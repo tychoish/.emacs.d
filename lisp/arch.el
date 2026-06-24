@@ -199,10 +199,11 @@ With a prefix argument, always prompt regardless of this setting."
 
 (defun arch--cached-info (pkg-name)
   "Return info for PKG-NAME from cache, fetching via backend if absent."
-  (or (arch--cache-get pkg-name)
-      (when-let* ((plist (funcall (arch-backend-info-fn (arch--default-backend)) pkg-name)))
-        (arch--cache-put pkg-name plist)
-        plist)))
+  (if-let* ((plist (arch--cache-get pkg-name)))
+      plist
+    (when-let* ((plist (funcall (arch-backend-info-fn (arch--default-backend)) pkg-name)))
+      (arch--cache-put pkg-name plist)
+      plist)))
 
 ;;; Shell helpers
 
@@ -576,17 +577,16 @@ always prompts when called with a prefix argument."
 Results from all backends are merged and grouped by repo in the ACR interface."
   (interactive "sSearch packages: ")
   (let* ((seen (make-hash-table :test #'equal))
-         (pkgs (seq-filter
-                (lambda (pkg)
-                  (unless (map-elt seen (arch-pkg-name pkg))
-                    (setf (map-elt seen (arch-pkg-name pkg)) t)))
-                (seq-mapcat
-                 (lambda (backend)
-                   (when-let* ((fn (arch-backend-search-fn backend)))
-                     (funcall fn query)))
-                 (map-values arch--backends)))))
-    (unless pkgs
-      (user-error "No packages found for %S" query))
+         (pkgs (or (seq-filter
+                    (lambda (pkg)
+                      (unless (map-elt seen (arch-pkg-name pkg))
+                        (setf (map-elt seen (arch-pkg-name pkg)) t)))
+                    (seq-mapcat
+                     (lambda (backend)
+                       (when-let* ((fn (arch-backend-search-fn backend)))
+                         (funcall fn query)))
+                     (map-values arch--backends)))
+                   (user-error "No packages found for %S" query))))
     (when-let* ((selected (arch--select-from-pkgs pkgs (format "Search [%s]: " query))))
       (arch-show-info selected))))
 
@@ -714,15 +714,15 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
     (erase-buffer)
     (seq-do
      (lambda (field)
-       (when-let* ((val (plist-get plist (cadr field))))
-         (unless (equal val "None")
-           (cond
+       (when-let* ((val (plist-get plist (cadr field)))
+                   (_ (not (equal val "None"))))
+         (cond
             ((caddr field)
              (arch--yaml-insert-list (car field) (arch--yaml-split val)))
             ((equal (car field) "url")
              (arch--yaml-insert-url (car field) val))
             (t
-             (arch--yaml-insert-pair (car field) val))))))
+             (arch--yaml-insert-pair (car field) val)))))
      arch--info-fields)
     (when aur-p
       (arch--yaml-insert-url     "aur-url"
@@ -740,11 +740,10 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
   "Display detailed info for PKG-NAME in a read-only buffer."
   (interactive "sPackage name: ")
   (let* ((backend (arch--default-backend))
-         (plist (arch--cached-info pkg-name))
+         (plist (or (arch--cached-info pkg-name)
+                    (user-error "No info found for package %S" pkg-name)))
          (files (funcall (arch-backend-files-fn backend) pkg-name))
          (buf (get-buffer-create (arch--info-buffer-name pkg-name))))
-    (unless plist
-      (user-error "No info found for package %S" pkg-name))
     (with-current-buffer buf
       (arch-info-mode)
       (setq arch--info-package pkg-name)
@@ -860,25 +859,25 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
   "Return a 5-char propertized status string for PKG.
 avail=not installed  expl=explicit  E+req=explicit+required by others
 dep=dependency  D+req=dep+required by others  orphn=orphaned dependency"
-  (if (not (arch-pkg-installed-p pkg))
-      (propertize "avail" 'face 'arch-face-available
-                  'help-echo "available in repository, not installed")
-    (let* ((explicit (arch-pkg-explicit-p pkg))
-           (req (arch-pkg-required-by-p pkg))
-           (orphan (and (not explicit) (not req)))
-           (str (cond
-                 (orphan "orphn")
-                 ((and explicit req) "E+req")
-                 (explicit "expl")
-                 (req "D+req")
-                 (t "dep")))
-           (face (if orphan 'arch-face-orphan 'arch-face-installed))
-           (desc (string-join
-                  (list (if (arch-pkg-aur-p pkg) "AUR" "official repo")
-                        (if explicit "explicitly installed" "installed as dependency")
-                        (if req "required by other packages" "not required by other packages"))
-                  " · ")))
-      (propertize str 'face face 'help-echo desc))))
+  (if (arch-pkg-installed-p pkg)
+      (let* ((explicit (arch-pkg-explicit-p pkg))
+             (req (arch-pkg-required-by-p pkg))
+             (orphan (and (not explicit) (not req)))
+             (str (cond
+                   (orphan "orphn")
+                   ((and explicit req) "E+req")
+                   (explicit "expl")
+                   (req "D+req")
+                   (t "dep")))
+             (face (if orphan 'arch-face-orphan 'arch-face-installed))
+             (desc (string-join
+                    (list (if (arch-pkg-aur-p pkg) "AUR" "official repo")
+                          (if explicit "explicitly installed" "installed as dependency")
+                          (if req "required by other packages" "not required by other packages"))
+                    " · ")))
+        (propertize str 'face face 'help-echo desc))
+    (propertize "avail" 'face 'arch-face-available
+                'help-echo "available in repository, not installed")))
 
 (defun arch--list-name-string (name markedp)
   "Return NAME propertized as a hyperlink, bold when MARKEDP."
@@ -1080,13 +1079,12 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
 (defun arch-list-toggle-mark ()
   "Toggle mark on the package at point without moving point."
   (interactive)
-  (when-let* ((pkg (tabulated-list-get-id)))
-    (let* ((name (arch-pkg-name pkg))
-           (now-marked (not (map-elt arch--marked name))))
-      (if now-marked
-          (setf (map-elt arch--marked name) t)
-        (map-delete arch--marked name))
-      (tabulated-list-set-col 0 (arch--list-name-string name now-marked) t))))
+  (when-let* ((pkg (tabulated-list-get-id))
+              (name (arch-pkg-name pkg)))
+    (if (map-elt arch--marked name)
+        (map-delete arch--marked name)
+      (setf (map-elt arch--marked name) t))
+    (tabulated-list-set-col 0 (arch--list-name-string name (map-elt arch--marked name)) t)))
 
 (defun arch-list-mark ()
   "Mark the package at point and advance to the next line."
@@ -1208,9 +1206,9 @@ Useful for AUR stub entries (version \"<aur>\") added by the widened list."
 (defun arch-list-upgrade-all ()
   "Upgrade all packages via the current backend."
   (interactive)
-  (when-let* ((fn (arch-backend-upgrade-all-fn (or arch--list-backend (arch--default-backend)))))
-    (when (yes-or-no-p "Upgrade all packages? ")
-      (funcall fn))))
+  (when-let* ((fn (arch-backend-upgrade-all-fn (or arch--list-backend (arch--default-backend))))
+              (_ (yes-or-no-p "Upgrade all packages? ")))
+    (funcall fn)))
 
 (defun arch-list-show-info ()
   "Show package info for the entry at point."
@@ -1362,18 +1360,17 @@ Useful for AUR stub entries (version \"<aur>\") added by the widened list."
 (defun arch-upgrade-all ()
   "Upgrade all packages via the default (pacman) backend."
   (interactive)
-  (when-let* ((fn (arch-backend-upgrade-all-fn (arch--default-backend))))
-    (when (yes-or-no-p "Upgrade all packages? ")
-      (funcall fn))))
+  (when-let* ((fn (arch-backend-upgrade-all-fn (arch--default-backend)))
+              (_ (yes-or-no-p "Upgrade all packages? ")))
+    (funcall fn)))
 
 ;;;###autoload
 (defun arch-upgrade-all-yay ()
   "Upgrade all packages including AUR via `arch-aur-backend'."
   (interactive)
-  (let ((backend (arch--aur-backend)))
-    (when-let* ((fn (arch-backend-upgrade-all-fn backend)))
-      (when (yes-or-no-p "Upgrade all packages (including AUR)? ")
-        (funcall fn)))))
+  (when-let* ((fn (arch-backend-upgrade-all-fn (arch--aur-backend)))
+              (_ (yes-or-no-p "Upgrade all packages (including AUR)? ")))
+    (funcall fn)))
 
 ;;; Backend registration
 
@@ -1416,20 +1413,6 @@ Useful for AUR stub entries (version \"<aur>\") added by the widened list."
     :remove-fn #'arch--yay-remove
     :upgrade-fn #'arch--yay-install
     :upgrade-all-fn #'arch--yay-upgrade-all)))
-
-;;; HUD registration
-
-(with-eval-after-load 'hud
-  (hud-register-command
-   :category 'arch
-   :command 'arch-find-package
-   :description "arch package info"
-   :transient-key "li")
-  (hud-register-command
-   :category 'arch
-   :command 'arch-list
-   :description "arch package list"
-   :transient-key "ll"))
 
 (provide 'arch)
 ;;; arch.el ends here

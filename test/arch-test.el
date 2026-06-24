@@ -6,14 +6,9 @@
 ;;; Code:
 
 (require 'ert)
-(require 'seq)
-(require 'map)
-
-(let ((load-path (cons (expand-file-name "lisp" (file-name-directory
-                                                  (directory-file-name
-                                                   (file-name-directory load-file-name))))
-                       load-path)))
-  (require 'arch))
+(load (expand-file-name "test-helper"
+                        (file-name-directory (or load-file-name buffer-file-name))))
+(require 'arch)
 
 ;;; Backend registry
 
@@ -118,46 +113,75 @@
     (arch-cache-drop)
     (should (zerop (hash-table-count arch--info-cache)))))
 
-;;; Status column — now 2-char [E/D][*/space]
+;;; arch--cached-info
 
-(ert-deftest arch-test-pkg-status-installed ()
-  "Explicit package, not required by others: \"E \"."
-  (let* ((pkg (arch-pkg--make :name "bash" :installed-p t :explicit-p t)))
-    (should (equal (substring-no-properties (arch--pkg-status pkg)) "E "))))
+(ert-deftest arch-test-cached-info-cache-hit ()
+  "Cache hit returns stored plist without calling backend."
+  (let ((arch--info-cache (make-hash-table :test #'equal))
+        (called nil))
+    (arch--cache-put "bash" '(name "bash"))
+    (cl-letf (((symbol-function 'arch--default-backend)
+               (lambda () (setq called t) nil)))
+      (should (equal (arch--cached-info "bash") '(name "bash")))
+      (should-not called))))
 
-(ert-deftest arch-test-pkg-status-upgradeable ()
-  "Upgrade does not change status string (shown via red version instead): \"E \"."
-  (let* ((pkg (arch-pkg--make :name "bash" :installed-p t :explicit-p t :upgradeable-p t)))
-    (should (equal (substring-no-properties (arch--pkg-status pkg)) "E "))))
+(ert-deftest arch-test-cached-info-cache-miss-fetches-and-stores ()
+  "Cache miss calls backend info-fn, stores result, and returns it."
+  (let* ((arch--info-cache (make-hash-table :test #'equal))
+         (plist '(name "ripgrep"))
+         (backend (arch-backend--make :name "test" :info-fn (lambda (_) plist))))
+    (cl-letf (((symbol-function 'arch--default-backend) (lambda () backend)))
+      (should (equal (arch--cached-info "ripgrep") plist))
+      (should (equal (arch--cache-get "ripgrep") plist)))))
 
-(ert-deftest arch-test-pkg-status-required ()
-  "Dep required by others: \"D*\"."
-  (let* ((pkg (arch-pkg--make :name "glibc" :installed-p t
-                               :explicit-p nil :required-by-p t)))
-    (should (equal (substring-no-properties (arch--pkg-status pkg)) "D*"))))
+(ert-deftest arch-test-cached-info-cache-miss-backend-nil ()
+  "Cache miss with backend returning nil yields nil and stores nothing."
+  (let* ((arch--info-cache (make-hash-table :test #'equal))
+         (backend (arch-backend--make :name "test" :info-fn (lambda (_) nil))))
+    (cl-letf (((symbol-function 'arch--default-backend) (lambda () backend)))
+      (should (null (arch--cached-info "missing")))
+      (should (null (arch--cache-get "missing"))))))
 
-(ert-deftest arch-test-pkg-status-aur ()
-  "AUR package, explicit: \"E \" (repo shown in Repo column, not status)."
-  (let* ((pkg (arch-pkg--make :name "myaur" :installed-p t :aur-p t :explicit-p t)))
-    (should (equal (substring-no-properties (arch--pkg-status pkg)) "E "))))
-
-(ert-deftest arch-test-pkg-status-aur-stale ()
-  "AUR package with upgrade: status still \"E \"; upgrade shown via red version."
-  (let* ((pkg (arch-pkg--make :name "myaur" :installed-p t :aur-p t
-                               :explicit-p t :upgradeable-p t)))
-    (should (equal (substring-no-properties (arch--pkg-status pkg)) "E "))))
-
-(ert-deftest arch-test-pkg-status-orphan ()
-  "Orphan (dep, not required): \"D \" with orphan face."
-  (let* ((pkg (arch-pkg--make :name "foo" :installed-p t
-                               :explicit-p nil :required-by-p nil)))
-    (should (equal (substring-no-properties (arch--pkg-status pkg)) "D "))
-    (should (eq (get-text-property 0 'face (arch--pkg-status pkg)) 'arch-face-orphan))))
+;;; Status column — 5-char label: avail / expl / E+req / D+req / orphn
 
 (ert-deftest arch-test-pkg-status-available ()
-  "Not-installed packages return two spaces."
-  (let* ((pkg (arch-pkg--make :name "foo" :installed-p nil)))
-    (should (equal (substring-no-properties (arch--pkg-status pkg)) "  "))))
+  "Not-installed package returns \"avail\"."
+  (let ((pkg (arch-pkg--make :name "foo" :installed-p nil)))
+    (should (equal (substring-no-properties (arch--pkg-status pkg)) "avail"))))
+
+(ert-deftest arch-test-pkg-status-explicit ()
+  "Explicit package, not required by others: \"expl\"."
+  (let ((pkg (arch-pkg--make :name "bash" :installed-p t :explicit-p t)))
+    (should (equal (substring-no-properties (arch--pkg-status pkg)) "expl"))))
+
+(ert-deftest arch-test-pkg-status-explicit-upgradeable ()
+  "Upgradeable flag does not change status label: still \"expl\"."
+  (let ((pkg (arch-pkg--make :name "bash" :installed-p t :explicit-p t :upgradeable-p t)))
+    (should (equal (substring-no-properties (arch--pkg-status pkg)) "expl"))))
+
+(ert-deftest arch-test-pkg-status-explicit-required ()
+  "Explicit package also required by others: \"E+req\"."
+  (let ((pkg (arch-pkg--make :name "gcc" :installed-p t
+                              :explicit-p t :required-by-p t)))
+    (should (equal (substring-no-properties (arch--pkg-status pkg)) "E+req"))))
+
+(ert-deftest arch-test-pkg-status-dep-required ()
+  "Dependency required by others: \"D+req\"."
+  (let ((pkg (arch-pkg--make :name "glibc" :installed-p t
+                              :explicit-p nil :required-by-p t)))
+    (should (equal (substring-no-properties (arch--pkg-status pkg)) "D+req"))))
+
+(ert-deftest arch-test-pkg-status-orphan ()
+  "Orphan (dep, not required): \"orphn\" with arch-face-orphan."
+  (let ((pkg (arch-pkg--make :name "foo" :installed-p t
+                              :explicit-p nil :required-by-p nil)))
+    (should (equal (substring-no-properties (arch--pkg-status pkg)) "orphn"))
+    (should (eq (get-text-property 0 'face (arch--pkg-status pkg)) 'arch-face-orphan))))
+
+(ert-deftest arch-test-pkg-status-aur-explicit ()
+  "AUR explicit package: \"expl\" (repo shown elsewhere, not in status)."
+  (let ((pkg (arch-pkg--make :name "myaur" :installed-p t :aur-p t :explicit-p t)))
+    (should (equal (substring-no-properties (arch--pkg-status pkg)) "expl"))))
 
 ;;; Sync-list parser
 
