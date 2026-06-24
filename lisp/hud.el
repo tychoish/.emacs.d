@@ -208,15 +208,6 @@ the description."
  :transient-key "rr")
 
 (hud-register-command
-<<<<<<< HEAD
- :command 'magit-dash-sync-all
- :description "sync all configured repos"
- :transient-key "rs")
-
-(hud-register-command
- :command 'magit-dash-sync-repo
- :description "sync one configured repo"
-=======
  :command #'magit-dash-sync-all
  :description "sync all dashboard repos"
  :transient-key "rs")
@@ -224,7 +215,6 @@ the description."
 (hud-register-command
  :command #'magit-dash-sync-repo
  :description "sync one dashboard repo"
->>>>>>> d0f5d4c (feat: add additional agent shell commands, update descriptions)
  :transient-key "ru")
 
 (hud-register-command
