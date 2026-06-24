@@ -29,7 +29,13 @@
   info-fn         ; (fn pkg-name) → plist of metadata, nil on failure
   files-fn        ; (fn pkg-name) → list of strings, nil if unavailable
   list-fn         ; (fn) → list of arch-pkg (installed packages)
-  install-fn      ; (fn pkg-name)
+  list-all-fn       ; (fn) → list of all sync-DB arch-pkg (installed + available, with descriptions)
+  foreign-fn        ; (fn) → hash table of foreign package names (string → t)
+  upgradeable-fn    ; (fn) → hash table of upgradeable package names (string → t)
+  populate-cache-fn      ; (fn) → populate arch--info-cache; nil means use pacman fallback
+  aur-list-fn            ; (fn) → list of AUR package name strings (for widened list); nil = unsupported
+  install-methods        ; alist of (symbol . fn) — method dispatch table, e.g. ((direct . fn) (abs . fn))
+  default-install-method ; symbol — preferred method for this backend; nil defers to prompt
   remove-fn       ; (fn pkg-name)
   upgrade-fn      ; (fn pkg-name) — nil means unsupported
   upgrade-all-fn) ; (fn) — nil means unsupported
@@ -44,10 +50,31 @@
 (defvar arch-default-backend "pacman"
   "Name of the backend used when none is specified.")
 
+(defcustom arch-aur-backend "yay"
+  "Name of the backend used for AUR search and upgrade-all operations.
+Change this to use an alternative AUR helper such as \"paru\"."
+  :type 'string
+  :group 'arch)
+
 (defun arch--default-backend ()
   "Return the default backend or signal a user error."
   (or (map-elt arch--backends arch-default-backend)
       (user-error "No arch backend registered for %S" arch-default-backend)))
+
+(defun arch--aur-backend ()
+  "Return the AUR backend or signal a user error."
+  (or (map-elt arch--backends arch-aur-backend)
+      (user-error "AUR backend %S not registered" arch-aur-backend)))
+
+(defcustom arch-default-install-method nil
+  "Default install method: `direct', `abs', or `rebuild'.
+nil means prompt when more than one method is available.
+With a prefix argument, always prompt regardless of this setting."
+  :type '(choice (const :tag "Prompt" nil)
+                 (const :tag "Package manager" direct)
+                 (const :tag "AUR source build" abs)
+                 (const :tag "Rebuild existing clone" rebuild))
+  :group 'arch)
 
 ;;; Package struct
 
@@ -66,28 +93,22 @@
 ;;; Faces
 
 (defface arch-face-installed
-  '((((class color) (background dark))  :foreground "#50fa7b")
-    (((class color) (background light)) :foreground "#228b22")
-    (t :inherit success))
+  '((t :inherit success))
   "Face for installed (official repo, current) packages."
   :group 'arch)
 
 (defface arch-face-upgradeable
-  '((t :foreground "orange" :weight bold))
+  '((t :inherit warning :weight bold))
   "Face for official-repo packages with an available upgrade."
   :group 'arch)
 
 (defface arch-face-aur
-  '((((class color) (background dark))  :foreground "#8be9fd")
-    (((class color) (background light)) :foreground "#0000cd")
-    (t :inherit font-lock-keyword-face))
+  '((t :inherit font-lock-keyword-face))
   "Face for AUR (foreign) packages that are current."
   :group 'arch)
 
 (defface arch-face-aur-stale
-  '((((class color) (background dark))  :foreground "#ff79c6")
-    (((class color) (background light)) :foreground "#8b0057")
-    (t :inherit warning))
+  '((t :inherit warning :weight bold))
   "Face for AUR packages that have an available upgrade."
   :group 'arch)
 
@@ -97,30 +118,22 @@
   :group 'arch)
 
 (defface arch-face-orphan
-  '((((class color) (background dark))  :foreground "#ff5555" :weight bold)
-    (((class color) (background light)) :foreground "#cc0000" :weight bold)
-    (t :inherit error))
+  '((t :inherit error :weight bold))
   "Face for orphaned packages (installed as dep, not required by anyone)."
   :group 'arch)
 
 (defface arch-face-version-old
-  '((((class color) (background dark))  :foreground "#ff5555")
-    (((class color) (background light)) :foreground "#cc0000")
-    (t :inherit error))
+  '((t :inherit error :weight bold))
   "Face for version numbers of packages that have an available upgrade."
   :group 'arch)
 
 (defface arch-face-pkg-name
-  '((((class color) (background dark))  :foreground "#8be9fd" :underline t :weight bold)
-    (((class color) (background light)) :foreground "#0000cd" :underline t :weight bold)
-    (t :inherit (bold underline)))
+  '((t :inherit link :weight bold))
   "Face for package names in the arch info buffer."
   :group 'arch)
 
 (defface arch-face-yaml-key
-  '((((class color) (background dark))  :foreground "#8be9fd" :weight bold)
-    (((class color) (background light)) :foreground "#0000cd" :weight bold)
-    (t :weight bold))
+  '((t :inherit font-lock-keyword-face :weight bold))
   "Face for YAML keys in the arch info buffer."
   :group 'arch)
 
@@ -162,10 +175,8 @@
   (arch--populate-cache)
   (message "arch: cache reloaded (%d packages)" (hash-table-count arch--info-cache)))
 
-(defun arch--populate-cache ()
-  "Fetch `pacman -Qi' for all installed packages and update the info cache.
-Also cross-references `pacman -Sl' to fill in the repository field, which
-`pacman -Qi' does not include for locally-installed packages."
+(defun arch--pacman-populate-cache ()
+  "Populate the info cache from `pacman -Qi', cross-referencing `pacman -Sl' for repo."
   (let ((repo-index
          (map-into
           (seq-map (lambda (pkg) (cons (arch-pkg-name pkg) (arch-pkg-repo pkg)))
@@ -180,10 +191,16 @@ Also cross-references `pacman -Sl' to fill in the repository field, which
                             plist))))
      (arch--parse-multi-info (arch--run-sync (list "pacman" "-Qi"))))))
 
+(defun arch--populate-cache ()
+  "Populate the package info cache via the current backend's populate-cache-fn."
+  (if-let* ((fn (arch-backend-populate-cache-fn (arch--default-backend))))
+      (funcall fn)
+    (arch--pacman-populate-cache)))
+
 (defun arch--cached-info (pkg-name)
-  "Return info for PKG-NAME from cache, fetching individually if absent."
+  "Return info for PKG-NAME from cache, fetching via backend if absent."
   (or (arch--cache-get pkg-name)
-      (when-let* ((plist (arch--pacman-info pkg-name)))
+      (when-let* ((plist (funcall (arch-backend-info-fn (arch--default-backend)) pkg-name)))
         (arch--cache-put pkg-name plist)
         plist)))
 
@@ -372,34 +389,61 @@ Lines not matching this format (warnings, blank lines) are skipped."
   "Return all packages in the sync DB as arch-pkg structs."
   (arch--parse-sync-list (arch--run-sync (list "pacman" "-Sl"))))
 
+(defun arch--pacman-list-all-with-desc ()
+  "Return all sync-DB packages as arch-pkg structs, including descriptions."
+  (arch--parse-search-output (arch--run-sync (list "pacman" "-Ss" "."))))
+
+(defun arch--yay-aur-list ()
+  "Return list of all AUR package names from `yay -Slaq'."
+  (seq-filter #'identity
+              (split-string (or (arch--run-sync (list "yay" "-Slaq")) "") "\n" t)))
+
+(defun arch--yay-list-all ()
+  "Return all sync-DB packages plus AUR name stubs from `yay -Slaq'.
+AUR stubs use version \"<aur>\" and blank description; they update in the
+list display once info is fetched and cached via `arch-list-fetch-info'."
+  (let* ((sync-pkgs (arch--pacman-list-all-with-desc))
+         (sync-names (map-into (seq-map (lambda (p) (cons (arch-pkg-name p) t)) sync-pkgs)
+                               '(hash-table :test equal))))
+    (append sync-pkgs
+            (thread-last (arch--yay-aur-list)
+              (seq-remove (lambda (name) (map-elt sync-names name)))
+              (seq-map (lambda (name)
+                         (arch-pkg--make
+                          :name name
+                          :version "<aur>"
+                          :repo "aur"
+                          :description ""
+                          :installed-p nil)))))))
+
 
 (defun arch--pacman-install (pkg-name)
   "Install PKG-NAME via pacman."
-  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "-S" pkg-name)))
+  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "-S" pkg-name)))
 
 (defun arch--pacman-remove (pkg-name)
   "Remove PKG-NAME via pacman."
-  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "-Rns" pkg-name)))
+  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "-Rns" pkg-name)))
 
 (defun arch--pacman-upgrade (pkg-name)
   "Upgrade PKG-NAME via pacman."
-  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "-S" pkg-name)))
+  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "-S" pkg-name)))
 
 (defun arch--pacman-upgrade-all ()
   "Full system upgrade via pacman."
-  (arch--pkg-run "pacman" (list "sudo" "pacman" "--noconfirm" "-Syu")))
+  (arch--pkg-run "pacman" (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "-Syu")))
 
 (defun arch--yay-install (pkg-name)
   "Install PKG-NAME via yay."
-  (arch--pkg-run pkg-name (list "yay" "--noconfirm" "-S" pkg-name)))
+  (arch--pkg-run pkg-name (list "yay" "--noconfirm" "--noprogressbar" "-S" pkg-name)))
 
 (defun arch--yay-remove (pkg-name)
   "Remove PKG-NAME via yay."
-  (arch--pkg-run pkg-name (list "yay" "--noconfirm" "-Rns" pkg-name)))
+  (arch--pkg-run pkg-name (list "yay" "--noconfirm" "--noprogressbar" "-Rns" pkg-name)))
 
 (defun arch--yay-upgrade-all ()
   "Full system upgrade including AUR via yay."
-  (arch--pkg-run "yay" (list "yay" "--noconfirm" "-Syu")))
+  (arch--pkg-run "yay" (list "yay" "--noconfirm" "--noprogressbar" "-Syu")))
 
 ;;; Pacman system operations
 
@@ -407,20 +451,20 @@ Lines not matching this format (warnings, blank lines) are skipped."
 (defun arch-sync ()
   "Sync package databases (`pacman -Sy')."
   (interactive)
-  (arch--pkg-run "pacman" (list "sudo" "pacman" "-Sy")))
+  (arch--pkg-run "pacman" (list "sudo" "pacman" "--noprogressbar" "-Sy")))
 
 ;;;###autoload
 (defun arch-sync-force ()
   "Force re-download of all package databases (`pacman -Syy')."
   (interactive)
-  (arch--pkg-run "pacman" (list "sudo" "pacman" "-Syy")))
+  (arch--pkg-run "pacman" (list "sudo" "pacman" "--noprogressbar" "-Syy")))
 
 ;;;###autoload
 (defun arch-upgrade-system ()
   "Upgrade installed packages without syncing databases (`pacman -Su')."
   (interactive)
   (when (yes-or-no-p "Upgrade system without syncing databases? ")
-    (arch--pkg-run "pacman" (list "sudo" "pacman" "--noconfirm" "-Su"))))
+    (arch--pkg-run "pacman" (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "-Su"))))
 
 ;;; AUR abs build
 
@@ -488,36 +532,77 @@ Lines not matching this format (warnings, blank lines) are skipped."
                    (when-let* ((pkg (map-elt index name)))
                      (or (arch-pkg-repo pkg) "other"))))))
 
-;;;###autoload
-(defun arch-search (query)
-  "Search for packages matching QUERY via the default backend, then show info."
-  (interactive "sSearch packages: ")
-  (let* ((pkgs (funcall (arch-backend-search-fn (arch--default-backend)) query)))
-    (if (null pkgs)
-        (user-error "No packages found for %S" query)
-      (when-let* ((selected (arch--select-from-pkgs pkgs (format "Package [%s]: " query))))
-        (arch-show-info selected)))))
+(defconst arch--install-method-labels
+  '((direct  . "Install via package manager")
+    (abs     . "Build from AUR source (clone + makepkg)")
+    (rebuild . "Rebuild existing AUR source clone"))
+  "Display labels for install method symbols used in `arch--install-dispatch'.")
+
+(defun arch--install-dispatch (pkg-name)
+  "Install PKG-NAME using the active backend's install-methods alist.
+Filters out `rebuild' when no abs directory exists.  Method selection:
+prefer `arch-default-install-method' (user override), then the backend's
+`default-install-method'; auto-selects when only one method is available;
+always prompts when called with a prefix argument."
+  (let* ((backend (arch--default-backend))
+         (all-methods (arch-backend-install-methods backend))
+         (methods (seq-filter (lambda (m)
+                                (or (not (eq (car m) 'rebuild))
+                                    (file-directory-p (arch--abs-pkg-dir pkg-name))))
+                              all-methods))
+         (effective-default (or arch-default-install-method
+                                (arch-backend-default-install-method backend)))
+         (method
+          (cond
+           ((null (cdr methods)) (caar methods))
+           ((and effective-default
+                 (not current-prefix-arg)
+                 (assq effective-default methods))
+            effective-default)
+           (t (intern (annotated-completing-read
+                       (seq-map (lambda (m)
+                                  (cons (symbol-name (car m))
+                                        (or (cdr (assq (car m) arch--install-method-labels))
+                                            (symbol-name (car m)))))
+                                methods)
+                       :prompt (format "Install %s: " pkg-name)
+                       :require-match t))))))
+    (when-let* ((fn (cdr (assq method methods))))
+      (funcall fn pkg-name))))
 
 ;;;###autoload
-(defun arch-search-yay (query)
-  "Search AUR for QUERY via yay, then show info."
-  (interactive "sSearch AUR: ")
-  (let* ((backend (or (map-elt arch--backends "yay")
-                      (user-error "yay backend not registered")))
-         (pkgs (funcall (arch-backend-search-fn backend) query)))
-    (if (null pkgs)
-        (user-error "No packages found for %S" query)
-      (when-let* ((selected (arch--select-from-pkgs pkgs (format "AUR [%s]: " query))))
-        (arch-show-info selected)))))
+(defun arch-search (query)
+  "Search all registered backends for QUERY and show info for the selection.
+Results from all backends are merged and grouped by repo in the ACR interface."
+  (interactive "sSearch packages: ")
+  (let* ((seen (make-hash-table :test #'equal))
+         (pkgs (seq-filter
+                (lambda (pkg)
+                  (unless (map-elt seen (arch-pkg-name pkg))
+                    (setf (map-elt seen (arch-pkg-name pkg)) t)))
+                (seq-mapcat
+                 (lambda (backend)
+                   (when-let* ((fn (arch-backend-search-fn backend)))
+                     (funcall fn query)))
+                 (map-values arch--backends)))))
+    (unless pkgs
+      (user-error "No packages found for %S" query))
+    (when-let* ((selected (arch--select-from-pkgs pkgs (format "Search [%s]: " query))))
+      (arch-show-info selected))))
+
+(defalias 'arch-search-yay #'arch-search)
 
 ;;;###autoload
 (defun arch-find-package ()
   "ACR-select from all sync-DB packages and open arch-info.
-Annotation mirrors the package list columns: [repo]  St  version  description."
+Annotation mirrors the package list columns: [repo]  Stat  (version)  description."
   (interactive)
   (when (zerop (hash-table-count arch--info-cache))
     (arch--populate-cache))
-  (let* ((pkgs (arch--pacman-list-all))
+  (let* ((backend (arch--default-backend))
+         (pkgs (if-let* ((fn (arch-backend-list-all-fn backend)))
+                    (funcall fn)
+                  (arch--pacman-list-all)))
          (index (map-into (seq-map (lambda (p) (cons (arch-pkg-name p) p)) pkgs)
                           '(hash-table :test equal)))
          (candidates
@@ -530,14 +615,16 @@ Annotation mirrors the package list columns: [repo]  St  version  description."
                                                (req (plist-get plist 'required-by))
                                                (req-p (and req (not (equal req "None")))))
                                           (concat (if explicit "E" "D")
-                                                  (if req-p "*" " ")))
-                                      "  ")))
+                                                  (if req-p "+req" "   ")))
+                                      "     ")))
                        (cons name
-                             (format "[%s]  %s  %s  %s"
+                             (format "[%s]  %s  (%s)  %s"
                                      (arch-pkg-repo pkg)
                                      status
                                      (arch-pkg-version pkg)
-                                     (or (plist-get plist 'description) "")))))
+                                     (or (plist-get plist 'description)
+                                         (arch-pkg-description pkg)
+                                         "")))))
                    pkgs))
          (selected (annotated-completing-read
                     candidates
@@ -671,11 +758,9 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
 
 (define-key arch-info-mode-map (kbd "q") #'quit-window)
 (define-key arch-info-mode-map (kbd "i") #'arch-info-install)
-(define-key arch-info-mode-map (kbd "a") #'arch-info-abs-install)
 (define-key arch-info-mode-map (kbd "r") #'arch-info-remove)
 (define-key arch-info-mode-map (kbd "u") #'arch-info-upgrade)
 (define-key arch-info-mode-map (kbd "s") #'arch-search)
-(define-key arch-info-mode-map (kbd "S") #'arch-search-yay)
 (define-key arch-info-mode-map (kbd "l") #'arch-list)
 (define-key arch-info-mode-map (kbd "p") #'arch-find-package)
 (define-key arch-info-mode-map (kbd "K") #'arch-kill-info-buffers)
@@ -689,19 +774,16 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
 (transient-define-prefix arch-info-menu ()
   "Actions for the arch package info buffer."
   [["Install"
-    ("i"  "Install (pacman)"  arch-info-install)
-    ("a"  "AUR/abs install"   arch-info-abs-install)]
+    ("i"  "Install"     arch-info-install)]
    ["Modify"
-    ("r"  "Remove"            arch-info-remove)
-    ("u"  "Upgrade"           arch-info-upgrade)]
-   ["Search"
-    ("s"  "Search (pacman)"   arch-search)
-    ("xy" "Search (yay/AUR)"  arch-search-yay)]
+    ("r"  "Remove"      arch-info-remove)
+    ("u"  "Upgrade"     arch-info-upgrade)]
    ["Navigate"
-    ("p"  "Find package"      arch-find-package)
-    ("l"  "Package list"      arch-list)
-    ("ki" "Kill info buffers" arch-kill-info-buffers)
-    ("q"  "Quit"              quit-window)]])
+    ("s"  "Search"               arch-search)
+    ("p"  "Find package"         arch-find-package)
+    ("l"  "Package list"         arch-list)
+    ("ki" "Kill info buffers"    arch-kill-info-buffers)
+    ("q"  "Quit"                 quit-window)]])
 
 ;;;###autoload
 (defun arch-kill-info-buffers ()
@@ -716,14 +798,9 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
     (message "arch: killed %d info buffer%s" killed (if (= killed 1) "" "s"))))
 
 (defun arch-info-install ()
-  "Install the package shown in this buffer."
+  "Install the package shown in this buffer, selecting method via `arch--install-dispatch'."
   (interactive)
-  (funcall (arch-backend-install-fn (arch--default-backend)) arch--info-package))
-
-(defun arch-info-abs-install ()
-  "Install the package shown in this buffer via abs/makepkg."
-  (interactive)
-  (arch-abs-install arch--info-package))
+  (arch--install-dispatch arch--info-package))
 
 (defun arch-info-remove ()
   "Remove the package shown in this buffer."
@@ -771,34 +848,35 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
             (and req (not (equal req "None"))))))
   pkg)
 
+(defun arch--pkg-repo-display (pkg)
+  "Return the display string for PKG's repository."
+  (cond
+   ((arch-pkg-aur-p pkg) "aur")
+   ((plist-get (arch--cache-get (arch-pkg-name pkg)) 'repository))
+   ((equal (arch-pkg-repo pkg) "local") "")
+   (t (arch-pkg-repo pkg))))
+
 (defun arch--pkg-status (pkg)
-  "Return a 2-char propertized status string for PKG.
-Format: [E/D/ ][*/ ]
-  E = explicitly installed
-  D = installed as dependency
-  * = required by other packages
-Not-installed packages return two spaces."
+  "Return a 5-char propertized status string for PKG.
+avail=not installed  expl=explicit  E+req=explicit+required by others
+dep=dependency  D+req=dep+required by others  orphn=orphaned dependency"
   (if (not (arch-pkg-installed-p pkg))
-      (propertize "  " 'face 'arch-face-available
+      (propertize "avail" 'face 'arch-face-available
                   'help-echo "available in repository, not installed")
-    (let* ((rsn  (if (arch-pkg-explicit-p pkg) "E" "D"))
-           (req  (if (arch-pkg-required-by-p pkg) "*" " "))
-           (str  (concat rsn req))
-           (face (cond
-                  ((and (not (arch-pkg-explicit-p pkg))
-                        (not (arch-pkg-required-by-p pkg))) 'arch-face-orphan)
-                  (t 'arch-face-installed)))
+    (let* ((explicit (arch-pkg-explicit-p pkg))
+           (req (arch-pkg-required-by-p pkg))
+           (orphan (and (not explicit) (not req)))
+           (str (cond
+                 (orphan "orphn")
+                 ((and explicit req) "E+req")
+                 (explicit "expl")
+                 (req "D+req")
+                 (t "dep")))
+           (face (if orphan 'arch-face-orphan 'arch-face-installed))
            (desc (string-join
-                  (seq-filter #'identity
-                              (list
-                               (if (arch-pkg-aur-p pkg) "AUR" "official repo")
-                               (when (arch-pkg-upgradeable-p pkg) "upgrade available")
-                               (if (arch-pkg-explicit-p pkg)
-                                   "explicitly installed"
-                                 "installed as dependency")
-                               (if (arch-pkg-required-by-p pkg)
-                                   "required by other packages"
-                                 "not required by other packages")))
+                  (list (if (arch-pkg-aur-p pkg) "AUR" "official repo")
+                        (if explicit "explicitly installed" "installed as dependency")
+                        (if req "required by other packages" "not required by other packages"))
                   " · ")))
       (propertize str 'face face 'help-echo desc))))
 
@@ -812,15 +890,12 @@ MARKED is a hash table of marked package names."
   (let ((desc (or (plist-get (arch--cache-get (arch-pkg-name pkg)) 'description)
                   (arch-pkg-description pkg)
                   ""))
-        (ver (or (arch-pkg-version pkg) "")))
+        (ver (or (plist-get (arch--cache-get (arch-pkg-name pkg)) 'version)
+                 (arch-pkg-version pkg) "")))
     (list pkg
           (vector
            (arch--list-name-string (arch-pkg-name pkg) (map-elt marked (arch-pkg-name pkg)))
-           (cond
-            ((arch-pkg-aur-p pkg) "aur")
-            ((plist-get (arch--cache-get (arch-pkg-name pkg)) 'repository))
-            ((equal (arch-pkg-repo pkg) "local") "")
-            (t (arch-pkg-repo pkg)))
+           (arch--pkg-repo-display pkg)
            (arch--pkg-status pkg)
            (if (arch-pkg-upgradeable-p pkg)
                (propertize ver 'face 'arch-face-version-old)
@@ -834,6 +909,7 @@ MARKED is a hash table of marked package names."
   "Keymap for `arch-list-mode'.")
 
 (define-key arch-list-mode-map (kbd "i")   #'arch-list-install)
+(define-key arch-list-mode-map (kbd "I")   #'arch-list-fetch-info)
 (define-key arch-list-mode-map (kbd "a")   #'arch-list-actions)
 (define-key arch-list-mode-map (kbd "r")   #'arch-list-remove)
 (define-key arch-list-mode-map (kbd "f")   #'arch-list-filter)
@@ -857,10 +933,11 @@ MARKED is a hash table of marked package names."
 (define-derived-mode arch-list-mode tabulated-list-mode "arch"
   "Major mode for browsing and managing Arch Linux packages.
 
-Columns: Name | Repo | St | Version | Description
+Columns: Name | Repo | Stat | Version | Description
   Repo: repository (core/extra/aur/…)
-  St: E=explicitly installed  D=dependency  *=required by others
-  Version: shown in red when an upgrade is available
+  Stat: expl=explicit  E+req=explicit+required  dep=dependency  D+req=dep+required
+        orphn=orphaned dep  avail=not installed
+  Version: shown in bold red when an upgrade is available
 
 Marks: SPC toggles, m marks, DEL unmarks, M unmarks all.  Marked names appear bold.
 Filter: f to set, F to clear.  a for package actions menu.
@@ -870,8 +947,8 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
   (setq tabulated-list-format
         (vector
          '("Name"        30 t)
-         '("Repo"         8 t)
-         '("St"           3 t)
+         '("Repo"         7 t)
+         '("Stat"         5 t)
          '("Version"     15 t)
          '("Description" 44 nil)))
   (setq tabulated-list-sort-key '("Name" . nil))
@@ -890,11 +967,17 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
   (when (zerop (hash-table-count arch--info-cache))
     (arch--populate-cache))
   (let* ((backend (or arch--list-backend (arch--default-backend)))
-         (foreign (arch--foreign-packages))
-         (upgradeable (arch--upgradeable-packages))
+         (foreign (if-let* ((fn (arch-backend-foreign-fn backend)))
+                      (funcall fn)
+                    (arch--foreign-packages)))
+         (upgradeable (if-let* ((fn (arch-backend-upgradeable-fn backend)))
+                          (funcall fn)
+                        (arch--upgradeable-packages)))
          (pkgs (seq-map (lambda (pkg) (arch--enrich-pkg pkg foreign upgradeable))
                         (if arch--list-wide
-                            (arch--pacman-list-all)
+                            (if-let* ((fn (arch-backend-list-all-fn backend)))
+                                (funcall fn)
+                              (arch--pacman-list-all))
                           (funcall (arch-backend-list-fn backend))))))
     (setq arch--all-entries
           (seq-map (lambda (pkg) (arch--build-list-entry pkg arch--marked)) pkgs))
@@ -960,8 +1043,11 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
            (cons "show info"
                  (cons #'arch-list-show-info     "Display package details"))
            (cons "install"
-                 (cons (lambda () (funcall (arch-backend-install-fn backend) name))
-                       "Install via pacman"))
+                 (cons (lambda () (arch--install-dispatch name))
+                       "Install (prompts for method: direct/abs/rebuild)"))
+           (cons "fetch info"
+                 (cons #'arch-list-fetch-info
+                       "Fetch and cache full info for this entry"))
            (cons "remove"
                  (cons (lambda () (when (yes-or-no-p (format "Remove %s? " name))
                                     (funcall (arch-backend-remove-fn backend) name)))
@@ -970,12 +1056,6 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
                  (cons (lambda () (when-let* ((fn (arch-backend-upgrade-fn backend)))
                                     (funcall fn name)))
                        "Upgrade to latest version"))
-           (cons "abs install"
-                 (cons (lambda () (arch-abs-install name))
-                       "Clone AUR repo and build with makepkg"))
-           (cons "abs rebuild"
-                 (cons (lambda () (arch-abs-rebuild name))
-                       "Rebuild in existing abs directory"))
            (cons "mark"
                  (cons #'arch-list-mark          "Add to marked set"))
            (cons "unmark"
@@ -1037,8 +1117,9 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
 (defun arch-list-install-marked ()
   "Install all marked packages."
   (interactive)
-  (let ((names (arch--list-marked-names))
-        (fn (arch-backend-install-fn (or arch--list-backend (arch--default-backend)))))
+  (let* ((names (arch--list-marked-names))
+         (backend (or arch--list-backend (arch--default-backend)))
+         (fn (cdr (assq 'direct (arch-backend-install-methods backend)))))
     (when (null names)
       (user-error "No packages marked"))
     (when (yes-or-no-p (format "Install %d marked packages? " (length names)))
@@ -1066,12 +1147,8 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
                      (let* ((pkg (car e))
                             (name (arch-pkg-name pkg)))
                        (cons name
-                             (format "[%s]  %s  %s  %s"
-                                     (cond
-                                      ((arch-pkg-aur-p pkg) "aur")
-                                      ((plist-get (arch--cache-get name) 'repository))
-                                      ((equal (arch-pkg-repo pkg) "local") "")
-                                      (t (arch-pkg-repo pkg)))
+                             (format "[%s]  %s  (%s)  %s"
+                                     (arch--pkg-repo-display pkg)
                                      (arch--pkg-status pkg)
                                      (or (arch-pkg-version pkg) "")
                                      (or (plist-get (arch--cache-get name) 'description)
@@ -1084,10 +1161,7 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
                 :category 'arch-package
                 :group-name (lambda (n)
                               (when-let* ((pkg (map-elt pkg-index n)))
-                                (cond
-                                 ((arch-pkg-aur-p pkg) "aur")
-                                 ((plist-get (arch--cache-get (arch-pkg-name pkg)) 'repository))
-                                 (t (arch-pkg-repo pkg))))))))
+                                (arch--pkg-repo-display pkg))))))
     (when name
       (goto-char (point-min))
       (while (and (not (eobp))
@@ -1097,15 +1171,26 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
         (forward-line 1)))))
 
 (defun arch-list-install ()
-  "Install the package at point."
+  "Install the package at point, selecting method via `arch--install-dispatch'."
   (interactive)
-  (funcall (arch-backend-install-fn (or arch--list-backend (arch--default-backend)))
-           (arch-pkg-name (arch-list--pkg-at-point))))
+  (arch--install-dispatch (arch-pkg-name (arch-list--pkg-at-point))))
 
-(defun arch-list-abs-install ()
-  "Install the AUR package at point via abs/makepkg."
+(defun arch-list-fetch-info ()
+  "Fetch and cache full info for the package at point; update its list entry.
+Useful for AUR stub entries (version \"<aur>\") added by the widened list."
   (interactive)
-  (arch-abs-install (arch-pkg-name (arch-list--pkg-at-point))))
+  (let* ((pkg (arch-list--pkg-at-point))
+         (name (arch-pkg-name pkg)))
+    (message "arch: fetching info for %s..." name)
+    (arch--cached-info name)
+    (let ((new-entry (arch--build-list-entry pkg arch--marked)))
+      (setq arch--all-entries
+            (seq-map (lambda (e) (if (equal (arch-pkg-name (car e)) name) new-entry e))
+                     arch--all-entries))
+      (unless arch--filter
+        (setq tabulated-list-entries arch--all-entries)))
+    (tabulated-list-print t)
+    (message "arch: info fetched for %s" name)))
 
 (defun arch-list-remove ()
   "Remove the package at point."
@@ -1156,13 +1241,14 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
    ["View"
     ("RET" "Package info"    arch-list-show-info
      :inapt-if-not arch-list--pkg-at-point-p)
+    ("I"   "Fetch info"      arch-list-fetch-info
+     :inapt-if-not arch-list--pkg-at-point-p)
     ("p"   "Find package"    arch-find-package)
     ("/"   "Find in list"    arch-list-find)
     ("w"   "Toggle wide"     arch-list-toggle-wide)
     ("f"   "Filter"          arch-list-filter)
     ("xc"  "Clear filter"    arch-list-filter-clear)
-    ("s"   "Search pacman"   arch-search)
-    ("xy"  "Search yay"      arch-search-yay)
+    ("s"   "Search"          arch-search)
     ("g"   "Refresh"         arch-list-refresh)]
    ["System"
     ("y"  "Sync databases"       arch-sync)
@@ -1174,16 +1260,14 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
 (transient-define-prefix arch-dispatch ()
   "Entry point for Arch Linux package management."
   [["Search"
-    ("s"  "Search (pacman)"  arch-search)
-    ("xy" "Search (yay/AUR)" arch-search-yay)]
+    ("s"  "Search"  arch-search)]
    ["View"
     ("l"  "List installed"    arch-list)
     ("fp" "Find package"      arch-find-package)
     ("i"  "Package info"      arch-show-info)
     ("ki" "Kill info buffers" arch-kill-info-buffers)]
    ["Install"
-    ("xp" "Install (pacman)"  arch-install)
-    ("a"  "AUR abs install"   arch-abs-install)]
+    ("xp" "Install"  arch-install)]
    ["System"
     ("y"  "Sync databases (-Sy)"        arch-sync)
     ("xf" "Force sync (-Syy)"           arch-sync-force)
@@ -1208,13 +1292,16 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
 (defun arch-install (pkg-name)
   "Install PKG-NAME via the default backend, selecting via ACR when interactive."
   (interactive
-   (let* ((pkgs (arch--pacman-list-all))
+   (let* ((backend (arch--default-backend))
+          (pkgs (if-let* ((fn (arch-backend-list-all-fn backend)))
+                    (funcall fn)
+                  (arch--pacman-list-all)))
           (index (map-into (seq-map (lambda (p) (cons (arch-pkg-name p) p)) pkgs)
                            '(hash-table :test equal))))
      (list (annotated-completing-read
             (seq-map (lambda (pkg)
                        (cons (arch-pkg-name pkg)
-                             (format "[%s] %s" (arch-pkg-repo pkg) (arch-pkg-version pkg))))
+                             (format "[%s] (%s)" (arch-pkg-repo pkg) (arch-pkg-version pkg))))
                      pkgs)
             :prompt "Install package: "
             :require-match t
@@ -1222,7 +1309,7 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
             :group-name (lambda (name)
                           (when-let* ((pkg (map-elt index name)))
                             (arch-pkg-repo pkg)))))))
-  (funcall (arch-backend-install-fn (arch--default-backend)) pkg-name))
+  (arch--install-dispatch pkg-name))
 
 ;;;###autoload
 (defun arch-remove (pkg-name)
@@ -1281,10 +1368,9 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
 
 ;;;###autoload
 (defun arch-upgrade-all-yay ()
-  "Upgrade all packages including AUR via yay."
+  "Upgrade all packages including AUR via `arch-aur-backend'."
   (interactive)
-  (let ((backend (or (map-elt arch--backends "yay")
-                     (user-error "yay backend not registered"))))
+  (let ((backend (arch--aur-backend)))
     (when-let* ((fn (arch-backend-upgrade-all-fn backend)))
       (when (yes-or-no-p "Upgrade all packages (including AUR)? ")
         (funcall fn)))))
@@ -1299,7 +1385,12 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
   :info-fn #'arch--pacman-info
   :files-fn #'arch--pacman-files
   :list-fn #'arch--pacman-list
-  :install-fn #'arch--pacman-install
+  :list-all-fn #'arch--pacman-list-all-with-desc
+  :foreign-fn #'arch--foreign-packages
+  :upgradeable-fn #'arch--upgradeable-packages
+  :populate-cache-fn #'arch--pacman-populate-cache
+  :install-methods '((direct . arch--pacman-install))
+  :default-install-method 'direct
   :remove-fn #'arch--pacman-remove
   :upgrade-fn #'arch--pacman-upgrade
   :upgrade-all-fn #'arch--pacman-upgrade-all))
@@ -1313,7 +1404,15 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
     :info-fn #'arch--pacman-info
     :files-fn #'arch--pacman-files
     :list-fn #'arch--pacman-list
-    :install-fn #'arch--yay-install
+    :list-all-fn #'arch--yay-list-all
+    :foreign-fn #'arch--foreign-packages
+    :upgradeable-fn #'arch--upgradeable-packages
+    :populate-cache-fn #'arch--pacman-populate-cache
+    :aur-list-fn #'arch--yay-aur-list
+    :install-methods '((direct  . arch--yay-install)
+                       (abs     . arch-abs-install)
+                       (rebuild . arch-abs-rebuild))
+    :default-install-method nil
     :remove-fn #'arch--yay-remove
     :upgrade-fn #'arch--yay-install
     :upgrade-all-fn #'arch--yay-upgrade-all)))

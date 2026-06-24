@@ -1254,12 +1254,12 @@ entry are still surfaced.  A trailing `-<digits-and-dots>' version
 suffix (as written by package.el) is stripped so the result is
 comparable with `package-alist' keys."
   (when (file-directory-p package-user-dir)
-    (seq-uniq
-     (seq-remove (lambda (it) (memq it builder-package-installed-exclude))
-		 (seq-map #'intern
-			  (seq-map (lambda (it) (replace-regexp-in-string "-[0-9.]+\\'" "" it))
-				   (seq-filter (lambda (it) (file-directory-p (expand-file-name it package-user-dir)))
-					      (directory-files package-user-dir nil "\\`[^.]"))))))))
+    (thread-last (directory-files package-user-dir nil "\\`[^.]")
+      (seq-filter (lambda (it) (file-directory-p (expand-file-name it package-user-dir))))
+      (seq-map (lambda (it) (replace-regexp-in-string "-[0-9.]+\\'" "" it)))
+      (seq-map #'intern)
+      (seq-remove (lambda (it) (memq it builder-package-installed-exclude)))
+      seq-uniq)))
 
 (defun builder-package--declared-use-packages (&optional dir)
   "Return symbols declared via `use-package' in init source files.

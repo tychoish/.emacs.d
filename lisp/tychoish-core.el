@@ -1782,7 +1782,7 @@
 
   (defun flycheck-eldoc (callback &rest _ignored)
     "Print flycheck messages at point by calling CALLBACK." ;; from masteringemacs.org
-    (when-let ((flycheck-errors (and flycheck-mode (flycheck-overlay-errors-at (point)))))
+    (when-let* ((flycheck-errors (and flycheck-mode (flycheck-overlay-errors-at (point)))))
       (mapc
        (lambda (err)
 	 (funcall callback

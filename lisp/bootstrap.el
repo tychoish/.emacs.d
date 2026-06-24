@@ -924,17 +924,16 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (save-some-buffers t t))
 
 (defun buffers-matching-path (regexp &optional internal-too)
-  (thread-last  (buffer-list)
-                (--keep (let* ((buffer it)
-		               (name (buffer-file-name buffer)))
-		          (when (and name (not (string-equal name ""))
-			             (or internal-too (/= (aref name 0) ?\s))
-			             (string-match regexp name))
-		            buffer)))))
+  (seq-filter (lambda (buf)
+                (when-let* ((name (buffer-file-name buf)))
+                  (and (not (string-equal name ""))
+                       (or internal-too (/= (aref name 0) ?\s))
+                       (string-match regexp name))))
+              (buffer-list)))
 
 (defun buffers-matching-mode (mode)
-  (thread-last  (buffer-list)
-                (--select (with-current-buffer it (eq major-mode mode)))))
+  (seq-filter (lambda (buf) (with-current-buffer buf (eq major-mode mode)))
+              (buffer-list)))
 
 (defun kill-buffers-in-directory (&optional directory)
   "Kill all buffers in `directory'. When not defined, a directory can be selected interactively."
@@ -943,15 +942,12 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
   (unless directory
     (setq directory (annotated-completing-read-directory)))
 
-  (let ((killed (thread-last  (buffer-list)
-		              (--filter (buffer-file-name it))
-		              (--select (f-ancestor-of-p directory (buffer-file-name it)))
-		              (--map (cons (buffer-file-name it) (kill-buffer it)))
-		              (--filter (cdr it))
-		              (--keep (car it))
-		              (apply #'append)
-		              (seq-filter 'identity)
-		              (--map (f-collapse-homedir it)))))
+  (let ((killed (thread-last (buffer-list)
+                  (seq-filter #'buffer-file-name)
+                  (seq-filter (lambda (buf) (f-ancestor-of-p directory (buffer-file-name buf))))
+                  (seq-map (lambda (buf) (cons (buffer-file-name buf) (kill-buffer buf))))
+                  (seq-filter #'cdr)
+                  (seq-map (lambda (c) (f-collapse-homedir (car c)))))))
 
     (if (called-interactively-p 'any)
 	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (string-join killed ", "))
@@ -964,10 +960,10 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
       (buffers-matching-path (approximate-project-root))))
    ((and (stringp thing)
 	 (file-exists-p thing))
-    (thread-last  (buffer-list)
-	          (--keep (f-equal-p thing (buffer-file-name it)))
-	          (seq-uniq)
-	          (--flat-map (with-current-buffer it (buffers-matching-path (approximate-project-root))))))))
+    (thread-last (buffer-list)
+      (seq-filter (lambda (buf) (f-equal-p thing (buffer-file-name buf))))
+      seq-uniq
+      (seq-mapcat (lambda (buf) (with-current-buffer buf (buffers-matching-path (approximate-project-root)))))))))
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 
@@ -982,11 +978,12 @@ prefix argument INTERNAL-TOO is non-nil.  Asks before killing
 each buffer, unless NO-ASK is non-nil."
   (interactive "sKill buffers visiting a path matching this regular expression: \n")
   (let* ((buffers (buffers-matching-path regexp internal-too))
-	 (killed (thread-last  buffers
-		               (--map (cons (buffer-file-name it) (funcall (if no-ask 'kill-buffer 'kill-buffer-ask) it)))
-		               (--filter (cdr it))
-		               (--keep (car it))
-		               (apply #'append))))
+	 (killed (thread-last buffers
+                  (seq-map (lambda (buf)
+                             (cons (buffer-file-name buf)
+                                   (funcall (if no-ask #'kill-buffer #'kill-buffer-ask) buf))))
+                  (seq-filter #'cdr)
+                  (seq-map #'car))))
 
     (if (called-interactively-p 'any)
 	(message "killed %d buffers matching '%S'" (length killed) (string-join killed ", "))
@@ -1436,12 +1433,12 @@ interactively then remove duplicate items from the `kill-ring'."
 ;; project.el -- groups of related files
 
 (defun project-find-go-module (dir)
-  (when-let ((root (or (locate-dominating-file dir "go.work")
-                       (locate-dominating-file dir "go.mod"))))
+  (when-let* ((root (or (locate-dominating-file dir "go.work")
+                        (locate-dominating-file dir "go.mod"))))
     (cons 'go-module root)))
 
 (defun project-find-cmake-project (dir)
-  (when-let ((root (locate-dominating-file dir "CMakeLists.txt")))
+  (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
     (cons 'cmake-root root)))
 
 (cl-defmethod project-root ((project (head go-module))) (cdr project))

@@ -354,9 +354,9 @@ the following configuration:
 (when (gui-p)
  (let ((sys (system-name)))
    (cond
-    ((equal "deleuze" sys) (tychoish-setup-font "Source Code Pro" 11))
-	((equal "derrida" sys) (tychoish-setup-font "Source Code Pro" 10))
-	((equal "bakhtin" sys) (tychoish-setup-font "Source Code Pro" 10)))))
+    ((equal "deleuze" sys) (bootstrap-setup-font "Source Code Pro" 11))
+	((equal "derrida" sys) (bootstrap-setup-font "Source Code Pro" 10))
+	((equal "bakhtin" sys) (bootstrap-setup-font "Source Code Pro" 10)))))
 ```
 
   I use different font sizes on my laptop `deleuze` but at the very
@@ -365,16 +365,16 @@ the following configuration:
 
 ```emacs
 (when (gui-p)
-   (tychoish-setup-font "Source Code Pro" 10))
+   (bootstrap-setup-font "Source Code Pro" 10))
 
 (when (gui-p)
-   (tychoish-setup-font "Inconsolata-g" 11))
+   (bootstrap-setup-font "Inconsolata-g" 11))
 
 (when (gui-p)
-   (tychoish-setup-font "Consolas" 11))
+   (bootstrap-setup-font "Consolas" 11))
 ```
 
-  `tychoish-setup-font` also works interactively.
+  `bootstrap-setup-font` also works interactively.
 
 - For using `mu4e` to manage email, in a multi-account setup. I wrote
   a macro, `tychoish-define-mail-account` to add a new account.  I
