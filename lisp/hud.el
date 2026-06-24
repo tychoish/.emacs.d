@@ -258,13 +258,8 @@ the description."
 
 (hud-register-command
  :category 'mu4e
-<<<<<<< HEAD
- :command 'consult-mu-bookmark
  :description "select mu4e bookmark"
-=======
  :command #'consult-mu-bookmark
- :description "select mu4e bookmark to view"
->>>>>>> d0f5d4c (feat: add additional agent shell commands, update descriptions)
  :transient-key "mb")
 
 (hud-register-command
