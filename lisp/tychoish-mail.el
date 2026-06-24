@@ -23,10 +23,12 @@
 (declare-function mu4e-headers-mark-for-unread "mu4e-headers")
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
+(declare-function mu4e-message-field "mu4e-message")
+(declare-function mu4e-message-at-point "mu4e-message")
+(declare-function cape-capf-prefix-length "cape")
 
 (autoload 'annotated-completing-read "annotated-completing-read")
 (autoload 'annotated-completing-read-directory "annotated-completing-read")
-(declare-function cape-capf-prefix-length "cape")
 
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
 (defvar tychoish/mail-accounts-table (make-hash-table :test #'equal))
@@ -91,6 +93,8 @@
    ("r" . mu4e-headers-mark-for-read)))
 
 (with-eval-after-load 'mu4e-headers
+  (add-to-list 'mu4e-headers-actions
+               '("generate refile rule" . tychoish/mail-generate-refile-rule) t)
   (bind-keys
    :map mu4e-headers-mode-map
    ("C-r" . compose-reply-wide-or-not-please-ask)
@@ -104,11 +108,108 @@
 
 (with-eval-after-load 'mu4e-view
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
-  (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish/mail-unsubscribe) t))
+  (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish/mail-unsubscribe) t)
+  (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish/mail-generate-refile-rule) t))
 
+(add-hook 'mu4e-compose-pre-hook #'tychoish/mail-auto-switch-for-reply)
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
 (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
 (add-hook 'mu4e-compose-mode-hook 'tychoish/set-up-message-mode-buffer)
+
+(defconst tychoish/mail--refile-matchable-fields
+  '((:from . address)
+    (:to . address)
+    (:cc . address)
+    (:subject . string)
+    (:maildir . string)
+    (:list . string))
+  "Alist of mu4e message fields available for refile rule generation.")
+
+(eval-and-compile
+  (defvar tychoish/mail--refile-clauses nil
+    "Accumulated refile rule forms built by `tychoish/mail-add-refile-rule'."))
+
+(defmacro tychoish/mail-add-refile-rule (&rest body)
+  "Add a refile rule and rebuild `tychoish/mail-refile-folder'.
+MSG is bound to the current mu4e message in BODY; return a maildir
+folder string or nil to fall through to the next rule."
+  (declare (indent 0))
+  (add-to-list 'tychoish/mail--refile-clauses (cons 'progn body) t)
+  `(defun tychoish/mail-refile-folder (msg)
+     "Return refile folder for MSG by trying each registered rule."
+     (or ,@tychoish/mail--refile-clauses "/archive")))
+
+(defun tychoish/mail-refile-folder (_msg)
+  "Return default refile folder when no rules are defined."
+  "/archive")
+
+(setq mu4e-refile-folder #'tychoish/mail-refile-folder)
+
+(defun tychoish/mail--field-display-value (msg field)
+  "Return a human-readable string for FIELD value in MSG."
+  (let ((val (mu4e-message-field msg field)))
+    (cond
+     ((null val) "(none)")
+     ((and (listp val) (consp (car val)))
+      (mapconcat #'cdr val ", "))
+     ((stringp val) val)
+     (t (format "%S" val)))))
+
+(defun tychoish/mail-generate-refile-rule (&optional msg)
+  "Build a `tychoish/mail-add-refile-rule' form from MSG or the current message.
+Prompts for a field (annotated with the message's current value), a regex
+pattern, and a destination folder.  Puts the resulting form on the kill ring."
+  (interactive)
+  (let* ((msg (or msg (mu4e-message-at-point)
+                  (user-error "No message at point")))
+         (candidates
+          (seq-map (lambda (entry)
+                     (cons (symbol-name (car entry))
+                           (tychoish/mail--field-display-value msg (car entry))))
+                   tychoish/mail--refile-matchable-fields))
+         (field-name (annotated-completing-read candidates
+                      :prompt "Match field: " :require-match t))
+         (field (intern (concat ":" field-name)))
+         (field-type (map-elt tychoish/mail--refile-matchable-fields field))
+         (regex (read-string
+                 (format "Regex (current: %s): "
+                         (tychoish/mail--field-display-value msg field))))
+         (folder (read-string "Refile to folder: " "/"))
+         (body (pcase field-type
+                 ('address
+                  `(when (seq-some (lambda (addr)
+                                     (string-match-p ,regex (cdr addr)))
+                                   (mu4e-message-field msg ,field))
+                     ,folder))
+                 ('string
+                  `(when (string-match-p ,regex
+                                         (or (mu4e-message-field msg ,field) ""))
+                     ,folder)))))
+    (kill-new (pp-to-string `(tychoish/mail-add-refile-rule ,body)))
+    (message "Refile rule copied to kill ring")))
+
+(defun tychoish/mail-test-refile-rules ()
+  "Test all refile rules on the current message and display results."
+  (interactive)
+  (let* ((msg (or (mu4e-message-at-point)
+                  (user-error "No message at point")))
+         (buf (get-buffer-create "*mu4e-refile-test*")))
+    (with-current-buffer buf
+      (erase-buffer)
+      (insert (format "Refile test for: %s\n\n"
+                      (or (mu4e-message-field msg :subject) "(no subject)")))
+      (if (null tychoish/mail--refile-clauses)
+          (insert "No refile rules defined.\n")
+        (seq-map-indexed
+         (lambda (clause i)
+           (let ((result (condition-case err
+                             (eval `(let ((msg ',msg)) ,clause))
+                           (error (format "ERROR: %S" err)))))
+             (insert (format "Rule %d: %s\n" (1+ i) (or result "no match")))))
+         tychoish/mail--refile-clauses))
+      (insert (format "\nFinal result: %s\n"
+                      (tychoish/mail-refile-folder msg))))
+    (display-buffer buf)))
 
 (setq mu4e-bookmarks
       '((:name "unread primary queues to file"
@@ -351,6 +452,20 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
   (let ((select-account-operation (intern account-id)))
     (funcall select-account-operation)))
+
+(defun tychoish/mail-auto-switch-for-reply ()
+  "Auto-switch to the account the parent message was addressed to."
+  (when-let* ((msg mu4e-compose-parent-message)
+              (recipients (append (mu4e-message-field msg :to)
+                                  (mu4e-message-field msg :cc)))
+              (addrs (seq-map (lambda (a) (downcase (cdr a))) recipients))
+              (account-name (map-some
+                             (lambda (name conf)
+                               (when (member (downcase (tychoish/mail-account-address conf))
+                                             addrs)
+                                 name))
+                             tychoish/mail-accounts-table)))
+    (tychoish-mail-select-account account-name)))
 
 (cl-defmacro tychoish-define-mail-account
     (&key name address key id
