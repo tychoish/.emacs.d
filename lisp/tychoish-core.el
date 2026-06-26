@@ -2775,7 +2775,7 @@ Useful after changing `eglot-workspace-configuration' or
   :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
          (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
   :commands (agent-shell-queue-buffer-open
-             agent-shell-queue-enqueue4
+             agent-shell-queue-enqueue
              agent-shell-queue-edit-task
              agent-shell-queue-pause
              agent-shell-queue-resume

@@ -475,9 +475,6 @@ more arguments than the function cares about."
     (recentf-mode 1)
     (savehist-mode 1))
 
-  (with-eval-after-load 'annotated-completing-read
-    (annotated-completing-read-enable-session-save))
-
   (with-eval-after-load 'consult
     (bind-key "C-x C-r" 'consult-recent-file 'global-map)))
 
