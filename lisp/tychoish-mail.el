@@ -25,6 +25,8 @@
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 (declare-function mu4e-message-field "mu4e-message")
 (declare-function mu4e-message-at-point "mu4e-message")
+(declare-function mu4e-contact-email "mu4e-contacts")
+(declare-function mu4e-contact-name "mu4e-contacts")
 (declare-function cape-capf-prefix-length "cape")
 
 (autoload 'annotated-completing-read "annotated-completing-read")
@@ -151,7 +153,11 @@ folder string or nil to fall through to the next rule."
     (cond
      ((null val) "(none)")
      ((and (listp val) (consp (car val)))
-      (mapconcat #'cadr val ", "))
+      (mapconcat (lambda (ct)
+                   (or (mu4e-contact-name ct)
+                       (mu4e-contact-email ct)
+                       "?"))
+                 val ", "))
      ((stringp val) val)
      (t (format "%S" val)))))
 
@@ -178,7 +184,8 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
          (body (pcase field-type
                  ('address
                   `(when (seq-some (lambda (addr)
-                                     (string-match-p ,regex (cadr addr)))
+                                     (when-let* ((email (mu4e-contact-email addr)))
+                                       (string-match-p ,regex email)))
                                    (mu4e-message-field msg ,field))
                      ,folder))
                  ('string
@@ -458,7 +465,11 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
   (when-let* ((msg mu4e-compose-parent-message)
               (recipients (append (mu4e-message-field msg :to)
                                   (mu4e-message-field msg :cc)))
-              (addrs (seq-map (lambda (a) (downcase (cadr a))) recipients))
+              (addrs (seq-filter #'identity
+                                 (seq-map (lambda (a)
+                                            (when-let* ((e (mu4e-contact-email a)))
+                                              (downcase e)))
+                                          recipients)))
               (account-name (map-some
                              (lambda (name conf)
                                (when (member (downcase (tychoish/mail-account-address conf))
