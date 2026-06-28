@@ -463,6 +463,9 @@ more arguments than the function cares about."
   (setq savehist-file (sprite-state-path "history.el"))
   (setq bookmark-default-file (sprite-state-path "bookmarks.el"))
   (setq tramp-persistency-file-name (sprite-state-path "tramp.el"))
+  (setq request-storage-directory (sprite-state-path "request/"))
+  (setq url-configuration-directory (sprite-state-path "url/"))
+  (setq transient-history-file (sprite-state-path "transient-history.el"))
 
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)
