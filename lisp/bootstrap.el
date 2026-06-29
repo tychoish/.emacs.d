@@ -436,6 +436,12 @@ more arguments than the function cares about."
         tab-mark
         newline-mark))
 
+(setq package-archive-priorities '(("melpa"     . 100)
+				   ("elpa"      . 75)
+				   ("nongnu"    . 50)
+				   ("gnu"       . 25)
+				   ("jcs-elpa"  . 10)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; id-state -- emacs daemon/instance identification for state config
@@ -503,7 +509,7 @@ more arguments than the function cares about."
     (setq desktop-dirname (file-name-concat user-emacs-directory sprite--conf-state-directory))
     (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-    (setq desktop-path (list desktop-dirname user-emacs-directory user-home-directory))
+    (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~/")))
 
     (if (daemonp)
         (setq desktop-restore-frames nil
@@ -1464,6 +1470,9 @@ interactively then remove duplicate items from the `kill-ring'."
 (defun bootstrap-set-notes-directory (&optional path)
   (when path
     (setq local-notes-directory (expand-file-name path)))
+
+  (unless local-notes-directory
+    (error "must have defined the `local-notes-directory'"))
 
   (setq org-directory (file-name-concat local-notes-directory "org"))
   (setq org-agenda-files (thread-last (list org-directory user-org-directories)

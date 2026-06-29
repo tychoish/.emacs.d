@@ -1361,7 +1361,7 @@
               ("r" . denote-rename-file)
               ("d" . denote-dired))
   :config
-  (setq denote-directory (file-name-concat local-notes-directory "denote"))
+  (setq denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-id-format "%Y-%m-%d.%H%M%S")
   (setq denote-date-format "%Y-%m-%d")
   (setq denote-known-keywords '("org" "project" "reference" "journal" "idea"))
@@ -2679,7 +2679,7 @@ Useful after changing `eglot-workspace-configuration' or
     (setq agent-shell-omp-environment
 	  (agent-shell-make-environment-variables
 	   "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
-	   "OMP_DOCS_DIR" (file-name-concat local-notes-directory "omp" "projects"))))
+	   "OMP_DOCS_DIR" (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "omp" "projects"))))
 
   (defun tychoish/agent-shell-toggle-terse-output ()
     "Toggle terse agent output on or off and update the running environment."

@@ -1,4 +1,10 @@
-;; -*- lexical-binding: t; -*-
+;;; early-init.el --- GC suppression, native-comp, frame defaults -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Macro utilities for startup optimization (with-gc-suppressed, with-slow-op-timer, etc.),
+;; native compilation settings, and early frame configuration.
+
+;;; Code:
 (defmacro with-gc-suppressed (&rest body)
   `(let ((gc-cons-threshold 800000000000000)
          (gc-cons-percentage 1.0))
@@ -48,3 +54,6 @@ Turns `with-slow-op-timer' from a noop to reporting on the duration of enclosed 
   (setq native-comp-async-report-warnings-errors 'silent)
   (setq native-comp-jit-compilation t)
   (setq native-compile-prune-cache t))
+
+(provide 'early-init)
+;;; early-init.el ends here
