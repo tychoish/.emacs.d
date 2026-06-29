@@ -12,9 +12,6 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'xtdlib))
-
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
 
@@ -24,9 +21,19 @@
 ;; (setq use-package-compute-statistics t)
 ;; (setq use-package-minimum-reported-time 0.005)
 
+(use-package s
+  :ensure t :demand t)
+(use-package dash
+  :ensure t :demand t)
+(use-package cond-let
+  :ensure t)
+(use-package fn
+  :ensure t :demand t)
+(use-package delight
+  :ensure t :demand t)
+
 (use-package async
   :ensure t
-  :defer t
   :delight
   (async-bytecomp-package-mode "")
   (dired-async-mode "")
@@ -1224,19 +1231,6 @@
   :defines (telega-chat-mode-hook)
   :bind-keymap (("C-c v" . telega-prefix-map)
 		("C-c n" . telega-prefix-map))
-  :bind (:map telega-prefix-map
-	      :prefix "d"
-	      :prefix-map tychoish/telega-buffer-management-map
-	      ("h" . telega-extras-bury-chat-buffers)
-	      ("k" . telega-extras-kill-chat-buffers)
-	      :map telega-chat-mode-map
-	      ("C-c C-f" . telega-chat-buffer-auto-fill)
-	      :map telega-root-mode-map
-	      ("C-c C-f" . telega-root-buffer-auto-fill)
-	      ("<tab>" . telega-extras-root-cycle-next)
-	      ("h" . telega-extras-bury-chat-buffers)
-	      ("C-k" . telega-extras-kill-chat-buffers)
-	      ("d" . telega-extras-disconnect))
   :commands (telega
 	     telega-chat-mode
 	     telega-extras-switch-to-root
@@ -1245,11 +1239,26 @@
   :init
   (which-key-customize "telega-prefix" :key "C-c n")
   (which-key-customize "telega-prefix" :key "C-c v")
+  :config
+  (bind-keys
+   :map telega-prefix-map
+   :prefix "d"
+   :prefix-map tychoish/telega-buffer-management-map
+   ("h" . telega-extras-bury-chat-buffers)
+   ("k" . telega-extras-kill-chat-buffers)
+   :map telega-chat-mode-map
+   ("C-c C-f" . telega-chat-buffer-auto-fill)
+   :map telega-root-mode-map
+   ("C-c C-f" . telega-root-buffer-auto-fill)
+   ("<tab>" . telega-extras-root-cycle-next)
+   ("h" . telega-extras-bury-chat-buffers)
+   ("C-k" . telega-extras-kill-chat-buffers)
+   ("d" . telega-extras-disconnect))
+
   (make-read-extended-command-for-prefix "telega"
     :bind-map telega-prefix-map
     :bind-key "x"
     :key-alias "telega-commands")
-  :config
   (add-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
 
   (when (eq system-type 'darwin)
@@ -1973,22 +1982,6 @@
       (shell-command cmd-str)))
   (setq path-to-ctags (executable-find "ctags"))
   (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; emacs lisp static analysis
-
-;; (use-package relint
-;;   :ensure t
-;;   :commands (relint-file relint-directory relint-current-buffer))
-
-;; (use-package package-lint
-;;   :ensure t
-;;   :commands (package-lint-current-buffer package-lint-batch-and-exit))
-
-;; (use-package elisp-lint
-;;   :ensure t
-;;   :commands (elisp-lint-file))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

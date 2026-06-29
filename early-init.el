@@ -10,6 +10,13 @@
   `(let ((file-name-handler-alist nil))
      ,@body))
 
+(defmacro with-silence (&rest body)
+  "Suppress all messages from the minibuffer and the *Messages* buffer."
+  (declare (indent defun) (debug t))
+  `(let ((inhibit-message t)
+         (message-log-max nil))
+     ,@body))
+
 (defvar slow-op-reporting debug-on-error
   "A toggle that, when enabled is supports more verbose timing reporting.
 Turns `with-slow-op-timer' from a noop to reporting on the duration of enclosed operations.")

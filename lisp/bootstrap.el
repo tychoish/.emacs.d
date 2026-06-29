@@ -1,9 +1,9 @@
-;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
+;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; no-byte-compile: t -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
 ;; Version: 1.0-pre
-;; Package-Requires: ((emacs "24.4"))
+;; Package-Requires: ((emacs "24.4") (xtdlib "0.1"))
 ;; Keywords: internal maint emacs startup dotemacs config
 ;; Homepage: https://github.com/bootstrap-.eamcs.d
 
@@ -33,10 +33,14 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'xtdlib))
+(use-package f
+  :ensure t)
+
+(use-package ht
+  :ensure t)
+
+(require 'xtdlib)
 (require 'sprite)
-(require 'fn)
-(require 'dash)
 (require 'subr-x)
 (require 'map)
 
@@ -293,6 +297,9 @@ more arguments than the function cares about."
 (which-key-customize '("project-grep" . tychoish/ecclectic-grep-project-map)
   :map tychoish/ecclectic-grep-map :key "p")
 
+(make-read-extended-command-for-prefix  "clipboard"
+  :bind-key "C-x x c")
+
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
@@ -428,9 +435,6 @@ more arguments than the function cares about."
         space-mark
         tab-mark
         newline-mark))
-
-(make-read-extended-command-for-prefix  "clipboard"
-  :bind-key "C-x x c")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -580,6 +584,8 @@ more arguments than the function cares about."
        (defun ,operation ()
 	 (setq ,variable (current-time))))))
 
+(create-toggle-functions slow-op-reporting)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
@@ -713,10 +719,10 @@ more arguments than the function cares about."
 
 (defun bootstrap-load-abbrev-files ()
   (thread-last  (f-entries (file-name-concat user-emacs-directory "abbrev"))
-                (--filter (f-ext-p it "el"))
+                (seq-filter (lambda (it) (f-ext-p it "el")))
                 (seq-filter #'file-exists-p)
                 (seq-filter #'should-read-abbrev-file-p)
-                (--map (let ((path it) (quietly t)) (read-abbrev-file path quietly) path))
+                (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
                 (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it) (f-mtime it)))))
 
   (delight 'abbrev-mode "abb")
@@ -740,13 +746,15 @@ more arguments than the function cares about."
       (make-directory path))
     (chmod path #o700)))
 
+
+
 (defun bootstrap-set-up-ephemeral-instance-file-locks ()
-  (let* ((run-path (format "/run/user/%d" (user-uid)))
-	 (path (cond
-		((f-when-file-exists run-path))
-		((f-when-file-exists "/var/tmp"))
-		((f-when-file-exists (temporary-file-directory)))))
+  (let* ((path (car (thread-last (list (format "/run/user/%d" (user-uid))
+				       "/var/tmp"
+				       (temporary-file-directory))
+				 (seq-filter #'file-exists-p))))
 	 (solo-lock-path (file-name-concat path (format "emacs-%d" (emacs-pid)))))
+
     (setq lock-file-name-transforms
           `(("\\`/.*/\\([^/]+\\)\\'" ,(concat solo-lock-path "\\1") t)))
 
@@ -783,7 +791,7 @@ Returns the list of files that were recompiled."
 
 (defun async-package-operation (op pkgs)
   (let* ((ops '(install upgrade 'reinstall))
-	 (valid-packages (--filter (or (symbolp it) (package-desc-p it)) pkgs))
+	 (valid-packages (seq-filter (lambda (it) (or (symbolp it) (package-desc-p it))) pkgs))
 	 (filename (concat (file-name-concat temporary-file-directory
 			                     (string-join (list
 						           "emacs" sprite-instance-id
@@ -1054,7 +1062,6 @@ when called non-interactively."
     (kill-line)
     (abort-minibuffers)))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; buffer/frame management -- helper functions.
@@ -1083,7 +1090,7 @@ when called non-interactively."
   (with-current-buffer (or (when (bufferp buffer) buffer)
 			   (when (and (stringp buffer) (get-buffer buffer)) buffer)
 			   (current-buffer))
-    (apply #'run-mode-hooks (--keep (append (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
+    (apply #'run-mode-hooks (seq-keep (lambda (it) (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
 
 (defun buffer-directory (buf)
   "Return the `default-directory' of the provide buffer."
@@ -1200,68 +1207,6 @@ when called non-interactively."
 	     wrapping-mode
 	     (buffer-local-value 'major-mode buf)
 	     (buffer-name buf))))
-
-(disabled
- (advice-add 'set-fill-column :around #'ad:set-fill-column-locally)
-
- (defun ad:set-fill-column-locally (f &rest arg)
-   (let ((had-default (default-boundp 'fill-column))
-	 (previous-default (default-value 'fill-column))
-	 (new-value (apply f arg)))
-     (when had-default
-       (setq-default fill-column previous-default))
-     (setq-local fill-column new-value)))
-
- (defun bootstrap--vfc-fill-column-watcher (_sym _newval op where)
-   "Re-apply visual-fill-column-mode when fill-column is set in an active buffer."
-   (when (and (eq op 'set) (buffer-live-p where))
-     (with-current-buffer where
-       (when (bound-and-true-p visual-fill-column-mode)
-         (visual-fill-column-mode 0)))))
-
- (add-variable-watcher 'fill-column #'bootstrap--vfc-fill-column-watcher)
-
- (defconst bootstrap--vfc-heading-patterns
-   '((org-mode      . "^\\*+\\s-")
-     (markdown-mode . "^#+\\s-"))
-   "Alist mapping major-mode symbols to heading regexp patterns.")
-
- (defconst bootstrap--vfc-wrap-prefix
-   (propertize " " 'display '(space :width 9999))
-   "wrap-prefix value that pushes continuation lines off-screen.
-A fixed large integer is used; (frame-width) would be more precise during
-export but adds complexity with no interactive benefit.")
-
- (defun bootstrap--vfc-jit-lock (start end)
-   "Apply heading truncation wrap-prefix in the region START to END."
-   (let ((pattern (cdr (assq major-mode bootstrap--vfc-heading-patterns))))
-     (when pattern
-       (save-excursion
-         (goto-char start)
-         (beginning-of-line)
-         (while (< (point) end)
-           (when (looking-at pattern)
-             (put-text-property (line-beginning-position)
-				(line-end-position)
-				'wrap-prefix bootstrap--vfc-wrap-prefix))
-           (forward-line 1))))))
-
- (define-minor-mode bootstrap-vfc-heading-truncation-mode
-   "Simulate truncation on heading lines when visual-fill-column is active."
-   :lighter nil
-   (if bootstrap-vfc-heading-truncation-mode
-       (progn
-         (jit-lock-register #'bootstrap--vfc-jit-lock)
-         (jit-lock-refontify))
-     (jit-lock-unregister #'bootstrap--vfc-jit-lock)
-     (with-silent-modifications
-       (remove-text-properties (point-min) (point-max) '(wrap-prefix nil)))))
-
- (add-hook 'visual-fill-column-mode-hook
-           (lambda ()
-             (when (assq major-mode bootstrap--vfc-heading-patterns)
-               (bootstrap-vfc-heading-truncation-mode
-		(if (bound-and-true-p visual-fill-column-mode) 1 -1))))))
 
 (defun unfill-region (begin end)
   "Remove all linebreaks in a region but leave paragraphs
@@ -1497,7 +1442,7 @@ interactively then remove duplicate items from the `kill-ring'."
          (interactive)
          (setq-local gptel-model ,model)
          ,(when api-key
-            `(setq-local gptel-api-key (fn ,api-key)))
+            `(setq-local gptel-api-key (lambda () ,api-key)))
          (setq-local gptel-backend ,backend)
          (message "[gptel] set backend to %s for the local buffer" ,name))
 
@@ -1506,7 +1451,7 @@ interactively then remove duplicate items from the `kill-ring'."
          (interactive)
          (setq-default gptel-model ,model)
          ,(when api-key
-            `(setq-default gptel-api-key (fn ,api-key)))
+            `(setq-default gptel-api-key (lambda () ,api-key)))
          (setq-default gptel-backend ,backend)
          (message "[gptel] set default backend to %s" ,name))
 
@@ -1771,8 +1716,6 @@ BODY is skipped."
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
-(create-toggle-functions slow-op-reporting)
-
 (declare-function magit-list-module-paths "magit-submodule")
 (declare-function magit-run-git "magit-process")
 
@@ -1818,20 +1761,12 @@ a non-git or partial bootstrap installation."
   (let ((root (expand-file-name user-emacs-directory)))
     (when (bootstrap--git-repo-p root)
       (when-let* ((missing (bootstrap--emacs-conf-uninstalled-submodules)))
-        (display-warning
-         'bootstrap--emacs-conf-submodules
-         (format "uninstalled submodules in %s: %s\nrun: (cd %s && git submodule update --init %s)"
+        (message "uninstalled submodules in %s: %s — run: (cd %s && git submodule update --init %s)"
                  root
                  (mapconcat #'identity missing " ")
                  root
                  (mapconcat #'identity missing " "))
-         :warning)
         missing))))
-
-(add-lazy-init
- :name "<bootstrap> check submodules"
- :delay 5
- :operation #'bootstrap--emacs-conf-check-submodules)
 
 (defun bootstrap--emacs-conf-pull-submodules ()
   "Run `git pull origin' in each submodule of `user-emacs-directory'.

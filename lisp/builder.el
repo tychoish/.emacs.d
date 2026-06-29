@@ -1005,6 +1005,104 @@ call `builder-add-candidates'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; org-babel -- execute source blocks in org files
+
+(defun builder--org-babel-select-file ()
+  "Prompt for an org file to execute.
+Candidates are open org-mode buffers first, then `org-agenda-files'.
+Falls back to `read-file-name' when the candidate list is empty."
+  (let* ((open-org (thread-last (buffer-list)
+                     (seq-filter (lambda (b)
+                                   (with-current-buffer b
+                                     (and (derived-mode-p 'org-mode)
+                                          (buffer-file-name)))))
+                     (seq-map #'buffer-file-name)))
+         (agenda (ignore-errors
+                   (seq-filter #'file-exists-p (org-agenda-files))))
+         (candidates (seq-uniq (append open-org agenda)))
+         (choice (if candidates
+                     (completing-read "Execute org file: " candidates)
+                   (read-file-name "Execute org file: " default-directory
+                                   nil t nil
+                                   (lambda (f)
+                                     (or (file-directory-p f)
+                                         (string-suffix-p ".org" f)))))))
+    (if (file-name-absolute-p choice)
+        choice
+      (expand-file-name choice default-directory))))
+
+;;;###autoload
+(defun builder-org-babel-execute-file (&optional file)
+  "Execute all Babel source blocks in FILE without confirmation prompts.
+When FILE is nil and the current buffer is `org-mode', execute it directly.
+Otherwise prompt via `builder--org-babel-select-file' over open org buffers
+and `org-agenda-files', falling back to `read-file-name'.
+Buffers already visiting the file before this call are left open afterwards."
+  (interactive)
+  (let* ((target (or file
+                     (if (derived-mode-p 'org-mode)
+                         (buffer-file-name)
+                       (builder--org-babel-select-file))))
+         (already-open (find-buffer-visiting target))
+         (buf (or already-open (find-file-noselect target))))
+    (with-current-buffer buf
+      (let ((org-confirm-babel-evaluate nil))
+        (org-babel-execute-buffer)))
+    (unless already-open
+      (kill-buffer buf))))
+
+;;;###autoload
+(defun builder-org-babel-execute-directory (directory)
+  "Execute all Babel source blocks in every .org file under DIRECTORY.
+Calls `builder-org-babel-execute-file' on each file found by
+`directory-files-recursively'."
+  (interactive (list (read-directory-name "Execute org files in: ")))
+  (seq-do #'builder-org-babel-execute-file
+          (directory-files-recursively directory "\\.org\\'")))
+
+(builder-register-candidates
+ :name "org-babel-file"
+ :pipeline
+ (when-let* ((filename (buffer-file-name))
+             (_ (derived-mode-p 'org-mode))
+             (short-name (f-collapse-homedir filename))
+             (basename (file-name-nondirectory filename))
+             (directory (f-dirname filename)))
+   (-l (make-builder-candidate
+        :name (format "org-babel-execute %s (emacsclient)" basename)
+        :command (format "emacsclient --eval '(builder-org-babel-execute-file \"%s\")'" filename)
+        :directory directory
+        :annotation (format "execute all babel blocks in %s via emacsclient" short-name)
+        :priority 0)
+       (make-builder-candidate
+        :name (format "org-babel-execute %s (fresh emacs)" basename)
+        :command (format "emacs --org-exec %s" (shell-quote-argument filename))
+        :directory directory
+        :annotation (format "execute all babel blocks in %s in a fresh Emacs" short-name)
+        :priority 0))))
+
+(builder-register-candidates
+ :name "org-babel-directory"
+ :pipeline
+ (when-let* ((_ (derived-mode-p 'org-mode))
+             (org-files (seq-filter (lambda (f) (string-suffix-p ".org" f))
+                                    (f-files project-root-directory nil t)))
+             (_ org-files))
+   (-l (make-builder-candidate
+        :name (format "org-babel-execute <%s> (emacsclient)" project-name)
+        :command (format "emacsclient --eval '(builder-org-babel-execute-directory \"%s\")'"
+                         project-root-directory)
+        :directory project-root-directory
+        :annotation (format "execute all org babel blocks in %s via emacsclient" project-name))
+       (make-builder-candidate
+        :name (format "org-babel-execute <%s> (fresh emacs)" project-name)
+        :command (format "emacs --org-exec-dir %s"
+                         (shell-quote-argument project-root-directory))
+        :directory project-root-directory
+        :annotation (format "execute all org files in %s in a fresh Emacs" project-name)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;; emacs-lisp -- package operations (test/compile/build/clean)
 ;;
 ;; These commands operate on an "elisp package" rooted at

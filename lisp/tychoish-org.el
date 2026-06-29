@@ -9,6 +9,10 @@
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")
 
+(use-package org-contrib
+  :ensure t
+  :defer t)
+
 (defconst tychoish/org-date-spec-datetime "<%Y-%02m-%02d %02H:%02M:%02S %Z>")
 (defconst tychoish/org-date-spec-date "<%Y-%02m-%02d>")
 
