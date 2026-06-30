@@ -1467,5 +1467,39 @@ PACKAGES to `package-selected-packages' and echoes the result."
         :directory project-root-directory
         :annotation (format "remove compiled .elc files via Cask for %s" project-name)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; docker -- CI test runner
+
+;;;###autoload
+(defun tychoish-run-ci-tests-docker ()
+  "Run CI tests for the current project in a Docker container.
+Detects whether a Cask file is present in the project root to
+select the appropriate silex/emacs image and test invocation.
+With Cask: uses the \"-ci\" image variant and runs
+\"cask install && cask exec ert-runner test/test-*.el\".
+Without Cask: uses the plain image and runs emacs in batch mode
+to load test files found under test/ and run ert."
+  (interactive)
+  (let* ((root (file-name-as-directory (approximate-project-root)))
+         (project-name (file-name-nondirectory (directory-file-name root)))
+         (has-cask (f-file-p (f-join root "Cask")))
+         (image (if has-cask
+                    "silex/emacs:30.2-ci-cask"
+                  "silex/emacs:30.2"))
+         (test-command (if has-cask
+                           "cask install && cask exec ert-runner test/test-*.el"
+                         "emacs --batch -L . $(find test -name '*.el' | sed 's/^/-l /') -f ert-run-tests-batch-and-exit"))
+         (command (format "docker run --rm -v %s:/workspace -w /workspace %s bash -c %s"
+                          (shell-quote-argument (directory-file-name root))
+                          image
+                          (shell-quote-argument test-command)))
+         (buf-name (format "*%s-docker-ci*" project-name))
+         (default-directory root))
+    (compilation-start
+     command
+     'compilation-mode
+     (compile-buffer-name buf-name))))
+
 (provide 'builder)
 ;;; builder.el ends here
