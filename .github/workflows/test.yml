@@ -30,14 +30,11 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install dependencies
-        run: cask install
-
-      - name: Remove stale byte-compiled files
-        run: find elpa -name "*.elc" -delete
-
-      - name: Run tests
-        run: cask exec ert-runner test/test-*.el
+      - run: apt-get update
+      - run: apt-get install -y aspell aspell-en
+      - run: cask install
+      - run: find elpa -name "*.elc" -delete
+      - run: cask exec ert-runner test/test-*.el
 
   integration:
     runs-on: ubuntu-latest
@@ -59,14 +56,8 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install system dependencies
-        run: apt-get install -y aspell aspell-en
-
-      - name: Link repo as ~/.emacs.d
-        run: ln -sf "$GITHUB_WORKSPACE" ~/.emacs.d
-
-      - name: Remove stale byte-compiled files
-        run: find ~/.emacs.d/elpa -name "*.elc" -delete
-
-      - name: Run integration tests
-        run: emacs --fg-daemon --eval '(bootstrap-run-ci-tests)'
+      - run: apt-get update
+      - run: apt-get install -y aspell aspell-en
+      - run: ln -sf "$GITHUB_WORKSPACE" ~/.emacs.d
+      - run: find ~/.emacs.d -name "*.elc" -delete
+      - run: emacs --fg-daemon --eval '(bootstrap-run-ci-tests)'
