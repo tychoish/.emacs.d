@@ -22,15 +22,23 @@
 ;; (setq use-package-minimum-reported-time 0.005)
 
 (use-package s
-  :ensure t :demand t)
+  :ensure t
+  :demand t)
 (use-package dash
-  :ensure t :demand t)
+  :ensure t
+  :demand t)
 (use-package cond-let
   :ensure t)
 (use-package fn
-  :ensure t :demand t)
+  :ensure t
+  :demand t)
 (use-package delight
-  :ensure t :demand t)
+  :ensure t
+  :demand t)
+
+(use-package uuidgen
+  :ensure t
+  :commands (uuidgen))
 
 (use-package async
   :ensure t
@@ -49,6 +57,22 @@
   :ensure t
   :commands (package-build-archive package-build-all))
 
+(use-package annotated-completing-read
+  :ensure nil
+  :load-path "external/annotated-completing-read"
+  :commands (annotated-completing-read
+	     annotated-completing-read-context-from-point
+	     annotated-completing-read-directory))
+
+(use-package sprite
+  :load-path "external/sprite"
+  :ensure nil
+  :commands (sprite-list sprite-create sprite-open-frame
+			 sprite-get-next sprite-get-or-create-next)
+  :config
+  (add-to-list 'mode-line-misc-info '(:eval (format " [%s]" (sprite--mode-line-string))))
+  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
+
 (use-package hud
   :ensure nil
   :commands (hud-menu hud-select)
@@ -57,6 +81,27 @@
 	 :map tychoish/core-map
          ("m" . hud-menu)
          ("," . hud-select)))
+
+(use-package arch
+  :ensure nil
+  :commands (arch-cache-drop
+             arch-cache-reload
+             arch-dispatch
+             arch-find-package
+             arch-install
+             arch-kill-info-buffers
+             arch-list
+             arch-remove
+             arch-search
+             arch-show-info
+             arch-sync
+             arch-sync-force
+             arch-upgrade
+             arch-upgrade-all
+             arch-upgrade-all-yay
+             arch-upgrade-system
+             arch-abs-install
+             arch-abs-rebuild))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -288,7 +333,7 @@
     (interactive "P")
     (let ((context (or context current-prefix-arg)))
       (consult-ripgrep
-       (or (awhen directory (string-trim directory))
+       (or (when directory (string-trim directory))
 	   (annotated-completing-read-directory)
 	   (annotated-completing-read--project-root))
        (if (and (or context (not initial)) (not (eq context 'override)))
@@ -1095,12 +1140,11 @@
 
 (use-package magit-dash
   :load-path "external/magit-dash"
-  :bind
-    (:map tychoish/magit-map
-	  ("d" . magit-dash-open)
-	  ("o" . magit-dash-open-repo)
-	  :map magit-mode-map
-	  ("C-c C-d" . magit-dash-open-other-window))
+  :bind (:map tychoish/magit-map
+         ("d" . magit-dash-open)
+	 ("o" . magit-dash-open-repo)
+	 :map magit-mode-map
+	 ("C-c C-d" . magit-dash-open-other-window))
   :commands (magit-dash-view magit-dash-gh-pr-dashboard-open)
   :config
   (require 'magit-gh)
@@ -2351,167 +2395,6 @@ Useful after changing `eglot-workspace-configuration' or
    :map tychoish/robot-gptel-map
    ("a" . gptel-agent)))
 
-(use-package copilot
-  :ensure t
-  :bind (:map tychoish/robot-map ;; "C-c r"
-	      :prefix "c"
-	      :prefix-map tychoish/robot-copilot-map ;; "C-c r c"
-	      ("s" . copilot-complete)
-	      ("g" . copilot-clear-overlay)
-	      :map tychoish/completion-map
-	      ("r" . copilot-complete)
-	      :map copilot-completion-map
-	      ("C-c a" . copilot-accept-completion)
-	      ("C-c l" . copilot-accept-completion-by-line)
-	      ("C-c w" . copilot-accept-completion-by-word)
-	      ("C-c n" . copilot-next-completion)
-	      ("C-c p" . copilot-previous-completion)
-	      ("C-c C-i" . copilot-insert-completion))
-  :commands (copilot-login copilot-mode)
-  :config
-  (add-to-list 'copilot-major-mode-alist '("rustic-mode" . "rust"))
-  (add-to-list 'copilot-major-mode-alist '("go-ts-mode" . "go"))
-  (add-to-list 'copilot-major-mode-alist '("c-ts-mode" . "c"))
-  (add-to-list 'copilot-major-mode-alist '("c++-ts-mode" . "cpp"))
-  (add-to-list 'copilot-major-mode-alist '("python-ts-mode" . "python"))
-  (add-to-list 'copilot-major-mode-alist '("yaml-mode" . "yaml"))
-  (add-to-list 'copilot-major-mode-alist '("bash-ts-mode" . "shellscript")))
-
-(use-package copilot-chat
-  :ensure t
-  :bind (:map tychoish/robot-copilot-map ;; "C-c r c"
-	      ("m" . copilot-chat-transient)
-	      ("t" . copilot-chat))
-  :config
-  (setq copilot-chat-frontend 'markdown)
-  (setq copilot-chat-follow t)
-  (setq copilot-chat-markdown-prompt "##"))
-
-(use-package aidermacs
-  :ensure t
-  :commands (aidermacs-transient-menu)
-  :init
-  (bind-keys
-   :map tychoish/robot-map
-   :prefix "a"
-   :prefix-map tychoish/robot-aider-map
-   ("m" . aidermacs-transient-menu))
-  (make-read-extended-command-for-prefix "aidermacs"
-    :bind-map tychoish/robot-aider-map
-    :bind-key "x")
-  (make-read-extended-command-for-prefix "aidermacs-model"
-    :bind-map tychoish/robot-aider-map
-    :bind-key "l")
-  :config
-  (setq aidermacs-default-chat-mode 'architect)
-  (setq aidermacs-program "aider")
-
-  (with-toggle-once tychoish/aider-setup-state
-    (when (boundp 'anthropic-api-key)
-      (setenv "ANTHROPIC_API_KEY" anthropic-api-key)
-      (message "[robots]: set environment variable for anthropic"))
-
-    (when (boundp 'gemini-api-key)
-      (setenv "GEMINI_API_KEY" gemini-api-key)
-      (message "[robots]: set environment variable for gemini"))
-
-    (when (boundp 'openai-api-key)
-      (setenv "OPENAI_API_KEY" openai-api-key)
-      (message "[robots]: set environment variable for OpenAI"))
-
-    (when-let* ((uv-bin-path (expand-file-name "~/.local/bin"))
-		(_ (file-exists-p uv-bin-path))
-		(aider-bin-path (f-join uv-bin-path "aider"))
-		(_ (file-exists-p aider-bin-path))
-		(search-path (getenv "PATH")))
-
-      (unless (s-contains-p uv-bin-path search-path)
-	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
-
-      (add-to-list 'exec-path uv-bin-path)))
-  (tychoish/aider-setup-state)
-  (defvar aidermacs-model-settings-path (f-join user-emacs-directory "aider.model.settings.yml"))
-
-  (mapc (make-add-to-list-fn aidermacs-extra-args :append t)
-	(list (concat "--input-history-file=" (sprite-state-path "aider.input-history.md"))
-	      (concat "--chat-history-file=" (sprite-state-path "aider.chat-history.md"))
-	      (concat "--model-settings-file=" aidermacs-model-settings-path)
-	      "--editor-edit-format=udiff" "--edit-format=udiff"
-	      "--notifications" "--cache-prompts"))
-
-  (make-aidermacs-model-selection-function
-   :name "claude-max"
-   :default-model "anthropic/claude-sonnet-4-5"
-   :architect-model "anthropic/claude-opus-4-5")
-
-  (make-aidermacs-model-selection-function
-   :name "claude-sonnet"
-   :default-model "anthropic/claude-sonnet-4-5"
-   :weak-model "anthropic/claude-haiku-4-5")
-
-  (make-aidermacs-model-selection-function
-   :name "gpt-4o"
-   :default-model "opeani/gpt-4o-mini"
-   :architect-model "openai/gpt-4o")
-
-  (make-aidermacs-model-selection-function
-   :name "gpt-4"
-   :default-model "opeani/gpt-4o"
-   :weak-model "opeani/gpt-4o-mini"
-   :architect-model "opeani/gpt-4.5-preview")
-
-  (make-aidermacs-model-selection-function
-   :name "gpt-5"
-   :default-model "opeani/gpt-5"
-   :architect-model "opeani/gpt-5.2"
-   :weak-model "opeani/gpt-5-nano")
-
-  (make-aidermacs-model-selection-function
-   :name "gpt-5-mini"
-   :default-model "opeani/gpt-5-mini"
-   :weak-model "opeani/gpt-5-nano")
-
-  (make-aidermacs-model-selection-function
-   :name "gemini-2"
-   :default-model "gemini/gemini-2.5-flash"
-   :architect-model "gemini/gemini-2.5-pro"
-   :weak-model "gemini/gemini-2.5-flash-lite")
-
-  (make-aidermacs-model-selection-function
-   :name "gemini"
-   :default-model "gemini/gemini-flash-latest"
-   :architect-model "gemini/gemini-pro")
-
-  (make-aidermacs-model-selection-function
-   :name "gemini-3-flash"
-   :default-model "gemini/gemini-3-flash-preview")
-
-  (make-aidermacs-model-selection-function
-   :name "copilot-gemini" :copilot 'use-copilot
-   :default-model "github_copilot/gemini-2.5-pro")
-
-  (make-aidermacs-model-selection-function
-   :name "copilot-gpt-4o" :copilot 'use-copilot
-   :default-model "github_copilot/gpt-4o-mini"
-   :architect-model "github_copilot/gpt-4o")
-
-  (make-aidermacs-model-selection-function
-   :name "copilot-gpt-5" :copilot 'use-copilot
-   :default-model "github_copilot/gpt-5-mini"
-   :architect-model "github_copilot/gpt-5.2"
-   :weak-model "github_copilot/gpt-5-nano")
-
-  (make-aidermacs-model-selection-function
-   :name "copilot-claude" :copilot 'use-copilot
-   :default-model "github_copilot/claude-sonnet-4.5"
-   :architect-model "github_copilot/claude-opus-4.5"
-   :weak-model "github_copilot/claude-haiku-4.5")
-
-  (make-aidermacs-model-selection-function
-   :name "copilot-claude-sonnet" :copilot 'use-copilot
-   :default-model "github_copilot/claude-sonnet-4.5"
-   :weak-model "github_copilot/claude-haiku-4.5"))
-
 (use-package claude-code-ide
   :load-path "external/claude-code-ide"
   ;; :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
@@ -2543,21 +2426,6 @@ Useful after changing `eglot-workspace-configuration' or
 
   (claude-code-ide-emacs-tools-setup))
 
-(use-package vterm
-  :ensure t
-  :defer t
-  :init
-  (bind-keys
-   :map tychoish/shell-map
-   :prefix "v"
-   :prefix-map tychoish/shell-vterm-map
-   ("v" . vterm)
-   ("e" . vterm-send-escape))
-
-  (make-read-extended-command-for-prefix "vterm"
-    :bind-key "m"
-    :bind-map tychoish/shell-vterm-map))
-
 (use-package eat
   :ensure t
   :commands (eat eat-project eat-other-window eat-project-other-window)
@@ -2570,22 +2438,21 @@ Useful after changing `eglot-workspace-configuration' or
    ("o" . eat-other-window)
    ("p" . eat-project)
    ("P" . eat-project-other-window))
-
   (make-read-extended-command-for-prefix "eat"
     :bind-map tychoish/shell-eat-map
     :bind-key "m"))
 
 (use-package efrit
   :load-path "external/efrit/lisp"
-  :bind (:map tychoish/robot-map
-	      :prefix "e"
-	      :prefix-map tychoish/robot-efrit-map
-	      ("s" . efrit-streamlined-send)
-	      ("p" . efrit-do-show-progress)
-	      ("q" . efrit-remote-queue-start)
-	      ("r" . efrit-remote-queue-status)
-	      ("x" . efrit-remote-queue-stop))
-  :commands (efrit-chat efrit-do efrit-agent efrit-help)
+  :commands (efrit-chat
+	     efrit-do
+	     efrit-agent
+	     efrit-help
+	     efrit-streamlined-send
+	     efrit-do-show-progress
+	     efrit-remote-queue-start
+	     efrit-remote-queue-stop
+	     efrit-remote-queue-status)
   :init
   (bind-keys
    :map tychoish/robot-map
@@ -2594,7 +2461,12 @@ Useful after changing `eglot-workspace-configuration' or
    ("c" . efrit-chat)
    ("d" . efrit-do)
    ("a" . efrit-agent)
-   ("h" . efrit-help))
+   ("h" . efrit-help)
+   ("s" . efrit-streamlined-send)
+   ("p" . efrit-do-show-progress)
+   ("q" . efrit-remote-queue-start)
+   ("r" . efrit-remote-queue-status)
+   ("x" . efrit-remote-queue-stop))
   (make-read-extended-command-for-prefix "efrit"
     :bind-map tychoish/robot-efrit-map
     :bind-key "m")
@@ -2611,20 +2483,15 @@ Useful after changing `eglot-workspace-configuration' or
 		    (secret (when auth-info (plist-get auth-info :secret)))
 		    (_ (and secret (functionp secret))))
 	  (funcall secret))))
-
   ;; Max tokens per response
   (setq efrit-max-tokens 2048)
-
   ;; Data directory
   (setq efrit-data-directory (sprite-state-path "efrit"))
   (unless (file-exists-p efrit-data-directory)
     (make-directory efrit-data-directory t))
-
   ;; Enable debug logging
   (setq efrit-log-level 'debug)
-
   (setq efrit-tools-eval-timeout 15)
-
   ;; Progress buffer configuration
   (setq efrit-do-show-progress-buffer t)  ; Show progress buffer automatically
   (setq efrit-do-queue-max-size 8))	 ; Max commands to queue
@@ -2754,13 +2621,6 @@ Useful after changing `eglot-workspace-configuration' or
 
   (tychoish/agent-shell--apply-environment))
 
-(use-package annotated-completing-read
-  :ensure nil
-  :load-path "external/annotated-completing-read"
-  :commands (annotated-completing-read
-	     annotated-completing-read-context-from-point
-	     annotated-completing-read-directory))
-
 (use-package agent-shell-queue
   :ensure nil
   :load-path "external/agent-shell-queue"
@@ -2866,20 +2726,11 @@ Useful after changing `eglot-workspace-configuration' or
   :load-path "external/agent-shell-manager"
   :ensure nil
   :after (agent-shell)
-  :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
   :bind (:map tychoish/robot-agent-shell-map
-	      ("," . agent-shell-manager-toggle))
+         ("," . agent-shell-manager-toggle))
+  :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
   :config
   (setq agent-shell-manager-side 'bottom))
-
-(use-package sprite
-  :load-path "external/sprite"
-  :ensure nil
-  :commands (sprite-list sprite-create sprite-open-frame
-			 sprite-get-next sprite-get-or-create-next)
-  :config
-  (add-to-list 'mode-line-misc-info '(:eval (format " [%s]" (sprite--mode-line-string))))
-  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
 
 (use-package agent-shell-notifications
   :load-path "external/agent-shell-notifications"
@@ -2937,32 +2788,6 @@ call-site that has access to SHELL-BUFFER."
   (advice-add 'agent-shell-notifications--make-notification-plist :around
 	      #'tychoish/agent-shell-notifications--add-buffer-name)
   (setq agent-shell-notifications-timeout 30))
-
-(use-package uuidgen
-  :ensure t
-  :defer t)
-
-
-(use-package arch
-  :ensure nil
-  :commands (arch-cache-drop
-             arch-cache-reload
-             arch-dispatch
-             arch-find-package
-             arch-install
-             arch-kill-info-buffers
-             arch-list
-             arch-remove
-             arch-search
-             arch-show-info
-             arch-sync
-             arch-sync-force
-             arch-upgrade
-             arch-upgrade-all
-             arch-upgrade-all-yay
-             arch-upgrade-system
-             arch-abs-install
-             arch-abs-rebuild))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

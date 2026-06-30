@@ -1414,31 +1414,6 @@ interactively then remove duplicate items from the `kill-ring'."
        (interactive "sName: ")
        (bootstrap-create-note-file name :path ,path))))
 
-(cl-defmacro make-aidermacs-model-selection-function (&optional &key name default-model weak-model editor-model architect-model copilot)
-  "Define a command to switch the aider model settings, including changing the live session."
-  (unless (and name default-model)
-    (user-error "must specify both name (%s) and default-model (%s)" name default-model))
-  (let ((symbol-name (format "aidermacs-model-use-%s" name)))
-    `(defun ,(intern symbol-name) ()
-       ,(format "Switch to using `%s' (%s) as the default model for aidermacs." default-model name)
-       (interactive)
-       (if ,copilot
-           (progn
-             (message "setup environment for copilot")
-             (setenv "OPENAI_API_KEY" github-oauth-token)
-             (setenv "OPENAI_API_BASE" "https://api.githubcopilot.com"))
-         (setenv "OPENAI_API_BASE" nil)
-         (setenv "OPENAI_API_KEY" openai-api-key))
-       (setq aidermacs-default-model ,default-model)
-       (setq aidermacs-architect-model ,(or architect-model default-model))
-       (setq aidermacs-editor-model ,(or editor-model default-model))
-       (setq aidermacs-weak-model ,weak-model)
-       (when-let* ((buf (aidermacs-select-buffer-name)))
-	 (with-current-buffer buf
-	   (aidermacs-send-command-with-prefix "/model " (or aidermacs-architect-model aidermacs-default-model))
-	   (aidermacs-send-command-with-prefix "/weak-model " aidermacs-weak-model)
-	   (aidermacs-send-command-with-prefix "/editor-model " aidermacs-editor-model))))))
-
 (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
   (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
         (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
@@ -1461,11 +1436,12 @@ interactively then remove duplicate items from the `kill-ring'."
          (setq-default gptel-backend ,backend)
          (message "[gptel] set default backend to %s" ,name))
 
-       (bind-keys :map gptel-mode-map
-		  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
-		  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-                  :map tychoish/robot-gptel-set-default-model-map
-		  (,(downcase key) . ,default-function-symbol)))))
+       (bind-keys
+	:map gptel-mode-map
+	(,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
+	(,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
+        :map tychoish/robot-gptel-set-default-model-map
+	(,(downcase key) . ,default-function-symbol)))))
 
 (defun bootstrap-set-notes-directory (&optional path)
   (when path
@@ -1503,6 +1479,7 @@ interactively then remove duplicate items from the `kill-ring'."
                   (nreverse))))
 
 (defun bootstrap-set-up-ssh-agent ()
+  (interactive)
   (let (env-value sockets)
     (unless (setq env-value (getenv "SSH_AUTH_SOCK"))
       (setq sockets (find-ssh-agent-socket-candidates))
