@@ -41,7 +41,7 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
-    container: silex/emacs:${{ matrix.emacs_version }}
+    container: silex/emacs:${{ matrix.emacs_version }}-ci
     timeout-minutes: 5
     permissions:
       contents: read
