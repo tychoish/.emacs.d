@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "gh": {
+      "type": "stdio",
+      "command": "gh",
+      "args":["mcp"]
+    },
+    "git": {
+      "type": "stdio",
+      "command": "uvx",
+      "args":["mcp-server-git"]
+    },
+    "ripgrep": {
+      "type": "stdio",
+      "command": "npx",
+      "args":["-y", "mcp-ripgrep@latest"]
+    }
+  }
+}
