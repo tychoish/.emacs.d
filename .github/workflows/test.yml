@@ -20,7 +20,6 @@ jobs:
       fail-fast: false
       matrix:
         emacs_version:
-          - "29.4"
           - "30.2"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,7 +45,6 @@ jobs:
       fail-fast: false
       matrix:
         emacs_version:
-          - "29.4"
           - "30.2"
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
