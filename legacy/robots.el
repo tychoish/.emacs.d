@@ -1,3 +1,13 @@
+(use-package google-gemini
+  :defer t
+  :ensure nil
+  :commands (google-gemini-chat-prompt
+	     google-gemini-content-prompt
+	     google-gemini-count-tokens-prompt
+	     google-gemini-list-models
+	     google-gemini-model-info))
+
+
 (use-package copilot-chat
   :ensure t
   :bind (:map tychoish/robot-copilot-map ;; "C-c r c"

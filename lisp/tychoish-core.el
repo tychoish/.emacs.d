@@ -126,9 +126,6 @@
 	    (border-mode-line-inactive bg-mode-line-inactive)
 	    (message-separator bg-main)))))
 
-;; (use-package modus-themes-exporter
-;;   :after modus-themes
-;;   :commands (modus-themes-exporter-export))
 
 (use-package nerd-icons
   :ensure t
@@ -146,7 +143,6 @@
   (create-toggle-functions doom-modeline-icon
 			   :keymap tychoish/theme-map
 			   :key "i")
-
   (add-one-shot-hook
    :name "doom-modeline"
    :form (run-with-idle-timer 0.1 nil #'doom-modeline-mode 1)
@@ -176,28 +172,6 @@
     (/ (frame-char-height) 4))
 
   (advice-add #'doom-modeline--font-height :override #'my-doom-modeline--font-height))
-
-(use-package winum
-  :ensure t
-  :bind (("C-x w n" . winum-select-window-by-number)
-	 ("C-x w w" . winum-mode))
-  :commands (winum-mode)
-  :config
-  (setq winum-auto-setup-mode-line nil)
-  (setq winum-scope 'frame-local))
-
-(use-package writeroom-mode
-  :ensure t
-  :bind (:map tychoish/display-map
-	      ("i" . writeroom-mode)))
-
-(use-package page-break-lines
-  :ensure t
-  :delight page-break-lines-mode
-  :hook ((text-mode prog-mode) . page-break-lines-mode)
-  :commands (global-page-break-lines-mode)
-  :config
-  (setq page-break-lines-modes '(text-mode prog-mode)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -275,20 +249,9 @@
     (interactive)
     (seq-do #'projectile-mode-disable-for-buffer (buffer-list))))
 
-(use-package annotated-completing-read
-  :load-path "external/annotated-completing-read"
-  :commands (annotated-completing-read
-	     annotated-completing-read-directory
-	     annotated-completing-read--project-root))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; grep/search
-
-(use-package git-grep
-  :ensure t
-  :bind (:map tychoish/ecclectic-grep-project-map
-	      ("g" . git-grep)))
 
 (use-package ripgrep
   :ensure t
@@ -429,16 +392,6 @@
 	      ("w" . wgrep-change-to-wgrep-mode))
   :config
   (setq wgrep-enable-key "w"))
-
-(use-package google-this
-  :ensure t
-  :delight google-this-mode
-  :bind-keymap ("C-c /" . google-this-mode-submap)
-  :commands (google-this-mode)
-  :config
-  (which-key-customize "google-this" :key "C-c /")
-  (setq google-this-browse-url-function 'browse-url-default-browser)
-  (google-this-mode 1))
 
 (use-package anzu
   :ensure t
@@ -1353,68 +1306,76 @@
 ;;
 ;; writing (english) configuration
 
-(use-package deft
-  :ensure t
-  :bind (:map tychoish/docs-map
-	      ("o" . deft)
-	      ("n" . tychoish-deft-create)
-	      ("f" . deft-find-file))
-  :init
-  (defun deft-find-file ()
-    (interactive)
-    (find-file deft-directory))
-
-  (defun deft-file-make-slug (s)
-    "Turn a string into a slug."
-    (replace-regexp-in-string
-     " " "-" (downcase
-	      (replace-regexp-in-string
-	       "[^A-Za-z0-9 ]" "" s))))
-
-  (defun tychoish-deft-create (title)
-    "Create a new deft entry."
-    (interactive "sNote Title: ")
-    (let ((draft-file (concat deft-directory
-			      (deft-file-make-slug title)
-			      "."
-			      deft-extensions)))
-      (if (file-exists-p draft-file)
-	  (find-file draft-file)
-	(find-file draft-file)
-	(insert title))))
-  :config
-  (setq deft-extensions '("md" "mdwn" "markdown" "txt" "text" "rst"))
-  (setq deft-new-file-format "%Y-%m-%dT.%H%M")
-  (setq deft-default-extension "md")
-  (setq deft-text-mode 'markdown-mode)
-  (setq deft-use-filename-as-title t)
-  (setq deft-auto-save-interval 0)
-  (setq deft-auto-save-interval nil))
-
 (use-package denote
   :ensure t
-  :commands (denote denote-open-or-create denote-link denote-backlinks
-             denote-rename-file denote-dired denote-org-capture)
+  :commands (denote
+	     denote-open-or-create
+	     denote-link
+	     denote-backlinks
+             denote-rename-file
+	     denote-dired
+	     denote-org-capture)
   :init
   (defvar-keymap tychoish/denote-map)
   :bind (:map tychoish/denote-map
-              ("n" . denote)
-              ("o" . denote-open-or-create)
-              ("l" . denote-link)
-              ("b" . denote-backlinks)
-              ("r" . denote-rename-file)
-              ("d" . denote-dired))
+         ("n" . denote)
+         ("o" . denote-open-or-create)
+         ("l" . denote-link)
+         ("b" . denote-backlinks)
+         ("r" . denote-rename-file)
+         ("d" . denote-dired)
+         ("R" . denote-rename-file-using-front-matter))
   :config
   (setq denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
+  (setq denote-file-type 'markdown-yaml)
   (setq denote-id-format "%Y-%m-%d.%H%M%S")
   (setq denote-date-format "%Y-%m-%d")
   (setq denote-known-keywords '("org" "project" "reference" "journal" "idea"))
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
-  (setq denote-prompts '(title keywords))
+  (setq denote-prompts '(title keywords file-type subdirectory))
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
     (add-to-list 'savehist-additional-variables 'denote--keywords-history)))
+
+(use-package consult-denote
+  :ensure t
+  :after (consult denote)
+  :bind (:map tychoish/denote-map
+         ("f" . consult-denote-find)
+         ("g" . consult-denote-grep)
+         :map tychoish/consult-mode-map
+	 ("d" . consult-denote-find))
+  :commands (consult-denote-find consult-denote-grep))
+
+(use-package denote-journal
+  :ensure t
+  :after denote
+  :bind (:map tychoish/denote-map
+         ("j" . denote-journal-new-entry))
+  :commands (denote-journal-new-entry denote-journal-new-entry-after-last)
+  :config
+  (setq denote-journal-directory
+        (file-name-concat denote-directory "journal")))
+
+(use-package denote-sequence
+  :ensure t
+  :after denote
+  :commands (denote-sequence-new-child denote-sequence-new-sibling
+             denote-sequence-new-parent denote-sequence-link-to-parent)
+  :bind (:map tychoish/denote-map
+              ("s c" . denote-sequence-new-child)
+              ("s s" . denote-sequence-new-sibling)
+              ("s p" . denote-sequence-new-parent)
+              ("s l" . denote-sequence-link-to-parent))
+  :config
+  (setq denote-sequence-separator "-"))
+
+(use-package denote-markdown
+  :ensure t
+  :after (denote markdown-mode)
+  :commands (denote-markdown-convert-links-to-markdown-format
+             denote-markdown-convert-links-to-denote-format))
 
 (use-package markdown-mode
   :ensure t
@@ -1497,13 +1458,6 @@
   (setq flyspell-timer-aux nil)
   (setq flyspell-guess-indicator nil)
   (setq flyspell-min-buffer-size (* flyspell-guess-size flyspell-guess-slots)))
-
-(use-package grammarly
-  :ensure t
-  :defer t
-  :defines (grammarly-on-message-function-list
-	    grammarly-on-open-function-list
-	    grammarly-on-close-function-list))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1716,13 +1670,6 @@
   :ensure t
   :mode "\\.proto$'")
 
-(use-package graphviz-dot-mode
-  :ensure t
-  :mode ("\\.gv" "\\.dot")
-  :commands (graphviz graphviz-dot-mode)
-  :init
-  (setq graphviz-dot-indent-width 4))
-
 (use-package terraform-mode
   :ensure t
   :delight (terraform-mode "tf")
@@ -1730,13 +1677,6 @@
   :config
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
-
-(use-package just-mode
-  :ensure t
-  :after (builder)
-  :mode (("justfile" . just-mode)
-	 ("Justfile" . just-mode)
-	 ("\\.just%" . just-mode)))
 
 (use-package nxml-mode
   :mode (("\\.xml$'". nxml-mode)))
@@ -1761,10 +1701,6 @@
   (setq web-mode-enable-auto-pairing t)
   (setq web-mode-enable-auto-expanding t)
   (setq web-mode-enable-css-colorization t))
-
-(use-package jinja2-mode
-  :ensure t
-  :mode "\\.jinja\\'")
 
 (use-package ninja-mode
   :ensure t
@@ -1870,12 +1806,6 @@
   (setq flycheck-golangci-lint-fast t)
   (setq flycheck-golangci-lint-tests t))
 
-(defun tychoish/go-test-filename-from-package (pkg)
-  "Convert go package path to full file path."
-  (let ((gopath (getenv "GOPATH")))
-    (when gopath
-      (expand-file-name (concat gopath "/src/" pkg)))))
-
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
   :bind (:map tychoish/core-map
@@ -1938,13 +1868,6 @@
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
   (advice-add 'compilation-read-command :override 'tychoish-compilation-read-command))
 
-(use-package cargo
-  :ensure t
-  :after (rustic)
-  :config
-  (setq cargo-process--command-fmt "+nightly fmt --all")
-  (add-hook 'rustic-mode-hook 'cargo-minor-mode))
-
 (use-package flycheck-aspell
   :ensure t
   :defer t
@@ -1958,32 +1881,6 @@
 
   (flycheck-aspell-define-checker "org" "Org" ("--add-filter" "url") (org-mode))
   (flycheck-aspell-define-checker "rst" "reStructuredText" ("--add-filter" "url") (rst-mode)))
-
-(use-package flycheck-grammarly
-  :ensure t
-  :after (flycheck flycheck-aspell grammarly)
-  :commands (flycheck-grammarly-setup tychoish/flycheck-grammarly-enable tychoish/flycheck-grammarly-disable)
-  :functions (flycheck-remove-next-checker flycheck-add-next-checker)
-  :config
-  (setq flycheck-grammarly-check-time 0.8)
-
-  (defun tychoish/flycheck-grammarly-enable ()
-    (interactive)
-    (add-to-list 'flycheck-checkers 'grammarly)
-    (add-to-list 'grammarly-on-open-function-list 'flycheck-grammarly--on-open)
-    (add-to-list 'grammarly-on-message-function-list 'flycheck-grammarly--on-message)
-    (add-to-list 'grammarly-on-close-function-list 'flycheck-grammarly--on-close)
-    (flycheck-add-next-checker 'markdown-aspell-dynamic 'grammarly)
-    (flycheck-add-next-checker 'mail-aspell-dynamic 'grammarly))
-
-  (defun tychoish/flycheck-grammarly-disable ()
-    (interactive)
-    (flycheck-remove-next-checker 'markdown-aspell-dynamic 'grammarly)
-    (flycheck-remove-next-checker 'mail-aspell-dynamic 'grammarly)
-    (setq flycheck-checkers (remove 'grammarly flycheck-checkers))
-    (setq grammarly-on-open-function-list (remove 'flycheck-grammarly--on-open 'grammarly-on-open-function-list))
-    (setq grammarly-on-message-function-list (remove 'flycheck-grammarly--on-message 'grammarly-on-open-function-list))
-    (setq grammarly-on-close-function-list (remove 'flycheck-grammarly--on-close 'grammarly-on-close-function-list))))
 
 (use-package flycheck-vale
   :ensure t
@@ -2008,24 +1905,6 @@
     (flycheck-remove-next-checker 'markdown-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'org-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
-
-(use-package ctags-update
-  :ensure t
-  :bind (("C-c E" . ctags-update))
-  :commands (turn-on-ctags-auto-update-mode create-tags)
-  :delight ctags-auto-update-mode
-  :config
-  (setq tags-add-tables nil)
-  (setq etags-table-search-up-depth 10)
-  (setq ctags-update-delay-seconds 300)
-  (defun create-tags (dir-name)
-    "Create tags file for the DIR-NAME directory."
-    (interactive "DDirectory: ")
-    (let ((cmd-str (format "%s -e -u -f %s/TAGS %s -R %s" path-to-ctags dir-name dir-name (directory-file-name dir-name))))
-      (message cmd-str)
-      (shell-command cmd-str)))
-  (setq path-to-ctags (executable-find "ctags"))
-  (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2261,15 +2140,6 @@ Useful after changing `eglot-workspace-configuration' or
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(use-package google-gemini
-  :defer t
-  :ensure nil
-  :commands (google-gemini-chat-prompt
-	     google-gemini-content-prompt
-	     google-gemini-count-tokens-prompt
-	     google-gemini-list-models
-	     google-gemini-model-info))
-
 (use-package gptel
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands (gptel gptel-rewrite)
@@ -2423,7 +2293,6 @@ Useful after changing `eglot-workspace-configuration' or
   (setq claude-code-ide-terminal-initialization-delay 0.2)
   (setq claude-code-ide-eat-preserve-position t)
   (setq claude-code-ide-vterm-anti-flicker t)
-
   (claude-code-ide-emacs-tools-setup))
 
 (use-package eat
