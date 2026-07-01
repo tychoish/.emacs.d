@@ -1326,6 +1326,7 @@
          ("d" . denote-dired)
          ("R" . denote-rename-file-using-front-matter))
   :config
+  (consult-denote-mode)
   (setq denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-file-type 'markdown-yaml)
   (setq denote-id-format "%Y-%m-%d.%H%M%S")
@@ -1341,13 +1342,12 @@
 
 (use-package consult-denote
   :ensure t
-  :after (consult denote)
   :bind (:map tychoish/denote-map
          ("f" . consult-denote-find)
          ("g" . consult-denote-grep)
          :map tychoish/consult-mode-map
 	 ("d" . consult-denote-find))
-  :commands (consult-denote-find consult-denote-grep))
+  :commands (consult-denote-find consult-denote-grep consult-denote-mode))
 
 (use-package denote-journal
   :ensure t
@@ -1364,13 +1364,20 @@
   :after denote
   :commands (denote-sequence-new-child denote-sequence-new-sibling
              denote-sequence-new-parent denote-sequence-link-to-parent)
-  :bind (:map tychoish/denote-map
-              ("s c" . denote-sequence-new-child)
-              ("s s" . denote-sequence-new-sibling)
-              ("s p" . denote-sequence-new-parent)
-              ("s l" . denote-sequence-link-to-parent))
+  :init
+  (bind-keys
+   :map tychoish/denote-map
+   :prefix "s"
+   :prefix-map tychoish/denote-sequence-map
+   ("c" . denote-sequence-new-child)
+   ("s" . denote-sequence-new-sibling)
+   ("p" . denote-sequence-new-parent)
+   ("l" . denote-sequence-link-to-parent)
+   ("r" . denote-sequence-reparent)
+   ("C-r" . denote-sequence-reparent-recursive))
   :config
-  (setq denote-sequence-separator "=="))
+  (setq denote-sequence-separator "=")
+  (setq denote-sequence-schemes 'alphanumeric))
 
 (use-package denote-markdown
   :ensure t
