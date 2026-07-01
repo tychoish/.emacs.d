@@ -33,11 +33,6 @@
 	url = https://github.com/zackattackz/agent-shell-notifications.git
 	ignore = untracked
 	branch = main
-[submodule "claude-code-ide"]
-	path = external/claude-code-ide
-	url = https://github.com/manzaltu/claude-code-ide.el
-	ignore = untracked
-	branch = main
 [submodule "consult-mu"]
 	path = external/consult-mu
 	url = https://github.com/armindarvish/consult-mu.git

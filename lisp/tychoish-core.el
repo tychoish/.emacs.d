@@ -1329,11 +1329,12 @@
   (setq denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-file-type 'markdown-yaml)
   (setq denote-id-format "%Y-%m-%d.%H%M%S")
+  (setq denote-id-regexp "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\.[0-9]\\{6\\}")
   (setq denote-date-format "%Y-%m-%d")
   (setq denote-known-keywords '("org" "project" "reference" "journal" "idea"))
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
-  (setq denote-prompts '(title keywords file-type subdirectory))
+  (setq denote-prompts '(title keywords file-type subdirectory template signature))
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
     (add-to-list 'savehist-additional-variables 'denote--keywords-history)))
@@ -1369,7 +1370,7 @@
               ("s p" . denote-sequence-new-parent)
               ("s l" . denote-sequence-link-to-parent))
   :config
-  (setq denote-sequence-separator "-"))
+  (setq denote-sequence-separator "=="))
 
 (use-package denote-markdown
   :ensure t

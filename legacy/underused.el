@@ -158,5 +158,21 @@
   :bind (:map tychoish/display-map
 	      ("i" . writeroom-mode)))
 
+(use-package modus-themes-exporter
+  :after modus-themes
+  :commands (modus-themes-exporter-export))
 
+(use-package vterm
+  :ensure t
+  :defer t
+  :init
+  (bind-keys
+   :map tychoish/shell-map
+   :prefix "v"
+   :prefix-map tychoish/shell-vterm-map
+   ("v" . vterm)
+   ("e" . vterm-send-escape))
 
+  (make-read-extended-command-for-prefix "vterm"
+    :bind-key "m"
+    :bind-map tychoish/shell-vterm-map))
