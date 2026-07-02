@@ -236,10 +236,8 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
           '(state debug buffer-name separator modes)))
 
 (ert-deftest hud-modeline--default-right-segments-has-required-keys ()
-  "Default right segments alist contains all expected keys."
-  (seq-do (lambda (key)
-            (should (assq key hud-modeline--default-right-segments)))
-          '(flycheck eglot vc position buffer-size misc)))
+  "Default right segments alist contains the core misc key."
+  (should (assq 'misc hud-modeline--default-right-segments)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline--pad

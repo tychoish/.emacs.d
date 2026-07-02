@@ -659,21 +659,25 @@ more arguments than the function cares about."
 (defun bootstrap-set-up-delightful-mode-lighters ()
   (with-slow-op-timer
     "<bootstrap.el> after-init [delight]"
-    (delight 'auto-fill-function "afm" 'simple)
-    (delight 'auto-revert-mode nil 'autorevert)
+
+    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
+    (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
+    (delight 'fundamental-mode "fun" 'simple)
+    (delight 'sh-mode "sh" 'sh-script)
+    (delight 'org-mode "org" 'org-mode)
+    (delight 'org-agenda-mode "agenda" 'org-agenda)
+
+    (delight 'projectile-mode "p" 'projectile)
+    (delight 'flycheck-mode "fc" 'flycheck)
+
     (delight 'eglot--managed-mode "" 'eglot)
     (delight 'eldoc-mode nil 'eldoc)
-    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
-    (delight 'flycheck-mode "fc" 'flycheck)
-    (delight 'fundamental-mode "fun" :major)
-    (delight 'lisp-interaction-mode "lisp" :major)
-    (delight 'org-agenda-mode "agenda" 'org-agenda)
-    (delight 'org-mode "org" :major)
+
+    (delight 'visual-line-mode "wr" 'simple)
+    (delight 'auto-fill-function "afm" 'simple)
     (delight 'overwrite-mode "om" 'simple)
-    (delight 'projectile-mode "p" 'projectile)
     (delight 'refill-mode "rf" 'refill)
-    (delight 'sh-mode "sh" :major)
-    (delight 'visual-line-mode "wr" 'simple)))
+    (delight 'auto-revert-mode nil 'autorevert)))
 
 (add-lazy-init
  :name "<bootstrap> late enable modes"
@@ -1369,8 +1373,9 @@ Does nothing if the current post is not in the drafts folder."
 (defun clean-kill-ring-filter-catch-p (string)
   "T if STRING satisfies at least one of `clean-kill-ring-filters'."
   (let ((s (substring-no-properties string)))
-    (seq-some (lambda (filter) (funcall filter s))
-              clean-kill-ring-filters)))
+    (and (seq-some (lambda (filter) (funcall filter s))
+                   clean-kill-ring-filters)
+         t)))
 
 (defun clean-kill-ring-clean (&optional remove-dups)
   "Remove `kill-ring' members that satisfy one of`clean-kill-ring-filters'.
