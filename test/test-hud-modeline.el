@@ -42,13 +42,18 @@
   "format-mode-line (COND THEN ELSE): ELSE is silently dropped when COND is nil.
 Root cause: delight stores (INHIBIT-VAR ORIGINAL LIGHTER) in mode-name.
 With INHIBIT-VAR nil the C renderer shows LIGHTER, but format-mode-line
-returns empty string instead."
+returns empty string instead.
+This behavior only manifests in batch mode (no display server)."
+  (skip-unless noninteractive)
   (let ((hud-modeline--test-inhibit nil))
     (should (equal "" (format-mode-line '(hud-modeline--test-inhibit "original" "lighter"))))))
 
 (ert-deftest hud-modeline--delight-form-via-format-mode-line-returns-empty ()
   "format-mode-line of a delight 3-element mode-name returns empty string.
-Confirms the root cause: format-mode-line cannot render the lighter."
+Confirms the root cause: format-mode-line cannot render the lighter.
+This behavior only manifests in batch mode; in an interactive session
+delight's advice on format-mode-line causes it to render the lighter."
+  (skip-unless noninteractive)
   (with-temp-buffer
     (setq-local mode-name '(delight-mode-name-inhibit "Fundamental" "fun"))
     (should (equal "" (format-mode-line mode-name nil nil (current-buffer))))))
