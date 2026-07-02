@@ -329,5 +329,24 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
        (should (equal w (string-width (hud-modeline--render))))))
    '(40 80 120 200)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; hud-modeline-format structure
+;;
+;; hud-modeline-format must be a list-of-constructs (not a bare construct)
+;; so that packages like anzu can safely prepend to it via `cons' without
+;; tearing apart the (:eval ...) element.  When anzu does
+;;   (setq mode-line-format (cons anzu-fmt mode-line-format))
+;; it must get (anzu-fmt (:eval (hud-modeline--render))), not
+;; (anzu-fmt :eval (hud-modeline--render)).
+
+(ert-deftest hud-modeline--format-is-list-of-constructs ()
+  "hud-modeline-format is a list whose single element is an :eval construct.
+A bare (:eval ...) at the top level would be torn apart by cons-based
+prependers such as anzu, producing a stray :eval keyword in mode-line-format
+that Emacs renders as *invalid*."
+  (should (listp hud-modeline-format))
+  (should (= 1 (length hud-modeline-format)))
+  (should (equal (car hud-modeline-format) '(:eval (hud-modeline--render)))))
+
 (provide 'test-hud-modeline)
 ;;; test-hud-modeline.el ends here

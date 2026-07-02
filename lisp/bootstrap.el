@@ -314,7 +314,6 @@ more arguments than the function cares about."
 
 (setq ad-redefinition-action 'accept)
 
-(setq fringe-mode 0)
 (setq ring-bell-function #'ignore)
 (setq font-lock-support-mode 'jit-lock-mode)
 (setq jit-lock-stealth-time nil)
@@ -645,6 +644,8 @@ more arguments than the function cares about."
   (electric-pair-mode 1)
   (when (fboundp 'which-key-mode)
     (which-key-mode 1))
+
+  (set-fringe-mode '(4 . 4))
 
   (when (fboundp 'popper-mode)
     (popper-mode +1)

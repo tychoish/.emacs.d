@@ -9,12 +9,14 @@
 ;; rendering.
 ;;
 ;; Public segment management API:
-;;   `hud-modeline-add-segment'        — add a new segment, optionally after a key
+;;   `hud-modeline-add-segment'        — register a segment; :fn SYMBOL or :body FORM
 ;;   `hud-modeline-remove-segment'     — remove a segment entirely
 ;;   `hud-modeline-override-segment'   — replace an existing segment's function
 ;;   `hud-modeline-disable-segment'    — suppress a segment without removing it
 ;;   `hud-modeline-reset-segment'      — restore one segment to its default
-;;   `hud-modeline-reset-all-segments' — restore all segments to defaults
+;;   `hud-modeline-reset-all-segments'  — restore all segments to defaults
+;;   `hud-modeline-move-segment'        — move a segment between left and right blocks
+;;   `hud-modeline-set-segment-action'  — attach a mouse-1 command to any segment
 ;;
 ;; External packages and use-package blocks should use these functions rather
 ;; than modifying `hud-modeline-left-segments' / `hud-modeline-right-segments'
@@ -27,13 +29,16 @@
 (require 'seq)
 
 (declare-function flycheck-count-errors "flycheck")
+(declare-function sprite-list-menu "sprite")
 (declare-function nerd-icons-codicon "nerd-icons")
 (declare-function nerd-icons-octicon "nerd-icons")
 (declare-function nerd-icons-icon-for-buffer "nerd-icons")
 (declare-function projectile-project-name "projectile")
 (declare-function projectile-project-root "projectile")
+(declare-function projectile-dispatch "projectile")
 (declare-function mouse-major-mode-menu "mouse")
 (declare-function mouse-buffer-menu "mouse")
+(declare-function annotated-completing-read "annotated-completing-read")
 
 ;;;; Customization
 
@@ -56,6 +61,17 @@
   :type 'boolean
   :group 'hud-modeline)
 
+(defcustom hud-modeline-box-style nil
+  "Mode-line box style as a list of features to enable (or nil for no box).
+Any combination of:
+  `raised'   — beveled raised-button appearance
+  `padded'   — extra pixel padding inside the mode-line border
+  `bordered' — thin flat border line around the mode-line"
+  :type '(set (const :tag "Raised" raised)
+              (const :tag "Padded" padded)
+              (const :tag "Bordered" bordered))
+  :group 'hud-modeline)
+
 (defcustom hud-modeline-misc-max-width nil
   "Default maximum display-column width for the misc segment, or nil for no cap.
 Can be overridden per-registration by passing :max-width to the segment constructor.
@@ -71,7 +87,7 @@ See `hud-modeline--misc-segment'."
   :group 'hud-modeline)
 
 (defface hud-modeline-read-only
-  '((t :inherit shadow :underline nil))
+  '((t :inherit mode-line-emphasis :underline nil))
   "Face for read-only buffer indicator."
   :group 'hud-modeline)
 
@@ -101,7 +117,7 @@ See `hud-modeline--misc-segment'."
   :group 'hud-modeline)
 
 (defface hud-modeline-position
-  '((t :inherit shadow :underline nil))
+  '((t :inherit mode-line :underline nil))
   "Face for line/column position."
   :group 'hud-modeline)
 
@@ -260,30 +276,6 @@ The major mode name is clickable: mouse-1/3 shows the mode menu, mouse-2 describ
     (format-mode-line
      `("%[" "(" ,major-display ("" mode-line-process) ("" minor-mode-alist) "%n" ")" "%]"))))
 
-(defun hud-modeline--flycheck ()
-  "Return flycheck error/warning counts with icons or nil."
-  (when (and (bound-and-true-p flycheck-mode)
-             flycheck-current-errors)
-    (let* ((counts (flycheck-count-errors flycheck-current-errors))
-           (errs (or (alist-get 'error counts) 0))
-           (warns (or (alist-get 'warning counts) 0)))
-      (when (or (> errs 0) (> warns 0))
-        (concat
-         (when (> errs 0)
-           (concat
-            (if (and hud-modeline-icons (fboundp 'nerd-icons-codicon))
-                (nerd-icons-codicon "nf-cod-error" :face 'hud-modeline-error)
-              (propertize "✖" 'face 'hud-modeline-error))
-            (propertize (number-to-string errs) 'face 'hud-modeline-error)
-            " "))
-         (when (> warns 0)
-           (concat
-            (if (and hud-modeline-icons (fboundp 'nerd-icons-codicon))
-                (nerd-icons-codicon "nf-cod-warning" :face 'hud-modeline-warning)
-              (propertize "▲" 'face 'hud-modeline-warning))
-            (propertize (number-to-string warns) 'face 'hud-modeline-warning)
-            " ")))))))
-
 (defun hud-modeline--eglot ()
   "Return eglot's own mode-line format string, or nil when eglot is inactive.
 Renders the same content eglot would show in mode-line-misc-info so that
@@ -294,20 +286,15 @@ callers who suppress eglot's misc-info entry still get the full status."
                 (_ (not (string-empty-p (string-trim s)))))
       (concat s " "))))
 
-(defun hud-modeline--vc-segment ()
-  "Return vc branch string with trailing space, or nil."
-  (when-let* ((branch (hud-modeline--vc)))
-    (concat branch " ")))
-
 (defun hud-modeline--position-segment ()
   "Return formatted line:column position with trailing space."
   (concat (format-mode-line '(:propertize "%l:%c" face hud-modeline-position))
           " "))
 
 (defun hud-modeline--buffer-size ()
-  "Return propertized buffer char count or nil when disabled."
+  "Return propertized buffer char count with trailing space, or nil when disabled."
   (when hud-modeline-show-buffer-size
-    (propertize (file-size-human-readable (buffer-size)) 'face 'shadow)))
+    (concat (file-size-human-readable (buffer-size)) " ")))
 
 (cl-defun hud-modeline--misc-segment (&key (max-width hud-modeline-misc-max-width))
   "Return misc mode-line info, or nil when empty.
@@ -320,16 +307,6 @@ Use a lambda wrapper when registering with a non-default width:
       (if (and max-width (> (string-width misc) max-width))
           (truncate-string-to-width misc max-width nil nil "…")
         misc))))
-
-(defun hud-modeline--projectile-segment ()
-  "Return current project name with a leading separator, or nil.
-Shown on the right side when `projectile-mode' is active and the buffer
-belongs to a known project."
-  (when (and (bound-and-true-p projectile-mode)
-             (fboundp 'projectile-project-name))
-    (when-let* ((name (projectile-project-name))
-                (_ (not (equal name "-"))))
-      (concat "| " (propertize name 'face 'hud-modeline-vc) " "))))
 
 ;;;; Compilation progress
 
@@ -358,45 +335,20 @@ belongs to a known project."
           (or (bound-and-true-p compilation-num-warnings-found) 0)))
   (force-mode-line-update t))
 
-(defun hud-modeline--compilation-segment ()
-  "Show compilation running spinner or last exit status.
-While a compilation is running shows a spinner with process count.
-After completion shows error/warning counts or a check mark on clean exit.
-Returns nil when no compilation has run this session."
-  (cond
-   ((bound-and-true-p compilation-in-progress)
-    (let ((n (length compilation-in-progress)))
-      (propertize (if (> n 1) (format "⟳%d " n) "⟳ ")
-                  'face 'hud-modeline-warning
-                  'help-echo "Compilation in progress")))
-   (hud-modeline--compilation-finished
-    (cond
-     ((> hud-modeline--compilation-errors 0)
-      (propertize (format "✖%d " hud-modeline--compilation-errors)
-                  'face 'hud-modeline-error
-                  'help-echo "Last compilation: errors"))
-     ((> hud-modeline--compilation-warnings 0)
-      (propertize (format "▲%d " hud-modeline--compilation-warnings)
-                  'face 'hud-modeline-warning
-                  'help-echo "Last compilation: warnings"))
-     (hud-modeline--compilation-exit-ok
-      (propertize "✓ " 'face 'hud-modeline-vc
-                  'help-echo "Last compilation succeeded"))))))
-
 ;;;; Segment registries
 
 (defconst hud-modeline--default-left-segments
-  '((state . hud-modeline--state-segment)
+  '((buffer-size . hud-modeline--buffer-size)
+    (state . hud-modeline--state-segment)
     (debug . hud-modeline--debug-segment)
     (buffer-name . hud-modeline--buffer-name)
     (separator . hud-modeline--separator)
-    (modes . hud-modeline--mode-segment))
+    (modes . hud-modeline--mode-segment)
+    (position . hud-modeline--position-segment))
   "Default left mode-line segment alist.")
 
 (defconst hud-modeline--default-right-segments
-  '((position . hud-modeline--position-segment)
-    (buffer-size . hud-modeline--buffer-size)
-    (misc . hud-modeline--misc-segment))
+  '((misc . hud-modeline--misc-segment))
   "Default right mode-line segment alist (core only).
 Integration segments — compilation, flycheck, eglot, vc, projectile — are
 registered after the defvars via `hud-modeline-add-segment'.")
@@ -444,62 +396,210 @@ the rendered mode line.  Use `hud-modeline-reset-segment' to re-enable."
   "Reset all segments in VAR to their defaults."
   (set var (copy-alist (hud-modeline--defaults-for var))))
 
-(defun hud-modeline-add-segment (var key fn &optional position ref-key)
-  "Add segment KEY with function FN to segments alist VAR.
-POSITION is :after (default) or :before, relative to REF-KEY.
-When REF-KEY is nil, :after appends to the end and :before prepends to the front.
-No-op if KEY is already in VAR — use `hud-modeline-override-segment' to update."
+;;;; Segment actions
+
+(defvar hud-modeline--action-keymaps nil
+  "Alist mapping segment key symbol to its mouse-1 keymap.")
+
+(defun hud-modeline-set-segment-action (key command)
+  "Attach COMMAND to mouse-1 clicks on segment KEY.
+Creates and caches a sparse keymap; segment bodies that call
+`hud-modeline--action-map' pick it up automatically.
+Replaces any previously registered action for KEY."
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mode-line mouse-1] command)
+    (setf (map-elt hud-modeline--action-keymaps key) map)))
+
+(defun hud-modeline--action-map (key)
+  "Return the cached mouse-1 keymap for segment KEY, or nil."
+  (map-elt hud-modeline--action-keymaps key))
+
+(defun hud-modeline--register-segment (var key fn place-after place-before)
+  "Insert KEY/FN into VAR relative to PLACE-AFTER or PLACE-BEFORE on first call; always update FN.
+Insertion order is fixed after first registration; re-evaluation updates the function
+in place so reload picks up body changes without moving the segment."
   (unless (assq key (symbol-value var))
     (let* ((new-pair (cons key fn))
-           (pos (or position :after))
-           (segments (symbol-value var)))
+           (segments (symbol-value var))
+           (ref (or place-after place-before)))
       (cond
-       ((and ref-key (assq ref-key segments))
+       ((and ref (assq ref segments))
         (set var (seq-mapcat (lambda (pair)
-                               (if (eq (car pair) ref-key)
-                                   (if (eq pos :before)
+                               (if (eq (car pair) ref)
+                                   (if place-before
                                        (list new-pair pair)
                                      (list pair new-pair))
                                  (list pair)))
                              segments)))
-       ((eq pos :before)
+       (place-before
         (set var (cons new-pair segments)))
        (t
-        (set var (append segments (list new-pair))))))))
+        (set var (append segments (list new-pair)))))))
+  (setf (map-elt (symbol-value var) key) fn))
+
+(cl-defmacro hud-modeline-add-segment (&key segment-block key fn body place-after place-before)
+  "Register segment KEY in SEGMENT-BLOCK with optional positional placement.
+Supply :fn SYMBOL for a pre-defined function, or :body FORM to generate a named
+function `hud-modeline--KEY-segment' inline.  Use :place-after KEY or
+:place-before KEY to control insertion order; the two are mutually exclusive.
+Re-evaluation always updates the function without changing insertion order."
+  (declare (debug t))
+  (cond
+   ((and place-after place-before)
+    (error "hud-modeline-add-segment: :place-after and :place-before are mutually exclusive"))
+   ((and fn body)
+    (error "hud-modeline-add-segment: supply :fn or :body, not both"))
+   (body
+    (let* ((key-sym (if (and (consp key) (eq (car key) 'quote))
+                        (cadr key)
+                      (error "hud-modeline-add-segment: key must be a quoted symbol")))
+           (fn-sym (intern (format "hud-modeline--%s-segment"
+                                   (symbol-name key-sym)))))
+      `(progn
+         (defun ,fn-sym () ,body)
+         (hud-modeline--register-segment ,segment-block ,key #',fn-sym ,place-after ,place-before))))
+   (fn
+    `(hud-modeline--register-segment ,segment-block ,key ,fn ,place-after ,place-before))
+   (t
+    (error "hud-modeline-add-segment: :fn or :body is required"))))
 
 (defun hud-modeline-remove-segment (var key)
   "Remove segment KEY from segments alist VAR entirely.
 Use `hud-modeline-disable-segment' to keep the slot but suppress output."
   (set var (assq-delete-all key (symbol-value var))))
 
+(defun hud-modeline-move-segment (from-var to-var key &optional place-after place-before)
+  "Move segment KEY from FROM-VAR to TO-VAR, preserving its function.
+Optional PLACE-AFTER or PLACE-BEFORE (quoted symbols) control insertion
+order in TO-VAR; they are mutually exclusive.  Signals `user-error' if KEY
+is not present in FROM-VAR."
+  (when (and place-after place-before)
+    (user-error "hud-modeline-move-segment: place-after and place-before are mutually exclusive"))
+  (if-let* ((pair (assq key (symbol-value from-var))))
+      (progn
+        (set from-var (assq-delete-all key (symbol-value from-var)))
+        (hud-modeline--register-segment to-var key (cdr pair) place-after place-before))
+    (user-error "hud-modeline-move-segment: segment %S not found in %S" key from-var)))
+
 ;; Register integration segments using the same public API external callers use.
 ;; Each goes before `position' so they appear left of the position/size/misc block.
-(hud-modeline-add-segment 'hud-modeline-right-segments 'compilation
-                          #'hud-modeline--compilation-segment :before 'position)
-(hud-modeline-add-segment 'hud-modeline-right-segments 'flycheck
-                          #'hud-modeline--flycheck :after 'compilation)
-(hud-modeline-add-segment 'hud-modeline-right-segments 'vc
-                          #'hud-modeline--vc-segment :after 'flycheck)
-(hud-modeline-add-segment 'hud-modeline-right-segments 'projectile
-                          #'hud-modeline--projectile-segment :after 'vc)
+(hud-modeline-add-segment
+    :segment-block 'hud-modeline-right-segments
+    :key 'instance
+    :place-before 'position
+    :body (when (and (featurep 'sprite) (boundp 'sprite-instance-id) sprite-instance-id)
+            (concat (propertize (concat "[" sprite-instance-id "]")
+                                'local-map (hud-modeline--action-map 'instance)
+                                'mouse-face 'mode-line-highlight
+                                'help-echo "mouse-1: sprite list")
+                    " ")))
+
+(hud-modeline-add-segment
+    :segment-block 'hud-modeline-right-segments
+    :place-before 'position
+    :key 'compilation
+    :body (cond
+            ((bound-and-true-p compilation-in-progress)
+             (let ((n (length compilation-in-progress)))
+               (propertize (if (> n 1) (format "⟳%d " n) "⟳ ")
+                           'face 'hud-modeline-warning
+                           'help-echo "Compilation in progress")))
+            (hud-modeline--compilation-finished
+             (cond
+              ((> hud-modeline--compilation-errors 0)
+               (propertize (format "✖%d " hud-modeline--compilation-errors)
+                           'face 'hud-modeline-error
+                           'help-echo "Last compilation: errors"))
+              ((> hud-modeline--compilation-warnings 0)
+               (propertize (format "▲%d " hud-modeline--compilation-warnings)
+                           'face 'hud-modeline-warning
+                           'help-echo "Last compilation: warnings"))
+              (hud-modeline--compilation-exit-ok
+               (propertize "✓ " 'face 'hud-modeline-vc
+                           'help-echo "Last compilation succeeded"))))))
+
+(hud-modeline-add-segment
+    :segment-block 'hud-modeline-right-segments
+    :place-after 'compilation
+    :key 'flycheck
+    :body (when (and (bound-and-true-p flycheck-mode)
+                     flycheck-current-errors)
+            (let* ((counts (flycheck-count-errors flycheck-current-errors))
+                   (errs (or (alist-get 'error counts) 0))
+                   (warns (or (alist-get 'warning counts) 0)))
+              (when (or (> errs 0) (> warns 0))
+                (concat
+                 (when (> errs 0)
+                   (concat
+                    (if (and hud-modeline-icons (fboundp 'nerd-icons-codicon))
+                        (nerd-icons-codicon "nf-cod-error" :face 'hud-modeline-error)
+                      (propertize "✖" 'face 'hud-modeline-error))
+                    (propertize (number-to-string errs) 'face 'hud-modeline-error)
+                    " "))
+                 (when (> warns 0)
+                   (concat
+                    (if (and hud-modeline-icons (fboundp 'nerd-icons-codicon))
+                        (nerd-icons-codicon "nf-cod-warning" :face 'hud-modeline-warning)
+                      (propertize "▲" 'face 'hud-modeline-warning))
+                    (propertize (number-to-string warns) 'face 'hud-modeline-warning)
+                    " ")))))))
+
+(hud-modeline-add-segment
+    :segment-block 'hud-modeline-right-segments
+    :place-after 'flycheck
+    :key 'vc
+    :body (when-let* ((branch (hud-modeline--vc)))
+            (if-let* ((km (hud-modeline--action-map 'vc)))
+                (concat (propertize branch
+                                    'local-map km
+                                    'mouse-face 'mode-line-highlight
+                                    'help-echo "mouse-1: vc dispatch")
+                        " ")
+              (concat branch " "))))
+
+(hud-modeline-add-segment
+    :segment-block 'hud-modeline-right-segments
+    :key 'projectile
+    :place-after 'vc
+    :body (when (and (bound-and-true-p projectile-mode)
+                     (fboundp 'projectile-project-name))
+            (when-let* ((name (projectile-project-name))
+                        (_ (not (equal name "-"))))
+              (concat "| " (propertize name
+                                       'face 'mode-line-buffer-id
+                                       'local-map (hud-modeline--action-map 'projectile)
+                                       'mouse-face 'mode-line-highlight
+                                       'help-echo "mouse-1: projectile dispatch")
+                      " "))))
+
+;; Default actions for built-in segments.
+(hud-modeline-set-segment-action 'instance #'sprite-list-menu)
+(hud-modeline-set-segment-action 'projectile #'projectile-dispatch)
+
 ;; eglot is intentionally absent from the defaults: eglot manages its own
 ;; mode-line-misc-info entry, which the misc segment renders without truncation.
 ;; To use a dedicated segment instead, add from the eglot use-package block:
-;;   (hud-modeline-add-segment 'hud-modeline-right-segments 'eglot
-;;                             #'hud-modeline--eglot :after 'flycheck)
+;;   (hud-modeline-add-segment
+;;     :segment-block 'hud-modeline-right-segments :key 'eglot
+;;     :fn #'hud-modeline--eglot :place-after 'flycheck)
 
 ;;;; Rendering
 
 (defun hud-modeline--render-segments (segments)
-  "Concatenate results of all non-nil segment functions in SEGMENTS.
+  "Concatenate segment function results with exactly one space between each.
 Iterates SEGMENTS in alist order; keys are ignored.  Disabled entries
-(nil function) and functions returning nil are silently skipped."
-  (thread-last segments
-    (seq-map #'cdr)
-    (seq-filter #'identity)
-    (seq-map #'funcall)
-    (seq-filter #'stringp)
-    (apply #'concat)))
+(nil function) and nil/non-string returns are silently skipped.
+Each segment string is trimmed before joining so no segment can introduce
+leading or trailing padding that would create double spaces."
+  (string-join
+   (thread-last segments
+     (seq-map #'cdr)
+     (seq-filter #'identity)
+     (seq-map #'funcall)
+     (seq-filter #'stringp)
+     (seq-map #'string-trim)
+     (seq-remove #'string-empty-p))
+   " "))
 
 (defun hud-modeline--left ()
   "Render the left side of the mode-line."
@@ -546,8 +646,11 @@ Truncates the right side when lhs + rhs would exceed the window width."
 
 ;;;; Mode
 
-(defvar hud-modeline-format '(:eval (hud-modeline--render))
-  "Mode-line format for `hud-modeline-mode'.")
+(defvar hud-modeline-format '((:eval (hud-modeline--render)))
+  "Mode-line format for `hud-modeline-mode'.
+Wrapped as a list of one construct so that packages such as anzu that
+prepend to `mode-line-format' via `cons' get a proper list of constructs
+rather than tearing apart the (:eval ...) element.")
 
 (defvar hud-modeline--saved-format nil
   "Saved `mode-line-format' before `hud-modeline-mode' activation.")
@@ -576,6 +679,69 @@ Truncates the right side when lhs + rhs would exceed the window width."
           hud-modeline--saved-underlines)
   (setq hud-modeline--saved-underlines nil))
 
+(defvar hud-modeline--saved-boxes nil
+  "Alist of (FACE . box-value) saved before box style activation.")
+
+(defun hud-modeline--box-spec ()
+  "Return a :box attribute value computed from `hud-modeline-box-style', or nil."
+  (when hud-modeline-box-style
+    (let* ((padded (memq 'padded hud-modeline-box-style))
+           (bordered (memq 'bordered hud-modeline-box-style))
+           (raised (memq 'raised hud-modeline-box-style))
+           (line-width (cond (padded 4) (bordered 1) (t -2)))
+           (style (when raised 'released-button)))
+      (if style
+          (list :line-width line-width :style style)
+        (list :line-width line-width)))))
+
+(defun hud-modeline--apply-box ()
+  "Save and apply the box spec from `hud-modeline-box-style' to mode-line faces."
+  (when-let* ((spec (hud-modeline--box-spec)))
+    (setq hud-modeline--saved-boxes
+          (seq-map (lambda (face)
+                     (cons face (face-attribute face :box nil t)))
+                   hud-modeline--mode-line-faces))
+    (seq-do (lambda (face)
+              (set-face-attribute face nil :box spec))
+            hud-modeline--mode-line-faces)))
+
+(defun hud-modeline--restore-boxes ()
+  "Restore saved :box values on mode-line faces."
+  (seq-do (lambda (pair)
+            (set-face-attribute (car pair) nil :box (cdr pair)))
+          hud-modeline--saved-boxes)
+  (setq hud-modeline--saved-boxes nil))
+
+(defconst hud-modeline--box-style-options
+  '(("none" nil "No box styling")
+    ("raised" (raised) "Beveled raised-button appearance")
+    ("bordered" (bordered) "Thin flat border line")
+    ("padded" (padded) "Extra pixel padding")
+    ("raised + padded" (raised padded) "Raised button with extra padding")
+    ("raised + bordered" (raised bordered) "Raised button with border line")
+    ("bordered + padded" (bordered padded) "Border with extra padding")
+    ("raised + bordered + padded" (raised bordered padded) "All features"))
+  "Preset combinations for `hud-modeline-set-box-style'.")
+
+(defun hud-modeline-set-box-style ()
+  "Interactively set `hud-modeline-box-style' and apply it immediately."
+  (interactive)
+  (let* ((table (seq-map (lambda (entry)
+                           (cons (car entry) (nth 2 entry)))
+                         hud-modeline--box-style-options))
+         (choice (annotated-completing-read
+                  table
+                  :prompt "Mode-line box style: "
+                  :require-match t
+                  :category 'hud-modeline))
+         (value (nth 1 (assoc choice hud-modeline--box-style-options))))
+    (setq hud-modeline-box-style value)
+    (when (bound-and-true-p hud-modeline-mode)
+      (when hud-modeline--saved-boxes
+        (hud-modeline--restore-boxes))
+      (when hud-modeline-box-style
+        (hud-modeline--apply-box)))))
+
 ;;;###autoload
 (define-minor-mode hud-modeline-mode
   "Lightweight global modeline."
@@ -586,12 +752,16 @@ Truncates the right side when lhs + rhs would exceed the window width."
         (setq hud-modeline--saved-format (default-value 'mode-line-format))
         (setq-default mode-line-format hud-modeline-format)
         (hud-modeline--suppress-underlines)
+        (when hud-modeline-box-style
+          (hud-modeline--apply-box))
         (add-hook 'after-change-major-mode-hook #'hud-modeline--invalidate-icon)
         (add-hook 'compilation-start-hook #'hud-modeline--on-compilation-start)
         (add-hook 'compilation-finish-functions #'hud-modeline--on-compilation-finish))
     (remove-hook 'after-change-major-mode-hook #'hud-modeline--invalidate-icon)
     (remove-hook 'compilation-start-hook #'hud-modeline--on-compilation-start)
     (remove-hook 'compilation-finish-functions #'hud-modeline--on-compilation-finish)
+    (when hud-modeline--saved-boxes
+      (hud-modeline--restore-boxes))
     (hud-modeline--restore-underlines)
     (setq-default mode-line-format hud-modeline--saved-format)))
 

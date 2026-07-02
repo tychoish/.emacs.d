@@ -1319,7 +1319,18 @@
   (setq denote-prompts '(title keywords file-type subdirectory template signature))
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
-    (add-to-list 'savehist-additional-variables 'denote--keywords-history)))
+    (add-to-list 'savehist-additional-variables 'denote--keywords-history))
+  (defun tychoish-denote-add-frontmatter-field (key value)
+    "Insert KEY: VALUE into the YAML frontmatter of the current buffer.
+Inserts immediately before the closing --- line.  Intended for use
+after `denote' creates a note to attach custom fields that denote
+does not manage (e.g. status, plan-type)."
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^---$" nil t)
+        (when (re-search-forward "^---$" nil t)
+          (beginning-of-line)
+          (insert key ": " value "\n"))))))
 
 (use-package consult-denote
   :ensure t
@@ -2538,16 +2549,20 @@ Useful after changing `eglot-workspace-configuration' or
    ("q" . agent-shell-queue-buffer-open)
    ("/" . agent-shell-queue-capture))
 
-  (agent-shell-mode-key "?" agent-shell-resolve-permission)
+  (agent-shell-mode-key "?" agent-shell-dispatch)
   (agent-shell-mode-key "p" agent-shell-resolve-permission)
   (agent-shell-mode-key "a" agent-shell-select-action)
   (agent-shell-mode-key "b" agent-shell-switch-buffer)
   (agent-shell-mode-key "x" execute-extended-agent-shell-command)
   (agent-shell-mode-key "f" agent-shell-select-collapse)
   (agent-shell-mode-key "c" agent-shell-select-command)
+  (agent-shell-mode-key "t" agent-shell-set-session-thought-level)
   (agent-shell-mode-key "m" agent-shell-dispatch)
+  (agent-shell-mode-key " " agent-shell-set-session-mode)
   (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment)
   (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
+
+  (unbind-key "SPC" 'agent-shell-mode)
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."
