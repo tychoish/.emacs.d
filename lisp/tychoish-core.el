@@ -1053,7 +1053,10 @@
   (bind-keys
    :map magit-status-mode-map
    ("C-n" . next-line)
-   ("C-p" . previous-line)))
+   ("C-p" . previous-line))
+
+  (when (fboundp 'hud-modeline-set-segment-action)
+    (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
 
 (use-package magit-gh
   :ensure t
@@ -1079,7 +1082,14 @@
   (setq magit-dash-show-discovered-submodules nil)
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
-	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch))))
+	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
+
+  (with-eval-after-load 'nerd-icons
+    (seq-do (lambda (entry)
+              (add-to-list 'nerd-icons-mode-icon-alist entry))
+            '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face 'nerd-icons-orange)
+              (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face 'nerd-icons-orange)
+              (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face 'nerd-icons-orange)))))
 
 (use-package smerge-mode
   :after (magit)
@@ -2367,6 +2377,9 @@ Useful after changing `eglot-workspace-configuration' or
   :defer t
   :commands (agent-shell agent-shell-new-shell agent-shell-toggle)
   :init
+  (delight 'agent-shell-ui-mode " ui" "agent-shell-menu")
+  (delight 'agent-shell-completion-mode " comp" "agent-shell-menu")
+
   (bind-keys
    :map tychoish/robot-map
    :prefix "s"
@@ -2424,6 +2437,10 @@ Useful after changing `eglot-workspace-configuration' or
     (setq-local completion-at-point-functions
 		(cons #'cape-dabbrev (remq t completion-at-point-functions))))
 
+  (defun agent-shell-bold-input-setup ()
+    "Render submitted prompt text in bold in agent-shell buffers."
+    (face-remap-add-relative 'comint-highlight-input :weight 'bold))
+
   (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
   (setq agent-shell-file-completion-enabled t)
   (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
@@ -2465,6 +2482,7 @@ Useful after changing `eglot-workspace-configuration' or
    ("S-SPC" . agent-shell-cycle-session-mode))
 
   (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
+  (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
 
   (defun ad:agent-shell--refresh-session-title (orig-fn &optional event)
     (let ((agent-name (map-nested-elt agent-shell--state '(:agent-config :mode-line-name)))
@@ -2578,7 +2596,17 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
   (setq agent-shell-queue-pick-buffer-function #'agent-shell-extras--pick-buffer)
-  (setq agent-shell-queue-show-ordinal-column nil))
+  (setq agent-shell-queue-show-ordinal-column nil)
+
+  (with-eval-after-load 'nerd-icons
+    (seq-do (lambda (entry)
+              (add-to-list 'nerd-icons-mode-icon-alist entry))
+            '((agent-shell-queue-mode nerd-icons-codicon "nf-cod-list-ordered" :face 'nerd-icons-purple)
+              (agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-file-text" :face 'nerd-icons-purple)
+              (agent-shell-queue-edit-mode nerd-icons-codicon "nf-cod-edit" :face 'nerd-icons-purple)
+              (agent-shell-queue-capture-mode nerd-icons-codicon "nf-cod-record" :face 'nerd-icons-purple)
+              (agent-shell-queue-raw-edit-mode nerd-icons-codicon "nf-cod-file-code" :face 'nerd-icons-purple)
+              (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment-discussion" :face 'nerd-icons-purple)))))
 
 (use-package agent-shell-manager
   :load-path "external/agent-shell-manager"
