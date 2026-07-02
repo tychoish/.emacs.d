@@ -15,23 +15,8 @@
 (declare-function approximate-project-root "xtdlib")
 (declare-function approximate-project-name "xtdlib")
 
-;; (toggle-debug-on-error)
-;; (setq use-package-expand-minimally t)
-;; (setq use-package-verbose t)
-;; (setq use-package-compute-statistics t)
-;; (setq use-package-minimum-reported-time 0.005)
-
-(use-package s
-  :ensure t
-  :demand t)
-(use-package dash
-  :ensure t
-  :demand t)
 (use-package cond-let
   :ensure t)
-(use-package fn
-  :ensure t
-  :demand t)
 (use-package delight
   :ensure t
   :demand t)
@@ -43,8 +28,8 @@
 (use-package async
   :ensure t
   :delight
-  (async-bytecomp-package-mode "")
-  (dired-async-mode "")
+  (async-bytecomp-package-mode "" async-bytecomp)
+  (dired-async-mode "" dired-async)
   :commands (async-start
 	     async-start-process
 	     async-bytecomp-package-mode
@@ -70,7 +55,6 @@
   :commands (sprite-list sprite-create sprite-open-frame
 			 sprite-get-next sprite-get-or-create-next)
   :config
-  (add-to-list 'mode-line-misc-info '(:eval (format " [%s]" (sprite--mode-line-string))))
   (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
 
 (use-package hud
@@ -136,42 +120,24 @@
   :delight (nerd-icons-dired-mode "")
   :hook (dired-mode . nerd-icons-dired-mode))
 
-(use-package doom-modeline
-  :ensure t
-  :commands (doom-modeline-mode)
+(use-package hud-modeline
+  :ensure nil
+  :load-path "lisp"
+  :commands (hud-modeline-mode)
   :init
-  (create-toggle-functions doom-modeline-icon
-			   :keymap tychoish/theme-map
-			   :key "i")
   (add-one-shot-hook
-   :name "doom-modeline"
-   :form (run-with-idle-timer 0.1 nil #'doom-modeline-mode 1)
+   :name "hud-modeline"
+   :form (run-with-idle-timer 0.1 nil #'hud-modeline-mode 1)
    :hook (if (daemonp)
 	     'server-after-make-frame-hook
 	   'window-setup-hook))
   :config
-  (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
-  (setq find-file-visit-truename t)
-  (setq size-indication-mode t)
-  (setq doom-modeline-buffer-file-name-style 'relative-to-project)
-  (setq doom-modeline-height 0)
-  (setq doom-modeline-bar-width 1)
-  (setq doom-modeline-major-mode-color-icon t)
-  (setq doom-modeline-major-mode-icon t)
-  (setq doom-modeline-unicode-fallback nil)
-  (setq doom-modeline-minor-modes t)
-  (setq doom-modeline-enable-word-count t)
-  (setq doom-modeline-continuous-word-count-modes '(text-mode))
-  (setq doom-modeline-buffer-encoding nil)
-  (setq doom-modeline-env-version nil)
-  (setq doom-modeline-irc-stylize 'identity)
-  (setq doom-modeline-irc t)
-
-  (defun my-doom-modeline--font-height ()
-    "Calculate the actual char height of the mode-line."
-    (/ (frame-char-height) 4))
-
-  (advice-add #'doom-modeline--font-height :override #'my-doom-modeline--font-height))
+  (create-toggle-functions hud-modeline-icons
+			   :keymap tychoish/theme-map
+			   :key "i")
+  (create-toggle-functions hud-modeline-show-buffer-size
+			   :keymap tychoish/theme-map
+			   :key "s"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -179,7 +145,7 @@
 
 (use-package projectile
   :ensure t
-  :delight '(:eval (tychoish-projectile-modeline-string))
+  :delight (projectile-mode "" projectile)
   :bind-keymap ("C-c p" . projectile-command-map)
   :bind (:map tychoish/ecclectic-grep-project-map
 	      ("a" . projectile-ag)
@@ -358,7 +324,7 @@
     (let ((directory (annotated-completing-read-directory)))
       (ripgrep-compile
        :directory directory
-       :buffer-name (format "*%s-rg*" directory)
+       :buffer-name (format "*%s-rg*" (file-name-nondirectory (directory-file-name directory)))
        :regexp (find-ripgrep--resolve-regexp
 		:regexp initial
 		:directory directory))))
@@ -374,10 +340,12 @@
   (defun find-merge-conflicts ()
     "Use ripgrep to identify all merge conflict artifacts"
     (interactive)
-    (ripgrep-compile
-     :regexp "^(=======$|<<<<<<<|>>>>>>>)"
-     :directory (annotated-completing-read--project-root)
-     :buffer-name (format "*%s-merge-conflicts*" (approximate-project-name)))))
+    (let ((root (annotated-completing-read--project-root)))
+      (ripgrep-compile
+       :regexp "^(=======$|<<<<<<<|>>>>>>>)"
+       :directory root
+       :buffer-name (format "*%s-merge-conflicts*"
+                            (file-name-nondirectory (directory-file-name root)))))))
 
 (use-package deadgrep
   :ensure t
@@ -1219,7 +1187,9 @@
 
 (use-package tracking
   :ensure t
-  :after (:any telega erc))
+  :after (:any telega erc)
+  :config
+  (setq tracking-max-mode-line-entries 3))
 
 (use-package telega
   :ensure t
@@ -1299,6 +1269,7 @@
 
   (require 'telega-alert)
   (require 'telega-extras)
+  (setq telega-chat-auto-fill-mode-lighter "")
   (telega-mode-line-mode 1)
   (telega-alert-mode 1))
 
@@ -1467,6 +1438,14 @@
   (setq flyspell-guess-indicator nil)
   (setq flyspell-min-buffer-size (* flyspell-guess-size flyspell-guess-slots)))
 
+(use-package flyspell-correct
+  :ensure t
+  :after flyspell
+  :commands (flyspell-correct-at-point
+             flyspell-correct-next
+             flyspell-correct-previous
+             flyspell-correct-wrapper))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; modes for programming languages other formats
@@ -1559,7 +1538,7 @@
     (setq local-go-bin (f-expand (concat gopath "/bin")))
     (add-to-list 'exec-path local-go-bin)
 
-    (unless (s-contains? local-go-bin current-path)
+    (unless (string-search local-go-bin current-path)
       (setenv "PATH" (format "%s:%s" current-path local-go-bin)))))
 
 (use-package rustic
@@ -1756,7 +1735,7 @@
 
 (use-package flycheck
   :ensure t
-  :delight (flycheck-mode "fc")
+  :delight (flycheck-mode " fc")
   :bind (("C-c f f" . flycheck-mode))
   :defines (flycheck-checkers)
   :commands (flycheck-disable-checker flycheck-mode global-flycheck-mode)
@@ -1816,6 +1795,7 @@
 
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
+  :delight (compilation-mode "Compile" compile)
   :bind (:map tychoish/core-map
 	      ("c" . tychoish-compile)
 	      :map compilation-mode-map
@@ -1989,7 +1969,7 @@
 
   (setq eglot-autoshutdown t)
   (setq eglot-extend-to-xref t)
-
+  (setq eglot-report-progress nil)
   (add-to-list 'eglot-stay-out-of 'flymake)
   (add-to-list 'eglot-stay-out-of 'company)
 
@@ -2466,6 +2446,7 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'agent-shell-menu)
 
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
+  (setq agent-shell-anthropic-default-session-mode-id "auto")
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
   (add-to-list 'agent-shell-agent-configs (agent-shell-omp-make-agent-config))
 

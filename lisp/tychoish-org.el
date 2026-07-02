@@ -2,9 +2,7 @@
 
 (eval-when-compile
   (require 'subr-x)
-  (require 'dash)
-  (require 'xtdlib)
-  (require 'fn))
+  (require 'xtdlib))
 
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")
@@ -224,13 +222,16 @@
   "Open all agenda files if not already open."
   (interactive)
   (let* ((files (thread-last (org-agenda-files)
-			     (--flat-map (if (f-directory-p it)
-					     (f-glob "*.org" it)
-					   (list it)))
-			     (--remove (string-suffix-p "archive.org" it))))
-	 (buffers (thread-last files
-			       (--map (or (get-file-buffer it)
-					  (find-file-noselect it t))))))
+                             (seq-mapcat (lambda (it)
+                                           (if (f-directory-p it)
+                                               (f-glob "*.org" it)
+                                             (list it))))
+                             (seq-remove (lambda (it)
+                                           (string-suffix-p "archive.org" it)))))
+         (buffers (thread-last files
+                               (seq-map (lambda (it)
+                                          (or (get-file-buffer it)
+                                              (find-file-noselect it t)))))))
     (message "opened %d agenda files [%s]" (length files) (string-join files ", "))
     buffers))
 
@@ -239,9 +240,10 @@
   "Open all agenda files, and reverting to the version on disk as needed."
   (interactive)
   (thread-last (org-agenda-files-open)
-	       (--map (with-current-buffer it
-			(revert-buffer nil (or current-prefix-arg (not (called-interactively-p 'interactive))) t)
-			(buffer-file-name)))))
+               (seq-map (lambda (it)
+                          (with-current-buffer it
+                            (revert-buffer nil (or current-prefix-arg (not (called-interactively-p 'interactive))) t)
+                            (buffer-file-name))))))
 
 (defun tychoish/background-revbufs-for-hook ()
   "Run `revbufs' without disturbing the current window configuration."
@@ -354,21 +356,25 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (interactive)
   (let ((key-table (make-hash-table :test #'equal))
 	(annotation-table (make-hash-table :test #'equal)))
-    (thread-last org-capture-templates
-		 (seq-filter (lambda (it) (< 4 (length it))))
-		 (seq-map (lambda (template) (let ((key-char (nth 0 template))
-						   (description (nth 1 template))
-						   (btrm (string-replace "\n" " " (nth 4 template))))
-				      (setf (map-elt key-table description) key-char)
-				      (setf (map-elt annotation-table description)
-					    (format "[%s] <%s> '%s'" key-char
-						    (file-name-nondirectory (cadr (nth 3 template)))
-						    (string-trim (if (> (length btrm) 32) (concat (substring btrm 0 29) "...") btrm))))))))
-    (org-capture nil (map-elt key-table (annotated-completing-read
-					annotation-table
-					:prompt "org-capture => "
-					:category 'org-capture
-					:require-match nil)))))
+    (seq-do
+     (lambda (template)
+       (let* ((key-char (nth 0 template))
+        (description (nth 1 template))
+        (target-loc (cadr (nth 3 template)))
+        (target-file (if (stringp target-loc) (file-name-nondirectory target-loc) ""))
+        (content (nth 4 template))
+        (raw (if (stringp content) (string-replace "\n" " " content) ""))
+        (preview (if (> (length raw) 32) (concat (substring raw 0 29) "...") raw)))
+   (setf (map-elt key-table description) key-char)
+   (setf (map-elt annotation-table description)
+         (format "[%s] <%s> '%s'" key-char target-file preview))))
+     (seq-filter (lambda (it) (< 4 (length it))) org-capture-templates))
+    (org-capture nil (map-elt key-table
+            (annotated-completing-read
+             annotation-table
+             :prompt "org-capture => "
+             :category 'org-capture
+             :require-match nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -423,32 +429,35 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
     (add-to-list 'org-capture-templates (list (concat key "r") description)))
 
   (thread-last '(("1d" .  "Daily")
-		 ("1w" .  "Weekly")
-		 ("4w" . "Monthly")
-		 ("12w" . "Quarterly")
-		 ("26w" . "Half Yearly")
-		 ("52w" . "Yearly"))
-	       (--flat-map (let* ((interval (car it))
-				  (heading (cdr it))
-				  (interval-key (downcase (substring-no-properties heading 0 1))))
-			     (thread-last (list (concat key "r" interval-key)
-						(concat "r" key interval-key))
-					  (mapcar (lambda (prefix) (cons prefix (cons interval heading)))))))
-
-	       (--map (let* ((prefix (car it))
-			     (interval (cadr it))
-			     (heading (cddr it))
-			     (lower-heading (downcase heading))
-			     (menu-name (format "routine (%s; %s)" name lower-heading)))
-
-			(add-to-list
-			 'org-capture-templates
-			 (list prefix menu-name
-			       'entry (list 'file+olp path "Loops" heading)
-			       (concat "* %(~title~)\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")
-			       :prepend t
-			       :kill-buffer t
-			       :empty-lines-after 1))))))
+                 ("1w" .  "Weekly")
+                 ("4w" . "Monthly")
+                 ("12w" . "Quarterly")
+                 ("26w" . "Half Yearly")
+                 ("52w" . "Yearly"))
+               (seq-mapcat
+                (lambda (it)
+                  (let* ((interval (car it))
+                         (heading (cdr it))
+                         (interval-key (downcase (substring-no-properties heading 0 1))))
+                    (thread-last (list (concat key "r" interval-key)
+                                       (concat "r" key interval-key))
+                                 (seq-map (lambda (prefix)
+                                            (cons prefix (cons interval heading))))))))
+               (seq-do
+                (lambda (it)
+                  (let* ((prefix (car it))
+                         (interval (cadr it))
+                         (heading (cddr it))
+                         (lower-heading (downcase heading))
+                         (menu-name (format "routine (%s; %s)" name lower-heading)))
+                    (add-to-list
+                     'org-capture-templates
+                     (list prefix menu-name
+                           'entry (list 'file+olp path "Loops" heading)
+                           (concat "* %(~title~)\nSCHEDULED: <%(org-read-date nil nil \"++" interval "\") ++" interval ">\n%?")
+                           :prepend t
+                           :kill-buffer t
+                           :empty-lines-after 1)))))))
 
 (defun ~title~ ()
   "Read a title string interactively during `org-capture' template expansion."
@@ -485,8 +494,8 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                          (format "%s %s <%s>" name kind (file-name-nondirectory path))))
       (push (list (concat char key) (car first-sub) (cdr first-sub)) specs))
     (dolist (entry (append specs
-                           (--map (cons (concat key (car it)) (cdr it))
-                                  default-subs)))
+                           (seq-map (lambda (it) (cons (concat key (car it)) (cdr it)))
+                                    default-subs)))
       (let* ((key-sequence (nth 0 entry))
              (template-anchor (nth 1 entry))
              (description (nth 2 entry))

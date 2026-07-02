@@ -18,6 +18,9 @@
 (require 'sprite-session)
 (require 'alert)
 (require 'bootstrap)
+
+(declare-function resolve-plural-form "xtdlib")
+
 (require 'telega)
 (require 'telega-server)
 (require 'telega-chat)
@@ -78,6 +81,15 @@ Possible values:
   (and (eq system-type 'gnu/linux)
        (fboundp 'dbus-register-signal)))
 
+(defvar telega-extras--was-live-before-sleep nil
+  "Non-nil when telega was connected at the last system sleep.
+Used by `telega-extras--on-after-sleep' to decide whether to reconnect.")
+
+(defvar telega-extras--sleeping nil
+  "Non-nil while the system is asleep after a sleep-triggered disconnect.
+Prevents `telega-extras-teardown' from unregistering the logind watch,
+which must remain active to catch the wake signal.")
+
 (defun telega-extras--on-prepare-for-sleep (going-to-sleep)
   "Disconnect telega before system sleep.
 GOING-TO-SLEEP is t when entering sleep, nil on wake."
@@ -86,18 +98,30 @@ GOING-TO-SLEEP is t when entering sleep, nil on wake."
 
 (defun telega-extras--on-before-sleep ()
   "Disconnect telega before system sleep or suspend."
-  (when (telega-server-live-p)
+  (setq telega-extras--was-live-before-sleep (telega-server-live-p))
+  (when telega-extras--was-live-before-sleep
     (message "telega-extras: disconnecting before sleep/suspend")
+    (setq telega-extras--sleeping t)
     (telega-extras-disconnect)))
 
+(defun telega-extras--on-after-sleep ()
+  "Reconnect telega after system wake if it was live before sleep."
+  (setq telega-extras--sleeping nil)
+  (when telega-extras--was-live-before-sleep
+    (setq telega-extras--was-live-before-sleep nil)
+    (message "telega-extras: scheduling reconnect after wake")
+    (run-with-timer 3 nil #'telega)))
+
 (defun telega-extras-start-logind-watch ()
-  "Register `telega-extras--on-before-sleep' on the session sleep hook and start watch."
+  "Register sleep/wake handlers on session hooks and start watch."
   (add-hook 'sprite-session-before-sleep-hook #'telega-extras--on-before-sleep)
+  (add-hook 'sprite-session-after-sleep-hook #'telega-extras--on-after-sleep)
   (sprite-session-start-logind-watch))
 
 (defun telega-extras-stop-logind-watch ()
-  "Remove `telega-extras--on-before-sleep' from the session sleep hook and stop watch."
+  "Remove sleep/wake handlers from session hooks and stop watch."
   (remove-hook 'sprite-session-before-sleep-hook #'telega-extras--on-before-sleep)
+  (remove-hook 'sprite-session-after-sleep-hook #'telega-extras--on-after-sleep)
   (sprite-session-stop-logind-watch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -137,7 +161,7 @@ non-interactive callers never see a prompt."
 
     (alert (format "buried %d telega-chat-%s"
                    (length chat-windows)
-		   (s-plural-for chat-windows "buffer" "buffers"))
+		   (resolve-plural-form (length chat-windows) "buffer" "buffers"))
            :title (format "emacs.%s.telega" (sprite-instance-name))
            :persistent t)))
 
@@ -259,7 +283,8 @@ Prompts for confirmation when called interactively."
             (telega-extras--confirm "Tear down telega extras? "))
     (telega-extras-remove-root-default)
     (telega-extras-stop-idle-timer)
-    (telega-extras-stop-logind-watch)
+    (unless telega-extras--sleeping
+      (telega-extras-stop-logind-watch))
     (advice-remove 'telega-notifications-msg-notify-p
                    #'telega-extras--notify-skip-own)))
 

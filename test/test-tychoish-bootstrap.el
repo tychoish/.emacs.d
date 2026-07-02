@@ -1001,5 +1001,60 @@
   (cl-letf (((symbol-function 'buffer-list) (lambda () nil)))
     (should (listp (kill-buffers-visiting-missing-files)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; delight mode lighters
+
+(defmacro bootstrap-test/with-delight-applied (&rest body)
+  "Run BODY after ensuring delight lighters are applied."
+  (declare (indent 0))
+  `(progn
+     (require 'delight)
+     (bootstrap-set-up-delightful-mode-lighters)
+     ,@body))
+
+(ert-deftest bootstrap/delight-fundamental-mode-name ()
+  "fundamental-mode sets mode-name lighter to \"fun\" after delight runs.
+delight stores (INHIBIT-VAR ORIGINAL LIGHTER) in mode-name; the C mode-line
+renderer shows LIGHTER when INHIBIT-VAR is nil."
+  (bootstrap-test/with-delight-applied
+    (with-temp-buffer
+      (fundamental-mode)
+      (should (listp mode-name))
+      (should (equal "fun" (nth 2 mode-name))))))
+
+(ert-deftest bootstrap/delight-sh-mode-name ()
+  "sh-mode sets mode-name lighter to \"sh\" after delight runs."
+  (bootstrap-test/with-delight-applied
+    (with-temp-buffer
+      (sh-mode)
+      (should (listp mode-name))
+      (should (equal "sh" (nth 2 mode-name))))))
+
+(ert-deftest bootstrap/delight-org-mode-name ()
+  "org-mode sets mode-name lighter to \"org\" after delight runs."
+  (bootstrap-test/with-delight-applied
+    (with-temp-buffer
+      (org-mode)
+      (should (listp mode-name))
+      (should (equal "org" (nth 2 mode-name))))))
+
+(ert-deftest bootstrap/delight-visual-line-mode-lighter ()
+  "visual-line-mode lighter in minor-mode-alist is \"wr\" after delight runs."
+  (bootstrap-test/with-delight-applied
+    (should (equal "wr"
+                   (cadr (assq 'visual-line-mode minor-mode-alist))))))
+
+(ert-deftest bootstrap/delight-auto-revert-mode-hidden ()
+  "auto-revert-mode lighter in minor-mode-alist is nil after delight runs."
+  (bootstrap-test/with-delight-applied
+    (require 'autorevert)
+    (should (null (cadr (assq 'auto-revert-mode minor-mode-alist))))))
+
+(ert-deftest bootstrap/delight-eldoc-mode-hidden ()
+  "eldoc-mode lighter in minor-mode-alist is nil after delight runs."
+  (bootstrap-test/with-delight-applied
+    (require 'eldoc)
+    (should (null (cadr (assq 'eldoc-mode minor-mode-alist))))))
+
 (provide 'test-bootstrap)
 ;;; test-bootstrap.el ends here

@@ -36,9 +36,6 @@
 (use-package f
   :ensure t)
 
-(use-package ht
-  :ensure t)
-
 (require 'xtdlib)
 (require 'sprite)
 (require 'subr-x)
@@ -402,6 +399,10 @@ more arguments than the function cares about."
 
 (setq electric-pair-inhibit-predicate #'bootstrap-electric-pair-inhibition)
 
+(setq window-sides-vertical t)
+(setq uniquify-buffer-name-style 'post-forward-angle-brackets)
+(setq find-file-visit-truename t)
+
 (setq byte-compile-warnings
       ;; OMIT: free-vars docstrings-wide
       '(callargs
@@ -436,11 +437,10 @@ more arguments than the function cares about."
         tab-mark
         newline-mark))
 
-(setq package-archive-priorities '(("melpa"     . 100)
-				   ("elpa"      . 75)
-				   ("nongnu"    . 50)
-				   ("gnu"       . 25)
-				   ("jcs-elpa"  . 10)))
+(setq package-archive-priorities '(("melpa"    . 100)
+				   ("nongnu"   . 50)
+				   ("gnu"      . 25)
+				   ("jcs-elpa" . 10)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -553,6 +553,24 @@ more arguments than the function cares about."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; system -- darwin or linux specific settings
+
+(when (eq system-type 'darwin)
+  (setq read-process-output-max (* 64 1024))
+  (setq ns-function-modifier 'hyper)
+  (setq mac-command-modifier 'meta)
+  (setq mac-option-modifier 'super)
+  (setq ns-use-srgb-colorspace nil)
+  (setq display-highres t)
+  (add-hook 'after-make-frame-functions #'contextual-menubar))
+
+(when (eq system-type 'gnu/linux)
+  (setq read-process-output-max (* 1024 1024))
+  (setq x-alt-keysym 'meta)
+  (setq x-super-keysym 'super))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;; silent startup -- avoid printing or using the Messages buffer
 
 (defun display-startup-echo-area-message ()
@@ -641,16 +659,21 @@ more arguments than the function cares about."
 (defun bootstrap-set-up-delightful-mode-lighters ()
   (with-slow-op-timer
     "<bootstrap.el> after-init [delight]"
-    (delight 'org-mode "org")
-    (delight 'org-agenda-mode "agenda")
-    (delight 'auto-revert-mode)
-    (delight 'eldoc-mode)
+    (delight 'auto-fill-function "afm" 'simple)
+    (delight 'auto-revert-mode nil 'autorevert)
+    (delight 'eglot--managed-mode "" 'eglot)
+    (delight 'eldoc-mode nil 'eldoc)
     (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) :major)
-    (delight 'auto-fill-function " afm")
-    (delight 'overwrite-mode "om")
-    (delight 'refill-mode "rf")
-    (delight 'visual-line-mode " wr")
-    (delight 'fundamental-mode "fun")))
+    (delight 'flycheck-mode "fc" 'flycheck)
+    (delight 'fundamental-mode "fun" :major)
+    (delight 'lisp-interaction-mode "lisp" :major)
+    (delight 'org-agenda-mode "agenda" 'org-agenda)
+    (delight 'org-mode "org" :major)
+    (delight 'overwrite-mode "om" 'simple)
+    (delight 'projectile-mode "p" 'projectile)
+    (delight 'refill-mode "rf" 'refill)
+    (delight 'sh-mode "sh" :major)
+    (delight 'visual-line-mode "wr" 'simple)))
 
 (add-lazy-init
  :name "<bootstrap> late enable modes"
@@ -672,11 +695,8 @@ more arguments than the function cares about."
  :operation 'bootstrap-set-up-emacs-instance-persistence
  :delay 0.25)
 
-(add-one-shot-hook
- :name "delight-modeline"
- :function bootstrap-set-up-delightful-mode-lighters
- :hook doom-modeline-mode-hook
- :idle-timer 0.75)
+(with-eval-after-load 'delight
+  (bootstrap-set-up-delightful-mode-lighters))
 
 (add-one-shot-hook
  :name "emacs-lockfile-setup"
@@ -819,8 +839,6 @@ Returns the list of files that were recompiled."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; frame/window -- setup and manage frames and windows
-
-(setq window-sides-vertical t)
 
 (defun kill-eldoc-and-help-buffers ()
   "Kills all eldoc and help buffers"
@@ -1350,14 +1368,9 @@ Does nothing if the current post is not in the drafts folder."
 
 (defun clean-kill-ring-filter-catch-p (string)
   "T if STRING satisfies at least one of `clean-kill-ring-filters'."
-  (let ((caught nil)
-        (s (substring-no-properties string)))
-    (catch 'loop
-      (dolist (filter clean-kill-ring-filters)
-        (when (funcall filter s)
-          (setq caught t)
-          (throw 'loop t))))
-    caught))
+  (let ((s (substring-no-properties string)))
+    (seq-some (lambda (filter) (funcall filter s))
+              clean-kill-ring-filters)))
 
 (defun clean-kill-ring-clean (&optional remove-dups)
   "Remove `kill-ring' members that satisfy one of`clean-kill-ring-filters'.
@@ -1487,24 +1500,6 @@ interactively then remove duplicate items from the `kill-ring'."
 		 (<= 1 (length sockets)))
 	(setq env-value (setenv "SSH_AUTH_SOCK" (car sockets)))))
     env-value))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; system -- darwin or linux specific settings
-
-(when (eq system-type 'darwin)
-  (setq read-process-output-max (* 64 1024))
-  (setq ns-function-modifier 'hyper)
-  (setq mac-command-modifier 'meta)
-  (setq mac-option-modifier 'super)
-  (setq ns-use-srgb-colorspace nil)
-  (setq display-highres t)
-  (add-hook 'after-make-frame-functions #'contextual-menubar))
-
-(when (eq system-type 'gnu/linux)
-  (setq read-process-output-max (* 1024 1024))
-  (setq x-alt-keysym 'meta)
-  (setq x-super-keysym 'super))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1793,8 +1788,8 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
     (load (expand-file-name "test-helper" test-dir) nil t)
     (run-with-timer (or timeout 240) nil (lambda () (kill-emacs 1)))
     (condition-case err
-        (dolist (file (directory-files test-dir t "\\`test-.*\\.el\\'"))
-          (load file nil t))
+        (seq-do (lambda (file) (load file nil t))
+                (directory-files test-dir t "\\`test-.*\\.el\\'"))
       (error
        (message "bootstrap-run-ci-tests: error loading test files: %S" err)
        (kill-emacs 1)))
@@ -1838,8 +1833,9 @@ block in bootstrap-core.el, sorted by LINE-COUNT descending."
         (erase-buffer)
         (insert (format "%-40s %s\n" "Package" "Lines"))
         (insert (make-string 48 ?-) "\n")
-        (dolist (entry results)
-          (insert (format "%-40s %d\n" (car entry) (cdr entry))))
+        (seq-do (lambda (entry)
+                  (insert (format "%-40s %d\n" (car entry) (cdr entry))))
+                results)
         (goto-char (point-min)))
       (special-mode))
     (pop-to-buffer buf)))
