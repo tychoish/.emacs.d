@@ -126,12 +126,12 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
 ;; hud-modeline--render-segments
 
 (ert-deftest hud-modeline--render-segments-concatenates-results ()
-  "render-segments concatenates results of all non-nil segment functions."
+  "render-segments joins results of all non-nil segment functions with a space."
   (let ((segs '((a . hud-modeline--test-seg-foo)
                 (b . hud-modeline--test-seg-bar))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
               ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
-      (should (equal "foobar" (hud-modeline--render-segments segs))))))
+      (should (equal "foo bar" (hud-modeline--render-segments segs))))))
 
 (ert-deftest hud-modeline--render-segments-skips-nil-disabled ()
   "render-segments skips segments with nil function (disabled)."
@@ -140,7 +140,7 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
                 (c . hud-modeline--test-seg-bar))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
               ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
-      (should (equal "foobar" (hud-modeline--render-segments segs))))))
+      (should (equal "foo bar" (hud-modeline--render-segments segs))))))
 
 (ert-deftest hud-modeline--render-segments-skips-nil-return ()
   "render-segments skips segments whose function returns nil."
@@ -150,7 +150,7 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
               ((symbol-function 'hud-modeline--test-seg-nil) (lambda () nil))
               ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
-      (should (equal "foobar" (hud-modeline--render-segments segs))))))
+      (should (equal "foo bar" (hud-modeline--render-segments segs))))))
 
 (ert-deftest hud-modeline--render-segments-empty-alist ()
   "render-segments returns empty string for an empty alist."
@@ -212,10 +212,13 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
 (ert-deftest hud-modeline--disabled-segment-absent-from-output ()
   "A disabled segment contributes nothing to the rendered mode line."
   (let ((hud-modeline-left-segments
-         (list (cons 'a #'hud-modeline--separator)
+         (list (cons 'a #'hud-modeline--test-seg-foo)
                (cons 'b nil)
-               (cons 'c #'hud-modeline--separator))))
-    (should (equal "  " (hud-modeline--render-segments hud-modeline-left-segments)))))
+               (cons 'c #'hud-modeline--test-seg-bar))))
+    (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
+              ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
+      (should (equal "foo bar"
+                     (hud-modeline--render-segments hud-modeline-left-segments))))))
 
 (ert-deftest hud-modeline--override-segment-affects-rendering ()
   "An overridden segment's new function is used during rendering."
