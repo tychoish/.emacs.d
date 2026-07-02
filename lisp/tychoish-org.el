@@ -414,7 +414,8 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (setq org-capture-templates '(("t" "tasks")
                                 ("j" "journal")
                                 ("n" "notes")
-                                ("r" "routines"))))
+                                ("r" "routines")
+                                ("a" "agent"))))
 
 ;;;###autoload
 (cl-defun tychoish/org-capture-add-routine-templates
@@ -615,7 +616,13 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 
   (tychoish/org-capture-add-task-templates
    :name "prime"
-   :path "planner.org"))
+   :path "planner.org")
+
+  (add-to-list 'org-capture-templates
+               `("a" "agent" entry
+                 (file ,(expand-file-name "agent.org" org-directory))
+                 "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%i"
+                 :kill-buffer t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
