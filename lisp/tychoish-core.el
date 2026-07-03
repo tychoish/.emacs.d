@@ -371,7 +371,14 @@
 		 ("r" . anzu-query-replace)
 		 ("e" . anzu-query-replace-regexp)
 		 :map isearch-mode-map
-		 ("C-o" . isearch-occur)))
+		 ("C-o" . isearch-occur))
+  :init
+  (setq anzu-cons-mode-line-p nil)
+  :config
+  (seq-do #'make-variable-buffer-local
+          '(anzu--total-matched anzu--current-position anzu--state
+            anzu--cached-count anzu--cached-positions anzu--last-command
+            anzu--last-isearch-string anzu--overflow-p)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -722,11 +729,11 @@
   ;; number of toggles. That breaks `corfu--popup-support-p' in TTY
   ;; and makes `corfu--in-region' fall through to the default
   ;; *Completions* buffer.
-  (add-hook 'corfu-mode-hook
-	    (lambda ()
-	      (unless (or (bound-and-true-p corfu-terminal-mode)
-			  (display-graphic-p))
-		(corfu-terminal-mode +1))))
+  (add-hook 'corfu-mode-hook #'tychoish--corfu-maybe-terminal)
+  (defun tychoish--corfu-maybe-terminal ()
+    (unless (or (bound-and-true-p corfu-terminal-mode)
+		(display-graphic-p))
+      (corfu-terminal-mode +1)))
   :config
   (setq corfu-terminal-disable-on-gui t)
   (setq corfu-terminal-enable-on-minibuffer nil))
@@ -2562,7 +2569,7 @@ Useful after changing `eglot-workspace-configuration' or
   (agent-shell-mode-key "TAB" agent-shell-ui-toggle-fragment)
   (agent-shell-mode-key "q" agent-shell-queue-buffer-open)
 
-  (unbind-key "SPC" 'agent-shell-mode)
+  (unbind-key "SPC" 'agent-shell-mode-map)
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."

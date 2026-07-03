@@ -28,6 +28,7 @@
 (require 'map)
 (require 'seq)
 
+(declare-function anzu--reset-status "anzu")
 (declare-function flycheck-count-errors "flycheck")
 (declare-function sprite-list-menu "sprite")
 (declare-function nerd-icons-codicon "nerd-icons")
@@ -117,7 +118,7 @@ See `hud-modeline--misc-segment'."
   :group 'hud-modeline)
 
 (defface hud-modeline-position
-  '((t :inherit mode-line :underline nil))
+  '((t :underline nil))
   "Face for line/column position."
   :group 'hud-modeline)
 
@@ -290,6 +291,27 @@ callers who suppress eglot's misc-info entry still get the full status."
   "Return formatted line:column position with trailing space."
   (concat (format-mode-line '(:propertize "%l:%c" face hud-modeline-position))
           " "))
+
+(defun hud-modeline--anzu ()
+  "Return anzu search match index string, or nil when anzu is inactive.
+Reads anzu state variables directly so the segment works without anzu
+prepending anything to `mode-line-format'.  Set `anzu-cons-mode-line-p'
+to nil in the anzu use-package config to suppress anzu's own insertion."
+  (when (and (bound-and-true-p anzu--state)
+             (not (bound-and-true-p iedit-mode)))
+    (let ((here anzu--current-position)
+          (total anzu--total-matched))
+      (propertize
+       (cond
+        ((eq anzu--state 'replace-query)
+         (format "%d replace" (bound-and-true-p anzu--cached-count)))
+        ((eq anzu--state 'replace)
+         (format "%d/%d" here total))
+        ((bound-and-true-p anzu--overflow-p)
+         (format "%s+" total))
+        (t
+         (format "%s/%d" here total)))
+       'face 'hud-modeline-warning))))
 
 (defun hud-modeline--buffer-size ()
   "Return propertized buffer char count with trailing space, or nil when disabled."
@@ -485,8 +507,14 @@ is not present in FROM-VAR."
 ;; Each goes before `position' so they appear left of the position/size/misc block.
 (hud-modeline-add-segment
     :segment-block 'hud-modeline-right-segments
+    :key 'anzu
+    :place-after 'misc
+    :fn #'hud-modeline--anzu)
+
+(hud-modeline-add-segment
+    :segment-block 'hud-modeline-right-segments
     :key 'instance
-    :place-before 'position
+    :place-after 'projectile
     :body (when (and (featurep 'sprite) (boundp 'sprite-instance-id) sprite-instance-id)
             (concat (propertize (concat "[" sprite-instance-id "]")
                                 'local-map (hud-modeline--action-map 'instance)
@@ -496,7 +524,7 @@ is not present in FROM-VAR."
 
 (hud-modeline-add-segment
     :segment-block 'hud-modeline-right-segments
-    :place-before 'position
+    :place-after 'anzu
     :key 'compilation
     :body (cond
             ((bound-and-true-p compilation-in-progress)
@@ -565,11 +593,12 @@ is not present in FROM-VAR."
                      (fboundp 'projectile-project-name))
             (when-let* ((name (projectile-project-name))
                         (_ (not (equal name "-"))))
-              (concat "| " (propertize name
-                                       'face 'mode-line-buffer-id
-                                       'local-map (hud-modeline--action-map 'projectile)
-                                       'mouse-face 'mode-line-highlight
-                                       'help-echo "mouse-1: projectile dispatch")
+              (concat (when vc-mode "| ")
+                      (propertize name
+                                  'face 'mode-line-buffer-id
+                                  'local-map (hud-modeline--action-map 'projectile)
+                                  'mouse-face 'mode-line-highlight
+                                  'help-echo "mouse-1: projectile dispatch")
                       " "))))
 
 ;; Default actions for built-in segments.
@@ -630,6 +659,9 @@ and batch contexts."
 
 (defun hud-modeline--render ()
   "Render full mode-line with right-aligned right side.
+Uses a display `(space :align-to (- right N))' property for the fill so the
+right side stays flush to the window edge regardless of content prepended to
+`mode-line-format' by other packages (e.g. anzu, popper).
 Truncates the right side when lhs + rhs would exceed the window width."
   (let* ((lhs (hud-modeline--pad (hud-modeline--left) t))
          (rhs-raw (hud-modeline--pad (hud-modeline--right) nil))
@@ -640,9 +672,10 @@ Truncates the right side when lhs + rhs would exceed the window width."
          (rhs (if (> rhs-raw-cols rhs-max)
                   (truncate-string-to-width rhs-raw rhs-max nil nil "…")
                 rhs-raw))
-         (rhs-cols (if (eq rhs rhs-raw) rhs-raw-cols (hud-modeline--cols rhs)))
-         (fill (max 1 (- window-width lhs-cols rhs-cols))))
-    (concat lhs (make-string fill ?\s) rhs)))
+         (rhs-cols (if (eq rhs rhs-raw) rhs-raw-cols (hud-modeline--cols rhs))))
+    (concat lhs
+            (propertize " " 'display `((space :align-to (- right ,rhs-cols))))
+            rhs)))
 
 ;;;; Mode
 

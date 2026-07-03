@@ -43,17 +43,18 @@
 Root cause: delight stores (INHIBIT-VAR ORIGINAL LIGHTER) in mode-name.
 With INHIBIT-VAR nil the C renderer shows LIGHTER, but format-mode-line
 returns empty string instead.
-This behavior only manifests in batch mode (no display server)."
-  (skip-unless noninteractive)
+This behavior only manifests in batch mode without delight: delight's advice
+around format-mode-line correctly returns the lighter in interactive sessions."
+  (skip-unless (and noninteractive (not (featurep 'delight))))
   (let ((hud-modeline--test-inhibit nil))
     (should (equal "" (format-mode-line '(hud-modeline--test-inhibit "original" "lighter"))))))
 
 (ert-deftest hud-modeline--delight-form-via-format-mode-line-returns-empty ()
   "format-mode-line of a delight 3-element mode-name returns empty string.
-Confirms the root cause: format-mode-line cannot render the lighter.
-This behavior only manifests in batch mode; in an interactive session
-delight's advice on format-mode-line causes it to render the lighter."
-  (skip-unless noninteractive)
+Confirms the root cause: format-mode-line cannot render the lighter without
+delight's advice active.  Skipped when delight is loaded because delight's
+advice on format-mode-line causes it to render the lighter instead."
+  (skip-unless (and noninteractive (not (featurep 'delight))))
   (with-temp-buffer
     (setq-local mode-name '(delight-mode-name-inhibit "Fundamental" "fun"))
     (should (equal "" (format-mode-line mode-name nil nil (current-buffer))))))
@@ -296,10 +297,18 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
        (advice-remove 'hud-modeline--right #'hud-modeline--test-right-stub)
        (advice-remove 'window-body-width #'hud-modeline--test-width-stub))))
 
-(ert-deftest hud-modeline--render-total-width-equals-window-body-width ()
-  "Rendered mode line is exactly as wide as window-body-width."
+(ert-deftest hud-modeline--render-uses-display-align-to ()
+  "Rendered mode line uses a display align-to property for right-alignment.
+The fill space between lhs and rhs carries a (space :align-to (- right N))
+display property so the rhs stays flush to the window edge regardless of
+content prepended to mode-line-format by packages such as anzu or popper."
   (hud-modeline-test--with-render-stubs "lhs" "rhs" 40
-    (should (equal 40 (string-width (hud-modeline--render))))))
+    (let* ((result (hud-modeline--render))
+           (fill-start (+ (length " lhs") 0))
+           (disp (get-text-property fill-start 'display result)))
+      (should disp)
+      (should (eq 'space (car (car disp))))
+      (should (plist-get (cdr (car disp)) :align-to)))))
 
 (ert-deftest hud-modeline--render-lhs-at-left-edge ()
   "Rendered mode line begins with the padded left content."
@@ -312,30 +321,37 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
     (should (string-suffix-p "rhs " (hud-modeline--render)))))
 
 (ert-deftest hud-modeline--render-lhs-rhs-separated-by-fill ()
-  "Left and right content are separated by one or more spaces."
+  "Left and right content are separated by a fill space with display alignment."
   (hud-modeline-test--with-render-stubs "lhs" "rhs" 40
-    (let ((result (hud-modeline--render)))
-      (should (string-match-p " lhs +rhs " result)))))
+    (let* ((result (hud-modeline--render))
+           ;; fill space is the single space between padded lhs and rhs
+           (fill-pos (length " lhs")))
+      (should (string-match-p " lhs rhs " result))
+      (should (get-text-property fill-pos 'display result)))))
 
 (ert-deftest hud-modeline--render-fill-minimum-one-when-content-exceeds-width ()
-  "Fill is at least 1 space even when lhs+rhs exceeds window-body-width."
+  "Fill contains at least 1 space character even when lhs+rhs exceeds window width.
+With display align-to, the fill is always exactly 1 propertized space character."
   (hud-modeline-test--with-render-stubs
       "this-left-side-is-very-long"
       "this-right-side-is-also-quite-long"
       20
     (let* ((result (hud-modeline--render))
-           (lhs-end (+ 1 (length "this-left-side-is-very-long")))
-           (rhs-start (- (length result)
-                         (+ 1 (length "this-right-side-is-also-quite-long")))))
-      (should (>= rhs-start lhs-end)))))
+           (lhs-len (length " this-left-side-is-very-long")))
+      (should (> (length result) lhs-len))
+      (should (equal " " (substring result lhs-len (1+ lhs-len)))))))
 
-(ert-deftest hud-modeline--render-width-tracks-window-resize ()
-  "Rendered width correctly tracks different window-body-width values."
-  (seq-do
-   (lambda (w)
-     (hud-modeline-test--with-render-stubs "lhs" "rhs" w
-       (should (equal w (string-width (hud-modeline--render))))))
-   '(40 80 120 200)))
+(ert-deftest hud-modeline--render-align-to-uses-rhs-cols ()
+  "The align-to target changes when rhs width changes."
+  (hud-modeline-test--with-render-stubs "lhs" "short" 80
+    (let* ((r1 (hud-modeline--render))
+           (d1 (get-text-property (+ (length " lhs") 0) 'display r1))
+           (align1 (plist-get (cdr (car d1)) :align-to)))
+      (hud-modeline-test--with-render-stubs "lhs" "much-longer-rhs" 80
+        (let* ((r2 (hud-modeline--render))
+               (d2 (get-text-property (+ (length " lhs") 0) 'display r2))
+               (align2 (plist-get (cdr (car d2)) :align-to)))
+          (should (not (equal align1 align2))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline-format structure
