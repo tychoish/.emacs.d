@@ -105,7 +105,6 @@ more arguments than the function cares about."
  ("C-x m" . execute-extended-command)
  ("C-x C-m" . execute-extended-command)
  ("M-X" . execute-extended-command-for-buffer)
- ("C-x b" . switch-to-buffer) ;; vs consult-buffer
  ("C-x l" . goto-line)
  ("C-x f" . find-file)
  ("C-x C-f" . find-file)
@@ -881,13 +880,15 @@ Returns the list of files that were recompiled."
   (text-scale-set 0))
 
 (defun djcb-opacity-modify (&optional dec)
-  "Modify the transparency of the frame.
-If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
-  (let* ((alpha-or-nil (frame-parameter nil 'alpha)) ; nil before setting
-         (oldalpha (if alpha-or-nil alpha-or-nil 100))
-         (newalpha (if dec (- oldalpha 2) (+ oldalpha 2))))
-    (when (and (>= newalpha frame-alpha-lower-limit) (<= newalpha 100))
-      (modify-frame-parameters nil (list (cons 'alpha newalpha))))))
+  "Modify frame transparency by 5% steps."
+  (let* ((raw (frame-parameter nil 'alpha))
+         (current (cond
+                   ((null raw) 1.0)
+                   ((floatp raw) raw)
+                   (t (/ raw 100.0))))
+         (next (if dec (- current 0.025) (+ current 0.025))))
+    (when (and (>= next 0.2) (<= next 1.0))
+      (modify-frame-parameters nil (list (cons 'alpha next))))))
 
 (defun opacity-increase ()
   (interactive)
@@ -899,7 +900,13 @@ If DEC is t, decrease the transparency, otherwise increase it in 10%-steps"
 
 (defun opacity-reset ()
   (interactive)
-  (modify-frame-parameters nil `((alpha . 95))))
+  (modify-frame-parameters nil '((alpha . 0.95))))
+
+(defvar-keymap tychoish/opacity-repeat-map
+  :repeat t
+  "=" #'opacity-increase
+  "-" #'opacity-decrease
+  "0" #'opacity-reset)
 
 (defun disable-all-themes ()
   (interactive)

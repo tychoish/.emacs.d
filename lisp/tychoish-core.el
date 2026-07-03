@@ -772,8 +772,8 @@
 	 ;; tychoish/wacky
 	 ([remap Info-search] . consult-info)
 	 ;; C-x bindings in `ctl-x-map'
-	 ("C-x M-:" . consult-complex-command)	   ;; orig. repeat-complex-command
-	 ("C-x C-b" . consult-buffer)		 ;; orig. list-buffers
+	 ("C-x :" . consult-complex-command)	   ;; orig. repeat-complex-command
+	 ("C-x b" . consult-buffer)		 ;; orig. list-buffers
 	 ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
 	 ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
 	 ("C-x t b" . consult-buffer-other-tab)	   ;; orig. switch-to-buffer-other-tab
@@ -964,10 +964,11 @@
 (use-package revbufs
   :ensure t
   :bind (("C-x x a" . revbufs)
-	 :prefix "C-c b"
+	 :prefix "C-x b"
 	 :prefix-map tychoish/buffer-control-map
 	 ("k" . kill-this-buffer)
 	 ("d" . kill-buffers-in-directory)
+	 ("<SPC>" . switch-to-buffer)
 	 ("m" . kill-buffers-matching-mode)
 	 ("h" . bury-buffer)
 	 ("r" . revbufs)
@@ -1388,6 +1389,9 @@ does not manage (e.g. status, plan-type)."
   :ensure t
   :delight (markdown-mode "mdwn")
   :mode ("\\.mdwn" "\\.md" "\\.markdown" "\\.txt")
+  :commands (tychoish/markdown-align-tables
+             tychoish/markdown-align-tables-in-file
+             tychoish/markdown-align-tables-dired)
   :init
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
@@ -1408,7 +1412,32 @@ does not manage (e.g. status, plan-type)."
 	  ("h4"	  "^#### \\(.*\\)$" 1)
 	  ("h5"	  "^##### \\(.*\\)$" 1)
 	  ("h6"	  "^###### \\(.*\\)$" 1)
-	  ("fn"	  "^\\[\\^\\(.*\\)\\]" 1))))
+	  ("fn"	  "^\\[\\^\\(.*\\)\\]" 1)))
+
+  (defun tychoish/markdown-align-tables ()
+    "Align all tables in the current buffer."
+    (interactive)
+    (save-excursion
+      (goto-char (point-min))
+      (let ((count 0))
+        (while (re-search-forward "^|" nil t)
+          (when (markdown-table-at-point-p)
+            (markdown-table-align)
+            (setq count (1+ count))
+            (goto-char (markdown-table-end))))
+        (message "Aligned %d table(s)" count))))
+
+  (defun tychoish/markdown-align-tables-in-file (file)
+    "Align all markdown tables in FILE."
+    (interactive "fMarkdown file: ")
+    (with-current-buffer (find-file-noselect file)
+      (tychoish/markdown-align-tables)
+      (save-buffer)))
+
+  (defun tychoish/markdown-align-tables-dired ()
+    "Align tables in all marked files in the current dired buffer."
+    (interactive)
+    (seq-do #'tychoish/markdown-align-tables-in-file (dired-get-marked-files))))
 
 (use-package fountain-mode
   :ensure t
