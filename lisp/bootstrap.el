@@ -316,6 +316,8 @@ more arguments than the function cares about."
 
 (setq ad-redefinition-action 'accept)
 
+(setq switch-to-prev-buffer-skip 'visible)
+
 (setq ring-bell-function #'ignore)
 (setq font-lock-support-mode 'jit-lock-mode)
 (setq jit-lock-stealth-time nil)
@@ -739,14 +741,14 @@ more arguments than the function cares about."
 
 (defun bootstrap-set-up-user-local-config ()
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
-    (thread-last
-      (file-name-concat user-emacs-directory "user")
-      (funcall (lambda (path) (when (file-directory-p path) (f-entries path))))
-      (seq-filter (lambda (it) (string-suffix-p ".el" it)))
-      (seq-map #'file-name-nondirectory)
-      (seq-map #'file-name-sans-extension)
-      (seq-map #'intern)
-      (seq-map #'bootstrap--load-user-file)))
+  (thread-last
+    (file-name-concat user-emacs-directory "user")
+    (funcall (lambda (path) (when (file-directory-p path) (f-entries path))))
+    (seq-filter (lambda (it) (string-suffix-p ".el" it)))
+    (seq-map #'file-name-nondirectory)
+    (seq-map #'file-name-sans-extension)
+    (seq-map #'intern)
+    (seq-map #'bootstrap--load-user-file)))
 
 (defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
   "cache mapping file names to files' mtime to avoid re-importing files")
@@ -815,12 +817,12 @@ Returns the list of files that were recompiled."
   (thread-last (cons user-emacs-directory
                      (seq-filter #'file-directory-p
                                  (directory-files user-emacs-directory t "^[^.]")))
-    (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
-    (seq-filter #'file-regular-p)
-    (seq-keep (lambda (f)
-                (unless (eq 'no-byte-compile
-                            (byte-recompile-file f current-prefix-arg))
-                  f)))))
+	       (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
+	       (seq-filter #'file-regular-p)
+	       (seq-keep (lambda (f)
+			   (unless (eq 'no-byte-compile
+				       (byte-recompile-file f current-prefix-arg))
+			     f)))))
 
 (declare-function package-installed-p "package")
 (declare-function package-desc-p "package")
@@ -1008,11 +1010,11 @@ Returns the list of files that were recompiled."
     (setq directory (annotated-completing-read-directory)))
 
   (let ((killed (thread-last (buffer-list)
-                  (seq-filter #'buffer-file-name)
-                  (seq-filter (lambda (buf) (f-ancestor-of-p directory (buffer-file-name buf))))
-                  (seq-map (lambda (buf) (cons (buffer-file-name buf) (kill-buffer buf))))
-                  (seq-filter #'cdr)
-                  (seq-map (lambda (c) (f-collapse-homedir (car c)))))))
+			     (seq-filter #'buffer-file-name)
+			     (seq-filter (lambda (buf) (f-ancestor-of-p directory (buffer-file-name buf))))
+			     (seq-map (lambda (buf) (cons (buffer-file-name buf) (kill-buffer buf))))
+			     (seq-filter #'cdr)
+			     (seq-map (lambda (c) (f-collapse-homedir (car c)))))))
 
     (if (called-interactively-p 'any)
 	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (string-join killed ", "))
@@ -1026,9 +1028,9 @@ Returns the list of files that were recompiled."
    ((and (stringp thing)
 	 (file-exists-p thing))
     (thread-last (buffer-list)
-      (seq-filter (lambda (buf) (f-equal-p thing (buffer-file-name buf))))
-      seq-uniq
-      (seq-mapcat (lambda (buf) (with-current-buffer buf (buffers-matching-path (approximate-project-root)))))))))
+		 (seq-filter (lambda (buf) (f-equal-p thing (buffer-file-name buf))))
+		 seq-uniq
+		 (seq-mapcat (lambda (buf) (with-current-buffer buf (buffers-matching-path (approximate-project-root)))))))))
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 
@@ -1042,13 +1044,13 @@ Ignores buffers whose name starts with a space, unless optional
 prefix argument INTERNAL-TOO is non-nil.  Asks before killing
 each buffer, unless NO-ASK is non-nil."
   (interactive "sKill buffers visiting a path matching this regular expression: \n")
-  (let* ((buffers (buffers-matching-path regexp internal-too))
-	 (killed (thread-last buffers
-                  (seq-map (lambda (buf)
-                             (cons (buffer-file-name buf)
-                                   (funcall (if no-ask #'kill-buffer #'kill-buffer-ask) buf))))
-                  (seq-filter #'cdr)
-                  (seq-map #'car))))
+  (let ((killed (thread-last
+		  (buffers-matching-path regexp internal-too)
+		  (seq-map (lambda (buf)
+			     (cons (buffer-file-name buf)
+				   (funcall (if no-ask #'kill-buffer #'kill-buffer-ask) buf))))
+		  (seq-filter #'cdr)
+		  (seq-map #'car))))
 
     (if (called-interactively-p 'any)
 	(message "killed %d buffers matching '%S'" (length killed) (string-join killed ", "))
