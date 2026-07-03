@@ -607,7 +607,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 ;; org capture templates definitions
 (defun tychoish-org--setup-standard-capture-templates ()
   (tychoish/org-capture-add-note-templates
-   :name "scratch"
+   :name "notes"
    :path "records.org")
 
   (tychoish/org-capture-add-journal-templates
@@ -618,11 +618,15 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :name "prime"
    :path "planner.org")
 
-  (add-to-list 'org-capture-templates
-               `("a" "agent" entry
-                 (file ,(expand-file-name "agent.org" org-directory))
-                 "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%i"
-                 :kill-buffer t)))
+  (tychoish/org-capture-add-task-templates
+   :name "agent"
+   :path "agent.org"
+   :key "a")
+
+  (tychoish/org-capture-add-journal-templates
+   :name "agent"
+   :path "agent.org"
+   :key "a")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
