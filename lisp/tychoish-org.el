@@ -626,7 +626,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (tychoish/org-capture-add-journal-templates
    :name "agent"
    :path "agent.org"
-   :key "a")))
+   :key "a"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
