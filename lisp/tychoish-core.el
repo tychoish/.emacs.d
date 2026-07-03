@@ -59,11 +59,11 @@
 
 (use-package hud
   :ensure nil
-  :commands (hud-menu hud-select)
-  :bind (("C-x ." . hud-menu)
+  :commands (hud-dispatch hud-select)
+  :bind (("C-x ." . hud-dispatch)
 	 ("C-x ," . hud-select)
 	 :map tychoish/core-map
-         ("m" . hud-menu)
+         ("m" . hud-dispatch)
          ("," . hud-select)))
 
 (use-package arch
@@ -964,15 +964,16 @@
 (use-package revbufs
   :ensure t
   :bind (("C-x x a" . revbufs)
-	 :prefix "C-x b"
+	 :prefix "C-x C-b"
 	 :prefix-map tychoish/buffer-control-map
 	 ("k" . kill-this-buffer)
 	 ("d" . kill-buffers-in-directory)
-	 ("<SPC>" . switch-to-buffer)
+	 ("<SPC>" . revert-buffer-quick)
 	 ("m" . kill-buffers-matching-mode)
 	 ("h" . bury-buffer)
 	 ("r" . revbufs)
-	 ("b" . revert-buffer-quick))
+	 ("b" . switch-to-buffer)
+	 ("n" . switch-to-buffer-other-window))
   :commands (revbufs)
   :config
   (bind-keys
@@ -1093,11 +1094,17 @@
 	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
 
   (with-eval-after-load 'nerd-icons
+    (setq nerd-icons-mode-icon-alist
+          (seq-remove (lambda (entry)
+                        (memq (car entry) '(magit-dash-mode
+                                            magit-dash-gh-pr-dashboard-mode
+                                            magit-dash-gh-actions-log-mode)))
+                      nerd-icons-mode-icon-alist))
     (seq-do (lambda (entry)
               (add-to-list 'nerd-icons-mode-icon-alist entry))
-            '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face 'nerd-icons-orange)
-              (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face 'nerd-icons-orange)
-              (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face 'nerd-icons-orange)))))
+            '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
+              (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
+              (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
 
 (use-package smerge-mode
   :after (magit)
@@ -1312,15 +1319,15 @@
          ("l" . denote-link)
          ("b" . denote-backlinks)
          ("r" . denote-rename-file)
-         ("d" . denote-dired)
+         ("dd" . denote-dispatch)
          ("R" . denote-rename-file-using-front-matter))
   :config
   (consult-denote-mode)
-  (setq denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
+  (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-file-type 'markdown-yaml)
-  (setq denote-id-format "%Y-%m-%d.%H%M%S")
-  (setq denote-id-regexp "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\.[0-9]\\{6\\}")
-  (setq denote-date-format "%Y-%m-%d")
+  (setq denote-id-format "%Y%m%dT%H%M%S")
+  (setq denote-journal-title-format nil)
+  (setq denote-journal-directory (file-name-concat local-notes-directory "denote" "journal"))
   (setq denote-known-keywords '("org" "project" "reference" "journal" "idea"))
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
@@ -1328,6 +1335,9 @@
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
     (add-to-list 'savehist-additional-variables 'denote--keywords-history))
+  (setq denote-rename-buffer-format "%>16t<%k>")
+  (denote-rename-buffer-mode 1)
+
   (defun tychoish-denote-add-frontmatter-field (key value)
     "Insert KEY: VALUE into the YAML frontmatter of the current buffer.
 Inserts immediately before the closing --- line.  Intended for use
@@ -1356,8 +1366,8 @@ does not manage (e.g. status, plan-type)."
          ("j" . denote-journal-new-entry))
   :commands (denote-journal-new-entry denote-journal-new-entry-after-last)
   :config
-  (setq denote-journal-directory
-        (file-name-concat denote-directory "journal")))
+(setq denote-journal-directory
+        (file-name-concat local-notes-directory "denote" "journal")))
 
 (use-package denote-sequence
   :ensure t
@@ -1384,6 +1394,9 @@ does not manage (e.g. status, plan-type)."
   :after (denote markdown-mode)
   :commands (denote-markdown-convert-links-to-markdown-format
              denote-markdown-convert-links-to-denote-format))
+
+(with-eval-after-load 'transient
+  (require 'denote-dispatch))
 
 (use-package markdown-mode
   :ensure t
@@ -2652,12 +2665,12 @@ Useful after changing `eglot-workspace-configuration' or
   (with-eval-after-load 'nerd-icons
     (seq-do (lambda (entry)
               (add-to-list 'nerd-icons-mode-icon-alist entry))
-            '((agent-shell-queue-mode nerd-icons-codicon "nf-cod-list-ordered" :face 'nerd-icons-purple)
-              (agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-file-text" :face 'nerd-icons-purple)
-              (agent-shell-queue-edit-mode nerd-icons-codicon "nf-cod-edit" :face 'nerd-icons-purple)
-              (agent-shell-queue-capture-mode nerd-icons-codicon "nf-cod-record" :face 'nerd-icons-purple)
-              (agent-shell-queue-raw-edit-mode nerd-icons-codicon "nf-cod-file-code" :face 'nerd-icons-purple)
-              (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment-discussion" :face 'nerd-icons-purple)))))
+            '((agent-shell-queue-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-purple)
+              (agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-file-text" :face nerd-icons-purple)
+              (agent-shell-queue-edit-mode nerd-icons-codicon "nf-cod-edit" :face nerd-icons-purple)
+              (agent-shell-queue-capture-mode nerd-icons-codicon "nf-cod-record" :face nerd-icons-purple)
+              (agent-shell-queue-raw-edit-mode nerd-icons-codicon "nf-cod-file-code" :face nerd-icons-purple)
+              (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment-discussion" :face nerd-icons-purple)))))
 
 (use-package agent-shell-manager
   :load-path "external/agent-shell-manager"

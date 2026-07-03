@@ -148,7 +148,9 @@ See `hud-modeline--misc-segment'."
 ;;;; Icon cache
 
 (defvar-local hud-modeline--icon-cache nil
-  "Cached nerd-icon for the current buffer's major mode.")
+  "Cached nerd-icon for the current buffer's major mode.
+The symbol `none' means icon lookup was attempted and failed or returned nil;
+any other non-nil value is the cached icon string.")
 
 (defun hud-modeline--invalidate-icon ()
   "Invalidate the icon cache when the major mode changes."
@@ -157,8 +159,15 @@ See `hud-modeline--misc-segment'."
 (defun hud-modeline--icon ()
   "Return file-type icon string or nil."
   (when (and hud-modeline-icons (fboundp 'nerd-icons-icon-for-buffer))
-    (or hud-modeline--icon-cache
-        (setq hud-modeline--icon-cache (nerd-icons-icon-for-buffer)))))
+    (cond
+     ((eq hud-modeline--icon-cache 'none) nil)
+     (hud-modeline--icon-cache hud-modeline--icon-cache)
+     (t
+      (let ((icon (condition-case nil
+                      (nerd-icons-icon-for-buffer)
+                    (error nil))))
+        (setq hud-modeline--icon-cache (or icon 'none))
+        icon)))))
 
 ;;;; Internal segment helpers
 ;;
@@ -362,7 +371,6 @@ Use a lambda wrapper when registering with a non-default width:
 (defconst hud-modeline--default-left-segments
   '((buffer-size . hud-modeline--buffer-size)
     (state . hud-modeline--state-segment)
-    (debug . hud-modeline--debug-segment)
     (buffer-name . hud-modeline--buffer-name)
     (separator . hud-modeline--separator)
     (modes . hud-modeline--mode-segment)

@@ -101,6 +101,9 @@ more arguments than the function cares about."
 
 (declare-function browse-url-chrome "browse-url")
 
+(unless (fboundp 'mouse-major-mode-menu)
+  (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map))
+
 (bind-keys
  ("C-x m" . execute-extended-command)
  ("C-x C-m" . execute-extended-command)
