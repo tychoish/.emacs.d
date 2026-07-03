@@ -242,7 +242,7 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
   "Default left segments alist contains all expected keys."
   (seq-do (lambda (key)
             (should (assq key hud-modeline--default-left-segments)))
-          '(state debug buffer-name separator modes)))
+          '(state buffer-name separator modes)))
 
 (ert-deftest hud-modeline--default-right-segments-has-required-keys ()
   "Default right segments alist contains the core misc key."
@@ -371,6 +371,28 @@ that Emacs renders as *invalid*."
   (should (listp hud-modeline-format))
   (should (= 1 (length hud-modeline-format)))
   (should (equal (car hud-modeline-format) '(:eval (hud-modeline--render)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; hud-modeline--icon error handling
+
+(ert-deftest hud-modeline--icon-returns-nil-on-nerd-icons-error ()
+  "`hud-modeline--icon' returns nil when `nerd-icons-icon-for-buffer' signals an error.
+Regression: a missing icon name (e.g. nf-cod-list-ordered) previously propagated
+an unhandled error through the mode-line :eval form, silencing the entire modeline."
+  (let ((hud-modeline-icons t)
+        (hud-modeline--icon-cache nil))
+    (cl-letf (((symbol-function 'nerd-icons-icon-for-buffer)
+               (lambda () (error "Unable to find icon with name 'nf-cod-list-ordered' in icon set 'codicon'"))))
+      (should (null (hud-modeline--icon))))))
+
+(ert-deftest hud-modeline--icon-caches-none-sentinel-on-error ()
+  "`hud-modeline--icon' caches `none' sentinel after an error so subsequent calls skip the lookup."
+  (let ((hud-modeline-icons t)
+        (hud-modeline--icon-cache nil))
+    (cl-letf (((symbol-function 'nerd-icons-icon-for-buffer)
+               (lambda () (error "icon lookup failed"))))
+      (hud-modeline--icon)
+      (should (eq 'none hud-modeline--icon-cache)))))
 
 (provide 'test-hud-modeline)
 ;;; test-hud-modeline.el ends here

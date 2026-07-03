@@ -601,6 +601,16 @@ is not present in FROM-VAR."
                                   'help-echo "mouse-1: projectile dispatch")
                       " "))))
 
+;; Move debug to the right side, first in the right block; safe to call on reload.
+(hud-modeline-remove-segment 'hud-modeline-left-segments 'debug)
+(hud-modeline-remove-segment 'hud-modeline-right-segments 'debug)
+
+(hud-modeline-add-segment
+    :segment-block 'hud-modeline-right-segments
+    :key 'debug
+    :place-before 'misc
+    :fn #'hud-modeline--debug-segment)
+
 ;; Default actions for built-in segments.
 (hud-modeline-set-segment-action 'instance #'sprite-list-menu)
 (hud-modeline-set-segment-action 'projectile #'projectile-dispatch)
