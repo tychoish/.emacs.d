@@ -6,8 +6,6 @@
 ;;
 ;; Bind via tychoish/denote-map:
 ;;   (bind-key "dd" #'denote-dispatch tychoish/denote-map)
-;;
-;; The Filter group is inapt outside denote-menu-mode buffers.
 
 ;;; Code:
 
@@ -28,18 +26,8 @@
 (declare-function denote-sequence-new-parent "denote-sequence")
 (declare-function denote-sequence-link-to-parent "denote-sequence")
 (declare-function denote-sequence-reparent "denote-sequence")
-(declare-function denote-menu-list-notes "denote-menu")
-(declare-function denote-menu-filter "denote-menu")
-(declare-function denote-menu-filter-by-keyword "denote-menu")
-(declare-function denote-menu-filter-out-keyword "denote-menu")
-(declare-function denote-menu-clear-filters "denote-menu")
-(declare-function denote-menu-export-to-dired "denote-menu")
 (declare-function denote-markdown-convert-links-to-markdown-format "denote-markdown")
 (declare-function denote-markdown-convert-links-to-denote-format "denote-markdown")
-
-(defun denote-dispatch--in-menu-p ()
-  "Return non-nil when the current buffer is a denote-menu buffer."
-  (derived-mode-p 'denote-menu-mode))
 
 ;;;###autoload
 (transient-define-prefix denote-dispatch ()
@@ -54,7 +42,6 @@
     ("ff" "find file"           consult-denote-find)
     ("fg" "grep content"        consult-denote-grep)
     ("fo" "open or create"      denote-open-or-create)
-    ("fl" "list notes"          denote-menu-list-notes)
     ("fd" "dired view"          denote-dired)
     ("fb" "backlinks"           denote-backlinks)]]
   [["Link"
@@ -63,15 +50,8 @@
    ["Rename & Manage"
     ("rr" "rename file"         denote-rename-file)
     ("rf" "rename from fm"      denote-rename-file-using-front-matter)
-    ("rs" "reparent sequence"   denote-sequence-reparent)]]
-  [["Filter"
-    :inapt-if-not denote-dispatch--in-menu-p
-    ("mf" "by regexp"           denote-menu-filter)
-    ("mk" "by keyword"          denote-menu-filter-by-keyword)
-    ("mo" "exclude keyword"     denote-menu-filter-out-keyword)
-    ("mc" "clear filters"       denote-menu-clear-filters)
-    ("me" "export to dired"     denote-menu-export-to-dired)]
-   ["Convert"
+    ("rs" "reparent sequence"   denote-sequence-reparent)]
+  ["Convert"
     ("cm" "links → markdown"    denote-markdown-convert-links-to-markdown-format)
     ("cd" "links → denote"      denote-markdown-convert-links-to-denote-format)]])
 

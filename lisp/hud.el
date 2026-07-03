@@ -307,9 +307,9 @@ category+command combination."
 (hud-register-command
  :row 2
  :category 'denote
- :command #'denote-menu-list-notes
- :description "list notes"
- :transient-key "dl")
+ :command #'denote-dispatch
+ :description "denote dispatch"
+ :transient-key "dd")
 
 (hud-register-command
  :row 2
