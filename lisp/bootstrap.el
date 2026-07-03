@@ -637,22 +637,11 @@ more arguments than the function cares about."
     (bootstrap-set-up-user-local-config)))
 
 (defun bootstrap-init-late-enable-modes ()
-  (global-auto-revert-mode 1)
   (column-number-mode 1)
   (delete-selection-mode 1)
   (winner-mode 1)
-  (transient-mark-mode 1)
-  (xterm-mouse-mode 1)
   (electric-pair-mode 1)
-  (when (fboundp 'which-key-mode)
-    (which-key-mode 1))
-
   (set-fringe-mode '(4 . 4))
-
-  (when (fboundp 'popper-mode)
-    (popper-mode +1)
-    (popper-echo-mode +1))
-
   (with-silence
     (repeat-mode 1)))
 
@@ -686,6 +675,22 @@ more arguments than the function cares about."
  :name "<bootstrap> late enable modes"
  :operation 'bootstrap-init-late-enable-modes
  :delay 0.67)
+
+(add-one-shot-hook
+ :name "<bootstrap> enable which-key"
+ :hook after-first-frame-created
+ :form (which-key-mode 1))
+
+(add-one-shot-hook
+ :name "<bootstrap> enable popper"
+ :hook '(compilation-mode-hook help-mode-hook special-mode-hook)
+ :form (when (fboundp 'popper-mode)
+         (popper-mode +1)))
+
+(add-one-shot-hook
+ :name "<bootstrap> auto-revert after first file"
+ :hook find-file-hook
+ :form (global-auto-revert-mode 1))
 
 (add-lazy-init
  :name "<bootstrap> ensure default font"
@@ -875,6 +880,19 @@ Returns the list of files that were recompiled."
 (add-hook 'after-make-frame-functions #'frame-unset-background-for-tty)
 (add-hook 'server-after-make-frame-hook #'current-frame-unset-background-for-tty)
 (add-hook 'window-setup-hook #'current-frame-unset-background-for-tty)
+
+(defun frame-enable-xterm-mouse-for-tty (frame)
+  "Enable xterm-mouse-mode when FRAME is a tty frame."
+  (unless (display-graphic-p frame)
+    (xterm-mouse-mode 1)))
+
+(defun current-frame-enable-xterm-mouse-for-tty ()
+  "Enable xterm-mouse-mode if the current frame is a tty."
+  (frame-enable-xterm-mouse-for-tty (selected-frame)))
+
+(add-hook 'after-make-frame-functions #'frame-enable-xterm-mouse-for-tty)
+(add-hook 'server-after-make-frame-hook #'current-frame-enable-xterm-mouse-for-tty)
+(add-hook 'window-setup-hook #'current-frame-enable-xterm-mouse-for-tty)
 
 ;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
 

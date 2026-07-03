@@ -988,8 +988,12 @@
   :ensure t
   :bind (("C-c '" . popper-toggle)
          ("C-c \\" . popper-cycle)
-         ("C-c C-'"  . popper-toggle-type))
+         ("C-c C-'"  . popper-toggle-type)
+	 :map tychoish/buffer-control-map
+	 ("p" . "popper-mode-map"))
   :commands (popper-mode popper-echo-mode popper-cycle popper-toggle)
+  :init
+  (add-hook 'popper-mode-hook 'popper-echo-mode)
   :config
   (setq popper-reference-buffers
         '("\\*Messages\\*"
