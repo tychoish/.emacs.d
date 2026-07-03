@@ -197,6 +197,14 @@ value to suppress lighters in non-mode-line contexts.  Calling here, before
           (or (bound-and-true-p compilation-num-warnings-found) 0)))
   (force-mode-line-update t))
 
+(defun hud-modeline-clear-compilation-status ()
+  "Clear the compilation status indicator in the mode-line."
+  (interactive)
+  (setq hud-modeline--compilation-finished nil
+        hud-modeline--compilation-errors 0
+        hud-modeline--compilation-warnings 0)
+  (force-mode-line-update t))
+
 ;;;; Segment registries
 
 (defvar hud-modeline-left-segments nil
