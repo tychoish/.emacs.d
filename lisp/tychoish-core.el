@@ -2522,6 +2522,17 @@ Useful after changing `eglot-workspace-configuration' or
   (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
   (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
 
+  (defun tychoish--agent-shell-buffer-p (buffer _action)
+    "Return non-nil if BUFFER is an agent-shell communication buffer."
+    (with-current-buffer buffer
+      (derived-mode-p 'agent-shell-mode)))
+
+  (add-to-list 'display-buffer-alist
+               '(tychoish--agent-shell-buffer-p
+                 (display-buffer-reuse-window
+                  display-buffer-use-some-window)
+                 (reusable-frames . t)))
+
   (defun ad:agent-shell--refresh-session-title (orig-fn &optional event)
     (let ((agent-name (map-nested-elt agent-shell--state '(:agent-config :mode-line-name)))
           (title (map-nested-elt agent-shell--state '(:session :title))))
