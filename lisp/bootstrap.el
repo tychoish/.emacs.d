@@ -854,6 +854,55 @@ Returns the list of files that were recompiled."
 
 ;; frame/window -- setup and manage frames and windows
 
+
+;;;; Frame-local buffer display policies
+;;
+;; Unified buffer-predicate covering three rules for next-buffer /
+;; switch-to-buffer:
+;;
+;;   1. mu4e sticky — mu4e buffers stay on the frame they first appeared on.
+;;   2. File → file only — when the current buffer visits a file, only
+;;      file-visiting buffers are eligible for cycling (excludes *compilation*,
+;;      *Messages*, etc.).
+;;   3. Reference → writable only — when the current buffer is read-only (an
+;;      external library or xref target), only writable file buffers appear;
+;;      another reference buffer is never the next stop.
+;;
+;; display-buffer-alist entries complement the predicate for call sites that
+;; go through display-buffer rather than next-buffer.
+
+(defvar-local tychoish--buffer-home-frame nil
+  "Frame where this buffer was first shown; nil means no frame restriction.")
+
+(defun tychoish--record-home-frame ()
+  "Record the selected frame as this buffer's home frame (first visit only)."
+  (unless tychoish--buffer-home-frame
+    (setq-local tychoish--buffer-home-frame (selected-frame))))
+
+(defun tychoish--frame-buffer-predicate (buf)
+  "Unified predicate controlling next-buffer and switch-to-buffer candidates."
+  (let* ((current (current-buffer))
+         (current-file (buffer-file-name current))
+         (current-readonly (buffer-local-value 'buffer-read-only current)))
+    (with-current-buffer buf
+      (and
+       ;; Rule 1: frame-sticky buffers stay on their home frame
+       (or (null tychoish--buffer-home-frame)
+           (eq tychoish--buffer-home-frame (selected-frame)))
+       ;; Rules 2 & 3: file-based navigation restrictions
+       (cond
+        ;; Not in a file buffer — no restriction
+        ((null current-file) t)
+        ;; In a read-only file (reference buffer) — only writable files
+        (current-readonly (and (buffer-file-name) (not buffer-read-only)))
+        ;; In a writable file — only file buffers (any)
+        (t (buffer-file-name)))))))
+
+(defun tychoish--install-buffer-predicate (frame)
+  "Install the unified buffer predicate on FRAME."
+  (set-frame-parameter frame 'buffer-predicate
+                        #'tychoish--frame-buffer-predicate))
+
 (defun kill-eldoc-and-help-buffers ()
   "Kills all eldoc and help buffers"
   (interactive)
@@ -880,6 +929,7 @@ Returns the list of files that were recompiled."
   (frame-unset-background-for-tty (selected-frame)))
 
 (add-hook 'after-make-frame-functions #'frame-unset-background-for-tty)
+(add-hook 'after-make-frame-functions #'tychoish--install-buffer-predicate)
 (add-hook 'server-after-make-frame-hook #'current-frame-unset-background-for-tty)
 (add-hook 'window-setup-hook #'current-frame-unset-background-for-tty)
 

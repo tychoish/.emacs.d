@@ -1,18 +1,16 @@
 ;; -*- lexical-binding: t -*-
 
-(eval-when-compile (require 'xtdlib))
-(require 'map)
+(eval-when-compile
+  (require 'xtdlib))
 
+(require 'map)
 (require 'mu4e-autoloads nil t)
 
-(declare-function f-join "f")
 (declare-function s-trimmed-or-nil "xtdlib")
 
-(use-package consult-mu
-  :load-path "external/consult-mu"
-  :commands (consult-mu))
-
 (autoload 'mu4e-update-index "mu4e-update")
+(autoload 'annotated-completing-read "annotated-completing-read")
+(autoload 'annotated-completing-read-directory "annotated-completing-read")
 
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-new "mu4e-compose")
@@ -29,9 +27,6 @@
 (declare-function mu4e-contact-name "mu4e-contacts")
 (declare-function cape-capf-prefix-length "cape")
 
-(autoload 'annotated-completing-read "annotated-completing-read")
-(autoload 'annotated-completing-read-directory "annotated-completing-read")
-
 (defconst tychoish/mail-id-template "tychoish-mail-%s")
 (defvar tychoish/mail-accounts-table (make-hash-table :test #'equal))
 (defvar tychoish/mail-account-current nil)
@@ -47,30 +42,12 @@
  ("C-;" . consult-mu)
  (";" . consult-mu-bookmark))
 
-(setq consult-mu-maxnum 200)
-(setq consult-mu-preview-key 'any)
-(setq consult-mu-mark-previewed-as-read nil)
-(setq consult-mu-mark-viewed-as-read t)
-(setq consult-mu-use-wide-reply t)
-(setq consult-mu-headers-template 'tychoish/consult-mu-headers-template)
-
-(setq consult-mu-saved-searches-dynamics '("#flag:unread"))
-(setq consult-mu-saved-searches-async '("#flag:unread"))
-
-(with-eval-after-load 'consult-mu
-  (with-slow-op-timer
-   "<mail.el> consult-mu extensions"
-   (add-to-list 'load-path (expand-file-name "external/consult-mu/extras/" user-emacs-directory))
-   (require 'consult-mu-compose)
-   (require 'consult-mu-contacts)
-   (require 'consult-mu-embark)
-   (setq consult-mu-compose-use-dired-attachment 'in-dired)
-   (setq consult-mu-compose-preview-key "M-o")
-   (setq consult-mu-contacts-ignore-case-fold-search t)
-   (setq consult-mu-contacts-ignore-list '("^.*no.*reply.*"))
-   ;; the order of the following remains important:
-   (setq consult-mu-embark-attach-file-key "C-a")
-   (require 'consult-mu-compose-embark)))
+(with-eval-after-load 'mu4e
+  (seq-do (lambda (hook) (add-hook hook #'tychoish--record-home-frame))
+          '(mu4e-main-mode-hook
+            mu4e-headers-mode-hook
+            mu4e-view-mode-hook
+            mu4e-compose-mode-hook)))
 
 (with-eval-after-load 'message
   (bind-key "M-q" 'ignore message-mode-map)
@@ -174,7 +151,7 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
                            (tychoish/mail--field-display-value msg (car entry))))
                    tychoish/mail--refile-matchable-fields))
          (field-name (annotated-completing-read candidates
-                      :prompt "Match field: " :require-match t))
+						:prompt "Match field: " :require-match t))
          (field (intern (concat ":" field-name)))
          (field-type (map-elt tychoish/mail--refile-matchable-fields field))
          (regex (read-string
@@ -217,6 +194,60 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
       (insert (format "\nFinal result: %s\n"
                       (tychoish/mail-refile-folder msg))))
     (display-buffer buf)))
+
+(use-package consult-mu
+  :load-path "external/consult-mu"
+  :commands (consult-mu)
+  :init
+  (setq consult-mu-maxnum 200)
+  (setq consult-mu-preview-key 'any)
+  (setq consult-mu-mark-previewed-as-read nil)
+  (setq consult-mu-mark-viewed-as-read t)
+  (setq consult-mu-use-wide-reply t)
+  (setq consult-mu-headers-template 'tychoish/consult-mu-headers-template)
+
+  (setq consult-mu-saved-searches-dynamics '("#flag:unread"))
+  (setq consult-mu-saved-searches-async '("#flag:unread"))
+  :config
+  (with-slow-op-timer
+    "<mail.el> consult-mu extensions"
+    (add-to-list 'load-path (expand-file-name "external/consult-mu/extras/" user-emacs-directory))
+    (require 'consult-mu-compose)
+    (require 'consult-mu-contacts)
+    (require 'consult-mu-embark)
+    (setq consult-mu-compose-use-dired-attachment 'in-dired)
+    (setq consult-mu-compose-preview-key "M-o")
+    (setq consult-mu-contacts-ignore-case-fold-search t)
+    (setq consult-mu-contacts-ignore-list '("^.*no.*reply.*"))
+    ;; the order of the following remains important:
+    (setq consult-mu-embark-attach-file-key "C-a")
+    (require 'consult-mu-compose-embark))
+
+  (defun consult-mu-bookmark ()
+    "Select `consult-mu' initial query from mu4e-bookmarks."
+    (interactive)
+    (let* ((bookmarks (map-into
+                       (seq-map (lambda (bm) (cons (plist-get bm :name) bm)) mu4e-bookmarks)
+                       '(hash-table :test equal)))
+           (annotation-table (map-into
+                              (seq-map (lambda (bm)
+					 (cons (plist-get bm :name)
+                                               (format "[%s] %s"
+                                                       (char-to-string (plist-get bm :key))
+                                                       (plist-get bm :query))))
+                                       mu4e-bookmarks)
+                              '(hash-table :test equal)))
+           (selection (annotated-completing-read
+                       annotation-table
+                       :prompt "mu4e query =>> "
+                       :category 'consult-mu)))
+      (consult-mu (plist-get (map-elt bookmarks selection) :query))))
+
+  (defun tychoish/consult-mu-headers-template ()
+    (concat "%f" (number-to-string
+		  (floor (* (frame-width) 0.15)))
+	    "%s" (number-to-string (floor (* (frame-width) 0.5)))
+	    "%d13" "%g" "%x")))
 
 (setq mu4e-bookmarks
       '((:name "unread primary queues to file"
@@ -282,9 +313,9 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
   ;; mu4e--compose-setup-completion
   (setq-local completion-at-point-functions
 	      `(,(cape-capf-prefix-length 'mu4e--compose-complete-contact-field 4)
-		    cape-emoji
-		    cape-dict
-		    yasnippet-capf))
+		cape-emoji
+		cape-dict
+		yasnippet-capf))
 
   (setq-local use-hard-newlines t)
   (setq-local make-backup-files nil))
@@ -332,32 +363,6 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 ;; consult-mu functions
 
-(defun consult-mu-bookmark ()
-  "Select `consult-mu' initial query from mu4e-bookmarks."
-  (interactive)
-  (let* ((bookmarks (map-into
-                     (seq-map (lambda (bm) (cons (plist-get bm :name) bm)) mu4e-bookmarks)
-                     '(hash-table :test equal)))
-         (annotation-table (map-into
-                             (seq-map (lambda (bm)
-                                        (cons (plist-get bm :name)
-                                              (format "[%s] %s"
-                                                      (char-to-string (plist-get bm :key))
-                                                      (plist-get bm :query))))
-                                      mu4e-bookmarks)
-                             '(hash-table :test equal)))
-         (selection (annotated-completing-read
-                     annotation-table
-                     :prompt "mu4e query =>> "
-                     :category 'consult-mu)))
-    (consult-mu (plist-get (map-elt bookmarks selection) :query))))
-
-(defun tychoish/consult-mu-headers-template ()
-  (concat "%f" (number-to-string
-		(floor (* (frame-width) 0.15)))
-	  "%s" (number-to-string (floor (* (frame-width) 0.5)))
-	  "%d13" "%g" "%x"))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; account configuration
@@ -377,9 +382,9 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 						  (t (f-expand maildir))))
                                    (signature (setq signature (and (when (s-trimmed-or-nil signature)
                                                                      (cond ((eq signature-kind 'signature-directory)
-                                                                            (f-join maildir ".sig"))
+                                                                            (file-name-concat maildir ".sig"))
                                                                            ((eq signature-kind 'signature-file)
-                                                                            (f-join maildir ".sig" address))
+                                                                            (file-name-concat maildir ".sig" address))
                                                                            ((eq signature-kind 'signature-text)
                                                                             (user-error "signature text is not defined"))
                                                                            ((null signature-kind)
@@ -388,18 +393,18 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
                                                                    signature)
                                                     ;; now validate
                                                     signature (cond
-                                                                ;; ((eq signature-kind 'signature-directory)
-								;; could attempt to validate that signatures exist, but probably only
-								;; breaks in cases that don't matter, and will error appropriately at
-								;; runtime, and aren't that hard to debug, same as maildir checks.
-								;;
-								;;  (if (or (null signature) (not (f-directory-p signature)))
-								;;      (user-error "signature directory does not exist")
-								;;    signature))
-								;; ((eq signature-kind 'signature-file)
-								;;  (if (not (f-file-p signature))
-								;;      (user-error "signature file does not exist")
-								;;    signature))
+                                                               ;; ((eq signature-kind 'signature-directory)
+							       ;; could attempt to validate that signatures exist, but probably only
+							       ;; breaks in cases that don't matter, and will error appropriately at
+							       ;; runtime, and aren't that hard to debug, same as maildir checks.
+							       ;;
+							       ;;  (if (or (null signature) (not (f-directory-p signature)))
+							       ;;      (user-error "signature directory does not exist")
+							       ;;    signature))
+							       ;; ((eq signature-kind 'signature-file)
+							       ;;  (if (not (f-file-p signature))
+							       ;;      (user-error "signature file does not exist")
+							       ;;    signature))
                                                                ((eq signature-kind 'signature-text)
                                                                 (or (when (not (s-contains-p "\n" signature))
                                                                       (warn "signature string does not contain newlines")
@@ -415,47 +420,47 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
   "track mail account configurations. used internally by tychoish-define-mail-account"
   (maildir (expand-file-name "~/mail")
-   :documentation "path for maildirs"
-   :type 'string)
+	   :documentation "path for maildirs"
+	   :type 'string)
   (id ""
-   :documentation "symbol of function that activates this account"
-   :type 'symbol)
+      :documentation "symbol of function that activates this account"
+      :type 'symbol)
   (address user-mail-address
-   :documentation "email address"
-   :type '(string t))
+	   :documentation "email address"
+	   :type '(string t))
   (name (user-full-name) ;; from /etc/password
-   :documentation "(given) name, used to populate `USER-FULL-NAME'"
-   :type 'string)
+	:documentation "(given) name, used to populate `USER-FULL-NAME'"
+	:type 'string)
   (keybinding "m"
-   :documentation "keybinding in the tychoish/mail-map keymap"
-   :type 'char)
+	      :documentation "keybinding in the tychoish/mail-map keymap"
+	      :type 'char)
   (fetchmail mu4e-get-mail-command
-   :documentation "external command to run to fetch mail."
-   :type 'string)
+	     :documentation "external command to run to fetch mail."
+	     :type 'string)
   (signature ""
-   :documentation "content or filename of signature"
-   :type 'string)
+	     :documentation "content or filename of signature"
+	     :type 'string)
   (signature-kind 'signature-directory
-   :documentation "determines how signatures are configured"
-   :type 'signature-source))
+		  :documentation "determines how signatures are configured"
+		  :type 'signature-source))
 
 (defun tychoish-mail-select-account (account-id)
   "Use consult to select an account/mail configuration."
 
   (interactive
    (list (annotated-completing-read
-	    (thread-last
-	      tychoish/mail-accounts-table
-	      (map-apply (lambda (key value)
+	  (thread-last
+	    tychoish/mail-accounts-table
+	    (map-apply (lambda (key value)
 			 (cons key (format
- 			  "%s <%s>%s"
- 			  (tychoish/mail-account-name value)
- 			  (tychoish/mail-account-address value)
- 			  (if (equal tychoish/mail-account-current key)
- 			      " -- CURRENT"
- 			    ""))) )))
-	    :prompt "mail-account => "
-	    :require-match nil)))
+ 				    "%s <%s>%s"
+ 				    (tychoish/mail-account-name value)
+ 				    (tychoish/mail-account-address value)
+ 				    (if (equal tychoish/mail-account-current key)
+ 					" -- CURRENT"
+ 				      ""))) )))
+	  :prompt "mail-account => "
+	  :require-match nil)))
 
   (let ((select-account-operation (intern account-id)))
     (funcall select-account-operation)))
@@ -497,14 +502,14 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
     (setf (map-elt tychoish/mail-accounts-table account-name)
           (tychoish/mail-make-account
-             :name name
-             :address address
-             :keybinding key
-             :maildir maildir
-             :fetchmail command
-             :id id
-             :signature-kind 'signature-directory
-             :signature (f-join maildir "tools" "signatures")))
+           :name name
+           :address address
+           :keybinding key
+           :maildir maildir
+           :fetchmail command
+           :id id
+           :signature-kind 'signature-directory
+           :signature (file-name-concat maildir "tools" "signatures")))
 
     (when (or default
 	      (not (and (null systems) (null instances))))
@@ -516,7 +521,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 			     (null ',instances))
 			 (or (member (sprite-system-name) ',systems)
 			     (null ',systems))))
-		 (,configure-account-symbol))
+		(,configure-account-symbol))
        :hook 'after-first-frame-created
        :idle-timer 0.5))
 
@@ -531,9 +536,9 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 	 (setq tychoish/mail-account-current account-name)
 	 (setq message-directory maildir)
-	 (setq smtpmail-queue-dir (f-join maildir "queue" "cur"))
-	 (setq mu4e-mu-home (f-join maildir ".mu"))
-	 (setq message-auto-save-directory (f-join maildir "drafts"))
+	 (setq smtpmail-queue-dir (file-name-concat maildir "queue" "cur"))
+	 (setq mu4e-mu-home (file-name-concat maildir ".mu"))
+	 (setq message-auto-save-directory (file-name-concat maildir "drafts"))
 	 (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
 	 (setq mu4e--header-separator mail-header-separator)
 
@@ -544,7 +549,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
            (cond
             ((eq signature-kind 'signature-directory)
-             (setq message-signature-directory (or signature (f-join maildir "tools" "signatures")))
+             (setq message-signature-directory (or signature (file-name-concat maildir "tools" "signatures")))
              (setq message-signature-file (or address account-id account-name))
              (setq message-signature t))
             ((eq (tychoish/mail-account-signature-kind conf) 'signature-file)
