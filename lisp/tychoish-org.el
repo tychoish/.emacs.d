@@ -11,6 +11,22 @@
   :ensure t
   :defer t)
 
+(use-package ox-hugo
+  :ensure t
+  :defer t)
+
+(use-package ox-gfm
+  :ensure t
+  :defer t)
+
+(use-package ox-gist
+  :ensure t
+  :defer t)
+
+(use-package ox-rst
+  :ensure t
+  :defer t)
+
 (defconst tychoish/org-date-spec-datetime "<%Y-%02m-%02d %02H:%02M:%02S %Z>")
 (defconst tychoish/org-date-spec-date "<%Y-%02m-%02d>")
 
