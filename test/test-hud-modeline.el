@@ -299,16 +299,17 @@ show the project-relative file path."
   (with-temp-buffer
     (setq-local buffer-file-name "/home/user/proj/src/foo.el")
     (rename-buffer "foo.el" t)
-    (cl-letf (((symbol-function 'projectile-project-root)
-               (lambda () "/home/user/proj/"))
-              ((symbol-function 'fboundp)
-               (lambda (sym)
-                 (if (eq sym 'projectile-project-root)
-                     t
-                   (funcall #'fboundp sym)))))
-      (let* ((result (hud-modeline--buffer-name-segment))
-             (text (substring-no-properties result)))
-        (should (equal "src/foo.el" text))))))
+    (let ((projectile-mode 1))
+      (cl-letf (((symbol-function 'projectile-project-root)
+                 (lambda () "/home/user/proj/"))
+                ((symbol-function 'fboundp)
+                 (lambda (sym)
+                   (if (eq sym 'projectile-project-root)
+                       t
+                     (funcall #'fboundp sym)))))
+        (let* ((result (hud-modeline--buffer-name-segment))
+               (text (substring-no-properties result)))
+          (should (equal "src/foo.el" text)))))))
 
 (ert-deftest hud-modeline--buffer-name-no-file-uses-buffer-name ()
   "Scratch and other non-file buffers use buffer-name directly."
