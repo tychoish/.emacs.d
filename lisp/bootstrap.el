@@ -670,16 +670,16 @@ more arguments than the function cares about."
     (delight 'org-mode "org" 'org-mode)
     (delight 'org-agenda-mode "agenda" 'org-agenda)
 
-    (delight 'projectile-mode "p" 'projectile)
-    (delight 'flycheck-mode "fc" 'flycheck)
+    (delight 'projectile-mode nil 'projectile)
+    (delight 'flycheck-mode " fc" 'flycheck)
 
-    (delight 'eglot--managed-mode "" 'eglot)
+    (delight 'eglot--managed-mode nil 'eglot)
     (delight 'eldoc-mode nil 'eldoc)
 
-    (delight 'visual-line-mode "wr" 'simple)
-    (delight 'auto-fill-function "afm" 'simple)
-    (delight 'overwrite-mode "om" 'simple)
-    (delight 'refill-mode "rf" 'refill)
+    (delight 'visual-line-mode " wr" 'simple)
+    (delight 'auto-fill-function " afm" 'simple)
+    (delight 'overwrite-mode " om" 'simple)
+    (delight 'refill-mode " rf" 'refill)
     (delight 'auto-revert-mode nil 'autorevert)))
 
 (add-lazy-init

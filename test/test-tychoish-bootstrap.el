@@ -1039,9 +1039,9 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (should (equal "org" (nth 2 mode-name))))))
 
 (ert-deftest bootstrap/delight-visual-line-mode-lighter ()
-  "visual-line-mode lighter in minor-mode-alist is \"wr\" after delight runs."
+  "visual-line-mode lighter in minor-mode-alist is \" wr\" after delight runs."
   (bootstrap-test/with-delight-applied
-    (should (equal "wr"
+    (should (equal " wr"
                    (cadr (assq 'visual-line-mode minor-mode-alist))))))
 
 (ert-deftest bootstrap/delight-auto-revert-mode-hidden ()

@@ -1319,19 +1319,22 @@
          ("l" . denote-link)
          ("b" . denote-backlinks)
          ("r" . denote-rename-file)
-         ("dd" . denote-dispatch)
-         ("R" . denote-rename-file-using-front-matter))
+         ("m" . denote-dispatch)
+         ("C-r" . denote-rename-file-using-front-matter))
   :config
+  (make-read-extended-command-for-prefix "denote"
+    :bind-map tychoish/denote-map
+    :bind-key "x"
+    :key-alias "denote-commands")
   (consult-denote-mode)
+  
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-file-type 'markdown-yaml)
   (setq denote-id-format "%Y%m%dT%H%M%S")
-  (setq denote-journal-title-format nil)
-  (setq denote-journal-directory (file-name-concat local-notes-directory "denote" "journal"))
-  (setq denote-known-keywords '("org" "project" "reference" "journal" "idea"))
+  (setq denote-known-keywords '("project" "reference" "journal" "idea"))
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
-  (setq denote-prompts '(title keywords file-type subdirectory template signature))
+  (setq denote-prompts '(title keywords file-type))
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
     (add-to-list 'savehist-additional-variables 'denote--keywords-history))
@@ -1366,8 +1369,8 @@ does not manage (e.g. status, plan-type)."
          ("j" . denote-journal-new-entry))
   :commands (denote-journal-new-entry denote-journal-new-entry-after-last)
   :config
-(setq denote-journal-directory
-        (file-name-concat local-notes-directory "denote" "journal")))
+  (setq denote-journal-title-format nil)
+  (setq denote-journal-directory (file-name-concat local-notes-directory "denote" "journal")))
 
 (use-package denote-sequence
   :ensure t
@@ -2437,8 +2440,8 @@ Useful after changing `eglot-workspace-configuration' or
   :defer t
   :commands (agent-shell agent-shell-new-shell agent-shell-toggle)
   :init
-  (delight 'agent-shell-ui-mode " ui" "agent-shell-menu")
-  (delight 'agent-shell-completion-mode " comp" "agent-shell-menu")
+  (delight 'agent-shell-ui-mode nil "agent-shell-menu")
+  (delight 'agent-shell-completion-mode nil "agent-shell-menu")
 
   (bind-keys
    :map tychoish/robot-map

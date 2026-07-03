@@ -242,14 +242,28 @@ value to suppress lighters in non-mode-line contexts.  Calling here, before
      (t ""))))
 
 (defun hud-modeline--buffer-name ()
-  "Return buffer name relative to project root when available."
+  "Return buffer name, preferring explicit renames over project-relative path.
+For file-backed buffers explicitly renamed (e.g. by `denote-rename-buffer-mode'),
+shows the first two space-separated words of the title portion (text before
+the first \" <\" keyword marker) for a compact modeline display."
   (propertize
    (if-let* ((fname (buffer-file-name))
+             (_ (string= (buffer-name) (file-name-nondirectory fname)))
              (root (and (bound-and-true-p projectile-mode)
                         (fboundp 'projectile-project-root)
                         (projectile-project-root))))
        (file-relative-name fname root)
-     (buffer-name))
+     (let* ((name (buffer-name))
+            (fpath (buffer-file-name))
+            (renamed (and fpath
+                          (not (string= name (file-name-nondirectory fpath))))))
+       (if renamed
+           (string-join
+            (seq-take
+             (split-string (or (car (split-string name " <" t)) name) " " t)
+             3)
+            " ")
+         name)))
    'face 'hud-modeline-buffer-name
    'local-map hud-modeline--buffer-name-keymap
    'mouse-face 'mode-line-highlight
@@ -648,60 +662,30 @@ leading or trailing padding that would create double spaces."
      (seq-remove #'string-empty-p))
    " "))
 
-(defun hud-modeline--left ()
-  "Render the left side of the mode-line."
-  (hud-modeline--render-segments hud-modeline-left-segments))
-
-(defun hud-modeline--right ()
-  "Render the right side of the mode-line."
-  (hud-modeline--render-segments hud-modeline-right-segments))
-
 (defun hud-modeline--pad (s prefix)
   "Ensure S has a single space at the PREFIX end (t=left, nil=right)."
   (if prefix
       (if (string-prefix-p " " s) s (concat " " s))
     (if (string-suffix-p " " s) s (concat s " "))))
 
-(defun hud-modeline--cols (s)
-  "Return display width of S in columns.
-Uses pixel-based measurement in GUI Emacs (Emacs 29+) for accuracy with
-characters whose Unicode width is 1 but render as 2 columns (nerd-icons
-glyphs, ambiguous-width symbols).  Falls back to `string-width' in terminal
-and batch contexts."
-  (if (and (fboundp 'string-pixel-width) (display-graphic-p))
-      (let ((char-w (frame-char-width)))
-        (if (> char-w 0)
-            (ceiling (/ (string-pixel-width s) (float char-w)))
-          (string-width s)))
-    (string-width s)))
+(defun hud-modeline--left ()
+  "Render the left side of the mode-line with a leading space."
+  (hud-modeline--pad (hud-modeline--render-segments hud-modeline-left-segments) t))
 
-(defun hud-modeline--render ()
-  "Render full mode-line with right-aligned right side.
-Uses a display `(space :align-to (- right N))' property for the fill so the
-right side stays flush to the window edge regardless of content prepended to
-`mode-line-format' by other packages (e.g. anzu, popper).
-Truncates the right side when lhs + rhs would exceed the window width."
-  (let* ((lhs (hud-modeline--pad (hud-modeline--left) t))
-         (rhs-raw (hud-modeline--pad (hud-modeline--right) nil))
-         (window-width (window-body-width))
-         (lhs-cols (hud-modeline--cols lhs))
-         (rhs-raw-cols (hud-modeline--cols rhs-raw))
-         (rhs-max (max 0 (- window-width lhs-cols 1)))
-         (rhs (if (> rhs-raw-cols rhs-max)
-                  (truncate-string-to-width rhs-raw rhs-max nil nil "…")
-                rhs-raw))
-         (rhs-cols (if (eq rhs rhs-raw) rhs-raw-cols (hud-modeline--cols rhs))))
-    (concat lhs
-            (propertize " " 'display `((space :align-to (- right ,rhs-cols))))
-            rhs)))
+(defun hud-modeline--right ()
+  "Render the right side of the mode-line with a trailing space."
+  (hud-modeline--pad (hud-modeline--render-segments hud-modeline-right-segments) nil))
 
 ;;;; Mode
 
-(defvar hud-modeline-format '((:eval (hud-modeline--render)))
+(defconst hud-modeline-format
+  '((:eval (hud-modeline--left))
+    mode-line-format-right-align
+    (:eval (hud-modeline--right)))
   "Mode-line format for `hud-modeline-mode'.
-Wrapped as a list of one construct so that packages such as anzu that
-prepend to `mode-line-format' via `cons' get a proper list of constructs
-rather than tearing apart the (:eval ...) element.")
+A list of constructs so packages like anzu that prepend to `mode-line-format'
+via `cons' get a proper list rather than tearing apart the first element.
+Right-alignment is provided by `mode-line-format-right-align'.")
 
 (defvar hud-modeline--saved-format nil
   "Saved `mode-line-format' before `hud-modeline-mode' activation.")

@@ -268,109 +268,88 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
   (should (equal "foo " (hud-modeline--pad "foo " nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; hud-modeline--render alignment
-;;
-;; Stub window-body-width and the left/right renderers via advice so
-;; tests run in batch mode.  Named stub functions are required (project
-;; rule: no lambdas in advice/hooks).
+;; hud-modeline--buffer-name
 
-(defvar hud-modeline--test-stub-lhs nil "Left content for render stubs.")
-(defvar hud-modeline--test-stub-rhs nil "Right content for render stubs.")
-(defvar hud-modeline--test-stub-width nil "Window width for render stubs.")
+(ert-deftest hud-modeline--buffer-name-renamed-buffer-shows-title ()
+  "When the buffer has been explicitly renamed, show first two words of the title.
+Regression: denote-rename-buffer-mode renames buffers to human-readable names
+like \"my-title <tag>\" but hud-modeline was showing the project-relative file
+path instead because it preferred file-relative-name whenever projectile was active."
+  (with-temp-buffer
+    (setq-local buffer-file-name
+                "/home/user/notes/20260702T123456--my-title__tag.md")
+    (rename-buffer "my-title <tag>" t)
+    (cl-letf (((symbol-function 'projectile-project-root)
+               (lambda () "/home/user/notes/"))
+              ((symbol-function 'projectile-mode) (lambda () t)))
+      (let* ((result (hud-modeline--buffer-name))
+             (text (substring-no-properties result)))
+        (should (equal "my-title" text))))))
 
-(defun hud-modeline--test-left-stub () hud-modeline--test-stub-lhs)
-(defun hud-modeline--test-right-stub () hud-modeline--test-stub-rhs)
-(defun hud-modeline--test-width-stub () hud-modeline--test-stub-width)
+(ert-deftest hud-modeline--buffer-name-renamed-truncates-long-title ()
+  "Renamed buffer names with many title words are truncated to the first three."
+  (with-temp-buffer
+    (setq-local buffer-file-name
+                "/home/user/notes/20260702T123456--my-long-title__tag.md")
+    (rename-buffer "my long title here <tag>" t)
+    (let* ((result (hud-modeline--buffer-name))
+           (text (substring-no-properties result)))
+      (should (equal "my long title" text)))))
 
-(defmacro hud-modeline-test--with-render-stubs (lhs rhs width &rest body)
-  "Run BODY with hud-modeline--left, --right, and window-body-width stubbed."
-  (declare (indent 3))
-  `(let ((hud-modeline--test-stub-lhs ,lhs)
-         (hud-modeline--test-stub-rhs ,rhs)
-         (hud-modeline--test-stub-width ,width))
-     (advice-add 'hud-modeline--left :override #'hud-modeline--test-left-stub)
-     (advice-add 'hud-modeline--right :override #'hud-modeline--test-right-stub)
-     (advice-add 'window-body-width :override #'hud-modeline--test-width-stub)
-     (unwind-protect
-         (progn ,@body)
-       (advice-remove 'hud-modeline--left #'hud-modeline--test-left-stub)
-       (advice-remove 'hud-modeline--right #'hud-modeline--test-right-stub)
-       (advice-remove 'window-body-width #'hud-modeline--test-width-stub))))
+(ert-deftest hud-modeline--buffer-name-unrenamed-uses-relative-path ()
+  "When buffer name matches file basename and projectile provides a root,
+show the project-relative file path."
+  (with-temp-buffer
+    (setq-local buffer-file-name "/home/user/proj/src/foo.el")
+    (rename-buffer "foo.el" t)
+    (cl-letf (((symbol-function 'projectile-project-root)
+               (lambda () "/home/user/proj/"))
+              ((symbol-function 'fboundp)
+               (lambda (sym)
+                 (if (eq sym 'projectile-project-root)
+                     t
+                   (funcall #'fboundp sym)))))
+      (let* ((result (hud-modeline--buffer-name))
+             (text (substring-no-properties result)))
+        (should (equal "src/foo.el" text))))))
 
-(ert-deftest hud-modeline--render-uses-display-align-to ()
-  "Rendered mode line uses a display align-to property for right-alignment.
-The fill space between lhs and rhs carries a (space :align-to (- right N))
-display property so the rhs stays flush to the window edge regardless of
-content prepended to mode-line-format by packages such as anzu or popper."
-  (hud-modeline-test--with-render-stubs "lhs" "rhs" 40
-    (let* ((result (hud-modeline--render))
-           (fill-start (+ (length " lhs") 0))
-           (disp (get-text-property fill-start 'display result)))
-      (should disp)
-      (should (eq 'space (car (car disp))))
-      (should (plist-get (cdr (car disp)) :align-to)))))
+(ert-deftest hud-modeline--buffer-name-no-file-uses-buffer-name ()
+  "Scratch and other non-file buffers use buffer-name directly."
+  (with-temp-buffer
+    (let* ((result (hud-modeline--buffer-name))
+           (text (substring-no-properties result)))
+      (should (equal (buffer-name) text)))))
 
-(ert-deftest hud-modeline--render-lhs-at-left-edge ()
-  "Rendered mode line begins with the padded left content."
-  (hud-modeline-test--with-render-stubs "lhs" "rhs" 40
-    (should (string-prefix-p " lhs" (hud-modeline--render)))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; hud-modeline--left / hud-modeline--right padding
 
-(ert-deftest hud-modeline--render-rhs-at-right-edge ()
-  "Rendered mode line ends with the padded right content."
-  (hud-modeline-test--with-render-stubs "lhs" "rhs" 40
-    (should (string-suffix-p "rhs " (hud-modeline--render)))))
+(ert-deftest hud-modeline--left-has-leading-space ()
+  "`hud-modeline--left' output begins with a space."
+  (let ((hud-modeline-left-segments
+         (list (cons 'a (lambda () "content")))))
+    (should (string-prefix-p " " (hud-modeline--left)))))
 
-(ert-deftest hud-modeline--render-lhs-rhs-separated-by-fill ()
-  "Left and right content are separated by a fill space with display alignment."
-  (hud-modeline-test--with-render-stubs "lhs" "rhs" 40
-    (let* ((result (hud-modeline--render))
-           ;; fill space is the single space between padded lhs and rhs
-           (fill-pos (length " lhs")))
-      (should (string-match-p " lhs rhs " result))
-      (should (get-text-property fill-pos 'display result)))))
-
-(ert-deftest hud-modeline--render-fill-minimum-one-when-content-exceeds-width ()
-  "Fill contains at least 1 space character even when lhs+rhs exceeds window width.
-With display align-to, the fill is always exactly 1 propertized space character."
-  (hud-modeline-test--with-render-stubs
-      "this-left-side-is-very-long"
-      "this-right-side-is-also-quite-long"
-      20
-    (let* ((result (hud-modeline--render))
-           (lhs-len (length " this-left-side-is-very-long")))
-      (should (> (length result) lhs-len))
-      (should (equal " " (substring result lhs-len (1+ lhs-len)))))))
-
-(ert-deftest hud-modeline--render-align-to-uses-rhs-cols ()
-  "The align-to target changes when rhs width changes."
-  (hud-modeline-test--with-render-stubs "lhs" "short" 80
-    (let* ((r1 (hud-modeline--render))
-           (d1 (get-text-property (+ (length " lhs") 0) 'display r1))
-           (align1 (plist-get (cdr (car d1)) :align-to)))
-      (hud-modeline-test--with-render-stubs "lhs" "much-longer-rhs" 80
-        (let* ((r2 (hud-modeline--render))
-               (d2 (get-text-property (+ (length " lhs") 0) 'display r2))
-               (align2 (plist-get (cdr (car d2)) :align-to)))
-          (should (not (equal align1 align2))))))))
+(ert-deftest hud-modeline--right-has-trailing-space ()
+  "`hud-modeline--right' output ends with a space."
+  (let ((hud-modeline-right-segments
+         (list (cons 'a (lambda () "content")))))
+    (should (string-suffix-p " " (hud-modeline--right)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline-format structure
 ;;
-;; hud-modeline-format must be a list-of-constructs (not a bare construct)
-;; so that packages like anzu can safely prepend to it via `cons' without
-;; tearing apart the (:eval ...) element.  When anzu does
-;;   (setq mode-line-format (cons anzu-fmt mode-line-format))
-;; it must get (anzu-fmt (:eval (hud-modeline--render))), not
-;; (anzu-fmt :eval (hud-modeline--render)).
+;; hud-modeline-format must be a list-of-constructs so that packages like
+;; anzu that prepend to `mode-line-format' via `cons' get a proper list.
+;; Right-alignment is delegated to `mode-line-format-right-align'.
 
-(ert-deftest hud-modeline--format-is-list-of-constructs ()
-  "hud-modeline-format is a list whose single element is an :eval construct.
-A bare (:eval ...) at the top level would be torn apart by cons-based
-prependers such as anzu, producing a stray :eval keyword in mode-line-format
-that Emacs renders as *invalid*."
+(ert-deftest hud-modeline--format-is-list-with-right-align ()
+  "hud-modeline-format is a list containing mode-line-format-right-align.
+The symbol must appear between the left and right :eval constructs so that
+Emacs right-aligns the right side without any manual width calculation."
   (should (listp hud-modeline-format))
-  (should (= 1 (length hud-modeline-format)))
-  (should (equal (car hud-modeline-format) '(:eval (hud-modeline--render)))))
+  (should (memq 'mode-line-format-right-align hud-modeline-format))
+  (should (equal (car hud-modeline-format) '(:eval (hud-modeline--left))))
+  (should (equal (car (last hud-modeline-format)) '(:eval (hud-modeline--right)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline--icon error handling
