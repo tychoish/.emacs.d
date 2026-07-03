@@ -130,29 +130,34 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline--render-segments
+;;
+;; Alist values are now hud-modeline-segment structs.  Non-struct values
+;; are filtered out by `hud-modeline-segment-p'; structs with enabled=nil
+;; are filtered before the fn is called.
 
 (ert-deftest hud-modeline--render-segments-concatenates-results ()
-  "render-segments joins results of all non-nil segment functions with a space."
-  (let ((segs '((a . hud-modeline--test-seg-foo)
-                (b . hud-modeline--test-seg-bar))))
+  "render-segments joins results of all enabled segment functions with a space."
+  (let ((segs (list (cons 'a (hud-modeline--make-segment :fn #'hud-modeline--test-seg-foo))
+                    (cons 'b (hud-modeline--make-segment :fn #'hud-modeline--test-seg-bar)))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
               ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
       (should (equal "foo bar" (hud-modeline--render-segments segs))))))
 
-(ert-deftest hud-modeline--render-segments-skips-nil-disabled ()
-  "render-segments skips segments with nil function (disabled)."
-  (let ((segs '((a . hud-modeline--test-seg-foo)
-                (b . nil)
-                (c . hud-modeline--test-seg-bar))))
+(ert-deftest hud-modeline--render-segments-skips-disabled ()
+  "render-segments skips segments with enabled=nil."
+  (let ((segs (list (cons 'a (hud-modeline--make-segment :fn #'hud-modeline--test-seg-foo))
+                    (cons 'b (hud-modeline--make-segment :fn #'hud-modeline--test-seg-bar
+                                                         :enabled nil))
+                    (cons 'c (hud-modeline--make-segment :fn #'hud-modeline--test-seg-bar)))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
               ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
       (should (equal "foo bar" (hud-modeline--render-segments segs))))))
 
 (ert-deftest hud-modeline--render-segments-skips-nil-return ()
   "render-segments skips segments whose function returns nil."
-  (let ((segs '((a . hud-modeline--test-seg-foo)
-                (b . hud-modeline--test-seg-nil)
-                (c . hud-modeline--test-seg-bar))))
+  (let ((segs (list (cons 'a (hud-modeline--make-segment :fn #'hud-modeline--test-seg-foo))
+                    (cons 'b (hud-modeline--make-segment :fn #'hud-modeline--test-seg-nil))
+                    (cons 'c (hud-modeline--make-segment :fn #'hud-modeline--test-seg-bar)))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
               ((symbol-function 'hud-modeline--test-seg-nil) (lambda () nil))
               ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
@@ -163,14 +168,15 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
   (should (equal "" (hud-modeline--render-segments '()))))
 
 (ert-deftest hud-modeline--render-segments-all-nil ()
-  "render-segments returns empty string when all segments return nil."
-  (let ((segs '((a . hud-modeline--test-seg-nil))))
+  "render-segments returns empty string when all segment functions return nil."
+  (let ((segs (list (cons 'a (hud-modeline--make-segment :fn #'hud-modeline--test-seg-nil)))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-nil) (lambda () nil)))
       (should (equal "" (hud-modeline--render-segments segs))))))
 
 (ert-deftest hud-modeline--render-segments-keys-ignored ()
-  "render-segments keys are symbols used for lookup; they do not appear in output."
-  (let ((segs '((my-custom-segment . hud-modeline--test-seg-foo))))
+  "render-segments keys are symbols for lookup only; they do not appear in output."
+  (let ((segs (list (cons 'my-custom-segment
+                          (hud-modeline--make-segment :fn #'hud-modeline--test-seg-foo)))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "content")))
       (let ((result (hud-modeline--render-segments segs)))
         (should (equal "content" result))
@@ -179,48 +185,48 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Segment management API
 
+(defun hud-modeline--test-seg-alist (&rest pairs)
+  "Build a segment alist from PAIRS of (KEY FN &optional ENABLED).
+ENABLED defaults to t when omitted."
+  (seq-map (lambda (pair)
+             (cons (car pair)
+                   (hud-modeline--make-segment
+                    :fn (cadr pair)
+                    :enabled (if (cddr pair) (caddr pair) t))))
+           pairs))
+
 (ert-deftest hud-modeline--override-segment-replaces-function ()
-  "`hud-modeline-override-segment' replaces a segment's function."
+  "`hud-modeline-override-segment' updates the fn field of the segment struct."
   (let ((hud-modeline-left-segments
-         (copy-alist hud-modeline--default-left-segments)))
-    (hud-modeline-override-segment 'hud-modeline-left-segments
-                                   'state
-                                   #'hud-modeline--separator)
-    (should (eq #'hud-modeline--separator
-                (map-elt hud-modeline-left-segments 'state)))))
+         (hud-modeline--test-seg-alist '(state hud-modeline--state-segment))))
+    (hud-modeline-override-segment 'hud-modeline-left-segments 'state #'hud-modeline--pad)
+    (should (eq #'hud-modeline--pad
+                (hud-modeline-segment-fn (map-elt hud-modeline-left-segments 'state))))))
 
-(ert-deftest hud-modeline--disable-segment-sets-nil ()
-  "`hud-modeline-disable-segment' sets a segment's function to nil."
+(ert-deftest hud-modeline--disable-segment-sets-enabled-nil ()
+  "`hud-modeline-disable-segment' sets the segment's enabled field to nil."
   (let ((hud-modeline-left-segments
-         (copy-alist hud-modeline--default-left-segments)))
+         (hud-modeline--test-seg-alist '(state hud-modeline--state-segment))))
     (hud-modeline-disable-segment 'hud-modeline-left-segments 'state)
-    (should (null (map-elt hud-modeline-left-segments 'state)))))
+    (should (null (hud-modeline-segment-enabled
+                   (map-elt hud-modeline-left-segments 'state))))))
 
-(ert-deftest hud-modeline--reset-segment-restores-default ()
-  "`hud-modeline-reset-segment' restores a segment to its default function."
+(ert-deftest hud-modeline--enable-segment-restores-enabled ()
+  "`hud-modeline-enable-segment' sets the segment's enabled field back to non-nil."
   (let ((hud-modeline-left-segments
-         (copy-alist hud-modeline--default-left-segments)))
+         (hud-modeline--test-seg-alist '(state hud-modeline--state-segment))))
     (hud-modeline-disable-segment 'hud-modeline-left-segments 'state)
-    (hud-modeline-reset-segment 'hud-modeline-left-segments 'state)
-    (should (eq #'hud-modeline--state-segment
-                (map-elt hud-modeline-left-segments 'state)))))
-
-(ert-deftest hud-modeline--reset-all-segments-restores-all ()
-  "`hud-modeline-reset-all-segments' restores every segment to its default."
-  (let ((hud-modeline-left-segments
-         (copy-alist hud-modeline--default-left-segments)))
-    (hud-modeline-disable-segment 'hud-modeline-left-segments 'state)
-    (hud-modeline-disable-segment 'hud-modeline-left-segments 'buffer-name)
-    (hud-modeline-reset-all-segments 'hud-modeline-left-segments)
-    (should (equal hud-modeline-left-segments
-                   hud-modeline--default-left-segments))))
+    (hud-modeline-enable-segment  'hud-modeline-left-segments 'state)
+    (should (hud-modeline-segment-enabled
+             (map-elt hud-modeline-left-segments 'state)))))
 
 (ert-deftest hud-modeline--disabled-segment-absent-from-output ()
-  "A disabled segment contributes nothing to the rendered mode line."
+  "A segment with enabled=nil contributes nothing to the rendered mode line."
   (let ((hud-modeline-left-segments
-         (list (cons 'a #'hud-modeline--test-seg-foo)
-               (cons 'b nil)
-               (cons 'c #'hud-modeline--test-seg-bar))))
+         (list (cons 'a (hud-modeline--make-segment :fn #'hud-modeline--test-seg-foo))
+               (cons 'b (hud-modeline--make-segment :fn #'hud-modeline--test-seg-bar
+                                                    :enabled nil))
+               (cons 'c (hud-modeline--make-segment :fn #'hud-modeline--test-seg-bar)))))
     (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
               ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "bar")))
       (should (equal "foo bar"
@@ -229,24 +235,25 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
 (ert-deftest hud-modeline--override-segment-affects-rendering ()
   "An overridden segment's new function is used during rendering."
   (let ((hud-modeline-left-segments
-         (copy-alist hud-modeline--default-left-segments)))
-    (hud-modeline-override-segment 'hud-modeline-left-segments
-                                   'separator
-                                   #'hud-modeline--test-custom-sep)
-    (cl-letf (((symbol-function 'hud-modeline--test-custom-sep)
-               (lambda () "---")))
-      (let ((result (hud-modeline--render-segments hud-modeline-left-segments)))
-        (should (string-match-p "---" result))))))
+         (hud-modeline--test-seg-alist '(foo hud-modeline--test-seg-foo)
+                                       '(sep hud-modeline--test-seg-bar))))
+    (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "foo"))
+              ((symbol-function 'hud-modeline--test-seg-bar) (lambda () "old")))
+      (hud-modeline-override-segment 'hud-modeline-left-segments 'sep
+                                     #'hud-modeline--test-custom-sep)
+      (cl-letf (((symbol-function 'hud-modeline--test-custom-sep) (lambda () "---")))
+        (should (string-match-p "---"
+                                (hud-modeline--render-segments hud-modeline-left-segments)))))))
 
-(ert-deftest hud-modeline--default-left-segments-has-required-keys ()
-  "Default left segments alist contains all expected keys."
+(ert-deftest hud-modeline--left-segments-has-required-keys ()
+  "Live left segments alist contains all expected keys."
   (seq-do (lambda (key)
-            (should (assq key hud-modeline--default-left-segments)))
-          '(state buffer-name separator modes)))
+            (should (assq key hud-modeline-left-segments)))
+          '(state icon buffer-name separator modes)))
 
-(ert-deftest hud-modeline--default-right-segments-has-required-keys ()
-  "Default right segments alist contains the core misc key."
-  (should (assq 'misc hud-modeline--default-right-segments)))
+(ert-deftest hud-modeline--right-segments-has-required-keys ()
+  "Live right segments alist contains the misc key."
+  (should (assq 'misc hud-modeline-right-segments)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline--pad
@@ -270,11 +277,11 @@ inside format-mode-line where delight's advice binds the variable to non-nil."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline--buffer-name
 
-(ert-deftest hud-modeline--buffer-name-renamed-buffer-shows-title ()
-  "When the buffer has been explicitly renamed, show first two words of the title.
-Regression: denote-rename-buffer-mode renames buffers to human-readable names
-like \"my-title <tag>\" but hud-modeline was showing the project-relative file
-path instead because it preferred file-relative-name whenever projectile was active."
+(ert-deftest hud-modeline--buffer-name-renamed-shows-full-name ()
+  "When the buffer has been explicitly renamed, show the full buffer name.
+Regression: hud-modeline was showing the project-relative file path for
+renamed buffers (e.g. those renamed by denote-rename-buffer-mode) because
+it preferred file-relative-name whenever projectile was active."
   (with-temp-buffer
     (setq-local buffer-file-name
                 "/home/user/notes/20260702T123456--my-title__tag.md")
@@ -282,19 +289,9 @@ path instead because it preferred file-relative-name whenever projectile was act
     (cl-letf (((symbol-function 'projectile-project-root)
                (lambda () "/home/user/notes/"))
               ((symbol-function 'projectile-mode) (lambda () t)))
-      (let* ((result (hud-modeline--buffer-name))
+      (let* ((result (hud-modeline--buffer-name-segment))
              (text (substring-no-properties result)))
-        (should (equal "my-title" text))))))
-
-(ert-deftest hud-modeline--buffer-name-renamed-truncates-long-title ()
-  "Renamed buffer names with many title words are truncated to the first three."
-  (with-temp-buffer
-    (setq-local buffer-file-name
-                "/home/user/notes/20260702T123456--my-long-title__tag.md")
-    (rename-buffer "my long title here <tag>" t)
-    (let* ((result (hud-modeline--buffer-name))
-           (text (substring-no-properties result)))
-      (should (equal "my long title" text)))))
+        (should (equal "my-title <tag>" text))))))
 
 (ert-deftest hud-modeline--buffer-name-unrenamed-uses-relative-path ()
   "When buffer name matches file basename and projectile provides a root,
@@ -309,14 +306,14 @@ show the project-relative file path."
                  (if (eq sym 'projectile-project-root)
                      t
                    (funcall #'fboundp sym)))))
-      (let* ((result (hud-modeline--buffer-name))
+      (let* ((result (hud-modeline--buffer-name-segment))
              (text (substring-no-properties result)))
         (should (equal "src/foo.el" text))))))
 
 (ert-deftest hud-modeline--buffer-name-no-file-uses-buffer-name ()
   "Scratch and other non-file buffers use buffer-name directly."
   (with-temp-buffer
-    (let* ((result (hud-modeline--buffer-name))
+    (let* ((result (hud-modeline--buffer-name-segment))
            (text (substring-no-properties result)))
       (should (equal (buffer-name) text)))))
 
@@ -326,14 +323,16 @@ show the project-relative file path."
 (ert-deftest hud-modeline--left-has-leading-space ()
   "`hud-modeline--left' output begins with a space."
   (let ((hud-modeline-left-segments
-         (list (cons 'a (lambda () "content")))))
-    (should (string-prefix-p " " (hud-modeline--left)))))
+         (list (cons 'a (hud-modeline--make-segment :fn #'hud-modeline--test-seg-foo)))))
+    (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "content")))
+      (should (string-prefix-p " " (hud-modeline--left))))))
 
 (ert-deftest hud-modeline--right-has-trailing-space ()
   "`hud-modeline--right' output ends with a space."
   (let ((hud-modeline-right-segments
-         (list (cons 'a (lambda () "content")))))
-    (should (string-suffix-p " " (hud-modeline--right)))))
+         (list (cons 'a (hud-modeline--make-segment :fn #'hud-modeline--test-seg-foo)))))
+    (cl-letf (((symbol-function 'hud-modeline--test-seg-foo) (lambda () "content")))
+      (should (string-suffix-p " " (hud-modeline--right))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; hud-modeline-format structure
@@ -362,7 +361,7 @@ an unhandled error through the mode-line :eval form, silencing the entire modeli
         (hud-modeline--icon-cache nil))
     (cl-letf (((symbol-function 'nerd-icons-icon-for-buffer)
                (lambda () (error "Unable to find icon with name 'nf-cod-list-ordered' in icon set 'codicon'"))))
-      (should (null (hud-modeline--icon))))))
+      (should (null (hud-modeline--icon-segment))))))
 
 (ert-deftest hud-modeline--icon-caches-none-sentinel-on-error ()
   "`hud-modeline--icon' caches `none' sentinel after an error so subsequent calls skip the lookup."
@@ -370,7 +369,7 @@ an unhandled error through the mode-line :eval form, silencing the entire modeli
         (hud-modeline--icon-cache nil))
     (cl-letf (((symbol-function 'nerd-icons-icon-for-buffer)
                (lambda () (error "icon lookup failed"))))
-      (hud-modeline--icon)
+      (hud-modeline--icon-segment)
       (should (eq 'none hud-modeline--icon-cache)))))
 
 (provide 'test-hud-modeline)

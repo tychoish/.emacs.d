@@ -1327,7 +1327,8 @@
     :bind-key "x"
     :key-alias "denote-commands")
   (consult-denote-mode)
-  
+  (when (default-boundp 'denote-directory)
+    (setq denote-directory '()))
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-file-type 'markdown-yaml)
   (setq denote-id-format "%Y%m%dT%H%M%S")
@@ -2325,36 +2326,6 @@ Useful after changing `eglot-workspace-configuration' or
   (bind-keys
    :map tychoish/robot-gptel-map
    ("a" . gptel-agent)))
-
-(use-package claude-code-ide
-  :load-path "external/claude-code-ide"
-  ;; :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
-  :bind (:map tychoish/robot-claude-code-ide-map
-	      ("l" . claude-code-ide-list-sessions)
-	      ("t" . claude-code-ide-toggle)
-	      ("b" . claude-code-ide-switch-to-buffer)
-	      ("k" . claude-code-ide-stop)
-	      ("s" . claude-code-ide-continue)
-	      ("e" . claude-code-ide-send-escape))
-  :commands (claude-code-ide claude-code-ide-menu)
-  :init
-  (bind-keys
-   :map tychoish/robot-map
-   :prefix "i"
-   :prefix-map tychoish/robot-claude-code-ide-map
-   ("m" . claude-code-ide-menu)
-   ("c" . claude-code-ide))
-  (make-read-extended-command-for-prefix "claude-code-ide"
-    :bind-map tychoish/robot-claude-code-ide-map
-    :bind-key "x")
-  :config
-  (setq claude-code-ide-diagnostics-backend 'flycheck)
-  (setq claude-code-ide-terminal-backend 'eat)
-  (setq claude-code-ide-prevent-reflow-glitch t)
-  (setq claude-code-ide-terminal-initialization-delay 0.2)
-  (setq claude-code-ide-eat-preserve-position t)
-  (setq claude-code-ide-vterm-anti-flicker t)
-  (claude-code-ide-emacs-tools-setup))
 
 (use-package eat
   :ensure t

@@ -144,10 +144,11 @@ category+command combination."
 
 (defun hud--flat-entries ()
   "Return a flat list of (CATEGORY . HUD-COMMAND) pairs from `hud-command-table'."
-  (seq-mapcat (lambda (bucket)
-                (seq-map (lambda (cmd) (cons (car bucket) cmd))
-                         (cdr bucket)))
-              hud-command-table))
+  (seq-mapcat 
+   (lambda (bucket)
+     (seq-map (lambda (cmd) (cons (car bucket) cmd))
+              (cdr bucket)))
+   hud-command-table))
 
 (defun hud--entry-lookup ()
   "Return a hash table mapping display names to (CATEGORY . HUD-COMMAND) pairs."
