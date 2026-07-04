@@ -111,7 +111,6 @@ more arguments than the function cares about."
  ("C-x l" . goto-line)
  ("C-x f" . find-file)
  ("C-x C-f" . find-file)
- ("C-x C-d" . dired)
  ("C-c h h" . help)
  ("C-x h" . mark-whole-buffer) ;; default
  ("C-x C-x" . exchange-point-and-mark)

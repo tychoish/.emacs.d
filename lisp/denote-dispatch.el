@@ -29,6 +29,8 @@
 (declare-function denote-rename-file-using-front-matter "denote")
 (declare-function consult-denote-find "consult-denote")
 (declare-function consult-denote-grep "consult-denote")
+(declare-function consult-notes "consult-notes")
+(declare-function consult-notes-search-in-all-notes "consult-notes")
 (declare-function denote-journal-new-entry "denote-journal")
 (declare-function denote-sequence-new-child "denote-sequence")
 (declare-function denote-sequence-new-sibling "denote-sequence")
@@ -37,6 +39,20 @@
 (declare-function denote-sequence-reparent "denote-sequence")
 (declare-function denote-markdown-convert-links-to-markdown-format "denote-markdown")
 (declare-function denote-markdown-convert-links-to-denote-format "denote-markdown")
+(declare-function denote-review-set-date "denote-review")
+(declare-function denote-review-display-list "denote-review")
+(declare-function denote-explore-random-note "denote-explore")
+(declare-function denote-explore-missing-links "denote-explore")
+(declare-function denote-explore-barchart-keywords "denote-explore")
+(declare-function denote-explore-barchart-timeline "denote-explore")
+(declare-function denote-explore-duplicate-notes "denote-explore")
+(declare-function denote-org-link-to-heading "denote-org")
+(declare-function denote-org-backlinks-for-heading "denote-org")
+(declare-function denote-org-extract-org-subtree "denote-org")
+(declare-function denote-org-dblock-insert-links "denote-org")
+(declare-function denote-org-dblock-insert-backlinks "denote-org")
+(declare-function denote-org-dblock-insert-files "denote-org")
+(declare-function tychoish-org-extract-subtree-and-link "tychoish-org")
 
 ;;;; Org datetree import
 ;;
@@ -162,28 +178,47 @@ restrict by date range."
 (transient-define-prefix denote-dispatch ()
   "Dispatch Denote commands by area."
   [["Create"
-    ("nc" "new note"            denote)
-    ("nj" "journal entry"       denote-journal-new-entry)
-    ("ns" "sequence sibling"    denote-sequence-new-sibling)
-    ("nh" "sequence child"      denote-sequence-new-child)
-    ("np" "sequence parent"     denote-sequence-new-parent)]
-   ["Find & View"
+    ("n"  "new note"            denote)
+    ("j"  "journal entry"       denote-journal-new-entry)
+    ("ss" "seq sibling"         denote-sequence-new-sibling)
+    ("sh" "seq child"           denote-sequence-new-child)
+    ("sp" "seq parent"          denote-sequence-new-parent)]
+   ["Find"
     ("ff" "find file"           consult-denote-find)
-    ("fg" "grep content"        consult-denote-grep)
+    ("fg" "grep"                consult-denote-grep)
+    ("fn" "notes"               consult-notes)
+    ("fs" "search all notes"    consult-notes-search-in-all-notes)
     ("fo" "open or create"      denote-open-or-create)
-    ("fd" "dired view"          denote-dired)
+    ("fd" "dired"               denote-dired)
     ("fb" "backlinks"           denote-backlinks)]]
   [["Link"
     ("ll" "insert link"         denote-link)
     ("lp" "link to parent"      denote-sequence-link-to-parent)]
-   ["Rename & Manage"
+   ["Rename"
     ("rr" "rename file"         denote-rename-file)
     ("rf" "rename from fm"      denote-rename-file-using-front-matter)
-    ("rs" "reparent sequence"   denote-sequence-reparent)]
-  ["Convert"
+    ("rp" "reparent seq"        denote-sequence-reparent)]]
+  [["Review"
+    ("vd" "set review date"     denote-review-set-date)
+    ("vl" "review list"         denote-review-display-list)]
+   ["Explore"
+    ("er" "random note"         denote-explore-random-note)
+    ("em" "missing links"       denote-explore-missing-links)
+    ("ek" "keyword chart"       denote-explore-barchart-keywords)
+    ("et" "timeline"            denote-explore-barchart-timeline)
+    ("ed" "duplicates"          denote-explore-duplicate-notes)]]
+  [["Org" :if-derived org-mode
+    ("ox" "extract subtree"     denote-org-extract-org-subtree)
+    ("or" "extract + link"      tychoish-org-extract-subtree-and-link)
+    ("ol" "link to heading"     denote-org-link-to-heading)
+    ("ob" "heading backlinks"   denote-org-backlinks-for-heading)
+    ("od" "dblock: links"       denote-org-dblock-insert-links)
+    ("op" "dblock: backlinks"   denote-org-dblock-insert-backlinks)
+    ("of" "dblock: files"       denote-org-dblock-insert-files)]
+   ["Convert" :if-derived markdown-mode
     ("cm" "links → markdown"    denote-markdown-convert-links-to-markdown-format)
-    ("cd" "links → denote"      denote-markdown-convert-links-to-denote-format)]
-  ["Import"
+    ("cd" "links → denote"      denote-markdown-convert-links-to-denote-format)]]
+  [["Import"
     ("id" "from org datetree"   denote-dispatch-import-from-datetree)]])
 
 (provide 'denote-dispatch)

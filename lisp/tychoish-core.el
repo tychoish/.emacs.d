@@ -1357,11 +1357,11 @@
   (defvar-keymap tychoish/denote-map)
   :bind (:map tychoish/denote-map
          ("n" . denote)
-         ("o" . denote-open-or-create)
+         ("m" . denote-open-or-create)
          ("l" . denote-link)
          ("b" . denote-backlinks)
          ("r" . denote-rename-file)
-         ("m" . denote-dispatch)
+         ("?" . denote-dispatch)
          ("C-r" . denote-rename-file-using-front-matter))
   :config
   (make-read-extended-command-for-prefix "denote"
@@ -1372,9 +1372,9 @@
   (when (default-boundp 'denote-directory)
     (setq denote-directory '()))
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
-  (setq denote-file-type 'markdown-yaml)
+  (setq denote-file-type 'org)
   (setq denote-id-format "%Y%m%dT%H%M%S")
-  (setq denote-known-keywords '("project" "reference" "journal" "idea"))
+  (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "migration" "agent" "plan" "singing"))
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
   (setq denote-prompts '(title keywords file-type))
@@ -1395,6 +1395,20 @@ does not manage (e.g. status, plan-type)."
         (when (re-search-forward "^---$" nil t)
           (beginning-of-line)
           (insert key ": " value "\n"))))))
+
+(use-package denote-dispatch
+  :ensure nil
+  :after transient
+  :commands (denote-dispatch))
+
+(use-package consult-notes
+  :ensure t
+  :commands (consult-notes consult-notes-search-in-all-notes)
+  :bind (:map tychoish/denote-map
+         (";" . consult-notes)
+         ("/" . consult-notes-search-in-all-notes))
+  :config
+  (consult-notes-denote-mode 1))
 
 (use-package consult-denote
   :ensure t
@@ -1419,7 +1433,8 @@ does not manage (e.g. status, plan-type)."
   :ensure t
   :after denote
   :commands (denote-sequence-new-child denote-sequence-new-sibling
-             denote-sequence-new-parent denote-sequence-link-to-parent)
+             denote-sequence-new-parent denote-sequence-link
+             denote-sequence-reparent denote-sequence-reparent-recursive)
   :init
   (bind-keys
    :map tychoish/denote-map
@@ -1427,13 +1442,13 @@ does not manage (e.g. status, plan-type)."
    :prefix-map tychoish/denote-sequence-map
    ("c" . denote-sequence-new-child)
    ("s" . denote-sequence-new-sibling)
+   ("r" . denote-sequence-rename-as-parent)
    ("p" . denote-sequence-new-parent)
-   ("l" . denote-sequence-link-to-parent)
-   ("r" . denote-sequence-reparent)
-   ("C-r" . denote-sequence-reparent-recursive))
+   ("l" . denote-sequence-link)
+   ("m" . denote-sequence-reparent)
+   ("a" . denote-sequence-reparent-recursive))
   :config
-  (setq denote-sequence-separator "=")
-  (setq denote-sequence-schemes 'alphanumeric))
+  (setq denote-sequence-scheme 'alphanumeric))
 
 (use-package denote-markdown
   :ensure t
@@ -1441,8 +1456,86 @@ does not manage (e.g. status, plan-type)."
   :commands (denote-markdown-convert-links-to-markdown-format
              denote-markdown-convert-links-to-denote-format))
 
-(with-eval-after-load 'transient
-  (require 'denote-dispatch))
+(use-package denote-org
+  :ensure t
+  :after denote
+  :commands (denote-org-link-to-heading
+             denote-org-backlinks-for-heading
+             denote-org-extract-org-subtree
+             denote-org-convert-links-to-file-type
+             denote-org-convert-links-to-denote-type
+             denote-org-dblock-insert-links
+             denote-org-dblock-insert-missing-links
+             denote-org-dblock-insert-backlinks
+             denote-org-dblock-insert-files
+             denote-org-dblock-insert-files-as-headings)
+  :bind (:map tychoish/denote-map
+         :prefix "o"
+	 :prefix-map tychoish/denote-org-map
+         ("l" . denote-org-link-to-heading)
+         ("b" . denote-org-backlinks-for-heading)
+         ("x" . denote-org-extract-org-subtree)
+         ("r" . tychoish-org-extract-subtree-and-link)
+         ("d" . denote-org-dblock-insert-links)
+         ("p" . denote-org-dblock-insert-backlinks)
+         ("f" . denote-org-dblock-insert-files)))
+
+(use-package denote-explore
+  :ensure t
+  :after denote
+  :commands (denote-explore-count-notes
+             denote-explore-count-keywords
+             denote-explore-random-note
+             denote-explore-random-link
+             denote-explore-random-keyword
+             denote-explore-duplicate-notes
+             denote-explore-single-keywords
+             denote-explore-zero-keywords
+             denote-explore-rename-keyword
+             denote-explore-sync-metadata
+             denote-explore-missing-links
+             denote-explore-barchart-keywords
+             denote-explore-barchart-timeline
+             denote-explore-barchart-filetypes)
+  :init
+  (bind-keys
+   :map tychoish/denote-map
+   :prefix "e"
+   :prefix-map tychoish/denote-explore-map
+   ("n" . denote-explore-count-notes)
+   ("c" . denote-explore-count-keywords)
+   ("r" . denote-explore-random-note)
+   ("l" . denote-explore-random-link)
+   ("d" . denote-explore-duplicate-notes)
+   ("s" . denote-explore-single-keywords)
+   ("z" . denote-explore-zero-keywords)
+   ("k" . denote-explore-rename-keyword)
+   ("m" . denote-explore-missing-links)
+   ("y" . denote-explore-sync-metadata)
+   ("b" . denote-explore-barchart-keywords)
+   ("t" . denote-explore-barchart-timeline))
+  :config
+  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
+  (setq denote-explore-network-format "graphviz")
+  (setq denote-explore-network-graphviz-filetype "svg"))
+
+(use-package denote-review
+  :ensure t
+  :after denote
+  :commands (denote-review-set-date
+             denote-review-set-date-dired-marked-files
+             denote-review-display-list)
+  :bind (:map tychoish/denote-map
+	 :prefix "c"
+	 :prefix-map tychoish/denote-review-map
+         ("d" . denote-review-set-date)
+         ("l" . denote-review-display-list))
+  :config
+  (setq denote-review-insert-after "date"))
+
+(use-package denote-journal-capture
+  :ensure t
+  :after (denote denote-journal))
 
 (use-package markdown-mode
   :ensure t
@@ -1838,11 +1931,19 @@ does not manage (e.g. status, plan-type)."
 (use-package docker
   :ensure t
   :commands (docker)
-  :bind (("C-c d d" . docker))
+  :bind (:prefix "C-x d"
+         :prefix-map tychoish/docker-map
+	 ("d" . docker)
+	 ("c" . docker-containers)
+	 ("i" . docker-images)
+	 ("v" . docker-volumes)
+	 ("m" . docker-contexts)
+	 ("p" . docker-compose))
   :config
+  (setq docker-terminal-backend 'eat)
   (make-read-extended-command-for-prefix "docker"
-    :bind-key "C-x C-d"
-    :bind-map global-map)
+    :bind-key "x"
+    :bind-map tychoish/docker-map)
   (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

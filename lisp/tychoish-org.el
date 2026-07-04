@@ -108,6 +108,13 @@
   (setq org-return-follows-link t)
   (setq org-use-speed-commands #'tychoish/org-use-speed-commands)
 
+  (seq-do (lambda (sym)
+            (when (boundp sym)
+              (set sym (make-sparse-keymap))))
+          '(tychoish/org-mode-personal-map
+            tychoish/org-mode-capture-map
+            tychoish/org-mode-personal-archive-map))
+
   (bind-keys
    :map org-mode-map
    ("C-c l o" . org-link-open-from-string)
@@ -118,7 +125,10 @@
    :map org-mode-map
    :prefix "C-c o"
    :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
-   ("a" . org-agenda)
+   ("s" . org-agenda)
+   ("a" . consult-org-agenda)
+   ("u" . tychoish-org-agenda-untagged-in-file)
+   ("h" . consult-org-heading)
    ("k" . org-capture)
    ("f" . org-agenda-files-open)
    ("t" . org-set-tags-command)
@@ -148,13 +158,7 @@
    ("t" . org-archive-set-tag)
    ("s" . org-archive-to-archive-sibling)
    ("a" . org-archive-done-tasks-to-archive-sibling)
-   ("f" . org-archive-done-tasks-to-archive-file))
-
-  (with-eval-after-load 'consult
-    (bind-keys
-     :map tychoish/org-mode-personal-map
-     ("h" . consult-org-heading)         ;; Alternative: consult-org-heading (for jump)
-     ("s" . consult-org-agenda))))
+   ("f" . org-archive-done-tasks-to-archive-file)))
 
 (autoload 'org-store-link "ol")
 (autoload 'org-insert-link "ol")
@@ -205,13 +209,18 @@
 ;; key bindings
 
 (bind-keys
- :map tychoish/global-org-map
+ :prefix "C-c o"
+ :prefix-map tychoish/global-org-map
+ ("a" . consult-org-agenda)
+ ("c" . consult-org-capture)
+ ("4" . org-agenda)
+ ("k" . org-capture)
  ("f" . org-agenda-files-open)
  ("s" . org-save-all-org-buffers)
  ("r" . org-agenda-files-reload)
  ("j" . consult-org-capture)
- ("c" . consult-org-capture)
- :map tychoish/org-link-mode-map
+ ("u" . tychoish-org-agenda-untagged-in-file)
+ ("/" . tychoish-org-agenda-for-file)
  :map tychoish/global-org-map
  :prefix "l"
  :prefix-map tychoish/org-link-mode-map
@@ -224,6 +233,13 @@
   :doc "keymap for org-gist commands"
   "p" #'org-gist-export-private-gist
   "g" #'org-gist-export-public-gist)
+
+(defun tychoish-org-agenda-extract-subtree-and-link ()
+  "From org-agenda, go to the entry and extract it to a new denote note.
+See `tychoish-org-extract-subtree-and-link'."
+  (interactive)
+  (org-agenda-goto)
+  (tychoish-org-extract-subtree-and-link))
 
 (with-eval-after-load 'org-agenda
   (bind-keys
@@ -704,6 +720,70 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                  #'denote-org-capture
                  :no-save t
                  :immediate-finish nil
+                 :kill-buffer t
+                 :jump-to-captured t)))
+
+(declare-function denote-org-extract-org-subtree "denote-org")
+(declare-function denote-format-link "denote")
+(declare-function denote-directory-files "denote")
+
+(defun tychoish-org--parse-heading-date (heading)
+  "Return an Emacs time value for the first org timestamp in HEADING, or nil."
+  (when (string-match org-ts-regexp-both heading)
+    (condition-case nil
+        (org-time-string-to-time (match-string 0 heading))
+      (error nil))))
+
+(defun tychoish-org-extract-subtree-and-link ()
+  "Extract the current Org subtree to a new denote note, replacing the heading with a link.
+The original heading is re-inserted at its level with the heading text
+replaced by a denote link to the new note.
+
+If the heading text contains an org timestamp and the entry has no DATE,
+CREATED, or CLOSED property, the timestamp is injected as CREATED so the
+new note's identifier reflects that date."
+  (interactive)
+  (unless (derived-mode-p 'org-mode)
+    (user-error "Must be in an org-mode buffer"))
+  (let* ((source-buf (current-buffer))
+         (insert-marker (copy-marker (org-entry-beginning-position)))
+         (level (org-current-level))
+         (heading (org-get-heading t t t t))
+         (heading-date (tychoish-org--parse-heading-date heading)))
+    (when (and heading-date
+               (not (or (org-entry-get nil "DATE")
+                        (org-entry-get nil "CREATED")
+                        (org-entry-get nil "CLOSED"))))
+      (org-set-property "CREATED"
+                        (format-time-string "[%Y-%m-%d %a %H:%M]" heading-date)))
+    (when-let* ((path (denote-org-extract-org-subtree)))
+      (with-current-buffer source-buf
+        (save-excursion
+          (goto-char insert-marker)
+          (insert (concat (make-string level ?*)
+                          " "
+                          (denote-format-link path heading 'org nil)
+                          "\n"))
+          (goto-char insert-marker)
+          (org-toggle-tag "denoted" 'on)))
+      (set-marker insert-marker nil))))
+
+(declare-function denote-journal-capture-entry-for-date "denote-journal-capture")
+(declare-function denote-journal-capture-entry-today "denote-journal-capture")
+
+(with-eval-after-load 'denote-journal-capture
+  (add-to-list 'org-capture-templates
+               '("dj" "denote journal (today)" entry
+                 (file+olp denote-journal-capture-entry-today "Journal")
+                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
+                 :no-save t
+                 :kill-buffer t
+                 :jump-to-captured t))
+  (add-to-list 'org-capture-templates
+               '("dJ" "denote journal (date)" entry
+                 (file+olp denote-journal-capture-entry-for-date "Journal")
+                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
+                 :no-save t
                  :kill-buffer t
                  :jump-to-captured t)))
 
