@@ -207,10 +207,16 @@
 (bind-keys
  :map tychoish/global-org-map
  ("f" . org-agenda-files-open)
+ ("s" . org-save-all-org-buffers)
  ("r" . org-agenda-files-reload)
  ("j" . consult-org-capture)
  ("c" . consult-org-capture)
  :map tychoish/org-link-mode-map
+ :map tychoish/global-org-map
+ :prefix "l"
+ :prefix-map tychoish/org-link-mode-map
+ ("s" . org-store-link)
+ ("i" . org-insert-link)
  ("a" . org-annotate-file))
 
 (defvar-keymap tychoish/org-gist-map
@@ -223,7 +229,9 @@
   (bind-keys
    :map org-agenda-mode-map
    ("C-l" . org-agenda-open-link)
-   ("M-c" . org-agenda-goto-calendar)))
+   ("M-c" . org-agenda-goto-calendar)
+   ("/" . tychoish-org-agenda-for-file)
+   ("C-e" . tychoish-org-agenda-extract-subtree-and-link)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

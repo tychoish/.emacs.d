@@ -267,19 +267,6 @@ or `describe-symbol' as fallback."
  ("f" . find-grep))
 
 (bind-keys
- :prefix "C-c o"
- :prefix-map tychoish/global-org-map
- ("a" . org-agenda)
- ("k" . org-capture))
-
-(bind-keys
- :map tychoish/global-org-map
- :prefix "l"
- :prefix-map tychoish/org-link-mode-map
- ("s" . org-store-link)
- ("i" . org-insert-link))
-
-(bind-keys
  :prefix "C-c ."
  :prefix-map tychoish/completion-map
  ("TAB" . completion-at-point)
