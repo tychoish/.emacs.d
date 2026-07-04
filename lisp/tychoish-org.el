@@ -386,6 +386,8 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (interactive)
   (tychoish-org-archive-completed-tasks #'org-archive-subtree " to file"))
 
+(declare-function annotated-completing-read "annotated-completing-read")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; consult-tycho: org-capture
@@ -418,6 +420,149 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; org-agenda: untagged filter
+
+(defvar tychoish-org-agenda-required-tag nil
+  "Dynamic binding used by `tychoish-org-skip-unless-untagged'.
+When nil: skip entries that have any local tag (show only fully-untagged items).
+When set to a tag string: skip entries that possess that tag (show items missing it).")
+
+(defvar tychoish-org-agenda-include-inherited-tags nil
+  "Dynamic binding used by `tychoish-org-skip-unless-untagged'.
+When nil (default): only local tags are considered — headings that merely
+inherit tags from ancestors are treated as untagged.
+When non-nil: inherited tags are included — a heading is considered tagged
+if it or any ancestor carries a tag.")
+
+(defconst tychoish-org-datetree-heading-re
+  (rx bol
+      (or (seq (= 4 digit) eol)
+          (seq (= 4 digit) "-" (= 2 digit) " " (+ alpha))
+          (seq (= 4 digit) "-" (= 2 digit) "-" (= 2 digit) " " (+ alpha))))
+  "Regexp matching org datetree auto-generated headings (year, month, day).")
+
+(defun tychoish-org-skip-unless-untagged ()
+  "Skip agenda entries that carry tags, match datetree headings, or have
+`tychoish-org-agenda-required-tag'.
+When `tychoish-org-agenda-required-tag' is nil, keeps only entries with no
+tags at all.  When it is a tag string, keeps only entries missing that tag.
+Datetree structural headings are always skipped.
+Respects `tychoish-org-agenda-include-inherited-tags': when nil, only local
+tags are tested; when non-nil, inherited tags are included in the check."
+  (let ((tags (if tychoish-org-agenda-include-inherited-tags
+                  (org-get-tags)
+                (org-get-tags nil t)))
+        (heading (org-get-heading t t t t)))
+    (when (or (string-match-p tychoish-org-datetree-heading-re heading)
+              (if tychoish-org-agenda-required-tag
+                  (member tychoish-org-agenda-required-tag tags)
+                tags))
+      (or (outline-next-heading) (point-max)))))
+
+(defun tychoish-org-agenda-untagged-in-file (file &optional tag todo-only inherited)
+  "Show an agenda for FILE restricted to items lacking TAG.
+When TAG is nil or empty, show items with no tags at all.
+When TODO-ONLY is non-nil, restrict to TODO-keyword headings.
+When INHERITED is non-nil, headings that inherit tags from ancestors are
+also considered tagged and excluded.
+Interactively, prompts for file and tag; \\[universal-argument] toggles
+TODO-only, \\[universal-argument] \\[universal-argument] adds inherited-tag checking."
+  (interactive
+   (list (read-file-name "Org file: " nil nil t nil
+                         (lambda (n) (or (file-directory-p n)
+                                         (string-suffix-p ".org" n))))
+         (let ((input (completing-read
+                       "Missing tag (empty = no tags at all): "
+                       (org-global-tags-completion-table (org-agenda-files))
+                       nil nil nil nil "")))
+           (unless (string-empty-p input) input))
+         (equal current-prefix-arg '(4))
+         (equal current-prefix-arg '(16))))
+  (let* ((tag (if (and tag (string-empty-p tag)) nil tag))
+         (scope (cond ((and todo-only inherited) "TODOs (inherited)")
+                      (todo-only "TODOs")
+                      (inherited "Headings (inherited)")
+                      (t "Headings")))
+         (header (format "%s in %s %s"
+                         scope
+                         (file-name-nondirectory file)
+                         (if tag (format "missing :%s:" tag) "with no tags")))
+         (block (if todo-only
+                    `(todo ""
+                           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+                            (org-agenda-overriding-header ,header)))
+                  `(tags "LEVEL>=1-TODO={.+}"
+                         ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+                          (org-agenda-overriding-header ,header)))))
+         (tychoish-org-agenda-required-tag tag)
+         (tychoish-org-agenda-include-inherited-tags inherited)
+         (org-agenda-custom-commands `(("V" ,header (,block)))))
+    (org-agenda nil "V")))
+
+(defun tychoish-org-agenda-for-file (file)
+  "Run a full org agenda restricted to FILE.
+FILE is selected from `org-agenda-files' with completion."
+  (interactive
+   (list (completing-read "Agenda for file: "
+                          (mapcar #'file-name-nondirectory (org-agenda-files))
+                          nil t)))
+  (let ((org-agenda-files
+         (seq-filter (lambda (f) (string= (file-name-nondirectory f) file))
+                     (org-agenda-files))))
+    (org-agenda nil "a")))
+
+(defconst tychoish-org-agenda-builtin-views
+  '(("a" "Agenda (week/day)")
+    ("t" "All TODOs")
+    ("m" "Match tags / props / todo")
+    ("s" "Search keywords"))
+  "Standard org-agenda built-in views included in `consult-org-agenda'.")
+
+;;;###autoload
+(defun consult-org-agenda ()
+  "Select an org-agenda view via annotated completing read.
+Includes both the standard built-in views and any entries in
+`org-agenda-custom-commands'.  Each candidate is annotated with its
+key and, for custom commands, the match string or filter function
+name.  Candidates are grouped by command type (built-in, tags, todo,
+etc.)."
+  (interactive)
+  (require 'org-agenda)
+  (let* ((customs (seq-filter (lambda (e) (stringp (cadr e)))
+                              org-agenda-custom-commands))
+         (all (append tychoish-org-agenda-builtin-views customs))
+         (desc->entry (seq-map (lambda (e) (cons (cadr e) e)) all))
+         (acr-table
+          (seq-map
+           (lambda (e)
+             (let* ((match (when (>= (length e) 4) (nth 3 e)))
+                    (match-label
+                     (cond
+                      ((and (symbolp match) (functionp match)) (symbol-name match))
+                      ((and (stringp match) (not (string-empty-p match))) match)))
+                    (annotation (string-join
+                                 (seq-filter #'identity
+                                             (list (format "[%s]" (car e))
+                                                   match-label))
+                                 "  ")))
+               (cons (cadr e) annotation)))
+           all))
+         (choice
+          (annotated-completing-read
+           acr-table
+           :prompt "Agenda view: "
+           :require-match t
+           :category 'org-agenda
+           :group-name (lambda (desc)
+                         (when-let* ((entry (cdr (assoc desc desc->entry))))
+                           (if (< (length entry) 3)
+                               "Built-in"
+                             (capitalize (format "%s" (nth 2 entry)))))))))
+    (when-let* ((entry (cdr (assoc choice desc->entry))))
+      (org-agenda nil (car entry)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;; org-agenda
 
 (with-eval-after-load 'org-agenda
@@ -425,7 +570,21 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 
   (setq org-agenda-custom-commands
         '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
-           ((org-agenda-skip-function-global nil)))))
+           ((org-agenda-skip-function-global nil)))
+          ("u" "Untagged TODOs (local)" todo ""
+           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+            (org-agenda-overriding-header "TODOs with no local tags")))
+          ("U" "Untagged headings (local)" tags "LEVEL>=1-TODO={.+}"
+           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+            (org-agenda-overriding-header "Headings with no local tags")))
+          ("i" "Untagged TODOs (incl. inherited)" todo ""
+           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+            (org-agenda-overriding-header "TODOs with no local or inherited tags")
+            (tychoish-org-agenda-include-inherited-tags t)))
+          ("I" "Untagged headings (incl. inherited)" tags "LEVEL>=1-TODO={.+}"
+           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+            (org-agenda-overriding-header "Headings with no local or inherited tags")
+            (tychoish-org-agenda-include-inherited-tags t)))))
 
   (setq org-agenda-include-diary nil)
   (setq org-agenda-block-separator nil)
