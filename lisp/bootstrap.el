@@ -201,10 +201,31 @@ more arguments than the function cares about."
  ("d" . bootstrap-load-dark-theme)
  ("l" . bootstrap-load-light-theme))
 
+(defun tychoish-describe-symbol-dwim (prefix)
+  "Look up symbol at point contextually.
+With PREFIX arg, always use `describe-symbol'.
+Otherwise: use `slime-describe-symbol' if slime is connected,
+`consult-eglot-symbols' if in an eglot-managed buffer,
+or `describe-symbol' as fallback."
+  (interactive "P")
+  (cond
+   (prefix
+    (call-interactively #'describe-symbol))
+   ((and (fboundp 'slime-describe-symbol)
+         (fboundp 'slime-connected-p)
+         (slime-connected-p))
+    (call-interactively #'slime-describe-symbol))
+   ((and (fboundp 'eglot-current-server)
+         (fboundp 'consult-eglot-symbols)
+         (eglot-current-server))
+    (consult-eglot-symbols))
+   (t
+    (call-interactively #'describe-symbol))))
+
 (bind-keys
  :prefix "C-c h"
  :prefix-map tychoish/docs-map
- ("s" . describe-symbol)
+ ("s" . tychoish-describe-symbol-dwim)
  ("v" . describe-variable)
  ("q" . kill-eldoc-and-help-buffers)
  ("j" . jump-to-elisp-help)
