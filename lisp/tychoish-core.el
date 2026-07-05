@@ -1768,9 +1768,7 @@ does not manage (e.g. status, plan-type)."
   (rust-mode "rs")
   (rustic-mode "rs(x)")
   :after (rust-mode flycheck)
-  :mode (("\\.rs$" . rustic-mode)
-	 ("\\.rs" . rustic-mode)
-	 ("\\.rs\\'" . rustic-mode)
+  :mode (("\\.rs\\'" . rustic-mode)
 	 ("Cargo.lock" . toml-ts-mode))
   :commands (rust-resolve-fmt-path rustic-mode)
   :init
@@ -1792,8 +1790,7 @@ does not manage (e.g. status, plan-type)."
 	 (rustup-p (and rustup-path (not (string-empty-p rustup-path))))
 	 (rustup-toolchain (if rustup-p "nightly" "stable")))
     (when rustup-p
-      (setq rustic-rustfmt-args "+nightly")
-      (setq rustic-analyzer-command `(,rustup-path "run" "stable" "rust-analyzer")))
+      (setq rustic-rustfmt-args "+nightly"))
 
     (add-to-list 'tychoish/eglot-default-server-configuration
 		 `((:rust-analyzer :initializationOptions
@@ -2137,9 +2134,7 @@ does not manage (e.g. status, plan-type)."
 	   typescript-ts-mode
 	   go-ts-mode
 	   go-mod-ts-mode
-	   rust-mode
 	   yaml-mode
-	   rust-ts-mode
 	   rustic-mode
 	   c++-ts-mode
 	   c-ts-mode
