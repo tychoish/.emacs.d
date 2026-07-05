@@ -170,6 +170,8 @@ more arguments than the function cares about."
  ("=" . text-scale-increase)
  ("-" . text-scale-decrease)
  ("0" . text-scale-reset)
+ ("h" . auto-fill-mode)
+ ("s" . visual-line-mode)
  :map tychoish/display-map ;; "C-c f"
  :prefix "o"
  :prefix-map tychoish/display-opacity-map

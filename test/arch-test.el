@@ -278,5 +278,45 @@
   (let ((arch-abs-directory "/tmp/abs/"))
     (should (equal (arch--abs-pkg-dir "mypkg") "/tmp/abs/mypkg"))))
 
+;;; Info buffer (with-help-window migration)
+
+(defmacro arch-test--with-info-buf (pkg plist &rest body)
+  "Run BODY with PKG mocked to return PLIST, cleaning up the info buffer after."
+  (declare (indent 2))
+  `(let ((backend (arch-backend--make :name "test" :files-fn (lambda (_) nil))))
+     (cl-letf (((symbol-function 'arch--default-backend) (lambda () backend))
+               ((symbol-function 'arch--cached-info) (lambda (_) ,plist)))
+       (unwind-protect
+           (progn (arch-show-info ,pkg) ,@body)
+         (when-let* ((buf (get-buffer (arch--info-buffer-name ,pkg))))
+           (kill-buffer buf))))))
+
+(ert-deftest arch-test-show-info-buffer-name ()
+  "arch-show-info creates a buffer with the canonical *arch-info<PKG>* name."
+  (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
+    (should (get-buffer (arch--info-buffer-name "testpkg")))))
+
+(ert-deftest arch-test-show-info-uses-help-mode ()
+  "arch-show-info buffer is in help-mode."
+  (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
+    (when-let* ((buf (get-buffer (arch--info-buffer-name "testpkg"))))
+      (with-current-buffer buf
+        (should (derived-mode-p 'help-mode))))))
+
+(ert-deftest arch-test-show-info-local-map-is-arch-info-map ()
+  "arch-show-info sets the local keymap to arch-info-map."
+  (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
+    (when-let* ((buf (get-buffer (arch--info-buffer-name "testpkg"))))
+      (with-current-buffer buf
+        (should (eq (current-local-map) arch-info-map))))))
+
+(ert-deftest arch-test-info-map-inherits-help-mode-map ()
+  "arch-info-map has help-mode-map as an ancestor."
+  (require 'help-mode)
+  (let ((map arch-info-map))
+    (while (and map (not (eq map help-mode-map)))
+      (setq map (keymap-parent map)))
+    (should (eq map help-mode-map))))
+
 (provide 'arch-test)
 ;;; arch-test.el ends here

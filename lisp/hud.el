@@ -45,7 +45,7 @@ Populated by `hud-register-command'.  Reset with `hud-reset-command-table'.")
 (cl-defstruct (hud-command
                (:copier nil)
                (:constructor make-hud-command
-                             (&key command description category transient-key display-name row
+                             (&key command description category transient-key display-name row visible inapt exclude-from-transient
                                    &aux (command      (when command (intern (symbol-name command))))
                                         (category     (or category (hud--derive-category command)))
                                         (display-name (or display-name
@@ -57,7 +57,10 @@ Populated by `hud-register-command'.  Reset with `hud-reset-command-table'.")
   (category      nil :type symbol  :documentation "Grouping key, e.g. \\='agent-shell.")
   (transient-key nil :type string  :documentation "Key string for the transient menu suffix.")
   (display-name  nil :type string  :documentation "Candidate string shown in `hud-select'.")
-  (row           1   :type integer :documentation "Row (1 or 2) in the two-row transient layout."))
+  (row           1   :type integer :documentation "Row (1 or 2) in the two-row transient layout.")
+  (visible       nil               :documentation "Predicate (:if): nil means always shown in ACR and transient.")
+  (inapt         nil               :documentation "Predicate (:ifapt): non-nil means grayed out in transient.")
+  (exclude-from-transient  nil               :documentation "When non-nil, item appears in ACR but not in the transient menu."))
 
 (defun hud--derive-category (command)
   "Derive a category symbol from COMMAND's defining file, or \\='hud."
@@ -74,11 +77,20 @@ claimed by a different category+command combination, or nil."
                              (eq command (hud-command-command (cdr pair)))))))
             (hud--flat-entries)))
 
-(cl-defun hud-register-command (&key category command description transient-key display-name (row 1))
+(cl-defun hud-register-command (&key category command description transient-key display-name (row 1) if ifapt exclude-from-transient)
   "Add or replace a `hud-command' entry in `hud-command-table'.
 
 :ROW (integer, default 1) assigns the command to a row in the two-row
 transient layout.  All commands in a category should share the same :row.
+
+:IF is a predicate function; when it returns nil the item is hidden from
+both the ACR selector and the transient menu.
+
+:IFAPT is a predicate function; when it returns non-nil the transient
+suffix is shown but marked inapt (grayed out, not invokable).
+
+:EXCLUDE-FROM-TRANSIENT when non-nil the item appears in `hud-select'
+but is omitted from the `hud-dispatch' transient menu entirely.
 
 Signals `user-error' when TRANSIENT-KEY is already claimed by a different
 category+command combination."
@@ -87,7 +99,10 @@ category+command combination."
                                   :category category
                                   :transient-key transient-key
                                   :display-name display-name
-                                  :row row))
+                                  :row row
+                                  :visible if
+                                  :inapt ifapt
+                                  :exclude-from-transient exclude-from-transient))
          (cat (hud-command-category entry)))
     (when-let* ((conflict (hud--find-transient-key-conflict cat command transient-key)))
       (user-error "Transient key %S is already used by %S in category %S"
@@ -117,11 +132,16 @@ category+command combination."
   "Convert a BUCKET (category . commands) to a transient column vector."
   (apply #'vector
          (symbol-name (car bucket))
-         (seq-map (lambda (cmd)
-                    (list (hud-command-transient-key cmd)
-                          (hud-command-description cmd)
-                          (hud-command-command cmd)))
-                  (cdr bucket))))
+         (thread-last (cdr bucket)
+           (seq-remove #'hud-command-exclude-from-transient)
+           (seq-map (lambda (cmd)
+                      (append (list (hud-command-transient-key cmd)
+                                    (hud-command-description cmd)
+                                    (hud-command-command cmd))
+                              (when-let* ((pred (hud-command-visible cmd)))
+                                (list :if pred))
+                              (when-let* ((pred (hud-command-inapt cmd)))
+                                (list :inapt-if pred))))))))
 
 (defun hud--setup-row-children (row)
   "Build transient column suffixes for categories whose first command is in ROW."
@@ -151,11 +171,15 @@ category+command combination."
    hud-command-table))
 
 (defun hud--entry-lookup ()
-  "Return a hash table mapping display names to (CATEGORY . HUD-COMMAND) pairs."
+  "Return a hash table mapping display names to visible (CATEGORY . HUD-COMMAND) pairs.
+Entries whose :if predicate returns nil are excluded."
   (map-into
-   (seq-map (lambda (pair)
-              (cons (hud-command-display-name (cdr pair)) pair))
-            (hud--flat-entries))
+   (thread-last (hud--flat-entries)
+     (seq-filter (lambda (pair)
+                   (let ((pred (hud-command-visible (cdr pair))))
+                     (or (null pred) (funcall pred)))))
+     (seq-map (lambda (pair)
+                (cons (hud-command-display-name (cdr pair)) pair))))
    '(hash-table :test equal)))
 
 ;;;###autoload
