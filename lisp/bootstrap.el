@@ -1936,5 +1936,52 @@ block in bootstrap-core.el, sorted by LINE-COUNT descending."
       (special-mode))
     (pop-to-buffer buf)))
 
+;;; Byte-compile check
+
+(defun tychoish-check-byte-compile (file)
+  "Byte-compile FILE for error checking, then delete the .elc artifact.
+Returns t if compilation produced no errors.  Intended for use by agent
+skills via emacsclient:
+  emacsclient --eval \\='(tychoish-check-byte-compile \"lisp/foo.el\")\\='"
+  (let* ((expanded (expand-file-name file user-emacs-directory))
+         (elc (concat (file-name-sans-extension expanded) ".elc"))
+         (result (byte-compile-file expanded)))
+    (when (file-exists-p elc)
+      (delete-file elc))
+    result))
+
+;;; Native compilation idle warm-up
+
+(defun tychoish-native-compile-all-local ()
+  "Queue native compilation of all .el files in lisp/ and elpa/, then prune cache.
+Reports the number of files queued and the time taken to dispatch them.
+Runs once on a 60-second idle timer after startup; also callable interactively.
+Compilation itself is async — Emacs stays responsive while .eln files are built."
+  (interactive)
+  (if (not (fboundp 'native-compile-async))
+      (message "Native compilation not available in this build")
+    (let* ((lisp-dir (expand-file-name "lisp" user-emacs-directory))
+           (elpa-dir (expand-file-name "elpa" user-emacs-directory))
+           (files (seq-filter
+                   #'file-regular-p
+                   (append
+                    (when (file-directory-p lisp-dir)
+                      (directory-files-recursively lisp-dir "\\.el\\'"))
+                    (when (file-directory-p elpa-dir)
+                      (directory-files-recursively elpa-dir "\\.el\\'")))
+                   ))
+           (n (length files)))
+      (with-slow-op-timer "native-compile-all-local: dispatch"
+        (native-compile-async files))
+      (condition-case err
+          (when (fboundp 'native-compile-prune-cache)
+            (native-compile-prune-cache))
+        (error (message "native-compile-prune-cache error: %s"
+                        (error-message-string err))))
+      (message "native-compile-all-local: queued %d .el files" n))))
+
+(when (string-match "NATIVE_COMP" system-configuration-features)
+  (run-with-idle-timer 60 nil #'tychoish-native-compile-all-local))
+
 (provide 'bootstrap)
 ;;; bootstrap.el ends here

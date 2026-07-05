@@ -252,33 +252,6 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
 
 ;;; Data layer
 
-(defun denote-dash--build-entry (file)
-  "Build a `tabulated-list-mode' entry for FILE."
-  (let ((seq-id (denote-retrieve-filename-signature file)))
-    (list file
-          (apply #'vector
-                 (seq-map
-                  (lambda (col)
-                    (pcase col
-                      ('fold
-                       (denote-dash--fold-indicator seq-id))
-                      ('title
-                       (or (denote-retrieve-filename-title file) (file-name-base file)))
-                      ('keywords
-                       (string-join (denote-extract-keywords-from-path file) " "))
-                      ('modified
-                       (format-time-string
-                        "%Y-%m-%d"
-                        (file-attribute-modification-time (file-attributes file))))
-                      ('id
-                       (or (denote-retrieve-filename-identifier file) ""))
-                      ('directory
-                       (file-relative-name (file-name-directory file)
-                                           (denote-dash--denote-root)))
-                      ('git
-                       (or (denote-dash--git-status-char file) " "))))
-                  denote-dash--visible-columns)))))
-
 (defun denote-dash--file-visible-p (file all-seq-ids)
   "Return non-nil if FILE should appear given current filter, directory, and fold state."
   (let ((seq-id (denote-retrieve-filename-signature file)))
@@ -297,25 +270,38 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
                                    (seq-filter #'identity))))
     (thread-last files
                  (seq-filter (lambda (f) (denote-dash--file-visible-p f all-seq-ids)))
-                 (seq-map #'denote-dash--build-entry))))
+                 (seq-map (lambda (file)
+                            (let ((seq-id (denote-retrieve-filename-signature file)))
+                              (list file
+                                    (apply #'vector
+                                           (seq-map
+                                            (lambda (col)
+                                              (pcase col
+                                                ('fold      (denote-dash--fold-indicator seq-id))
+                                                ('title     (or (denote-retrieve-filename-title file) (file-name-base file)))
+                                                ('keywords  (string-join (denote-extract-keywords-from-path file) " "))
+                                                ('modified  (format-time-string "%Y-%m-%d" (file-attribute-modification-time (file-attributes file))))
+                                                ('id        (or (denote-retrieve-filename-identifier file) ""))
+                                                ('directory (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
+                                                ('git       (or (denote-dash--git-status-char file) " "))))
+                                            denote-dash--visible-columns)))))))))
 
 ;;; Column format
-
-(defun denote-dash--column-spec (col)
-  "Return the `tabulated-list-format' spec vector for column symbol COL."
-  (pcase col
-    ('fold      ["" 1 nil])
-    ('title     ["Title" 40 t])
-    ('keywords  ["Keywords" 25 t])
-    ('modified  ["Modified" 10 t])
-    ('id        ["ID" 17 t])
-    ('directory ["Dir" 20 t])
-    ('git       ["G" 1 nil])))
 
 (defun denote-dash--setup-columns ()
   "Configure `tabulated-list-format' from current visible columns and reinit header."
   (setq tabulated-list-format
-        (apply #'vector (seq-map #'denote-dash--column-spec denote-dash--visible-columns)))
+        (apply #'vector
+               (seq-map (lambda (col)
+                          (pcase col
+                            ('fold      ["" 1 nil])
+                            ('title     ["Title" 40 t])
+                            ('keywords  ["Keywords" 25 t])
+                            ('modified  ["Modified" 10 t])
+                            ('id        ["ID" 17 t])
+                            ('directory ["Dir" 20 t])
+                            ('git       ["G" 1 nil])))
+                        denote-dash--visible-columns)))
   (tabulated-list-init-header))
 
 ;;; Refresh
@@ -490,11 +476,13 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
 (defun denote-dash-global-cycle ()
   "Step through global fold depths: 0 (roots only) → 1 → … → nil (all expanded)."
   (interactive)
-  (let* ((depths (thread-last (denote-directory-files)
-                               (seq-map #'denote-retrieve-filename-signature)
-                               (seq-filter #'identity)
-                               (seq-map #'denote-dash--sequence-depth)))
-         (max-depth (if depths (apply #'max depths) 0))
+  (let* ((max-depth (seq-reduce
+                     #'max
+                     (thread-last (denote-directory-files)
+                                  (seq-map #'denote-retrieve-filename-signature)
+                                  (seq-filter #'identity)
+                                  (seq-map #'denote-dash--sequence-depth))
+                     0))
          (next (cond
                 ((null denote-dash--global-cycle-depth) 0)
                 ((>= denote-dash--global-cycle-depth max-depth) nil)
@@ -641,14 +629,13 @@ file and whether to apply a date restriction."
           (from (when restrict (org-read-date nil nil nil "From (inclusive): ")))
           (to   (when restrict (org-read-date nil nil nil "To (inclusive): "))))
      (list f from to)))
-  (let* ((entries (with-current-buffer (find-file-noselect file)
-                    (denote-dash--collect-datetree-entries)))
-         (filtered (seq-filter
+  (let* ((filtered (seq-filter
                     (lambda (e)
                       (let ((d (plist-get e :date)))
                         (and (or (null from-date) (not (string< d from-date)))
                              (or (null to-date)   (not (string< to-date d))))))
-                    entries))
+                    (with-current-buffer (find-file-noselect file)
+                      (denote-dash--collect-datetree-entries))))
          (n (length filtered)))
     (when (zerop n)
       (user-error "No datetree entries found%s"

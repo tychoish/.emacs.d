@@ -16,12 +16,14 @@
   `(let ((file-name-handler-alist nil))
      ,@body))
 
-(defvar slow-op-reporting debug-on-error
-  "A toggle that, when enabled is supports more verbose timing reporting.
-Turns `with-slow-op-timer' from a noop to reporting on the duration of enclosed operations.")
+(defvar slow-op-reporting t
+  "When non-nil, `with-slow-op-timer' logs any operation that exceeds `slow-op-threshold'.
+Always enabled at 500ms so genuinely blocking startup work is surfaced without needing
+a special flag.  Set to nil in user/*.el to suppress reporting on a specific machine.")
 
-(defvar slow-op-threshold 0.005
-  "Threshold in seconds, or fractions thereof. Controls the behavior of `with-slow-op-timer'. Any operation below this threshold (faster) are ignored. Use this to control verbosity.")
+(defvar slow-op-threshold 0.1
+  "Minimum duration in seconds for `with-slow-op-timer' to emit a log message.
+Set to 0.1 (100ms) to surface meaningfully slow operations without noise.")
 
 (defmacro with-slow-op-timer (name &rest body)
   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
@@ -44,7 +46,7 @@ Turns `with-slow-op-timer' from a noop to reporting on the duration of enclosed 
 
 (when (string-match "NATIVE_COMP" system-configuration-features)
   (setcar native-comp-eln-load-path (expand-file-name "~/.cache/emacs/eln/"))
-  (setq native-comp-async-report-warnings-errors 'silent)
+  (setq native-comp-async-report-warnings-errors nil)
   (setq native-comp-jit-compilation t)
   (setq native-compile-prune-cache t))
 

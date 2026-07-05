@@ -527,8 +527,8 @@
 (use-package yasnippet
   :ensure t
   :delight (yas-minor-mode " ys")
-  :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
   :hook ((text-mode prog-mode) . yas-minor-mode)
+  :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
   :config
   (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
   (which-key-customize "yasnippet" :key "C-c &"))
@@ -544,7 +544,8 @@
 
 (use-package yasnippet-snippets
   :ensure t
-  :after yasnippet)
+  :after yasnippet
+  :defer t)
 
 (use-package vertico
   :ensure t
@@ -759,6 +760,7 @@
 (use-package orderless
   :ensure t
   :after (vertico)
+  :defer t
   :config
   ;; Orderless's own behavior knobs only; cross-cutting `completion-styles' and
   ;; `completion-category-overrides' are owned by the completion-flavor system.
@@ -965,7 +967,7 @@
   :bind (:map tychoish/consult-mode-map
 	      ("f" . consult-flyspell))
   :commands (consult-flyspell flyspell-correct-consult)
-  :init
+  :config
   (defun consult-flyspell--round-trip ()
     (flyspell-correct-at-point)
     (consult-flyspell))
@@ -1164,13 +1166,8 @@
 
 (use-package smerge-mode
   :after (magit)
+  :defer t
   :init
-  (defun smerge-kill-and-vc-next-conflict ()
-    "Kills the current conflict option and moves to the next conflict, potentially in another file."
-    (interactive)
-    (smerge-kill-current)
-    (smerge-vc-next-conflict))
-
   (bind-keys
    :map tychoish/magit-map
    :prefix "m"
@@ -1183,7 +1180,13 @@
 
   (make-read-extended-command-for-prefix "smerge"
     :bind-map tychoish/smerge-map
-    :bind-key "x"))
+    :bind-key "x")
+  :config
+  (defun smerge-kill-and-vc-next-conflict ()
+    "Kill the current conflict option and move to the next conflict."
+    (interactive)
+    (smerge-kill-current)
+    (smerge-vc-next-conflict)))
 
 (use-package emacsql
   :ensure t
@@ -1269,6 +1272,7 @@
 (use-package tracking
   :ensure t
   :after (:any telega erc)
+  :defer t
   :config
   (setq tracking-max-mode-line-entries 3))
 
@@ -1360,13 +1364,6 @@
 
 (use-package denote
   :ensure t
-  :commands (denote
-	     denote-open-or-create
-	     denote-link
-	     denote-backlinks
-             denote-rename-file
-	     denote-dired
-	     denote-org-capture)
   :init
   (defvar-keymap tychoish/denote-map)
   :bind (:map tychoish/denote-map
@@ -1378,6 +1375,7 @@
          ("?" . denote-dash-dispatch)
          ("v" . denote-dash)
          ("C-r" . denote-rename-file-using-front-matter))
+  :commands (denote-dired denote-org-capture)
   :config
   (make-read-extended-command-for-prefix "denote"
     :bind-map tychoish/denote-map
@@ -1418,10 +1416,10 @@ does not manage (e.g. status, plan-type)."
 
 (use-package consult-notes
   :ensure t
-  :commands (consult-notes consult-notes-search-in-all-notes)
   :bind (:map tychoish/denote-map
          (";" . consult-notes)
          ("/" . consult-notes-search-in-all-notes))
+  :commands (consult-notes consult-notes-search-in-all-notes)
   :config
   (consult-notes-denote-mode 1))
 
@@ -1537,20 +1535,19 @@ does not manage (e.g. status, plan-type)."
 (use-package denote-review
   :ensure t
   :after denote
-  :commands (denote-review-set-date
-             denote-review-set-date-dired-marked-files
-             denote-review-display-list)
   :bind (:map tychoish/denote-map
 	 :prefix "c"
 	 :prefix-map tychoish/denote-review-map
          ("d" . denote-review-set-date)
          ("l" . denote-review-display-list))
+  :commands (denote-review-set-date-dired-marked-files)
   :config
   (setq denote-review-insert-after "date"))
 
 (use-package denote-journal-capture
   :ensure t
-  :after (denote denote-journal))
+  :after (denote denote-journal)
+  :defer t)
 
 (use-package markdown-mode
   :ensure t
@@ -1945,7 +1942,8 @@ does not manage (e.g. status, plan-type)."
 
 (use-package docker
   :ensure t
-  :commands (docker)
+  :init
+  (defvar-keymap tychoish/docker-map)
   :bind (:prefix "C-x d"
          :prefix-map tychoish/docker-map
 	 ("d" . docker)
