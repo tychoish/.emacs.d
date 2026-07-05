@@ -332,7 +332,14 @@ Entries whose :if predicate returns nil are excluded."
 (hud-register-command
  :row 2
  :category 'denote
- :command #'denote-dispatch
+ :command #'denote-dash
+ :description "denote list"
+ :transient-key "dv")
+
+(hud-register-command
+ :row 2
+ :category 'denote
+ :command #'denote-dash-dispatch
  :description "denote dispatch"
  :transient-key "dd")
 

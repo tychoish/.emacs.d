@@ -1375,7 +1375,8 @@
          ("l" . denote-link)
          ("b" . denote-backlinks)
          ("r" . denote-rename-file)
-         ("?" . denote-dispatch)
+         ("?" . denote-dash-dispatch)
+         ("v" . denote-dash)
          ("C-r" . denote-rename-file-using-front-matter))
   :config
   (make-read-extended-command-for-prefix "denote"
@@ -1410,10 +1411,10 @@ does not manage (e.g. status, plan-type)."
           (beginning-of-line)
           (insert key ": " value "\n"))))))
 
-(use-package denote-dispatch
+(use-package denote-dash
   :ensure nil
   :after transient
-  :commands (denote-dispatch))
+  :commands (denote-dash denote-dash-dispatch))
 
 (use-package consult-notes
   :ensure t
