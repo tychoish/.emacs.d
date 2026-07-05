@@ -743,32 +743,32 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
          (plist (or (arch--cached-info pkg-name)
                     (user-error "No info found for package %S" pkg-name)))
          (files (funcall (arch-backend-files-fn backend) pkg-name))
-         (buf (get-buffer-create (arch--info-buffer-name pkg-name))))
-    (with-current-buffer buf
-      (arch-info-mode)
-      (setq arch--info-package pkg-name)
-      (arch--info-render pkg-name plist files)
-      (goto-char (point-min)))
-    (pop-to-buffer buf)))
+         (buf-name (arch--info-buffer-name pkg-name)))
+    (with-help-window buf-name
+      (with-current-buffer standard-output
+        (setq arch--info-package pkg-name)
+        (arch--info-render pkg-name plist files)
+        (goto-char (point-min))))
+    (when-let* ((buf (get-buffer buf-name)))
+      (with-current-buffer buf
+        (use-local-map arch-info-map)))))
 
-(defvar arch-info-mode-map
+(defvar arch-info-map
   (make-sparse-keymap)
-  "Keymap for `arch-info-mode'.")
+  "Keymap for arch info help buffers.  Inherits `help-mode-map' once loaded.")
 
-(define-key arch-info-mode-map (kbd "q") #'quit-window)
-(define-key arch-info-mode-map (kbd "i") #'arch-info-install)
-(define-key arch-info-mode-map (kbd "r") #'arch-info-remove)
-(define-key arch-info-mode-map (kbd "u") #'arch-info-upgrade)
-(define-key arch-info-mode-map (kbd "s") #'arch-search)
-(define-key arch-info-mode-map (kbd "l") #'arch-list)
-(define-key arch-info-mode-map (kbd "p") #'arch-find-package)
-(define-key arch-info-mode-map (kbd "K") #'arch-kill-info-buffers)
-(define-key arch-info-mode-map (kbd "?") #'arch-info-menu)
+(with-eval-after-load 'help-mode
+  (set-keymap-parent arch-info-map help-mode-map))
 
-(define-derived-mode arch-info-mode special-mode "arch-info"
-  "Read-only view of an Arch Linux package's details.
-
-\\{arch-info-mode-map}")
+(define-key arch-info-map (kbd "q") #'quit-window)
+(define-key arch-info-map (kbd "i") #'arch-info-install)
+(define-key arch-info-map (kbd "r") #'arch-info-remove)
+(define-key arch-info-map (kbd "u") #'arch-info-upgrade)
+(define-key arch-info-map (kbd "s") #'arch-search)
+(define-key arch-info-map (kbd "l") #'arch-list)
+(define-key arch-info-map (kbd "p") #'arch-find-package)
+(define-key arch-info-map (kbd "K") #'arch-kill-info-buffers)
+(define-key arch-info-map (kbd "?") #'arch-info-menu)
 
 (transient-define-prefix arch-info-menu ()
   "Actions for the arch package info buffer."
