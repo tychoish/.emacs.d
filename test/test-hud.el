@@ -253,5 +253,213 @@
     (let ((pair (car (hud--flat-entries))))
       (should (eq (car pair) (hud-command-category (cdr pair)))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :exclude-from-transient — struct slot
+
+(ert-deftest hud-test/command-exclude-from-transient-default-nil ()
+  "New commands have nil exclude-from-transient by default."
+  (let ((cmd (make-hud-command :command 'foo :description "f" :transient-key "f")))
+    (should (null (hud-command-exclude-from-transient cmd)))))
+
+(ert-deftest hud-test/command-exclude-from-transient-stored ()
+  "`make-hud-command' stores a non-nil :exclude-from-transient value."
+  (let ((cmd (make-hud-command :command 'foo :description "f" :transient-key "f"
+                               :exclude-from-transient t)))
+    (should (hud-command-exclude-from-transient cmd))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :exclude-from-transient — hud-register-command
+
+(ert-deftest hud-test/register-command-exclude-from-transient-stored ()
+  ":exclude-from-transient t is stored in the struct slot."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f" :exclude-from-transient t)
+    (let ((cmd (car (cdr (assq 'g hud-command-table)))))
+      (should (hud-command-exclude-from-transient cmd)))))
+
+(ert-deftest hud-test/register-command-exclude-from-transient-default-nil ()
+  "Without :exclude-from-transient the slot is nil."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f" :transient-key "f")
+    (let ((cmd (car (cdr (assq 'g hud-command-table)))))
+      (should (null (hud-command-exclude-from-transient cmd))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :exclude-from-transient — transient suffix builder
+
+(ert-deftest hud-test/bucket-to-column-omits-excluded-commands ()
+  "`hud--bucket-to-column' skips commands with exclude-from-transient set."
+  (let* ((included (make-hud-command :command 'cmd-a :description "A" :category 'g
+                                     :transient-key "a"))
+         (excluded (make-hud-command :command 'cmd-b :description "B" :category 'g
+                                     :transient-key "b" :exclude-from-transient t))
+         (col (hud--bucket-to-column (cons 'g (list included excluded)))))
+    ;; col is a vector: ["g" suffix-for-a]  — excluded never appears
+    (should (= 2 (length col)))
+    (should (equal "a" (nth 0 (aref col 1))))))
+
+(ert-deftest hud-test/bucket-to-column-all-excluded-yields-empty-column ()
+  "A bucket where all commands are excluded produces a header-only column."
+  (let* ((cmd (make-hud-command :command 'foo :description "F" :category 'g
+                                :transient-key "f" :exclude-from-transient t))
+         (col (hud--bucket-to-column (cons 'g (list cmd)))))
+    (should (= 1 (length col)))
+    (should (equal "g" (aref col 0)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :exclude-from-transient — ACR entry lookup still includes the item
+
+(ert-deftest hud-test/entry-lookup-includes-exclude-from-transient ()
+  "Items with :exclude-from-transient still appear in `hud--entry-lookup'."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f" :exclude-from-transient t)
+    (should (= 1 (hash-table-count (hud--entry-lookup))))))
+
+(ert-deftest hud-test/entry-lookup-exclude-from-transient-with-truthy-if ()
+  "An item can be ACR-only (:exclude-from-transient) and still respect :if."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f"
+                          :exclude-from-transient t
+                          :if (lambda () nil))
+    (should (= 0 (hash-table-count (hud--entry-lookup))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :if and :ifapt predicates — struct slots
+
+(ert-deftest hud-test/command-visible-inapt-default-nil ()
+  "New commands have nil visible and inapt slots by default."
+  (let ((cmd (make-hud-command :command 'foo :description "f" :transient-key "f")))
+    (should (null (hud-command-visible cmd)))
+    (should (null (hud-command-inapt cmd)))))
+
+(ert-deftest hud-test/command-visible-inapt-stored ()
+  "`make-hud-command' stores :visible and :inapt predicates."
+  (let* ((pred-v (lambda () t))
+         (pred-i (lambda () nil))
+         (cmd (make-hud-command :command 'foo :description "f" :transient-key "f"
+                                :visible pred-v :inapt pred-i)))
+    (should (eq pred-v (hud-command-visible cmd)))
+    (should (eq pred-i (hud-command-inapt cmd)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :if and :ifapt predicates — hud-register-command
+
+(ert-deftest hud-test/register-command-if-ifapt-default-nil ()
+  "Without :if or :ifapt the slots default to nil."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f" :transient-key "f")
+    (let ((cmd (car (cdr (assq 'g hud-command-table)))))
+      (should (null (hud-command-visible cmd)))
+      (should (null (hud-command-inapt cmd))))))
+
+(ert-deftest hud-test/register-command-stores-if-predicate ()
+  ":if predicate is stored in the visible slot."
+  (let ((hud-command-table '())
+        (pred (lambda () t)))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f" :if pred)
+    (let ((cmd (car (cdr (assq 'g hud-command-table)))))
+      (should (eq pred (hud-command-visible cmd))))))
+
+(ert-deftest hud-test/register-command-stores-ifapt-predicate ()
+  ":ifapt predicate is stored in the inapt slot."
+  (let ((hud-command-table '())
+        (pred (lambda () nil)))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f" :ifapt pred)
+    (let ((cmd (car (cdr (assq 'g hud-command-table)))))
+      (should (eq pred (hud-command-inapt cmd))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :if and :ifapt predicates — transient suffix builder
+
+(ert-deftest hud-test/bucket-to-column-no-predicates ()
+  "`hud--bucket-to-column' emits a plain 3-element suffix when no predicates are set."
+  (let* ((cmd (make-hud-command :command 'foo :description "Foo" :category 'g
+                                :transient-key "f"))
+         (suffix (aref (hud--bucket-to-column (cons 'g (list cmd))) 1)))
+    (should (= 3 (length suffix)))
+    (should (equal "f" (nth 0 suffix)))
+    (should (equal "Foo" (nth 1 suffix)))
+    (should (eq 'foo (nth 2 suffix)))))
+
+(ert-deftest hud-test/bucket-to-column-with-if-predicate ()
+  "`hud--bucket-to-column' appends :if PRED when visible is set."
+  (let* ((pred (lambda () t))
+         (cmd (make-hud-command :command 'foo :description "Foo" :category 'g
+                                :transient-key "f" :visible pred))
+         (suffix (aref (hud--bucket-to-column (cons 'g (list cmd))) 1)))
+    (should (= 5 (length suffix)))
+    (should (eq :if (nth 3 suffix)))
+    (should (eq pred (nth 4 suffix)))))
+
+(ert-deftest hud-test/bucket-to-column-with-ifapt-predicate ()
+  "`hud--bucket-to-column' appends :inapt-if PRED when inapt is set."
+  (let* ((pred (lambda () nil))
+         (cmd (make-hud-command :command 'foo :description "Foo" :category 'g
+                                :transient-key "f" :inapt pred))
+         (suffix (aref (hud--bucket-to-column (cons 'g (list cmd))) 1)))
+    (should (= 5 (length suffix)))
+    (should (eq :inapt-if (nth 3 suffix)))
+    (should (eq pred (nth 4 suffix)))))
+
+(ert-deftest hud-test/bucket-to-column-with-both-predicates ()
+  "`hud--bucket-to-column' appends both :if and :inapt-if when both are set."
+  (let* ((pred-v (lambda () t))
+         (pred-i (lambda () nil))
+         (cmd (make-hud-command :command 'foo :description "Foo" :category 'g
+                                :transient-key "f" :visible pred-v :inapt pred-i))
+         (suffix (aref (hud--bucket-to-column (cons 'g (list cmd))) 1)))
+    (should (= 7 (length suffix)))
+    (should (eq :if (nth 3 suffix)))
+    (should (eq pred-v (nth 4 suffix)))
+    (should (eq :inapt-if (nth 5 suffix)))
+    (should (eq pred-i (nth 6 suffix)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; :if and :ifapt predicates — ACR entry lookup (hud--entry-lookup)
+
+(ert-deftest hud-test/entry-lookup-includes-nil-if ()
+  "`hud--entry-lookup' includes entries with nil :if (always visible)."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f" :transient-key "f")
+    (should (= 1 (hash-table-count (hud--entry-lookup))))))
+
+(ert-deftest hud-test/entry-lookup-includes-truthy-if ()
+  "`hud--entry-lookup' includes entries whose :if predicate returns non-nil."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f" :if (lambda () t))
+    (should (= 1 (hash-table-count (hud--entry-lookup))))))
+
+(ert-deftest hud-test/entry-lookup-excludes-falsy-if ()
+  "`hud--entry-lookup' excludes entries whose :if predicate returns nil."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f" :if (lambda () nil))
+    (should (= 0 (hash-table-count (hud--entry-lookup))))))
+
+(ert-deftest hud-test/entry-lookup-ifapt-alone-does-not-hide ()
+  ":ifapt alone does not hide an entry from the ACR selector."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'foo :description "f"
+                          :transient-key "f" :ifapt (lambda () t))
+    (should (= 1 (hash-table-count (hud--entry-lookup))))))
+
+(ert-deftest hud-test/entry-lookup-mixed-visibility ()
+  "Only visible entries appear; entries with falsy :if are excluded."
+  (let ((hud-command-table '()))
+    (hud-register-command :category 'g :command 'visible-cmd :description "v"
+                          :transient-key "v")
+    (hud-register-command :category 'g :command 'hidden-cmd :description "h"
+                          :transient-key "h" :if (lambda () nil))
+    (let ((lookup (hud--entry-lookup)))
+      (should (= 1 (hash-table-count lookup)))
+      (should (map-elt lookup "visible-cmd"))
+      (should (null (map-elt lookup "hidden-cmd"))))))
+
 (provide 'test-hud)
 ;;; test-hud.el ends here

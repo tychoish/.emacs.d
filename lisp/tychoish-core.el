@@ -16,11 +16,12 @@
 (declare-function approximate-project-name "xtdlib")
 
 (use-package cond-let
-  :ensure t)
+  :ensure t
+  :defer t)
 
 (use-package delight
   :ensure t
-  :demand t)
+  :commands (delight))
 
 (use-package uuidgen
   :ensure t
@@ -56,7 +57,9 @@
   :commands (sprite-list sprite-create sprite-open-frame
 			 sprite-get-next sprite-get-or-create-next)
   :config
-  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
+  (require 'sprite-heartbeat)
+  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
+  (add-hook 'emacs-startup-hook #'sprite-defs-activate))
 
 (use-package hud
   :ensure nil
@@ -112,9 +115,19 @@
 	    (message-separator bg-main)))))
 
 
+(defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
+  "Return empty string instead of signaling for an unresolvable buffer icon."
+  (condition-case nil
+      (apply orig args)
+    (error "")))
+
 (use-package nerd-icons
   :ensure t
-  :defer t)
+  :defer t
+  :config
+  (add-to-list 'nerd-icons-mode-icon-alist
+               '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))
+  (advice-add 'nerd-icons-icon-for-buffer :around #'ad:nerd-icons-icon-for-buffer-safe))
 
 (use-package nerd-icons-dired
   :ensure t
@@ -1128,6 +1141,7 @@
   (require 'magit-dash-gh-pr)
   (require 'magit-dash-gh)
   (require 'magit-dash-gh-actions)
+  (require 'magit-dash-timer)
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
   (setq magit-dash-gh-prune-pr-limit 50)
   (setq magit-dash-show-discovered-submodules nil)

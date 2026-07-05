@@ -181,6 +181,8 @@
 ;; lexical variable.
 (defvar org-archive-sibling-heading)
 
+(setq org-archive-default-command #'org-archive-to-archive-sibling)
+
 (autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
 (autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
 (autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")

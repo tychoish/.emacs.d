@@ -56,5 +56,29 @@
   (should (equal "*claude-project*"
                  (tychoish-core-test--agent-shell-format "  Claude  " "project"))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; nerd-icons mode registration
+
+(defconst tychoish-core-test--registered-modes
+  '(agent-shell-queue-item-view-mode)
+  "Modes explicitly registered in nerd-icons-mode-icon-alist by this config.")
+
+(ert-deftest tychoish-core/nerd-icons-registered-modes-resolve ()
+  "Every mode we register in nerd-icons-mode-icon-alist resolves without error."
+  (require 'nerd-icons)
+  (seq-do (lambda (mode)
+            (should-not
+             (condition-case err
+                 (progn (nerd-icons-icon-for-mode mode) nil)
+               (error err))))
+          tychoish-core-test--registered-modes))
+
+(ert-deftest tychoish-core/nerd-icons-icon-for-buffer-degrades-gracefully ()
+  "The safe advice returns a string even when given an unregistered mode."
+  (require 'nerd-icons)
+  (with-temp-buffer
+    (setq major-mode 'tychoish-core-test--nonexistent-mode-xyz)
+    (should (stringp (nerd-icons-icon-for-buffer)))))
+
 (provide 'test-tychoish-core)
 ;;; test-tychoish-core.el ends here
