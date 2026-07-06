@@ -50,6 +50,7 @@
 (declare-function denote-sequence--get-prefix-for-siblings "denote-sequence")
 (declare-function denote-sequence-get-all-files-with-prefix "denote-sequence")
 (declare-function denote-sequence-get-all-files "denote-sequence")
+(declare-function denote-sequence-sort-files "denote-sequence")
 (declare-function denote-sequence-split "denote-sequence")
 (declare-function denote-sequence-join "denote-sequence")
 (declare-function denote-sequence-and-scheme-p "denote-sequence")
@@ -390,6 +391,8 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   "l"       #'denote-dash-lint-sequences
   "C-r"     #'denote-dash-repack-sequence-children
   "M-r"     #'denote-dash-swap-with-parent
+  "M-p"     #'denote-dash-swap-with-previous
+  "M-n"     #'denote-dash-swap-with-next
   "n"       #'denote
   "g"       #'denote-dash-refresh
   "?"       #'denote-dash-dispatch
@@ -1006,6 +1009,15 @@ Computed by finding the last type-transition (digit↔letter) in SEQ."
       (when last-transition
         (substring seq 0 last-transition)))))
 
+(defun denote-dash--rename-signature-component (file old-sig new-sig)
+  "Return FILE's path with its ==SIG== component changed from OLD-SIG to NEW-SIG."
+  (let ((dir (file-name-directory file))
+        (base (file-name-nondirectory file)))
+    (concat dir (replace-regexp-in-string
+                 (concat "==" (regexp-quote old-sig) "--")
+                 (concat "==" new-sig "--")
+                 base t t))))
+
 (defun denote-dash-swap-with-parent ()
   "Swap the sequence of the note at point with its direct parent.
 Both nodes must have files in the denote directory.  Uses a three-step
@@ -1013,7 +1025,7 @@ rename (child→tmp, parent→child-seq, tmp→parent-seq) to avoid collision,
 then fixes frontmatter signatures on both files."
   (interactive)
   (let* ((file (denote-dash--target-file))
-         (seq  (denote-retrieve-filename-signature file)))
+         (seq (denote-retrieve-filename-signature file)))
     (unless seq
       (user-error "File has no sequence: %s" (file-name-nondirectory file)))
     (let ((parent-seq (denote-dash--sequence-parent seq)))
@@ -1027,31 +1039,119 @@ then fixes frontmatter signatures on both files."
           (user-error "No file found for parent sequence %s" parent-seq))
         (unless (yes-or-no-p (format "Swap %s ↔ %s? " seq parent-seq))
           (user-error "Cancelled"))
-        (let* ((dir          (file-name-directory file))
-               (base         (file-name-nondirectory file))
-               (par-base     (file-name-nondirectory parent-file))
-               (new-base     (replace-regexp-in-string
-                              (concat "==" (regexp-quote seq) "--")
-                              (concat "==" parent-seq "--") base t t))
-               (new-par-base (replace-regexp-in-string
-                              (concat "==" (regexp-quote parent-seq) "--")
-                              (concat "==" seq "--") par-base t t))
-               (tmp-path     (concat dir (replace-regexp-in-string
-                                          (concat "==" (regexp-quote seq) "--")
-                                          "==__swaptmp__--" base t t))))
+        (let* ((new-path (denote-dash--rename-signature-component file seq parent-seq))
+               (new-par-path (denote-dash--rename-signature-component parent-file parent-seq seq))
+               (tmp-path (denote-dash--rename-signature-component file seq "__swaptmp__")))
           ;; Kill any buffers visiting files we are about to rename so they
           ;; do not become stale (pointing to a path that no longer exists).
-          (dolist (f (list file parent-file))
-            (when-let* ((buf (find-buffer-visiting f)))
-              (kill-buffer buf)))
-          (rename-file file              tmp-path               t)
-          (rename-file parent-file      (concat dir new-par-base) t)
-          (rename-file tmp-path         (concat dir new-base)     t)
-          (denote-dash--fix-frontmatter-from-filename (concat dir new-base))
-          (denote-dash--fix-frontmatter-from-filename (concat dir new-par-base))
+          (seq-do (lambda (f)
+                    (when-let* ((buf (find-buffer-visiting f)))
+                      (kill-buffer buf)))
+                  (list file parent-file))
+          (rename-file file tmp-path t)
+          (rename-file parent-file new-par-path t)
+          (rename-file tmp-path new-path t)
+          (denote-dash--fix-frontmatter-from-filename new-path)
+          (denote-dash--fix-frontmatter-from-filename new-par-path)
           (message "Swapped %s ↔ %s" seq parent-seq)
           (when (derived-mode-p 'denote-dash-mode)
             (denote-dash-refresh)))))))
+
+;;; Sequence sibling swap
+
+(defun denote-dash--subtree-files (seq)
+  "Return the file for SEQ and all its descendant files, sequence-sorted."
+  (denote-sequence-sort-files (denote-sequence-get-all-files-with-prefix seq)))
+
+(defun denote-dash--sequence-siblings (seq)
+  "Return the sorted list of SEQ's direct siblings, SEQ included.
+Siblings share SEQ's parent, or are all root sequences when SEQ is one."
+  (denote-sequence-sort-files
+   (denote-dash--sequence-direct-children (denote-dash--sequence-parent seq))))
+
+(defun denote-dash--swap-subtrees (seq-a seq-b)
+  "Swap the sequence subtrees rooted at SEQ-A and SEQ-B.
+Recursively renames SEQ-A, SEQ-B, and all their descendants so the two
+subtrees exchange positions, then fixes the frontmatter signature of
+every renamed file.  SEQ-A and SEQ-B must be direct siblings."
+  (let* ((files-a (denote-dash--subtree-files seq-a))
+         (files-b (denote-dash--subtree-files seq-b)))
+    (unless files-a (user-error "No files found for sequence %s" seq-a))
+    (unless files-b (user-error "No files found for sequence %s" seq-b))
+    (seq-do (lambda (f)
+              (when-let* ((buf (find-buffer-visiting f)))
+                (kill-buffer buf)))
+            (append files-a files-b))
+    ;; Stage 1: move SEQ-A's subtree aside under unique temp signatures,
+    ;; remembering each file's original signature to recover it later.
+    (let ((staged
+           (seq-map-indexed
+            (lambda (f i)
+              (let* ((sig (denote-retrieve-filename-signature f))
+                     (tmp-sig (format "swaptmp%d" i))
+                     (tmp-path (denote-dash--rename-signature-component f sig tmp-sig)))
+                (rename-file f tmp-path t)
+                (list sig tmp-sig tmp-path)))
+            files-a)))
+      ;; Stage 2: move SEQ-B's subtree into SEQ-A's namespace.
+      (seq-do (lambda (f)
+                (let* ((old-sig (denote-retrieve-filename-signature f))
+                       (new-sig (concat seq-a (substring old-sig (length seq-b))))
+                       (new-path (denote-dash--rename-signature-component f old-sig new-sig)))
+                  (rename-file f new-path t)
+                  (denote-dash--fix-frontmatter-from-filename new-path)))
+              files-b)
+      ;; Stage 3: move the staged SEQ-A subtree into SEQ-B's namespace.
+      (seq-do (lambda (entry)
+                (pcase-let ((`(,orig-sig ,tmp-sig ,tmp-path) entry))
+                  (let* ((new-sig (concat seq-b (substring orig-sig (length seq-a))))
+                         (new-path (denote-dash--rename-signature-component tmp-path tmp-sig new-sig)))
+                    (rename-file tmp-path new-path t)
+                    (denote-dash--fix-frontmatter-from-filename new-path))))
+              staged))))
+
+(defun denote-dash--swap-with-sibling (direction)
+  "Swap the note at point (with its subtree) with a sibling.
+DIRECTION is the symbol `previous' or `next', selecting which of the
+current sequence's siblings to swap with."
+  (let* ((file (denote-dash--target-file))
+         (seq (denote-retrieve-filename-signature file)))
+    (unless seq
+      (user-error "File has no sequence: %s" (file-name-nondirectory file)))
+    (let* ((siblings (denote-dash--sequence-siblings seq))
+           (position (seq-position (seq-map #'denote-retrieve-filename-signature siblings) seq))
+           (other (pcase direction
+                    ('previous (and position (> position 0)
+                                    (nth (1- position) siblings)))
+                    ('next (and position
+                                (nth (1+ position) siblings))))))
+      (unless position
+        (error "Cannot locate %s among its own siblings" seq))
+      (unless other
+        (user-error "No %s sibling for sequence %s" direction seq))
+      (let ((other-seq (denote-retrieve-filename-signature other)))
+        (unless (yes-or-no-p (format "Swap %s ↔ %s (with descendants)? " seq other-seq))
+          (user-error "Cancelled"))
+        (denote-dash--swap-subtrees seq other-seq)
+        (message "Swapped %s ↔ %s" seq other-seq)
+        (when (derived-mode-p 'denote-dash-mode)
+          (denote-dash-refresh))))))
+
+;;;###autoload
+(defun denote-dash-swap-with-previous ()
+  "Swap the note at point, with its subtree, with its previous sibling.
+Descendants of both nodes move along with their parent, so the whole
+subtrees exchange positions.  See also `denote-dash-swap-with-parent'."
+  (interactive)
+  (denote-dash--swap-with-sibling 'previous))
+
+;;;###autoload
+(defun denote-dash-swap-with-next ()
+  "Swap the note at point, with its subtree, with its next sibling.
+Descendants of both nodes move along with their parent, so the whole
+subtrees exchange positions.  See also `denote-dash-swap-with-parent'."
+  (interactive)
+  (denote-dash--swap-with-sibling 'next))
 
 ;;; Sequence insertion
 
@@ -1174,7 +1274,9 @@ or prompts for a file."
     ("al" "lint sequences"     denote-dash-lint-sequences)
     ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)
     ("ar" "repack children"    denote-dash-repack-sequence-children)
-    ("as" "swap with parent"   denote-dash-swap-with-parent)]
+    ("as" "swap with parent"   denote-dash-swap-with-parent)
+    ("ap" "swap with previous" denote-dash-swap-with-previous)
+    ("an" "swap with next"     denote-dash-swap-with-next)]
    ["Import"
     ("id" "from org datetree"  denote-dash-import-from-datetree)]]
   [["Columns" :if-derived denote-dash-mode

@@ -421,5 +421,112 @@ ID is the timestamp string, SIG the sequence or nil, TITLE the note title."
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-swap-with-previous / denote-dash-swap-with-next (file-based)
+
+(defun denote-dash-test--make-tree (dir)
+  "Create a two-branch sequence tree in DIR, return a plist of its files.
+Branch one is 1/1a/1a1, branch two is 2/2a; 1 and 2 are root siblings."
+  (list :root1       (denote-dash-test--make-org-note dir "20240101T100000" "1"   "Root One")
+        :child1      (denote-dash-test--make-org-note dir "20240101T110000" "1a"  "Child One")
+        :grandchild1 (denote-dash-test--make-org-note dir "20240101T120000" "1a1" "Grandchild One")
+        :root2       (denote-dash-test--make-org-note dir "20240101T130000" "2"   "Root Two")
+        :child2      (denote-dash-test--make-org-note dir "20240101T140000" "2a"  "Child Two")))
+
+(ert-deftest denote-dash-test/swap-with-next-moves-subtree-recursively ()
+  "Swapping root 1 with sibling 2 renumbers each whole subtree, not just the root."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((tree (denote-dash-test--make-tree dir))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect (plist-get tree :root1))
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-next)))
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (directory-files dir nil "20240101T100000==2--"))
+          (should (directory-files dir nil "20240101T110000==2a--"))
+          (should (directory-files dir nil "20240101T120000==2a1--"))
+          (should (directory-files dir nil "20240101T130000==1--"))
+          (should (directory-files dir nil "20240101T140000==1a--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-previous-moves-subtree-recursively ()
+  "Swapping root 2 with previous sibling 1 gives the same result as swap-with-next."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((tree (denote-dash-test--make-tree dir))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect (plist-get tree :root2))
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-previous)))
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (directory-files dir nil "20240101T100000==2--"))
+          (should (directory-files dir nil "20240101T110000==2a--"))
+          (should (directory-files dir nil "20240101T120000==2a1--"))
+          (should (directory-files dir nil "20240101T130000==1--"))
+          (should (directory-files dir nil "20240101T140000==1a--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-next-updates-frontmatter-recursively ()
+  "Frontmatter signature is fixed on descendants too, not just the swapped roots."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((tree (denote-dash-test--make-tree dir))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect (plist-get tree :root1))
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-next)))
+          (denote-dash-test--kill-dir-buffers dir)
+          (let ((grandchild (car (directory-files dir t "20240101T120000==2a1--"))))
+            (should grandchild)
+            (with-temp-buffer
+              (insert-file-contents grandchild)
+              (should (search-forward "#+signature: 2a1" nil t)))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-previous-errors-when-first ()
+  "The first sibling has no previous sibling to swap with."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((tree (denote-dash-test--make-tree dir))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect (plist-get tree :root1))
+            (should-error (denote-dash-swap-with-previous) :type 'user-error)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-next-errors-when-last ()
+  "The last sibling has no next sibling to swap with."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((tree (denote-dash-test--make-tree dir))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect (plist-get tree :root2))
+            (should-error (denote-dash-swap-with-next) :type 'user-error)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-next-no-stale-buffers ()
+  "After a subtree swap, no buffer visits a path that no longer exists."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((tree (denote-dash-test--make-tree dir))
+               (denote-directory (list dir)))
+          (find-file-noselect (plist-get tree :grandchild1))
+          (find-file-noselect (plist-get tree :child2))
+          (with-current-buffer (find-file-noselect (plist-get tree :root1))
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-next)))
+          (denote-dash-test--kill-dir-buffers dir)
+          (should-not (find-buffer-visiting (plist-get tree :root1)))
+          (should-not (find-buffer-visiting (plist-get tree :grandchild1)))
+          (should-not (find-buffer-visiting (plist-get tree :child2))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here
