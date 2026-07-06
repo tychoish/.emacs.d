@@ -234,10 +234,6 @@ or `describe-symbol' as fallback."
  ("b" . eldoc-doc-buffer))
 
 (bind-keys
- :prefix "C-c d"
- :prefix-map tychoish/denote-map)
-
-(bind-keys
  :prefix "C-c k"
  :prefix-map tychoish/kill-map
  ("s" . backward-kill-sentence)

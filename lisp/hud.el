@@ -297,37 +297,6 @@ Entries whose :if predicate returns nil are excluded."
  :description "select mail account"
  :transient-key "ma")
 
-(hud-register-command
- :row 2
- :command #'sprite-list
- :description "sprite dashboard"
- :transient-key "sd")
-
-(hud-register-command
- :row 2
- :command #'sprite-create
- :description "spawn sprite"
- :transient-key "ss")
-
-(hud-register-command
- :row 2
- :command #'sprite-open-frame
- :description "open frame in sprite"
- :transient-key "sf")
-
-(hud-register-command
- :row 2
- :category 'arch
- :command 'arch-find-package
- :description "arch package info"
- :transient-key "li")
-
-(hud-register-command
- :row 2
- :category 'arch
- :command 'arch-list
- :description "arch package list"
- :transient-key "ll")
 
 (hud-register-command
  :row 2
@@ -353,16 +322,45 @@ Entries whose :if predicate returns nil are excluded."
 (hud-register-command
  :row 2
  :category 'denote
- :command #'consult-denote-find
- :description "find note"
- :transient-key "df")
-
-(hud-register-command
- :row 2
- :category 'denote
  :command #'denote-journal-new-entry
  :description "new journal entry"
  :transient-key "dj")
+
+
+(hud-register-command
+ :row 2
+ :category 'sprite
+ :command #'sprite-list
+ :description "sprite dashboard"
+ :transient-key "sd")
+
+(hud-register-command
+ :row 2
+ :category 'sprite
+ :command #'sprite-create
+ :description "spawn sprite"
+ :transient-key "ss")
+
+(hud-register-command
+ :row 2
+ :category 'sprite
+ :command #'sprite-open-frame
+ :description "open frame in sprite"
+ :transient-key "sf")
+
+(hud-register-command
+ :row 2
+ :category 'arch
+ :command 'arch-find-package
+ :description "arch package info"
+ :transient-key "li")
+
+(hud-register-command
+ :row 2
+ :category 'arch
+ :command 'arch-list
+ :description "arch package list"
+ :transient-key "ll")
 
 (provide 'hud)
 ;;; hud.el ends here

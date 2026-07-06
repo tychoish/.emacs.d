@@ -1362,23 +1362,32 @@
 
 (use-package denote
   :ensure t
+  :commands (denote
+	     denote-backlinks
+	     denote-dired
+	     denote-link
+	     denote-open-or-create
+	     denote-org-capture
+	     denote-rename-file
+	     denote-rename-file-using-front-matter)
   :init
-  (defvar-keymap tychoish/denote-map)
-  :bind (:map tychoish/denote-map
-         ("n" . denote)
-         ("m" . denote-open-or-create)
-         ("l" . denote-link)
-         ("b" . denote-backlinks)
-         ("r" . denote-rename-file)
-         ("?" . denote-dash-dispatch)
-         ("v" . denote-dash)
-         ("C-r" . denote-rename-file-using-front-matter))
-  :commands (denote-dired denote-org-capture)
-  :config
+  (bind-keys
+   :prefix "C-c d"
+   :prefix-map tychoish/denote-map
+   ("n" . denote)
+   ("f" . consult-denote-find)
+   ("m" . denote-open-or-create)
+   ("l" . denote-link)
+   ("b" . denote-backlinks)
+   ("r" . denote-rename-file)
+   ("?" . denote-dash-dispatch)
+   ("v" . denote-dash)
+   ("u" . denote-rename-file-using-front-matter))
   (make-read-extended-command-for-prefix "denote"
     :bind-map tychoish/denote-map
     :bind-key "x"
     :key-alias "denote-commands")
+  :config
   (consult-denote-mode)
   (when (default-boundp 'denote-directory)
     (setq denote-directory '()))
