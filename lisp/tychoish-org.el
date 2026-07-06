@@ -32,10 +32,6 @@
 
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook 'turn-on-soft-wrap) ;; from 'tychoish-common
-  (defun tychoish--org-enable-vfc-heading-truncation ()
-    "Enable heading truncation mode when visual-fill-column is active."
-    (when (bound-and-true-p visual-fill-column-mode)
-      (tychoish-vfc-heading-truncation-mode 1)))
   (add-hook 'org-mode-hook #'tychoish--org-enable-vfc-heading-truncation)
   (add-hook 'org-agenda-mode-hook 'tychoish/background-revbufs-for-hook)
   (add-hook 'org-mode-hook 'tychoish/set-up-buffer-org-mode)
@@ -202,9 +198,6 @@
 
 (with-eval-after-load 'ox-rst
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
-
-(with-eval-after-load 'ox-leanpub
-  (org-leanpub-book-setup-menu-markua))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -415,7 +408,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
               (content (nth 4 template))
               (raw (if (stringp content) (string-replace "\n" " " content) ""))
               (preview (if (> (length raw) 32) (concat (substring raw 0 29) "...") raw))
-              (group (or (map-elt prefix-map (substring key-char 0 1)) key-char)))
+              (group (or (map-elt prefix-map (substring key-char 0 1)) "root capture (other)")))
          (setf (map-elt key-table description) key-char)
          (setf (map-elt annotation-table description)
                (format "[%s] <%s> '%s'" key-char target-file preview))
