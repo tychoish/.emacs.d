@@ -1186,32 +1186,9 @@
     (smerge-kill-current)
     (smerge-vc-next-conflict)))
 
-(use-package emacsql
-  :ensure t
-  :defer t)
-
-(use-package ghub
-  :ensure t
-  :defer t)
-
 (use-package sqlite-mode-extras
   :ensure t
   :hook ((sqlite-mode . sqlite-extras-minor-mode)))
-
-(use-package forge
-  :ensure t
-  :after (ghub magit)
-  :commands (forge-dispatch forge-configure)
-  :config
-  (setq forge-database-file (expand-file-name (f-join user-emacs-directory sprite--conf-state-directory "forge-database.sqlite")))
-  (make-read-extended-command-for-prefix  "forge"
-    :bind-map tychoish/magit-map
-    :bind-key "r")
-
-  (bind-keys
-   :map magit-command-mode-map
-   ("r" . execute-extended-forge-command))
-  (which-key-customize "forge-commands" :map 'magit-command-mode-map :key "r"))
 
 (use-package gist
   :ensure t
@@ -1403,6 +1380,13 @@
     (add-to-list 'savehist-additional-variables 'denote--keywords-history))
   (setq denote-rename-buffer-format "%>16t<%k>")
   (denote-rename-buffer-mode 1)
+
+  (defun ad:denote-rename-file-using-front-matter--no-confirm (fn &rest args)
+    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+              ((symbol-function 'y-or-n-p)    (lambda (&rest _) t)))
+      (apply fn args)))
+  (advice-add 'denote-rename-file-using-front-matter :around
+              #'ad:denote-rename-file-using-front-matter--no-confirm)
 
   (defun tychoish-denote-add-frontmatter-field (key value)
     "Insert KEY: VALUE into the YAML frontmatter of the current buffer.
