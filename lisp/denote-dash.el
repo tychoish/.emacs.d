@@ -15,6 +15,7 @@
 (require 'tabulated-list)
 (require 'seq)
 (require 'map)
+(require 'denote)
 
 ;;; Declarations
 
@@ -627,8 +628,9 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
       "titles: front-matter [on]"
     "titles: front-matter [off]"))
 
-(defun denote-dash-toggle-front-matter-titles ()
+(transient-define-suffix denote-dash-toggle-front-matter-titles ()
   "Toggle title rendering between filename and front-matter sources."
+  :description #'denote-dash--front-matter-description
   (interactive)
   (setq-local denote-dash-title-source
               (if (eq denote-dash-title-source 'front-matter) 'filename 'front-matter))
@@ -647,7 +649,7 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
     ("d" "directory" denote-dash-toggle-directory-column)
     ("g" "git"       denote-dash-toggle-git-column)]
    ["Display"
-    ("r" denote-dash--front-matter-description denote-dash-toggle-front-matter-titles)
+    ("r" denote-dash-toggle-front-matter-titles)
     ("w" "set column width" denote-dash-set-column-width)]])
 
 ;;; Savehist

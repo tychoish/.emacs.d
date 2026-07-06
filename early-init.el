@@ -16,12 +16,12 @@
   `(let ((file-name-handler-alist nil))
      ,@body))
 
-(defvar slow-op-reporting t
+(defvar slow-op-reporting nil
   "When non-nil, `with-slow-op-timer' logs any operation that exceeds `slow-op-threshold'.
 Always enabled at 500ms so genuinely blocking startup work is surfaced without needing
 a special flag.  Set to nil in user/*.el to suppress reporting on a specific machine.")
 
-(defvar slow-op-threshold 0.1
+(defvar slow-op-threshold 0.001
   "Minimum duration in seconds for `with-slow-op-timer' to emit a log message.
 Set to 0.1 (100ms) to surface meaningfully slow operations without noise.")
 
