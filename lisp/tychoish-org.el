@@ -777,10 +777,14 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
     (setq name "planner"))
 
   (setq path (if path
-		 (f-expand path)
+		 (expand-file-name path)
 	       (concat (f-make-slug name) ".org")))
 
   (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (file-name-nondirectory path))) t)
+
+  (when-let* ((file-dir (file-name-directory path))
+	      (_ (not (string-equal file-dir org-directory))))
+    (add-to-list 'org-agenda-files path))
 
   (let ((org-filename (if (or (file-exists-p path)
 			      (and
@@ -788,6 +792,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 			       (file-exists-p (f-dirname path))))
 			  path
 			(concat org-directory "/" path))))
+
     (tychoish/org-capture-add-routine-templates
      :name name
      :key key
