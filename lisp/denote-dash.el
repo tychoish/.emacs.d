@@ -6,7 +6,7 @@
 ;; all Denote-related UI into a single package.
 ;;
 ;; Entry points:
-;;   `denote-dash'          — open the *Denote Dash* list buffer
+;;   `denote-dash'          — open the *denote-dash* list buffer
 ;;   `denote-dash-dispatch' — open the transient command menu
 
 ;;; Code:
@@ -27,6 +27,7 @@
 (declare-function denote-rename-file-using-front-matter "denote")
 (declare-function denote-directory-files "denote")
 (declare-function denote-retrieve-filename-title "denote")
+(declare-function denote-retrieve-title-or-filename "denote")
 (declare-function denote-retrieve-filename-identifier "denote")
 (declare-function denote-retrieve-filename-signature "denote")
 (declare-function denote-extract-keywords-from-path "denote")
@@ -44,6 +45,15 @@
 (declare-function denote-sequence-new-parent "denote-sequence")
 (declare-function denote-sequence-link-to-parent "denote-sequence")
 (declare-function denote-sequence-reparent "denote-sequence")
+(declare-function denote-sequence-increment-partial "denote-sequence")
+(declare-function denote-sequence--get-prefix-for-siblings "denote-sequence")
+(declare-function denote-sequence-get-all-files-with-prefix "denote-sequence")
+(declare-function denote-sequence-get-all-files "denote-sequence")
+(declare-function denote-sequence-split "denote-sequence")
+(declare-function denote-sequence-join "denote-sequence")
+(declare-function denote-sequence-and-scheme-p "denote-sequence")
+(declare-function denote-sequence-file-p "denote-sequence")
+(declare-function denote-keywords-prompt "denote")
 (declare-function denote-markdown-convert-links-to-markdown-format "denote-markdown")
 (declare-function denote-markdown-convert-links-to-denote-format "denote-markdown")
 (declare-function denote-review-set-date "denote-review")
@@ -85,12 +95,24 @@ filter language: strings, (or ...), (and ...), (not ...)."
   :type '(alist :key-type string :value-type sexp)
   :group 'denote-dash)
 
-(defcustom denote-dash-initial-columns '(title keywords modified)
-  "Columns shown when the *Denote Dash* buffer is first created.
-Valid symbols: fold, title, keywords, modified, id, directory, git."
-  :type '(repeat (choice (const fold) (const title) (const keywords)
-                         (const modified) (const id) (const directory)
-                         (const git)))
+(defcustom denote-dash-initial-columns '(sequence title keywords id)
+  "Columns shown when the *denote-dash* buffer is first created.
+Valid symbols: fold, sequence, title, keywords, modified, id, directory, git."
+  :type '(repeat (choice (const fold) (const sequence) (const title)
+                         (const keywords) (const modified) (const id)
+                         (const directory) (const git)))
+  :group 'denote-dash)
+
+(defcustom denote-dash-title-source 'filename
+  "How to retrieve the title for the title column.
+`filename' uses the title encoded in the filename (fast).
+`front-matter' reads the title from the file's front matter (accurate but slower)."
+  :type '(choice (const filename) (const front-matter))
+  :group 'denote-dash)
+
+(defcustom denote-dash-sequence-column-width 6
+  "Display width of the sequence ID column."
+  :type 'natnum
   :group 'denote-dash)
 
 (defcustom denote-dash-git-column-enabled nil
@@ -121,6 +143,9 @@ Absent entries default to `subtree'.  States: `folded', `children', `subtree'.")
 
 (defvar-local denote-dash--show-non-sequence t
   "When nil, notes without a sequence ID are hidden.")
+
+(defvar-local denote-dash--column-widths nil
+  "Alist of (COLUMN . WIDTH) overrides for this buffer.")
 
 ;;; Module-level cache
 
@@ -250,6 +275,16 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
       ('children "▼")
       (_         " "))))
 
+;;; ID formatting
+
+(defun denote-dash--format-id (id)
+  "Format Denote ID string ID (YYYYMMDDTHHmmSS) as YYYY-MM-DD HH:mm:ss."
+  (if (and id (= (length id) 15))
+      (format "%s-%s-%s %s:%s:%s"
+              (substring id 0 4) (substring id 4 6) (substring id 6 8)
+              (substring id 9 11) (substring id 11 13) (substring id 13 15))
+    (or id "")))
+
 ;;; Data layer
 
 (defun denote-dash--file-visible-p (file all-seq-ids)
@@ -278,15 +313,32 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
                                             (lambda (col)
                                               (pcase col
                                                 ('fold      (denote-dash--fold-indicator seq-id))
-                                                ('title     (or (denote-retrieve-filename-title file) (file-name-base file)))
+                                                ('sequence  (or seq-id ""))
+                                                ('title     (if (eq denote-dash-title-source 'front-matter)
+                                                               (denote-retrieve-title-or-filename file (denote-filetype-heuristics file))
+                                                             (or (denote-retrieve-filename-title file) (file-name-base file))))
                                                 ('keywords  (string-join (denote-extract-keywords-from-path file) " "))
                                                 ('modified  (format-time-string "%Y-%m-%d" (file-attribute-modification-time (file-attributes file))))
-                                                ('id        (or (denote-retrieve-filename-identifier file) ""))
+                                                ('id        (denote-dash--format-id (denote-retrieve-filename-identifier file)))
                                                 ('directory (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
                                                 ('git       (or (denote-dash--git-status-char file) " "))))
                                             denote-dash--visible-columns)))))))))
 
 ;;; Column format
+
+(defun denote-dash--column-width (col)
+  "Return display width for COL, consulting buffer-local overrides first."
+  (or (alist-get col denote-dash--column-widths)
+      (pcase col
+        ('fold      1)
+        ('sequence  denote-dash-sequence-column-width)
+        ('title     44)
+        ('keywords  25)
+        ('modified  10)
+        ('id        19)
+        ('directory 20)
+        ('git       1)
+        (_          10))))
 
 (defun denote-dash--setup-columns ()
   "Configure `tabulated-list-format' from current visible columns and reinit header."
@@ -294,20 +346,21 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
         (apply #'vector
                (seq-map (lambda (col)
                           (pcase col
-                            ('fold      ["" 1 nil])
-                            ('title     ["Title" 40 t])
-                            ('keywords  ["Keywords" 25 t])
-                            ('modified  ["Modified" 10 t])
-                            ('id        ["ID" 17 t])
-                            ('directory ["Dir" 20 t])
-                            ('git       ["G" 1 nil])))
+                            ('fold      (list "" (denote-dash--column-width 'fold) nil))
+                            ('sequence  (list "Seq" (denote-dash--column-width 'sequence) t))
+                            ('title     (list "Title" (denote-dash--column-width 'title) t))
+                            ('keywords  (list "Keywords" (denote-dash--column-width 'keywords) t))
+                            ('modified  (list "Modified" (denote-dash--column-width 'modified) t))
+                            ('id        (list "ID" (denote-dash--column-width 'id) t))
+                            ('directory (list "Dir" (denote-dash--column-width 'directory) t))
+                            ('git       (list "G" (denote-dash--column-width 'git) nil))))
                         denote-dash--visible-columns)))
   (tabulated-list-init-header))
 
 ;;; Refresh
 
 (defun denote-dash-refresh ()
-  "Rebuild and redisplay the *Denote Dash* buffer."
+  "Rebuild and redisplay the *denote-dash* buffer."
   (interactive)
   (when (member 'git denote-dash--visible-columns)
     (setq denote-dash--git-cache (denote-dash--build-git-cache)))
@@ -334,26 +387,30 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   "t"       #'denote-dash-toggle-non-sequence
   "r"       #'denote-rename-file-using-front-matter
   "l"       #'denote-dash-lint-sequences
+  "C-r"     #'denote-dash-repack-sequence-children
+  "M-r"     #'denote-dash-swap-with-parent
   "n"       #'denote
   "g"       #'denote-dash-refresh
   "?"       #'denote-dash-dispatch
   "q"       #'quit-window)
 
-(define-derived-mode denote-dash-mode tabulated-list-mode "Denote-Dash"
+(define-derived-mode denote-dash-mode tabulated-list-mode "ddash"
   "Major mode for browsing and filtering Denote notes.
 
 \\{denote-dash-mode-map}"
   (setq-local denote-dash--fold-state (make-hash-table :test #'equal))
-  (setq-local denote-dash--visible-columns (copy-sequence denote-dash-initial-columns))
+  (let ((cols (or denote-dash--persisted-columns denote-dash-initial-columns)))
+    (setq-local denote-dash--visible-columns
+                (seq-filter (lambda (c) (member c cols)) denote-dash-column-order)))
   (setq-local tabulated-list-sort-key nil))
 
 ;;; Entry point
 
 ;;;###autoload
 (defun denote-dash ()
-  "Open or switch to the *Denote Dash* buffer."
+  "Open or switch to the *denote-dash* buffer."
   (interactive)
-  (let ((buf (get-buffer-create "*Denote Dash*")))
+  (let ((buf (get-buffer-create "*denote-dash*")))
     (pop-to-buffer buf)
     (unless (derived-mode-p 'denote-dash-mode)
       (denote-dash-mode))
@@ -499,15 +556,28 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
            (if denote-dash--show-non-sequence "shown" "hidden"))
   (denote-dash-refresh))
 
-;;; Column toggle
+;;; Column ordering and toggle
+
+(defvar denote-dash-column-order
+  '(sequence fold title keywords id directory modified git)
+  "Canonical display order for columns; determines left-to-right position.")
+
+(defvar denote-dash--persisted-columns nil
+  "Column list saved across sessions for `*denote-dash*'.")
 
 (defun denote-dash--toggle-column (col)
   "Toggle visibility of column COL and refresh the buffer."
-  (setq denote-dash--visible-columns
-        (if (member col denote-dash--visible-columns)
-            (seq-remove (lambda (c) (eq c col)) denote-dash--visible-columns)
-          (append denote-dash--visible-columns (list col))))
+  (let ((cols (if (member col denote-dash--visible-columns)
+                  (seq-remove (lambda (c) (eq c col)) denote-dash--visible-columns)
+                (cons col denote-dash--visible-columns))))
+    (setq denote-dash--visible-columns
+          (seq-filter (lambda (c) (member c cols)) denote-dash-column-order))
+    (setq denote-dash--persisted-columns denote-dash--visible-columns))
   (denote-dash-refresh))
+
+(defun denote-dash-toggle-sequence-column ()
+  "Toggle the sequence ID column."
+  (interactive) (denote-dash--toggle-column 'sequence))
 
 (defun denote-dash-toggle-fold-column ()
   "Toggle the fold indicator column."
@@ -540,21 +610,51 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
     (user-error "Set `denote-dash-git-column-enabled' to t to enable the git column"))
   (denote-dash--toggle-column 'git))
 
+(defun denote-dash-set-column-width ()
+  "Interactively set the display width for a visible column."
+  (interactive)
+  (let* ((col (intern (completing-read "Column: "
+                                       (seq-map #'symbol-name denote-dash--visible-columns)
+                                       nil t)))
+         (current (denote-dash--column-width col))
+         (width (read-number (format "Width for %s (current %d): " col current) current)))
+    (setf (alist-get col denote-dash--column-widths) width)
+    (denote-dash-refresh)))
+
+(defun denote-dash--front-matter-description ()
+  "Transient label showing current title source."
+  (if (eq denote-dash-title-source 'front-matter)
+      "titles: front-matter [on]"
+    "titles: front-matter [off]"))
+
+(defun denote-dash-toggle-front-matter-titles ()
+  "Toggle title rendering between filename and front-matter sources."
+  (interactive)
+  (setq-local denote-dash-title-source
+              (if (eq denote-dash-title-source 'front-matter) 'filename 'front-matter))
+  (message "Title source: %s" denote-dash-title-source)
+  (denote-dash-refresh))
+
 (transient-define-prefix denote-dash-column-transient ()
-  "Toggle columns in the *Denote Dash* buffer."
+  "Toggle columns and display options in the *denote-dash* buffer."
   [["Columns"
+    ("s" "sequence"  denote-dash-toggle-sequence-column)
     ("f" "fold"      denote-dash-toggle-fold-column)
     ("t" "title"     denote-dash-toggle-title-column)
     ("k" "keywords"  denote-dash-toggle-keywords-column)
     ("m" "modified"  denote-dash-toggle-modified-column)
     ("i" "id"        denote-dash-toggle-id-column)
     ("d" "directory" denote-dash-toggle-directory-column)
-    ("g" "git"       denote-dash-toggle-git-column)]])
+    ("g" "git"       denote-dash-toggle-git-column)]
+   ["Display"
+    ("r" denote-dash--front-matter-description denote-dash-toggle-front-matter-titles)
+    ("w" "set column width" denote-dash-set-column-width)]])
 
 ;;; Savehist
 
 (with-eval-after-load 'savehist
-  (add-to-list 'savehist-additional-variables 'denote-dash--filter-history))
+  (add-to-list 'savehist-additional-variables 'denote-dash--filter-history)
+  (add-to-list 'savehist-additional-variables 'denote-dash--persisted-columns))
 
 ;;; Org datetree import
 
@@ -794,6 +894,228 @@ In `denote-dash-mode', operates on the note at point; otherwise on `buffer-file-
                (if (> errors 0) (format " (%d errors)" errors) "")))
     (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh))))
 
+;;; Sequence repack
+
+(defun denote-dash--sequence-direct-children (prefix)
+  "Return all Denote files that are direct children of PREFIX.
+If PREFIX is nil or empty, returns all root-level sequence files (depth 0).
+A direct child has exactly one more alternating segment than PREFIX."
+  (let* ((pfx-depth (if (and prefix (not (string-empty-p (or prefix ""))))
+                        (denote-dash--sequence-depth prefix)
+                      -1))
+         (target-depth (1+ pfx-depth))
+         (files (if (and prefix (not (string-empty-p (or prefix ""))))
+                    (denote-sequence-get-all-files-with-prefix prefix)
+                  (denote-sequence-get-all-files))))
+    (seq-filter
+     (lambda (f)
+       (when-let* ((sig (denote-retrieve-filename-signature f)))
+         (= (denote-dash--sequence-depth sig) target-depth)))
+     files)))
+
+(defun denote-dash--compact-child-seq (n prefix)
+  "Return the Nth (1-based) compact child sequence for PREFIX.
+Children alternate type: if PREFIX ends in a digit (or is nil/empty),
+children use letters (a, b, c…); if it ends in a letter, children use
+numbers (1, 2, 3…)."
+  (let* ((last-char (and prefix
+                         (not (string-empty-p (or prefix "")))
+                         (aref prefix (1- (length prefix)))))
+         (use-letters (or (null last-char)
+                          (denote-dash--char-digit-p last-char)))
+         (suffix (if use-letters
+                     (char-to-string (+ ?a (1- n)))
+                   (number-to-string n))))
+    (concat (or prefix "") suffix)))
+
+(defun denote-dash--fix-all-frontmatter-silent ()
+  "Fix all sequence frontmatter mismatches without confirmation.  Returns count."
+  (let ((fixed 0))
+    (seq-do (lambda (file)
+              (condition-case nil
+                  (when (denote-dash--fix-frontmatter-from-filename file)
+                    (setq fixed (1+ fixed)))
+                (error nil)))
+            (denote-dash--collect-sequence-mismatches))
+    fixed))
+
+(defun denote-dash-repack-sequence-children (prefix)
+  "Compact direct children of PREFIX so their last segment has no gaps.
+PREFIX is a sequence string (e.g. \"3a1\"); empty string means root level.
+Renames files from highest sequence first to avoid collisions, then
+syncs all frontmatter.  Works from `denote-dash-mode' or interactively."
+  (interactive
+   (list (read-string "Sequence prefix (empty = root): "
+                      (when (derived-mode-p 'denote-dash-mode)
+                        (when-let* ((f (tabulated-list-get-id)))
+                          (denote-retrieve-filename-signature f))))))
+  (let* ((prefix (if (string-empty-p prefix) nil prefix))
+         (children (denote-dash--sequence-direct-children prefix))
+         (sorted (seq-sort (lambda (a b)
+                             (string< (denote-retrieve-filename-signature a)
+                                      (denote-retrieve-filename-signature b)))
+                           children)))
+    (when (null sorted)
+      (user-error "No children found for %s" (or prefix "(root)")))
+    (let* ((expected (seq-map-indexed
+                      (lambda (_f i)
+                        (denote-dash--compact-child-seq (1+ i) prefix))
+                      sorted))
+           (to-rename (seq-filter
+                       (lambda (pair)
+                         (not (string= (denote-retrieve-filename-signature (car pair))
+                                       (cdr pair))))
+                       (seq-mapn #'cons sorted expected))))
+      (if (null to-rename)
+          (message "Sequences for %s already compact." (or prefix "(root)"))
+        (unless (yes-or-no-p
+                 (format "Repack %d/%d children of %s? "
+                         (length to-rename) (length sorted) (or prefix "(root)")))
+          (user-error "Cancelled"))
+        ;; Rename highest sequence first to avoid intermediate collisions
+        (seq-do (lambda (pair)
+                  (denote-rename-file (car pair) 'keep-current 'keep-current
+                                      (cdr pair) 'keep-current 'keep-current))
+                (seq-sort (lambda (a b)
+                            (string> (denote-retrieve-filename-signature (car a))
+                                     (denote-retrieve-filename-signature (car b))))
+                          to-rename)))
+      ;; Always sync frontmatter after — covers both renames and any prior drift
+      (let ((n (denote-dash--fix-all-frontmatter-silent)))
+        (message "Repacked %d/%d children of %s; fixed %d frontmatter %s."
+                 (length to-rename) (length sorted) (or prefix "(root)")
+                 n (if (= n 1) "note" "notes")))
+      (when (derived-mode-p 'denote-dash-mode)
+        (denote-dash-refresh)))))
+
+;;; Sequence swap
+
+(defun denote-dash--sequence-parent (seq)
+  "Return the parent sequence of SEQ, or nil if SEQ is a root.
+The parent is the longest proper prefix whose depth is one less than SEQ's.
+Computed by finding the last type-transition (digit↔letter) in SEQ."
+  (when (and seq (not (string-empty-p seq))
+             (> (denote-dash--sequence-depth seq) 0))
+    (let ((last-transition nil))
+      (dotimes (i (1- (length seq)))
+        (when (not (eq (denote-dash--char-digit-p (aref seq i))
+                       (denote-dash--char-digit-p (aref seq (1+ i)))))
+          (setq last-transition (1+ i))))
+      (when last-transition
+        (substring seq 0 last-transition)))))
+
+(defun denote-dash-swap-with-parent ()
+  "Swap the sequence of the note at point with its direct parent.
+Both nodes must have files in the denote directory.  Uses a three-step
+rename (child→tmp, parent→child-seq, tmp→parent-seq) to avoid collision,
+then fixes frontmatter signatures on both files."
+  (interactive)
+  (let* ((file (denote-dash--target-file))
+         (seq  (denote-retrieve-filename-signature file)))
+    (unless seq
+      (user-error "File has no sequence: %s" (file-name-nondirectory file)))
+    (let ((parent-seq (denote-dash--sequence-parent seq)))
+      (unless parent-seq
+        (user-error "%s is a root sequence — nothing to swap with" seq))
+      (let ((parent-file
+             (seq-find (lambda (f)
+                         (equal (denote-retrieve-filename-signature f) parent-seq))
+                       (denote-directory-files))))
+        (unless parent-file
+          (user-error "No file found for parent sequence %s" parent-seq))
+        (unless (yes-or-no-p (format "Swap %s ↔ %s? " seq parent-seq))
+          (user-error "Cancelled"))
+        (let* ((dir          (file-name-directory file))
+               (base         (file-name-nondirectory file))
+               (par-base     (file-name-nondirectory parent-file))
+               (new-base     (replace-regexp-in-string
+                              (concat "==" (regexp-quote seq) "--")
+                              (concat "==" parent-seq "--") base t t))
+               (new-par-base (replace-regexp-in-string
+                              (concat "==" (regexp-quote parent-seq) "--")
+                              (concat "==" seq "--") par-base t t))
+               (tmp-path     (concat dir (replace-regexp-in-string
+                                          (concat "==" (regexp-quote seq) "--")
+                                          "==__swaptmp__--" base t t))))
+          ;; Kill any buffers visiting files we are about to rename so they
+          ;; do not become stale (pointing to a path that no longer exists).
+          (dolist (f (list file parent-file))
+            (when-let* ((buf (find-buffer-visiting f)))
+              (kill-buffer buf)))
+          (rename-file file              tmp-path               t)
+          (rename-file parent-file      (concat dir new-par-base) t)
+          (rename-file tmp-path         (concat dir new-base)     t)
+          (denote-dash--fix-frontmatter-from-filename (concat dir new-base))
+          (denote-dash--fix-frontmatter-from-filename (concat dir new-par-base))
+          (message "Swapped %s ↔ %s" seq parent-seq)
+          (when (derived-mode-p 'denote-dash-mode)
+            (denote-dash-refresh)))))))
+
+;;; Sequence insertion
+
+(defun denote-dash--increment-sequence (seq)
+  "Return SEQ with its last component incremented."
+  (let* ((parts (denote-sequence-split seq))
+         (new-last (denote-sequence-increment-partial (car (last parts))))
+         (scheme (cdr (denote-sequence-and-scheme-p seq))))
+    (denote-sequence-join (append (butlast parts) (list new-last)) scheme)))
+
+(defun denote-dash--sequence-direct-sibling-p (seq-id file)
+  "Return non-nil if FILE is a direct sibling of SEQ-ID (same depth)."
+  (when-let* ((fsig (denote-retrieve-filename-signature file)))
+    (= (length (denote-sequence-split fsig))
+       (length (denote-sequence-split seq-id)))))
+
+(defun denote-dash--target-file ()
+  "Return the target file for sequence operations.
+Uses the note at point in `denote-dash-mode', the current buffer file,
+or prompts with completing-read."
+  (cond
+   ((derived-mode-p 'denote-dash-mode) (tabulated-list-get-id))
+   (buffer-file-name buffer-file-name)
+   (t (completing-read "File: "
+                       (seq-filter #'denote-sequence-file-p (denote-directory-files))
+                       nil t))))
+
+;;;###autoload
+(defun denote-dash-insert-sequence-note ()
+  "Insert a new note at the current note's sequence position.
+All following siblings are shifted forward by one to make room.
+Works from `denote-dash-mode' (note at point), a Denote note buffer,
+or prompts for a file."
+  (interactive)
+  (let* ((file (denote-dash--target-file))
+         (seq-id (denote-retrieve-filename-signature file)))
+    (unless seq-id
+      (user-error "File has no sequence ID: %s" (file-name-nondirectory file)))
+    (let* ((parent-prefix (denote-sequence--get-prefix-for-siblings seq-id))
+           (candidates (if (or (null parent-prefix) (string-empty-p (or parent-prefix "")))
+                           (denote-sequence-get-all-files)
+                         (denote-sequence-get-all-files-with-prefix parent-prefix)))
+           (siblings (seq-filter (lambda (f) (denote-dash--sequence-direct-sibling-p seq-id f))
+                                 candidates))
+           (to-rename (thread-last siblings
+                                   (seq-filter (lambda (f)
+                                                 (string>= (denote-retrieve-filename-signature f) seq-id)))
+                                   (seq-sort (lambda (a b)
+                                               (string> (denote-retrieve-filename-signature a)
+                                                        (denote-retrieve-filename-signature b)))))))
+      (unless (yes-or-no-p (format "Insert before %s, shifting %d sibling%s? "
+                                   seq-id (length to-rename)
+                                   (if (= (length to-rename) 1) "" "s")))
+        (user-error "Cancelled"))
+      (seq-do (lambda (f)
+                (denote-rename-file f 'keep-current 'keep-current
+                                    (denote-dash--increment-sequence
+                                     (denote-retrieve-filename-signature f))
+                                    'keep-current 'keep-current))
+              to-rename)
+      (denote (read-string "Title: ")
+              (denote-keywords-prompt)
+              nil nil nil nil seq-id)
+      (when (derived-mode-p 'denote-dash-mode)
+        (denote-dash-refresh)))))
+
 ;;; Dispatch transient
 ;;
 ;; Key layout — all prefix groups share a first character, no single-char
@@ -813,14 +1135,6 @@ In `denote-dash-mode', operates on the note at point; otherwise on `buffer-file-
 ;;;###autoload
 (transient-define-prefix denote-dash-dispatch ()
   "Dispatch Denote commands by area."
-  [["View"
-    ("vv" "note list (dash)"   denote-dash)]
-   ["Create"
-    ("n"  "new note"           denote)
-    ("j"  "journal entry"      denote-journal-new-entry)
-    ("ss" "seq sibling"        denote-sequence-new-sibling)
-    ("sh" "seq child"          denote-sequence-new-child)
-    ("sp" "seq parent"         denote-sequence-new-parent)]]
   [["Find"
     ("ff" "find file"          consult-denote-find)
     ("fg" "grep"               consult-denote-grep)
@@ -829,27 +1143,40 @@ In `denote-dash-mode', operates on the note at point; otherwise on `buffer-file-
     ("fo" "open or create"     denote-open-or-create)
     ("fd" "dired"              denote-dired)
     ("fb" "backlinks"          denote-backlinks)]
-   ["Link"
-    ("ll" "insert link"        denote-link)
-    ("lp" "link to parent"     denote-sequence-link-to-parent)]]
-  [["Rename"
-    ("rr" "rename file"        denote-rename-file)
-    ("rf" "rename from fm"     denote-rename-file-using-front-matter)
-    ("rp" "reparent seq"       denote-sequence-reparent)]
-   ["Review"
-    ("vd" "set review date"    denote-review-set-date)
-    ("vl" "review list"        denote-review-display-list)]]
-  [["Explore"
+   ["Create"
+    ("n"  "new note"           denote)
+    ("j"  "journal entry"      denote-journal-new-entry)
+    ("ss" "seq sibling"        denote-sequence-new-sibling)
+    ("sh" "seq child"          denote-sequence-new-child)
+    ("sp" "seq parent"         denote-sequence-new-parent)
+    ("si" "insert at seq"      denote-dash-insert-sequence-note)]
+   ["Explore"
     ("er" "random note"        denote-explore-random-note)
     ("em" "missing links"      denote-explore-missing-links)
     ("ek" "keyword chart"      denote-explore-barchart-keywords)
     ("et" "timeline"           denote-explore-barchart-timeline)
     ("ed" "duplicates"         denote-explore-duplicate-notes)]
-   ["Import"
-    ("id" "from org datetree"  denote-dash-import-from-datetree)]
+   ["View" :if-not-derived denote-dash-mode
+    ("vv" "note list (dash)"   denote-dash)]]
+  [["Link"
+    ("ll" "insert link"        denote-link)
+    ("lp" "link to parent"     denote-sequence-link-to-parent)]
+   ["Rename"
+    ("rr" "rename file"        denote-rename-file)
+    ("rf" "rename from fm"     denote-rename-file-using-front-matter)
+    ("rp" "reparent seq"       denote-sequence-reparent)]
+   ["Review"
+    ("vd" "set review date"    denote-review-set-date)
+    ("vl" "review list"        denote-review-display-list)]
    ["Align"
     ("al" "lint sequences"     denote-dash-lint-sequences)
-    ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)]]
+    ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)
+    ("ar" "repack children"    denote-dash-repack-sequence-children)
+    ("as" "swap with parent"   denote-dash-swap-with-parent)]
+   ["Import"
+    ("id" "from org datetree"  denote-dash-import-from-datetree)]]
+  [["Columns" :if-derived denote-dash-mode
+    ("c" "toggle columns…"     denote-dash-column-transient)]]
   [["Org" :if-derived org-mode
     ("ox" "extract subtree"    denote-org-extract-org-subtree)
     ("or" "extract + link"     tychoish-org-extract-subtree-and-link)

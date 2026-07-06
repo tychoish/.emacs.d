@@ -309,5 +309,117 @@ ID is the timestamp string, SIG the sequence or nil, TITLE the note title."
           (should-not (denote-dash--sequence-aligned-p new-name)))
       (delete-directory dir t))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--sequence-parent
+
+(ert-deftest denote-dash-test/sequence-parent-root ()
+  "Root sequences (depth 0) have no parent."
+  (should-not (denote-dash--sequence-parent "1"))
+  (should-not (denote-dash--sequence-parent "3"))
+  (should-not (denote-dash--sequence-parent nil))
+  (should-not (denote-dash--sequence-parent "")))
+
+(ert-deftest denote-dash-test/sequence-parent-depth-1 ()
+  "Depth-1 sequences return the root number as parent."
+  (should (equal "1"  (denote-dash--sequence-parent "1a")))
+  (should (equal "1"  (denote-dash--sequence-parent "1b")))
+  (should (equal "3"  (denote-dash--sequence-parent "3b"))))
+
+(ert-deftest denote-dash-test/sequence-parent-depth-2 ()
+  "Depth-2 sequences return the depth-1 letter sequence as parent."
+  (should (equal "1a"  (denote-dash--sequence-parent "1a1")))
+  (should (equal "3a"  (denote-dash--sequence-parent "3a1")))
+  (should (equal "3b"  (denote-dash--sequence-parent "3b9"))))
+
+(ert-deftest denote-dash-test/sequence-parent-depth-3 ()
+  "Depth-3 sequences return the depth-2 numeric sequence as parent."
+  (should (equal "1a1"  (denote-dash--sequence-parent "1a1a")))
+  (should (equal "3a1"  (denote-dash--sequence-parent "3a1b")))
+  (should (equal "3a1"  (denote-dash--sequence-parent "3a1o"))))
+
+(ert-deftest denote-dash-test/sequence-parent-multi-digit ()
+  "Multi-digit segments are handled: parent of 3a12 is 3a."
+  (should (equal "3a" (denote-dash--sequence-parent "3a12"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-swap-with-parent (file-based)
+
+(defun denote-dash-test--kill-dir-buffers (dir)
+  "Kill all buffers whose file is under DIR."
+  (dolist (buf (buffer-list))
+    (when-let* ((f (buffer-file-name buf)))
+      (when (string-prefix-p (expand-file-name dir) (expand-file-name f))
+        (kill-buffer buf)))))
+
+(ert-deftest denote-dash-test/swap-with-parent-renames-files ()
+  "Swap exchanges the ==SEQ== component in both filenames."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((parent-file (denote-dash-test--make-org-note
+                             dir "20240101T100000" "1a" "Parent"))
+               (child-file  (denote-dash-test--make-org-note
+                             dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect child-file)
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-parent)))
+          ;; Kill any buffers the swap opened in the temp dir
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; The file whose timestamp was 110000 now carries sequence 1a
+          (should (directory-files dir nil "20240101T110000==1a--"))
+          ;; The file whose timestamp was 100000 now carries sequence 1a1
+          (should (directory-files dir nil "20240101T100000==1a1--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-parent-updates-frontmatter ()
+  "Swap updates #+signature: in both files to match the new filename."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((parent-file (denote-dash-test--make-org-note
+                             dir "20240101T100000" "1a" "Parent"))
+               (child-file  (denote-dash-test--make-org-note
+                             dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect child-file)
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-parent)))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; Check frontmatter of the swapped child (now at 1a)
+          (let ((new-child (car (directory-files dir t "20240101T110000==1a--"))))
+            (should new-child)
+            (with-temp-buffer
+              (insert-file-contents new-child)
+              (should (search-forward "#+signature: 1a" nil t))))
+          ;; Check frontmatter of the demoted parent (now at 1a1)
+          (let ((new-parent (car (directory-files dir t "20240101T100000==1a1--"))))
+            (should new-parent)
+            (with-temp-buffer
+              (insert-file-contents new-parent)
+              (should (search-forward "#+signature: 1a1" nil t)))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-parent-no-stale-buffers ()
+  "After swap, no buffer visits a path that no longer exists."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((parent-file (denote-dash-test--make-org-note
+                             dir "20240101T100000" "1a" "Parent"))
+               (child-file  (denote-dash-test--make-org-note
+                             dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir)))
+          ;; Open both files first so buffers exist before the swap
+          (find-file-noselect parent-file)
+          (with-current-buffer (find-file-noselect child-file)
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-parent)))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; No buffer should point to the old paths (they no longer exist)
+          (should-not (find-buffer-visiting parent-file))
+          (should-not (find-buffer-visiting child-file)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here

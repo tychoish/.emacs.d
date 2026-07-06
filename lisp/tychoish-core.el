@@ -1041,9 +1041,7 @@
   :ensure t
   :bind (("C-c '" . popper-toggle)
          ("C-c \\" . popper-cycle)
-         ("C-c C-'"  . popper-toggle-type)
-	 :map tychoish/buffer-control-map
-	 ("p" . "popper-mode-map"))
+         ("C-c C-'"  . popper-kill-latest-popup))
   :commands (popper-mode popper-echo-mode popper-cycle popper-toggle)
   :init
   (add-hook 'popper-mode-hook 'popper-echo-mode)
@@ -1459,7 +1457,8 @@ does not manage (e.g. status, plan-type)."
    ("p" . denote-sequence-new-parent)
    ("l" . denote-sequence-link)
    ("m" . denote-sequence-reparent)
-   ("a" . denote-sequence-reparent-recursive))
+   ("a" . denote-sequence-reparent-recursive)
+   ("i" . denote-dash-insert-sequence-note))
   :config
   (setq denote-sequence-scheme 'alphanumeric))
 
