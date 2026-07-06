@@ -398,27 +398,37 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 (defun consult-org-capture ()
   "Select a capture template interactively."
   (interactive)
-  (let ((key-table (make-hash-table :test #'equal))
-	(annotation-table (make-hash-table :test #'equal)))
+  (let* ((key-table (make-hash-table :test #'equal))
+         (annotation-table (make-hash-table :test #'equal))
+         (group-table (make-hash-table :test #'equal))
+         (prefix-map (map-into
+                      (seq-map (lambda (it) (cons (nth 0 it) (nth 1 it)))
+                               (seq-filter (lambda (it) (<= (length it) 4))
+                                           org-capture-templates))
+                      '(hash-table :test equal))))
     (seq-do
      (lambda (template)
        (let* ((key-char (nth 0 template))
-        (description (nth 1 template))
-        (target-loc (cadr (nth 3 template)))
-        (target-file (if (stringp target-loc) (file-name-nondirectory target-loc) ""))
-        (content (nth 4 template))
-        (raw (if (stringp content) (string-replace "\n" " " content) ""))
-        (preview (if (> (length raw) 32) (concat (substring raw 0 29) "...") raw)))
-   (setf (map-elt key-table description) key-char)
-   (setf (map-elt annotation-table description)
-         (format "[%s] <%s> '%s'" key-char target-file preview))))
+              (description (nth 1 template))
+              (target-loc (cadr (nth 3 template)))
+              (target-file (if (stringp target-loc) (file-name-nondirectory target-loc) ""))
+              (content (nth 4 template))
+              (raw (if (stringp content) (string-replace "\n" " " content) ""))
+              (preview (if (> (length raw) 32) (concat (substring raw 0 29) "...") raw))
+              (group (or (map-elt prefix-map (substring key-char 0 1)) key-char)))
+         (setf (map-elt key-table description) key-char)
+         (setf (map-elt annotation-table description)
+               (format "[%s] <%s> '%s'" key-char target-file preview))
+         (setf (map-elt group-table description) group)))
      (seq-filter (lambda (it) (< 4 (length it))) org-capture-templates))
     (org-capture nil (map-elt key-table
-            (annotated-completing-read
-             annotation-table
-             :prompt "org-capture => "
-             :category 'org-capture
-             :require-match nil)))))
+                              (annotated-completing-read
+                               annotation-table
+                               :prompt "org-capture => "
+                               :category 'org-capture
+                               :require-match nil
+                               :group-name (lambda (candidate)
+                                             (map-elt group-table candidate "")))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

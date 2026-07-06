@@ -528,5 +528,119 @@ Branch one is 1/1a/1a1, branch two is 2/2a; 1 and 2 are root siblings."
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-reparent-recursive
+
+(ert-deftest denote-dash-test/reparent-recursive-fixes-type-alternation ()
+  "Reparent recursive rewrites suffix types when old and new roots differ.
+Old root \"1a1\" ends digit (letter-children); target \"2\" ends digit so
+its first child is \"2a\" which ends letter (digit-children).  The child
+\"1a1a\" (letter suffix \"a\") must become \"2a1\" (digit suffix \"1\"),
+not \"2aa\"."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root   (denote-dash-test--make-org-note dir "20240101T100000" "1a1"  "Root"))
+               (_child  (denote-dash-test--make-org-note dir "20240101T110000" "1a1a" "Child"))
+               (_target (denote-dash-test--make-org-note dir "20240101T120000" "2"    "Target"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000=="))))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+            (denote-dash-reparent-recursive root-file _target))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; "1a1" → first letter child of "2" → "2a"
+          (should (directory-files dir nil "20240101T100000==2a--"))
+          ;; "1a1a": suffix "a" (letter) in old context (digit-ending "1a1"),
+          ;; rewritten to digit "1" in new context (letter-ending "2a")
+          (should (directory-files dir nil "20240101T110000==2a1--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/reparent-recursive-same-type-no-change ()
+  "When old and new roots end in the same type, suffix characters are preserved."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root   (denote-dash-test--make-org-note dir "20240101T100000" "1a"  "Root"))
+               (_child  (denote-dash-test--make-org-note dir "20240101T110000" "1a1" "Child"))
+               (_target (denote-dash-test--make-org-note dir "20240101T120000" "2a"  "Target"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000=="))))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+            (denote-dash-reparent-recursive root-file _target))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; "1a" (ends letter) → first digit child of "2a" (ends letter) → "2a1"
+          (should (directory-files dir nil "20240101T100000==2a1--"))
+          ;; "1a1": suffix "1" (digit) in old context (letter-ending "1a"),
+          ;; new root "2a1" ends digit → children are letters → "a"
+          (should (directory-files dir nil "20240101T110000==2a1a--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-repack-sequence-children
+
+(ert-deftest denote-dash-test/repack-root-uses-numbers ()
+  "Root-level repack assigns numeric sequences, not letters."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((_f1 (denote-dash-test--make-org-note dir "20240101T100000" "1" "One"))
+               (_f3 (denote-dash-test--make-org-note dir "20240101T110000" "3" "Three"))
+               (denote-directory (list dir)))
+          (denote-dash-repack-sequence-children "")
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; "1" stays "1", "3" compacts to "2"
+          (should (directory-files dir nil "20240101T100000==1--"))
+          (should (directory-files dir nil "20240101T110000==2--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/repack-letter-children-compact-gaps ()
+  "Children of a digit-ending prefix use letters; gaps are compacted."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((_fp  (denote-dash-test--make-org-note dir "20240101T090000" "3a6" "Parent"))
+               (_fk  (denote-dash-test--make-org-note dir "20240101T100000" "3a6k" "First"))
+               (_fl  (denote-dash-test--make-org-note dir "20240101T110000" "3a6l" "Second"))
+               (denote-directory (list dir)))
+          (denote-dash-repack-sequence-children "3a6")
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; k (11th letter) → a, l (12th letter) → b
+          (should (directory-files dir nil "20240101T100000==3a6a--"))
+          (should (directory-files dir nil "20240101T110000==3a6b--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/repack-propagates-to-subtree ()
+  "Repacking a child also renames that child's descendants."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((_fp   (denote-dash-test--make-org-note dir "20240101T090000" "3a6"   "Parent"))
+               (_fk   (denote-dash-test--make-org-note dir "20240101T100000" "3a6k"  "Child"))
+               (_fk1  (denote-dash-test--make-org-note dir "20240101T110000" "3a6k1" "Grandchild"))
+               (denote-directory (list dir)))
+          (denote-dash-repack-sequence-children "3a6")
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; 3a6k → 3a6a; its child 3a6k1 must follow → 3a6a1
+          (should (directory-files dir nil "20240101T100000==3a6a--"))
+          (should (directory-files dir nil "20240101T110000==3a6a1--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/repack-no-gaps-is-noop ()
+  "Repack does nothing and emits a message when sequences are already compact."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((_fa (denote-dash-test--make-org-note dir "20240101T100000" "3a6a" "First"))
+               (_fb (denote-dash-test--make-org-note dir "20240101T110000" "3a6b" "Second"))
+               (denote-directory (list dir)))
+          ;; Should not signal user-error or rename anything
+          (denote-dash-repack-sequence-children "3a6")
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (directory-files dir nil "20240101T100000==3a6a--"))
+          (should (directory-files dir nil "20240101T110000==3a6b--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here

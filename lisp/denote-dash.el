@@ -25,6 +25,7 @@
 (declare-function denote-link "denote")
 (declare-function denote-backlinks "denote")
 (declare-function denote-rename-file "denote")
+(declare-function denote-rename-file-keywords "denote")
 (declare-function denote-dired "denote")
 (declare-function denote-rename-file-using-front-matter "denote")
 (declare-function denote-directory-files "denote")
@@ -45,7 +46,7 @@
 (declare-function denote-sequence-new-child "denote-sequence")
 (declare-function denote-sequence-new-sibling "denote-sequence")
 (declare-function denote-sequence-new-parent "denote-sequence")
-(declare-function denote-sequence-link-to-parent "denote-sequence")
+(declare-function denote-sequence-link "denote-sequence")
 (declare-function denote-sequence-reparent "denote-sequence")
 (declare-function denote-sequence-increment-partial "denote-sequence")
 (declare-function denote-sequence--get-prefix-for-siblings "denote-sequence")
@@ -921,14 +922,12 @@ A direct child has exactly one more alternating segment than PREFIX."
 
 (defun denote-dash--compact-child-seq (n prefix)
   "Return the Nth (1-based) compact child sequence for PREFIX.
-Children alternate type: if PREFIX ends in a digit (or is nil/empty),
-children use letters (a, b, c…); if it ends in a letter, children use
-numbers (1, 2, 3…)."
+Root level (nil/empty PREFIX) and letter-ending PREFIX use numbers (1, 2, 3…).
+Digit-ending PREFIX uses letters (a, b, c…)."
   (let* ((last-char (and prefix
                          (not (string-empty-p (or prefix "")))
                          (aref prefix (1- (length prefix)))))
-         (use-letters (or (null last-char)
-                          (denote-dash--char-digit-p last-char)))
+         (use-letters (and last-char (denote-dash--char-digit-p last-char)))
          (suffix (if use-letters
                      (char-to-string (+ ?a (1- n)))
                    (number-to-string n))))
@@ -945,11 +944,37 @@ numbers (1, 2, 3…)."
             (denote-dash--collect-sequence-mismatches))
     fixed))
 
+(defun denote-dash--repack-subtree (old-root-seq new-root-seq)
+  "Rename all files rooted at OLD-ROOT-SEQ so their prefix becomes NEW-ROOT-SEQ.
+Stages every file in the subtree through a unique temp signature first so no
+rename collides with an existing sibling or intermediate target.  Kills any
+buffer visiting a file before the rename so no stale buffers remain."
+  (let* ((subtree (denote-dash--subtree-files old-root-seq))
+         (staged (seq-map-indexed
+                  (lambda (f i)
+                    (let* ((sig (denote-retrieve-filename-signature f))
+                           (tmp-sig (format "rpacktmp%d" i))
+                           (tmp-path (denote-dash--rename-signature-component f sig tmp-sig)))
+                      (when-let* ((buf (find-buffer-visiting f)))
+                        (kill-buffer buf))
+                      (rename-file f tmp-path t)
+                      (list sig tmp-sig tmp-path)))
+                  subtree)))
+    (seq-do (lambda (entry)
+              (pcase-let ((`(,orig-sig ,tmp-sig ,tmp-path) entry))
+                (let* ((new-sig (concat new-root-seq
+                                        (string-remove-prefix old-root-seq orig-sig)))
+                       (new-path (denote-dash--rename-signature-component
+                                  tmp-path tmp-sig new-sig)))
+                  (rename-file tmp-path new-path t)
+                  (denote-dash--fix-frontmatter-from-filename new-path))))
+            staged)))
+
 (defun denote-dash-repack-sequence-children (prefix)
   "Compact direct children of PREFIX so their last segment has no gaps.
-PREFIX is a sequence string (e.g. \"3a1\"); empty string means root level.
-Renames files from highest sequence first to avoid collisions, then
-syncs all frontmatter.  Works from `denote-dash-mode' or interactively."
+Renames each child's entire subtree (child and all descendants) so that
+descendants stay consistent with their parent's new sequence.  Works from
+`denote-dash-mode' or interactively."
   (interactive
    (list (read-string "Sequence prefix (empty = root): "
                       (when (derived-mode-p 'denote-dash-mode)
@@ -974,25 +999,22 @@ syncs all frontmatter.  Works from `denote-dash-mode' or interactively."
                        (seq-mapn #'cons sorted expected))))
       (if (null to-rename)
           (message "Sequences for %s already compact." (or prefix "(root)"))
-        (unless (yes-or-no-p
-                 (format "Repack %d/%d children of %s? "
-                         (length to-rename) (length sorted) (or prefix "(root)")))
-          (user-error "Cancelled"))
-        ;; Rename highest sequence first to avoid intermediate collisions
+        ;; Process highest sequence first so sibling renames don't collide
         (seq-do (lambda (pair)
-                  (denote-rename-file (car pair) 'keep-current 'keep-current
-                                      (cdr pair) 'keep-current 'keep-current))
+                  (denote-dash--repack-subtree
+                   (denote-retrieve-filename-signature (car pair))
+                   (cdr pair)))
                 (seq-sort (lambda (a b)
                             (string> (denote-retrieve-filename-signature (car a))
                                      (denote-retrieve-filename-signature (car b))))
                           to-rename)))
-      ;; Always sync frontmatter after — covers both renames and any prior drift
+      ;; Sync any remaining frontmatter drift
       (let ((n (denote-dash--fix-all-frontmatter-silent)))
         (message "Repacked %d/%d children of %s; fixed %d frontmatter %s."
                  (length to-rename) (length sorted) (or prefix "(root)")
-                 n (if (= n 1) "note" "notes")))
-      (when (derived-mode-p 'denote-dash-mode)
-        (denote-dash-refresh)))))
+                 n (if (= n 1) "note" "notes"))))
+    (when (derived-mode-p 'denote-dash-mode)
+      (denote-dash-refresh))))
 
 ;;; Sequence swap
 
@@ -1154,6 +1176,87 @@ subtrees exchange positions.  See also `denote-dash-swap-with-parent'."
   (interactive)
   (denote-dash--swap-with-sibling 'next))
 
+;;; Recursive reparent with correct alphanumeric suffix rewriting
+
+(defun denote-dash--seq-last-type (seq)
+  "Return :digit or :letter for the type of the last character in SEQ."
+  (if (denote-dash--char-digit-p (aref seq (1- (length seq))))
+      :digit
+    :letter))
+
+(defun denote-dash--alphanumeric-suffix-rewrite (suffix old-root-last-type new-root-last-type)
+  "Rewrite SUFFIX so it is valid under a root ending with NEW-ROOT-LAST-TYPE.
+OLD-ROOT-LAST-TYPE is the type of the last character of the old root (:digit
+or :letter).  Returns the suffix unchanged when both types agree."
+  (if (eq old-root-last-type new-root-last-type)
+      suffix
+    (let* ((old-first (if (eq old-root-last-type :digit) :letter :digit))
+           (new-first (if (eq new-root-last-type :digit) :letter :digit))
+           (pos 0)
+           (current-type old-first)
+           (positions nil))
+      (while (< pos (length suffix))
+        (if (eq current-type :digit)
+            (let ((start pos))
+              (while (and (< pos (length suffix))
+                          (denote-dash--char-digit-p (aref suffix pos)))
+                (setq pos (1+ pos)))
+              (push (string-to-number (substring suffix start pos)) positions)
+              (setq current-type :letter))
+          (let ((start pos))
+            (while (and (< pos (length suffix))
+                        (not (denote-dash--char-digit-p (aref suffix pos))))
+              (setq pos (1+ pos)))
+            (push (string-to-number
+                   (denote-sequence--alpha-to-number (substring suffix start pos)))
+                  positions)
+            (setq current-type :digit))))
+      (let ((rebuild-type new-first)
+            (result ""))
+        (seq-do (lambda (p)
+                  (setq result
+                        (concat result
+                                (if (eq rebuild-type :digit)
+                                    (number-to-string p)
+                                  (denote-sequence--number-to-alpha (number-to-string p)))))
+                  (setq rebuild-type (if (eq rebuild-type :digit) :letter :digit)))
+                (nreverse positions))
+        result))))
+
+;;;###autoload
+(defun denote-dash-reparent-recursive (current-file file-with-sequence)
+  "Re-parent CURRENT-FILE and all descendants to be children of FILE-WITH-SEQUENCE.
+Corrects the type alternation (letter/digit) of descendant sequences when the
+old and new roots end in different character types — a bug in the upstream
+`denote-sequence-reparent-recursive'."
+  (interactive
+   (list
+    (denote-sequence--get-current-file-for-renaming)
+    (denote-sequence-file-prompt
+     (format "Reparent `%s' (recursively) to be a child of"
+             (propertize (denote--rename-dired-file-or-current-file-or-prompt)
+                         'face 'denote-faces-prompt-current-name)))))
+  (let* ((root-seq (denote-retrieve-filename-signature current-file))
+         (target-seq (or (denote-sequence-file-p file-with-sequence)
+                         (denote-sequence-p file-with-sequence)
+                         (user-error "No sequence found in `%s'" file-with-sequence)))
+         (new-seq (denote-sequence--get-new-child target-seq))
+         (descendants (when root-seq
+                        (denote-sequence-get-relative root-seq 'all-children)))
+         (rename-fn (lambda (file seq)
+                      (denote-rename-file file 'keep-current 'keep-current
+                                          seq 'keep-current 'keep-current)))
+         (old-last-type (when root-seq (denote-dash--seq-last-type root-seq)))
+         (new-last-type (denote-dash--seq-last-type new-seq)))
+    (funcall rename-fn current-file new-seq)
+    (seq-do (lambda (child)
+              (when-let* ((child-seq (denote-retrieve-filename-signature child)))
+                (let* ((raw-suffix (string-remove-prefix root-seq child-seq))
+                       (fixed-suffix (denote-dash--alphanumeric-suffix-rewrite
+                                      raw-suffix old-last-type new-last-type)))
+                  (funcall rename-fn child (concat new-seq fixed-suffix)))))
+            descendants)))
+
 ;;; Sequence insertion
 
 (defun denote-dash--increment-sequence (seq)
@@ -1263,11 +1366,13 @@ or prompts for a file."
     ("vv" "note list (dash)"   denote-dash)]]
   [["Link"
     ("ll" "insert link"        denote-link)
-    ("lp" "link to parent"     denote-sequence-link-to-parent)]
+    ("lp" "link (sequence)"    denote-sequence-link)]
    ["Rename"
     ("rr" "rename file"        denote-rename-file)
     ("rf" "rename from fm"     denote-rename-file-using-front-matter)
-    ("rp" "reparent seq"       denote-sequence-reparent)]
+    ("rt" "retag (keywords)"   denote-rename-file-keywords)
+    ("rp" "reparent seq"       denote-sequence-reparent)
+    ("rR" "reparent recursive" denote-dash-reparent-recursive)]
    ["Review"
     ("vd" "set review date"    denote-review-set-date)
     ("vl" "review list"        denote-review-display-list)]
