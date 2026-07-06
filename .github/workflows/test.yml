@@ -12,31 +12,6 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: silex/emacs:${{ matrix.emacs_version }}-ci-cask
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        emacs_version:
-          - "30.2"
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - run: apt-get update
-      - run: apt-get install -y aspell aspell-en
-      - run: cask install
-      - run: find elpa -name "*.elc" -delete
-      - run: cask exec ert-runner test/test-*.el
-
-  integration:
-    runs-on: ubuntu-latest
     container: silex/emacs:${{ matrix.emacs_version }}-ci
     timeout-minutes: 5
     permissions:
