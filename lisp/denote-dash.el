@@ -16,6 +16,7 @@
 (require 'seq)
 (require 'map)
 (require 'denote)
+(require 'denote-sequence)
 
 ;;; Declarations
 
