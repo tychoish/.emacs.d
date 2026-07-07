@@ -1480,7 +1480,7 @@ does not manage (e.g. status, plan-type)."
          ("l" . denote-org-link-to-heading)
          ("b" . denote-org-backlinks-for-heading)
          ("x" . denote-org-extract-org-subtree)
-         ("r" . tychoish-org-extract-subtree-and-link)
+         ("r" . org-migrate-subtree-to-denote)
          ("d" . denote-org-dblock-insert-links)
          ("p" . denote-org-dblock-insert-backlinks)
          ("f" . denote-org-dblock-insert-files)))

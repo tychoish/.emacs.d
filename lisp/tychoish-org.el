@@ -228,20 +228,13 @@
   "p" #'org-gist-export-private-gist
   "g" #'org-gist-export-public-gist)
 
-(defun tychoish-org-agenda-extract-subtree-and-link ()
-  "From org-agenda, go to the entry and extract it to a new denote note.
-See `tychoish-org-extract-subtree-and-link'."
-  (interactive)
-  (org-agenda-goto)
-  (tychoish-org-extract-subtree-and-link))
-
 (with-eval-after-load 'org-agenda
   (bind-keys
    :map org-agenda-mode-map
    ("C-l" . org-agenda-open-link)
    ("M-c" . org-agenda-goto-calendar)
    ("/" . tychoish-org-agenda-for-file)
-   ("C-e" . tychoish-org-agenda-extract-subtree-and-link)))
+   ("C-e" . org-migrate-subtree-to-denote)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -894,6 +887,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 (declare-function denote-org-extract-org-subtree "denote-org")
 (declare-function denote-format-link "denote")
 (declare-function denote-directory-files "denote")
+(declare-function org-agenda-goto "org-agenda")
 
 (defun tychoish-org--parse-heading-date (heading)
   "Return an Emacs time value for the first org timestamp in HEADING, or nil."
@@ -902,8 +896,11 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
         (org-time-string-to-time (match-string 0 heading))
       (error nil))))
 
-(defun tychoish-org-extract-subtree-and-link ()
+(defun org-migrate-subtree-to-denote ()
   "Extract the current Org subtree to a new denote note, replacing the heading with a link.
+Works from an `org-agenda-mode' buffer or an `org-mode' buffer: in the
+former, first jumps to the underlying entry via `org-agenda-goto'.
+
 The original heading is re-inserted at its level with the heading text
 replaced by a denote link to the new note.
 
@@ -911,8 +908,10 @@ If the heading text contains an org timestamp and the entry has no DATE,
 CREATED, or CLOSED property, the timestamp is injected as CREATED so the
 new note's identifier reflects that date."
   (interactive)
+  (when (derived-mode-p 'org-agenda-mode)
+    (org-agenda-goto))
   (unless (derived-mode-p 'org-mode)
-    (user-error "Must be in an org-mode buffer"))
+    (user-error "Must be in an org-mode or org-agenda-mode buffer"))
   (let* ((source-buf (current-buffer))
          (insert-marker (copy-marker (org-entry-beginning-position)))
          (level (org-current-level))

@@ -40,7 +40,7 @@
 (declare-function denote-org-dblock-insert-links "denote-org")
 (declare-function denote-org-dblock-insert-backlinks "denote-org")
 (declare-function denote-org-dblock-insert-files "denote-org")
-(declare-function tychoish-org-extract-subtree-and-link "tychoish-org")
+(declare-function org-migrate-subtree-to-denote "tychoish-org")
 (declare-function org-back-to-heading "org")
 (declare-function org-end-of-meta-data "org")
 (declare-function org-end-of-subtree "org")
@@ -1356,7 +1356,7 @@ or prompts for a file."
     ("c" "toggle columns…"     denote-dash-column-transient)]]
   [["Org" :if-derived org-mode
     ("ox" "extract subtree"    denote-org-extract-org-subtree)
-    ("or" "extract + link"     tychoish-org-extract-subtree-and-link)
+    ("or" "extract + link"     org-migrate-subtree-to-denote)
     ("ol" "link to heading"    denote-org-link-to-heading)
     ("ob" "heading backlinks"  denote-org-backlinks-for-heading)
     ("od" "dblock: links"      denote-org-dblock-insert-links)
