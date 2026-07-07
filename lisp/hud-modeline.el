@@ -438,8 +438,12 @@ is not present in FROM-VAR."
  :segment-block 'hud-modeline-right-segments
  :key 'misc
  :name "Misc Info"
- :description "Miscellaneous mode-line info (battery, flyspell, etc.)"
- :body (let ((misc (format-mode-line 'mode-line-misc-info)))
+ :description "Miscellaneous mode-line info (battery, flyspell, etc.); excludes eglot, which has its own segment"
+ :body (let ((misc (format-mode-line
+                    (seq-remove (lambda (entry)
+                                  (and (consp entry)
+                                       (eq (car entry) 'eglot--managed-mode)))
+                                mode-line-misc-info))))
          (unless (string-empty-p (string-trim misc))
            (if (and hud-modeline-misc-max-width
                     (> (string-width misc) hud-modeline-misc-max-width))
