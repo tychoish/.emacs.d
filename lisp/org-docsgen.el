@@ -11,6 +11,8 @@
 (require 'subr-x)
 (require 'cl-lib)
 
+(declare-function org-babel-execute-src-block "ob-core")
+
 (defun org-docsgen--find-el-files ()
   "Return sorted non-test .el files in the directory of the current org buffer."
   (seq-sort
@@ -261,6 +263,30 @@ SECTION-STYLE is `ruler' (default: long ;;;;... lines) or `triple-semi'
                             (org-docsgen--collect-triple-semi files scope include-kinds namespace)
                           (org-docsgen--collect-ruler files scope include-kinds namespace))))
           (org-docsgen--emit sections scope level))))))
+
+;;;###autoload
+(defun org-docsgen-regenerate-readme (readme-file)
+  "Regenerate README-FILE's API reference by re-running its `org-docsgen-run' block.
+Locates the first `#+BEGIN_SRC emacs-lisp' block calling `org-docsgen-run',
+executes it, and saves the buffer.  Binds `org-confirm-babel-evaluate' to
+nil for the duration of the call so this can run non-interactively (e.g.
+via emacsclient) without blocking on a confirmation prompt -- the block is
+config-authored source, not untrusted content, so skipping the prompt here
+is safe.  Intended for use by agent skills via emacsclient:
+  emacsclient --eval \\='(org-docsgen-regenerate-readme \"external/foo/README.org\")\\='"
+  (interactive "fREADME.org file: ")
+  (let ((expanded (expand-file-name readme-file)))
+    (with-current-buffer (find-file-noselect expanded)
+      (save-excursion
+        (goto-char (point-min))
+        (unless (re-search-forward "^#\\+BEGIN_SRC emacs-lisp" nil t)
+          (user-error "org-docsgen-regenerate-readme: no emacs-lisp source block in %s" expanded))
+        (unless (re-search-forward "org-docsgen-run" nil t)
+          (user-error "org-docsgen-regenerate-readme: no `org-docsgen-run' call in %s" expanded))
+        (let ((org-confirm-babel-evaluate nil))
+          (org-babel-execute-src-block)))
+      (save-buffer))
+    (message "org-docsgen: regenerated %s" expanded)))
 
 (provide 'org-docsgen)
 ;;; org-docsgen.el ends here

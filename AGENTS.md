@@ -199,6 +199,17 @@ After byte-compiling a file as a correctness check, delete the `.elc` file — i
 `user/`, and `test/` directories remove any/all `.elc` files. Byte-compilation is used
 only to catch errors, not to produce artifacts.
 
+Use `tychoish-byte-compile-and-delete-artifact` (in `bootstrap.el`) instead of calling
+`byte-compile-file` directly — it deletes the `.elc` for you, and it still validates files
+that declare `no-byte-compile: t` (e.g. `bootstrap.el`, `tychoish-core.el`), which
+`byte-compile-file` would otherwise silently skip:
+
+```sh
+emacsclient --eval '(tychoish-byte-compile-and-delete-artifact "lisp/foo.el")'
+```
+
+Returns `t` on a clean compile; check `*Compile-Log*` for warnings/errors otherwise.
+
 ### Reload after changes
 
 After verifying an elisp file compiles cleanly, reload it with

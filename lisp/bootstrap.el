@@ -1927,17 +1927,40 @@ block in bootstrap-core.el, sorted by LINE-COUNT descending."
 
 ;;; Byte-compile check
 
-(defun tychoish-check-byte-compile (file)
+(defun tychoish-byte-compile-and-delete-artifact (file)
   "Byte-compile FILE for error checking, then delete the .elc artifact.
-Returns t if compilation produced no errors.  Intended for use by agent
-skills via emacsclient:
-  emacsclient --eval \\='(tychoish-check-byte-compile \"lisp/foo.el\")\\='"
+FILE is resolved relative to `user-emacs-directory'.
+
+Some files (e.g. bootstrap.el, tychoish-core.el) declare `no-byte-compile: t'
+because they are never meant to ship a compiled artifact, but that is not a
+reason to skip validating them: `byte-compile-file' honors that declaration
+and silently no-ops, so the check runs against a scratch copy with the
+declaration stripped from its first line, and only that scratch copy (and
+its .elc) is deleted -- FILE itself is never touched.
+
+Returns t if compilation produced no errors, nil otherwise; see
+`*Compile-Log*' for warnings and errors.  Intended for use by agent skills
+via emacsclient:
+  emacsclient --eval \\='(tychoish-byte-compile-and-delete-artifact \"lisp/foo.el\")\\='"
   (let* ((expanded (expand-file-name file user-emacs-directory))
-         (elc (concat (file-name-sans-extension expanded) ".elc"))
-         (result (byte-compile-file expanded)))
-    (when (file-exists-p elc)
-      (delete-file elc))
-    result))
+         (scratch (make-temp-file "tychoish-byte-compile-" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-buffer
+            (insert-file-contents expanded)
+            (goto-char (point-min))
+            (when (re-search-forward "-\\*-.*-\\*-" (line-end-position) t)
+              (replace-match
+               (replace-regexp-in-string
+                "[ \t]*;[ \t]*no-byte-compile:[ \t]*t[ \t]*" ""
+                (match-string 0))
+               t t))
+            (write-region (point-min) (point-max) scratch nil 'silent))
+          (byte-compile-file scratch))
+      (let ((elc (concat (file-name-sans-extension scratch) ".elc")))
+        (when (file-exists-p elc)
+          (delete-file elc)))
+      (delete-file scratch))))
 
 ;;; Native compilation idle warm-up
 
