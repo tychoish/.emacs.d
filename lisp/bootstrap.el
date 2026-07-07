@@ -1289,8 +1289,6 @@ when called non-interactively."
   (interactive)
   (let ((was-hard-wrapping auto-fill-function))
     (auto-fill-mode -1)
-    (when (fboundp 'visual-fill-column-mode)
-      (visual-fill-column-mode 1))
     (visual-line-mode 1)
     (when was-hard-wrapping
       (bootstrap-show-wrapping-mode))))
@@ -1298,8 +1296,6 @@ when called non-interactively."
 (defun turn-off-soft-wrap ()
   (interactive)
   (let ((was-soft-wrapping (not auto-fill-function)))
-    (when (fboundp 'visual-fill-column-mode)
-      (visual-fill-column-mode -1))
     (visual-line-mode -1)
     (auto-fill-mode 1)
     (when was-soft-wrapping
