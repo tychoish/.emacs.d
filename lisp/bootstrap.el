@@ -42,9 +42,6 @@
 (require 'map)
 
 (declare-function which-key-add-key-based-replacements "which-key")
-(declare-function approximate-project-root "xtdlib")
-(declare-function approximate-project-name "xtdlib")
-(declare-function approximate-project-buffers "xtdlib")
 
 (defvar bootstrap-fallback-buffer-name "*scratch*"
   "Buffer name used as a last-resort fallback when no other buffer is available.

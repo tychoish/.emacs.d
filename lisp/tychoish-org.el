@@ -32,7 +32,6 @@
 
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook 'turn-on-soft-wrap) ;; from 'tychoish-common
-  (add-hook 'org-mode-hook #'tychoish--org-enable-vfc-heading-truncation)
   (add-hook 'org-agenda-mode-hook 'tychoish/background-revbufs-for-hook)
   (add-hook 'org-mode-hook 'tychoish/set-up-buffer-org-mode)
 
