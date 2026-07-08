@@ -564,8 +564,18 @@
   (defvar vertico-multiform-commands nil)
   (eval-and-compile
     (defmacro tychoish/vertico-disable-sort-for (command)
-      "Disable sorting in vertico rendering."
-      `(add-to-list 'vertico-multiform-categories '(,command (vertico-sort-function . nil)))))
+      "Disable sorting in vertico rendering for COMMAND.
+Matched against `this-command', so COMMAND must be a command
+symbol, not a completion category -- use
+`vertico-multiform-categories' directly for the latter.
+Clears `vertico-sort-override-function' too: `vertico--sort-function'
+checks it before `display-sort-function' or `vertico-sort-function',
+so `vertico-prescient-mode' (which sets it globally when
+`vertico-prescient-override-sorting' is non-nil) would otherwise
+keep re-sorting these commands regardless of this setting."
+      `(add-to-list 'vertico-multiform-commands
+		    '(,command (vertico-sort-function . nil)
+			       (vertico-sort-override-function . nil)))))
 
   (tychoish/vertico-disable-sort-for yank)
   (tychoish/vertico-disable-sort-for yank-from-kill-ring)
@@ -745,8 +755,19 @@
 
 (use-package corfu-prescient
   :ensure t
+  :defer t
   :after (prescient)
-  :hook (corfu-mode . corfu-prescient-mode)
+  :init
+  ;; A `:hook (corfu-mode . corfu-prescient-mode)' would re-enable this
+  ;; global mode every time `corfu-mode' activates in a new buffer --
+  ;; since it's called non-interactively with no arg, that always turns
+  ;; the mode ON, silently undoing `bootstrap-completion-use-orderless'
+  ;; (or any flavor that disables it). Enable once, like
+  ;; `vertico-prescient-mode', and let the flavor system own on/off state.
+  (add-lazy-init
+   :name "<core> corfu prescient"
+   :delay 1
+   :operation 'corfu-prescient-mode)
   :config
   ;; Same as `vertico-prescient' -- filtering is flavor-owned.
   (setq corfu-prescient-override-sorting t)
@@ -1190,7 +1211,18 @@
 (use-package git-link
   :ensure t
   :bind (:map tychoish/magit-map
-	      ("l" . git-link)))
+	      ("l" . git-link))
+  :config
+  (defun ad:git-link--new-copy-to-clipboard (link)
+    "Also copy LINK to the system clipboard.
+`select-enable-clipboard' is nil, so `kill-new' (called by
+`git-link--new') only reaches the Emacs kill-ring, not the OS
+clipboard."
+    (with-temp-buffer
+      (insert link)
+      (clipboard-kill-ring-save (point-min) (point-max))))
+
+  (advice-add 'git-link--new :after #'ad:git-link--new-copy-to-clipboard))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

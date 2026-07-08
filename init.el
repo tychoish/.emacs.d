@@ -111,7 +111,7 @@ Called from `after-init-hook' so the full config is loaded first."
     (package-initialize)
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
-            ("nongnu" . "https://elpa.nongnu.org/packages/")
+            ("nongnu" . "https://elpa.nongnu.org/nongnu/")
             ("gnu" . "https://elpa.gnu.org/packages/")
             ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/"))))
 

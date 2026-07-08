@@ -376,6 +376,18 @@ or `describe-symbol' as fallback."
 (setq select-enable-primary nil)
 (setq select-enable-clipboard nil)
 
+;; `mark-even-if-inactive' defaults to t, so `region-beginning'/`region-end'
+;; use a stale mark instead of erroring when there's no active region, so
+;; commands like `clipboard-kill-ring-save' (bound to "s-c") silently kill
+;; an empty string whenever pressed without a real selection. Reject empty
+;; strings at the source so no kill-ring consumer (yank, M-y, consult,
+;; embark, ...) ever sees them.
+(defun ad:kill-new-reject-empty (string &optional _replace)
+  "Prevent empty STRING from being added to the kill ring."
+  (not (string-empty-p string)))
+
+(advice-add 'kill-new :before-while #'ad:kill-new-reject-empty)
+
 (setq query-replace-highlight t)
 (setq search-highlight t)
 
@@ -1643,6 +1655,10 @@ BODY is skipped."
     (setq completion-styles '(orderless basic))
     (bootstrap-completion--set-category-overrides 'orderless)
     (setq completion-preview-sort-function nil)
+    (when (boundp 'vertico-prescient-enable-filtering)
+      (setq vertico-prescient-enable-filtering nil))
+    (when (boundp 'corfu-prescient-enable-filtering)
+      (setq corfu-prescient-enable-filtering nil))
     (when (fboundp 'vertico-prescient-mode) (vertico-prescient-mode -1))
     (when (fboundp 'corfu-prescient-mode)   (corfu-prescient-mode -1))
     (setq bootstrap-completion-flavor 'orderless)
