@@ -345,11 +345,18 @@ ID is the timestamp string, SIG the sequence or nil, TITLE the note title."
 ;; denote-dash-swap-with-parent (file-based)
 
 (defun denote-dash-test--kill-dir-buffers (dir)
-  "Kill all buffers whose file is under DIR."
-  (dolist (buf (buffer-list))
-    (when-let* ((f (buffer-file-name buf)))
-      (when (string-prefix-p (expand-file-name dir) (expand-file-name f))
-        (kill-buffer buf)))))
+  "Kill all buffers whose file is under DIR.
+Clears the modified flag on each buffer first: `kill-buffer' unconditionally
+calls `kill-buffer--possibly-save' (via `read-multiple-choice') for a
+modified file-visiting buffer regardless of `kill-buffer-query-functions',
+so a freshly `denote'-created note that was never saved would otherwise
+block on a \"Buffer modified; kill anyway?\" prompt."
+  (seq-do (lambda (buf)
+            (when-let* ((f (buffer-file-name buf)))
+              (when (string-prefix-p (expand-file-name dir) (expand-file-name f))
+                (with-current-buffer buf (set-buffer-modified-p nil))
+                (kill-buffer buf))))
+          (buffer-list)))
 
 (ert-deftest denote-dash-test/swap-with-parent-renames-files ()
   "Swap exchanges the ==SEQ== component in both filenames."
