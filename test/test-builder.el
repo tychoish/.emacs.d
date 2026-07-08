@@ -458,6 +458,22 @@ the selected name and the candidate table."
         (should (equal "custom-cmd" (car result)))
         (should (ht-contains-p (cdr result) "custom-cmd"))))))
 
+(ert-deftest builder-test/read-command-unknown-long-selection-name-matches-key ()
+  "Regression: for a typed command over 32 chars, the returned name must
+match the (truncated) key actually stored in the table, so callers can
+look the candidate back up with `map-elt'."
+  (let* ((tbl (make-hash-table :test #'equal))
+         (long-cmd (make-string 64 ?x)))
+    (cl-letf (((symbol-function 'annotated-completing-read)
+               (lambda (_tbl &rest _) long-cmd))
+              ((symbol-function 'builder--get-candidates)
+               (lambda (&rest _) tbl)))
+      (let* ((result (builder--read-command nil tbl))
+             (name (car result))
+             (candidates (cdr result)))
+        (should (ht-contains-p candidates name))
+        (should (builder-candidate-p (map-elt candidates name)))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder-reset-finish-hooks
 

@@ -225,7 +225,8 @@
 	     :hook 'compilation-finish-functions
 	     :make-unique t
 	     :local t
-	     :function (hook))))
+	     :args (compilation-buffer msg)
+	     :form (funcall hook compilation-buffer msg))))
 
 	(let ((op-window (get-buffer-window (current-buffer) (selected-frame))))
 	  (if op-window (select-window op-window)
@@ -296,16 +297,14 @@ priority from CANDIDATES, with key length as a final tiebreaker."
            :require-match nil
            :history 'compile-history
            :sort-fn (builder--make-sort-fn candidates 'compile-history)))
-	 (candidate (map-elt candidates selection-name))
-	 (operation-name (if candidate
-			     (builder-candidate-name candidate)
-			   (builder--add-candidate
-			    candidates
-			    (make-builder-candidate
-			     :command selection-name
-			     :directory default-directory
-			     :annotation "user input"))
-			   selection-name)))
+	 (candidate (or (map-elt candidates selection-name)
+			(let ((new-candidate (make-builder-candidate
+					       :command selection-name
+					       :directory default-directory
+					       :annotation "user input")))
+			  (builder--add-candidate candidates new-candidate)
+			  new-candidate)))
+	 (operation-name (builder-candidate-name candidate)))
     (cons operation-name candidates)))
 
 (cl-defun builder--project-compilation-buffers (&optional &key name (project (approximate-project-name)))
@@ -645,14 +644,11 @@ call `builder-add-candidates'."
 			  (operation-directory-tree (if (string-equal "..." operation-directory-tree) "./..." operation-directory-tree))
 			  (short-path (f-collapse-homedir operation-directory))
 			  (package-path (string-replace project-root-directory "" operation-directory))
-			  (is-recursive (string-suffix-p "..." it))
 			  (path-for-project-tag (cond ((f-equal-p operation-directory project-root-directory) "")
 						      ((equal short-path package-path) "")
 						      (t package-path)))
-			  (proj-path-tag (format "<%s>/%s" project-name path-for-project-tag))
 			  (proj-path-for-name (s-join-with-space (format "<%s>/%s" project-name
-									 (f-visually-compress-to-five path-for-project-tag))))
-			  (proj-path-recursive (f-join proj-path-for-name "...")))
+									 (f-visually-compress-to-five path-for-project-tag)))))
 		     (append
 		      (-l (make-builder-candidate
 			   :name (s-join-with-space "go build" (f-join proj-path-for-name "..."))
@@ -922,9 +918,10 @@ call `builder-add-candidates'."
 (defun builder--vale-insert-statistics (buffer _message &key filename)
   (interactive)
   (let* ((table (json-parse-string (shell-command-to-string (format "vale ls-metrics --output=line %s" filename)))))
-    (insert (format "\nstatistics for %s" (propertize (f-collapse-homedir filename) 'face 'italic)))
-    (map-do (lambda (key value) (insert (format "\n%s:%s" (propertize key 'face 'bold) value)))
-	    table)))
+    (with-current-buffer buffer
+      (insert (format "\nstatistics for %s" (propertize (f-collapse-homedir filename) 'face 'italic)))
+      (map-do (lambda (key value) (insert (format "\n%s:%s" (propertize key 'face 'bold) value)))
+	      table))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -106,13 +106,20 @@
     (setq-default custom-theme-directory theme-directory)
     (add-to-list 'custom-theme-load-path theme-directory)
     (add-to-list 'load-path theme-directory))
+  :config
+  (setq modus-themes-deuteranopia t)
+  (setq modus-themes-common-palette-overrides
+	'((border-mode-line-active bg-mode-line-active)
+	  (border-mode-line-inactive bg-mode-line-inactive)
+	  (message-separator bg-main)))
 
-  (with-eval-after-load 'modus-themes
-    (setq modus-themes-deuteranopia t)
-    (setq modus-themes-common-palette-overrides
-	  '((border-mode-line-active bg-mode-line-active)
-	    (border-mode-line-inactive bg-mode-line-inactive)
-	    (message-separator bg-main)))))
+  (declare-function tychoish/eglot-highlight-symbol-bold "tychoish-core")
+  (defun tychoish/eglot-highlight-symbol-bold ()
+    "Render eglot's symbol-at-point highlight as bold instead of underlined."
+    (set-face-attribute 'eglot-highlight-symbol-face nil
+			 :underline nil :weight 'bold))
+
+  (add-hook 'modus-themes-after-load-theme-hook #'tychoish/eglot-highlight-symbol-bold))
 
 
 (defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
@@ -663,7 +670,7 @@
   (with-current-buffer buf
     (and buffer-read-only (buffer-file-name))))
 
-(defun tychoish--reuse-readonly-file-window (buffer alist)
+(defun tychoish--reuse-readonly-file-window (buffer _alist)
   "Action: display BUFFER in an existing read-only file window if one exists."
   (when-let* ((win (seq-find
                     (lambda (w)
@@ -764,7 +771,7 @@
   :config
   ;; Orderless's own behavior knobs only; cross-cutting `completion-styles' and
   ;; `completion-category-overrides' are owned by the completion-flavor system.
-  (setq orderless-component-separator #'orderless-escapable-split-on-space)
+  (setq orderless-component-separator #'orderless-escapable-split)
   (setq orderless-matching-styles
 	'(orderless-literal orderless-prefixes orderless-initialism orderless-regexp)))
 
@@ -1173,7 +1180,7 @@
    ("n" . smerge-vc-next-conflict)
    ("k" . smerge-kill-current)
    ("s" . smerge-start-session)
-   ("r" . tychoish/smerge-kill-and-next)
+   ("r" . smerge-kill-and-vc-next-conflict)
    ("t" . smerge-keep-current))
 
   (make-read-extended-command-for-prefix "smerge"
@@ -1370,7 +1377,6 @@
     (setq denote-directory '()))
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-file-type 'org)
-  (setq denote-id-format "%Y%m%dT%H%M%S")
   (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "migration" "agent" "plan" "singing"))
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
@@ -1829,6 +1835,9 @@ does not manage (e.g. status, plan-type)."
   :config
   (require 'python)
 
+  (declare-function python-indent-shift-left "python")
+  (declare-function python-indent-shift-right "python")
+
   (defun balle-python-shift-left ()
     (interactive)
     (let (start end bds)
@@ -2014,7 +2023,6 @@ does not manage (e.g. status, plan-type)."
 
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
-  :delight (compilation-mode "Compile" compile)
   :bind (:map tychoish/core-map
 	      ("c" . tychoish-compile)
 	      :map compilation-mode-map
@@ -2053,8 +2061,7 @@ does not manage (e.g. status, plan-type)."
     (require 'rust-compile))
 
   (defun tychoish-compilation-read-command (command)
-    (let* ((had-initial-command (not (null command)))
-	   (results (tychoish--compilation-read-command command))
+    (let* ((results (builder--read-command command))
 	   (name (car results))
 	   (candidates (cdr results))
 	   (command (builder-candidate-command (map-elt candidates name))))
@@ -2192,7 +2199,7 @@ does not manage (e.g. status, plan-type)."
 
   (defun tychoish/eglot-before-save-hook ()
     (add-hook 'before-save-hook #'eglot-format-for-hook nil t)
-    (add-hook 'before-save-hook #'eglot-organize-imports nil t))
+    (add-hook 'before-save-hook #'eglot-code-action-organize-imports nil t))
 
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-before-save-hook)
 
@@ -2518,9 +2525,8 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'efrit-tools)
   (defun tychoish/get-anthropic-api-key ()
     (or (when (boundp 'anthropic-api-key) anthropic-api-key)
-	(unless tychoish/aider-setup-state
-	  (or (tychoish/aider-setup-state) nil))
-	(awhen (getenv "ANTHROPIC_API_KEY") (string-trim it))
+	(when-let* ((key (getenv "ANTHROPIC_API_KEY")))
+	  (string-trim key))
 	(when-let* ((auth-info (car (auth-source-search :host efrit-api-auth-source-host
 							:user efrit-api-auth-source-user
 							:require '(:secret))))
@@ -2552,7 +2558,7 @@ Useful after changing `eglot-workspace-configuration' or
   :delight ((agent-shell-completion-mode "")
 	    (agent-shell-ui-mode ""))
   :defer t
-  :commands (agent-shell agent-shell-new-shell agent-shell-toggle)
+  :commands (agent-shell agent-shell-new-shell agent-shell-toggle agent-shell-resolve-permissions)
   :init
   (delight 'agent-shell-ui-mode nil "agent-shell-menu")
   (delight 'agent-shell-completion-mode nil "agent-shell-menu")
