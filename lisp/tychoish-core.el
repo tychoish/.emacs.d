@@ -2523,16 +2523,6 @@ Useful after changing `eglot-workspace-configuration' or
     :bind-key "m")
   :config
   (require 'efrit-tools)
-  (defun tychoish/get-anthropic-api-key ()
-    (or (when (boundp 'anthropic-api-key) anthropic-api-key)
-	(when-let* ((key (getenv "ANTHROPIC_API_KEY")))
-	  (string-trim key))
-	(when-let* ((auth-info (car (auth-source-search :host efrit-api-auth-source-host
-							:user efrit-api-auth-source-user
-							:require '(:secret))))
-		    (secret (when auth-info (plist-get auth-info :secret)))
-		    (_ (and secret (functionp secret))))
-	  (funcall secret))))
   ;; Max tokens per response
   (setq efrit-max-tokens 2048)
   ;; Data directory
