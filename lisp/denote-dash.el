@@ -1195,7 +1195,12 @@ or :letter).  Returns the suffix unchanged when both types agree."
   "Re-parent CURRENT-FILE and all descendants to be children of FILE-WITH-SEQUENCE.
 Corrects the type alternation (letter/digit) of descendant sequences when the
 old and new roots end in different character types — a bug in the upstream
-`denote-sequence-reparent-recursive'."
+`denote-sequence-reparent-recursive'.
+
+Suppresses `denote-rename-confirmations' for the duration: this is a single
+logical operation that may rename many descendants, and prompting once per
+file (as `denote-rename-file' does by default) would be unusable for any
+subtree beyond a couple of files."
   (interactive
    (list
     (denote-sequence--get-current-file-for-renaming)
@@ -1214,7 +1219,8 @@ old and new roots end in different character types — a bug in the upstream
                       (denote-rename-file file 'keep-current 'keep-current
                                           seq 'keep-current 'keep-current)))
          (old-last-type (when root-seq (denote-dash--seq-last-type root-seq)))
-         (new-last-type (denote-dash--seq-last-type new-seq)))
+         (new-last-type (denote-dash--seq-last-type new-seq))
+         (denote-rename-confirmations nil))
     (funcall rename-fn current-file new-seq)
     (seq-do (lambda (child)
               (when-let* ((child-seq (denote-retrieve-filename-signature child)))
@@ -1269,7 +1275,7 @@ or prompts for a file."
                                  candidates))
            (to-rename (thread-last siblings
                                    (seq-filter (lambda (f)
-                                                 (string>= (denote-retrieve-filename-signature f) seq-id)))
+                                                 (not (string< (denote-retrieve-filename-signature f) seq-id))))
                                    (seq-sort (lambda (a b)
                                                (string> (denote-retrieve-filename-signature a)
                                                         (denote-retrieve-filename-signature b)))))))
@@ -1277,12 +1283,16 @@ or prompts for a file."
                                    seq-id (length to-rename)
                                    (if (= (length to-rename) 1) "" "s")))
         (user-error "Cancelled"))
-      (seq-do (lambda (f)
-                (denote-rename-file f 'keep-current 'keep-current
-                                    (denote-dash--increment-sequence
-                                     (denote-retrieve-filename-signature f))
-                                    'keep-current 'keep-current))
-              to-rename)
+      ;; Suppress per-file confirmations: the shift above is one logical
+      ;; operation already confirmed once; `denote-rename-file' would
+      ;; otherwise prompt again for each shifted sibling.
+      (let ((denote-rename-confirmations nil))
+        (seq-do (lambda (f)
+                  (denote-rename-file f 'keep-current 'keep-current
+                                      (denote-dash--increment-sequence
+                                       (denote-retrieve-filename-signature f))
+                                      'keep-current 'keep-current))
+                to-rename))
       (denote (read-string "Title: ")
               (denote-keywords-prompt)
               nil nil nil nil seq-id)

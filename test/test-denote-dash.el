@@ -578,6 +578,41 @@ not \"2aa\"."
       (delete-directory dir t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-insert-sequence-note
+
+(ert-deftest denote-dash-test/insert-sequence-note-shifts-siblings-without-prompting ()
+  "Shifting siblings does not block on a per-file `y-or-n-p' confirmation.
+Regression test: `denote-rename-file' prompts per-file under its default
+`denote-rename-confirmations'; the shift loop must suppress that so a
+single top-level `yes-or-no-p' confirmation is enough."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((_f1 (denote-dash-test--make-org-note dir "20240101T100000" "1" "One"))
+               (_f2 (denote-dash-test--make-org-note dir "20240101T110000" "2" "Two"))
+               (denote-directory (list dir))
+               (file (car (directory-files dir t "20240101T100000=="))))
+          (cl-letf (((symbol-function 'y-or-n-p)
+                     (lambda (&rest _) (error "should not prompt per-file")))
+                    ((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                    ((symbol-function 'read-string) (lambda (&rest _) "New"))
+                    ((symbol-function 'denote-keywords-prompt) (lambda (&rest _) nil))
+                    ((symbol-function 'denote-dash--target-file) (lambda () file)))
+            (denote-dash-insert-sequence-note))
+          ;; the new note took the vacated "1" position; `denote' leaves it
+          ;; in an unsaved buffer, so check the buffer rather than the disk
+          (should (seq-find (lambda (buf)
+                              (when-let* ((f (buffer-file-name buf)))
+                                (string-match-p "==1--" f)))
+                            (buffer-list)))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; "One" (was "1") shifted forward to "2"
+          (should (directory-files dir nil "20240101T100000==2--"))
+          ;; "Two" (was "2") shifted forward to "3"
+          (should (directory-files dir nil "20240101T110000==3--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash-repack-sequence-children
 
 (ert-deftest denote-dash-test/repack-root-uses-numbers ()
