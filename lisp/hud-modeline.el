@@ -106,11 +106,6 @@ Any combination of:
   "Face for flycheck warning count."
   :group 'hud-modeline)
 
-(defface hud-modeline-lsp
-  '((t :inherit mode-line-emphasis :underline nil))
-  "Face for active LSP (eglot) indicator."
-  :group 'hud-modeline)
-
 (defface hud-modeline-buffer-name
   '((t :inherit mode-line-buffer-id :underline nil))
   "Face for the buffer name in the mode line."

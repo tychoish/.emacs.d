@@ -463,7 +463,6 @@ or `describe-symbol' as fallback."
   (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
 
 (with-eval-after-load 'transient
-  (setq transient-history-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-history.el")))
   (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -629,17 +628,6 @@ or `describe-symbol' as fallback."
 (when slow-op-reporting
   (advice-add 'run-hooks :around 'with-hook-timing)
   (advice-add 'run-hooks-with-args :around 'with-hook-timing))
-
-(defun bootstrap-init-force-reload ()
-  (with-slow-op-timer "<bootstrap.el>: force reload"
-    (load "bootstrap.el")
-    (load "bootstrap-core.el")
-    (load "bootstrap-mail.el")
-    (load "bootstrap-org.el")
-    (bootstrap-init-late-enable-modes)
-    (bootstrap-ensure-default-font)
-    (bootstrap-ensure-light-theme)
-    (bootstrap-set-up-user-local-config)))
 
 (defun bootstrap-init-late-enable-modes ()
   (column-number-mode 1)
@@ -1072,18 +1060,6 @@ Returns the list of files that were recompiled."
     (if (called-interactively-p 'any)
 	(message "killed %d buffers in subdirectory %s: '%S'" (length killed) (f-collapse-homedir directory) (string-join killed ", "))
       killed)))
-
-(defun buffers-matching-project (thing)
-  (cond
-   ((or (bufferp thing) (and (stringp thing) (get-buffer thing)))
-    (with-current-buffer thing
-      (buffers-matching-path (approximate-project-root))))
-   ((and (stringp thing)
-	 (file-exists-p thing))
-    (thread-last (buffer-list)
-		 (seq-filter (lambda (buf) (f-equal-p thing (buffer-file-name buf))))
-		 seq-uniq
-		 (seq-mapcat (lambda (buf) (with-current-buffer buf (buffers-matching-path (approximate-project-root)))))))))
 
 (defalias 'kill-buffers-matching-name 'kill-matching-buffers)
 

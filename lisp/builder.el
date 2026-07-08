@@ -82,17 +82,6 @@
 (f-directories-containing-file-function "makefile" "Makefile" "GNUmakefile")
 (f-directories-containing-file-function "pyproject.toml")
 
-(defun builder--go-module (&optional directory)
-  (if go-module-path
-      go-module-path
-    (let* ((output (let ((default-directory directory))
-		     (string-trim (shell-command-to-string "go list"))))
-	   (proj-root (approximate-project-root)))
-      (if (or (f-equal-p default-directory directory)
-	      (string-prefix-p proj-root (f-full default-directory)))
-	  (setq-local go-module-path output)
-	output))))
-
 ;;;###autoload
 (defun builder ()
   "Run compile operation selecting compile buffer and commands."

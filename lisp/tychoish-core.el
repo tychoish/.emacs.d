@@ -169,9 +169,7 @@
   :delight (projectile-mode "" projectile)
   :bind-keymap ("C-c p" . projectile-command-map)
   :bind (:map tychoish/ecclectic-grep-project-map
-	      ("a" . projectile-ag)
-	      ("r" . projectile-ripgrep)
-	      ("p" . projectile-grep))
+	      ("a" . projectile-ag))
   :commands (projectile-mode
 	     projectile-project-name
 	     projectile-project-root
@@ -203,11 +201,6 @@
       :prompt "directories =>"
       :category 'file)))
 
-  (defun tychoish-projectile-modeline-string ()
-    (let ((pname (projectile-project-name)))
-      (if (equal pname "-")
-	  ""
-	(concat " p:" pname))))
   :config
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep t)
@@ -524,12 +517,7 @@
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-capf-setup)
   (add-hook 'emacs-lisp-mode-hook #'tychoish/elisp-capf-setup)
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
-  (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup)
-  :config
-  (defun cape--project-buffers ()
-    (let ((directory (approximate-project-root)))
-      (cape--buffer-list (lambda (buf)
-			   (string-prefix-p directory (buffer-file-name buf)))))))
+  (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup))
 
 (use-package yasnippet
   :ensure t
@@ -1012,9 +1000,7 @@
 (use-package builder
   :after (compile)
   :bind (:map compilation-mode-map
-	      ("d" . builder-change-directory)
-	      :map tychoish/core-map
-	      ("c" . builder))
+	      ("d" . builder-change-directory))
   :commands (annotated-completing-read-directory
 	     make-builder-candidate
 	     builder-register-candidates
@@ -1392,19 +1378,7 @@
               ((symbol-function 'y-or-n-p)    (lambda (&rest _) t)))
       (apply fn args)))
   (advice-add 'denote-rename-file-using-front-matter :around
-              #'ad:denote-rename-file-using-front-matter--no-confirm)
-
-  (defun tychoish-denote-add-frontmatter-field (key value)
-    "Insert KEY: VALUE into the YAML frontmatter of the current buffer.
-Inserts immediately before the closing --- line.  Intended for use
-after `denote' creates a note to attach custom fields that denote
-does not manage (e.g. status, plan-type)."
-    (save-excursion
-      (goto-char (point-min))
-      (when (re-search-forward "^---$" nil t)
-        (when (re-search-forward "^---$" nil t)
-          (beginning-of-line)
-          (insert key ": " value "\n"))))))
+              #'ad:denote-rename-file-using-front-matter--no-confirm))
 
 (use-package denote-dash
   :ensure nil
@@ -1424,9 +1398,7 @@ does not manage (e.g. status, plan-type)."
   :ensure t
   :bind (:map tychoish/denote-map
          ("f" . consult-denote-find)
-         ("g" . consult-denote-grep)
-         :map tychoish/consult-mode-map
-	 ("d" . consult-denote-find))
+         ("g" . consult-denote-grep))
   :commands (consult-denote-find consult-denote-grep consult-denote-mode))
 
 (use-package denote-journal
@@ -1980,7 +1952,6 @@ does not manage (e.g. status, plan-type)."
   ;; the order of the following 3 operations is important.
   (define-key flycheck-mode-map flycheck-keymap-prefix nil)
   (define-key flycheck-mode-map flycheck-keymap-prefix flycheck-command-map)
-  (setq flycheck-keymap-prefix (kbd "C-c f"))
 
   (bind-key "m" #'consult-flycheck flycheck-command-map)
 
