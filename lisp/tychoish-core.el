@@ -207,6 +207,7 @@
   (setq projectile-completion-system 'auto)
   (setq projectile-require-project-root nil)
   (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
+  (setq projectile-frecency-file (sprite-state-path "projectile-frecency.eld"))
 
   (add-hook 'prog-mode-hook #'projectile-mode)
   (add-hook 'text-mode-hook #'projectile-mode)
@@ -1634,9 +1635,25 @@ clipboard."
   :ensure t
   :defer t
   :delight (flyspell-mode " fs")
-  :hook ((prog-mode . flyspell-prog-mode)
-	 (text-mode . flyspell-mode)
-	 (telega-chat-mode . flyspell-mode))
+  :init
+  (defun tychoish--flyspell-run-in-buffer (mode-fn buf)
+    "Call MODE-FN with argument 1 in BUF, if BUF is still live.
+Deferring via an idle timer keeps mode hooks that fire while buffers are
+restored in bulk (`desktop-read', command-line file arguments) from
+synchronously starting the ispell/aspell subprocess and logging
+\"Starting new Ispell process...\" outside any message-suppressing scope."
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+	(funcall mode-fn 1))))
+  (defun tychoish--flyspell-mode-idle ()
+    "Enable `flyspell-mode' in the current buffer once Emacs is idle."
+    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-buffer #'flyspell-mode (current-buffer)))
+  (defun tychoish--flyspell-prog-mode-idle ()
+    "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
+    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-buffer #'flyspell-prog-mode (current-buffer)))
+  :hook ((prog-mode . tychoish--flyspell-prog-mode-idle)
+	 (text-mode . tychoish--flyspell-mode-idle)
+	 (telega-chat-mode . tychoish--flyspell-mode-idle))
   :bind (("C-c [" . flyspell-correct-next)
 	 ("C-c ]" . flyspell-correct-previous)
 	 ("M-$" . flyspell-correct-at-point)

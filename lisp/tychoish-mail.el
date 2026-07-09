@@ -22,6 +22,7 @@
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 (declare-function mu4e-message-field "mu4e-message")
+(declare-function mu4e-fetch-field "mu4e-message")
 (declare-function mu4e-message-at-point "mu4e-message")
 (declare-function mu4e-contact-email "mu4e-contacts")
 (declare-function mu4e-contact-name "mu4e-contacts")
@@ -353,7 +354,11 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
                          (url-parse-query-string (cadr parts))))
                (subject (cadr (assoc "subject" params)))
                (body (cadr (assoc "body" params))))
-          (compose-mail to subject)))
+          (compose-mail to subject)
+          (when body
+            (save-excursion
+              (goto-char (point-max))
+              (insert body)))))
        ((string-match-p "\\`https?://" uri)
         (browse-url uri))
        (t
@@ -457,7 +462,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
  				    (tychoish/mail-account-name value)
  				    (tychoish/mail-account-address value)
  				    (if (equal tychoish/mail-account-current key)
- 					" -- CURRENT"
+ 					(concat " " (propertize "[current]" 'face 'bold))
  				      ""))) )))
 	  :prompt "mail-account => "
 	  :require-match nil)))
