@@ -44,6 +44,49 @@
   (add-to-list 'copilot-major-mode-alist '("yaml-mode" . "yaml"))
   (add-to-list 'copilot-major-mode-alist '("bash-ts-mode" . "shellscript")))
 
+(use-package efrit
+  :load-path "external/efrit/lisp"
+  :commands (efrit-chat
+	     efrit-do
+	     efrit-agent
+	     efrit-help
+	     efrit-streamlined-send
+	     efrit-do-show-progress
+	     efrit-remote-queue-start
+	     efrit-remote-queue-stop
+	     efrit-remote-queue-status)
+  :init
+  (bind-keys
+   :map tychoish/robot-map
+   :prefix "e"
+   :prefix-map tychoish/robot-efrit-map
+   ("c" . efrit-chat)
+   ("d" . efrit-do)
+   ("a" . efrit-agent)
+   ("h" . efrit-help)
+   ("s" . efrit-streamlined-send)
+   ("p" . efrit-do-show-progress)
+   ("q" . efrit-remote-queue-start)
+   ("r" . efrit-remote-queue-status)
+   ("x" . efrit-remote-queue-stop))
+  (make-read-extended-command-for-prefix "efrit"
+    :bind-map tychoish/robot-efrit-map
+    :bind-key "m")
+  :config
+  (require 'efrit-tools)
+  ;; Max tokens per response
+  (setq efrit-max-tokens 2048)
+  ;; Data directory
+  (setq efrit-data-directory (sprite-state-path "efrit"))
+  (unless (file-exists-p efrit-data-directory)
+    (make-directory efrit-data-directory t))
+  ;; Enable debug logging
+  (setq efrit-log-level 'debug)
+  (setq efrit-tools-eval-timeout 15)
+  ;; Progress buffer configuration
+  (setq efrit-do-show-progress-buffer t)  ; Show progress buffer automatically
+  (setq efrit-do-queue-max-size 8))	 ; Max commands to queue
+
 (use-package claude-code-ide
   :load-path "external/claude-code-ide"
   ;; :vc (:url "https://github.com/manzaltu/claude-code-ide.el" :rev :newest)
