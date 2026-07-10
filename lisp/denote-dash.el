@@ -82,7 +82,7 @@ Valid symbols: fold, sequence, title, keywords, modified, id, directory, git."
                          (const directory) (const git)))
   :group 'denote-dash)
 
-(defcustom denote-dash-title-source 'filename
+(defcustom denote-dash-title-source 'front-matter
   "How to retrieve the title for the title column.
 `filename' uses the title encoded in the filename (fast).
 `front-matter' reads the title from the file's front matter (accurate but slower)."
@@ -933,9 +933,9 @@ or prompts with completing-read."
     ("ed" "duplicates"         denote-explore-duplicate-notes)]
    ["View"
     ("vv" "note list (dash)"   denote-dash
-     :inapt-if-not-derived denote-dash-mode)
+     :inapt-if-derived denote-dash-mode)
     ("vh" "sequence hierarchy" denote-sequence-view-hierarchy
-     :inapt-if-not-derived denote-sequence-hierarchy-mode)]
+     :inapt-if-derived denote-sequence-hierarchy-mode)]
    ["Columns" :if-derived denote-dash-mode
     ("c" "toggle columns…"     denote-dash-column-transient)]]
   [["Link"
