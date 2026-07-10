@@ -201,14 +201,13 @@
       :prompt "directories =>"
       :category 'file)))
 
-  :config
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep t)
-  (setq projectile-completion-system 'auto)
+  (setq projectile-completion-system 'default)
   (setq projectile-require-project-root nil)
   (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
   (setq projectile-frecency-file (sprite-state-path "projectile-frecency.eld"))
-
+  :config
   (add-hook 'prog-mode-hook #'projectile-mode)
   (add-hook 'text-mode-hook #'projectile-mode)
 
