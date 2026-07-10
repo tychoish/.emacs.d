@@ -119,7 +119,8 @@
     (set-face-attribute 'eglot-highlight-symbol-face nil
 			 :underline nil :weight 'bold))
 
-  (add-hook 'modus-themes-after-load-theme-hook #'tychoish/eglot-highlight-symbol-bold))
+  (add-hook 'modus-themes-after-load-theme-hook #'tychoish/eglot-highlight-symbol-bold)
+  (tychoish/eglot-highlight-symbol-bold))
 
 
 (defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
@@ -434,6 +435,9 @@
 
   (defun tychoish/maybe-capf-dict ()
     (and (boundp 'cape-dict-file) (file-exists-p cape-dict-file) #'cape-dict))
+
+  (defun tychoish/get-available-word-capfs ()
+    (seq-filter #'symbolp (list (tychoish/maybe-capf-dict))))
 
   (defun tychoish/text-mode-capf-setup ()
     "so here is the"
@@ -1352,6 +1356,19 @@ clipboard."
   :commands (denote-dash
 	     denote-dash-dispatch))
 
+(use-package denote-dash-repack
+  :ensure nil
+  :after denote-dash
+  :commands (denote-dash-lint-sequences
+	     denote-dash-fix-sequence-frontmatter
+	     denote-dash-fix-all-sequence-frontmatter
+	     denote-dash-repack-sequence-children
+	     denote-dash-swap-with-parent
+	     denote-dash-swap-with-previous
+	     denote-dash-swap-with-next
+	     denote-dash-reparent-recursive
+	     denote-dash-insert-sequence-note))
+
 (use-package consult-notes
   :ensure t
   :bind (:map tychoish/denote-map
@@ -2132,11 +2149,82 @@ synchronously starting the ispell/aspell subprocess and logging
   (add-to-list 'eglot-stay-out-of 'flymake)
   (add-to-list 'eglot-stay-out-of 'company)
 
+  ;; Decline the `workspace/didChangeWatchedFiles' dynamic-registration
+  ;; capability. Advertising it makes most language servers immediately send
+  ;; a `client/registerCapability' request as part of session startup; the
+  ;; handler for that request calls the generic `project-files' on the
+  ;; server's project. Because `projectile-mode' adds `project-projectile' to
+  ;; `project-find-functions', `project-files' can resolve to Projectile's
+  ;; backend, whose implementation is a full synchronous project file listing
+  ;; (`projectile-project-files', which shells out to git/find). The net
+  ;; effect is that starting an eglot session blocks on a full project index,
+  ;; even though nothing about starting the session should require one.
+  ;; Declining the capability here means servers never ask.
+  (cl-defmethod eglot-client-capabilities :around (_server)
+    (let* ((caps (cl-call-next-method))
+           (workspace (plist-get caps :workspace)))
+      (plist-put workspace :didChangeWatchedFiles
+                 (list :dynamicRegistration :json-false))
+      caps))
+
   (defun tychoish/eglot-before-save-hook ()
     (add-hook 'before-save-hook #'eglot-format-for-hook nil t)
     (add-hook 'before-save-hook #'eglot-code-action-organize-imports nil t))
 
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-before-save-hook)
+
+  (defun tychoish/eglot-prune-dead-servers ()
+    "Remove non-live server structs from `eglot--servers-by-project'.
+`eglot--on-shutdown' can abort partway through its cleanup (for
+instance on a `track-changes' assertion failure), leaving a dead
+`eglot-lsp-server' stuck in `eglot--servers-by-project' forever."
+    (map-do
+     (lambda (project servers)
+       (let ((live (seq-filter (lambda (s) (process-live-p (jsonrpc--process s))) servers)))
+	 (unless (eq (length live) (length servers))
+	   (setf (map-elt eglot--servers-by-project project) live))))
+     eglot--servers-by-project))
+
+  (defun tychoish/eglot-reconnect-orphaned-buffers ()
+    "Reattach buffers whose cached Eglot server is no longer live.
+A buffer left pointing at a dead server otherwise errors on every
+eldoc/xref request until manually reconnected."
+    (seq-do
+     (lambda (buffer)
+       (with-current-buffer buffer
+	 (when (and (bound-and-true-p eglot--managed-mode)
+		    eglot--cached-server
+		    (not (process-live-p (jsonrpc--process eglot--cached-server))))
+	   (setq eglot--cached-server nil)
+	   (ignore-errors (eglot--managed-mode-off))
+	   (when buffer-file-name
+	     (ignore-errors (eglot-ensure))))))
+     (buffer-list)))
+
+  (defun tychoish/eglot-cleanup-stale-connections ()
+    "Prune dead Eglot servers and reconnect any buffers orphaned by them."
+    (interactive)
+    (tychoish/eglot-prune-dead-servers)
+    (tychoish/eglot-reconnect-orphaned-buffers))
+
+  (defun ad:eglot--on-shutdown-cleanup-stale (orig-fn server)
+    "Run stale-connection cleanup even if ORIG-FN's teardown aborts partway.
+`eglot--on-shutdown' can hit a `track-changes' assertion failure
+mid-cleanup, which otherwise leaves the dead SERVER stuck in
+`eglot--servers-by-project' and orphans its buffers."
+    (ignore-errors (funcall orig-fn server))
+    (tychoish/eglot-cleanup-stale-connections))
+
+  (advice-add 'eglot--on-shutdown :around #'ad:eglot--on-shutdown-cleanup-stale)
+
+  (defvar tychoish/eglot-cleanup-stale-connections-timer nil
+    "Idle timer running `tychoish/eglot-cleanup-stale-connections'.")
+
+  (when (timerp tychoish/eglot-cleanup-stale-connections-timer)
+    (cancel-timer tychoish/eglot-cleanup-stale-connections-timer))
+
+  (setq tychoish/eglot-cleanup-stale-connections-timer
+	(run-with-idle-timer 300 t #'tychoish/eglot-cleanup-stale-connections))
 
   (add-to-list 'eglot-server-programs
 	       `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
