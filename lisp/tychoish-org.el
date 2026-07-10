@@ -751,9 +751,22 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 ;; registration helpers
 
 ;;;###autoload
-(cl-defun tychoish-org-add-project-file-capture-templates (&key name (path nil) (key "") (agenda nil))
-  "Defines a set of capture mode templates for adding notes and tasks to a file."
+(defmacro tychoish-org-add-project-file-capture-templates (&rest args)
+  "Register project file capture templates once `org' is loaded.
+Expands to a call to `tychoish-org--add-project-file-capture-templates',
+forwarding ARGS (the same :name/:path/:key/:agenda keywords), wrapped in
+`with-eval-after-load' so the templates take effect the moment `org' loads
+--- including when `org' loads because the user just ran `org-capture' ---
+without needing a manual, ordered setup step from a per-machine user file.
+Also avoids forcing `org' to load during init merely to register templates."
+  `(with-eval-after-load 'org
+     (tychoish-org--add-project-file-capture-templates ,@args)))
 
+(cl-defun tychoish-org--add-project-file-capture-templates (&key name (path nil) (key "") (agenda nil))
+  "Defines a set of capture mode templates for adding notes and tasks to a file.
+Called via the `tychoish-org-add-project-file-capture-templates' macro, which
+defers invocation until `org' is loaded.  Call this directly only from code
+that already runs after `org' is loaded."
   (unless (and (boundp 'org-capture-templates) org-capture-templates)
     (tychoish-org-reset-capture-templates))
 
