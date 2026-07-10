@@ -1311,13 +1311,13 @@ clipboard."
    :prefix "C-c d"
    :prefix-map tychoish/denote-map
    ("n" . denote)
-   ("f" . consult-denote-find)
    ("m" . denote-open-or-create)
+   ("f" . consult-denote-find)
    ("l" . denote-link)
    ("b" . denote-backlinks)
    ("r" . denote-rename-file)
-   ("?" . denote-dash-dispatch)
-   ("v" . denote-dash)
+   ("." . denote-dash-dispatch)
+   ("," . denote-dash)
    ("u" . denote-rename-file-using-front-matter))
   (make-read-extended-command-for-prefix "denote"
     :bind-map tychoish/denote-map

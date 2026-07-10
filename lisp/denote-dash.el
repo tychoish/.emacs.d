@@ -1339,8 +1339,11 @@ or prompts for a file."
     ("ek" "keyword chart"      denote-explore-barchart-keywords)
     ("et" "timeline"           denote-explore-barchart-timeline)
     ("ed" "duplicates"         denote-explore-duplicate-notes)]
-   ["View" :if-not-derived denote-dash-mode
-    ("vv" "note list (dash)"   denote-dash)]]
+   ["View"
+    ("vv" "note list (dash)"   denote-dash
+     :inapt-if-not-derived denote-dash-mode)
+    ("vh" "sequence hierarchy" denote-sequence-view-hierarchy
+     :inapt-if-not-derived denote-sequence-hierarchy-mode)]]
   [["Link"
     ("ll" "insert link"        denote-link)
     ("lp" "link (sequence)"    denote-sequence-link)]
