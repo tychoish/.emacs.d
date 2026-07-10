@@ -364,7 +364,6 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
        (t
         (user-error "Unrecognized URI scheme in List-Unsubscribe: %s" uri))))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; display-buffer configuration

@@ -399,16 +399,6 @@
 ;;
 ;; Completion/Snippets Menus
 
-(use-package capf-wordfreq
-  :load-path "external/"
-  :commands (capf-wordfreq-completion-at-point-function capf-wordfreq--dictionary)
-  :init
-  (defun capf-wordfreq-avalible-p ()
-    (and (fboundp 'capf-wordfreq-completion-at-point-function)
-	 (fboundp 'capf-wordfreq--dictionary)
-	 (file-exists-p (capf-wordfreq--dictionary))))
-  (setq capf-wordfreq-minimal-candidate-length 5))
-
 (use-package cape
   :ensure t
   :bind (:map tychoish/completion-map ;; "C-c ."
@@ -553,20 +543,11 @@
   :config
   (defvar vertico-multiform-categories nil)
   (defvar vertico-multiform-commands nil)
-  (eval-and-compile
-    (defmacro tychoish/vertico-disable-sort-for (command)
-      "Disable sorting in vertico rendering for COMMAND.
-Matched against `this-command', so COMMAND must be a command
-symbol, not a completion category -- use
-`vertico-multiform-categories' directly for the latter.
-Clears `vertico-sort-override-function' too: `vertico--sort-function'
-checks it before `display-sort-function' or `vertico-sort-function',
-so `vertico-prescient-mode' (which sets it globally when
-`vertico-prescient-override-sorting' is non-nil) would otherwise
-keep re-sorting these commands regardless of this setting."
-      `(add-to-list 'vertico-multiform-commands
-		    '(,command (vertico-sort-function . nil)
-			       (vertico-sort-override-function . nil)))))
+  (defmacro tychoish/vertico-disable-sort-for (command)
+    "Disable sorting in vertico rendering for COMMAND, matching against `this-command'"
+    `(add-to-list 'vertico-multiform-commands
+		  '(,command (vertico-sort-function . nil)
+			     (vertico-sort-override-function . nil))))
 
   (tychoish/vertico-disable-sort-for yank)
   (tychoish/vertico-disable-sort-for yank-from-kill-ring)
@@ -1369,7 +1350,8 @@ clipboard."
 (use-package denote-dash
   :ensure nil
   :after transient
-  :commands (denote-dash denote-dash-dispatch))
+  :commands (denote-dash
+	     denote-dash-dispatch))
 
 (use-package consult-notes
   :ensure t
