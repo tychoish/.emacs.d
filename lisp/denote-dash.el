@@ -594,6 +594,50 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
     (setf (alist-get col denote-dash--column-widths) width)
     (denote-dash-refresh)))
 
+;;; Column sort
+
+(defun denote-dash--sortable-column-names ()
+  "Return names of columns in the current `tabulated-list-format' that sort."
+  (thread-last tabulated-list-format
+               (seq-filter (lambda (col) (aref col 2)))
+               (seq-map (lambda (col) (aref col 0)))))
+
+(defun denote-dash-select-sort-column ()
+  "Choose which column to sort the *denote-dash* buffer by."
+  (interactive)
+  (let ((name (completing-read "Sort by column: "
+                               (denote-dash--sortable-column-names) nil t)))
+    (setq tabulated-list-sort-key (cons name nil))
+    (denote-dash-refresh)))
+
+(defun denote-dash-toggle-sort-direction ()
+  "Flip the direction of the active sort in the *denote-dash* buffer."
+  (interactive)
+  (unless tabulated-list-sort-key
+    (user-error "No sort column selected"))
+  (setcdr tabulated-list-sort-key (not (cdr tabulated-list-sort-key)))
+  (denote-dash-refresh))
+
+(defun denote-dash-clear-sort ()
+  "Clear the active sort, restoring the default file order."
+  (interactive)
+  (setq tabulated-list-sort-key nil)
+  (denote-dash-refresh))
+
+(defun denote-dash--sort-description ()
+  "Transient label showing the active sort column and direction."
+  (if tabulated-list-sort-key
+      (format "sort: %s %s" (car tabulated-list-sort-key)
+              (if (cdr tabulated-list-sort-key) "▼" "▲"))
+    "sort: (none)"))
+
+(transient-define-prefix denote-dash-sort-transient ()
+  "Select and modify the active sort column in the *denote-dash* buffer."
+  [:description #'denote-dash--sort-description
+   ("s" "select column"    denote-dash-select-sort-column)
+   ("d" "toggle direction" denote-dash-toggle-sort-direction)
+   ("x" "clear"            denote-dash-clear-sort)])
+
 (defun denote-dash--front-matter-description ()
   "Transient label showing current title source."
   (if (eq denote-dash-title-source 'front-matter)
@@ -619,7 +663,8 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
     ("m" "modified"  denote-dash-toggle-modified-column)
     ("i" "id"        denote-dash-toggle-id-column)
     ("d" "directory" denote-dash-toggle-directory-column)
-    ("g" "git"       denote-dash-toggle-git-column)]
+    ("g" "git"       denote-dash-toggle-git-column)
+    ("o" "sort…"     denote-dash-sort-transient)]
    ["Display"
     ("r" denote-dash-toggle-front-matter-titles)
     ("w" "set column width" denote-dash-set-column-width)]])
@@ -865,6 +910,34 @@ In `denote-dash-mode', operates on the note at point; otherwise on `buffer-file-
               mismatches)
       (message "Fixed %d/%d note%s%s."
                fixed n (if (= fixed 1) "" "s")
+               (if (> errors 0) (format " (%d errors)" errors) "")))
+    (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh))))
+
+(defun denote-dash-rename-all-files-using-front-matter ()
+  "Rename every Denote note's filename to match its front matter.
+Inverse of `denote-dash-fix-all-sequence-frontmatter': that command makes
+frontmatter match the filename, this makes the filename match frontmatter,
+for every note, via `denote-rename-file-using-front-matter'."
+  (interactive)
+  (let* ((files (denote-directory-files))
+         (n (length files)))
+    (unless (yes-or-no-p (format "Rename %d note%s from front matter? "
+                                 n (if (= n 1) "" "s")))
+      (user-error "Cancelled"))
+    (let ((renamed 0) (errors 0)
+          (denote-rename-confirmations nil))
+      (seq-do (lambda (file)
+                (condition-case err
+                    (progn (denote-rename-file-using-front-matter file)
+                           (setq renamed (1+ renamed)))
+                  (error
+                   (setq errors (1+ errors))
+                   (message "Skipped %s: %s"
+                            (file-name-nondirectory file)
+                            (error-message-string err)))))
+              files)
+      (message "Renamed %d/%d note%s%s."
+               renamed n (if (= renamed 1) "" "s")
                (if (> errors 0) (format " (%d errors)" errors) "")))
     (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh))))
 
@@ -1310,7 +1383,7 @@ or prompts for a file."
 ;;   r* = rename (rr, rf, rp)
 ;;   e* = explore (er, em, ek, et, ed)
 ;;   i* = import (id)
-;;   a* = align (al=lint, af=fix all)
+;;   a* = sequence (al=lint, af=fix all)
 ;;   o* = org commands (ox, or, ol, ob, od, op, of)
 ;;   c* = convert (cm, cd)
 ;;   n, j = bare single-key create commands
@@ -1343,7 +1416,9 @@ or prompts for a file."
     ("vv" "note list (dash)"   denote-dash
      :inapt-if-not-derived denote-dash-mode)
     ("vh" "sequence hierarchy" denote-sequence-view-hierarchy
-     :inapt-if-not-derived denote-sequence-hierarchy-mode)]]
+     :inapt-if-not-derived denote-sequence-hierarchy-mode)]
+   ["Columns" :if-derived denote-dash-mode
+    ("c" "toggle columns…"     denote-dash-column-transient)]]
   [["Link"
     ("ll" "insert link"        denote-link)
     ("lp" "link (sequence)"    denote-sequence-link)]
@@ -1352,21 +1427,20 @@ or prompts for a file."
     ("rf" "rename from fm"     denote-rename-file-using-front-matter)
     ("rt" "retag (keywords)"   denote-rename-file-keywords)
     ("rp" "reparent seq"       denote-sequence-reparent)
-    ("rR" "reparent recursive" denote-dash-reparent-recursive)]
+    ("rs" "reparent recursive" denote-dash-reparent-recursive)]
    ["Review"
     ("vd" "set review date"    denote-review-set-date)
     ("vl" "review list"        denote-review-display-list)]
-   ["Align"
+   ["Sequence"
     ("al" "lint sequences"     denote-dash-lint-sequences)
     ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)
+    ("au" "update all from fm" denote-dash-rename-all-files-using-front-matter)
     ("ar" "repack children"    denote-dash-repack-sequence-children)
     ("as" "swap with parent"   denote-dash-swap-with-parent)
     ("ap" "swap with previous" denote-dash-swap-with-previous)
     ("an" "swap with next"     denote-dash-swap-with-next)]
    ["Import"
     ("id" "from org datetree"  denote-dash-import-from-datetree)]]
-  [["Columns" :if-derived denote-dash-mode
-    ("c" "toggle columns…"     denote-dash-column-transient)]]
   [["Org" :if-derived org-mode
     ("ox" "extract subtree"    denote-org-extract-org-subtree)
     ("or" "extract + link"     org-migrate-subtree-to-denote)

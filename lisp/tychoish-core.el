@@ -2445,12 +2445,12 @@ Useful after changing `eglot-workspace-configuration' or
    ("t" . agent-shell-toggle)
    ("b" . agent-shell-switch-buffer)
    ("n" . agent-shell-new-shell)
-   ("T" . agent-shell-new-temp-shell)
-   ("W" . agent-shell-new-worktree-shell)
-   ("V" . tychoish/agent-shell-toggle-terse-output))
+   ("e" . agent-shell-new-temp-shell)
+   ("w" . agent-shell-new-worktree-shell)
+   ("v" . tychoish/agent-shell-toggle-terse-output))
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
-    :bind-key "m")
+    :bind-key "x")
   (which-key-customize nil
     :form (push '((nil . "^agent-shell-") . (nil . ""))
                 which-key-replacement-alist))
@@ -2604,7 +2604,8 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-c j" . tychoish/robot-agent-shell-map)
    :map tychoish/robot-agent-shell-map
    ("q" . agent-shell-queue-buffer-open)
-   ("/" . agent-shell-queue-capture))
+   ("/" . agent-shell-queue-capture)
+   ("m" . agent-shell-menu-dispatch))
 
   (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key "p" agent-shell-menu-resolve-permission)
