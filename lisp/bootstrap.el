@@ -663,6 +663,7 @@ or `describe-symbol' as fallback."
     (delight 'sh-mode "sh" 'sh-script)
     (delight 'org-mode "org" 'org-mode)
     (delight 'org-agenda-mode "agenda" 'org-agenda)
+    (delight 'rst-mode "rst" 'rst-mode)
 
     (delight 'projectile-mode nil 'projectile)
     (delight 'flycheck-mode " fc" 'flycheck)
@@ -1551,6 +1552,28 @@ interactively then remove duplicate items from the `kill-ring'."
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
 
+
+(with-eval-after-load 'rst
+  (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
+
+  (bind-keys
+   :map rst-mode-map
+   ("C-c C-t h" . rst-adjust))
+
+  (defun tychoish/set-up-rst-mode ()
+    (turn-on-auto-fill)
+    (setq-local fill-column 78)
+    (setq-local rst-level-face-max 0)
+    (set-face-background 'rst-level-1 nil)
+    (set-face-background 'rst-level-2 nil)
+    (set-face-background 'rst-level-3 nil)
+    (set-face-background 'rst-level-4 nil)
+    (set-face-background 'rst-level-5 nil)
+    (set-face-background 'rst-level-6 nil)
+    (local-unset-key (kbd "C-c C-s")))
+
+  (add-hook 'rst-mode-hook 'tychoish/set-up-rst-mode))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
@@ -1748,6 +1771,7 @@ BODY is skipped."
 (add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.conf\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
+(add-to-list 'auto-mode-alist '("\\.rst\\'" . rst-mode))
 
 (add-to-list 'auto-mode-alist '("\\.zsh\\'" . sh-mode))
 (add-to-list 'auto-mode-alist '("\\.zshrc\\'" . sh-mode))

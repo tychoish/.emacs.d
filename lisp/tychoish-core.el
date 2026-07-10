@@ -1600,27 +1600,6 @@ clipboard."
   :ensure t
   :mode ("\\.script" "\\.sp"))
 
-(use-package rst
-  :delight (rst-mode "rst")
-  :mode ("\\.rst" . rst-mode)
-  :bind (:map rst-mode-map
-	      ("C-c C-t h" . rst-adjust))
-  :init
-  (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
-  (defun tychoish/set-up-rst-mode ()
-    (turn-on-auto-fill)
-    (setq-local fill-column 78)
-    (setq-local rst-level-face-max 0)
-    (set-face-background 'rst-level-1 nil)
-    (set-face-background 'rst-level-2 nil)
-    (set-face-background 'rst-level-3 nil)
-    (set-face-background 'rst-level-4 nil)
-    (set-face-background 'rst-level-5 nil)
-    (set-face-background 'rst-level-6 nil)
-    (define-key rst-mode-map (kbd "C-c C-t h") 'rst-adjust)
-    (local-unset-key (kbd "C-c C-s")))
-  (add-hook 'rst-mode-hook 'tychoish/set-up-rst-mode))
-
 (use-package flyspell
   :ensure t
   :defer t
