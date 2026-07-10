@@ -595,23 +595,46 @@ is not present in FROM-VAR."
                    (_ (not (string-empty-p (string-trim s)))))
          (concat s " ")))
 
+(defun hud-modeline--raise-backtrace ()
+  "Display the *Backtrace* buffer if one is currently active."
+  (interactive)
+  (if-let* ((buf (get-buffer "*Backtrace*")))
+      (pop-to-buffer buf)
+    (message "No *Backtrace* buffer is currently active")))
+
+(defun hud-modeline--debug-flag-icon (icon-name fallback face help-echo)
+  "Return a propertized mode-line indicator for an active debug flag.
+ICON-NAME is a nerd-icons codicon name, FALLBACK the plain-text substitute
+when icons are disabled, FACE the icon/text face, and HELP-ECHO the
+tooltip text.  Clicking with mouse-1 raises the *Backtrace* buffer via
+`hud-modeline--raise-backtrace'."
+  (let ((icon (if (and hud-modeline-icons (fboundp 'nerd-icons-codicon))
+                  (nerd-icons-codicon icon-name :face face)
+                (propertize fallback 'face face))))
+    (propertize icon
+                'local-map (let ((map (make-sparse-keymap)))
+                            (define-key map [mode-line mouse-1] #'hud-modeline--raise-backtrace)
+                            map)
+                'mouse-face 'mode-line-highlight
+                'help-echo help-echo)))
+
 (hud-modeline-add-segment
  :segment-block 'hud-modeline-right-segments
  :key 'debug
  :name "Debug"
- :description "Active when debug-on-error is set"
+ :description "Active when debug-on-error or debug-on-quit is set"
  :place-before 'misc
- :body (when debug-on-error
-         (let ((icon (if (and hud-modeline-icons (fboundp 'nerd-icons-codicon))
-                         (nerd-icons-codicon "nf-cod-bug" :face 'hud-modeline-error)
-                       (propertize "bug" 'face 'hud-modeline-error))))
-           (concat (propertize icon
-                               'local-map (let ((map (make-sparse-keymap)))
-					    (define-key map [mode-line mouse-1] #'toggle-debug-on-error)
-					    map)
-                               'mouse-face 'mode-line-highlight
-                               'help-echo "debug-on-error active\nmouse-1: toggle")
-                   " "))))
+ :body (when-let* ((parts (delq nil
+                                (list
+                                 (when debug-on-error
+                                   (hud-modeline--debug-flag-icon
+                                    "nf-cod-bug" "bug" 'hud-modeline-error
+                                    "debug-on-error active\nmouse-1: raise *Backtrace*"))
+                                 (when debug-on-quit
+                                   (hud-modeline--debug-flag-icon
+                                    "nf-cod-debug_pause" "quit" 'hud-modeline-warning
+                                    "debug-on-quit active\nmouse-1: raise *Backtrace*"))))))
+         (concat (string-join parts " ") " ")))
 
 ;; Default actions for built-in segments.
 (hud-modeline-set-segment-action 'instance #'sprite-list-menu)
