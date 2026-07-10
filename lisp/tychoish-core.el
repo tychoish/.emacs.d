@@ -2153,6 +2153,7 @@ synchronously starting the ispell/aspell subprocess and logging
 
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
   :config
+  (autoload 'eglot-test-at-point "eglot-test-at-point")
 
   (bind-keys
    :map eglot-mode-map
@@ -2166,6 +2167,7 @@ synchronously starting the ispell/aspell subprocess and logging
    ("o" . eglot-code-action-organize-imports)
    ("q" . eglot-code-action-quickfix)
    ("w" . eglot-code-action-rewrite)
+   ("t" . eglot-test-at-point)
    ("u" . eglot-update-workspace))
 
   (make-read-extended-command-for-prefix "eglot"
@@ -2238,14 +2240,6 @@ Useful after changing `eglot-workspace-configuration' or
   (setq flycheck-eglot-enable-diagnostic-tags nil)
   (flycheck-add-next-checker 'eglot-check 'go-gofmt))
 
-(use-package eglot-test-at-point
-  :after (eglot)
-  :bind (:map eglot-mode-map)
-  :commands (eglot-test-at-point)
-  :init
-  (bind-keys
-   :map tychoish/eglot-map
-   ("t" . eglot-test-at-point)))
 
 (use-package treesit
   :defer t
