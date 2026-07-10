@@ -373,5 +373,55 @@ an unhandled error through the mode-line :eval form, silencing the entire modeli
       (hud-modeline--icon-segment)
       (should (eq 'none hud-modeline--icon-cache)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; hud-modeline--debug-segment
+
+(ert-deftest hud-modeline--debug-segment-nil-when-both-off ()
+  "No indicator is shown when neither debug flag is set."
+  (let ((debug-on-error nil) (debug-on-quit nil))
+    (should (null (hud-modeline--debug-segment)))))
+
+(ert-deftest hud-modeline--debug-segment-shows-error-icon ()
+  "An indicator appears when only `debug-on-error' is set."
+  (let ((debug-on-error t) (debug-on-quit nil))
+    (should (hud-modeline--debug-segment))))
+
+(ert-deftest hud-modeline--debug-segment-shows-quit-icon ()
+  "An indicator appears when only `debug-on-quit' is set."
+  (let ((debug-on-error nil) (debug-on-quit t))
+    (should (hud-modeline--debug-segment))))
+
+(ert-deftest hud-modeline--debug-segment-shows-both-icons ()
+  "Both flags set produce a longer indicator than either alone.
+Regression: `debug-on-quit' previously had no companion indicator at all."
+  (let ((error-only (let ((debug-on-error t) (debug-on-quit nil))
+                      (length (hud-modeline--debug-segment))))
+        (both (let ((debug-on-error t) (debug-on-quit t))
+               (length (hud-modeline--debug-segment)))))
+    (should (> both error-only))))
+
+(ert-deftest hud-modeline--debug-flag-icon-binds-raise-backtrace ()
+  "Clicking either flag's icon is bound to `hud-modeline--raise-backtrace',
+not a flag-toggling command."
+  (let* ((icon (hud-modeline--debug-flag-icon "nf-cod-bug" "bug" 'hud-modeline-error "help"))
+         (map (get-text-property 0 'local-map icon)))
+    (should (eq 'hud-modeline--raise-backtrace
+                (lookup-key map [mode-line mouse-1])))))
+
+(ert-deftest hud-modeline--raise-backtrace-no-buffer-message ()
+  "With no *Backtrace* buffer, a message is shown instead of an error."
+  (should-not (get-buffer "*Backtrace*"))
+  (should (equal "No *Backtrace* buffer is currently active"
+                 (hud-modeline--raise-backtrace))))
+
+(ert-deftest hud-modeline--raise-backtrace-pops-existing-buffer ()
+  "With a *Backtrace* buffer present, it is displayed."
+  (let ((buf (get-buffer-create "*Backtrace*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'pop-to-buffer)
+                   (lambda (b) b)))
+          (should (eq buf (hud-modeline--raise-backtrace))))
+      (kill-buffer buf))))
+
 (provide 'test-hud-modeline)
 ;;; test-hud-modeline.el ends here
