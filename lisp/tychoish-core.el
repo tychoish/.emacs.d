@@ -638,43 +638,6 @@ keep re-sorting these commands regardless of this setting."
 		 nil
 		 (window-parameters (mode-line-format . none)))))
 
-;; Mark mu4e buffers as frame-sticky when first displayed
-
-;; display-buffer: mu4e buffers prefer the frame they were first shown on
-(defun tychoish--mu4e-buffer-p (buf _action)
-  "Return non-nil if BUF uses a mu4e major mode."
-  (with-current-buffer buf
-    (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
-                    'mu4e-view-mode 'mu4e-compose-mode)))
-
-(add-to-list 'display-buffer-alist
-             '(tychoish--mu4e-buffer-p
-               (display-buffer-reuse-window)
-               (reusable-frames . t)))
-
-;; display-buffer: reference (read-only file) buffers reuse an existing
-;; read-only window rather than displacing a writable project-file window
-(defun tychoish--readonly-file-buffer-p (buf _action)
-  "Return non-nil if BUF is a read-only file-visiting buffer."
-  (with-current-buffer buf
-    (and buffer-read-only (buffer-file-name))))
-
-(defun tychoish--reuse-readonly-file-window (buffer _alist)
-  "Action: display BUFFER in an existing read-only file window if one exists."
-  (when-let* ((win (seq-find
-                    (lambda (w)
-                      (and (not (eq w (selected-window)))
-                           (with-current-buffer (window-buffer w)
-                             (and buffer-read-only (buffer-file-name)))))
-                    (window-list nil 'nomini))))
-    (set-window-buffer win buffer)
-    win))
-
-(add-to-list 'display-buffer-alist
-             '(tychoish--readonly-file-buffer-p
-               (tychoish--reuse-readonly-file-window
-                display-buffer-use-some-window)))
-
 (use-package corfu
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
