@@ -508,6 +508,42 @@ FILE is selected from `org-agenda-files' with completion."
                      (org-agenda-files))))
     (org-agenda nil "a")))
 
+(defun tychoish-org-denote-files ()
+  "Return every .org file across all directories in `denote-directories'.
+Computed fresh on each call so newly added or renamed notes, and any
+change to `denote-directory', are always picked up — do not cache the
+result."
+  (thread-last (denote-directories)
+               (seq-mapcat (lambda (dir) (directory-files-recursively dir "\\.org\\'")))))
+
+(defconst tychoish-org-denote-agenda-category-width 16
+  "Max width, in characters, of `tychoish-org-denote-agenda-category'.")
+
+(defun tychoish-org-denote-agenda-category ()
+  "Short category label for the denote agenda: sequence + title, or title alone.
+Denote filenames encode the identifier, signature, and keywords and are
+much too long for the agenda's category column. When the file has a
+Folgezettel sequence (its `denote-sequence' signature, e.g. \"3d2b\"),
+show that plus as much of the #+TITLE as fits; otherwise show the title
+alone. Falls back to the bare file name (no directory or extension) when
+a file has no title. Always truncated to
+`tychoish-org-denote-agenda-category-width' characters."
+  (let* ((file (buffer-file-name))
+         (seq (and file (denote-retrieve-filename-signature file)))
+         (title (or (org-get-title) (file-name-base file)))
+         (label (if seq (format "%s %s" seq title) title)))
+    (truncate-string-to-width
+     label tychoish-org-denote-agenda-category-width nil nil "…")))
+
+;;;###autoload
+(defun tychoish-org-agenda-denote-todos ()
+  "Show all TODO-keyword items across every org file in the denote tree.
+Convenience entry point for the \"D\" custom agenda command, which scans
+`tychoish-org-denote-files' (recursively, including denote/journal/ and
+any other subdirectories) rather than the usual `org-agenda-files'."
+  (interactive)
+  (org-agenda nil "D"))
+
 (defconst tychoish-org-agenda-builtin-views
   '(("a" "Agenda (week/day)")
     ("t" "All TODOs")
@@ -568,6 +604,12 @@ etc.)."
   (setq org-agenda-custom-commands
         '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
            ((org-agenda-skip-function-global nil)))
+          ("D" "Denote TODOs" todo ""
+           ((org-agenda-files (tychoish-org-denote-files))
+            (org-agenda-skip-function-global nil)
+            (org-agenda-overriding-header "TODO items across the denote tree")
+            (org-agenda-prefix-format
+             '((todo . " %i %-16(tychoish-org-denote-agenda-category) ")))))
           ("u" "Untagged TODOs (local)" todo ""
            ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
             (org-agenda-overriding-header "TODOs with no local tags")))
