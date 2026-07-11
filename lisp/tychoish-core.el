@@ -111,16 +111,7 @@
   (setq modus-themes-common-palette-overrides
 	'((border-mode-line-active bg-mode-line-active)
 	  (border-mode-line-inactive bg-mode-line-inactive)
-	  (message-separator bg-main)))
-
-  (declare-function tychoish/eglot-highlight-symbol-bold "tychoish-core")
-  (defun tychoish/eglot-highlight-symbol-bold ()
-    "Render eglot's symbol-at-point highlight as bold instead of underlined."
-    (set-face-attribute 'eglot-highlight-symbol-face nil
-			 :underline nil :weight 'bold))
-
-  (add-hook 'modus-themes-after-load-theme-hook #'tychoish/eglot-highlight-symbol-bold)
-  (tychoish/eglot-highlight-symbol-bold))
+	  (message-separator bg-main))))
 
 
 (defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
@@ -2115,7 +2106,6 @@ synchronously starting the ispell/aspell subprocess and logging
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
   :config
   (autoload 'eglot-test-at-point "eglot-test-at-point")
-
   (bind-keys
    :map eglot-mode-map
    :prefix "C-c l"
@@ -2148,6 +2138,7 @@ synchronously starting the ispell/aspell subprocess and logging
   (setq eglot-report-progress nil)
   (add-to-list 'eglot-stay-out-of 'flymake)
   (add-to-list 'eglot-stay-out-of 'company)
+  (set-face-attribute 'eglot-highlight-symbol-face nil :underline nil :weight 'bold)
 
   ;; Decline the `workspace/didChangeWatchedFiles' dynamic-registration
   ;; capability. Advertising it makes most language servers immediately send
