@@ -121,7 +121,7 @@
    :prefix "C-c o"
    :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
    ("s" . org-agenda)
-   ("a" . consult-org-agenda)
+   ("a" . tychoish-org-agenda-view)
    ("u" . tychoish-org-agenda-untagged-in-file)
    ("h" . consult-org-heading)
    ("k" . org-capture)
@@ -205,7 +205,7 @@
 (bind-keys
  :prefix "C-c o"
  :prefix-map tychoish/global-org-map
- ("a" . consult-org-agenda)
+ ("a" . tychoish-org-agenda-view)
  ("c" . consult-org-capture)
  ("4" . org-agenda)
  ("k" . org-capture)
@@ -549,10 +549,10 @@ any other subdirectories) rather than the usual `org-agenda-files'."
     ("t" "All TODOs")
     ("m" "Match tags / props / todo")
     ("s" "Search keywords"))
-  "Standard org-agenda built-in views included in `consult-org-agenda'.")
+  "Standard org-agenda built-in views included in `tychoish-org-agenda-view'.")
 
 ;;;###autoload
-(defun consult-org-agenda ()
+(defun tychoish-org-agenda-view ()
   "Select an org-agenda view via annotated completing read.
 Includes both the standard built-in views and any entries in
 `org-agenda-custom-commands'.  Each candidate is annotated with its
