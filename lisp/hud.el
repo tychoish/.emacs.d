@@ -205,73 +205,6 @@ Entries whose :if predicate returns nil are excluded."
 (hud-reset-command-table)
 
 (hud-register-command
- :category 'agent-shell
- :command #'agent-shell-new-shell
- :description "new agent shell"
- :transient-key "an")
-
-(hud-register-command
- :category 'agent-shell
- :command #'agent-shell-menu-new-shell-in-dir
- :description "new agent shell (dir)"
- :transient-key "ad")
-
-(hud-register-command
- :category 'agent-shell
- :command #'agent-shell-switch-buffer
- :transient-key "ab"
- :description "switch agent shell buffer")
-
-(hud-register-command
- :category 'agent-shell
- :command #'agent-shell-queue-buffer-open
- :description "open queue"
- :transient-key "aq")
-
-(hud-register-command
- :category 'org-mode
- :command #'consult-org-capture
- :description "org-capture with template"
- :transient-key "oc")
-
-(hud-register-command
- :category 'org-mode
- :command #'org-agenda
- :description "org-agenda view dispatch"
- :transient-key "oa")
-
-(hud-register-command
- :category 'org-mode
- :command #'tychoish-org-jump-to-heading
- :description "jump to org heading"
- :transient-key "oh")
-
-(hud-register-command
- :category 'mu4e
- :command #'mu4e-compose-mail
- :description "compose new email"
- :transient-key "mc")
-
-(hud-register-command
- :category 'mu4e
- :command #'mu4e
- :description "open mu4e dashboard"
- :transient-key "mm")
-
-(hud-register-command
- :category 'mu4e
- :description "select mu4e bookmark"
- :command #'consult-mu-bookmark
- :transient-key "mb")
-
-(hud-register-command
- :category 'mu4e
- :command #'tychoish-mail-select-account
- :display-name "mail-select-account"
- :description "select mail account"
- :transient-key "ma")
-
-(hud-register-command
  :category 'denote
  :command #'denote-dash
  :description "denote list"
@@ -301,32 +234,98 @@ Entries whose :if predicate returns nil are excluded."
  :description "denote sequence hierarchy"
  :transient-key "ds")
 
-;;;; Command registrations — Row 2
-
 (hud-register-command
- :row 2
  :command #'magit-dash-open
  :description "repo dashboard"
  :transient-key "rd")
 
 (hud-register-command
- :row 2
  :category 'magit-dash
  :command #'magit-dash-open-repo
  :description "magit open repo"
  :transient-key "rr")
 
 (hud-register-command
- :row 2
  :command #'magit-dash-sync-all
  :description "sync all dashboard repos"
  :transient-key "rs")
 
 (hud-register-command
- :row 2
  :command #'magit-dash-sync-repo
  :description "sync one dashboard repo"
  :transient-key "ru")
+
+(hud-register-command
+ :category 'agent-shell
+ :command #'agent-shell-new-shell
+ :description "new agent shell"
+ :transient-key "an")
+
+(hud-register-command
+ :category 'agent-shell
+ :command #'agent-shell-menu-new-shell-in-dir
+ :description "new agent shell (dir)"
+ :transient-key "ad")
+
+(hud-register-command
+ :category 'agent-shell
+ :command #'agent-shell-switch-buffer
+ :transient-key "ab"
+ :description "switch agent shell buffer")
+
+(hud-register-command
+ :category 'agent-shell
+ :command #'agent-shell-queue-buffer-open
+ :description "open queue"
+ :transient-key "aq")
+
+(hud-register-command
+ :category 'mu4e
+ :command #'mu4e-compose-mail
+ :description "compose new email"
+ :transient-key "mc")
+
+(hud-register-command
+ :category 'mu4e
+ :command #'mu4e
+ :description "open mu4e dashboard"
+ :transient-key "mm")
+
+(hud-register-command
+ :category 'mu4e
+ :description "select mu4e bookmark"
+ :command #'consult-mu-bookmark
+ :transient-key "mb")
+
+(hud-register-command
+ :category 'mu4e
+ :command #'tychoish-mail-select-account
+ :display-name "mail-select-account"
+ :description "select mail account"
+ :transient-key "ma")
+
+;;;; Command registrations — Row 2
+
+(hud-register-command
+ :row 2
+ :category 'org-mode
+ :command #'consult-org-capture
+ :description "org-capture with template"
+ :transient-key "oc")
+
+(hud-register-command
+ :row 2
+ :category 'org-mode
+ :command #'org-agenda
+ :description "org-agenda view dispatch"
+ :transient-key "oa")
+
+(hud-register-command
+ :row 2
+ :category 'org-mode
+ :command #'tychoish-org-jump-to-heading
+ :description "jump to org heading"
+ :transient-key "oh")
 
 (hud-register-command
  :row 2
