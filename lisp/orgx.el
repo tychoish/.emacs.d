@@ -1,11 +1,76 @@
-;;  -*- lexical-binding: t -*-
+;;; orgx.el --- personal org-mode configuration and extensions -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Personal org-mode setup, split into two sections:
+;;
+;;   1. Configuration: package declarations, `setq' settings, hooks, and
+;;      keybindings (both in upstream maps like `org-mode-map' and in the
+;;      `orgx-' prefix maps defined here).
+;;   2. Functionality: the commands, helpers, and capture-template machinery
+;;      implemented for this configuration.
+;;
+;; Section 1 refers to symbols defined in section 2; forward `declare-function'
+;; declarations near the top keep the byte-compiler quiet.
+
+;;; Code:
 
 (eval-when-compile
   (require 'subr-x)
   (require 'xtdlib))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Section 1: Configuration and keybindings
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Autoloads and forward declarations
+
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")
+(autoload 'org-store-link "ol")
+(autoload 'org-insert-link "ol")
+(autoload 'org-annotate-file "org-annotate-file")
+(autoload 'toc-org-insert-toc "toc-org")
+(autoload 'org-gist-export-to-gist "ox-gist")
+(autoload 'org-rst-export-to-rst "ox-rst")
+(autoload 'org-rst-export-as-rst "ox-rst")
+(autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
+(autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
+(autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
+(autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
+(autoload 'org-leanpub-markdown-export-to-markdown "ox-leanpub-markdown")
+(autoload 'org-leanpub-markdown-export-as-markdown "ox-leanpub-markdown")
+(autoload 'annotated-completing-read "annotated-completing-read")
+
+(declare-function annotated-completing-read "annotated-completing-read")
+(declare-function orgx--use-speed-commands "orgx")
+(declare-function orgx--install-auxiliary-packages "orgx")
+(declare-function orgx--setup-standard-capture-templates "orgx")
+(declare-function orgx-agenda-files-open "orgx")
+(declare-function org-gist-export-private-gist "orgx")
+(declare-function org-gist-export-public-gist "orgx")
+(declare-function ad:org-agenda--open-files "orgx")
+(declare-function denote-org-capture "denote")
+(declare-function denote-last-path "denote")
+(declare-function denote-org-extract-org-subtree "denote-org")
+(declare-function denote-format-link "denote")
+(declare-function denote-directory-files "denote")
+(declare-function denote-directories "denote")
+(declare-function denote-retrieve-filename-signature "denote")
+(declare-function org-agenda-goto "org-agenda")
+(declare-function denote-journal-capture-entry-for-date "denote-journal-capture")
+(declare-function denote-journal-capture-entry-today "denote-journal-capture")
+(declare-function agent-shell-queue-capture-from-context "agent-shell-queue")
+(declare-function agent-shell-queue-org-refile-from-heading "agent-shell-queue-org")
+
+;; Declared special so the `let'-binding in `orgx-mark-done-and-archive'
+;; takes effect dynamically and the byte compiler doesn't warn about an unused
+;; lexical variable.
+(defvar org-archive-sibling-heading)
+(defvar org-capture-templates nil)
+
+;; Supporting export/format packages.
 
 (use-package org-contrib
   :ensure t
@@ -27,15 +92,14 @@
   :ensure t
   :defer t)
 
-(defconst tychoish/org-date-spec-datetime "<%Y-%02m-%02d %02H:%02M:%02S %Z>")
-(defconst tychoish/org-date-spec-date "<%Y-%02m-%02d>")
+;; org-mode configuration, hooks, and keybindings.
 
 (with-eval-after-load 'org
   (add-hook 'org-mode-hook 'turn-on-soft-wrap) ;; from 'tychoish-common
-  (add-hook 'org-agenda-mode-hook 'tychoish/background-revbufs-for-hook)
-  (add-hook 'org-mode-hook 'tychoish/set-up-buffer-org-mode)
+  (add-hook 'org-agenda-mode-hook 'orgx--background-revbufs)
+  (add-hook 'org-mode-hook 'orgx--set-up-buffer)
 
-  (add-hook 'org-ctrl-c-ctrl-c-hook 'org-set-weekday-of-timestamp)
+  (add-hook 'org-ctrl-c-ctrl-c-hook 'orgx-set-weekday-of-timestamp)
   (add-hook 'org-shiftup-final-hook 'windmove-up)
   (add-hook 'org-shiftleft-final-hook 'windmove-left)
   (add-hook 'org-shiftdown-final-hook 'windmove-down)
@@ -101,14 +165,14 @@
   ;; org-keys.el
   (setq org-replace-disputed-keys t)
   (setq org-return-follows-link t)
-  (setq org-use-speed-commands #'tychoish/org-use-speed-commands)
+  (setq org-use-speed-commands #'orgx--use-speed-commands)
 
   (seq-do (lambda (sym)
             (when (boundp sym)
               (set sym (make-sparse-keymap))))
-          '(tychoish/org-mode-personal-map
-            tychoish/org-mode-capture-map
-            tychoish/org-mode-personal-archive-map))
+          '(orgx-personal-map
+            orgx-capture-map
+            orgx-personal-archive-map))
 
   (bind-keys
    :map org-mode-map
@@ -119,25 +183,25 @@
    ("C-c C-w" . whitespace-cleanup)
    :map org-mode-map
    :prefix "C-c o"
-   :prefix-map tychoish/org-mode-personal-map ;; "C-c o"
+   :prefix-map orgx-personal-map ;; "C-c o"
    ("s" . org-agenda)
-   ("a" . tychoish-org-agenda-view)
-   ("u" . tychoish-org-agenda-untagged-in-file)
+   ("a" . orgx-agenda-view)
+   ("u" . orgx-agenda-untagged-in-file)
    ("h" . consult-org-heading)
    ("k" . org-capture)
-   ("f" . org-agenda-files-open)
+   ("f" . orgx-agenda-files-open)
    ("t" . org-set-tags-command)
    ("n" . org-narrow-to-subtree)
    ("W" . widen)
    ("p" . org-insert-property-drawer)
    ("w" . org-refile)
-   ("d" . tychoish-org-date-now)
+   ("d" . orgx-date-now)
    ("C-s" . org-save-all-org-buffers)
    ;; ("i" . org-ctags-create-tags)
-   ;; ("g" . tychoish/org-gist-map)
-   :map tychoish/org-mode-personal-map
+   ;; ("g" . orgx-gist-map)
+   :map orgx-personal-map
    :prefix "c"
-   :prefix-map tychoish/org-mode-capture-map
+   :prefix-map orgx-capture-map
    ("c" . consult-org-capture)
    ("m" . org-capture)
    ("p" . org-capture-goto-last-stored)
@@ -145,107 +209,196 @@
    ("t" . org-capture-goto-target)
    ("r" . org-capture-refile)
    ("w" . org-capture-refile)
-   :map tychoish/org-mode-personal-map
+   :map orgx-personal-map
    :prefix "f"
-   :prefix-map tychoish/org-mode-personal-archive-map
-   ("d" . tychoish-org-mark-done-and-archive)
+   :prefix-map orgx-personal-archive-map
+   ("d" . orgx-mark-done-and-archive)
    ("e" . org-cycle-force-archived)
    ("t" . org-archive-set-tag)
    ("s" . org-archive-to-archive-sibling)
-   ("a" . org-archive-done-tasks-to-archive-sibling)
-   ("f" . org-archive-done-tasks-to-archive-file)))
-
-(autoload 'org-store-link "ol")
-(autoload 'org-insert-link "ol")
-(autoload 'org-annotate-file "org-annotate-file")
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; org-mode extensions and supporting packages
-
-(autoload 'toc-org-insert-toc "toc-org")
-(autoload 'org-gist-export-to-gist "ox-gist")
-(autoload 'org-rst-export-to-rst "ox-rst")
-(autoload 'org-rst-export-as-rst "ox-rst")
-(autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
-
-(autoload 'annotated-completing-read "annotated-completing-read")
-
-;; Declared special so the `let'-binding in `tychoish-org-mark-done-and-archive'
-;; takes effect dynamically and the byte compiler doesn't warn about an unused
-;; lexical variable.
-(defvar org-archive-sibling-heading)
-
-(setq org-archive-default-command #'org-archive-to-archive-sibling)
-
-(autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
-(autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
-(autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
-(autoload 'org-leanpub-markdown-export-to-markdown "ox-leanpub-markdown")
-(autoload 'org-leanpub-markdown-export-as-markdown "ox-leanpub-markdown")
-
-(defvar tychoish-org--auxiliary-packages
-  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
-  "Supporting org packages that should be installed when org-mode loads the first time.")
-
-(defun tychoish-org--install-auxiliary-packages ()
-  "Install all of the auxiliary packages."
-  (thread-last tychoish-org--auxiliary-packages
-	       (seq-remove #'package-installed-p)
-	       (mapcar #'package-install-async)
-	       (length)))
+   ("a" . orgx-archive-done-tasks-to-archive-sibling)
+   ("f" . orgx-archive-done-tasks-to-archive-file)))
 
 (with-eval-after-load 'ox-rst
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; key bindings
+;; Global org keybindings.
 
 (bind-keys
  :prefix "C-c o"
- :prefix-map tychoish/global-org-map
- ("a" . tychoish-org-agenda-view)
+ :prefix-map orgx-global-map
+ ("a" . orgx-agenda-view)
  ("c" . consult-org-capture)
  ("4" . org-agenda)
  ("k" . org-capture)
- ("f" . org-agenda-files-open)
+ ("f" . orgx-agenda-files-open)
  ("s" . org-save-all-org-buffers)
- ("r" . org-agenda-files-reload)
+ ("r" . orgx-agenda-files-reload)
  ("j" . consult-org-capture)
- ("u" . tychoish-org-agenda-untagged-in-file)
- ("/" . tychoish-org-agenda-for-file)
- :map tychoish/global-org-map
+ ("u" . orgx-agenda-untagged-in-file)
+ ("/" . orgx-agenda-for-file)
+ :map orgx-global-map
  :prefix "l"
- :prefix-map tychoish/org-link-mode-map
+ :prefix-map orgx-link-map
  ("s" . org-store-link)
  ("i" . org-insert-link)
  ("a" . org-annotate-file))
 
-(defvar-keymap tychoish/org-gist-map
+(defvar-keymap orgx-gist-map
   :name "org-gist"
   :doc "keymap for org-gist commands"
   "p" #'org-gist-export-private-gist
   "g" #'org-gist-export-public-gist)
+
+;; org-agenda keybindings and configuration.
 
 (with-eval-after-load 'org-agenda
   (bind-keys
    :map org-agenda-mode-map
    ("C-l" . org-agenda-open-link)
    ("M-c" . org-agenda-goto-calendar)
-   ("/" . tychoish-org-agenda-for-file)
-   ("C-e" . org-migrate-subtree-to-denote)))
+   ("/" . orgx-agenda-for-file)
+   ("C-e" . org-migrate-subtree-to-denote))
+
+  (setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
+
+  (setq org-agenda-custom-commands
+        '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
+           ((org-agenda-skip-function-global nil)))
+          ("D" "Denote TODOs" todo ""
+           ((org-agenda-files (orgx-denote-files))
+            (org-agenda-skip-function-global nil)
+            (org-agenda-overriding-header "TODO items across the denote tree")
+            (org-agenda-prefix-format
+             '((todo . " %i %-16(orgx-denote-agenda-category) ")))))
+          ("u" "Untagged TODOs (local)" todo ""
+           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
+            (org-agenda-overriding-header "TODOs with no local tags")))
+          ("U" "Untagged headings (local)" tags "LEVEL>=1-TODO={.+}"
+           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
+            (org-agenda-overriding-header "Headings with no local tags")))
+          ("i" "Untagged TODOs (incl. inherited)" todo ""
+           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
+            (org-agenda-overriding-header "TODOs with no local or inherited tags")
+            (orgx-agenda-include-inherited-tags t)))
+          ("I" "Untagged headings (incl. inherited)" tags "LEVEL>=1-TODO={.+}"
+           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
+            (org-agenda-overriding-header "Headings with no local or inherited tags")
+            (orgx-agenda-include-inherited-tags t)))))
+
+  (setq org-agenda-include-diary nil)
+  (setq org-agenda-block-separator nil)
+  (setq org-agenda-columns-add-appointments-to-effort-sum t)
+  (setq org-agenda-compact-blocks t)
+  (setq org-agenda-default-appointment-duration 60)
+  (setq org-agenda-inhibit-startup nil)
+  (setq org-agenda-mouse-1-follows-link t)
+  (setq org-agenda-use-time-grid t)
+  (setq org-agenda-skip-deadline-if-done nil)
+  (setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
+  (setq org-agenda-skip-scheduled-if-done t)
+  (setq org-agenda-skip-unavailable-files t)
+  (setq org-agenda-skip-timestamp-if-done t)
+  (setq org-agenda-todo-ignore-deadlines t)
+  (setq org-agenda-todo-ignore-scheduled t)
+  (setq org-agenda-start-on-weekday nil))
+
+(setq org-archive-default-command #'org-archive-to-archive-sibling)
+
+;; Capture template integrations for external packages.
+
+(with-eval-after-load 'denote
+  (add-to-list 'org-capture-templates
+               '("dn" "denote note" plain
+                 (file denote-last-path)
+                 #'denote-org-capture
+                 :no-save t
+                 :immediate-finish nil
+                 :kill-buffer t
+                 :jump-to-captured t)))
+
+(with-eval-after-load 'denote-journal-capture
+  (add-to-list 'org-capture-templates
+               '("dj" "denote journal (today)" entry
+                 (file+olp denote-journal-capture-entry-today "Journal")
+                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
+                 :no-save t
+                 :kill-buffer t
+                 :jump-to-captured t))
+  (add-to-list 'org-capture-templates
+               '("dJ" "denote journal (date)" entry
+                 (file+olp denote-journal-capture-entry-for-date "Journal")
+                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
+                 :no-save t
+                 :kill-buffer t
+                 :jump-to-captured t)))
+
+(with-eval-after-load 'agent-shell-queue
+  (add-to-list 'org-capture-templates
+               '("q" "agent queue item" plain
+                 (function ignore)
+                 ""
+                 :immediate-finish t
+                 :before-finalize (lambda ()
+                                    (call-interactively
+                                     #'agent-shell-queue-capture-from-context)))))
+
+(with-eval-after-load 'agent-shell-queue-org
+  (bind-key "C-c o q" #'agent-shell-queue-org-refile-from-heading org-mode-map))
+
+;; Startup hooks and advice.
+
+(add-one-shot-hook
+ :name "org-install-aux-packages"
+ :hook 'org-mode-hook
+ :operation #'orgx--install-auxiliary-packages)
+
+(add-one-shot-hook
+ :name "org-capture [install standard templates]"
+ :hook 'emacs-startup-hook
+ :operation #'orgx--setup-standard-capture-templates
+ :idle-timer 1.0)
+
+(advice-add 'org-agenda :before #'ad:org-agenda--open-files)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Section 2: Custom functionality
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; functions and helpers
+;; date formatting
 
-(defun tychoish/set-up-buffer-org-mode ()
-  (add-hook 'write-contents-functions 'tychoish--add-toc-org-op nil t)
+(defconst orgx-date-spec-datetime "<%Y-%02m-%02d %02H:%02M:%02S %Z>")
+(defconst orgx-date-spec-date "<%Y-%02m-%02d>")
+
+(cl-defun orgx-date-now (&key short)
+  (interactive)
+  (format-time-string (if short
+			  orgx-date-spec-date
+			orgx-date-spec-datetime) (current-time)))
+
+;; buffer setup helpers
+
+(defun orgx--set-up-buffer ()
+  (add-hook 'write-contents-functions 'orgx--add-toc-op nil t)
   (setq-local fill-column 80))
 
+(defun orgx--add-toc-op ()
+  (when (require 'toc-org nil t)
+    (save-excursion (toc-org-insert-toc))))
+
+(defun orgx--background-revbufs ()
+  "Run `revbufs' without disturbing the current window configuration."
+  (save-window-excursion (revbufs)))
+
+(defun orgx--use-speed-commands ()
+  (and (looking-at org-outline-regexp) (looking-back "^\\**" nil)))
+
+;; agenda file open/reload
+
 ;;;###autoload
-(defun org-agenda-files-open ()
+(defun orgx-agenda-files-open ()
   "Open all agenda files if not already open."
   (interactive)
   (let* ((files (thread-last (org-agenda-files)
@@ -263,22 +416,20 @@
     buffers))
 
 ;;;###autoload
-(defun org-agenda-files-reload ()
+(defun orgx-agenda-files-reload ()
   "Open all agenda files, and reverting to the version on disk as needed."
   (interactive)
-  (thread-last (org-agenda-files-open)
+  (thread-last (orgx-agenda-files-open)
                (seq-map (lambda (it)
                           (with-current-buffer it
                             (revert-buffer nil (or current-prefix-arg (not (called-interactively-p 'interactive))) t)
                             (buffer-file-name))))))
 
-(defun tychoish/background-revbufs-for-hook ()
-  "Run `revbufs' without disturbing the current window configuration."
-  (save-window-excursion (revbufs)))
+(defun ad:org-agenda--open-files (&rest _)
+  "Pre-load all agenda files before `org-agenda'."
+  (orgx-agenda-files-open))
 
-(defun tychoish--add-toc-org-op ()
-  (when (require 'toc-org nil t)
-    (save-excursion (toc-org-insert-toc))))
+;; gist export (ox-gist integration)
 
 (defun org-gist-export-private-gist ()
   (interactive)
@@ -288,13 +439,9 @@
   (interactive)
   (org-gist-export-to-gist 'public))
 
-(cl-defun tychoish-org-date-now (&key short)
-  (interactive)
-  (format-time-string (if short
-			  tychoish/org-date-spec-date
-			tychoish/org-date-spec-datetime) (current-time)))
+;; timestamps and archiving
 
-(defun tychoish-org-mark-done-and-archive ()
+(defun orgx-mark-done-and-archive ()
   "Mark the current entry done and archive it under the \"Completed\" sibling."
   (interactive)
   (require 'org-archive)
@@ -302,7 +449,7 @@
   (let ((org-archive-sibling-heading "Completed"))
     (org-archive-to-archive-sibling)))
 
-(defun org-set-weekday-of-timestamp ()
+(defun orgx-set-weekday-of-timestamp ()
   "Re-normalize the timestamp at point.
 Used to add the weekday to a bare numeric date like <2026-05-10>: the
 `org-timestamp-change' call with a zero delta rewrites the timestamp in
@@ -312,16 +459,13 @@ canonical form, which has the side effect of appending the weekday."
     (org-timestamp-change 0 'year)
     t))
 
-(defun tychoish/org-use-speed-commands ()
-  (and (looking-at org-outline-regexp) (looking-back "^\\**" nil)))
-
-(defvar tychoish-org-project-tags '("PROJECT" "EPIC")
+(defvar orgx-project-tags '("PROJECT" "EPIC")
   "Tags that suppress their children from all agenda views.
 A heading carrying any of these tags acts as a project boundary: its
 descendant entries are hidden from agenda while the heading itself stays
 visible.  Changes take effect after the next agenda rebuild.")
 
-(defun tychoish-org-skip-child-of-project-tag ()
+(defun orgx-skip-child-of-project-tag ()
   "Skip the current entry if any ancestor carries a project grouping tag.
 Returns the end-of-subtree position to skip past, or nil to keep the entry.
 The tagged ancestor itself is never skipped — only its descendants are.
@@ -329,12 +473,12 @@ Intended for `org-agenda-skip-function-global'."
   (save-excursion
     (let (skip)
       (while (and (not skip) (org-up-heading-safe))
-        (when (seq-intersection tychoish-org-project-tags
+        (when (seq-intersection orgx-project-tags
                                 (org-get-tags nil t))
           (setq skip (save-excursion (org-end-of-subtree t) (point)))))
       skip)))
 
-(defun tychoish-org-done-state-match ()
+(defun orgx-done-state-match ()
   "Return an org-map-entries match string for all completed todo states.
 Derives the set from `org-todo-keywords-1' (buffer-local when set) and
 falls back to `org-done-keywords' which org populates from the keyword
@@ -343,7 +487,7 @@ sequences after the \"|\" separator."
                          '("DONE"))))
     (concat "/" (mapconcat #'identity done-states "|"))))
 
-(defun tychoish-org-archive-completed-tasks (archive-fn label)
+(defun orgx-archive-completed-tasks (archive-fn label)
   "Collect all completed tasks in scope and archive each with ARCHIVE-FN.
 Scope is the current subtree when point is inside a heading, else the
 full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
@@ -352,7 +496,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
         markers)
     (org-map-entries
      (fn (push (point-marker) markers))
-     (tychoish-org-done-state-match)
+     (orgx-done-state-match)
      scope
      'archive)
     (let ((count (length markers)))
@@ -363,19 +507,15 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
           (set-marker marker nil)))
       (message "Archived %d completed task(s)%s" count label))))
 
-(defun org-archive-done-tasks-to-archive-sibling ()
+(defun orgx-archive-done-tasks-to-archive-sibling ()
   "Archive all completed tasks in scope to the archive sibling heading."
   (interactive)
-  (tychoish-org-archive-completed-tasks #'org-archive-to-archive-sibling ""))
+  (orgx-archive-completed-tasks #'org-archive-to-archive-sibling ""))
 
-(defun org-archive-done-tasks-to-archive-file ()
+(defun orgx-archive-done-tasks-to-archive-file ()
   "Archive all completed tasks in scope to the org archive file."
   (interactive)
-  (tychoish-org-archive-completed-tasks #'org-archive-subtree " to file"))
-
-(declare-function annotated-completing-read "annotated-completing-read")
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  (orgx-archive-completed-tasks #'org-archive-subtree " to file"))
 
 ;; consult-tycho: org-capture
 
@@ -415,48 +555,46 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
                                :group-name (lambda (candidate)
                                              (map-elt group-table candidate "")))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; org-agenda: untagged filter
 
-(defvar tychoish-org-agenda-required-tag nil
-  "Dynamic binding used by `tychoish-org-skip-unless-untagged'.
+(defvar orgx-agenda-required-tag nil
+  "Dynamic binding used by `orgx-skip-unless-untagged'.
 When nil: skip entries that have any local tag (show only fully-untagged items).
 When set to a tag string: skip entries that possess that tag (show items missing it).")
 
-(defvar tychoish-org-agenda-include-inherited-tags nil
-  "Dynamic binding used by `tychoish-org-skip-unless-untagged'.
+(defvar orgx-agenda-include-inherited-tags nil
+  "Dynamic binding used by `orgx-skip-unless-untagged'.
 When nil (default): only local tags are considered — headings that merely
 inherit tags from ancestors are treated as untagged.
 When non-nil: inherited tags are included — a heading is considered tagged
 if it or any ancestor carries a tag.")
 
-(defconst tychoish-org-datetree-heading-re
+(defconst orgx-datetree-heading-re
   (rx bol
       (or (seq (= 4 digit) eol)
           (seq (= 4 digit) "-" (= 2 digit) " " (+ alpha))
           (seq (= 4 digit) "-" (= 2 digit) "-" (= 2 digit) " " (+ alpha))))
   "Regexp matching org datetree auto-generated headings (year, month, day).")
 
-(defun tychoish-org-skip-unless-untagged ()
+(defun orgx-skip-unless-untagged ()
   "Skip agenda entries that carry tags, match datetree headings, or have
-`tychoish-org-agenda-required-tag'.
-When `tychoish-org-agenda-required-tag' is nil, keeps only entries with no
+`orgx-agenda-required-tag'.
+When `orgx-agenda-required-tag' is nil, keeps only entries with no
 tags at all.  When it is a tag string, keeps only entries missing that tag.
 Datetree structural headings are always skipped.
-Respects `tychoish-org-agenda-include-inherited-tags': when nil, only local
+Respects `orgx-agenda-include-inherited-tags': when nil, only local
 tags are tested; when non-nil, inherited tags are included in the check."
-  (let ((tags (if tychoish-org-agenda-include-inherited-tags
+  (let ((tags (if orgx-agenda-include-inherited-tags
                   (org-get-tags)
                 (org-get-tags nil t)))
         (heading (org-get-heading t t t t)))
-    (when (or (string-match-p tychoish-org-datetree-heading-re heading)
-              (if tychoish-org-agenda-required-tag
-                  (member tychoish-org-agenda-required-tag tags)
+    (when (or (string-match-p orgx-datetree-heading-re heading)
+              (if orgx-agenda-required-tag
+                  (member orgx-agenda-required-tag tags)
                 tags))
       (or (outline-next-heading) (point-max)))))
 
-(defun tychoish-org-agenda-untagged-in-file (file &optional tag todo-only inherited)
+(defun orgx-agenda-untagged-in-file (file &optional tag todo-only inherited)
   "Show an agenda for FILE restricted to items lacking TAG.
 When TAG is nil or empty, show items with no tags at all.
 When TODO-ONLY is non-nil, restrict to TODO-keyword headings.
@@ -486,17 +624,17 @@ TODO-only, \\[universal-argument] \\[universal-argument] adds inherited-tag chec
                          (if tag (format "missing :%s:" tag) "with no tags")))
          (block (if todo-only
                     `(todo ""
-                           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+                           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
                             (org-agenda-overriding-header ,header)))
                   `(tags "LEVEL>=1-TODO={.+}"
-                         ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
+                         ((org-agenda-skip-function #'orgx-skip-unless-untagged)
                           (org-agenda-overriding-header ,header)))))
-         (tychoish-org-agenda-required-tag tag)
-         (tychoish-org-agenda-include-inherited-tags inherited)
+         (orgx-agenda-required-tag tag)
+         (orgx-agenda-include-inherited-tags inherited)
          (org-agenda-custom-commands `(("V" ,header (,block)))))
     (org-agenda nil "V")))
 
-(defun tychoish-org-agenda-for-file (file)
+(defun orgx-agenda-for-file (file)
   "Run a full org agenda restricted to FILE.
 FILE is selected from `org-agenda-files' with completion."
   (interactive
@@ -508,7 +646,9 @@ FILE is selected from `org-agenda-files' with completion."
                      (org-agenda-files))))
     (org-agenda nil "a")))
 
-(defun tychoish-org-denote-files ()
+;; denote agenda integration
+
+(defun orgx-denote-files ()
   "Return every .org file across all directories in `denote-directories'.
 Computed fresh on each call so newly added or renamed notes, and any
 change to `denote-directory', are always picked up — do not cache the
@@ -516,10 +656,10 @@ result."
   (thread-last (denote-directories)
                (seq-mapcat (lambda (dir) (directory-files-recursively dir "\\.org\\'")))))
 
-(defconst tychoish-org-denote-agenda-category-width 16
-  "Max width, in characters, of `tychoish-org-denote-agenda-category'.")
+(defconst orgx-denote-agenda-category-width 16
+  "Max width, in characters, of `orgx-denote-agenda-category'.")
 
-(defun tychoish-org-denote-agenda-category ()
+(defun orgx-denote-agenda-category ()
   "Short category label for the denote agenda: sequence + title, or title alone.
 Denote filenames encode the identifier, signature, and keywords and are
 much too long for the agenda's category column. When the file has a
@@ -527,32 +667,32 @@ Folgezettel sequence (its `denote-sequence' signature, e.g. \"3d2b\"),
 show that plus as much of the #+TITLE as fits; otherwise show the title
 alone. Falls back to the bare file name (no directory or extension) when
 a file has no title. Always truncated to
-`tychoish-org-denote-agenda-category-width' characters."
+`orgx-denote-agenda-category-width' characters."
   (let* ((file (buffer-file-name))
          (seq (and file (denote-retrieve-filename-signature file)))
          (title (or (org-get-title) (file-name-base file)))
          (label (if seq (format "%s %s" seq title) title)))
     (truncate-string-to-width
-     label tychoish-org-denote-agenda-category-width nil nil "…")))
+     label orgx-denote-agenda-category-width nil nil "…")))
 
 ;;;###autoload
-(defun tychoish-org-agenda-denote-todos ()
+(defun orgx-agenda-denote-todos ()
   "Show all TODO-keyword items across every org file in the denote tree.
 Convenience entry point for the \"D\" custom agenda command, which scans
-`tychoish-org-denote-files' (recursively, including denote/journal/ and
+`orgx-denote-files' (recursively, including denote/journal/ and
 any other subdirectories) rather than the usual `org-agenda-files'."
   (interactive)
   (org-agenda nil "D"))
 
-(defconst tychoish-org-agenda-builtin-views
+(defconst orgx-agenda-builtin-views
   '(("a" "Agenda (week/day)")
     ("t" "All TODOs")
     ("m" "Match tags / props / todo")
     ("s" "Search keywords"))
-  "Standard org-agenda built-in views included in `tychoish-org-agenda-view'.")
+  "Standard org-agenda built-in views included in `orgx-agenda-view'.")
 
 ;;;###autoload
-(defun tychoish-org-agenda-view ()
+(defun orgx-agenda-view ()
   "Select an org-agenda view via annotated completing read.
 Includes both the standard built-in views and any entries in
 `org-agenda-custom-commands'.  Each candidate is annotated with its
@@ -563,7 +703,7 @@ etc.)."
   (require 'org-agenda)
   (let* ((customs (seq-filter (lambda (e) (stringp (cadr e)))
                               org-agenda-custom-commands))
-         (all (append tychoish-org-agenda-builtin-views customs))
+         (all (append orgx-agenda-builtin-views customs))
          (desc->entry (seq-map (lambda (e) (cons (cadr e) e)) all))
          (acr-table
           (seq-map
@@ -594,72 +734,19 @@ etc.)."
     (when-let* ((entry (cdr (assoc choice desc->entry))))
       (org-agenda nil (car entry)))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; org-agenda
-
-(with-eval-after-load 'org-agenda
-  (setq org-agenda-skip-function-global #'tychoish-org-skip-child-of-project-tag)
-
-  (setq org-agenda-custom-commands
-        '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
-           ((org-agenda-skip-function-global nil)))
-          ("D" "Denote TODOs" todo ""
-           ((org-agenda-files (tychoish-org-denote-files))
-            (org-agenda-skip-function-global nil)
-            (org-agenda-overriding-header "TODO items across the denote tree")
-            (org-agenda-prefix-format
-             '((todo . " %i %-16(tychoish-org-denote-agenda-category) ")))))
-          ("u" "Untagged TODOs (local)" todo ""
-           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
-            (org-agenda-overriding-header "TODOs with no local tags")))
-          ("U" "Untagged headings (local)" tags "LEVEL>=1-TODO={.+}"
-           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
-            (org-agenda-overriding-header "Headings with no local tags")))
-          ("i" "Untagged TODOs (incl. inherited)" todo ""
-           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
-            (org-agenda-overriding-header "TODOs with no local or inherited tags")
-            (tychoish-org-agenda-include-inherited-tags t)))
-          ("I" "Untagged headings (incl. inherited)" tags "LEVEL>=1-TODO={.+}"
-           ((org-agenda-skip-function #'tychoish-org-skip-unless-untagged)
-            (org-agenda-overriding-header "Headings with no local or inherited tags")
-            (tychoish-org-agenda-include-inherited-tags t)))))
-
-  (setq org-agenda-include-diary nil)
-  (setq org-agenda-block-separator nil)
-  (setq org-agenda-columns-add-appointments-to-effort-sum t)
-  (setq org-agenda-compact-blocks t)
-  (setq org-agenda-default-appointment-duration 60)
-  (setq org-agenda-inhibit-startup nil)
-  (setq org-agenda-mouse-1-follows-link t)
-  (setq org-agenda-use-time-grid t)
-  (setq org-agenda-skip-deadline-if-done nil)
-  (setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
-  (setq org-agenda-skip-scheduled-if-done t)
-  (setq org-agenda-skip-unavailable-files t)
-  (setq org-agenda-skip-timestamp-if-done t)
-  (setq org-agenda-todo-ignore-deadlines t)
-  (setq org-agenda-todo-ignore-scheduled t)
-  (setq org-agenda-start-on-weekday nil))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; org-capture-templates
 
-(defvar org-capture-templates nil)
-
-(defun tychoish-org-reset-capture-templates ()
+(defun orgx-reset-capture-templates ()
   (setq org-capture-templates '(("t" "tasks")
                                 ("j" "journal")
                                 ("n" "notes")
                                 ("a" "agent"))))
 
-
 (defun ~title~ ()
   "Read a title string interactively during `org-capture' template expansion."
   (read-string "title => "))
 
-(cl-defun tychoish/org-capture--add-flat-templates
+(cl-defun orgx--capture-add-flat-templates
     (&key kind char name path (key "") target body-fn first-sub default-subs
           (prepend t) (time-prompt-suffix nil))
   "Register a flat set of capture templates of KIND for NAME at PATH.
@@ -707,8 +794,8 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
           (setq template (append template (list :time-prompt t))))
         (add-to-list 'org-capture-templates template append-item)))))
 
-(cl-defun tychoish/org-capture-add-journal-templates (&key name path (key ""))
-  (tychoish/org-capture--add-flat-templates
+(cl-defun orgx-capture-add-journal-templates (&key name path (key ""))
+  (orgx--capture-add-flat-templates
    :kind "journal" :char "j" :name name :path path :key key
    :target (if (string-equal "" key)
                (list 'file+olp+datetree path)
@@ -724,8 +811,8 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :prepend nil
    :time-prompt-suffix "jp"))
 
-(cl-defun tychoish/org-capture-add-task-templates (&key name path (key ""))
-  (tychoish/org-capture--add-flat-templates
+(cl-defun orgx-capture-add-task-templates (&key name path (key ""))
+  (orgx--capture-add-flat-templates
    :kind "tasks" :char "t" :name name :path path :key key
    :target (list 'file+headline path "Tasks")
    :body-fn (lambda (anchor) (concat "* TODO %(~title~)\n" anchor "\n%?"))
@@ -735,8 +822,8 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                    ("tl" "%a" "org-link")
                    ("tk" "%c" "emacs kill-ring"))))
 
-(cl-defun tychoish/org-capture-add-note-templates (&key name path (key ""))
-  (tychoish/org-capture--add-flat-templates
+(cl-defun orgx-capture-add-note-templates (&key name path (key ""))
+  (orgx--capture-add-flat-templates
    :kind "notes" :char "n" :name name :path path :key key
    :target (list 'file+headline path "Inbox")
    :body-fn (lambda (anchor) (concat "* %(~title~)\n" anchor "\n%?"))
@@ -746,28 +833,27 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                    ("nl" "%a" "org-link")
                    ("nk" "%c" "emacs kill-ring"))))
 
-
 ;; registration helpers
 
 ;;;###autoload
-(defmacro tychoish-org-add-project-file-capture-templates (&rest args)
+(defmacro orgx-add-project-file-capture-templates (&rest args)
   "Register project file capture templates once `org' is loaded.
-Expands to a call to `tychoish-org--add-project-file-capture-templates',
+Expands to a call to `orgx--add-project-file-capture-templates',
 forwarding ARGS (the same :name/:path/:key/:agenda keywords), wrapped in
 `with-eval-after-load' so the templates take effect the moment `org' loads
 --- including when `org' loads because the user just ran `org-capture' ---
 without needing a manual, ordered setup step from a per-machine user file.
 Also avoids forcing `org' to load during init merely to register templates."
   `(with-eval-after-load 'org
-     (tychoish-org--add-project-file-capture-templates ,@args)))
+     (orgx--add-project-file-capture-templates ,@args)))
 
-(cl-defun tychoish-org--add-project-file-capture-templates (&key name (path nil) (key "") (agenda nil))
+(cl-defun orgx--add-project-file-capture-templates (&key name (path nil) (key "") (agenda nil))
   "Defines a set of capture mode templates for adding notes and tasks to a file.
-Called via the `tychoish-org-add-project-file-capture-templates' macro, which
+Called via the `orgx-add-project-file-capture-templates' macro, which
 defers invocation until `org' is loaded.  Call this directly only from code
 that already runs after `org' is loaded."
   (unless (and (boundp 'org-capture-templates) org-capture-templates)
-    (tychoish-org-reset-capture-templates))
+    (orgx-reset-capture-templates))
 
   (when (and agenda (not (-contains-p (org-agenda-files) (f-full path))))
     (add-to-list 'org-agenda-files path))
@@ -797,68 +883,62 @@ that already runs after `org' is loaded."
 			  path
 			(concat org-directory "/" path))))
 
-    (tychoish/org-capture-add-note-templates
+    (orgx-capture-add-note-templates
      :name name
      :key key
      :path org-filename)
 
-    (tychoish/org-capture-add-journal-templates
+    (orgx-capture-add-journal-templates
      :name name
      :key key
      :path org-filename)
 
-    (tychoish/org-capture-add-task-templates
+    (orgx-capture-add-task-templates
      :name name
      :key key
      :path org-filename)))
 
 ;; org capture templates definitions
-(defun tychoish-org--setup-standard-capture-templates ()
-  (tychoish/org-capture-add-note-templates
+(defun orgx--setup-standard-capture-templates ()
+  (orgx-capture-add-note-templates
    :name "notes"
    :path "records.org")
 
-  (tychoish/org-capture-add-journal-templates
+  (orgx-capture-add-journal-templates
    :name "diary"
    :path "journal.org")
 
-  (tychoish/org-capture-add-task-templates
+  (orgx-capture-add-task-templates
    :name "prime"
    :path "planner.org")
 
-  (tychoish/org-capture-add-task-templates
+  (orgx-capture-add-task-templates
    :name "agent"
    :path "agent.org"
    :key "a")
 
-  (tychoish/org-capture-add-journal-templates
+  (orgx-capture-add-journal-templates
    :name "agent"
    :path "agent.org"
    :key "a"))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; auxiliary package installation
 
-;; hooks
+(defvar orgx--auxiliary-packages
+  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
+  "Supporting org packages that should be installed when org-mode loads the first time.")
 
-(add-one-shot-hook
- :name "org-install-aux-packages"
- :hook 'org-mode-hook
- :operation #'tychoish-org--install-auxiliary-packages)
+(defun orgx--install-auxiliary-packages ()
+  "Install all of the auxiliary packages."
+  (thread-last orgx--auxiliary-packages
+	       (seq-remove #'package-installed-p)
+	       (mapcar #'package-install-async)
+	       (length)))
 
-(add-one-shot-hook
- :name "org-capture [install standard templates]"
- :hook 'emacs-startup-hook
- :operation #'tychoish-org--setup-standard-capture-templates
- :idle-timer 1.0)
-
-(defun ad:org-agenda--open-files (&rest _)
-  "Pre-load all agenda files before `org-agenda'."
-  (org-agenda-files-open))
-
-(advice-add 'org-agenda :before #'ad:org-agenda--open-files)
+;; heading navigation
 
 ;;;###autoload
-(defun tychoish-org-jump-to-heading ()
+(defun orgx-jump-to-heading ()
   "Jump to any org heading across all agenda files via `org-refile-targets'."
   (interactive)
   (let* ((targets (org-refile-get-targets))
@@ -874,29 +954,9 @@ that already runs after `org' is loaded."
       (goto-char (nth 3 target))
       (org-show-context 'agenda))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote subtree migration
 
-;; denote org-capture integration
-
-(declare-function denote-org-capture "denote")
-(declare-function denote-last-path "denote")
-
-(with-eval-after-load 'denote
-  (add-to-list 'org-capture-templates
-               '("dn" "denote note" plain
-                 (file denote-last-path)
-                 #'denote-org-capture
-                 :no-save t
-                 :immediate-finish nil
-                 :kill-buffer t
-                 :jump-to-captured t)))
-
-(declare-function denote-org-extract-org-subtree "denote-org")
-(declare-function denote-format-link "denote")
-(declare-function denote-directory-files "denote")
-(declare-function org-agenda-goto "org-agenda")
-
-(defun tychoish-org--parse-heading-date (heading)
+(defun orgx--parse-heading-date (heading)
   "Return an Emacs time value for the first org timestamp in HEADING, or nil."
   (when (string-match org-ts-regexp-both heading)
     (condition-case nil
@@ -923,7 +983,7 @@ new note's identifier reflects that date."
          (insert-marker (copy-marker (org-entry-beginning-position)))
          (level (org-current-level))
          (heading (org-get-heading t t t t))
-         (heading-date (tychoish-org--parse-heading-date heading)))
+         (heading-date (orgx--parse-heading-date heading)))
     (when (and heading-date
                (not (or (org-entry-get nil "DATE")
                         (org-entry-get nil "CREATED")
@@ -942,48 +1002,5 @@ new note's identifier reflects that date."
           (org-toggle-tag "denoted" 'on)))
       (set-marker insert-marker nil))))
 
-(declare-function denote-journal-capture-entry-for-date "denote-journal-capture")
-(declare-function denote-journal-capture-entry-today "denote-journal-capture")
-
-(with-eval-after-load 'denote-journal-capture
-  (add-to-list 'org-capture-templates
-               '("dj" "denote journal (today)" entry
-                 (file+olp denote-journal-capture-entry-today "Journal")
-                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
-                 :no-save t
-                 :kill-buffer t
-                 :jump-to-captured t))
-  (add-to-list 'org-capture-templates
-               '("dJ" "denote journal (date)" entry
-                 (file+olp denote-journal-capture-entry-for-date "Journal")
-                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
-                 :no-save t
-                 :kill-buffer t
-                 :jump-to-captured t)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; agent-shell-queue org-capture integration
-
-(declare-function agent-shell-queue-capture-from-region "agent-shell-queue")
-
-(with-eval-after-load 'agent-shell-queue
-  (add-to-list 'org-capture-templates
-               '("q" "agent queue item" plain
-                 (function ignore)
-                 ""
-                 :immediate-finish t
-                 :before-finalize (lambda ()
-                                    (call-interactively
-                                     #'agent-shell-queue-capture-from-context)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; refile current org heading to agent-shell-queue
-
-(declare-function agent-shell-queue-org-refile-from-heading "agent-shell-queue-org")
-
-(with-eval-after-load 'agent-shell-queue-org
-  (bind-key "C-c o q" #'agent-shell-queue-org-refile-from-heading org-mode-map))
-
-(provide 'tychoish-org)
+(provide 'orgx)
+;;; orgx.el ends here

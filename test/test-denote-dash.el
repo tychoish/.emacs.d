@@ -232,5 +232,132 @@
     (should     (denote-dash--fold-visible-p "1a"  '("1" "1a" "1a1")))
     (should-not (denote-dash--fold-visible-p "1a1" '("1" "1a" "1a1")))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-close-all-notes (buffer-based)
+;;
+;; NOTE: this command closes ALL open Denote note buffers in the session,
+;; so these tests are only safe in a fresh (batch) Emacs, never a live one
+;; with real notes open.
+
+(require 'cl-lib)
+
+(defun denote-dash-test--visit-note (dir id title &optional write)
+  "Open a buffer visiting a Denote-named note in DIR and return it.
+ID is the timestamp identifier, TITLE the note title.  When WRITE is
+non-nil the file is created on disk first; otherwise the buffer visits a
+path that does not yet exist."
+  (let ((file (expand-file-name
+               (format "%s--%s.org" id (downcase (replace-regexp-in-string " " "-" title)))
+               dir)))
+    (when write
+      (with-temp-file file
+        (insert "#+title:      " title "\n#+identifier: " id "\n\nBody.\n")))
+    (find-file-noselect file)))
+
+(ert-deftest denote-dash-test/close-all-notes-none-open ()
+  "With no Denote note buffers open, the command reports and does nothing."
+  (should (equal "No open Denote note buffers" (denote-dash-close-all-notes))))
+
+(ert-deftest denote-dash-test/close-all-notes-kills-unmodified ()
+  "Unmodified note buffers are closed without prompting."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let ((buf (denote-dash-test--visit-note dir "20240101T120000" "Note" t)))
+          (should (buffer-live-p buf))
+          (cl-letf (((symbol-function 'y-or-n-p)
+                     (lambda (&rest _) (error "should not prompt for unmodified buffer")))
+                    ((symbol-function 'yes-or-no-p)
+                     (lambda (&rest _) (error "should not prompt for unmodified buffer"))))
+            (denote-dash-close-all-notes))
+          (should-not (buffer-live-p buf)))
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/close-all-notes-saves-modified-existing ()
+  "A modified buffer whose file exists prompts to save, then is closed."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let ((buf (denote-dash-test--visit-note dir "20240101T120000" "Note" t)))
+          (with-current-buffer buf
+            (goto-char (point-max))
+            (insert "extra\n"))
+          (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+            (denote-dash-close-all-notes))
+          (should-not (buffer-live-p buf))
+          (with-temp-buffer
+            (insert-file-contents (expand-file-name "20240101T120000--note.org" dir))
+            (should (search-forward "extra" nil t))))
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/close-all-notes-missing-file-discard ()
+  "A modified buffer whose file is gone is not recreated when the user declines."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((buf (denote-dash-test--visit-note dir "20240101T120000" "Gone" nil))
+               (file (buffer-file-name buf)))
+          (with-current-buffer buf (insert "unsaved\n"))
+          (should-not (file-exists-p file))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+            (denote-dash-close-all-notes))
+          (should-not (buffer-live-p buf))
+          (should-not (file-exists-p file)))
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/close-all-notes-missing-file-save-recreates ()
+  "Declining is discard; accepting the prompt recreates the missing file."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((buf (denote-dash-test--visit-note dir "20240101T120000" "Gone" nil))
+               (file (buffer-file-name buf)))
+          (with-current-buffer buf (insert "recreated\n"))
+          (should-not (file-exists-p file))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+            (denote-dash-close-all-notes))
+          (should-not (buffer-live-p buf))
+          (should (file-exists-p file)))
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/close-all-notes-ignores-non-denote ()
+  "Buffers not visiting a Denote note are left untouched."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let ((plain (find-file-noselect (expand-file-name "plain.txt" dir))))
+          (unwind-protect
+              (progn
+                (denote-dash-close-all-notes)
+                (should (buffer-live-p plain)))
+            (with-current-buffer plain (set-buffer-modified-p nil))
+            (kill-buffer plain)))
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--hierarchy-sync-directory
+
+(ert-deftest denote-dash-test/hierarchy-sync-directory-fallback ()
+  "With no file property at point, default-directory becomes the first Denote dir."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let ((denote-directory (list dir)))
+          (with-temp-buffer
+            (insert "no property here\n")
+            (goto-char (point-min))
+            (denote-dash--hierarchy-sync-directory)
+            (should (equal (car (denote-directories)) default-directory))))
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/hierarchy-sync-directory-file-at-point ()
+  "With a file property at point, default-directory is that file's directory."
+  (with-temp-buffer
+    (insert (propertize "1a  Title\n"
+                        'denote-sequence-hierarchy-file
+                        "/some/where/20240101T120000==1a--title.org"))
+    (goto-char (point-min))
+    (denote-dash--hierarchy-sync-directory)
+    (should (equal "/some/where/" default-directory))))
+
+(ert-deftest denote-dash-test/hierarchy-mode-hook-registered ()
+  "The directory-setup function is on `denote-sequence-hierarchy-mode-hook'."
+  (should (memq #'denote-dash--hierarchy-setup-directory
+                denote-sequence-hierarchy-mode-hook)))
+
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here

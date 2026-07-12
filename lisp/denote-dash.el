@@ -40,7 +40,7 @@
 (declare-function denote-org-dblock-insert-links "denote-org")
 (declare-function denote-org-dblock-insert-backlinks "denote-org")
 (declare-function denote-org-dblock-insert-files "denote-org")
-(declare-function org-migrate-subtree-to-denote "tychoish-org")
+(declare-function org-migrate-subtree-to-denote "orgx")
 (declare-function org-back-to-heading "org")
 (declare-function org-end-of-meta-data "org")
 (declare-function org-end-of-subtree "org")
@@ -396,6 +396,75 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
     (unless (derived-mode-p 'denote-dash-mode)
       (denote-dash-mode))
     (denote-dash-refresh)))
+
+;;; Buffer management
+
+(defun denote-dash--note-buffers ()
+  "Return the list of live buffers visiting a Denote note file."
+  (seq-filter
+   (lambda (buf)
+     (when-let* ((file (buffer-file-name buf)))
+       (denote-file-has-identifier-p file)))
+   (buffer-list)))
+
+;;;###autoload
+(defun denote-dash-close-all-notes ()
+  "Close every open Denote note buffer, prompting to save modified ones.
+For a modified buffer whose file no longer exists on disk — for example
+because a sequence operation renamed it out from under the buffer — the
+user is informed and asked whether to save (which recreates the file) or
+discard the changes."
+  (interactive)
+  (let ((buffers (denote-dash--note-buffers))
+        (closed 0)
+        (saved 0)
+        (stale nil))
+    (if (null buffers)
+        (message "No open Denote note buffers")
+      (seq-do
+       (lambda (buf)
+         (with-current-buffer buf
+           (when (buffer-modified-p)
+             (cond
+              ((not (and (buffer-file-name) (file-exists-p (buffer-file-name))))
+               (push (buffer-name) stale)
+               (if (yes-or-no-p
+                    (format "%s: file no longer exists on disk; save anyway (recreates it)? "
+                            (buffer-name)))
+                   (progn (save-buffer) (setq saved (1+ saved)))
+                 (set-buffer-modified-p nil)))
+              ((y-or-n-p (format "Save %s? " (buffer-name)))
+               (save-buffer)
+               (setq saved (1+ saved)))
+              (t (set-buffer-modified-p nil)))))
+         (kill-buffer buf)
+         (setq closed (1+ closed)))
+       buffers)
+      (message "Closed %d Denote buffer%s (%d saved)%s"
+               closed (if (= closed 1) "" "s") saved
+               (if stale
+                   (format "; %d had missing files: %s"
+                           (length stale) (string-join (nreverse stale) ", "))
+                 "")))))
+
+;;; Sequence hierarchy buffer directory
+
+(defun denote-dash--hierarchy-sync-directory ()
+  "Set `default-directory' to the file at point, else the first Denote directory.
+Each line in a `denote-sequence-view-hierarchy' buffer carries the note
+path in the `denote-sequence-hierarchy-file' text property."
+  (setq default-directory
+        (or (when-let* ((file (get-text-property (point) 'denote-sequence-hierarchy-file)))
+              (file-name-directory file))
+            (car (denote-directories))
+            default-directory)))
+
+(defun denote-dash--hierarchy-setup-directory ()
+  "Initialize a hierarchy buffer's `default-directory' and track point movement."
+  (denote-dash--hierarchy-sync-directory)
+  (add-hook 'post-command-hook #'denote-dash--hierarchy-sync-directory nil t))
+
+(add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-setup-directory)
 
 ;;; Navigation
 
@@ -935,7 +1004,8 @@ or prompts with completing-read."
     ("vv" "note list (dash)"   denote-dash
      :inapt-if-derived denote-dash-mode)
     ("vh" "sequence hierarchy" denote-sequence-view-hierarchy
-     :inapt-if-derived denote-sequence-hierarchy-mode)]
+     :inapt-if-derived denote-sequence-hierarchy-mode)
+    ("vc" "close all notes"    denote-dash-close-all-notes)]
    ["Columns" :if-derived denote-dash-mode
     ("c" "toggle columns…"     denote-dash-column-transient)]]
   [["Link"

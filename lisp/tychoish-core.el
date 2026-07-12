@@ -1331,7 +1331,18 @@ clipboard."
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
     (add-to-list 'savehist-additional-variables 'denote--keywords-history))
-  (setq denote-rename-buffer-format "%>16t<%k>")
+  (defun tychoish--denote-rename-buffer (&optional buffer)
+    "Rename denote BUFFER to `[D:SEQ] TITLE' or just TITLE when there is no sequence."
+    (when-let* ((file (buffer-file-name buffer))
+                ((denote-file-has-identifier-p file)))
+      (let* ((sig   (denote-retrieve-filename-signature file))
+             (title (or (denote-retrieve-filename-title file)
+                        (file-name-base file)))
+             (name  (if (and sig (not (string-empty-p sig)))
+                        (format "[D:%s] %s" sig title)
+                      title)))
+        (rename-buffer name :unique))))
+  (setq denote-rename-buffer-function #'tychoish--denote-rename-buffer)
   (denote-rename-buffer-mode 1)
 
   (defun ad:denote-rename-file-using-front-matter--no-confirm (fn &rest args)

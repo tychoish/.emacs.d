@@ -323,7 +323,7 @@ Entries whose :if predicate returns nil are excluded."
 (hud-register-command
  :row 2
  :category 'org-mode
- :command #'tychoish-org-jump-to-heading
+ :command #'orgx-jump-to-heading
  :description "jump to org heading"
  :transient-key "oh")
 

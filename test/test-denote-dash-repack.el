@@ -583,5 +583,158 @@ the *second* slot instead of the first."
       (delete-directory dir t))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-swap-with-parent — complete file/buffer cleanup
+;; These tests verify that ONLY the two expected files exist after a swap
+;; and that OLD paths are completely gone, not just that new paths exist.
+
+(ert-deftest denote-dash-test/swap-with-parent-old-files-removed ()
+  "After swap, the two original file paths no longer exist on disk."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((parent-file (denote-dash-test--make-org-note
+                             dir "20240101T100000" "1a" "Parent"))
+               (child-file  (denote-dash-test--make-org-note
+                             dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect child-file)
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-parent)))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; Original paths must not exist
+          (should-not (file-exists-p parent-file))
+          (should-not (file-exists-p child-file)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-parent-exactly-two-files ()
+  "After swap, the directory contains exactly the two renamed files — no extras."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((parent-file (denote-dash-test--make-org-note
+                             dir "20240101T100000" "1a" "Parent"))
+               (child-file  (denote-dash-test--make-org-note
+                             dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir)))
+          (with-current-buffer (find-file-noselect child-file)
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-parent)))
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (= 2 (length (directory-files dir nil "\\.org$")))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-reparent-recursive — no-legacy-file guarantee
+
+(ert-deftest denote-dash-test/reparent-recursive-old-files-removed ()
+  "After reparent-recursive, no file with an old sequence exists on disk."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (root-file   (denote-dash-test--make-org-note dir "20240101T100000" "1a1"  "Root"))
+               (child-file  (denote-dash-test--make-org-note dir "20240101T110000" "1a1a" "Child"))
+               (target-file (denote-dash-test--make-org-note dir "20240101T120000" "2"    "Target"))
+               (denote-directory (list dir)))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+            (denote-dash-reparent-recursive root-file target-file))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; Old sequence files must be gone
+          (should-not (file-exists-p root-file))
+          (should-not (file-exists-p child-file))
+          ;; New files must exist
+          (should (directory-files dir nil "20240101T100000==2a--"))
+          (should (directory-files dir nil "20240101T110000==2a1--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/reparent-recursive-no-stale-buffers ()
+  "After reparent-recursive, no buffer visits a path that no longer exists."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (root-file   (denote-dash-test--make-org-note dir "20240101T100000" "1a1"  "Root"))
+               (child-file  (denote-dash-test--make-org-note dir "20240101T110000" "1a1a" "Child"))
+               (target-file (denote-dash-test--make-org-note dir "20240101T120000" "2"    "Target"))
+               (denote-directory (list dir)))
+          (find-file-noselect root-file)
+          (find-file-noselect child-file)
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+            (denote-dash-reparent-recursive root-file target-file))
+          (denote-dash-test--kill-dir-buffers dir)
+          (should-not (find-buffer-visiting root-file))
+          (should-not (find-buffer-visiting child-file)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; upstream denote-sequence-reparent-recursive — bug confirmation tests
+;;
+;; These tests call the upstream `denote-sequence-reparent-recursive'
+;; (from elpa) directly to document known bugs for an upstream issue report.
+;;
+;; Bug 1 — Type-alternation error: when reparenting from a root whose last
+;;   char type differs from the new root's last char type, descendant suffixes
+;;   are copied verbatim instead of being rewritten to maintain letter/digit
+;;   alternation.  E.g. reparenting "1a1" under "2" should yield "2a1" for
+;;   the child, but upstream produces "2aa" (suffix "a" copied unchanged).
+;;
+;; Bug 2 — Legacy files: `denote-rename-file' with `denote-rename-confirmations'
+;;   not suppressed may prompt per-file and, if interrupted, leave the old file
+;;   AND the new file on disk simultaneously.
+
+(ert-deftest denote-dash-test/upstream-reparent-recursive-type-alternation-bug ()
+  "Upstream denote-sequence-reparent-recursive produces wrong suffix type.
+Expected FAILURE with upstream: child '1a1a' is renamed to '2aa' instead
+of the correct '2a1'.  This test documents the bug for an upstream report."
+  :expected-result :failed
+  (let ((dir (make-temp-file "denote-dash-test-upstream-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root   (denote-dash-test--make-org-note dir "20240101T100000" "1a1"  "Root"))
+               (_child  (denote-dash-test--make-org-note dir "20240101T110000" "1a1a" "Child"))
+               (target  (denote-dash-test--make-org-note dir "20240101T120000" "2"    "Target"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000=="))))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+            (denote-sequence-reparent-recursive root-file target))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; Correct: child suffix "a" (letter in digit-ending ctx) → "1" (digit in letter-ending ctx)
+          ;; Upstream bug: produces "2aa" — this assertion fails, confirming the bug
+          (should (directory-files dir nil "20240101T110000==2a1--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/upstream-reparent-recursive-legacy-files ()
+  "Upstream denote-sequence-reparent-recursive leaves old files when confirmations fire.
+Expected FAILURE with upstream when `denote-rename-confirmations' is non-nil.
+Demonstrates the need to suppress `denote-rename-confirmations' around the
+operation — as `denote-dash-reparent-recursive' does."
+  :expected-result :failed
+  (let ((dir (make-temp-file "denote-dash-test-upstream-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (root-file   (denote-dash-test--make-org-note dir "20240101T100000" "1a"  "Root"))
+               (child-file  (denote-dash-test--make-org-note dir "20240101T110000" "1a1" "Child"))
+               (target-file (denote-dash-test--make-org-note dir "20240101T120000" "2a"  "Target"))
+               ;; Leave denote-rename-confirmations at its default (non-nil)
+               ;; and stub yes-or-no-p to cancel after the first rename fires,
+               ;; simulating a user who is prompted and accidentally declines.
+               (call-count 0)
+               (denote-directory (list dir)))
+          (cl-letf (((symbol-function 'yes-or-no-p)
+                     (lambda (&rest _)
+                       (setq call-count (1+ call-count))
+                       ;; Accept the outer "reparent?" prompt, decline the first file prompt
+                       (= call-count 1))))
+            (ignore-errors
+              (denote-sequence-reparent-recursive root-file target-file)))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; If the upstream bug is present, old root-file still exists alongside
+          ;; a partially-renamed copy — this assertion fails, confirming the bug.
+          (should-not (file-exists-p root-file)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
 (provide 'test-denote-dash-repack)
 ;;; test-denote-dash-repack.el ends here

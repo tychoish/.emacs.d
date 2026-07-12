@@ -23,7 +23,7 @@ Detected here against `command-line-args' -- rather than via
 `command-line-functions' in init.el, where the flag is normally handled --
 because `command-line-1' only dispatches `command-line-functions' after
 `after-init-hook' has already run.  By then init.el and every module it
-requires (bootstrap, tychoish-core, tychoish-mail, tychoish-org, user/*.el)
+requires (bootstrap, tychoish-core, tychoish-mail, orgx, user/*.el)
 have already loaded once with reporting off, so every `with-slow-op-timer'
 call in the main synchronous init path would go unmeasured.")
 
