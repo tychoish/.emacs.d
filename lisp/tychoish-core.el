@@ -2140,23 +2140,71 @@ synchronously starting the ispell/aspell subprocess and logging
   (add-to-list 'eglot-stay-out-of 'company)
   (set-face-attribute 'eglot-highlight-symbol-face nil :underline nil :weight 'bold)
 
-  ;; Decline the `workspace/didChangeWatchedFiles' dynamic-registration
-  ;; capability. Advertising it makes most language servers immediately send
-  ;; a `client/registerCapability' request as part of session startup; the
-  ;; handler for that request calls the generic `project-files' on the
-  ;; server's project. Because `projectile-mode' adds `project-projectile' to
-  ;; `project-find-functions', `project-files' can resolve to Projectile's
-  ;; backend, whose implementation is a full synchronous project file listing
-  ;; (`projectile-project-files', which shells out to git/find). The net
-  ;; effect is that starting an eglot session blocks on a full project index,
-  ;; even though nothing about starting the session should require one.
-  ;; Declining the capability here means servers never ask.
-  (cl-defmethod eglot-client-capabilities :around (_server)
-    (let* ((caps (cl-call-next-method))
-           (workspace (plist-get caps :workspace)))
-      (plist-put workspace :didChangeWatchedFiles
-                 (list :dynamicRegistration :json-false))
-      caps))
+  ;; Advertising `workspace/didChangeWatchedFiles' makes most language
+  ;; servers send a `client/registerCapability' request as part of session
+  ;; startup. Its handler (`eglot-register-capability') calls `project-files'
+  ;; on the server's project, and when `projectile-mode' resolves that to
+  ;; Projectile's backend with a cold file cache, Projectile's async indexer
+  ;; waits on `accept-process-output' from *inside this very jsonrpc process
+  ;; filter* — a reentrant context that can stall for minutes until manually
+  ;; interrupted. Two complementary fixes below: warm the cache before eglot
+  ;; ever connects, and defer file-watch registration instead of blocking the
+  ;; process filter when the cache is still cold.
+
+  (defun tychoish/projectile-warm-cache-for-buffer ()
+    "Kick off background Projectile indexing for the current buffer's project.
+Runs on the first visit to a project in a session, well before
+`eglot-ensure' would otherwise force a synchronous, cold index."
+    (when-let* ((root (and (bound-and-true-p projectile-mode)
+                            (projectile-project-root))))
+      (projectile-index-project-async root)))
+
+  (defun tychoish/projectile-warm-cache-on-project-change (_new-root _previous-root)
+    (tychoish/projectile-warm-cache-for-buffer))
+
+  (declare-function tychoish/projectile-warm-cache-on-project-change "tychoish-core")
+  (add-hook 'projectile-project-changed-functions
+            #'tychoish/projectile-warm-cache-on-project-change)
+
+  (defun tychoish/projectile-cache-warm-p (root)
+    "Return non-nil if Projectile's in-memory file cache for ROOT is populated."
+    (and (bound-and-true-p projectile-enable-caching)
+         (map-elt projectile-projects-cache root)))
+
+  (defun tychoish/eglot-defer-file-watch-registration (server id watchers root)
+    "Register SERVER's file watches for ID/WATCHERS once ROOT's cache is warm.
+Polls at most two minutes before giving up and registering anyway from
+inside the timer callback — still safer than the original jsonrpc
+process-filter context, since a timer callback isn't nested inside the
+process filter it might end up pumping."
+    (projectile-index-project-async root)
+    (let ((tries 0) timer)
+      (setq timer
+            (run-with-timer
+             1 1
+             (lambda ()
+               (cl-incf tries)
+               (when (or (tychoish/projectile-cache-warm-p root)
+                         (>= tries 120))
+                 (cancel-timer timer)
+                 (when (process-live-p (jsonrpc--process server))
+                   (eglot-register-capability
+                    server 'workspace/didChangeWatchedFiles id :watchers watchers))))))))
+
+  ;; `cl-defmethod' forms defeat the byte-compiler's forward-reference
+  ;; tracking for sibling `defun's in this same `eval-after-load' block, so
+  ;; declare them explicitly even though they're defined a few lines above.
+  (declare-function tychoish/projectile-warm-cache-for-buffer "tychoish-core")
+  (declare-function tychoish/projectile-cache-warm-p "tychoish-core")
+  (declare-function tychoish/eglot-defer-file-watch-registration "tychoish-core")
+
+  (cl-defmethod eglot-register-capability :around
+    (server (_method (eql workspace/didChangeWatchedFiles)) id &key watchers)
+    (let* ((project (eglot--project server))
+           (root (and (eq (car-safe project) 'projectile) (cdr project))))
+      (if (and root (not (tychoish/projectile-cache-warm-p root)))
+          (tychoish/eglot-defer-file-watch-registration server id watchers root)
+        (cl-call-next-method))))
 
   (defun tychoish/eglot-before-save-hook ()
     (add-hook 'before-save-hook #'eglot-format-for-hook nil t)
