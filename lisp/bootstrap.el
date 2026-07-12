@@ -1,4 +1,4 @@
-;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; no-byte-compile: t -*-
+;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -1151,6 +1151,26 @@ when called non-interactively."
                      (format ": %s" (string-join (seq-map #'f-collapse-homedir killed) ", "))
                    ""))
       killed)))
+
+(defun kill-buffer-and-delete-file (&optional buffer)
+  "Kill BUFFER (default the current buffer), then delete the file it visits.
+Errors when BUFFER is not visiting a file.  The buffer is killed
+before the file is deleted, so declining Emacs's built-in \"buffer
+modified; kill anyway?\" prompt, or its \"save and then kill\" choice,
+leaves the file on disk.  Never prompts when called non-interactively."
+  (interactive)
+  (let* ((buffer (or buffer (current-buffer)))
+         (file (buffer-file-name buffer)))
+    (unless file
+      (user-error "Buffer '%s' is not visiting a file" (buffer-name buffer)))
+    (if (called-interactively-p 'any)
+        (unless (kill-buffer buffer)
+          (user-error "Aborted: '%s' was not killed" (buffer-name buffer)))
+      (let ((kill-buffer-query-functions nil))
+        (kill-buffer buffer)))
+    (delete-file file)
+    (when (called-interactively-p 'any)
+      (message "Deleted %s" (f-collapse-homedir file)))))
 
 (defun bootstrap-super-abort-minibuffers ()
   (interactive)
