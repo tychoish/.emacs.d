@@ -2747,6 +2747,9 @@ Useful after changing `eglot-workspace-configuration' or
 
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
+  (setq agent-shell-queue-archive-enabled t)
+  (setq agent-shell-queue-safe-save t)
+  (setq agent-shell-queue-safe-save-max-files 50)
   (setq agent-shell-queue-pick-buffer-function #'agent-shell-menu--pick-buffer)
   (setq agent-shell-queue-show-ordinal-column nil)
 
