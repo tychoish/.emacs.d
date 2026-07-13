@@ -31,19 +31,8 @@
 (autoload 'org-store-link "ol")
 (autoload 'org-insert-link "ol")
 (autoload 'org-annotate-file "org-annotate-file")
-(autoload 'toc-org-insert-toc "toc-org")
-(autoload 'org-gist-export-to-gist "ox-gist")
-(autoload 'org-rst-export-to-rst "ox-rst")
-(autoload 'org-rst-export-as-rst "ox-rst")
-(autoload 'org-leanpub-book-export-markdown "ox-leanpub-book")
-(autoload 'org-leanpub-book-export-markua "ox-leanpub-book")
-(autoload 'org-leanpub-markua-export-to-markua "ox-leanpub-markua")
-(autoload 'org-leanpub-markua-export-as-markua "ox-leanpub-markua")
-(autoload 'org-leanpub-markdown-export-to-markdown "ox-leanpub-markdown")
-(autoload 'org-leanpub-markdown-export-as-markdown "ox-leanpub-markdown")
 (autoload 'annotated-completing-read "annotated-completing-read")
 
-(declare-function annotated-completing-read "annotated-completing-read")
 (declare-function orgx--use-speed-commands "orgx")
 (declare-function orgx--install-auxiliary-packages "orgx")
 (declare-function orgx--setup-standard-capture-templates "orgx")
@@ -86,19 +75,31 @@
 
 (use-package ox-gist
   :ensure t
-  :defer t)
+  :commands (org-gist-export-to-gist))
+
+(use-package toc-org
+  :ensure t
+  :commands (toc-org-insert-toc))
+
+(use-package ox-leanpub
+  :ensure t
+  :commands (org-leanpub-book-export-markdown
+	     org-leanpub-book-export-markua
+	     org-leanpub-markua-export-to-markua
+	     org-leanpub-markua-export-as-markua
+	     org-leanpub-markdown-export-to-markdown
+	     org-leanpub-markdown-export-as-markdown))
 
 (use-package ox-rst
   :ensure t
-  :defer t)
+  :defer t
+  :commands (org-rst-export-to-rst org-rst-export-as-rst)
+  :config
+  (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
 ;; org-mode configuration, hooks, and keybindings.
 
 (with-eval-after-load 'org
-  (add-hook 'org-mode-hook 'turn-on-soft-wrap) ;; from 'tychoish-common
-  (add-hook 'org-agenda-mode-hook 'orgx--background-revbufs)
-  (add-hook 'org-mode-hook 'orgx--set-up-buffer)
-
   (add-hook 'org-ctrl-c-ctrl-c-hook 'orgx-set-weekday-of-timestamp)
   (add-hook 'org-shiftup-final-hook 'windmove-up)
   (add-hook 'org-shiftleft-final-hook 'windmove-left)
@@ -165,62 +166,7 @@
   ;; org-keys.el
   (setq org-replace-disputed-keys t)
   (setq org-return-follows-link t)
-  (setq org-use-speed-commands #'orgx--use-speed-commands)
-
-  (seq-do (lambda (sym)
-            (when (boundp sym)
-              (set sym (make-sparse-keymap))))
-          '(orgx-personal-map
-            orgx-capture-map
-            orgx-personal-archive-map))
-
-  (bind-keys
-   :map org-mode-map
-   ("C-c l o" . org-link-open-from-string)
-   ("C-c C-p" . set-mark-command)
-   ("M-TAB" . org-cycle)
-   ("C-M-TAB" . org-cycle-force-archived)
-   ("C-c C-w" . whitespace-cleanup)
-   :map org-mode-map
-   :prefix "C-c o"
-   :prefix-map orgx-personal-map ;; "C-c o"
-   ("s" . org-agenda)
-   ("a" . orgx-agenda-view)
-   ("u" . orgx-agenda-untagged-in-file)
-   ("h" . consult-org-heading)
-   ("k" . org-capture)
-   ("f" . orgx-agenda-files-open)
-   ("t" . org-set-tags-command)
-   ("n" . org-narrow-to-subtree)
-   ("W" . widen)
-   ("p" . org-insert-property-drawer)
-   ("w" . org-refile)
-   ("d" . orgx-date-now)
-   ("C-s" . org-save-all-org-buffers)
-   ;; ("i" . org-ctags-create-tags)
-   ;; ("g" . orgx-gist-map)
-   :map orgx-personal-map
-   :prefix "c"
-   :prefix-map orgx-capture-map
-   ("c" . consult-org-capture)
-   ("m" . org-capture)
-   ("p" . org-capture-goto-last-stored)
-   ("l" . org-capture-goto-last-stored)
-   ("t" . org-capture-goto-target)
-   ("r" . org-capture-refile)
-   ("w" . org-capture-refile)
-   :map orgx-personal-map
-   :prefix "f"
-   :prefix-map orgx-personal-archive-map
-   ("d" . orgx-mark-done-and-archive)
-   ("e" . org-cycle-force-archived)
-   ("t" . org-archive-set-tag)
-   ("s" . org-archive-to-archive-sibling)
-   ("a" . orgx-archive-done-tasks-to-archive-sibling)
-   ("f" . orgx-archive-done-tasks-to-archive-file)))
-
-(with-eval-after-load 'ox-rst
-  (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
+  (setq org-use-speed-commands #'orgx--use-speed-commands))
 
 ;; Global org keybindings.
 
@@ -253,13 +199,6 @@
 ;; org-agenda keybindings and configuration.
 
 (with-eval-after-load 'org-agenda
-  (bind-keys
-   :map org-agenda-mode-map
-   ("C-l" . org-agenda-open-link)
-   ("M-c" . org-agenda-goto-calendar)
-   ("/" . orgx-agenda-for-file)
-   ("C-e" . org-migrate-subtree-to-denote))
-
   (setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
 
   (setq org-agenda-custom-commands
@@ -344,7 +283,7 @@
                                      #'agent-shell-queue-capture-from-context)))))
 
 (with-eval-after-load 'agent-shell-queue-org
-  (bind-key "C-c o q" #'agent-shell-queue-org-refile-from-heading org-mode-map))
+  (keymap-set orgx-minor-mode-commands-map "q" #'agent-shell-queue-org-refile-from-heading))
 
 ;; Startup hooks and advice.
 
@@ -1001,6 +940,130 @@ new note's identifier reflects that date."
           (goto-char insert-marker)
           (org-toggle-tag "denoted" 'on)))
       (set-marker insert-marker nil))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Section 3: Minor modes
+;;;
+;;; C-c o audit (personal map vs global map)
+;;;
+;;; Personal (orgx-minor-mode-commands-map, active in org buffers via minor mode):
+;;;   s=org-agenda  a=orgx-agenda-view  u=orgx-agenda-untagged-in-file
+;;;   h=consult-org-heading  k=org-capture  f=orgx-agenda-files-open
+;;;   r=orgx-agenda-files-reload  /=orgx-agenda-for-file
+;;;   t=org-set-tags-command  n=org-narrow-to-subtree
+;;;   p=org-insert-property-drawer  w=org-refile  d=orgx-date-now
+;;;   q=agent-shell-queue-org-refile-from-heading (set lazily on package load)
+;;;   C-s=org-save-all-org-buffers
+;;;   c → orgx-minor-mode-capture-map (submap)
+;;;   C-f → orgx-minor-mode-archive-map (submap; f was archive before — moved to
+;;;          C-f to unblock f=orgx-agenda-files-open which was previously shadowed)
+;;;
+;;; Global (orgx-global-map, active everywhere):
+;;;   a=orgx-agenda-view  c=consult-org-capture  4=org-agenda
+;;;   k=org-capture  f=orgx-agenda-files-open  s=org-save-all-org-buffers
+;;;   r=orgx-agenda-files-reload  j=consult-org-capture
+;;;   u=orgx-agenda-untagged-in-file  /=orgx-agenda-for-file
+;;;   l → orgx-link-map (submap)
+;;;
+;;; Cross-map precedence: minor-mode map shadows global in org buffers.
+;;; Keys only in global (unreachable via minor-mode, acceptable):
+;;;   4 (org-agenda direct), j (duplicate consult-org-capture alias)
+;;;   c in global = consult-org-capture; c in personal = orgx-minor-mode-capture-map
+;;;     → in org buffers C-c o c opens capture submap; use C-c o c c for capture
+;;;
+;;;  W (widen) dropped: violates no-capitals rule; use C-x n w instead.
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;; orgx-minor-mode
+
+(defvar-keymap orgx-minor-mode-capture-map
+  :name "orgx-capture"
+  :doc "Capture commands under C-c o c (orgx-minor-mode)."
+  "c" #'consult-org-capture
+  "m" #'org-capture
+  "p" #'org-capture-goto-last-stored
+  "l" #'org-capture-goto-last-stored
+  "t" #'org-capture-goto-target
+  "r" #'org-capture-refile
+  "w" #'org-capture-refile)
+
+(defvar-keymap orgx-minor-mode-archive-map
+  :name "orgx-archive"
+  :doc "Archive commands under C-c o C-f (orgx-minor-mode)."
+  "d" #'orgx-mark-done-and-archive
+  "e" #'org-cycle-force-archived
+  "t" #'org-archive-set-tag
+  "s" #'org-archive-to-archive-sibling
+  "a" #'orgx-archive-done-tasks-to-archive-sibling
+  "f" #'orgx-archive-done-tasks-to-archive-file)
+
+(defvar-keymap orgx-minor-mode-commands-map
+  :name "orgx-personal"
+  :doc "C-c o prefix in org-mode buffers (orgx-minor-mode)."
+  "s"   #'org-agenda
+  "a"   #'orgx-agenda-view
+  "u"   #'orgx-agenda-untagged-in-file
+  "h"   #'consult-org-heading
+  "k"   #'org-capture
+  "f"   #'orgx-agenda-files-open
+  "r"   #'orgx-agenda-files-reload
+  "/"   #'orgx-agenda-for-file
+  "t"   #'org-set-tags-command
+  "n"   #'org-narrow-to-subtree
+  "p"   #'org-insert-property-drawer
+  "w"   #'org-refile
+  "d"   #'orgx-date-now
+  "C-s" #'org-save-all-org-buffers
+  "c"   orgx-minor-mode-capture-map
+  "C-f" orgx-minor-mode-archive-map)
+
+(defvar-keymap orgx-minor-mode-map
+  :doc "Keymap for `orgx-minor-mode'."
+  "C-c l o" #'org-link-open-from-string
+  "C-c C-p" #'set-mark-command
+  "M-TAB"   #'org-cycle
+  "C-M-TAB" #'org-cycle-force-archived
+  "C-c C-w" #'whitespace-cleanup
+  "C-c o"   orgx-minor-mode-commands-map)
+
+(define-minor-mode orgx-minor-mode
+  "Personal org-mode keybindings and buffer setup.
+Activates `orgx-minor-mode-commands-map' under C-c o, sets fill-column, and wires
+the toc-org write hook."
+  :lighter " ox"
+  :keymap orgx-minor-mode-map
+  (when orgx-minor-mode
+    (orgx--set-up-buffer)))
+
+(defun orgx-minor-mode-turn-on ()
+  "Enable `orgx-minor-mode' in the current buffer."
+  (orgx-minor-mode 1))
+
+(add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
+
+;;; orgx-agenda-minor-mode
+
+(defvar-keymap orgx-agenda-minor-mode-map
+  :doc "Keymap for `orgx-agenda-minor-mode'."
+  "C-l" #'org-agenda-open-link
+  "M-c" #'org-agenda-goto-calendar
+  "/"   #'orgx-agenda-for-file
+  "C-e" #'org-migrate-subtree-to-denote)
+
+(define-minor-mode orgx-agenda-minor-mode
+  "Personal org-agenda keybindings and setup."
+  :lighter " oxa"
+  :keymap orgx-agenda-minor-mode-map
+  (when orgx-agenda-minor-mode
+    (orgx--background-revbufs)))
+
+(defun orgx-agenda-minor-mode-turn-on ()
+  "Enable `orgx-agenda-minor-mode' in the current buffer."
+  (orgx-agenda-minor-mode 1))
+
+(add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
 
 (provide 'orgx)
 ;;; orgx.el ends here
