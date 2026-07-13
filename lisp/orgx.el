@@ -33,6 +33,7 @@
 (autoload 'org-annotate-file "org-annotate-file")
 (autoload 'annotated-completing-read "annotated-completing-read")
 
+(declare-function org-agenda-goto "org-agenda")
 (declare-function orgx--use-speed-commands "orgx")
 (declare-function orgx--install-auxiliary-packages "orgx")
 (declare-function orgx--setup-standard-capture-templates "orgx")
@@ -47,7 +48,6 @@
 (declare-function denote-directory-files "denote")
 (declare-function denote-directories "denote")
 (declare-function denote-retrieve-filename-signature "denote")
-(declare-function org-agenda-goto "org-agenda")
 (declare-function denote-journal-capture-entry-for-date "denote-journal-capture")
 (declare-function denote-journal-capture-entry-today "denote-journal-capture")
 (declare-function agent-shell-queue-capture-from-context "agent-shell-queue")
@@ -298,7 +298,9 @@
  :operation #'orgx--setup-standard-capture-templates
  :idle-timer 1.0)
 
+
 (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -852,13 +854,13 @@ that already runs after `org' is loaded."
    :path "planner.org")
 
   (orgx-capture-add-task-templates
-   :name "agent"
-   :path "agent.org"
+   :name "agentic"
+   :path "agentic.org"
    :key "a")
 
   (orgx-capture-add-journal-templates
-   :name "agent"
-   :path "agent.org"
+   :name "agentic"
+   :path "agentic.org"
    :key "a"))
 
 ;; auxiliary package installation
