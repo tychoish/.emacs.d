@@ -60,6 +60,7 @@
 (declare-function denote-dash-swap-with-previous "denote-dash-repack")
 (declare-function denote-dash-swap-with-next "denote-dash-repack")
 (declare-function denote-dash-reparent-recursive "denote-dash-repack")
+(declare-function denote-dash-renumber-recursive "denote-dash-repack")
 (declare-function denote-dash-insert-sequence-note "denote-dash-repack")
 (declare-function denote-dash-retag-sequence "denote-dash-repack")
 
@@ -558,6 +559,16 @@ path in the `denote-sequence-hierarchy-file' text property."
   (add-hook 'post-command-hook #'denote-dash--hierarchy-sync-directory nil t))
 
 (add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-setup-directory)
+
+;; `denote-sequence-hierarchy-find-file' opens via `denote-open-link-function',
+;; which defaults to `find-file-other-window'.  Selecting a note from the
+;; hierarchy should replace it in the current window instead; `winner-mode'
+;; (enabled globally) lets the user get back with `winner-undo'.
+(defun denote-dash--hierarchy-use-same-window ()
+  "Make note selection in a hierarchy buffer open in the current window."
+  (setq-local denote-open-link-function #'find-file))
+
+(add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-use-same-window)
 
 ;;; Sequence hierarchy initial folding
 
@@ -1249,7 +1260,8 @@ the current buffer file, or prompts with completing-read."
     ("rt" "retag (keywords)"   denote-rename-file-keywords)
     ("rc" "convert file type"  denote-dash-convert-file-type)
     ("rp" "reparent seq"       denote-sequence-reparent)
-    ("rs" "reparent recursive" denote-dash-reparent-recursive)]
+    ("rs" "reparent recursive" denote-dash-reparent-recursive)
+    ("rn" "renumber recursive" denote-dash-renumber-recursive)]
    ["Review"
     ("vd" "set review date"    denote-review-set-date)
     ("vl" "review list"        denote-review-display-list)]

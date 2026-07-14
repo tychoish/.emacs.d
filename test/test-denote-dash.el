@@ -420,6 +420,19 @@ path that does not yet exist."
   (should (memq #'denote-dash--hierarchy-apply-initial-fold
                 denote-sequence-hierarchy-mode-hook)))
 
+(ert-deftest denote-dash-test/hierarchy-same-window-hook-registered ()
+  "The same-window function is on `denote-sequence-hierarchy-mode-hook'."
+  (should (memq #'denote-dash--hierarchy-use-same-window
+                denote-sequence-hierarchy-mode-hook)))
+
+(ert-deftest denote-dash-test/hierarchy-use-same-window-sets-local-var ()
+  "Running the hook function makes note selection use `find-file'."
+  (with-temp-buffer
+    (let ((denote-open-link-function #'find-file-other-window))
+      (denote-dash--hierarchy-use-same-window)
+      (should (eq denote-open-link-function #'find-file))
+      (should (local-variable-p 'denote-open-link-function)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash--hierarchy-heading-positions / --hierarchy-section-sizes
 ;;

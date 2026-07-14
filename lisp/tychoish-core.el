@@ -1418,7 +1418,10 @@ clipboard."
    ("a" . denote-sequence-reparent-recursive)
    ("i" . denote-dash-insert-sequence-note))
   :config
-  (setq denote-sequence-scheme 'alphanumeric))
+  (setq denote-sequence-scheme 'alphanumeric)
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*denote-sequence-hierarchy "
+                 (display-buffer-same-window))))
 
 (use-package denote-markdown
   :ensure t

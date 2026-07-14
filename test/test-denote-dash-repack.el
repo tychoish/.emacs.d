@@ -364,6 +364,56 @@ not \"2aa\"."
       (delete-directory dir t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash-renumber-recursive
+
+(ert-deftest denote-dash-test/renumber-recursive-fixes-type-alternation ()
+  "Renumber recursive rewrites suffix types when old and new roots differ.
+Old root \"1a\" ends letter (digit-children); given new sequence \"9\" ends
+digit (letter-children).  The child \"1a1\" (digit suffix \"1\") must become
+\"9a\" (letter suffix \"a\"), not \"91\"."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root  (denote-dash-test--make-org-note dir "20240101T100000" "1a"  "Root"))
+               (_child (denote-dash-test--make-org-note dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000=="))))
+          (denote-dash-renumber-recursive root-file "9")
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (directory-files dir nil "20240101T100000==9--"))
+          (should (directory-files dir nil "20240101T110000==9a--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/renumber-recursive-same-type-no-change ()
+  "When old root and new sequence end in the same type, suffixes are preserved."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root  (denote-dash-test--make-org-note dir "20240101T100000" "1a"  "Root"))
+               (_child (denote-dash-test--make-org-note dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000=="))))
+          (denote-dash-renumber-recursive root-file "9a")
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (directory-files dir nil "20240101T100000==9a--"))
+          (should (directory-files dir nil "20240101T110000==9a1--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/renumber-recursive-errors-without-sequence ()
+  "Renumbering a file with no existing sequence signals a user-error."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root (denote-dash-test--make-org-note dir "20240101T100000" nil "Root"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000"))))
+          (should-error (denote-dash-renumber-recursive root-file "9") :type 'user-error))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash-insert-sequence-note
 
 (ert-deftest denote-dash-test/insert-sequence-note-shifts-siblings-without-prompting ()

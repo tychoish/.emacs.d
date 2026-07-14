@@ -560,6 +560,45 @@ subtree beyond a couple of files."
                   (funcall rename-fn child (concat new-seq fixed-suffix)))))
             descendants)))
 
+;;;###autoload
+(defun denote-dash-renumber-recursive (current-file new-seq)
+  "Renumber CURRENT-FILE to NEW-SEQ, renumbering all descendants to match.
+Like `denote-dash-reparent-recursive', but NEW-SEQ is the target sequence
+itself rather than derived as a new child of another file's sequence — use
+this to move a subtree to a specific sequence ID instead of appending it
+under a parent.  Corrects the type alternation (letter/digit) of descendant
+sequences when the old and new roots end in different character types.
+
+Suppresses `denote-rename-confirmations' for the duration: this is a single
+logical operation that may rename many descendants, and prompting once per
+file (as `denote-rename-file' does by default) would be unusable for any
+subtree beyond a couple of files."
+  (interactive
+   (list
+    (denote-sequence--get-current-file-for-renaming)
+    (denote-sequence-with-error-p
+     (read-string
+      (format "Renumber `%s' (recursively) to sequence: "
+              (propertize (denote--rename-dired-file-or-current-file-or-prompt)
+                          'face 'denote-faces-prompt-current-name))))))
+  (let* ((root-seq (or (denote-retrieve-filename-signature current-file)
+                       (user-error "File has no sequence: %s" (file-name-nondirectory current-file))))
+         (descendants (denote-sequence-get-relative root-seq 'all-children))
+         (rename-fn (lambda (file seq)
+                      (denote-rename-file file 'keep-current 'keep-current
+                                          seq 'keep-current 'keep-current)))
+         (old-last-type (denote-dash--seq-last-type root-seq))
+         (new-last-type (denote-dash--seq-last-type new-seq))
+         (denote-rename-confirmations nil))
+    (funcall rename-fn current-file new-seq)
+    (seq-do (lambda (child)
+              (when-let* ((child-seq (denote-retrieve-filename-signature child)))
+                (let* ((raw-suffix (string-remove-prefix root-seq child-seq))
+                       (fixed-suffix (denote-dash--alphanumeric-suffix-rewrite
+                                      raw-suffix old-last-type new-last-type)))
+                  (funcall rename-fn child (concat new-seq fixed-suffix)))))
+            descendants)))
+
 ;;; Sequence insertion
 
 (defun denote-dash--increment-sequence (seq)
