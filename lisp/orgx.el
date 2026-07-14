@@ -323,7 +323,8 @@
 
 (defun orgx--set-up-buffer ()
   (add-hook 'write-contents-functions 'orgx--add-toc-op nil t)
-  (setq-local fill-column 80))
+  (setq-local fill-column 80)
+  (turn-on-visual-line-mode))
 
 (defun orgx--add-toc-op ()
   (when (require 'toc-org nil t)
