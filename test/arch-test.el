@@ -318,5 +318,129 @@
       (setq map (keymap-parent map)))
     (should (eq map help-mode-map))))
 
+;;; AUR detection and abs actions in the info buffer
+
+(ert-deftest arch-test-pkg-aur-source-p-true-for-foreign-package ()
+  "arch--pkg-aur-source-p is non-nil for a package in the foreign set."
+  (cl-letf (((symbol-function 'arch--foreign-packages)
+             (lambda () (map-into '(("aurpkg" . t)) '(hash-table :test equal)))))
+    (should (arch--pkg-aur-source-p "aurpkg"))))
+
+(ert-deftest arch-test-pkg-aur-source-p-false-for-repo-package ()
+  "arch--pkg-aur-source-p is nil for a package not in the foreign set.
+Regression test: the prior check relied on the sync-db `repository' field
+being absent, but `pacman -Qi' never includes that field, so it was always
+nil and every installed package was misreported as AUR."
+  (cl-letf (((symbol-function 'arch--foreign-packages)
+             (lambda () (map-into '(("aurpkg" . t)) '(hash-table :test equal)))))
+    (should (null (arch--pkg-aur-source-p "bash")))))
+
+(ert-deftest arch-test-show-info-sets-aur-p-for-foreign-package ()
+  "arch-show-info marks the info buffer as AUR when the package is foreign."
+  (cl-letf (((symbol-function 'arch--foreign-packages)
+             (lambda () (map-into '(("aurpkg" . t)) '(hash-table :test equal)))))
+    (arch-test--with-info-buf "aurpkg" '(name "aurpkg" version "1.0")
+      (with-current-buffer (arch--info-buffer-name "aurpkg")
+        (should arch--info-aur-p)))))
+
+(ert-deftest arch-test-show-info-clears-aur-p-for-repo-package ()
+  "arch-show-info does not mark the info buffer as AUR for a repo package."
+  (cl-letf (((symbol-function 'arch--foreign-packages)
+             (lambda () (map-into '(("aurpkg" . t)) '(hash-table :test equal)))))
+    (arch-test--with-info-buf "bash" '(name "bash" version "1.0")
+      (with-current-buffer (arch--info-buffer-name "bash")
+        (should (null arch--info-aur-p))))))
+
+(ert-deftest arch-test-info-abs-install-dispatches-to-abs-install ()
+  "arch-info-abs-install calls arch-abs-install with the buffer's package."
+  (let (called-with)
+    (cl-letf (((symbol-function 'arch--foreign-packages)
+               (lambda () (map-into '(("aurpkg" . t)) '(hash-table :test equal))))
+              ((symbol-function 'arch-abs-install)
+               (lambda (name) (setq called-with name))))
+      (arch-test--with-info-buf "aurpkg" '(name "aurpkg" version "1.0")
+        (with-current-buffer (arch--info-buffer-name "aurpkg")
+          (arch-info-abs-install))))
+    (should (equal called-with "aurpkg"))))
+
+(ert-deftest arch-test-info-abs-rebuild-dispatches-to-abs-rebuild ()
+  "arch-info-abs-rebuild calls arch-abs-rebuild with the buffer's package."
+  (let (called-with)
+    (cl-letf (((symbol-function 'arch--foreign-packages)
+               (lambda () (map-into '(("aurpkg" . t)) '(hash-table :test equal))))
+              ((symbol-function 'arch-abs-rebuild)
+               (lambda (name) (setq called-with name))))
+      (arch-test--with-info-buf "aurpkg" '(name "aurpkg" version "1.0")
+        (with-current-buffer (arch--info-buffer-name "aurpkg")
+          (arch-info-abs-rebuild))))
+    (should (equal called-with "aurpkg"))))
+
+;;; Progress buffer window placement
+
+(defmacro arch-test--with-buffers (names &rest body)
+  "Create a buffer for each name expression in NAMES, run BODY, then kill them."
+  (declare (indent 1))
+  `(progn
+     ,@(seq-map (lambda (n) `(get-buffer-create ,n)) names)
+     (unwind-protect
+         (progn ,@body)
+       ,@(seq-map (lambda (n) `(when (get-buffer ,n) (kill-buffer ,n))) names))))
+
+(ert-deftest arch-test-progress-buffer-p-matches-progress-buffer ()
+  "arch--progress-buffer-p recognizes *arch:<pkg>* buffers."
+  (arch-test--with-buffers ("*arch:foopkg*")
+    (should (arch--progress-buffer-p (get-buffer "*arch:foopkg*") nil))))
+
+(ert-deftest arch-test-progress-buffer-p-excludes-package-list ()
+  "arch--progress-buffer-p does not match the *arch-packages* list buffer."
+  (arch-test--with-buffers (arch--list-buffer-name)
+    (should (null (arch--progress-buffer-p (get-buffer arch--list-buffer-name) nil)))))
+
+(defmacro arch-test--with-frame (frame-var &rest body)
+  "Bind FRAME-VAR to an invisible test frame, run BODY, then delete it."
+  (declare (indent 1))
+  `(let ((,frame-var (make-frame '((visibility . nil)))))
+     (unwind-protect
+         (with-selected-frame ,frame-var
+           (delete-other-windows)
+           ,@body)
+       (delete-frame ,frame-var))))
+
+(ert-deftest arch-test-takeover-window-never-uses-package-list-window ()
+  "arch--takeover-window never displaces the *arch-packages* window."
+  (arch-test--with-buffers (arch--list-buffer-name "*arch-test-other*" "*arch:takeover-test*")
+    (arch-test--with-frame frame
+      (let* ((list-buf (get-buffer arch--list-buffer-name))
+             (other-buf (get-buffer "*arch-test-other*"))
+             (win1 (selected-window))
+             (win2 (split-window win1)))
+        (set-window-buffer win1 list-buf)
+        (set-window-buffer win2 other-buf)
+        (select-window win2)
+        (let* ((new-buf (get-buffer "*arch:takeover-test*"))
+               (chosen (arch--takeover-window new-buf nil)))
+          (should (eq chosen win2))
+          (should (equal (buffer-name (window-buffer win1)) arch--list-buffer-name))
+          (should (eq (window-buffer win2) new-buf)))))))
+
+(ert-deftest arch-test-takeover-window-prefers-existing-progress-window ()
+  "arch--takeover-window reuses a window already showing another progress buffer."
+  (arch-test--with-buffers (arch--list-buffer-name "*arch-test-other2*" "*arch:existing*" "*arch:new*")
+    (arch-test--with-frame frame
+      (let* ((list-buf (get-buffer arch--list-buffer-name))
+             (progress-buf (get-buffer "*arch:existing*"))
+             (other-buf (get-buffer "*arch-test-other2*"))
+             (win1 (selected-window))
+             (win2 (split-window win1))
+             (win3 (split-window win2)))
+        (set-window-buffer win1 list-buf)
+        (set-window-buffer win2 other-buf)
+        (set-window-buffer win3 progress-buf)
+        (select-window win2)
+        (let* ((new-buf (get-buffer "*arch:new*"))
+               (chosen (arch--takeover-window new-buf nil)))
+          (should (eq chosen win3))
+          (should (eq (window-buffer win3) new-buf)))))))
+
 (provide 'arch-test)
 ;;; arch-test.el ends here

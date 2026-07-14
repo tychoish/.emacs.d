@@ -499,7 +499,7 @@ versions, so upgrading those requires rebuilding individually via
   (make-directory arch-abs-directory t)
   (let* ((pkg-dir (arch--abs-pkg-dir pkg-name))
          (fetch-cmd (if (file-directory-p pkg-dir)
-                        (format "git --quiet -C %s pull" (shell-quote-argument pkg-dir))
+                        (format "git -C %s pull --quiet" (shell-quote-argument pkg-dir))
                       (format "git clone %s %s"
                               (shell-quote-argument (arch--abs-clone-url pkg-name))
                               (shell-quote-argument pkg-dir)))))
@@ -699,6 +699,9 @@ Annotation mirrors the package list columns: [repo]  Stat  (version)  descriptio
 (defvar-local arch--info-package nil
   "Package name displayed in the current arch-info buffer.")
 
+(defvar-local arch--info-aur-p nil
+  "Non-nil if the package displayed in the current arch-info buffer is from AUR.")
+
 ;;; YAML rendering helpers
 
 (defconst arch--info-fields
@@ -759,11 +762,16 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
                       'help-echo "mouse-1: open in eww")
   (insert "\n"))
 
+(defun arch--pkg-aur-source-p (pkg-name)
+  "Return non-nil if PKG-NAME is a foreign (AUR) package.
+Checked via `arch--foreign-packages', the same pacman `--query --foreign'
+lookup used by the package list view."
+  (and (map-elt (arch--foreign-packages) pkg-name) t))
+
 (defun arch--info-render (pkg-name plist files)
   "Render PKG-NAME info from PLIST and FILES as YAML into the current buffer."
   (let ((inhibit-read-only t)
-        (aur-p (and (plist-get plist 'install-date)
-                    (null (plist-get plist 'repository)))))
+        (aur-p (arch--pkg-aur-source-p pkg-name)))
     (erase-buffer)
     (seq-do
      (lambda (field)
@@ -800,6 +808,7 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
     (with-help-window buf-name
       (with-current-buffer standard-output
         (setq arch--info-package pkg-name)
+        (setq arch--info-aur-p (arch--pkg-aur-source-p pkg-name))
         (arch--info-render pkg-name plist files)
         (goto-char (point-min))))
     (when-let* ((buf (get-buffer buf-name)))
@@ -831,6 +840,11 @@ List items containing ': ' are single-quoted to avoid YAML mapping ambiguity."
    ["Modify"
     ("r"  "Remove"      arch-info-remove)
     ("u"  "Upgrade"     arch-info-upgrade)]
+   ["AUR (abs)"
+    ("bi" "Install/upgrade"     arch-info-abs-install
+     :inapt-if-nil arch--info-aur-p)
+    ("br" "Reinstall (no pull)" arch-info-abs-rebuild
+     :inapt-if-nil arch--info-aur-p)]
    ["Navigate"
     ("s"  "Search"               arch-search)
     ("S"  "Search AUR"           arch-search-aur)
@@ -897,10 +911,52 @@ reinstalling; use `arch-info-upgrade' to upgrade/reinstall it."
   (when-let* ((fn (arch-backend-upgrade-fn (arch--default-backend))))
     (funcall fn arch--info-package)))
 
+(defun arch-info-abs-install ()
+  "Install or upgrade the package shown in this buffer from AUR source.
+See `arch-abs-install'."
+  (interactive)
+  (arch-abs-install arch--info-package))
+
+(defun arch-info-abs-rebuild ()
+  "Reinstall the package shown in this buffer from its existing abs clone.
+See `arch-abs-rebuild'."
+  (interactive)
+  (arch-abs-rebuild arch--info-package))
+
 ;;; Tabulated list view
 
 (defconst arch--list-buffer-name "*arch-packages*"
   "Name of the arch package list buffer.")
+
+;; window placement: progress buffers take over an existing window rather
+;; than popping a new one, but never displace the arch package list window
+
+(defun arch--progress-buffer-p (buf _action)
+  "Return non-nil if BUF is an *arch:<pkg>* progress buffer.
+BUF may be a buffer or a buffer name, per the `display-buffer-alist'
+condition-function contract."
+  (string-match-p "^\\*arch:" (if (bufferp buf) (buffer-name buf) buf)))
+
+(defun arch--takeover-window (buffer _alist)
+  "Action: display BUFFER by taking over another arch progress window.
+Prefers a window already showing a different *arch:<pkg>* buffer, then any
+other non-dedicated window.  Never takes over the window showing
+`arch--list-buffer-name'."
+  (let ((candidates (seq-remove
+                     (lambda (w)
+                       (or (window-dedicated-p w)
+                           (equal (buffer-name (window-buffer w)) arch--list-buffer-name)))
+                     (window-list nil 'nomini))))
+    (when-let* ((win (or (seq-find (lambda (w) (arch--progress-buffer-p (window-buffer w) nil)) candidates)
+                         (seq-find (lambda (w) (not (eq w (selected-window)))) candidates)
+                         (car candidates))))
+      (set-window-buffer win buffer)
+      win)))
+
+(add-to-list 'display-buffer-alist
+             '(arch--progress-buffer-p
+               (arch--takeover-window
+                display-buffer-pop-up-window)))
 
 (defvar-local arch--list-backend nil
   "Backend used by the current arch-list buffer.")
