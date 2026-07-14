@@ -521,17 +521,19 @@ or `describe-symbol' as fallback."
   ;; only read the desktop if we're not in the "solo" (no ID) emacs
   ;; instance.
   (unless (equal "solo" sprite-instance-id)
-    ;; TODO This should get a better runtime/feature flag (and have
-    ;; a list of instance names that are epehemral)
     (setq desktop-dirname (file-name-concat user-emacs-directory sprite--conf-state-directory))
     (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
     (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
     (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~/")))
 
+    (setq desktop-save t)
+    (setq desktop/last-save-time (current-time))
+    (setq desktop-restore-frames nil)
+    (setq desktop-restore-in-current-display nil)
+
     (if (daemonp)
-        (setq desktop-restore-frames nil
-              desktop-load-locked-desktop t
-              desktop-restore-eager nil)
+        (setq desktop-restore-eager nil
+              desktop-load-locked-desktop t)
       (setq desktop-restore-eager t
             desktop-load-locked-desktop nil))
 
@@ -540,9 +542,6 @@ or `describe-symbol' as fallback."
      (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
        (with-file-name-handler-disabled
 	(with-silence (desktop-read)))))
-
-    (setq desktop-save t)
-    (setq desktop/last-save-time (current-time))
 
     (run-with-idle-timer 120 t #'bootstrap-desktop-save)
 
