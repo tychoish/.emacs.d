@@ -29,6 +29,8 @@
 (declare-function denote-markdown-convert-links-to-denote-format "denote-markdown")
 (declare-function denote-review-set-date "denote-review")
 (declare-function denote-review-display-list "denote-review")
+(declare-function denote-review-search-regexp-for-filetype "denote-review")
+(declare-function denote-review-check-date-of-file "denote-review")
 (declare-function annotated-completing-read "annotated-completing-read")
 (declare-function denote-explore-random-note "denote-explore")
 (declare-function denote-explore-missing-links "denote-explore")
@@ -99,6 +101,28 @@ Valid symbols: fold, sequence, title, keywords, modified, id, directory, git."
 (defcustom denote-dash-git-column-enabled nil
   "When non-nil, allow enabling the git status column via column toggle."
   :type 'boolean
+  :group 'denote-dash)
+
+(defcustom denote-dash-review-interval-days 90
+  "Days after a note's last reviewdate before it counts as pending review.
+A note with no reviewdate at all always counts as pending."
+  :type 'natnum
+  :group 'denote-dash)
+
+(defun denote-dash-review-indicator-icon (pending-p)
+  "Return an icon-style review indicator string for PENDING-P."
+  (if pending-p "●" " "))
+
+(defun denote-dash-review-indicator-text (pending-p)
+  "Return a text-style review indicator string for PENDING-P."
+  (if pending-p "due" ""))
+
+(defcustom denote-dash-review-indicator-function #'denote-dash-review-indicator-icon
+  "Function of one argument, PENDING-P, returning the review column's text.
+Built-in choices: `denote-dash-review-indicator-icon' (a filled circle when
+pending, blank otherwise) and `denote-dash-review-indicator-text' (\"due\" when
+pending, blank otherwise).  Set to a custom function for other presentations."
+  :type 'function
   :group 'denote-dash)
 
 ;;; Buffer-local state
@@ -238,6 +262,18 @@ or (or ...), (and ...), (not ...) compound forms."
                  (file-relative-name file (denote-dash--denote-root)))
         " ")))
 
+;;; Review status
+
+(defun denote-dash--review-pending-p (file)
+  "Return non-nil if FILE has no reviewdate or its reviewdate is stale.
+Staleness is controlled by `denote-dash-review-interval-days'."
+  (let* ((denote-file-type (denote-filetype-heuristics file))
+         (reviewdate (denote-review-check-date-of-file
+                      file (denote-review-search-regexp-for-filetype))))
+    (or (null reviewdate)
+        (time-less-p (days-to-time denote-dash-review-interval-days)
+                     (time-since (date-to-time reviewdate))))))
+
 ;;; Fold state
 
 (defun denote-dash--fold-visible-p (seq-id all-seq-ids)
@@ -316,7 +352,9 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
                                                 ('modified  (format-time-string "%Y-%m-%d" (file-attribute-modification-time (file-attributes file))))
                                                 ('id        (denote-dash--format-id (denote-retrieve-filename-identifier file)))
                                                 ('directory (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
-                                                ('git       (or (denote-dash--git-status-char file) " "))))
+                                                ('git       (or (denote-dash--git-status-char file) " "))
+                                                ('review    (funcall denote-dash-review-indicator-function
+                                                                     (denote-dash--review-pending-p file)))))
                                             denote-dash--visible-columns)))))))))
 
 ;;; Column format
@@ -333,6 +371,7 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
         ('id        19)
         ('directory 20)
         ('git       1)
+        ('review    3)
         (_          10))))
 
 (defun denote-dash--setup-columns ()
@@ -348,7 +387,8 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
                             ('modified  (list "Modified" (denote-dash--column-width 'modified) t))
                             ('id        (list "ID" (denote-dash--column-width 'id) t))
                             ('directory (list "Dir" (denote-dash--column-width 'directory) t))
-                            ('git       (list "G" (denote-dash--column-width 'git) nil))))
+                            ('git       (list "G" (denote-dash--column-width 'git) nil))
+                            ('review    (list "Rev" (denote-dash--column-width 'review) nil))))
                         denote-dash--visible-columns)))
   (tabulated-list-init-header))
 
@@ -395,6 +435,7 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   "M-n"     #'denote-dash-swap-with-next
   "C-n"     denote-dash-narrow-map
   "k"       #'denote-dash-retag-sequence
+  "v"       #'denote-dash-schedule-review-at-point
   "n"       #'denote
   "g"       #'denote-dash-refresh
   "?"       #'denote-dash-dispatch
@@ -504,6 +545,18 @@ path in the `denote-sequence-hierarchy-file' text property."
   (interactive)
   (when-let* ((file (tabulated-list-get-id)))
     (find-file-other-window file)))
+
+(defun denote-dash-schedule-review-at-point ()
+  "Set today's reviewdate on the note at point, without leaving denote-dash."
+  (interactive)
+  (when-let* ((file (tabulated-list-get-id)))
+    (let* ((existing (get-file-buffer file))
+           (denote-file-type (denote-filetype-heuristics file)))
+      (with-current-buffer (find-file-noselect file)
+        (denote-review-set-date)
+        (save-buffer)
+        (unless existing (kill-buffer))))
+    (denote-dash-refresh)))
 
 ;;; Filter commands
 
@@ -684,7 +737,7 @@ prefix argument they are AND'd."
 ;;; Column ordering and toggle
 
 (defvar denote-dash-column-order
-  '(sequence fold title keywords id directory modified git)
+  '(sequence fold title keywords id directory modified git review)
   "Canonical display order for columns; determines left-to-right position.")
 
 (defvar denote-dash--persisted-columns nil
@@ -734,6 +787,10 @@ prefix argument they are AND'd."
   (unless denote-dash-git-column-enabled
     (user-error "Set `denote-dash-git-column-enabled' to t to enable the git column"))
   (denote-dash--toggle-column 'git))
+
+(defun denote-dash-toggle-review-column ()
+  "Toggle the review-pending status column."
+  (interactive) (denote-dash--toggle-column 'review))
 
 (defun denote-dash-set-column-width ()
   "Interactively set the display width for a visible column."
@@ -816,6 +873,7 @@ prefix argument they are AND'd."
     ("i" "id"        denote-dash-toggle-id-column)
     ("d" "directory" denote-dash-toggle-directory-column)
     ("g" "git"       denote-dash-toggle-git-column)
+    ("v" "review"    denote-dash-toggle-review-column)
     ("o" "sort…"     denote-dash-sort-transient)]
    ["Display"
     ("r" denote-dash-toggle-front-matter-titles)

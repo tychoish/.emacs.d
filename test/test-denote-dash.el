@@ -8,6 +8,7 @@
 
 (require 'ert)
 (require 'denote-dash)
+(require 'denote-review)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash--char-digit-p
@@ -441,6 +442,68 @@ exclusive major modes and can never be simultaneously reachable."
     (should-not (seq-filter (lambda (c) (or (member (nth 0 c) new-keys)
                                             (member (nth 1 c) new-keys)))
                             conflicts))))
+
+(ert-deftest denote-dash-test/column-transient-no-key-collisions ()
+  "`denote-dash-column-transient' has no duplicate keys or key/prefix shadowing."
+  (let ((keys (transient-test/collect-keys 'denote-dash-column-transient)))
+    (should-not (transient-test/duplicate-keys keys))
+    (should-not (transient-test/key-prefix-conflicts keys))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--review-pending-p
+
+(defun denote-dash-test--make-org-note-with-reviewdate (dir id reviewdate)
+  "Create a minimal org Denote note in DIR and return its path.
+ID is the timestamp string.  REVIEWDATE, when non-nil, is an ISO 8601
+date string (\"YYYY-MM-DD\") written as the note's reviewdate frontmatter."
+  (let ((file (expand-file-name (concat id "--test.org") dir)))
+    (with-temp-file file
+      (insert "#+title:      Test\n")
+      (insert "#+identifier: " id "\n")
+      (when reviewdate (insert "#+reviewdate: [" reviewdate "]\n"))
+      (insert "\nBody.\n"))
+    file))
+
+(ert-deftest denote-dash-test/review-pending-no-reviewdate ()
+  "A note with no reviewdate at all is always pending."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let ((file (denote-dash-test--make-org-note-with-reviewdate
+                     dir "20240101T120000" nil)))
+          (should (denote-dash--review-pending-p file)))
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/review-pending-recent-reviewdate ()
+  "A note reviewed today is not pending."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let ((file (denote-dash-test--make-org-note-with-reviewdate
+                     dir "20240101T120000" (format-time-string "%F"))))
+          (should-not (denote-dash--review-pending-p file)))
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/review-pending-stale-reviewdate ()
+  "A note reviewed long before the interval is pending again."
+  (let ((dir (make-temp-file "denote-dash-test-" t))
+        (denote-dash-review-interval-days 90))
+    (unwind-protect
+        (let ((file (denote-dash-test--make-org-note-with-reviewdate
+                     dir "20240101T120000" "2000-01-01")))
+          (should (denote-dash--review-pending-p file)))
+      (delete-directory dir t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Review indicator functions
+
+(ert-deftest denote-dash-test/review-indicator-icon ()
+  "The icon indicator shows a filled circle when pending, blank otherwise."
+  (should (equal "●" (denote-dash-review-indicator-icon t)))
+  (should (equal " " (denote-dash-review-indicator-icon nil))))
+
+(ert-deftest denote-dash-test/review-indicator-text ()
+  "The text indicator shows \"due\" when pending, blank otherwise."
+  (should (equal "due" (denote-dash-review-indicator-text t)))
+  (should (equal "" (denote-dash-review-indicator-text nil))))
 
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here
