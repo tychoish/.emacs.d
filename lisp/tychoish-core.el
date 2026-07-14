@@ -1369,7 +1369,8 @@ clipboard."
 	     denote-dash-swap-with-previous
 	     denote-dash-swap-with-next
 	     denote-dash-reparent-recursive
-	     denote-dash-insert-sequence-note))
+	     denote-dash-insert-sequence-note
+	     denote-dash-retag-sequence))
 
 (use-package consult-notes
   :ensure t

@@ -431,5 +431,16 @@ exclusive major modes and can never be simultaneously reachable."
   (let ((keys (transient-test/collect-keys 'denote-dash-dispatch)))
     (should-not (transient-test/duplicate-keys keys))))
 
+(ert-deftest denote-dash-test/dispatch-transient-new-keys-no-collisions ()
+  "The narrow (`w*') and retag (`ak') keys don't shadow or get shadowed."
+  (let* ((keys (transient-test/collect-keys 'denote-dash-dispatch))
+         (new-keys '("ws" "wt" "ww" "wk" "ak"))
+         (conflicts (transient-test/key-prefix-conflicts keys)))
+    (dolist (nk new-keys)
+      (should (= 1 (seq-count (lambda (k) (equal k nk)) keys))))
+    (should-not (seq-filter (lambda (c) (or (member (nth 0 c) new-keys)
+                                            (member (nth 1 c) new-keys)))
+                            conflicts))))
+
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here

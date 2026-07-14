@@ -18,6 +18,7 @@
 (require 'denote-dash)
 
 (defvar denote-file-types)
+(declare-function annotated-completing-read "annotated-completing-read")
 
 ;;; Sequence alignment lint / autofix
 
@@ -616,6 +617,75 @@ or prompts for a file."
               nil nil nil nil seq-id)
       (when (derived-mode-p 'denote-dash-mode)
         (denote-dash-refresh)))))
+
+;;; Bulk retag across a sequence subtree
+
+(defconst denote-dash--retag-operations
+  '(("add"     add     "Add one or more keywords")
+    ("remove"  remove  "Remove one or more keywords")
+    ("replace" replace "Replace one keyword with another"))
+  "Operations offered by `denote-dash-retag-sequence'.")
+
+(defun denote-dash--retag-apply (keywords add-kws remove-kws)
+  "Return KEYWORDS with REMOVE-KWS removed and ADD-KWS added, deduplicated."
+  (seq-uniq (append (seq-difference keywords remove-kws) add-kws)))
+
+;;;###autoload
+(defun denote-dash-retag-sequence ()
+  "Add, remove, or replace a keyword across a sequence and all its descendants.
+Resolves the target sequence from the note at point in `denote-dash-mode' or
+`denote-sequence-hierarchy-mode', the current buffer file, or a prompt."
+  (interactive)
+  (require 'annotated-completing-read)
+  (let* ((file (denote-dash--target-file))
+         (seq-id (or (denote-retrieve-filename-signature file)
+                     (annotated-completing-read
+                      (seq-map (lambda (s) (cons s nil)) (denote-sequence-get-all-sequences))
+                      :prompt "Sequence: " :require-match t)))
+         (files (denote-dash--subtree-files seq-id))
+         (existing-keywords (seq-uniq (seq-mapcat #'denote-extract-keywords-from-path files))))
+    (unless files
+      (user-error "No files found for sequence %s" seq-id))
+    (let* ((op-table (seq-map (lambda (e) (cons (nth 0 e) (nth 2 e))) denote-dash--retag-operations))
+           (op-choice (annotated-completing-read op-table :prompt "Operation: " :require-match t))
+           (operation (nth 1 (assoc op-choice denote-dash--retag-operations)))
+           (add-kws nil)
+           (remove-kws nil))
+      (pcase operation
+        ('add
+         (setq add-kws (completing-read-multiple "Add keyword(s): " nil)))
+        ('remove
+         (unless existing-keywords
+           (user-error "No keywords found under sequence %s" seq-id))
+         (setq remove-kws (completing-read-multiple "Remove keyword(s): " existing-keywords nil t)))
+        ('replace
+         (unless existing-keywords
+           (user-error "No keywords found under sequence %s" seq-id))
+         (let ((old-kw (annotated-completing-read
+                        (seq-map (lambda (k) (cons k nil)) existing-keywords)
+                        :prompt "Replace keyword: " :require-match t)))
+           (setq remove-kws (list old-kw))
+           (setq add-kws (list (read-string (format "Replace `%s' with: " old-kw)))))))
+      (unless (yes-or-no-p (format "%s across sequence %s (%d file%s)? "
+                                   op-choice seq-id (length files)
+                                   (if (= (length files) 1) "" "s")))
+        (user-error "Cancelled"))
+      ;; Suppress per-file confirmations: the single confirmation above
+      ;; already covers the whole bulk operation.
+      (let ((denote-rename-confirmations nil))
+        (seq-do (lambda (f)
+                  (denote-rename-file f 'keep-current
+                                      (denote-dash--retag-apply
+                                       (denote-extract-keywords-from-path f)
+                                       add-kws remove-kws)
+                                      'keep-current 'keep-current 'keep-current))
+                files))
+      (cond
+       ((derived-mode-p 'denote-dash-mode) (denote-dash-refresh))
+       ((derived-mode-p 'denote-sequence-hierarchy-mode) (revert-buffer))))))
+
+(with-eval-after-load 'denote-sequence
+  (define-key denote-sequence-hierarchy-mode-map (kbd "k") #'denote-dash-retag-sequence))
 
 (provide 'denote-dash-repack)
 ;;; denote-dash-repack.el ends here

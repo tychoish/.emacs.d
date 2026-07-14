@@ -58,6 +58,7 @@
 (declare-function denote-dash-swap-with-next "denote-dash-repack")
 (declare-function denote-dash-reparent-recursive "denote-dash-repack")
 (declare-function denote-dash-insert-sequence-note "denote-dash-repack")
+(declare-function denote-dash-retag-sequence "denote-dash-repack")
 
 ;;; Custom variables
 
@@ -393,6 +394,7 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   "M-p"     #'denote-dash-swap-with-previous
   "M-n"     #'denote-dash-swap-with-next
   "C-n"     denote-dash-narrow-map
+  "k"       #'denote-dash-retag-sequence
   "n"       #'denote
   "g"       #'denote-dash-refresh
   "?"       #'denote-dash-dispatch
@@ -1024,10 +1026,13 @@ syntax) is left to the author."
 
 (defun denote-dash--target-file ()
   "Return the target file for sequence operations.
-Uses the note at point in `denote-dash-mode', the current buffer file,
-or prompts with completing-read."
+Uses the note at point in `denote-dash-mode' or `denote-sequence-hierarchy-mode',
+the current buffer file, or prompts with completing-read."
   (cond
    ((derived-mode-p 'denote-dash-mode) (tabulated-list-get-id))
+   ((derived-mode-p 'denote-sequence-hierarchy-mode)
+    (or (get-text-property (point) 'denote-sequence-hierarchy-file)
+        (user-error "No file found at point")))
    (buffer-file-name buffer-file-name)
    (t (completing-read "File: "
                        (seq-filter #'denote-sequence-file-p (denote-directory-files))
@@ -1044,7 +1049,7 @@ or prompts with completing-read."
 ;;   r* = rename (rr, rf, rp)
 ;;   e* = explore (er, em, ek, et, ed)
 ;;   i* = import (id)
-;;   a* = sequence (al=lint, af=fix all)
+;;   a* = sequence (al=lint, af=fix all, ak=retag)
 ;;   o* = org commands (ox, or, ol, ob, od, op, of)
 ;;   c* = convert (cm, cd)
 ;;   w* = narrow (ws, wt, ww, wk)
@@ -1107,7 +1112,8 @@ or prompts with completing-read."
     ("ar" "repack children"    denote-dash-repack-sequence-children)
     ("as" "swap with parent"   denote-dash-swap-with-parent)
     ("ap" "swap with previous" denote-dash-swap-with-previous)
-    ("an" "swap with next"     denote-dash-swap-with-next)]
+    ("an" "swap with next"     denote-dash-swap-with-next)
+    ("ak" "retag sequence"     denote-dash-retag-sequence)]
    ["Import"
     ("id" "from org datetree"  denote-dash-import-from-datetree)]]
   [["Org" :if-derived org-mode
