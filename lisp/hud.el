@@ -235,6 +235,7 @@ Entries whose :if predicate returns nil are excluded."
  :transient-key "ds")
 
 (hud-register-command
+ :category 'magit-dash
  :command #'magit-dash-open
  :description "repo dashboard"
  :transient-key "rd")
@@ -246,11 +247,13 @@ Entries whose :if predicate returns nil are excluded."
  :transient-key "rr")
 
 (hud-register-command
+ :category 'magit-dash
  :command #'magit-dash-sync-all
  :description "sync all dashboard repos"
  :transient-key "rs")
 
 (hud-register-command
+ :category 'magit-dash
  :command #'magit-dash-sync-repo
  :description "sync one dashboard repo"
  :transient-key "ru")
