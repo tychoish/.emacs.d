@@ -29,6 +29,7 @@
 (declare-function denote-markdown-convert-links-to-denote-format "denote-markdown")
 (declare-function denote-review-set-date "denote-review")
 (declare-function denote-review-display-list "denote-review")
+(declare-function annotated-completing-read "annotated-completing-read")
 (declare-function denote-explore-random-note "denote-explore")
 (declare-function denote-explore-missing-links "denote-explore")
 (declare-function denote-explore-barchart-keywords "denote-explore")
@@ -107,6 +108,12 @@ Valid symbols: fold, sequence, title, keywords, modified, id, directory, git."
 (defvar-local denote-dash--filter-history nil
   "Minibuffer history for denote-dash filter expressions.")
 
+(defvar-local denote-dash--narrowed-sequences nil
+  "List of sequence-ID strings to narrow to, or nil to show all sequences.")
+
+(defvar-local denote-dash--keyword-toggles nil
+  "List of keyword strings toggled on for `denote-dash--current-filter'.")
+
 (defvar-local denote-dash--active-directory nil
   "Directory path restriction, or nil to show notes from all directories.")
 
@@ -169,6 +176,12 @@ hierarchy levels alternate between digit and letter characters."
   (and (denote-dash--sequence-descendant-p parent child)
        (= (denote-dash--sequence-depth child)
           (1+ (denote-dash--sequence-depth parent)))))
+
+(defun denote-dash--sequence-in-narrow-p (seq-id narrowed)
+  "Return non-nil if SEQ-ID equals or descends from a sequence in NARROWED."
+  (seq-some (lambda (n) (or (string= n seq-id)
+                            (denote-dash--sequence-descendant-p n seq-id)))
+            narrowed))
 
 ;;; Filter expression evaluator
 
@@ -271,6 +284,8 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   (let ((seq-id (denote-retrieve-filename-signature file)))
     (and (denote-dash--matches-p (denote-extract-keywords-from-path file)
                                  denote-dash--current-filter)
+         (or (null denote-dash--narrowed-sequences)
+             (and seq-id (denote-dash--sequence-in-narrow-p seq-id denote-dash--narrowed-sequences)))
          (or (null denote-dash--active-directory)
              (string-prefix-p (expand-file-name denote-dash--active-directory) file))
          (or denote-dash--show-non-sequence seq-id)
@@ -349,6 +364,13 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
 
 ;;; Mode definition
 
+(defvar-keymap denote-dash-narrow-map
+  :doc "Keymap for sequence/keyword narrowing in `denote-dash-mode'."
+  "s" #'denote-dash-narrow-to-sequence
+  "t" #'denote-dash-toggle-sequence-narrow
+  "w" #'denote-dash-widen
+  "k" #'denote-dash-toggle-keyword)
+
 (defvar-keymap denote-dash-mode-map
   :doc "Keymap for `denote-dash-mode'."
   "RET"     #'denote-dash-open-note
@@ -370,6 +392,7 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   "M-r"     #'denote-dash-swap-with-parent
   "M-p"     #'denote-dash-swap-with-previous
   "M-n"     #'denote-dash-swap-with-next
+  "C-n"     denote-dash-narrow-map
   "n"       #'denote
   "g"       #'denote-dash-refresh
   "?"       #'denote-dash-dispatch
@@ -533,6 +556,56 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
          (expr (cdr (assoc chosen denote-dash-filter-shortcuts))))
     (setq denote-dash--current-filter expr)
     (denote-dash-refresh)))
+
+(defun denote-dash-toggle-keyword ()
+  "Toggle one keyword in `denote-dash--keyword-toggles' using a single ACR pick.
+Without a prefix argument the toggled keywords are OR'd together; with a
+prefix argument they are AND'd."
+  (interactive)
+  (require 'annotated-completing-read)
+  (let* ((keyword (annotated-completing-read
+                   (seq-map (lambda (k) (cons k nil)) (denote-dash--all-keywords))
+                   :prompt "Toggle keyword: " :require-match t))
+         (toggles (if (member keyword denote-dash--keyword-toggles)
+                      (remove keyword denote-dash--keyword-toggles)
+                    (cons keyword denote-dash--keyword-toggles))))
+    (setq denote-dash--keyword-toggles toggles)
+    (setq denote-dash--current-filter
+          (cond
+           ((null toggles) nil)
+           ((= (length toggles) 1) (car toggles))
+           (current-prefix-arg `(and ,@toggles))
+           (t `(or ,@toggles))))
+    (denote-dash-refresh)))
+
+;;; Sequence narrowing
+
+(defun denote-dash-narrow-to-sequence ()
+  "Narrow the displayed notes to one or more sequences, selected all at once."
+  (interactive)
+  (let ((selected (completing-read-multiple
+                   "Narrow to sequences: " (denote-sequence-get-all-sequences))))
+    (setq denote-dash--narrowed-sequences selected)
+    (denote-dash-refresh)))
+
+(defun denote-dash-toggle-sequence-narrow ()
+  "Toggle a single sequence in or out of the current narrow set."
+  (interactive)
+  (require 'annotated-completing-read)
+  (let* ((seq-id (annotated-completing-read
+                  (seq-map (lambda (s) (cons s nil)) (denote-sequence-get-all-sequences))
+                  :prompt "Toggle sequence: " :require-match t)))
+    (setq denote-dash--narrowed-sequences
+          (if (member seq-id denote-dash--narrowed-sequences)
+              (remove seq-id denote-dash--narrowed-sequences)
+            (cons seq-id denote-dash--narrowed-sequences)))
+    (denote-dash-refresh)))
+
+(defun denote-dash-widen ()
+  "Clear sequence narrowing and show notes from all sequences."
+  (interactive)
+  (setq denote-dash--narrowed-sequences nil)
+  (denote-dash-refresh))
 
 ;;; Directory restriction
 
@@ -974,6 +1047,7 @@ or prompts with completing-read."
 ;;   a* = sequence (al=lint, af=fix all)
 ;;   o* = org commands (ox, or, ol, ob, od, op, of)
 ;;   c* = convert (cm, cd)
+;;   w* = narrow (ws, wt, ww, wk)
 ;;   n, j = bare single-key create commands
 
 ;;;###autoload
@@ -1007,7 +1081,12 @@ or prompts with completing-read."
      :inapt-if-derived denote-sequence-hierarchy-mode)
     ("vc" "close all notes"    denote-dash-close-all-notes)]
    ["Columns" :if-derived denote-dash-mode
-    ("c" "toggle columns…"     denote-dash-column-transient)]]
+    ("c" "toggle columns…"     denote-dash-column-transient)]
+   ["Narrow" :if-derived denote-dash-mode
+    ("ws" "narrow to seq(s)"   denote-dash-narrow-to-sequence)
+    ("wt" "toggle seq"         denote-dash-toggle-sequence-narrow)
+    ("ww" "widen"              denote-dash-widen)
+    ("wk" "toggle keyword"     denote-dash-toggle-keyword)]]
   [["Link"
     ("ll" "insert link"        denote-link)
     ("lp" "link (sequence)"    denote-sequence-link)]

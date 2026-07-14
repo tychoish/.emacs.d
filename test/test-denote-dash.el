@@ -110,6 +110,61 @@
   (should-not (denote-dash--direct-child-p "1b" "1a1")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--sequence-in-narrow-p
+
+(ert-deftest denote-dash-test/in-narrow-p-exact-match ()
+  "A sequence equal to a narrowed entry is in the narrow set."
+  (should (denote-dash--sequence-in-narrow-p "1a" '("1a"))))
+
+(ert-deftest denote-dash-test/in-narrow-p-descendant-match ()
+  "A descendant of a narrowed sequence is in the narrow set."
+  (should (denote-dash--sequence-in-narrow-p "1a1" '("1a"))))
+
+(ert-deftest denote-dash-test/in-narrow-p-unrelated ()
+  "An unrelated sequence is not in the narrow set."
+  (should-not (denote-dash--sequence-in-narrow-p "2" '("1a"))))
+
+(ert-deftest denote-dash-test/in-narrow-p-multiple-narrowed ()
+  "Matching any one of several narrowed sequences is sufficient."
+  (should (denote-dash--sequence-in-narrow-p "2b" '("1a" "2"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--file-visible-p with sequence narrowing
+
+(ert-deftest denote-dash-test/file-visible-narrowed-shows-descendant ()
+  "With a narrow set active, descendants of a narrowed sequence are visible."
+  (let ((denote-dash--current-filter nil)
+        (denote-dash--narrowed-sequences '("1a"))
+        (denote-dash--active-directory nil)
+        (denote-dash--show-non-sequence t)
+        (denote-dash--fold-state (make-hash-table :test #'equal))
+        (denote-dash--global-cycle-depth nil))
+    (should (denote-dash--file-visible-p
+             "/tmp/20240101T120000==1a1--child.org" '("1a" "1a1")))))
+
+(ert-deftest denote-dash-test/file-visible-narrowed-hides-unrelated ()
+  "With a narrow set active, unrelated sequences are hidden."
+  (let ((denote-dash--current-filter nil)
+        (denote-dash--narrowed-sequences '("1a"))
+        (denote-dash--active-directory nil)
+        (denote-dash--show-non-sequence t)
+        (denote-dash--fold-state (make-hash-table :test #'equal))
+        (denote-dash--global-cycle-depth nil))
+    (should-not (denote-dash--file-visible-p
+                 "/tmp/20240101T120000==2--other.org" '("1a" "2")))))
+
+(ert-deftest denote-dash-test/file-visible-nil-narrow-shows-everything ()
+  "A nil narrow set imposes no restriction."
+  (let ((denote-dash--current-filter nil)
+        (denote-dash--narrowed-sequences nil)
+        (denote-dash--active-directory nil)
+        (denote-dash--show-non-sequence t)
+        (denote-dash--fold-state (make-hash-table :test #'equal))
+        (denote-dash--global-cycle-depth nil))
+    (should (denote-dash--file-visible-p
+             "/tmp/20240101T120000==2--other.org" '("1a" "2")))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash--matches-p
 
 (ert-deftest denote-dash-test/matches-p-nil-filter ()
@@ -358,6 +413,23 @@ path that does not yet exist."
   "The directory-setup function is on `denote-sequence-hierarchy-mode-hook'."
   (should (memq #'denote-dash--hierarchy-setup-directory
                 denote-sequence-hierarchy-mode-hook)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Transient key-collision regressions
+;;
+;; A transient's key strings must be unique and no single-char binding may
+;; shadow a multi-char one, else the shadowed suffix is silently unreachable.
+
+(ert-deftest denote-dash-test/dispatch-transient-no-key-collisions ()
+  "`denote-dash-dispatch' has no duplicate keys.
+Prefix-shadowing is checked separately, scoped to the narrow/retag keys
+this test suite added: the dispatch has one pre-existing, intentional
+prefix overlap between the bare \"c\" (Columns, visible only in
+`denote-dash-mode') and \"cd\"/\"cm\" (Convert, visible only in
+`markdown-mode') — safe because the two groups are gated by mutually
+exclusive major modes and can never be simultaneously reachable."
+  (let ((keys (transient-test/collect-keys 'denote-dash-dispatch)))
+    (should-not (transient-test/duplicate-keys keys))))
 
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here
