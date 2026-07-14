@@ -1569,21 +1569,24 @@ clipboard."
   :defer t
   :delight (flyspell-mode " fs")
   :init
-  (defun tychoish--flyspell-run-in-buffer (mode-fn buf)
-    "Call MODE-FN with argument 1 in BUF, if BUF is still live.
-Deferring via an idle timer keeps mode hooks that fire while buffers are
-restored in bulk (`desktop-read', command-line file arguments) from
-synchronously starting the ispell/aspell subprocess and logging
-\"Starting new Ispell process...\" outside any message-suppressing scope."
+  (defun tychoish--flyspell-run-in-text-buffer (buf)
     (when (buffer-live-p buf)
       (with-current-buffer buf
-	(funcall mode-fn 1))))
+	(flyspell-mode 1))))
+
+  (defun tychoish--flyspell-run-in-prog-buffer (buf)
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+	(flyspell-prog-mode))))
+
   (defun tychoish--flyspell-mode-idle ()
     "Enable `flyspell-mode' in the current buffer once Emacs is idle."
-    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-buffer #'flyspell-mode (current-buffer)))
+    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-text-buffer (current-buffer)))
+
   (defun tychoish--flyspell-prog-mode-idle ()
     "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
-    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-buffer #'flyspell-prog-mode (current-buffer)))
+    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-prog-buffer (current-buffer)))
+
   :hook ((prog-mode . tychoish--flyspell-prog-mode-idle)
 	 (text-mode . tychoish--flyspell-mode-idle)
 	 (telega-chat-mode . tychoish--flyspell-mode-idle))
