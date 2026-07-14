@@ -174,13 +174,13 @@
  :prefix "C-c o"
  :prefix-map orgx-global-map
  ("a" . orgx-agenda-view)
- ("c" . consult-org-capture)
+ ("c" . orgx-capture)
  ("4" . org-agenda)
  ("k" . org-capture)
  ("f" . orgx-agenda-files-open)
  ("s" . org-save-all-org-buffers)
  ("r" . orgx-agenda-files-reload)
- ("j" . consult-org-capture)
+ ("j" . orgx-capture)
  ("u" . orgx-agenda-untagged-in-file)
  ("/" . orgx-agenda-for-file)
  :map orgx-global-map
@@ -461,7 +461,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 ;; consult-tycho: org-capture
 
 ;;;###autoload
-(defun consult-org-capture ()
+(defun orgx-capture ()
   "Select a capture template interactively."
   (interactive)
   (let* ((key-table (make-hash-table :test #'equal))
@@ -962,16 +962,16 @@ new note's identifier reflects that date."
 ;;;          C-f to unblock f=orgx-agenda-files-open which was previously shadowed)
 ;;;
 ;;; Global (orgx-global-map, active everywhere):
-;;;   a=orgx-agenda-view  c=consult-org-capture  4=org-agenda
+;;;   a=orgx-agenda-view  c=orgx-capture  4=org-agenda
 ;;;   k=org-capture  f=orgx-agenda-files-open  s=org-save-all-org-buffers
-;;;   r=orgx-agenda-files-reload  j=consult-org-capture
+;;;   r=orgx-agenda-files-reload  j=orgx-capture
 ;;;   u=orgx-agenda-untagged-in-file  /=orgx-agenda-for-file
 ;;;   l → orgx-link-map (submap)
 ;;;
 ;;; Cross-map precedence: minor-mode map shadows global in org buffers.
 ;;; Keys only in global (unreachable via minor-mode, acceptable):
-;;;   4 (org-agenda direct), j (duplicate consult-org-capture alias)
-;;;   c in global = consult-org-capture; c in personal = orgx-minor-mode-capture-map
+;;;   4 (org-agenda direct), j (duplicate orgx-capture alias)
+;;;   c in global = orgx-capture; c in personal = orgx-minor-mode-capture-map
 ;;;     → in org buffers C-c o c opens capture submap; use C-c o c c for capture
 ;;;
 ;;;  W (widen) dropped: violates no-capitals rule; use C-x n w instead.
@@ -983,7 +983,7 @@ new note's identifier reflects that date."
 (defvar-keymap orgx-minor-mode-capture-map
   :name "orgx-capture"
   :doc "Capture commands under C-c o c (orgx-minor-mode)."
-  "c" #'consult-org-capture
+  "c" #'orgx-capture
   "m" #'org-capture
   "p" #'org-capture-goto-last-stored
   "l" #'org-capture-goto-last-stored

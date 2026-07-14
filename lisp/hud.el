@@ -309,7 +309,7 @@ Entries whose :if predicate returns nil are excluded."
 (hud-register-command
  :row 2
  :category 'org-mode
- :command #'consult-org-capture
+ :command #'orgx-capture
  :description "org-capture with template"
  :transient-key "oc")
 
