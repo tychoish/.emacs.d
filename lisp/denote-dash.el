@@ -15,6 +15,7 @@
 (require 'tabulated-list)
 (require 'seq)
 (require 'map)
+(require 'outline)
 (require 'denote)
 (require 'denote-sequence)
 
@@ -123,6 +124,32 @@ Built-in choices: `denote-dash-review-indicator-icon' (a filled circle when
 pending, blank otherwise) and `denote-dash-review-indicator-text' (\"due\" when
 pending, blank otherwise).  Set to a custom function for other presentations."
   :type 'function
+  :group 'denote-dash)
+
+(defcustom denote-dash-hierarchy-initial-fold-depth nil
+  "Depth to collapse to when the hierarchy view first opens.
+nil (default) shows everything expanded, matching upstream.  An integer N
+folds anything deeper than N levels — equivalent to `outline-hide-sublevels'."
+  :type '(choice (const :tag "Expand all" nil) natnum)
+  :group 'denote-dash)
+
+(defcustom denote-dash-hierarchy-fold-sequences nil
+  "Sequence-ID strings whose whole subtree starts folded, unconditionally."
+  :type '(repeat string)
+  :group 'denote-dash)
+
+(defcustom denote-dash-hierarchy-auto-fold-min-size nil
+  "Fold a top-level section (root sequence + descendants) this small.
+A section counts as its root note plus every descendant.  nil disables
+this rule; a small section is trivial to expand by hand, so the default
+is off — it only matters when many tiny sections clutter the view."
+  :type '(choice (const :tag "Disabled" nil) natnum)
+  :group 'denote-dash)
+
+(defcustom denote-dash-hierarchy-auto-fold-max-size nil
+  "Fold a top-level section (root sequence + descendants) larger than this.
+nil disables the rule."
+  :type '(choice (const :tag "Disabled" nil) natnum)
   :group 'denote-dash)
 
 ;;; Buffer-local state
@@ -531,6 +558,69 @@ path in the `denote-sequence-hierarchy-file' text property."
   (add-hook 'post-command-hook #'denote-dash--hierarchy-sync-directory nil t))
 
 (add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-setup-directory)
+
+;;; Sequence hierarchy initial folding
+
+(defun denote-dash--hierarchy-heading-positions ()
+  "Return a list of (POINT LEVEL SEQUENCE) for every heading in the buffer.
+LEVEL comes from the `denote-sequence-hierarchy-level' text property and
+SEQUENCE from `denote-retrieve-filename-signature' on the file at that
+property; both are set by `denote-sequence-view-hierarchy'."
+  (let (result)
+    (save-excursion
+      (goto-char (point-min))
+      (while (not (eobp))
+        (when-let* ((level (get-text-property (point) 'denote-sequence-hierarchy-level))
+                    (file (get-text-property (point) 'denote-sequence-hierarchy-file)))
+          (push (list (point) level (denote-retrieve-filename-signature file)) result))
+        (forward-line 1)))
+    (nreverse result)))
+
+(defun denote-dash--hierarchy-section-sizes (headings)
+  "Return an alist of (POINT . SIZE) for each entry in HEADINGS.
+HEADINGS is the list returned by `denote-dash--hierarchy-heading-positions'.
+SIZE counts the heading itself plus every following heading whose level is
+strictly deeper, stopping at the next heading whose level is the same or
+shallower."
+  (let (sizes)
+    (while headings
+      (let* ((entry (car headings))
+             (level (nth 1 entry))
+             (size 1))
+        (catch 'done
+          (dolist (other (cdr headings))
+            (if (> (nth 1 other) level)
+                (setq size (1+ size))
+              (throw 'done nil))))
+        (push (cons (nth 0 entry) size) sizes))
+      (setq headings (cdr headings)))
+    (nreverse sizes)))
+
+(defun denote-dash--hierarchy-apply-initial-fold ()
+  "Fold sections of a freshly populated hierarchy buffer per user options.
+Composes `denote-dash-hierarchy-initial-fold-depth',
+`denote-dash-hierarchy-fold-sequences', `denote-dash-hierarchy-auto-fold-min-size',
+and `denote-dash-hierarchy-auto-fold-max-size' — a section folds if any
+enabled rule applies to it."
+  (when denote-dash-hierarchy-initial-fold-depth
+    (outline-hide-sublevels denote-dash-hierarchy-initial-fold-depth))
+  (when (or denote-dash-hierarchy-fold-sequences
+            denote-dash-hierarchy-auto-fold-min-size
+            denote-dash-hierarchy-auto-fold-max-size)
+    (let* ((headings (denote-dash--hierarchy-heading-positions))
+           (sizes (denote-dash--hierarchy-section-sizes headings)))
+      (dolist (entry headings)
+        (pcase-let ((`(,pos ,level ,seq) entry))
+          (when (= level 1)
+            (let ((size (cdr (assq pos sizes))))
+              (when (or (member seq denote-dash-hierarchy-fold-sequences)
+                        (and denote-dash-hierarchy-auto-fold-min-size
+                             (<= size denote-dash-hierarchy-auto-fold-min-size))
+                        (and denote-dash-hierarchy-auto-fold-max-size
+                             (> size denote-dash-hierarchy-auto-fold-max-size)))
+                (save-excursion (goto-char pos) (outline-hide-subtree))))))))))
+
+(add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-apply-initial-fold t)
 
 ;;; Navigation
 

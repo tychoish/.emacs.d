@@ -415,39 +415,180 @@ path that does not yet exist."
   (should (memq #'denote-dash--hierarchy-setup-directory
                 denote-sequence-hierarchy-mode-hook)))
 
+(ert-deftest denote-dash-test/hierarchy-fold-hook-registered ()
+  "The initial-fold function is on `denote-sequence-hierarchy-mode-hook'."
+  (should (memq #'denote-dash--hierarchy-apply-initial-fold
+                denote-sequence-hierarchy-mode-hook)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Transient key-collision regressions
+;; denote-dash--hierarchy-heading-positions / --hierarchy-section-sizes
 ;;
-;; A transient's key strings must be unique and no single-char binding may
-;; shadow a multi-char one, else the shadowed suffix is silently unreachable.
+;; Synthetic tree, matching what `denote-sequence-view-hierarchy' inserts:
+;;   1          (singleton root, size 1)
+;;   2          (root with 2 children, size 3)
+;;     2a
+;;     2b
+;;   3          (root with 5 descendants, size 6)
+;;     3a
+;;       3a1
+;;       3a2
+;;     3b
+;;       3b1
 
-(ert-deftest denote-dash-test/dispatch-transient-no-key-collisions ()
-  "`denote-dash-dispatch' has no duplicate keys.
-Prefix-shadowing is checked separately, scoped to the narrow/retag keys
-this test suite added: the dispatch has one pre-existing, intentional
-prefix overlap between the bare \"c\" (Columns, visible only in
-`denote-dash-mode') and \"cd\"/\"cm\" (Convert, visible only in
-`markdown-mode') — safe because the two groups are gated by mutually
-exclusive major modes and can never be simultaneously reachable."
-  (let ((keys (transient-test/collect-keys 'denote-dash-dispatch)))
-    (should-not (transient-test/duplicate-keys keys))))
+(defun denote-dash-test--insert-hierarchy-tree (tree)
+  "Insert TREE, a list of (LEVEL . SEQUENCE), as propertized hierarchy lines.
+Mirrors the text properties `denote-sequence-view-hierarchy' sets on each
+line: `denote-sequence-hierarchy-level' and `denote-sequence-hierarchy-file'
+(a fake but Denote-compliant path encoding SEQUENCE)."
+  (dolist (entry tree)
+    (let* ((level (car entry))
+           (seq (cdr entry))
+           (file (format "/tmp/x/20240101T100000==%s--note.org" seq)))
+      (insert (propertize (format "%s\n" seq)
+                          'denote-sequence-hierarchy-level level
+                          'denote-sequence-hierarchy-file file)))))
 
-(ert-deftest denote-dash-test/dispatch-transient-new-keys-no-collisions ()
-  "The narrow (`w*') and retag (`ak') keys don't shadow or get shadowed."
-  (let* ((keys (transient-test/collect-keys 'denote-dash-dispatch))
-         (new-keys '("ws" "wt" "ww" "wk" "ak"))
-         (conflicts (transient-test/key-prefix-conflicts keys)))
-    (dolist (nk new-keys)
-      (should (= 1 (seq-count (lambda (k) (equal k nk)) keys))))
-    (should-not (seq-filter (lambda (c) (or (member (nth 0 c) new-keys)
-                                            (member (nth 1 c) new-keys)))
-                            conflicts))))
+(defconst denote-dash-test--hierarchy-tree
+  '((1 . "1")
+    (1 . "2") (2 . "2a") (2 . "2b")
+    (1 . "3") (2 . "3a") (3 . "3a1") (3 . "3a2") (2 . "3b") (3 . "3b1"))
+  "Synthetic hierarchy tree shared by the fold tests.")
 
-(ert-deftest denote-dash-test/column-transient-no-key-collisions ()
-  "`denote-dash-column-transient' has no duplicate keys or key/prefix shadowing."
-  (let ((keys (transient-test/collect-keys 'denote-dash-column-transient)))
-    (should-not (transient-test/duplicate-keys keys))
-    (should-not (transient-test/key-prefix-conflicts keys))))
+(defun denote-dash-test--hierarchy-point-for (seq)
+  "Return the buffer position of the line for SEQ in the current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (let (found)
+      (while (and (not found) (not (eobp)))
+        (when (equal seq (denote-retrieve-filename-signature
+                           (get-text-property (point) 'denote-sequence-hierarchy-file)))
+          (setq found (point)))
+        (forward-line 1))
+      found)))
+
+(ert-deftest denote-dash-test/hierarchy-heading-positions-collects-all ()
+  "Every inserted line is collected, in order, with its level and sequence."
+  (with-temp-buffer
+    (denote-dash-test--insert-hierarchy-tree denote-dash-test--hierarchy-tree)
+    (let ((headings (denote-dash--hierarchy-heading-positions)))
+      (should (= (length denote-dash-test--hierarchy-tree) (length headings)))
+      (should (equal (mapcar #'cdr denote-dash-test--hierarchy-tree)
+                     (mapcar (lambda (h) (nth 2 h)) headings))))))
+
+(ert-deftest denote-dash-test/hierarchy-section-sizes-singleton ()
+  "A root with no children has section size 1."
+  (with-temp-buffer
+    (denote-dash-test--insert-hierarchy-tree denote-dash-test--hierarchy-tree)
+    (let* ((headings (denote-dash--hierarchy-heading-positions))
+           (sizes (denote-dash--hierarchy-section-sizes headings))
+           (pos (denote-dash-test--hierarchy-point-for "1")))
+      (should (= 1 (cdr (assq pos sizes)))))))
+
+(ert-deftest denote-dash-test/hierarchy-section-sizes-two-children ()
+  "A root with 2 direct children has section size 3."
+  (with-temp-buffer
+    (denote-dash-test--insert-hierarchy-tree denote-dash-test--hierarchy-tree)
+    (let* ((headings (denote-dash--hierarchy-heading-positions))
+           (sizes (denote-dash--hierarchy-section-sizes headings))
+           (pos (denote-dash-test--hierarchy-point-for "2")))
+      (should (= 3 (cdr (assq pos sizes)))))))
+
+(ert-deftest denote-dash-test/hierarchy-section-sizes-nested-descendants ()
+  "A root with 5 nested descendants has section size 6."
+  (with-temp-buffer
+    (denote-dash-test--insert-hierarchy-tree denote-dash-test--hierarchy-tree)
+    (let* ((headings (denote-dash--hierarchy-heading-positions))
+           (sizes (denote-dash--hierarchy-section-sizes headings))
+           (pos (denote-dash-test--hierarchy-point-for "3")))
+      (should (= 6 (cdr (assq pos sizes)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--hierarchy-apply-initial-fold
+
+(defun denote-dash-test--hierarchy-level-at-point ()
+  "`outline-level' function for the synthetic hierarchy test buffers."
+  (get-text-property (point) 'denote-sequence-hierarchy-level))
+
+(defmacro denote-dash-test--with-hierarchy-buffer (&rest body)
+  "Run BODY in a temp buffer populated like a real hierarchy view, with
+`outline-minor-mode' configured the same way `denote-sequence-hierarchy-mode' does."
+  `(with-temp-buffer
+     (denote-dash-test--insert-hierarchy-tree denote-dash-test--hierarchy-tree)
+     (setq-local outline-regexp "[\s[:alnum:]]+")
+     (setq-local outline-level #'denote-dash-test--hierarchy-level-at-point)
+     (outline-minor-mode 1)
+     ,@body))
+
+(ert-deftest denote-dash-test/hierarchy-apply-fold-depth ()
+  "A depth of 1 folds every root's children, but not the roots themselves."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-initial-fold-depth 1)
+         (denote-dash-hierarchy-fold-sequences nil)
+         (denote-dash-hierarchy-auto-fold-min-size nil)
+         (denote-dash-hierarchy-auto-fold-max-size nil))
+     (denote-dash--hierarchy-apply-initial-fold)
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "1")))
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "2")))
+     (should (outline-invisible-p (denote-dash-test--hierarchy-point-for "2a"))))))
+
+(ert-deftest denote-dash-test/hierarchy-apply-fold-explicit-sequences ()
+  "Only the listed sequence's subtree folds; unrelated roots stay expanded."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-initial-fold-depth nil)
+         (denote-dash-hierarchy-fold-sequences '("3"))
+         (denote-dash-hierarchy-auto-fold-min-size nil)
+         (denote-dash-hierarchy-auto-fold-max-size nil))
+     (denote-dash--hierarchy-apply-initial-fold)
+     (should (outline-invisible-p (denote-dash-test--hierarchy-point-for "3a")))
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "2a"))))))
+
+(ert-deftest denote-dash-test/hierarchy-apply-fold-min-size ()
+  "Sections at or below the min-size threshold fold; larger ones don't."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-initial-fold-depth nil)
+         (denote-dash-hierarchy-fold-sequences nil)
+         (denote-dash-hierarchy-auto-fold-min-size 1)
+         (denote-dash-hierarchy-auto-fold-max-size nil))
+     (denote-dash--hierarchy-apply-initial-fold)
+     ;; "1" has size 1 (<= 1): nothing under it to hide, but it must not error.
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "1")))
+     ;; "2" has size 3 (> 1): stays expanded.
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "2a"))))))
+
+(ert-deftest denote-dash-test/hierarchy-apply-fold-max-size ()
+  "Sections larger than the max-size threshold fold; smaller ones don't."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-initial-fold-depth nil)
+         (denote-dash-hierarchy-fold-sequences nil)
+         (denote-dash-hierarchy-auto-fold-min-size nil)
+         (denote-dash-hierarchy-auto-fold-max-size 3))
+     (denote-dash--hierarchy-apply-initial-fold)
+     ;; "3" has size 6 (> 3): folds.
+     (should (outline-invisible-p (denote-dash-test--hierarchy-point-for "3a")))
+     ;; "2" has size 3 (not > 3): stays expanded.
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "2a"))))))
+
+(ert-deftest denote-dash-test/hierarchy-apply-fold-composes-rules ()
+  "An explicit-list fold and a max-size fold both apply when both are set."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-initial-fold-depth nil)
+         (denote-dash-hierarchy-fold-sequences '("2"))
+         (denote-dash-hierarchy-auto-fold-min-size nil)
+         (denote-dash-hierarchy-auto-fold-max-size 3))
+     (denote-dash--hierarchy-apply-initial-fold)
+     (should (outline-invisible-p (denote-dash-test--hierarchy-point-for "2a")))
+     (should (outline-invisible-p (denote-dash-test--hierarchy-point-for "3a"))))))
+
+(ert-deftest denote-dash-test/hierarchy-apply-fold-noop-when-unconfigured ()
+  "With every option nil, nothing folds."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-initial-fold-depth nil)
+         (denote-dash-hierarchy-fold-sequences nil)
+         (denote-dash-hierarchy-auto-fold-min-size nil)
+         (denote-dash-hierarchy-auto-fold-max-size nil))
+     (denote-dash--hierarchy-apply-initial-fold)
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "2a")))
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "3a1"))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash--review-pending-p
@@ -504,6 +645,40 @@ date string (\"YYYY-MM-DD\") written as the note's reviewdate frontmatter."
   "The text indicator shows \"due\" when pending, blank otherwise."
   (should (equal "due" (denote-dash-review-indicator-text t)))
   (should (equal "" (denote-dash-review-indicator-text nil))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Transient key-collision regressions
+;;
+;; A transient's key strings must be unique and no single-char binding may
+;; shadow a multi-char one, else the shadowed suffix is silently unreachable.
+
+(ert-deftest denote-dash-test/dispatch-transient-no-key-collisions ()
+  "`denote-dash-dispatch' has no duplicate keys.
+Prefix-shadowing is checked separately, scoped to the narrow/retag keys
+this test suite added: the dispatch has one pre-existing, intentional
+prefix overlap between the bare \"c\" (Columns, visible only in
+`denote-dash-mode') and \"cd\"/\"cm\" (Convert, visible only in
+`markdown-mode') — safe because the two groups are gated by mutually
+exclusive major modes and can never be simultaneously reachable."
+  (let ((keys (transient-test/collect-keys 'denote-dash-dispatch)))
+    (should-not (transient-test/duplicate-keys keys))))
+
+(ert-deftest denote-dash-test/dispatch-transient-new-keys-no-collisions ()
+  "The narrow (`w*') and retag (`ak') keys don't shadow or get shadowed."
+  (let* ((keys (transient-test/collect-keys 'denote-dash-dispatch))
+         (new-keys '("ws" "wt" "ww" "wk" "ak"))
+         (conflicts (transient-test/key-prefix-conflicts keys)))
+    (dolist (nk new-keys)
+      (should (= 1 (seq-count (lambda (k) (equal k nk)) keys))))
+    (should-not (seq-filter (lambda (c) (or (member (nth 0 c) new-keys)
+                                            (member (nth 1 c) new-keys)))
+                            conflicts))))
+
+(ert-deftest denote-dash-test/column-transient-no-key-collisions ()
+  "`denote-dash-column-transient' has no duplicate keys or key/prefix shadowing."
+  (let ((keys (transient-test/collect-keys 'denote-dash-column-transient)))
+    (should-not (transient-test/duplicate-keys keys))
+    (should-not (transient-test/key-prefix-conflicts keys))))
 
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here
