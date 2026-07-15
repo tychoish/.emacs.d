@@ -1798,8 +1798,8 @@ BODY is skipped."
 
 (add-to-list 'auto-mode-alist '("\\.el\\'" . emacs-lisp-mode))
 
-(add-to-list 'auto-mode-alist '("makefile" . makefile-mode))
-(add-to-list 'auto-mode-alist '("Makefile" . makefile-mode))
+(add-to-list 'auto-mode-alist '("\\`[Mm]akefile" . makefile-mode))
+(add-to-list 'auto-mode-alist '("[Mm]akefile\\'" . makefile-mode))
 (add-to-list 'auto-mode-alist '("\\.mk\\'" . makefile-mode))
 
 (add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))

@@ -1310,10 +1310,11 @@ clipboard."
    ("f" . consult-denote-find)
    ("l" . denote-link)
    ("b" . denote-backlinks)
-   ("r" . denote-rename-file)
+   ("r" . denote-dash-rename-file)
    ("." . denote-dash-dispatch)
    ("," . denote-dash)
-   ("u" . denote-rename-file-using-front-matter))
+   ("k" . denote-dash-save-and-kill-all-notes)
+   ("u" . denote-dash-rename-file-using-front-matter))
   (make-read-extended-command-for-prefix "denote"
     :bind-map tychoish/denote-map
     :bind-key "x"
@@ -1356,7 +1357,12 @@ clipboard."
   :ensure nil
   :after transient
   :commands (denote-dash
-	     denote-dash-dispatch))
+	     denote-dash-dispatch
+	     denote-dash-close-all-notes
+	     denote-dash-save-and-kill-all-notes
+	     denote-dash-rename-file
+	     denote-dash-retag-file
+	     denote-dash-rename-file-using-front-matter))
 
 (use-package denote-dash-repack
   :ensure nil
@@ -1368,7 +1374,9 @@ clipboard."
 	     denote-dash-swap-with-parent
 	     denote-dash-swap-with-previous
 	     denote-dash-swap-with-next
+	     denote-dash-reparent
 	     denote-dash-reparent-recursive
+	     denote-dash-renumber-recursive
 	     denote-dash-insert-sequence-note
 	     denote-dash-retag-sequence))
 
@@ -1408,8 +1416,7 @@ clipboard."
   :ensure t
   :after denote
   :commands (denote-sequence-new-child denote-sequence-new-sibling
-             denote-sequence-new-parent denote-sequence-link
-             denote-sequence-reparent denote-sequence-reparent-recursive)
+             denote-sequence-new-parent denote-sequence-link)
   :init
   (bind-keys
    :map tychoish/denote-map
@@ -1420,8 +1427,9 @@ clipboard."
    ("r" . denote-sequence-rename-as-parent)
    ("p" . denote-sequence-new-parent)
    ("l" . denote-sequence-link)
-   ("m" . denote-sequence-reparent)
-   ("a" . denote-sequence-reparent-recursive)
+   ("m" . denote-dash-reparent)
+   ("a" . denote-dash-reparent-recursive)
+   ("n" . denote-dash-renumber-recursive)
    ("i" . denote-dash-insert-sequence-note))
   :config
   (setq denote-sequence-scheme 'alphanumeric)

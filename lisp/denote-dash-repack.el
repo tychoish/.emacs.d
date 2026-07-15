@@ -521,23 +521,51 @@ or :letter).  Returns the suffix unchanged when both types agree."
         result))))
 
 ;;;###autoload
+(defun denote-dash-reparent (current-file file-with-sequence &optional recursive)
+  "Re-parent CURRENT-FILE to be a child of FILE-WITH-SEQUENCE.
+Wraps `denote-sequence-reparent'.  That command's own interactive spec
+resolves CURRENT-FILE via `denote-sequence--get-current-file-for-renaming'
+and then, purely to build the target prompt's label text, calls the same
+private file-or-prompt helper a second time — doubling the raw \"Rename
+FILE Denote-style\" prompt whenever neither Dired nor a visited buffer is
+in scope, which is exactly the case from a `denote-dash' or
+sequence-hierarchy buffer.  This resolves CURRENT-FILE once via
+`denote-dash--target-file' and reuses it for the label instead.
+
+With optional RECURSIVE (the prefix argument interactively), also
+reparent all descendants; see `denote-sequence-reparent'."
+  (interactive
+   (let ((current-file (denote-dash--target-file)))
+     (list
+      current-file
+      (denote-sequence-file-prompt
+       (format "Reparent `%s' to be a child of"
+               (propertize current-file 'face 'denote-faces-prompt-current-name)))
+      current-prefix-arg)))
+  (denote-sequence-reparent current-file file-with-sequence recursive))
+
+;;;###autoload
 (defun denote-dash-reparent-recursive (current-file file-with-sequence)
   "Re-parent CURRENT-FILE and all descendants to be children of FILE-WITH-SEQUENCE.
 Corrects the type alternation (letter/digit) of descendant sequences when the
 old and new roots end in different character types — a bug in the upstream
-`denote-sequence-reparent-recursive'.
+`denote-sequence-reparent-recursive'.  Also resolves CURRENT-FILE once via
+`denote-dash--target-file', unlike the upstream command's interactive spec,
+which redundantly re-resolves it a second time (see `denote-dash-reparent'
+for the full explanation) — doubling its raw file prompt outside Dired or
+a visited buffer.
 
 Suppresses `denote-rename-confirmations' for the duration: this is a single
 logical operation that may rename many descendants, and prompting once per
 file (as `denote-rename-file' does by default) would be unusable for any
 subtree beyond a couple of files."
   (interactive
-   (list
-    (denote-sequence--get-current-file-for-renaming)
-    (denote-sequence-file-prompt
-     (format "Reparent `%s' (recursively) to be a child of"
-             (propertize (denote--rename-dired-file-or-current-file-or-prompt)
-                         'face 'denote-faces-prompt-current-name)))))
+   (let ((current-file (denote-dash--target-file)))
+     (list
+      current-file
+      (denote-sequence-file-prompt
+       (format "Reparent `%s' (recursively) to be a child of"
+               (propertize current-file 'face 'denote-faces-prompt-current-name))))))
   (let* ((root-seq (denote-retrieve-filename-signature current-file))
          (target-seq (or (denote-sequence-file-p file-with-sequence)
                          (denote-sequence-p file-with-sequence)
@@ -574,13 +602,13 @@ logical operation that may rename many descendants, and prompting once per
 file (as `denote-rename-file' does by default) would be unusable for any
 subtree beyond a couple of files."
   (interactive
-   (list
-    (denote-sequence--get-current-file-for-renaming)
-    (denote-sequence-with-error-p
-     (read-string
-      (format "Renumber `%s' (recursively) to sequence: "
-              (propertize (denote--rename-dired-file-or-current-file-or-prompt)
-                          'face 'denote-faces-prompt-current-name))))))
+   (let ((current-file (denote-dash--target-file)))
+     (list
+      current-file
+      (denote-sequence-with-error-p
+       (read-string
+        (format "Renumber `%s' (recursively) to sequence: "
+                (propertize current-file 'face 'denote-faces-prompt-current-name)))))))
   (let* ((root-seq (or (denote-retrieve-filename-signature current-file)
                        (user-error "File has no sequence: %s" (file-name-nondirectory current-file))))
          (descendants (denote-sequence-get-relative root-seq 'all-children))

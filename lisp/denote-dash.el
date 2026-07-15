@@ -59,6 +59,7 @@
 (declare-function denote-dash-swap-with-parent "denote-dash-repack")
 (declare-function denote-dash-swap-with-previous "denote-dash-repack")
 (declare-function denote-dash-swap-with-next "denote-dash-repack")
+(declare-function denote-dash-reparent "denote-dash-repack")
 (declare-function denote-dash-reparent-recursive "denote-dash-repack")
 (declare-function denote-dash-renumber-recursive "denote-dash-repack")
 (declare-function denote-dash-insert-sequence-note "denote-dash-repack")
@@ -540,6 +541,28 @@ discard the changes."
                    (format "; %d had missing files: %s"
                            (length stale) (string-join (nreverse stale) ", "))
                  "")))))
+
+;;;###autoload
+(defun denote-dash-save-and-kill-all-notes ()
+  "Save every modified Denote note buffer, then kill all Denote note buffers.
+Unlike `denote-dash-close-all-notes', this does not prompt per buffer:
+modified buffers are saved unconditionally before every Denote buffer is
+killed."
+  (interactive)
+  (let ((buffers (denote-dash--note-buffers))
+        (saved 0))
+    (if (null buffers)
+        (message "No open Denote note buffers")
+      (seq-do
+       (lambda (buf)
+         (with-current-buffer buf
+           (when (buffer-modified-p)
+             (save-buffer)
+             (setq saved (1+ saved))))
+         (kill-buffer buf))
+       buffers)
+      (message "Saved %d and killed %d Denote buffer%s"
+               saved (length buffers) (if (= (length buffers) 1) "" "s")))))
 
 ;;; Sequence hierarchy buffer directory
 
@@ -1183,36 +1206,152 @@ syntax) is left to the author."
 
 ;;; Target file resolution
 
-(defun denote-dash--target-file ()
-  "Return the target file for sequence operations.
-Uses the note at point in `denote-dash-mode' or `denote-sequence-hierarchy-mode',
-the current buffer file, or prompts with completing-read."
+(defun denote-dash--file-at-point ()
+  "Return the Denote file implied by the current point/buffer context, or nil.
+Recognizes the row at point in `denote-dash-mode', the
+`denote-sequence-hierarchy-file' text property in
+`denote-sequence-hierarchy-mode', the file at point in Dired, and any
+buffer already visiting a Denote note.  This is the \"obvious\" note for a
+command invoked without an explicit argument; when it returns nil, the
+caller has no context to fall back on and must prompt."
   (cond
    ((derived-mode-p 'denote-dash-mode) (tabulated-list-get-id))
    ((derived-mode-p 'denote-sequence-hierarchy-mode)
-    (or (get-text-property (point) 'denote-sequence-hierarchy-file)
-        (user-error "No file found at point")))
-   (buffer-file-name buffer-file-name)
-   (t (completing-read "File: "
-                       (seq-filter #'denote-sequence-file-p (denote-directory-files))
-                       nil t))))
+    (get-text-property (point) 'denote-sequence-hierarchy-file))
+   ((derived-mode-p 'dired-mode) (dired-get-filename nil t))
+   ((and buffer-file-name (denote-file-has-identifier-p buffer-file-name))
+    buffer-file-name)))
+
+(defun denote-dash--target-file ()
+  "Return the target file for sequence operations.
+Uses `denote-dash--file-at-point', else prompts among sequence-bearing
+notes only, since sequence operations require one."
+  (or (denote-dash--file-at-point)
+      (denote-dash-note-prompt "File: " nil (seq-filter #'denote-sequence-file-p
+                                                        (denote-directory-files)))))
+
+;;; Annotated note selection
+;;
+;; The standard way to ask the user "which Denote note?" when the context
+;; (buffer, Dired, denote-dash row, hierarchy row) doesn't already make it
+;; obvious.  Candidates are labeled the way the note's buffer would be named
+;; by `tychoish--denote-rename-buffer' (`[D:SIGNATURE] TITLE') and annotated
+;; with keywords and last-modified date, and default to the file implied by
+;; `denote-dash--file-at-point' so the obvious note can be accepted with RET.
+
+(defun denote-dash--note-label (file)
+  "Return the `[D:SIGNATURE] TITLE' label FILE's buffer would be named.
+Mirrors `tychoish--denote-rename-buffer' so a candidate reads the same as
+the buffer name a user would see after visiting FILE."
+  (let* ((sig (denote-retrieve-filename-signature file))
+         (title (denote-retrieve-title-or-filename file (denote-filetype-heuristics file))))
+    (if (and sig (not (string-empty-p sig)))
+        (format "[D:%s] %s" sig title)
+      title)))
+
+(defun denote-dash--note-annotation (file)
+  "Return a keywords + last-modified-date annotation string for FILE."
+  (string-join
+   (append (denote-extract-keywords-from-path file)
+           (list (format-time-string "%Y-%m-%d" (file-attribute-modification-time (file-attributes file)))))
+   "  "))
+
+(defun denote-dash--note-labels (files)
+  "Return an alist of (LABEL . FILE) for FILES, disambiguating duplicate labels.
+Two notes can share a label (e.g. the same title with no distinguishing
+signature); any label that collides gets its Denote identifier appended so
+every entry stays individually selectable."
+  (let ((labeled (seq-map (lambda (f) (cons (denote-dash--note-label f) f)) files))
+        (counts (make-hash-table :test #'equal)))
+    (seq-do (lambda (pair) (setf (map-elt counts (car pair)) (1+ (or (map-elt counts (car pair)) 0))))
+            labeled)
+    (seq-map (lambda (pair)
+               (if (> (map-elt counts (car pair)) 1)
+                   (cons (format "%s (%s)" (car pair) (denote-retrieve-filename-identifier (cdr pair)))
+                         (cdr pair))
+                 pair))
+             labeled)))
+
+(defun denote-dash-note-prompt (&optional prompt default-file files)
+  "Read a Denote note file via an annotated-completing-read UI.
+Candidates cover FILES, or every note in `denote-directory-files' when nil —
+every configured Denote directory, including the journal.  PROMPT overrides
+the default prompt text.  DEFAULT-FILE, or `denote-dash--file-at-point' when
+nil, seeds the minibuffer so the note already implied by context (buffer at
+point, Dired, denote-dash row, hierarchy row) can be accepted with RET
+instead of retyped."
+  (require 'annotated-completing-read)
+  (let* ((labels (denote-dash--note-labels (or files (denote-directory-files))))
+         (table (map-into
+                 (seq-map (lambda (pair) (cons (car pair) (denote-dash--note-annotation (cdr pair))))
+                          labels)
+                 'hash-table))
+         (default (or default-file (denote-dash--file-at-point)))
+         (initial (car (seq-find (lambda (pair) (equal (cdr pair) default)) labels)))
+         (choice (annotated-completing-read
+                  table
+                  :prompt (or prompt "Denote note: ")
+                  :require-match t
+                  :category 'file
+                  :initial-input initial)))
+    (or (cdr (assoc choice labels)) choice)))
+
+(defun denote-dash--rename-with-prompts (file prompts)
+  "Run `denote-rename-file' on FILE, prompting only for `denote-prompts' PROMPTS.
+Reuses the same title/keywords/signature/date/identifier resolution as
+`denote-rename-file' itself, so the only thing this changes is how FILE is
+selected."
+  (let* ((denote-prompts prompts))
+    (apply #'denote-rename-file file (denote--rename-get-file-info-from-prompts-or-existing file))))
+
+;;;###autoload
+(defun denote-dash-rename-file (&optional file)
+  "Rename FILE per `denote-prompts', selecting FILE via `denote-dash-note-prompt'.
+Same effect as `denote-rename-file', except FILE selection always uses the
+annotated, context-defaulting prompt instead of that command's own fallback
+to a plain `read-file-name', which is unusable from a `denote-dash' or
+sequence-hierarchy buffer since neither visits a file."
+  (interactive (list (denote-dash-note-prompt "Rename note: ")))
+  (denote-dash--rename-with-prompts file denote-prompts))
+
+;;;###autoload
+(defun denote-dash-retag-file (&optional file)
+  "Change FILE's keywords, selecting FILE via `denote-dash-note-prompt'.
+Same effect as `denote-rename-file-keywords', except FILE selection always
+uses the annotated, context-defaulting prompt instead of that command's own
+fallback to a plain `read-file-name'."
+  (interactive (list (denote-dash-note-prompt "Retag note: ")))
+  (denote-dash--rename-with-prompts file '(keywords)))
+
+;;;###autoload
+(defun denote-dash-rename-file-using-front-matter (&optional file)
+  "Rename FILE from its front matter, selecting FILE via `denote-dash-note-prompt'.
+Same effect as `denote-rename-file-using-front-matter', except FILE
+selection always uses the annotated, context-defaulting prompt.  That
+command's own fallback is only Dired or `buffer-file-name' — outside
+either, it errors instead of prompting at all."
+  (interactive (list (denote-dash-note-prompt "Rename from front matter: ")))
+  (denote-rename-file-using-front-matter file))
 
 ;;; Dispatch transient
 ;;
+;; Row 1: Find, Create, Rename, Sequence, View
+;; Row 2: Review, Link, Convert
+;; Row 3: Explore, Columns, Narrow, Org
+;;
 ;; Key layout — all prefix groups share a first character, no single-char
 ;; binding shadows a multi-char prefix:
-;;   v* = view (vv=dash) + review (vd, vl)
+;;   f* = find (ff, fg, fn, fs, fo, fb)
 ;;   s* = sequence (ss, sh, sp)
-;;   f* = find (ff, fg, fn, fs, fo, fd, fb)
-;;   l* = link (ll, lp)
 ;;   r* = rename (rr, rf, rp)
-;;   e* = explore (er, em, ek, et, ed)
-;;   i* = import (id)
 ;;   a* = sequence (al=lint, af=fix all, ak=retag)
-;;   o* = org commands (ox, or, ol, ob, od, op, of)
+;;   v* = view (vv=dash, vh, vc, vk, fd)
 ;;   c* = convert (cm, cd)
+;;   l* = link (ll, lp)
+;;   e* = explore (er, em, ek, et, ed)
+;;   o* = org commands (ox, or, ol, ob, od, op, of)
 ;;   w* = narrow (ws, wt, ww, wk)
-;;   n, j = bare single-key create commands
+;;   n, j, id = bare single-key create commands
 
 ;;;###autoload
 (transient-define-prefix denote-dash-dispatch ()
@@ -1223,7 +1362,6 @@ the current buffer file, or prompts with completing-read."
     ("fn" "notes"              consult-notes)
     ("fs" "search all notes"   consult-notes-search-in-all-notes)
     ("fo" "open or create"     denote-open-or-create)
-    ("fd" "dired"              denote-dired)
     ("fb" "backlinks"          denote-backlinks)]
    ["Create"
     ("n"  "new note"           denote)
@@ -1231,62 +1369,63 @@ the current buffer file, or prompts with completing-read."
     ("ss" "seq sibling"        denote-sequence-new-sibling)
     ("sh" "seq child"          denote-sequence-new-child)
     ("sp" "seq parent"         denote-sequence-new-parent)
-    ("si" "insert at seq"      denote-dash-insert-sequence-note)]
+    ("si" "insert at seq"      denote-dash-insert-sequence-note)
+    ("id" "from org datetree"  denote-dash-import-from-datetree)]
+   ["Rename"
+    ("rr" "rename file"        denote-dash-rename-file)
+    ("rf" "rename from fm"     denote-dash-rename-file-using-front-matter)
+    ("rt" "retag (keywords)"   denote-dash-retag-file)
+    ("rc" "convert file type"  denote-dash-convert-file-type)
+    ("raf" "update all from fm" denote-dash-rename-all-files-using-front-matter)]
+   ["Sequence"
+    ("al" "lint sequences"     denote-dash-lint-sequences)
+    ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)
+    ("ar" "repack children"    denote-dash-repack-sequence-children)
+    ("as" "swap with parent"   denote-dash-swap-with-parent)
+    ("ap" "swap with previous" denote-dash-swap-with-previous)
+    ("an" "swap with next"     denote-dash-swap-with-next)
+    ("ak" "retag sequence"     denote-dash-retag-sequence)]]
+  [["Splice"
+    ("rp" "reparent seq"       denote-dash-reparent)
+    ("rs" "reparent recursive" denote-dash-reparent-recursive)
+    ("rn" "renumber recursive" denote-dash-renumber-recursive)]
+   ["Review"
+    ("vd" "set review date"    denote-review-set-date)
+    ("vl" "review list"        denote-review-display-list)]
+   ["Link"
+    ("ll" "insert link"        denote-link)
+    ("lp" "link (sequence)"    denote-sequence-link)]
+   ["Convert" :if-derived markdown-mode
+    ("cm" "links → markdown"   denote-markdown-convert-links-to-markdown-format)
+    ("cd" "links → denote"     denote-markdown-convert-links-to-denote-format)]]
+  [["View"
+    ("vv" "note list (dash)"   denote-dash
+     :inapt-if-derived denote-dash-mode)
+    ("vh" "sequence hierarchy" denote-sequence-view-hierarchy
+     :inapt-if-derived denote-sequence-hierarchy-mode)
+    ("vf" "dired"              denote-dired)
+    ("vc" "close all notes"    denote-dash-close-all-notes)
+    ("vk" "save+kill all notes" denote-dash-save-and-kill-all-notes)]
    ["Explore"
     ("er" "random note"        denote-explore-random-note)
     ("em" "missing links"      denote-explore-missing-links)
     ("ek" "keyword chart"      denote-explore-barchart-keywords)
     ("et" "timeline"           denote-explore-barchart-timeline)
     ("ed" "duplicates"         denote-explore-duplicate-notes)]
-   ["View"
-    ("vv" "note list (dash)"   denote-dash
-     :inapt-if-derived denote-dash-mode)
-    ("vh" "sequence hierarchy" denote-sequence-view-hierarchy
-     :inapt-if-derived denote-sequence-hierarchy-mode)
-    ("vc" "close all notes"    denote-dash-close-all-notes)]
-   ["Columns" :if-derived denote-dash-mode
-    ("c" "toggle columns…"     denote-dash-column-transient)]
-   ["Narrow" :if-derived denote-dash-mode
+   ["Dash" :if-derived denote-dash-mode
+    ("c" "toggle columns…"     denote-dash-column-transient)
     ("ws" "narrow to seq(s)"   denote-dash-narrow-to-sequence)
     ("wt" "toggle seq"         denote-dash-toggle-sequence-narrow)
     ("ww" "widen"              denote-dash-widen)
-    ("wk" "toggle keyword"     denote-dash-toggle-keyword)]]
-  [["Link"
-    ("ll" "insert link"        denote-link)
-    ("lp" "link (sequence)"    denote-sequence-link)]
-   ["Rename"
-    ("rr" "rename file"        denote-rename-file)
-    ("rf" "rename from fm"     denote-rename-file-using-front-matter)
-    ("rt" "retag (keywords)"   denote-rename-file-keywords)
-    ("rc" "convert file type"  denote-dash-convert-file-type)
-    ("rp" "reparent seq"       denote-sequence-reparent)
-    ("rs" "reparent recursive" denote-dash-reparent-recursive)
-    ("rn" "renumber recursive" denote-dash-renumber-recursive)]
-   ["Review"
-    ("vd" "set review date"    denote-review-set-date)
-    ("vl" "review list"        denote-review-display-list)]
-   ["Sequence"
-    ("al" "lint sequences"     denote-dash-lint-sequences)
-    ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)
-    ("au" "update all from fm" denote-dash-rename-all-files-using-front-matter)
-    ("ar" "repack children"    denote-dash-repack-sequence-children)
-    ("as" "swap with parent"   denote-dash-swap-with-parent)
-    ("ap" "swap with previous" denote-dash-swap-with-previous)
-    ("an" "swap with next"     denote-dash-swap-with-next)
-    ("ak" "retag sequence"     denote-dash-retag-sequence)]
-   ["Import"
-    ("id" "from org datetree"  denote-dash-import-from-datetree)]]
-  [["Org" :if-derived org-mode
+    ("wk" "toggle keyword"     denote-dash-toggle-keyword)]
+   ["Org" :if-derived org-mode
     ("ox" "extract subtree"    denote-org-extract-org-subtree)
     ("or" "extract + link"     org-migrate-subtree-to-denote)
     ("ol" "link to heading"    denote-org-link-to-heading)
     ("ob" "heading backlinks"  denote-org-backlinks-for-heading)
     ("od" "dblock: links"      denote-org-dblock-insert-links)
     ("op" "dblock: backlinks"  denote-org-dblock-insert-backlinks)
-    ("of" "dblock: files"      denote-org-dblock-insert-files)]
-   ["Convert" :if-derived markdown-mode
-    ("cm" "links → markdown"   denote-markdown-convert-links-to-markdown-format)
-    ("cd" "links → denote"     denote-markdown-convert-links-to-denote-format)]])
+    ("of" "dblock: files"      denote-org-dblock-insert-files)]])
 
 (provide 'denote-dash)
 ;;; denote-dash.el ends here
