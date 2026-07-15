@@ -1372,6 +1372,12 @@ clipboard."
 	     denote-dash-insert-sequence-note
 	     denote-dash-retag-sequence))
 
+(use-package denote-notion
+  :ensure nil
+  :commands (denote-notion-export-post
+	     denote-notion-import-page
+	     denote-notion-import-refresh))
+
 (use-package consult-notes
   :ensure t
   :bind (:map tychoish/denote-map
