@@ -18,6 +18,7 @@
 (require 'outline)
 (require 'denote)
 (require 'denote-sequence)
+(require 'annotated-completing-read)
 
 ;;; Declarations
 
@@ -32,7 +33,6 @@
 (declare-function denote-review-display-list "denote-review")
 (declare-function denote-review-search-regexp-for-filetype "denote-review")
 (declare-function denote-review-check-date-of-file "denote-review")
-(declare-function annotated-completing-read "annotated-completing-read")
 (declare-function denote-explore-random-note "denote-explore")
 (declare-function denote-explore-missing-links "denote-explore")
 (declare-function denote-explore-barchart-keywords "denote-explore")
@@ -741,7 +741,6 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
 Without a prefix argument the toggled keywords are OR'd together; with a
 prefix argument they are AND'd."
   (interactive)
-  (require 'annotated-completing-read)
   (let* ((keyword (annotated-completing-read
                    (seq-map (lambda (k) (cons k nil)) (denote-dash--all-keywords))
                    :prompt "Toggle keyword: " :require-match t))
@@ -770,7 +769,6 @@ prefix argument they are AND'd."
 (defun denote-dash-toggle-sequence-narrow ()
   "Toggle a single sequence in or out of the current narrow set."
   (interactive)
-  (require 'annotated-completing-read)
   (let* ((seq-id (annotated-completing-read
                   (seq-map (lambda (s) (cons s nil)) (denote-sequence-get-all-sequences))
                   :prompt "Toggle sequence: " :require-match t)))
@@ -1280,7 +1278,6 @@ the default prompt text.  DEFAULT-FILE, or `denote-dash--file-at-point' when
 nil, seeds the minibuffer so the note already implied by context (buffer at
 point, Dired, denote-dash row, hierarchy row) can be accepted with RET
 instead of retyped."
-  (require 'annotated-completing-read)
   (let* ((labels (denote-dash--note-labels (or files (denote-directory-files))))
          (table (map-into
                  (seq-map (lambda (pair) (cons (car pair) (denote-dash--note-annotation (cdr pair))))
@@ -1311,8 +1308,8 @@ Same effect as `denote-rename-file', except FILE selection always uses the
 annotated, context-defaulting prompt instead of that command's own fallback
 to a plain `read-file-name', which is unusable from a `denote-dash' or
 sequence-hierarchy buffer since neither visits a file."
-  (interactive (list (denote-dash-note-prompt "Rename note: ")))
-  (denote-dash--rename-with-prompts file denote-prompts))
+  (interactive)
+  (denote-dash--rename-with-prompts (denote-dash--resolve-file-interactive file) denote-prompts))
 
 ;;;###autoload
 (defun denote-dash-retag-file (&optional file)
@@ -1320,8 +1317,8 @@ sequence-hierarchy buffer since neither visits a file."
 Same effect as `denote-rename-file-keywords', except FILE selection always
 uses the annotated, context-defaulting prompt instead of that command's own
 fallback to a plain `read-file-name'."
-  (interactive (list (denote-dash-note-prompt "Retag note: ")))
-  (denote-dash--rename-with-prompts file '(keywords)))
+  (interactive)
+  (denote-dash--rename-with-prompts (denote-dash--resolve-file-interactive file) '(keywords)))
 
 ;;;###autoload
 (defun denote-dash-rename-file-using-front-matter (&optional file)
@@ -1330,8 +1327,27 @@ Same effect as `denote-rename-file-using-front-matter', except FILE
 selection always uses the annotated, context-defaulting prompt.  That
 command's own fallback is only Dired or `buffer-file-name' — outside
 either, it errors instead of prompting at all."
-  (interactive (list (denote-dash-note-prompt "Rename from front matter: ")))
-  (denote-rename-file-using-front-matter file))
+  (interactive)
+  (denote-rename-file-using-front-matter (denote-dash--resolve-file-interactive file)))
+
+(defun denote-dash--resolve-file-interactive (&optional file)
+  (when-let* ((_ (not file))
+	      (_ (called-interactively-p))
+	      (buffer-file (buffer-file-name (current-buffer)))
+	      (_ (file-exists-p buffer-file)))
+    (setq file buffer-file))
+
+  (unless (and file
+	       (denote-file-has-denoted-filename-p file)
+	       (thread-last (denote-directories)
+			    (seq-map (lambda (dir) (file-in-directory-p file dir)))
+			    (seq-filter #'identity)))
+     (setq file (denote-dash-note-prompt "select denote: ")))
+
+  (unless file
+    (user-error "must specify denote file"))
+
+  file)
 
 ;;; Dispatch transient
 ;;
