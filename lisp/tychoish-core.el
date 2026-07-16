@@ -1393,7 +1393,22 @@ clipboard."
          ("/" . consult-notes-search-in-all-notes))
   :commands (consult-notes consult-notes-search-in-all-notes)
   :config
-  (consult-notes-denote-mode 1))
+  (consult-notes-denote-mode 1)
+
+  (defun ad:consult-notes--single-directory-string (fn &rest args)
+    "Let-bind `denote-directory' to a single string for the duration of FN.
+`consult-notes' and `consult-notes-denote' treat `denote-directory' as a
+bare directory string in several places (`expand-file-name',
+`file-relative-name'), but this config sets it to a list per the
+`denote-directories' multi-directory convention.  Substituting the common
+root here keeps those call sites working without patching the vendored
+package.  The let-binding covers the whole interactive session (including
+any async candidate recomputation), since the advised commands don't
+return until the minibuffer session ends."
+    (let ((denote-directory (denote-directories-get-common-root)))
+      (apply fn args)))
+  (advice-add 'consult-notes :around #'ad:consult-notes--single-directory-string)
+  (advice-add 'consult-notes-search-in-all-notes :around #'ad:consult-notes--single-directory-string))
 
 (use-package consult-denote
   :ensure t
@@ -1428,7 +1443,6 @@ clipboard."
    ("p" . denote-sequence-new-parent)
    ("l" . denote-sequence-link)
    ("m" . denote-dash-reparent)
-   ("a" . denote-dash-reparent-recursive)
    ("n" . denote-dash-renumber-recursive)
    ("i" . denote-dash-insert-sequence-note))
   :config

@@ -363,6 +363,38 @@ not \"2aa\"."
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 
+(ert-deftest denote-dash-test/reparent-nil-target-promotes-to-root ()
+  "A nil FILE-WITH-SEQUENCE promotes the file to a new top-level sequence."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root (denote-dash-test--make-org-note dir "20240101T100000" "1a1" "Root"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000=="))))
+          (denote-dash-reparent root-file nil)
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (directory-files dir nil "20240101T100000==2--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/reparent-recursive-nil-target-promotes-subtree-to-root ()
+  "A nil FILE-WITH-SEQUENCE with RECURSIVE promotes CURRENT-FILE and its
+descendants to a new top-level sequence, instead of requiring
+`denote-dash-renumber-recursive' and a hand-typed sequence."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root  (denote-dash-test--make-org-note dir "20240101T100000" "1a1"  "Root"))
+               (_child (denote-dash-test--make-org-note dir "20240101T110000" "1a1a" "Child"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000=="))))
+          (denote-dash-reparent-recursive root-file nil)
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (directory-files dir nil "20240101T100000==2--"))
+          (should (directory-files dir nil "20240101T110000==2a--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash-renumber-recursive
 
@@ -793,19 +825,34 @@ operation — as `denote-dash-reparent-recursive' does."
 (ert-deftest denote-dash-test/retag-apply-add ()
   "Adding keywords appends them and deduplicates."
   (should (equal '("a" "b" "c")
-                 (denote-dash--retag-apply '("a" "b") '("b" "c") nil))))
+                 (denote-dash--retag-apply '("a" "b") 'add '("b" "c") nil))))
+
+(ert-deftest denote-dash-test/retag-apply-add-already-present-is-noop ()
+  "Adding a keyword that every file already has returns `:unchanged'."
+  (should (eq :unchanged (denote-dash--retag-apply '("a" "b") 'add '("a") nil))))
 
 (ert-deftest denote-dash-test/retag-apply-remove ()
   "Removing keywords drops only the requested ones."
-  (should (equal '("a") (denote-dash--retag-apply '("a" "b") nil '("b")))))
+  (should (equal '("a") (denote-dash--retag-apply '("a" "b") 'remove nil '("b")))))
 
-(ert-deftest denote-dash-test/retag-apply-replace ()
-  "Replace is remove-then-add in one call."
-  (should (equal '("a" "c") (denote-dash--retag-apply '("a" "b") '("c") '("b")))))
+(ert-deftest denote-dash-test/retag-apply-remove-to-empty ()
+  "Removing every remaining keyword returns an empty list, not `:unchanged'
+— an empty result is a legitimate change, not a no-op."
+  (should (equal '() (denote-dash--retag-apply '("a") 'remove nil '("a")))))
 
 (ert-deftest denote-dash-test/retag-apply-remove-absent-is-noop ()
-  "Removing a keyword that is not present leaves the list unchanged."
-  (should (equal '("a") (denote-dash--retag-apply '("a") nil '("missing")))))
+  "Removing a keyword that is not present returns `:unchanged', so the file
+is left untouched instead of being renamed to the same keyword set."
+  (should (eq :unchanged (denote-dash--retag-apply '("a") 'remove nil '("missing")))))
+
+(ert-deftest denote-dash-test/retag-apply-replace-present ()
+  "Replace swaps the old keyword for the new one when the old one is present."
+  (should (equal '("a" "c") (denote-dash--retag-apply '("a" "b") 'replace '("c") '("b")))))
+
+(ert-deftest denote-dash-test/retag-apply-replace-absent-is-noop ()
+  "Replace returns `:unchanged' for a file that never had the old
+keyword — it must not pick up the new keyword as a side effect."
+  (should (eq :unchanged (denote-dash--retag-apply '("a") 'replace '("c") '("b")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash-retag-sequence (file-based)
@@ -884,6 +931,84 @@ instead."
                                        (denote-dash-test--find-by-identifier dir "20240101T100000"))))
           (should-not (member "alpha" (denote-extract-keywords-from-path
                                        (denote-dash-test--find-by-identifier dir "20240101T110000")))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/retag-sequence-replace-only-touches-files-with-old-keyword ()
+  "Replace swaps the keyword only on files that carry the old one, and
+leaves every other file in the subtree completely untouched — it must
+not add the new keyword to files that never had the old one."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((root (denote-dash-test--make-org-note-with-keywords
+                      dir "20240101T100000" "1" '("alpha") "Root"))
+               (_child (denote-dash-test--make-org-note-with-keywords
+                        dir "20240101T110000" "1a" '("beta") "Child"))
+               (denote-directory (list dir))
+               (denote-sequence-scheme 'alphanumeric))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                    ((symbol-function 'annotated-completing-read)
+                     (let ((calls 0))
+                       (lambda (&rest _)
+                         (setq calls (1+ calls))
+                         (if (= calls 1) "replace" "alpha"))))
+                    ((symbol-function 'read-string) (lambda (&rest _) "gamma"))
+                    ((symbol-function 'denote-dash--target-file) (lambda () root)))
+            (denote-dash-retag-sequence))
+          ;; Root had "alpha": swapped to "gamma".
+          (should (member "gamma" (denote-extract-keywords-from-path
+                                   (denote-dash-test--find-by-identifier dir "20240101T100000"))))
+          (should-not (member "alpha" (denote-extract-keywords-from-path
+                                       (denote-dash-test--find-by-identifier dir "20240101T100000"))))
+          ;; Child never had "alpha": left with "beta" only, no "gamma" added.
+          (should (equal '("beta") (denote-extract-keywords-from-path
+                                    (denote-dash-test--find-by-identifier dir "20240101T110000")))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/retag-sequence-add-skips-files-that-already-have-it ()
+  "Adding a keyword the root already has, but a descendant lacks, only
+renames the descendant."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((root (denote-dash-test--make-org-note-with-keywords
+                      dir "20240101T100000" "1" '("gamma") "Root"))
+               (_child (denote-dash-test--make-org-note-with-keywords
+                        dir "20240101T110000" "1a" '("beta") "Child"))
+               (denote-directory (list dir))
+               (denote-sequence-scheme 'alphanumeric))
+          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
+                    ((symbol-function 'annotated-completing-read)
+                     (lambda (&rest _) "add"))
+                    ((symbol-function 'completing-read-multiple)
+                     (lambda (&rest _) '("gamma")))
+                    ((symbol-function 'denote-dash--target-file) (lambda () root)))
+            (denote-dash-retag-sequence))
+          (should (equal '("gamma") (denote-extract-keywords-from-path
+                                     (denote-dash-test--find-by-identifier dir "20240101T100000"))))
+          (should (equal '("beta" "gamma") (denote-extract-keywords-from-path
+                                            (denote-dash-test--find-by-identifier dir "20240101T110000")))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/retag-sequence-no-affected-files-errors ()
+  "If no file in the subtree is affected by the operation, error out instead
+of silently doing nothing (or, worse, touching files it shouldn't)."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((root (denote-dash-test--make-org-note-with-keywords
+                      dir "20240101T100000" "1" '("alpha") "Root"))
+               (denote-directory (list dir))
+               (denote-sequence-scheme 'alphanumeric))
+          (cl-letf (((symbol-function 'yes-or-no-p)
+                     (lambda (&rest _) (error "should not reach confirmation")))
+                    ((symbol-function 'annotated-completing-read)
+                     (lambda (&rest _) "remove"))
+                    ((symbol-function 'completing-read-multiple)
+                     (lambda (&rest _) '("missing")))
+                    ((symbol-function 'denote-dash--target-file) (lambda () root)))
+            (should-error (denote-dash-retag-sequence) :type 'user-error))
+          (should (member "alpha" (denote-extract-keywords-from-path root))))
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 

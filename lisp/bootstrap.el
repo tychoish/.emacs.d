@@ -777,7 +777,7 @@ or `describe-symbol' as fallback."
     (add-to-list 'backup-directory-alist (cons "." path))
 
     (unless (file-exists-p path)
-      (make-directory path))
+      (make-directory path t))
     (chmod path #o700)))
 
 (defun bootstrap-set-up-named-instance-file-locks ()
@@ -786,7 +786,7 @@ or `describe-symbol' as fallback."
           `(("\\`/.*/\\([^/]+\\)\\'" ,(concat path "\\1") t)))
 
     (unless (file-exists-p path)
-      (make-directory path))
+      (make-directory path t))
     (chmod path #o700)))
 
 
@@ -802,7 +802,7 @@ or `describe-symbol' as fallback."
           `(("\\`/.*/\\([^/]+\\)\\'" ,(concat solo-lock-path "\\1") t)))
 
     (unless (file-exists-p solo-lock-path)
-      (make-directory solo-lock-path))
+      (make-directory solo-lock-path t))
     (chmod solo-lock-path #o700)))
 
 (defun bootstrap-set-up-show-whitespace ()

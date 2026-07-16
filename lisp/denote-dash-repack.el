@@ -16,9 +16,9 @@
 (require 'denote)
 (require 'denote-sequence)
 (require 'denote-dash)
+(require 'annotated-completing-read)
 
 (defvar denote-file-types)
-(declare-function annotated-completing-read "annotated-completing-read")
 
 ;;; Sequence alignment lint / autofix
 
@@ -115,15 +115,17 @@ Returns t if a change was made, nil if already aligned.
 
 (defun denote-dash-fix-sequence-frontmatter ()
   "Fix frontmatter signature to match filename for the note at point or current file.
-In `denote-dash-mode', operates on the note at point; otherwise on `buffer-file-name'."
+Resolves the target file via `denote-dash--file-at-point', so it works from
+`denote-dash-mode', `denote-sequence-hierarchy-mode', Dired, or a visited
+Denote buffer."
   (interactive)
-  (when-let* ((file (if (derived-mode-p 'denote-dash-mode)
-                        (tabulated-list-get-id)
-                      (buffer-file-name))))
+  (when-let* ((file (denote-dash--file-at-point)))
     (if (denote-dash--fix-frontmatter-from-filename file)
         (progn
           (message "Fixed: %s" (file-name-nondirectory file))
-          (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh)))
+          (cond
+           ((derived-mode-p 'denote-dash-mode) (denote-dash-refresh))
+           ((derived-mode-p 'denote-sequence-hierarchy-mode) (revert-buffer))))
       (message "Already aligned: %s" (file-name-nondirectory file)))))
 
 (defun denote-dash-fix-all-sequence-frontmatter ()
@@ -520,57 +522,33 @@ or :letter).  Returns the suffix unchanged when both types agree."
                 (nreverse positions))
         result))))
 
-;;;###autoload
-(defun denote-dash-reparent (current-file file-with-sequence &optional recursive)
-  "Re-parent CURRENT-FILE to be a child of FILE-WITH-SEQUENCE.
-Wraps `denote-sequence-reparent'.  That command's own interactive spec
-resolves CURRENT-FILE via `denote-sequence--get-current-file-for-renaming'
-and then, purely to build the target prompt's label text, calls the same
-private file-or-prompt helper a second time — doubling the raw \"Rename
-FILE Denote-style\" prompt whenever neither Dired nor a visited buffer is
-in scope, which is exactly the case from a `denote-dash' or
-sequence-hierarchy buffer.  This resolves CURRENT-FILE once via
-`denote-dash--target-file' and reuses it for the label instead.
+(defun denote-dash--reparent-target-sequence (file-with-sequence)
+  "Return the destination sequence for a reparent operation.
+When FILE-WITH-SEQUENCE names a file or a sequence, return a new child of
+it.  When nil, return a new top-level sequence instead — the \"become a
+root\" case that plain `denote-sequence-reparent' has no path for: it can
+only ever make CURRENT-FILE a child of some other file.  `renumber-recursive'
+is the only existing command that can send a note to an arbitrary target
+sequence, including one with no parent, which is why NEW-SEQ is computed
+the same way here as there."
+  (if file-with-sequence
+      (let ((target-seq (or (denote-sequence-file-p file-with-sequence)
+                            (denote-sequence-p file-with-sequence)
+                            (user-error "No sequence found in `%s'" file-with-sequence))))
+        (denote-sequence--get-new-child target-seq))
+    (denote-sequence--get-new-parent)))
 
-With optional RECURSIVE (the prefix argument interactively), also
-reparent all descendants; see `denote-sequence-reparent'."
-  (interactive
-   (let ((current-file (denote-dash--target-file)))
-     (list
-      current-file
-      (denote-sequence-file-prompt
-       (format "Reparent `%s' to be a child of"
-               (propertize current-file 'face 'denote-faces-prompt-current-name)))
-      current-prefix-arg)))
-  (denote-sequence-reparent current-file file-with-sequence recursive))
-
-;;;###autoload
-(defun denote-dash-reparent-recursive (current-file file-with-sequence)
-  "Re-parent CURRENT-FILE and all descendants to be children of FILE-WITH-SEQUENCE.
+(defun denote-dash--reparent-recursive-apply (current-file new-seq)
+  "Re-parent CURRENT-FILE and all descendants onto NEW-SEQ.
 Corrects the type alternation (letter/digit) of descendant sequences when the
 old and new roots end in different character types — a bug in the upstream
-`denote-sequence-reparent-recursive'.  Also resolves CURRENT-FILE once via
-`denote-dash--target-file', unlike the upstream command's interactive spec,
-which redundantly re-resolves it a second time (see `denote-dash-reparent'
-for the full explanation) — doubling its raw file prompt outside Dired or
-a visited buffer.
+`denote-sequence-reparent-recursive'.
 
 Suppresses `denote-rename-confirmations' for the duration: this is a single
 logical operation that may rename many descendants, and prompting once per
 file (as `denote-rename-file' does by default) would be unusable for any
 subtree beyond a couple of files."
-  (interactive
-   (let ((current-file (denote-dash--target-file)))
-     (list
-      current-file
-      (denote-sequence-file-prompt
-       (format "Reparent `%s' (recursively) to be a child of"
-               (propertize current-file 'face 'denote-faces-prompt-current-name))))))
   (let* ((root-seq (denote-retrieve-filename-signature current-file))
-         (target-seq (or (denote-sequence-file-p file-with-sequence)
-                         (denote-sequence-p file-with-sequence)
-                         (user-error "No sequence found in `%s'" file-with-sequence)))
-         (new-seq (denote-sequence--get-new-child target-seq))
          (descendants (when root-seq
                         (denote-sequence-get-relative root-seq 'all-children)))
          (rename-fn (lambda (file seq)
@@ -587,6 +565,81 @@ subtree beyond a couple of files."
                                       raw-suffix old-last-type new-last-type)))
                   (funcall rename-fn child (concat new-seq fixed-suffix)))))
             descendants)))
+
+;;;###autoload
+(defun denote-dash-reparent (current-file file-with-sequence &optional recursive)
+  "Re-parent CURRENT-FILE to be a child of FILE-WITH-SEQUENCE.
+Wraps `denote-sequence-reparent'.  That command's own interactive spec
+resolves CURRENT-FILE via `denote-sequence--get-current-file-for-renaming'
+and then, purely to build the target prompt's label text, calls the same
+private file-or-prompt helper a second time — doubling the raw \"Rename
+FILE Denote-style\" prompt whenever neither Dired nor a visited buffer is
+in scope, which is exactly the case from a `denote-dash' or
+sequence-hierarchy buffer.  This resolves CURRENT-FILE once via
+`denote-dash--target-file' and reuses it for the label instead.
+
+FILE-WITH-SEQUENCE may be nil, meaning \"make CURRENT-FILE a new top-level
+sequence instead of a child of anything\" — plain `denote-sequence-reparent'
+has no such path; it can only reparent onto another file.  Interactively
+this is offered as its own y-or-n-p question before the child-of prompt,
+so promoting a note out of its hierarchy doesn't require reaching for
+`denote-dash-renumber-recursive' and typing a sequence by hand.
+
+Also prompts whether to reparent RECURSIVE-ly instead of relying on a
+prefix argument the caller has to already know about; the plain
+`denote-sequence-reparent' prefix-arg convention isn't discoverable from a
+`denote-dash' or sequence-hierarchy buffer.
+
+Suppresses `denote-rename-confirmations' for the duration: this is a single
+logical operation, and per-file prompting (as `denote-rename-file' does by
+default) would be unusable for any subtree beyond a couple of files.  With
+RECURSIVE, also corrects the type alternation (letter/digit) of descendant
+sequences when the old and new roots end in different character types — a
+bug in the upstream `denote-sequence-reparent-recursive'; see
+`denote-dash--reparent-recursive-apply'."
+  (interactive
+   (let* ((current-file (denote-dash--target-file))
+          (root-p (y-or-n-p
+                   (format "Make `%s' a new top-level sequence (no parent)? "
+                           (propertize current-file 'face 'denote-faces-prompt-current-name)))))
+     (list
+      current-file
+      (unless root-p
+        (denote-sequence-file-prompt
+         (format "Reparent `%s' to be a child of"
+                 (propertize current-file 'face 'denote-faces-prompt-current-name))))
+      (y-or-n-p "Reparent recursively (include descendants)? "))))
+  (let ((denote-rename-confirmations nil))
+    (if recursive
+        (denote-dash--reparent-recursive-apply
+         current-file (denote-dash--reparent-target-sequence file-with-sequence))
+      (if file-with-sequence
+          (denote-sequence-reparent current-file file-with-sequence nil)
+        (denote-rename-file current-file 'keep-current 'keep-current
+                            (denote-sequence--get-new-parent) 'keep-current 'keep-current)))))
+
+;;;###autoload
+(defun denote-dash-reparent-recursive (current-file file-with-sequence)
+  "Re-parent CURRENT-FILE and all descendants to be children of FILE-WITH-SEQUENCE.
+FILE-WITH-SEQUENCE may be nil, meaning \"promote to a new top-level
+sequence\"; see `denote-dash-reparent' for the full explanation.
+
+Direct, prompt-free entry point for the recursive case; see
+`denote-dash-reparent' for the interactive command that asks whether to
+recurse instead of requiring a separate command."
+  (interactive
+   (let* ((current-file (denote-dash--target-file))
+          (root-p (y-or-n-p
+                   (format "Make `%s' a new top-level sequence (no parent)? "
+                           (propertize current-file 'face 'denote-faces-prompt-current-name)))))
+     (list
+      current-file
+      (unless root-p
+        (denote-sequence-file-prompt
+         (format "Reparent `%s' (recursively) to be a child of"
+                 (propertize current-file 'face 'denote-faces-prompt-current-name)))))))
+  (denote-dash--reparent-recursive-apply
+   current-file (denote-dash--reparent-target-sequence file-with-sequence)))
 
 ;;;###autoload
 (defun denote-dash-renumber-recursive (current-file new-seq)
@@ -693,31 +746,67 @@ or prompts for a file."
     ("replace" replace "Replace one keyword with another"))
   "Operations offered by `denote-dash-retag-sequence'.")
 
-(defun denote-dash--retag-apply (keywords add-kws remove-kws)
-  "Return KEYWORDS with REMOVE-KWS removed and ADD-KWS added, deduplicated."
-  (seq-uniq (append (seq-difference keywords remove-kws) add-kws)))
+(defun denote-dash--retag-apply (keywords operation add-kws remove-kws)
+  "Return the new keyword list for KEYWORDS under OPERATION, or `:unchanged'.
+`:unchanged' (rather than nil) marks a no-op so callers can tell it apart
+from a legitimate rename to an empty keyword list.  ADD-KWS and REMOVE-KWS
+are lists of keyword strings; their meaning depends on OPERATION:
+
+- `add': KEYWORDS plus ADD-KWS, deduplicated.  `:unchanged' when every
+  keyword in ADD-KWS is already present.
+
+- `remove': KEYWORDS minus REMOVE-KWS.  `:unchanged' when none of
+  REMOVE-KWS is present, so files that never had the keyword are left
+  untouched rather than being renamed for no reason.
+
+- `replace': KEYWORDS with REMOVE-KWS (the single old keyword) swapped for
+  ADD-KWS (the single new keyword).  `:unchanged' unless the old keyword is
+  actually present — a file that never had it is left untouched entirely,
+  it does not pick up the new keyword by side effect."
+  (pcase operation
+    ('add
+     (let ((new (seq-uniq (append keywords add-kws))))
+       (if (= (length new) (length (seq-uniq keywords))) :unchanged new)))
+    ('remove
+     (if (seq-intersection keywords remove-kws)
+         (seq-difference keywords remove-kws)
+       :unchanged))
+    ('replace
+     (if (seq-intersection keywords remove-kws)
+         (seq-uniq (append (seq-difference keywords remove-kws) add-kws))
+       :unchanged))))
 
 ;;;###autoload
 (defun denote-dash-retag-sequence ()
   "Add, remove, or replace a keyword across a sequence and all its descendants.
 Resolves the target sequence from the note at point in `denote-dash-mode' or
-`denote-sequence-hierarchy-mode', the current buffer file, or a prompt."
+`denote-sequence-hierarchy-mode', the current buffer file, or a prompt.
+
+Only files actually affected by the chosen operation are renamed — see
+`denote-dash--retag-apply' for the exact per-operation semantics; in
+particular `replace' never adds the new keyword to a file that didn't
+already carry the old one."
   (interactive)
-  (require 'annotated-completing-read)
   (let* ((file (denote-dash--target-file))
          (seq-id (or (denote-retrieve-filename-signature file)
                      (annotated-completing-read
-                      (seq-map (lambda (s) (cons s nil)) (denote-sequence-get-all-sequences))
-                      :prompt "Sequence: " :require-match t)))
+                      (seq-map
+		       (lambda (s) (cons s nil))
+		       (denote-sequence-get-all-sequences))
+                      :prompt "Sequence:"
+		      :require-match t)))
          (files (denote-dash--subtree-files seq-id))
          (existing-keywords (seq-uniq (seq-mapcat #'denote-extract-keywords-from-path files))))
     (unless files
       (user-error "No files found for sequence %s" seq-id))
-    (let* ((op-table (seq-map (lambda (e) (cons (nth 0 e) (nth 2 e))) denote-dash--retag-operations))
-           (op-choice (annotated-completing-read op-table :prompt "Operation: " :require-match t))
+    (let* ((op-choice (annotated-completing-read
+		       (seq-map
+			(lambda (e) (cons (nth 0 e) (nth 2 e)))
+			denote-dash--retag-operations)
+		       :prompt "Operation:"
+		       :require-match t))
            (operation (nth 1 (assoc op-choice denote-dash--retag-operations)))
-           (add-kws nil)
-           (remove-kws nil))
+	   add-kws remove-kws)
       (pcase operation
         ('add
          (setq add-kws (completing-read-multiple "Add keyword(s): " nil)))
@@ -729,30 +818,49 @@ Resolves the target sequence from the note at point in `denote-dash-mode' or
          (unless existing-keywords
            (user-error "No keywords found under sequence %s" seq-id))
          (let ((old-kw (annotated-completing-read
-                        (seq-map (lambda (k) (cons k nil)) existing-keywords)
-                        :prompt "Replace keyword: " :require-match t)))
+                        (seq-map
+			 (lambda (k) (cons k nil))
+			 existing-keywords)
+                        :prompt "Replace keyword:"
+			:require-match t)))
            (setq remove-kws (list old-kw))
            (setq add-kws (list (read-string (format "Replace `%s' with: " old-kw)))))))
-      (unless (yes-or-no-p (format "%s across sequence %s (%d file%s)? "
-                                   op-choice seq-id (length files)
-                                   (if (= (length files) 1) "" "s")))
-        (user-error "Cancelled"))
-      ;; Suppress per-file confirmations: the single confirmation above
-      ;; already covers the whole bulk operation.
-      (let ((denote-rename-confirmations nil))
-        (seq-do (lambda (f)
-                  (denote-rename-file f 'keep-current
-                                      (denote-dash--retag-apply
-                                       (denote-extract-keywords-from-path f)
-                                       add-kws remove-kws)
-                                      'keep-current 'keep-current 'keep-current))
-                files))
+      (let* ((planned (seq-map (lambda (f)
+                                 (cons f (denote-dash--retag-apply
+                                          (denote-extract-keywords-from-path f)
+                                          operation add-kws remove-kws)))
+                               files))
+             (affected (seq-remove (lambda (pair) (eq (cdr pair) :unchanged)) planned)))
+        (unless affected
+          (user-error "No files in sequence %s are affected by this operation" seq-id))
+        (unless (yes-or-no-p (format "%s across sequence %s (%d of %d file%s)? "
+                                     op-choice seq-id (length affected) (length files)
+                                     (if (= (length files) 1) "" "s")))
+          (user-error "Cancelled"))
+        ;; Suppress per-file confirmations: the single confirmation above
+        ;; already covers the whole bulk operation.
+        (let ((denote-rename-confirmations nil))
+          (seq-do (lambda (pair)
+                    (denote-rename-file
+                     (car pair) 'keep-current (cdr pair)
+                     'keep-current 'keep-current 'keep-current))
+                  affected)))
       (cond
        ((derived-mode-p 'denote-dash-mode) (denote-dash-refresh))
        ((derived-mode-p 'denote-sequence-hierarchy-mode) (revert-buffer))))))
 
 (with-eval-after-load 'denote-sequence
-  (define-key denote-sequence-hierarchy-mode-map (kbd "k") #'denote-dash-retag-sequence))
+  (define-key denote-sequence-hierarchy-mode-map (kbd "k")   #'denote-dash-retag-sequence)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "l")   #'denote-dash-lint-sequences)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "C-r") #'denote-dash-repack-sequence-children)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "M-r") #'denote-dash-swap-with-parent)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "M-p") #'denote-dash-swap-with-previous)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "M-n") #'denote-dash-swap-with-next)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "m")   #'denote-dash-reparent)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "u")   #'denote-dash-renumber-recursive)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "i")   #'denote-dash-insert-sequence-note)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "h")   #'denote-dash-fix-sequence-frontmatter)
+  (define-key denote-sequence-hierarchy-mode-map (kbd "C-l") #'denote-dash-fix-all-sequence-frontmatter))
 
 (provide 'denote-dash-repack)
 ;;; denote-dash-repack.el ends here

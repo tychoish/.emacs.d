@@ -54,6 +54,7 @@
 (declare-function org-read-date "org")
 (declare-function org-up-heading-safe "org")
 (declare-function denote-dash-lint-sequences "denote-dash-repack")
+(declare-function denote-dash-fix-sequence-frontmatter "denote-dash-repack")
 (declare-function denote-dash-fix-all-sequence-frontmatter "denote-dash-repack")
 (declare-function denote-dash-repack-sequence-children "denote-dash-repack")
 (declare-function denote-dash-swap-with-parent "denote-dash-repack")
@@ -464,6 +465,11 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   "M-n"     #'denote-dash-swap-with-next
   "C-n"     denote-dash-narrow-map
   "k"       #'denote-dash-retag-sequence
+  "m"       #'denote-dash-reparent
+  "u"       #'denote-dash-renumber-recursive
+  "i"       #'denote-dash-insert-sequence-note
+  "h"       #'denote-dash-fix-sequence-frontmatter
+  "C-l"     #'denote-dash-fix-all-sequence-frontmatter
   "v"       #'denote-dash-schedule-review-at-point
   "n"       #'denote
   "g"       #'denote-dash-refresh
@@ -1395,6 +1401,7 @@ either, it errors instead of prompting at all."
     ("raf" "update all from fm" denote-dash-rename-all-files-using-front-matter)]
    ["Sequence"
     ("al" "lint sequences"     denote-dash-lint-sequences)
+    ("ah" "fix frontmatter"    denote-dash-fix-sequence-frontmatter)
     ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)
     ("ar" "repack children"    denote-dash-repack-sequence-children)
     ("as" "swap with parent"   denote-dash-swap-with-parent)
@@ -1402,8 +1409,7 @@ either, it errors instead of prompting at all."
     ("an" "swap with next"     denote-dash-swap-with-next)
     ("ak" "retag sequence"     denote-dash-retag-sequence)]]
   [["Splice"
-    ("rp" "reparent seq"       denote-dash-reparent)
-    ("rs" "reparent recursive" denote-dash-reparent-recursive)
+    ("rp" "reparent (asks recursive)" denote-dash-reparent)
     ("rn" "renumber recursive" denote-dash-renumber-recursive)]
    ["Review"
     ("vd" "set review date"    denote-review-set-date)
