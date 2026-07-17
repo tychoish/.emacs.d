@@ -18,8 +18,6 @@
   (require 'subr-x)
   (require 'xtdlib))
 
-(require 'orgx-capture)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Section 1: Configuration and keybindings
@@ -36,13 +34,7 @@
 (autoload 'annotated-completing-read "annotated-completing-read")
 
 (declare-function org-agenda-goto "org-agenda")
-(declare-function orgx--use-speed-commands "orgx")
-(declare-function orgx--install-auxiliary-packages "orgx")
-(declare-function orgx--setup-standard-capture-templates "orgx-capture")
-(declare-function orgx-agenda-files-open "orgx")
-(declare-function org-gist-export-private-gist "orgx")
-(declare-function org-gist-export-public-gist "orgx")
-(declare-function ad:org-agenda--open-files "orgx")
+(declare-function org-archive-set-tag "org-archive")
 (declare-function denote-org-extract-org-subtree "denote-org")
 (declare-function denote-format-link "denote")
 (declare-function denote-directory-files "denote")
@@ -54,6 +46,13 @@
 ;; takes effect dynamically and the byte compiler doesn't warn about an unused
 ;; lexical variable.
 (defvar org-archive-sibling-heading)
+
+;; `org-capture-templates' is populated by whatever loads capture templates
+;; into it (`orgx-capture', `org-capture' itself, etc.); `orgx-capture' below
+;; only ever reads it, so this file has no load-time dependency on any of
+;; them. Defaults to nil (matching `org-capture''s own default) so reading
+;; it here doesn't signal void-variable before anything has populated it.
+(defvar org-capture-templates nil)
 
 ;; Supporting export/format packages.
 
@@ -164,28 +163,6 @@
   (setq org-return-follows-link t)
   (setq org-use-speed-commands #'orgx--use-speed-commands))
 
-;; Global org keybindings.
-
-(bind-keys
- :prefix "C-c o"
- :prefix-map orgx-global-map
- ("a" . orgx-agenda-view)
- ("c" . orgx-capture)
- ("4" . org-agenda)
- ("k" . org-capture)
- ("f" . orgx-agenda-files-open)
- ("s" . org-save-all-org-buffers)
- ("r" . orgx-agenda-files-reload)
- ("j" . orgx-capture)
- ("u" . orgx-agenda-untagged-in-file)
- ("/" . orgx-agenda-for-file)
- :map orgx-global-map
- :prefix "l"
- :prefix-map orgx-link-map
- ("s" . org-store-link)
- ("i" . org-insert-link)
- ("a" . org-annotate-file))
-
 (defvar-keymap orgx-gist-map
   :name "org-gist"
   :doc "keymap for org-gist commands"
@@ -246,22 +223,8 @@
 (with-eval-after-load 'agent-shell-queue-org
   (keymap-set orgx-minor-mode-commands-map "q" #'agent-shell-queue-org-refile-from-heading))
 
-;; Startup hooks and advice.
-
-(add-one-shot-hook
- :name "org-install-aux-packages"
- :hook 'org-mode-hook
- :operation #'orgx--install-auxiliary-packages)
-
-(add-one-shot-hook
- :name "org-capture [install standard templates]"
- :hook 'emacs-startup-hook
- :operation #'orgx--setup-standard-capture-templates
- :idle-timer 1.0)
-
-
-(advice-add 'org-agenda :before #'ad:org-agenda--open-files)
-
+;; Startup hooks and advice are registered in the `use-package orgx' :init
+;; block in `tychoish-core.el' so they can trigger this file's deferred load.
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -669,7 +632,7 @@ etc.)."
     (when-let* ((target (seq-find (lambda (tgt) (equal (car tgt) choice)) targets)))
       (find-file (nth 1 target))
       (goto-char (nth 3 target))
-      (org-show-context 'agenda))))
+      (org-fold-show-context 'agenda))))
 
 ;; denote subtree migration
 
@@ -820,7 +783,8 @@ the toc-org write hook."
   "Enable `orgx-minor-mode' in the current buffer."
   (orgx-minor-mode 1))
 
-(add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
+;; Hooked onto `org-mode-hook' from the `use-package orgx' :init block in
+;; `tychoish-core.el' so the hook is live before this file loads.
 
 ;;; orgx-agenda-minor-mode
 
@@ -842,7 +806,8 @@ the toc-org write hook."
   "Enable `orgx-agenda-minor-mode' in the current buffer."
   (orgx-agenda-minor-mode 1))
 
-(add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+;; Hooked onto `org-agenda-mode-hook' from the `use-package orgx' :init
+;; block in `tychoish-core.el' so the hook is live before this file loads.
 
 (provide 'orgx)
 ;;; orgx.el ends here

@@ -136,9 +136,6 @@ Called from `after-init-hook' so the full config is loaded first."
     (with-slow-op-timer "<init> tychoish-mail"
       (require 'tychoish-mail))
 
-    (with-slow-op-timer "<init> orgx"
-      (require 'orgx))
-
     ;; load the user/*.el files
     (with-slow-op-timer "<init> user-files"
       (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))

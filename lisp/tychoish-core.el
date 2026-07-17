@@ -1033,19 +1033,23 @@
   ;; magit-20260609+ uses `thread$' from cond-let which requires cond-let>=0.3;
   ;; the installed cond-let doesn't define cond-let--thread$ yet.  Redefine the
   ;; one affected function using nested calls until cond-let catches up.
-  (defun magit-config-get-from-cached-list (key)
-    (gethash
-     (replace-regexp-in-string "[^.]+\\'" #'downcase
-       (replace-regexp-in-string "\\`[^.]+" #'downcase key t t)
-       t t)
-     (magit--with-refresh-cache (cons (magit-toplevel) 'config)
-       (let ((configs (make-hash-table :test #'equal)))
-         (dolist (conf (magit-git-items "config" "--list" "-z"))
-           (let* ((nl-pos (cl-position ?\n conf))
-                  (key (substring conf 0 nl-pos))
-                  (val (if nl-pos (substring conf (1+ nl-pos)) "")))
-             (puthash key (nconc (gethash key configs) (list val)) configs)))
-         configs))))
+  ;; `magit--with-refresh-cache' (vendored, not ours) expands to `incf', which
+  ;; triggers an obsolete-alias warning at this call site; suppressed since
+  ;; there's no local fix for a third-party macro's expansion.
+  (with-suppressed-warnings ((obsolete incf))
+    (defun magit-config-get-from-cached-list (key)
+      (gethash
+       (replace-regexp-in-string "[^.]+\\'" #'downcase
+         (replace-regexp-in-string "\\`[^.]+" #'downcase key t t)
+         t t)
+       (magit--with-refresh-cache (cons (magit-toplevel) 'config)
+         (let ((configs (make-hash-table :test #'equal)))
+           (dolist (conf (magit-git-items "config" "--list" "-z"))
+             (let* ((nl-pos (cl-position ?\n conf))
+                    (key (substring conf 0 nl-pos))
+                    (val (if nl-pos (substring conf (1+ nl-pos)) "")))
+               (puthash key (nconc (gethash key configs) (list val)) configs)))
+           configs)))))
 
   (bind-keys
    :map magit-mode-map
@@ -1545,6 +1549,56 @@ return until the minibuffer session ends."
   :ensure t
   :after (denote denote-journal)
   :defer t)
+
+(use-package orgx
+  :ensure nil
+  :commands (orgx-capture
+	     orgx-agenda-view
+	     orgx-agenda-files-open
+	     orgx-agenda-files-reload
+	     orgx-agenda-untagged-in-file
+	     orgx-agenda-for-file
+	     orgx-minor-mode-turn-on
+	     orgx-agenda-minor-mode-turn-on
+	     orgx--install-auxiliary-packages
+	     ad:org-agenda--open-files)
+  :init
+  (bind-keys
+   :prefix "C-c o"
+   :prefix-map orgx-global-map
+   ("a" . orgx-agenda-view)
+   ("c" . orgx-capture)
+   ("4" . org-agenda)
+   ("k" . org-capture)
+   ("f" . orgx-agenda-files-open)
+   ("s" . org-save-all-org-buffers)
+   ("r" . orgx-agenda-files-reload)
+   ("j" . orgx-capture)
+   ("u" . orgx-agenda-untagged-in-file)
+   ("/" . orgx-agenda-for-file)
+   :map orgx-global-map
+   :prefix "l"
+   :prefix-map orgx-link-map
+   ("s" . org-store-link)
+   ("i" . org-insert-link)
+   ("a" . org-annotate-file))
+  (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
+  (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+  (add-one-shot-hook
+   :name "org-install-aux-packages"
+   :hook 'org-mode-hook
+   :operation #'orgx--install-auxiliary-packages)
+  :config
+  (advice-add 'org-agenda :before #'ad:org-agenda--open-files))
+
+(use-package orgx-capture
+  :ensure nil
+  :commands (orgx-add-project-file-capture-templates
+	     orgx-capture-add-note-templates
+	     orgx-capture-add-journal-templates
+	     orgx-capture-add-task-templates)
+  :config
+  (orgx--setup-standard-capture-templates))
 
 (use-package markdown-mode
   :ensure t
