@@ -644,7 +644,9 @@ name.  Candidates are grouped by command type (built-in, tags, todo,
 etc.)."
   (interactive)
   (require 'org-agenda)
-  (let* ((customs (seq-filter (lambda (e) (stringp (cadr e)))
+  (let* ((customs (seq-filter (lambda (e)
+				(and (proper-list-p e)
+				     (stringp (cadr e))))
                               org-agenda-custom-commands))
          (all (append orgx-agenda-builtin-views customs))
          (desc->entry (seq-map (lambda (e) (cons (cadr e) e)) all))
