@@ -3,14 +3,14 @@
 ;;; Commentary:
 ;; Push a Denote note to Notion as a page, or pull a Notion page back into
 ;; a Denote note, on demand via the `npx ntn` CLI.  Both directions are
-;; manual/interactive; nothing here runs on a timer or watch.
+;; manual/interactive.
 ;;
 ;; Entry points:
-;;   `denote-notion-export-post'     — create or update the Notion page for
-;;                                     the current note
-;;   `denote-notion-import-page'     — pull a Notion page into a new or
-;;                                     existing tracked note
-;;   `denote-notion-import-refresh'  — re-pull the current note's tracked page
+;;   `denote-notion-push' — create or update the Notion page for the
+;;                          current note
+;;   `denote-notion-pull' — pull a Notion page: with an id/URL, create or
+;;                          refresh; with none, dwim-refresh the current
+;;                          buffer's tracked page.
 
 ;;; Code:
 
@@ -22,6 +22,17 @@
 
 (declare-function org-export-to-buffer "ox")
 (declare-function annotated-completing-read "annotated-completing-read")
+(declare-function denote-dash--file-at-point "denote-dash")
+
+(defun denote-notion--file-at-point ()
+  "Return the denote file implied by the current point/buffer context, or nil.
+Uses `denote-dash--file-at-point' when `denote-dash' is loaded, so a note
+that's merely selected at point in a `denote-dash' or sequence-hierarchy
+listing resolves correctly instead of requiring the file to be the
+current buffer's own visited file.  Falls back to `buffer-file-name'."
+  (if (fboundp 'denote-dash--file-at-point)
+      (denote-dash--file-at-point)
+    (buffer-file-name)))
 
 ;;; Custom variables
 
@@ -33,7 +44,7 @@
   "Default Notion parent for a first-time export, or nil to always prompt.
 When set, a cons of (TYPE . ID): TYPE is one of the symbols `page',
 `database', or `data-source'; ID is that resource's id string.  Takes
-priority over `denote-notion-parent-registry' — set this only for a
+priorityh over `denote-notion-parent-registry' — set this only for a
 single fixed target used non-interactively (e.g. from a headless script);
 leave nil to pick per-export via the registry or a raw prompt."
   :type '(choice (const :tag "Always prompt" nil)
@@ -89,10 +100,17 @@ PARENT is a (TYPE . ID) cons.  Returns (NAME . (PARENT . PROPERTIES)), or nil."
       (cons exit-code (buffer-string)))))
 
 (defun denote-notion--run-json (args)
-  "Run \"npx ntn\" with ARGS plus --json and return the parsed result.
-Returns nil if the process exits non-zero.  Signals a `user-error' with
-the CLI's own output when the exit code is non-zero."
-  (let* ((result (denote-notion--run (append args '("--json"))))
+  "Run \"npx ntn\" with ARGS and return the parsed JSON result.
+Appends \"--json\" unless ARGS invokes the `api' subcommand — `ntn api'
+always emits JSON and has no `--json' flag at all (unlike `pages
+get'/`create'/`edit'), so appending it there is an unrecognized
+argument, not a no-op: `ntn api's variadic trailing [INPUT]... catch-all
+means a bare trailing \"--json\" is rejected outright rather than
+silently absorbed. Returns nil if the process exits non-zero. Signals
+a `user-error' with the CLI's own output when the exit code is
+non-zero."
+  (let* ((args (if (equal (car args) "api") args (append args '("--json"))))
+         (result (denote-notion--run args))
          (exit-code (car result))
          (output (cdr result)))
     (unless (zerop exit-code)
@@ -198,13 +216,21 @@ then a raw type+id prompt."
                 file (denote-filetype-heuristics file))))
     (and title (not (string-empty-p title)) title)))
 
-(defun denote-notion--content-with-title (file body)
-  "Prepend FILE's Denote title to BODY as a leading heading, if it has one.
-`ntn pages create'/`edit' read a leading H1 in the Markdown content as the
-page title rather than rendering it as a body block."
-  (if-let* ((title (denote-notion--export-title file)))
-      (concat "# " title "\n\n" body)
-    body))
+(defun denote-notion--rich-text-value (text)
+  "Return a Notion rich_text property value array for the plain string TEXT."
+  (vector (list (cons 'text (list (cons 'content text))))))
+
+(defun denote-notion--set-page-title (id properties title)
+  "PATCH page ID's title property (found via PROPERTIES) to TITLE.
+Every Notion page has exactly one property of type `title'; its name
+varies by schema (\"Name\" is common; a bare page parent's is literally
+\"title\"), so the key is discovered from PROPERTIES rather than assumed.
+Does nothing if TITLE is nil or PROPERTIES has no `title'-typed entry."
+  (when-let* ((title (and title (not (string-empty-p title)) title))
+              (key (car (seq-find (lambda (kv) (equal (map-elt (cdr kv) 'type) "title"))
+                                   properties))))
+    (denote-notion--apply-properties
+     id (list (cons key (list (cons 'title (denote-notion--rich-text-value title))))))))
 
 (defun denote-notion--set-tags-from-properties (file properties)
   "Set FILE's notion_tags from Notion page PROPERTIES' Tags multi_select, if any."
@@ -245,55 +271,104 @@ PROPERTIES — is replaced by calling NILADIC-FN.")
     (mapcar #'denote-notion--resolve-property-sentinels value))
    (t value)))
 
+(defconst denote-notion--default-export-properties
+  '((Timestamp (date (start . "<today>"))))
+  "Built-in default Notion property values applied to every newly created
+page, before any `denote-notion-parent-registry' entry's or file's own
+override — see `denote-notion--merge-properties' precedence in
+`denote-notion--export-create'.  Several Casap Notion data sources expect
+a `Timestamp' date property to be populated on creation; this ensures
+that happens even when no registry entry or per-file `notion_properties'
+has been configured to do it explicitly.  Sentinels (e.g. \"<today>\")
+are resolved the same as any other property value — see
+`denote-notion--apply-properties'.")
+
 (defun denote-notion--export-properties (file)
-  "Return FILE's `notion_properties' front-matter value, parsed and resolved.
+  "Return FILE's `notion_properties' front-matter value, parsed but unresolved.
 The value is a raw JSON object mapping Notion property names to Notion API
 property-value objects, e.g. {\"Timestamp\": {\"date\": {\"start\": \"<today>\"}}}.
-Sentinels in `denote-notion--property-sentinels' (e.g. \"<today>\") are
-replaced before sending.  Returns nil if FILE has no `notion_properties'
+Sentinels (see `denote-notion--property-sentinels') are left unresolved
+here — `denote-notion--apply-properties' resolves them once, uniformly,
+regardless of which layer (file, registry entry, or built-in default)
+contributed the value.  Returns nil if FILE has no `notion_properties'
 line."
   (when-let* ((raw (denote-notion--frontmatter-get file "notion_properties"))
               (raw (and (not (string-empty-p raw)) raw)))
-    (denote-notion--resolve-property-sentinels
-     (json-parse-string raw :object-type 'alist :array-type 'list))))
+    (json-parse-string raw :object-type 'alist :array-type 'list)))
 
 (defun denote-notion--apply-properties (id properties)
-  "PATCH Notion page ID's PROPERTIES (an alist ready for JSON serialization)."
+  "PATCH Notion page ID's PROPERTIES (an alist ready for JSON serialization).
+Sentinels in PROPERTIES (see `denote-notion--property-sentinels') are
+resolved here, just before sending — the single point every caller's
+merged properties pass through, whether they came from a note's own
+`notion_properties', a `denote-notion-parent-registry' entry's default,
+or `denote-notion--default-export-properties'.  Resolving earlier, per
+layer, would miss whichever layers didn't happen to call it."
   (when properties
     (denote-notion--run-json
      (list "api" (format "v1/pages/%s" id)
-           "--data" (json-serialize (list (cons 'properties properties)))
+           "--data" (json-serialize
+                     (list (cons 'properties (denote-notion--resolve-property-sentinels properties))))
            "-X" "PATCH"))))
+
+(defun denote-notion--parse-parent-arg (string)
+  "Parse STRING (as formatted by `denote-notion--parent-arg') back to a cons.
+Returns (TYPE . ID) with TYPE interned as a symbol, or nil if STRING is
+nil/empty."
+  (when (and string (not (string-empty-p string)))
+    (when-let* ((pos (string-search ":" string)))
+      (cons (intern (substring string 0 pos)) (substring string (1+ pos))))))
 
 (defun denote-notion--export-create (file parent)
   "Create a new Notion page for FILE under PARENT and write back tracking fields.
-PARENT is a (TYPE . ID) cons; see `denote-notion-default-parent'.  If
-PARENT matches a `denote-notion-parent-registry' entry, that entry's name
-is recorded as `notion_parent' (so `denote-notion--export-update' can
-keep reapplying its default properties) and its default properties are
-merged under FILE's own `notion_properties'."
+PARENT is a (TYPE . ID) cons; see `denote-notion-default-parent'.  The
+`type:id' form of PARENT itself (not any `denote-notion-parent-registry'
+entry's name) is recorded as `notion_parent', so a later
+`denote-notion--export-update' resolves default properties by looking the
+same locator back up in the registry (see
+`denote-notion--registry-entry-for-parent') — storing the registry name
+instead would bitrot the moment that name is renamed or removed from
+config, since the note itself has no other record of which parent it
+was actually created under.  If PARENT matches a registry entry, that
+entry's default properties are merged under FILE's own
+`notion_properties', which in turn take precedence over
+`denote-notion--default-export-properties' (e.g. `Timestamp') — so the
+built-in default always populates a value on creation unless something
+more specific already provides one.
+
+`ntn pages create --json' returns the created page object directly at
+its top level (unlike `ntn pages get --json', which wraps it under a
+`page' key alongside the converted markdown) — RESULT below is used as
+the page object as-is."
   (let* ((registry-entry (denote-notion--registry-entry-for-parent parent))
-         (content (denote-notion--content-with-title file (denote-notion--export-body file)))
-         (result (denote-notion--run-json
-                  (list "pages" "create" "--parent" (denote-notion--parent-arg parent)
-                        "--content" content)))
-         (page (map-elt result 'page)))
+         (content (denote-notion--export-body file))
+         (page (denote-notion--run-json
+                (list "pages" "create" "--parent" (denote-notion--parent-arg parent)
+                      "--content" content))))
     (denote-notion--frontmatter-set file "notion_id" (map-elt page 'id))
-    (denote-notion--frontmatter-set file "source_url" (map-elt page 'url))
     (denote-notion--frontmatter-set file "notion_created" (map-elt page 'created_time))
     (denote-notion--frontmatter-set file "notion_edited" (map-elt page 'last_edited_time))
+    (denote-notion--frontmatter-set file "notion_parent" (denote-notion--parent-arg parent))
     (denote-notion--set-tags-from-properties file (map-elt page 'properties))
-    (when registry-entry
-      (denote-notion--frontmatter-set file "notion_parent" (car registry-entry)))
+    (denote-notion--set-page-title (map-elt page 'id) (map-elt page 'properties)
+                                    (denote-notion--export-title file))
     (denote-notion--apply-properties
      (map-elt page 'id)
      (denote-notion--merge-properties (denote-notion--export-properties file)
-                                       (cdr (cdr registry-entry))))
+                                       (cdr (cdr registry-entry))
+                                       denote-notion--default-export-properties))
     (map-elt page 'url)))
 
 (defun denote-notion--export-update (file force)
   "Update the Notion page already tracked by FILE, or signal a conflict.
-With FORCE non-nil, overwrite the remote page without comparing timestamps."
+With FORCE non-nil, overwrite the remote page without comparing timestamps.
+
+Unlike `ntn pages create --json' (a flat page object with `url',
+`properties', `last_edited_time', etc.), `ntn pages edit --json' returns
+only a minimal confirmation object — id/markdown/object/request_id/
+truncated/unknown_block_ids, no `url' or `properties' — so everything
+below the content edit re-fetches the full page object via `pages get'
+rather than reading it from the edit response."
   (let* ((notion-id (denote-notion--frontmatter-get file "notion_id"))
          (id (string-trim notion-id "\"" "\"")))
     (unless force
@@ -304,20 +379,23 @@ With FORCE non-nil, overwrite the remote page without comparing timestamps."
                    (not (string-empty-p stored-edited))
                    (string> remote-edited stored-edited))
           (user-error
-           "Notion page %s changed since the last sync (remote %s > stored %s); run `denote-notion-import-refresh' first, or pass force"
+           "Notion page %s changed since the last sync (remote %s > stored %s); run `denote-notion-pull' (with no page id, to dwim-refresh) first, or pass force"
            id remote-edited stored-edited))))
-    (let* ((content (denote-notion--content-with-title file (denote-notion--export-body file)))
-           (result (denote-notion--run-json (list "pages" "edit" id "--content" content)))
-           (page (map-elt result 'page))
-           (parent-name (string-trim (or (denote-notion--frontmatter-get file "notion_parent") "") "\"" "\""))
-           (default-properties (cdr (cdr (assoc parent-name denote-notion-parent-registry)))))
+    (let ((content (denote-notion--export-body file)))
+      (denote-notion--run-json (list "pages" "edit" id "--content" content)))
+    (let* ((page (map-elt (denote-notion--run-json (list "pages" "get" id)) 'page))
+           (stored-parent (string-trim (or (denote-notion--frontmatter-get file "notion_parent") "") "\"" "\""))
+           (registry-entry (denote-notion--registry-entry-for-parent
+                             (denote-notion--parse-parent-arg stored-parent)))
+           (default-properties (cdr (cdr registry-entry))))
       (denote-notion--frontmatter-set file "notion_edited" (map-elt page 'last_edited_time))
+      (denote-notion--set-page-title id (map-elt page 'properties) (denote-notion--export-title file))
       (denote-notion--apply-properties
        id (denote-notion--merge-properties (denote-notion--export-properties file) default-properties))
       (map-elt page 'url))))
 
 ;;;###autoload
-(defun denote-notion-export-post (&optional file parent force)
+(defun denote-notion-push (&optional file parent force)
   "Push FILE (default the current buffer's file) to Notion as a page.
 If FILE is not yet Notion-tracked, PARENT — a (TYPE . ID) cons, where TYPE
 is one of the symbols `page', `database', or `data-source' — is required:
@@ -327,7 +405,7 @@ updated, unless the remote page has changed since the last sync, in which
 case a conflict is signaled; pass FORCE (or the prefix argument,
 interactively) to overwrite anyway."
   (interactive (list nil nil current-prefix-arg))
-  (let* ((file (or file (buffer-file-name) (user-error "No file to export")))
+  (let* ((file (or file (denote-notion--file-at-point) (user-error "No file to export")))
          (url (if (denote-notion--tracked-p file)
                   (denote-notion--export-update file force)
                 (denote-notion--export-create file (or parent (denote-notion--read-parent))))))
@@ -341,6 +419,33 @@ interactively) to overwrite anyway."
                     (replace-regexp-in-string "-" "" id-or-url))
       (match-string 1 (replace-regexp-in-string "-" "" id-or-url))
     id-or-url))
+
+(defun denote-notion--clean-imported-body (body)
+  "Clean up BODY as returned by `ntn pages get' for storage in a denote note.
+Every separate Notion block (a paragraph, a heading, a list item, ...) is
+joined to the next by a single newline in `ntn's Markdown, with no blank
+line between them; a single newline is not a paragraph break in Markdown,
+so without widening it every block runs into the next as one paragraph.
+Each single newline is widened to a blank line first, then a literal
+\"<br>\" tag — Notion's *soft* line break within one block — is turned
+into a single newline, so it does not also become a paragraph break.
+Any literal square bracket in prose is also backslash-escaped (\\[, \\])
+per CommonMark convention, to stop it from being misread as link syntax
+by a Markdown parser; a denote note is not read through one, so the
+escaping only pollutes prose that never had it in Notion's own editor."
+  (thread-last body
+               (replace-regexp-in-string "\n" "\n\n")
+               (replace-regexp-in-string "<br[ \t]*/?>" "\n")
+               (replace-regexp-in-string (regexp-quote "\\[") "[")
+               (replace-regexp-in-string (regexp-quote "\\]") "]")))
+
+(defun denote-notion--rich-text-plain (rich-text-array)
+  "Return the concatenated `plain_text' of RICH-TEXT-ARRAY.
+RICH-TEXT-ARRAY is a Notion API rich_text array (as found in a `title' or
+`rich_text' property value) -- a list of alists each carrying their own
+`plain_text', not a plain string on its own."
+  (mapconcat (lambda (segment) (or (map-elt segment 'plain_text) ""))
+             rich-text-array ""))
 
 (defun denote-notion--import-write-body (file body)
   "Replace FILE's body (everything after its front matter) with BODY."
@@ -360,62 +465,102 @@ interactively) to overwrite anyway."
     (save-buffer)))
 
 (defun denote-notion--import-refresh-file (file page-id)
-  "Pull PAGE-ID's current content and tracking fields into FILE."
+  "Pull PAGE-ID's current content and tracking fields into FILE.
+Syncs `notion_tags' from the page's current Tags property.  denote's own
+title/keywords are left alone, matching how export treats them as
+user-owned once set."
   (let* ((result (denote-notion--run-json (list "pages" "get" page-id)))
          (page (map-elt result 'page))
          ;; `ntn pages get --json' nests the markdown text under its own
          ;; `markdown' object: {"markdown": {"markdown": "...", ...}, "page": {...}}.
-         (body (map-elt (map-elt result 'markdown) 'markdown)))
+         (body (denote-notion--clean-imported-body
+                (map-elt (map-elt result 'markdown) 'markdown))))
     (denote-notion--import-write-body file body)
-    (denote-notion--frontmatter-set file "notion_edited" (map-elt page 'last_edited_time))))
+    (denote-notion--frontmatter-set file "notion_edited" (map-elt page 'last_edited_time))
+    (denote-notion--set-tags-from-properties file (map-elt page 'properties))))
+
+(defun denote-notion--find-tracked-file (id)
+  "Return the denote file already tracking Notion page ID, or nil.
+Searches every file in `denote-directory-files', not just the current
+buffer or an explicit TARGET-FILE -- otherwise importing a page id
+already tracked by some other, not-currently-open note creates a
+duplicate rather than refreshing the note that already exists for it."
+  (seq-find (lambda (f)
+              (equal (string-trim (or (denote-notion--frontmatter-get f "notion_id") "") "\"" "\"")
+                     id))
+            (denote-directory-files)))
 
 ;;;###autoload
-(defun denote-notion-import-refresh (&optional file)
-  "Re-pull FILE's (default current buffer's) tracked Notion page into it."
-  (interactive)
-  (let* ((file (or file (buffer-file-name) (user-error "No file to refresh")))
-         (notion-id (or (denote-notion--frontmatter-get file "notion_id")
-                        (user-error "%s is not Notion-tracked" file)))
-         (id (string-trim notion-id "\"" "\"")))
-    (denote-notion--import-refresh-file file id)
-    (message "Refreshed %s from Notion" (file-name-nondirectory file))))
+(defun denote-notion-pull (&optional page-id target-file)
+  "Pull a Notion page into a denote note, creating or refreshing as needed.
 
-;;;###autoload
-(defun denote-notion-import-page (page-id &optional target-file)
-  "Pull Notion page PAGE-ID (an id, or a Notion URL, or the current tracked file).
-With TARGET-FILE (or when the current buffer is already tracked with this
-page id), replace that file's body and update its tracking fields.
-Otherwise create a new Denote note from the page's properties and body."
-  (interactive (list (read-string "Notion page id or URL: ")))
-  (let* ((id (denote-notion--extract-page-id page-id))
-         (target (or target-file
-                     (when (and (buffer-file-name)
-                                (equal (string-trim (or (denote-notion--frontmatter-get (buffer-file-name) "notion_id") "") "\"" "\"")
-                                       id))
-                       (buffer-file-name)))))
-    (if target
+With PAGE-ID (an id, or a Notion URL): pull that specific page.  If
+TARGET-FILE, the current buffer, or any other denote note already tracks
+that page's id (see `denote-notion--find-tracked-file'), replace that
+file's body and refresh its tracking fields in place.  Otherwise create a
+new tracked denote note from the page's properties and body — so
+re-running an import on a page you already have never creates a
+duplicate note, even from a buffer other than the one already tracking it.
+
+Without PAGE-ID: refresh TARGET-FILE (or the current buffer) using its
+own already-tracked `notion_id', so \"pull this specific page\" and
+\"re-pull whatever I'm already looking at\" are the same command.
+Errors if there's no tracked file to fall back on.
+
+Interactively, PAGE-ID is only prompted for when the current buffer isn't
+already a tracked Notion note — otherwise this dwim-refreshes the current
+buffer directly, with no prompt at all."
+  (interactive
+   (list (let ((file (denote-notion--file-at-point)))
+           (unless (and file (denote-notion--tracked-p file))
+             (read-string "Notion page id or URL: ")))))
+  (let ((file (or target-file (denote-notion--file-at-point))))
+    (if (not page-id)
         (progn
-          (denote-notion--import-refresh-file target id)
-          (message "Refreshed %s from Notion" (file-name-nondirectory target)))
-      (let* ((result (denote-notion--run-json (list "pages" "get" id)))
-             (page (map-elt result 'page))
-             (body (map-elt (map-elt result 'markdown) 'markdown))
-             (properties (map-elt page 'properties))
-             (title (map-elt (map-elt properties 'Name) 'title))
-             (tags (seq-map (lambda (tag) (map-elt tag 'name))
-                            (map-elt (map-elt properties 'Tags) 'multi_select))))
-        (denote (if (and title (not (string-empty-p title))) title "Untitled Notion import")
-                (cons "notion" tags) 'markdown)
-        (let ((file (buffer-file-name)))
-          (goto-char (point-max))
-          (insert "\n" body)
-          (denote-notion--frontmatter-set file "notion_id" id)
-          (denote-notion--frontmatter-set file "notion_tags" tags)
-          (denote-notion--frontmatter-set file "notion_created" (map-elt page 'created_time))
-          (denote-notion--frontmatter-set file "notion_edited" (map-elt page 'last_edited_time))
-          (denote-notion--frontmatter-set file "source_url" (map-elt page 'url))
-          (save-buffer)
-          (message "Imported %s" (file-name-nondirectory file)))))))
+          (unless (and file (denote-notion--tracked-p file))
+            (user-error "No file to refresh: not Notion-tracked, and no page id given"))
+          (let ((id (string-trim (denote-notion--frontmatter-get file "notion_id") "\"" "\"")))
+            (denote-notion--import-refresh-file file id)
+            (message "Refreshed %s from Notion" (file-name-nondirectory file))))
+      (let* ((id (denote-notion--extract-page-id page-id))
+             (target (or target-file
+                         (when (and file
+                                    (equal (string-trim (or (denote-notion--frontmatter-get file "notion_id") "") "\"" "\"")
+                                           id))
+                           file)
+                         (denote-notion--find-tracked-file id))))
+        (if target
+            (progn
+              (denote-notion--import-refresh-file target id)
+              (message "Refreshed %s from Notion" (file-name-nondirectory target)))
+          (let* ((result (denote-notion--run-json (list "pages" "get" id)))
+                 (page (map-elt result 'page))
+                 (body (denote-notion--clean-imported-body
+                        (map-elt (map-elt result 'markdown) 'markdown)))
+                 (properties (map-elt page 'properties))
+                 ;; `Name' (a `title' property) is a Notion rich_text array,
+                 ;; not a plain string -- see `denote-notion--rich-text-plain'.
+                 (title (denote-notion--rich-text-plain
+                         (map-elt (map-elt properties 'Name) 'title)))
+                 (tags (seq-map (lambda (tag) (map-elt tag 'name))
+                                (map-elt (map-elt properties 'Tags) 'multi_select)))
+                 ;; Backdate the new note's identifier/date to when the
+                 ;; Notion page was actually created, rather than "now" --
+                 ;; otherwise an import loses the page's real authorship date.
+                 (created (map-elt page 'created_time)))
+            ;; `markdown-yaml' matches the front matter shape already used
+            ;; by every note this tool tracks.
+            (denote (if (and title (not (string-empty-p title))) title "Untitled Notion import")
+                    (cons "notion" tags) 'markdown-yaml nil created)
+            (let ((new-file (buffer-file-name)))
+              (goto-char (point-max))
+              (insert "\n" body)
+              (denote-notion--frontmatter-set new-file "notion_id" id)
+              (denote-notion--frontmatter-set new-file "notion_tags" tags)
+              (denote-notion--frontmatter-set new-file "notion_created" (map-elt page 'created_time))
+              (denote-notion--frontmatter-set new-file "notion_edited" (map-elt page 'last_edited_time))
+              (save-buffer)
+              (message "Imported %s" (file-name-nondirectory new-file)))))))))
 
 (provide 'denote-notion)
 ;;; denote-notion.el ends here

@@ -1351,7 +1351,17 @@ clipboard."
               ((symbol-function 'y-or-n-p)    (lambda (&rest _) t)))
       (apply fn args)))
   (advice-add 'denote-rename-file-using-front-matter :around
-              #'ad:denote-rename-file-using-front-matter--no-confirm))
+              #'ad:denote-rename-file-using-front-matter--no-confirm)
+
+  (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
+    "Only call FN in `org-mode' buffers.
+`denote-link-ol-store' calls this unconditionally, even from
+`markdown-mode' buffers, which makes `org-get-heading' warn via
+`org-element-at-point' about running outside an Org buffer."
+    (when (derived-mode-p 'org-mode)
+      (apply fn args)))
+  (advice-add 'denote-link-ol-get-heading :around
+              #'ad:denote-link-ol-get-heading--org-only))
 
 (use-package denote-dash
   :ensure nil
@@ -1382,9 +1392,8 @@ clipboard."
 
 (use-package denote-notion
   :ensure nil
-  :commands (denote-notion-export-post
-	     denote-notion-import-page
-	     denote-notion-import-refresh))
+  :commands (denote-notion-push
+	     denote-notion-pull))
 
 (use-package consult-notes
   :ensure t
