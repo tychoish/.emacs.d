@@ -1675,6 +1675,12 @@ return until the minibuffer session ends."
   :mode (("\\.yaml$" . yaml-mode)
 	 ("\\.yml$" . yaml-mode))
   :init
+  ;; Emacs's own built-in `\.ya?ml\'' → `yaml-ts-mode' entry in
+  ;; `auto-mode-alist' sits ahead of the :mode entries above, so it wins
+  ;; the match regardless of load order.  Remapping `yaml-ts-mode' to
+  ;; `yaml-mode' here intercepts at mode-selection time instead of
+  ;; `auto-mode-alist' match time, so `yaml-mode' wins unconditionally.
+  (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
   (add-to-list 'tychoish/eglot-default-server-configuration
 	       '((:yaml (:format
 			 :enable t
