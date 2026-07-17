@@ -604,6 +604,86 @@ line: `denote-sequence-hierarchy-level' and `denote-sequence-hierarchy-file'
      (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "3a1"))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--hierarchy-goto-root / denote-dash-hierarchy-toggle-fold-sequence
+
+(ert-deftest denote-dash-test/hierarchy-goto-root-from-descendant ()
+  "Point moves to the top-level heading enclosing a deeply nested descendant."
+  (denote-dash-test--with-hierarchy-buffer
+   (goto-char (denote-dash-test--hierarchy-point-for "3a1"))
+   (denote-dash--hierarchy-goto-root)
+   (should (= (point) (denote-dash-test--hierarchy-point-for "3")))))
+
+(ert-deftest denote-dash-test/hierarchy-goto-root-already-at-root ()
+  "Point already on a root heading does not move."
+  (denote-dash-test--with-hierarchy-buffer
+   (goto-char (denote-dash-test--hierarchy-point-for "2"))
+   (denote-dash--hierarchy-goto-root)
+   (should (= (point) (denote-dash-test--hierarchy-point-for "2")))))
+
+(ert-deftest denote-dash-test/hierarchy-toggle-fold-sequence-adds-and-folds ()
+  "Toggling from an unfolded descendant marks its root and hides the subtree."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-fold-sequences nil))
+     (goto-char (denote-dash-test--hierarchy-point-for "3a"))
+     (denote-dash-hierarchy-toggle-fold-sequence)
+     (should (equal '("3") denote-dash-hierarchy-fold-sequences))
+     (should (outline-invisible-p (denote-dash-test--hierarchy-point-for "3a"))))))
+
+(ert-deftest denote-dash-test/hierarchy-toggle-fold-sequence-removes-and-unfolds ()
+  "Toggling an already-marked root unmarks it and shows the subtree again."
+  (denote-dash-test--with-hierarchy-buffer
+   (let ((denote-dash-hierarchy-fold-sequences '("3")))
+     (goto-char (denote-dash-test--hierarchy-point-for "3"))
+     (outline-hide-subtree)
+     (denote-dash-hierarchy-toggle-fold-sequence)
+     (should-not denote-dash-hierarchy-fold-sequences)
+     (should-not (outline-invisible-p (denote-dash-test--hierarchy-point-for "3a"))))))
+
+(ert-deftest denote-dash-test/hierarchy-clear-fold-sequences ()
+  "Clearing empties the persisted fold list."
+  (let ((denote-dash-hierarchy-fold-sequences '("1" "2a" "3")))
+    (denote-dash-hierarchy-clear-fold-sequences)
+    (should-not denote-dash-hierarchy-fold-sequences)))
+
+(ert-deftest denote-dash-test/hierarchy-fold-sequences-persisted-via-savehist ()
+  "The fold-sequences variable is registered for `savehist-mode' persistence."
+  (require 'savehist)
+  (should (memq 'denote-dash-hierarchy-fold-sequences savehist-additional-variables)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-dash--hierarchy-remap-fold-sequence-prefix / --swap-fold-sequence*
+
+(ert-deftest denote-dash-test/hierarchy-remap-fold-sequence-prefix-exact ()
+  "An exact-match entry is rewritten to the new sequence."
+  (let ((denote-dash-hierarchy-fold-sequences '("8a" "9b")))
+    (denote-dash--hierarchy-remap-fold-sequence-prefix "8a" "3c")
+    (should (equal '("3c" "9b") denote-dash-hierarchy-fold-sequences))))
+
+(ert-deftest denote-dash-test/hierarchy-remap-fold-sequence-prefix-descendant ()
+  "A folded descendant of the renamed subtree keeps its relative suffix."
+  (let ((denote-dash-hierarchy-fold-sequences '("8a1")))
+    (denote-dash--hierarchy-remap-fold-sequence-prefix "8a" "3c")
+    (should (equal '("3c1") denote-dash-hierarchy-fold-sequences))))
+
+(ert-deftest denote-dash-test/hierarchy-remap-fold-sequence-prefix-noop-unrelated ()
+  "Entries outside the renamed prefix are left alone."
+  (let ((denote-dash-hierarchy-fold-sequences '("9b")))
+    (denote-dash--hierarchy-remap-fold-sequence-prefix "8a" "3c")
+    (should (equal '("9b") denote-dash-hierarchy-fold-sequences))))
+
+(ert-deftest denote-dash-test/hierarchy-swap-fold-sequence-exact ()
+  "Two single entries trade places without a sequential-application clash."
+  (let ((denote-dash-hierarchy-fold-sequences '("8a" "8")))
+    (denote-dash--hierarchy-swap-fold-sequence "8a" "8")
+    (should (equal '("8" "8a") denote-dash-hierarchy-fold-sequences))))
+
+(ert-deftest denote-dash-test/hierarchy-swap-fold-sequence-prefix-swaps-subtrees ()
+  "Descendant entries under either sibling swap prefixes together."
+  (let ((denote-dash-hierarchy-fold-sequences '("8a1" "8b2")))
+    (denote-dash--hierarchy-swap-fold-sequence-prefix "8a" "8b")
+    (should (equal '("8b1" "8a2") denote-dash-hierarchy-fold-sequences))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash--review-pending-p
 
 (defun denote-dash-test--make-org-note-with-reviewdate (dir id reviewdate)

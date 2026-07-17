@@ -207,6 +207,24 @@ block on a \"Buffer modified; kill anyway?\" prompt."
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 
+(ert-deftest denote-dash-test/swap-with-parent-remaps-persisted-fold ()
+  "A persisted fold entry follows its sequence through the swap."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((parent-file (denote-dash-test--make-org-note
+                             dir "20240101T100000" "1a" "Parent"))
+               (child-file  (denote-dash-test--make-org-note
+                             dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir))
+               (denote-dash-hierarchy-fold-sequences '("1a1")))
+          (with-current-buffer (find-file-noselect child-file)
+            (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+              (denote-dash-swap-with-parent)))
+          (denote-dash-test--kill-dir-buffers dir)
+          ;; "1a1" (the folded child) is now at "1a"
+          (should (equal '("1a") denote-dash-hierarchy-fold-sequences)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-dash-swap-with-previous / denote-dash-swap-with-next (file-based)
@@ -430,6 +448,22 @@ digit (letter-children).  The child \"1a1\" (digit suffix \"1\") must become
           (denote-dash-test--kill-dir-buffers dir)
           (should (directory-files dir nil "20240101T100000==9a--"))
           (should (directory-files dir nil "20240101T110000==9a1--")))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/renumber-recursive-remaps-persisted-fold ()
+  "Persisted folds on the root and a descendant follow the renumber."
+  (let ((dir (make-temp-file "denote-dash-test-" t)))
+    (unwind-protect
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (_root  (denote-dash-test--make-org-note dir "20240101T100000" "1a"  "Root"))
+               (_child (denote-dash-test--make-org-note dir "20240101T110000" "1a1" "Child"))
+               (denote-directory (list dir))
+               (root-file (car (directory-files dir t "20240101T100000==")))
+               (denote-dash-hierarchy-fold-sequences '("1a" "1a1")))
+          (denote-dash-renumber-recursive root-file "9")
+          (denote-dash-test--kill-dir-buffers dir)
+          (should (equal '("9" "9a") denote-dash-hierarchy-fold-sequences)))
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 

@@ -306,6 +306,10 @@ untouched.  Works from `denote-dash-mode' or interactively."
                                    (length plan) (if (= (length plan) 1) "" "s")
                                    (or prefix "(root)")))
               (progn
+                (seq-do (lambda (pair)
+                          (denote-dash--hierarchy-remap-fold-sequence-prefix
+                           (denote-retrieve-filename-signature (car pair)) (cdr pair)))
+                        to-rename)
                 (denote-dash--apply-repack-plan plan)
                 (let ((n (denote-dash--fix-all-frontmatter-silent)))
                   (message "Repacked %d/%d children of %s; fixed %d frontmatter %s."
@@ -375,6 +379,7 @@ then fixes frontmatter signatures on both files."
           (rename-file tmp-path new-path t)
           (denote-dash--fix-frontmatter-from-filename new-path)
           (denote-dash--fix-frontmatter-from-filename new-par-path)
+          (denote-dash--hierarchy-swap-fold-sequence seq parent-seq)
           (message "Swapped %s ↔ %s" seq parent-seq)
           (when (derived-mode-p 'denote-dash-mode)
             (denote-dash-refresh)))))))
@@ -400,6 +405,7 @@ every renamed file.  SEQ-A and SEQ-B must be direct siblings."
          (files-b (denote-dash--subtree-files seq-b)))
     (unless files-a (user-error "No files found for sequence %s" seq-a))
     (unless files-b (user-error "No files found for sequence %s" seq-b))
+    (denote-dash--hierarchy-swap-fold-sequence-prefix seq-a seq-b)
     (seq-do (lambda (f)
               (when-let* ((buf (find-buffer-visiting f)))
                 (kill-buffer buf)))
@@ -556,15 +562,20 @@ subtree beyond a couple of files."
                                           seq 'keep-current 'keep-current)))
          (old-last-type (when root-seq (denote-dash--seq-last-type root-seq)))
          (new-last-type (denote-dash--seq-last-type new-seq))
+         (child-pairs (seq-keep (lambda (child)
+                                   (when-let* ((child-seq (denote-retrieve-filename-signature child)))
+                                     (list child child-seq
+                                           (concat new-seq
+                                                   (denote-dash--alphanumeric-suffix-rewrite
+                                                    (string-remove-prefix root-seq child-seq)
+                                                    old-last-type new-last-type)))))
+                                 descendants))
          (denote-rename-confirmations nil))
+    (denote-dash--hierarchy-remap-fold-sequence-many
+     (cons (cons root-seq new-seq)
+           (seq-map (lambda (e) (cons (nth 1 e) (nth 2 e))) child-pairs)))
     (funcall rename-fn current-file new-seq)
-    (seq-do (lambda (child)
-              (when-let* ((child-seq (denote-retrieve-filename-signature child)))
-                (let* ((raw-suffix (string-remove-prefix root-seq child-seq))
-                       (fixed-suffix (denote-dash--alphanumeric-suffix-rewrite
-                                      raw-suffix old-last-type new-last-type)))
-                  (funcall rename-fn child (concat new-seq fixed-suffix)))))
-            descendants)))
+    (seq-do (lambda (e) (funcall rename-fn (nth 0 e) (nth 2 e))) child-pairs)))
 
 ;;;###autoload
 (defun denote-dash-reparent (current-file file-with-sequence &optional recursive)
@@ -609,14 +620,19 @@ bug in the upstream `denote-sequence-reparent-recursive'; see
          (format "Reparent `%s' to be a child of"
                  (propertize current-file 'face 'denote-faces-prompt-current-name))))
       (y-or-n-p "Reparent recursively (include descendants)? "))))
-  (let ((denote-rename-confirmations nil))
+  (let ((denote-rename-confirmations nil)
+        (old-seq (denote-retrieve-filename-signature current-file)))
     (if recursive
         (denote-dash--reparent-recursive-apply
          current-file (denote-dash--reparent-target-sequence file-with-sequence))
       (if file-with-sequence
-          (denote-sequence-reparent current-file file-with-sequence nil)
-        (denote-rename-file current-file 'keep-current 'keep-current
-                            (denote-sequence--get-new-parent) 'keep-current 'keep-current)))))
+          (let ((new-seq (denote-dash--reparent-target-sequence file-with-sequence)))
+            (denote-sequence-reparent current-file file-with-sequence nil)
+            (denote-dash--hierarchy-remap-fold-sequence-prefix old-seq new-seq))
+        (let ((new-seq (denote-sequence--get-new-parent)))
+          (denote-rename-file current-file 'keep-current 'keep-current
+                              new-seq 'keep-current 'keep-current)
+          (denote-dash--hierarchy-remap-fold-sequence-prefix old-seq new-seq))))))
 
 ;;;###autoload
 (defun denote-dash-reparent-recursive (current-file file-with-sequence)
@@ -670,15 +686,20 @@ subtree beyond a couple of files."
                                           seq 'keep-current 'keep-current)))
          (old-last-type (denote-dash--seq-last-type root-seq))
          (new-last-type (denote-dash--seq-last-type new-seq))
+         (child-pairs (seq-keep (lambda (child)
+                                   (when-let* ((child-seq (denote-retrieve-filename-signature child)))
+                                     (list child child-seq
+                                           (concat new-seq
+                                                   (denote-dash--alphanumeric-suffix-rewrite
+                                                    (string-remove-prefix root-seq child-seq)
+                                                    old-last-type new-last-type)))))
+                                 descendants))
          (denote-rename-confirmations nil))
+    (denote-dash--hierarchy-remap-fold-sequence-many
+     (cons (cons root-seq new-seq)
+           (seq-map (lambda (e) (cons (nth 1 e) (nth 2 e))) child-pairs)))
     (funcall rename-fn current-file new-seq)
-    (seq-do (lambda (child)
-              (when-let* ((child-seq (denote-retrieve-filename-signature child)))
-                (let* ((raw-suffix (string-remove-prefix root-seq child-seq))
-                       (fixed-suffix (denote-dash--alphanumeric-suffix-rewrite
-                                      raw-suffix old-last-type new-last-type)))
-                  (funcall rename-fn child (concat new-seq fixed-suffix)))))
-            descendants)))
+    (seq-do (lambda (e) (funcall rename-fn (nth 0 e) (nth 2 e))) child-pairs)))
 
 ;;; Sequence insertion
 
@@ -727,10 +748,11 @@ or prompts for a file."
       ;; otherwise prompt again for each shifted sibling.
       (let ((denote-rename-confirmations nil))
         (seq-do (lambda (f)
-                  (denote-rename-file f 'keep-current 'keep-current
-                                      (denote-dash--increment-sequence
-                                       (denote-retrieve-filename-signature f))
-                                      'keep-current 'keep-current))
+                  (let* ((old-sig (denote-retrieve-filename-signature f))
+                         (new-sig (denote-dash--increment-sequence old-sig)))
+                    (denote-rename-file f 'keep-current 'keep-current
+                                        new-sig 'keep-current 'keep-current)
+                    (denote-dash--hierarchy-remap-fold-sequence-prefix old-sig new-sig)))
                 to-rename))
       (denote (read-string "Title: ")
               (denote-keywords-prompt)

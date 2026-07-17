@@ -136,10 +136,13 @@ folds anything deeper than N levels — equivalent to `outline-hide-sublevels'."
   :type '(choice (const :tag "Expand all" nil) natnum)
   :group 'denote-dash)
 
-(defcustom denote-dash-hierarchy-fold-sequences nil
-  "Sequence-ID strings whose whole subtree starts folded, unconditionally."
-  :type '(repeat string)
-  :group 'denote-dash)
+(defvar denote-dash-hierarchy-fold-sequences nil
+  "Sequence-ID strings whose whole subtree starts folded, unconditionally.
+Toggled from a `denote-sequence-hierarchy-mode' buffer with
+`denote-dash-hierarchy-toggle-fold-sequence' rather than customized
+statically; persisted across sessions via `savehist-mode'.  Rename-style
+commands in `denote-dash-repack' keep entries here in sync with sequence
+signatures that change underneath them.")
 
 (defcustom denote-dash-hierarchy-auto-fold-min-size nil
   "Fold a top-level section (root sequence + descendants) this small.
@@ -662,6 +665,92 @@ enabled rule applies to it."
 
 (add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-apply-initial-fold t)
 
+(defun denote-dash--hierarchy-goto-root ()
+  "Move point to the top-level (level 1) heading enclosing point."
+  (while (> (denote-sequence-hierarchy-get-level) 1)
+    (outline-up-heading 1 t)))
+
+(defun denote-dash-hierarchy-toggle-fold-sequence ()
+  "Toggle persistent folding of the sequence section at point.
+Adds or removes the root sequence at point from
+`denote-dash-hierarchy-fold-sequences' — remembered across sessions via
+`savehist-mode', not a static default — and folds or unfolds the section
+to match immediately."
+  (interactive)
+  (save-excursion
+    (denote-dash--hierarchy-goto-root)
+    (if-let* ((file (get-text-property (point) 'denote-sequence-hierarchy-file))
+              (seq (denote-retrieve-filename-signature file)))
+        (if (member seq denote-dash-hierarchy-fold-sequences)
+            (progn
+              (setq denote-dash-hierarchy-fold-sequences
+                    (remove seq denote-dash-hierarchy-fold-sequences))
+              (outline-show-subtree)
+              (message "Sequence %s: fold no longer persisted" seq))
+          (setq denote-dash-hierarchy-fold-sequences
+                (cons seq denote-dash-hierarchy-fold-sequences))
+          (outline-hide-subtree)
+          (message "Sequence %s: will stay folded" seq))
+      (user-error "No sequence heading at point"))))
+
+(defun denote-dash-hierarchy-clear-fold-sequences ()
+  "Forget every sequence toggled to stay folded, then refresh the view."
+  (interactive)
+  (setq denote-dash-hierarchy-fold-sequences nil)
+  (message "Cleared all persisted sequence folds")
+  (when (derived-mode-p 'denote-sequence-hierarchy-mode)
+    (revert-buffer)))
+
+(define-key denote-sequence-hierarchy-mode-map (kbd "z")
+            #'denote-dash-hierarchy-toggle-fold-sequence)
+
+;;; Sequence hierarchy fold-sequence remapping across renames
+
+(defun denote-dash--hierarchy-remap-fold-sequence-prefix (old-seq new-seq)
+  "Rewrite entries under OLD-SEQ to NEW-SEQ in the persisted fold list.
+Any entry equal to OLD-SEQ, or with OLD-SEQ as a proper prefix (a folded
+descendant of a renamed subtree), has that prefix replaced by NEW-SEQ."
+  (when (and old-seq new-seq (not (equal old-seq new-seq)))
+    (setq denote-dash-hierarchy-fold-sequences
+          (seq-map (lambda (s)
+                     (if (string-prefix-p old-seq s)
+                         (concat new-seq (substring s (length old-seq)))
+                       s))
+                   denote-dash-hierarchy-fold-sequences))))
+
+(defun denote-dash--hierarchy-remap-fold-sequence-many (pairs)
+  "Rewrite fold-list entries per PAIRS, a list of (OLD-SEQ . NEW-SEQ).
+Only exact matches are rewritten.  Use this instead of
+`denote-dash--hierarchy-remap-fold-sequence-prefix' when descendant
+sequences are not simple prefix substitutions of the root — e.g. a
+recursive reparent/renumber that corrects letter/digit type alternation
+(`denote-dash--alphanumeric-suffix-rewrite')."
+  (setq denote-dash-hierarchy-fold-sequences
+        (seq-map (lambda (s) (or (cdr (assoc s pairs)) s))
+                 denote-dash-hierarchy-fold-sequences)))
+
+(defun denote-dash--hierarchy-swap-fold-sequence (seq-a seq-b)
+  "Swap SEQ-A and SEQ-B wherever they appear (exact match) in the fold list.
+Use this when a rename swaps exactly two files without touching their
+descendants, e.g. `denote-dash-swap-with-parent'."
+  (setq denote-dash-hierarchy-fold-sequences
+        (seq-map (lambda (s)
+                   (cond ((equal s seq-a) seq-b)
+                         ((equal s seq-b) seq-a)
+                         (t s)))
+                 denote-dash-hierarchy-fold-sequences)))
+
+(defun denote-dash--hierarchy-swap-fold-sequence-prefix (seq-a seq-b)
+  "Swap SEQ-A and SEQ-B subtree prefixes in the persisted fold list.
+Use this when a rename swaps two whole subtrees, e.g.
+`denote-dash--swap-subtrees'."
+  (setq denote-dash-hierarchy-fold-sequences
+        (seq-map (lambda (s)
+                   (cond ((string-prefix-p seq-a s) (concat seq-b (substring s (length seq-a))))
+                         ((string-prefix-p seq-b s) (concat seq-a (substring s (length seq-b))))
+                         (t s)))
+                 denote-dash-hierarchy-fold-sequences)))
+
 ;;; Navigation
 
 (defun denote-dash-open-note ()
@@ -1011,7 +1100,8 @@ prefix argument they are AND'd."
 
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'denote-dash--filter-history)
-  (add-to-list 'savehist-additional-variables 'denote-dash--persisted-columns))
+  (add-to-list 'savehist-additional-variables 'denote-dash--persisted-columns)
+  (add-to-list 'savehist-additional-variables 'denote-dash-hierarchy-fold-sequences))
 
 ;;; Org datetree import
 
@@ -1440,6 +1530,9 @@ either, it errors instead of prompting at all."
     ("wt" "toggle seq"         denote-dash-toggle-sequence-narrow)
     ("ww" "widen"              denote-dash-widen)
     ("wk" "toggle keyword"     denote-dash-toggle-keyword)]
+   ["Hierarchy" :if-derived denote-sequence-hierarchy-mode
+    ("hz" "toggle persist fold" denote-dash-hierarchy-toggle-fold-sequence)
+    ("hc" "clear persisted folds" denote-dash-hierarchy-clear-fold-sequences)]
    ["Org" :if-derived org-mode
     ("ox" "extract subtree"    denote-org-extract-org-subtree)
     ("or" "extract + link"     org-migrate-subtree-to-denote)
