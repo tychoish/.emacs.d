@@ -204,7 +204,7 @@
   (setq org-agenda-custom-commands
         '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
            ((org-agenda-skip-function-global nil)))
-          ("D" "Denote TODOs" todo ""
+          ("d" "Denote TODOs" todo ""
            ((org-agenda-files (orgx-denote-files))
             (org-agenda-skip-function-global nil)
             (org-agenda-overriding-header "TODO items across the denote tree")
@@ -213,14 +213,15 @@
           ("u" "Untagged TODOs (local)" todo ""
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
             (org-agenda-overriding-header "TODOs with no local tags")))
-          ("U" "Untagged headings (local)" tags "LEVEL>=1-TODO={.+}"
+          ("h" "Untagged headings (local)" tags "LEVEL>=1-TODO={.+}"
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
             (org-agenda-overriding-header "Headings with no local tags")))
-          ("i" "Untagged TODOs (incl. inherited)" todo ""
+	  ("i" . "including inherited")
+          ("iu" "Untagged TODOs (incl. inherited)" todo ""
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
             (org-agenda-overriding-header "TODOs with no local or inherited tags")
             (orgx-agenda-include-inherited-tags t)))
-          ("I" "Untagged headings (incl. inherited)" tags "LEVEL>=1-TODO={.+}"
+          ("ih" "Untagged headings (incl. inherited)" tags "LEVEL>=1-TODO={.+}"
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
             (org-agenda-overriding-header "Headings with no local or inherited tags")
             (orgx-agenda-include-inherited-tags t)))))
