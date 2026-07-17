@@ -485,14 +485,16 @@ or `describe-symbol' as fallback."
 (defvar desktop-dirname nil)
 
 (defun bootstrap-set-up-emacs-instance-persistence ()
+  (setq package-quickstart-file (sprite-state-path "package-quickstart.el"))
   (setq project-list-file (sprite-state-path "projects.el"))
-  (setq auto-save-list-file-prefix (sprite-state-path (concat "auto-safe-list" (f-path-separator))))
   (setq savehist-file (sprite-state-path "history.el"))
   (setq bookmark-default-file (sprite-state-path "bookmarks.el"))
   (setq tramp-persistency-file-name (sprite-state-path "tramp.el"))
+  (setq transient-history-file (sprite-state-path "transient-history.el"))
+
+  (setq auto-save-list-file-prefix (sprite-state-path "auto-save-list/"))
   (setq request-storage-directory (sprite-state-path "request/"))
   (setq url-configuration-directory (sprite-state-path "url/"))
-  (setq transient-history-file (sprite-state-path "transient-history.el"))
 
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)
