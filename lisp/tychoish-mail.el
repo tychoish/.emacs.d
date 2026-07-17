@@ -6,8 +6,6 @@
 (require 'map)
 (require 'mu4e-autoloads nil t)
 
-(declare-function s-trimmed-or-nil "xtdlib")
-
 (autoload 'mu4e-update-index "mu4e-update")
 (autoload 'annotated-completing-read "annotated-completing-read")
 (autoload 'annotated-completing-read-directory "annotated-completing-read")
@@ -397,18 +395,19 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 						  ((not (stringp maildir)) (user-error "maildir must be a string"))
 						  ;; we could do more validation here, but it's probably more trouble
 						  ;; than it's worth.
-						  (t (f-expand maildir))))
-                                   (signature (setq signature (and (when (s-trimmed-or-nil signature)
-                                                                     (cond ((eq signature-kind 'signature-directory)
-                                                                            (file-name-concat maildir ".sig"))
-                                                                           ((eq signature-kind 'signature-file)
-                                                                            (file-name-concat maildir ".sig" address))
-                                                                           ((eq signature-kind 'signature-text)
-                                                                            (user-error "signature text is not defined"))
-                                                                           ((null signature-kind)
-                                                                            (user-error "signature configuration is not supported"))
-                                                                           (t signature)))
-                                                                   signature)
+						  (t (expand-file-name maildir))))
+                                   (signature (setq signature (cond
+                                                                ((or (not (stringp signature)) (string-blank-p signature))
+                                                                 nil)
+                                                                ((eq signature-kind 'signature-directory)
+                                                                 signature)
+                                                                ((eq signature-kind 'signature-file)
+                                                                 signature)
+                                                                ((eq signature-kind 'signature-text)
+                                                                 (user-error "signature text is not defined"))
+                                                                ((null signature-kind)
+                                                                 (user-error "signature configuration is not supported"))
+                                                                (t signature))
                                                     ;; now validate
                                                     signature (cond
                                                                ;; ((eq signature-kind 'signature-directory)
@@ -416,15 +415,15 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 							       ;; breaks in cases that don't matter, and will error appropriately at
 							       ;; runtime, and aren't that hard to debug, same as maildir checks.
 							       ;;
-							       ;;  (if (or (null signature) (not (f-directory-p signature)))
+							       ;;  (if (or (null signature) (not (file-directory-p signature)))
 							       ;;      (user-error "signature directory does not exist")
 							       ;;    signature))
 							       ;; ((eq signature-kind 'signature-file)
-							       ;;  (if (not (f-file-p signature))
+							       ;;  (if (not (file-regular-p signature))
 							       ;;      (user-error "signature file does not exist")
 							       ;;    signature))
                                                                ((eq signature-kind 'signature-text)
-                                                                (or (when (not (s-contains-p "\n" signature))
+                                                                (or (when (not (string-search "\n" signature))
                                                                       (warn "signature string does not contain newlines")
                                                                       signature)
                                                                     signature))
@@ -432,7 +431,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
                                    (signature-kind (cond
                                                     ((eq (type-of signature) 'signature-source) signature)
                                                     ((not (eq (type-of signature) 'string)) (user-error "invalid type for signature"))
-                                                    ((f-directory-p signature) 'signature-directory)
+                                                    ((file-directory-p signature) 'signature-directory)
                                                     ((file-exists-p signature) 'signature-file)
                                                     (t 'signature-text))))))
 
@@ -583,7 +582,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
            (setq user-full-name given-name)
            (setq mu4e-compose-reply-to-address address)
 
-           (setq mail-host-address (s-replace-regexp ".*@" "" address))
+           (setq mail-host-address (replace-regexp-in-string ".*@" "" address))
            (setq message-sendmail-extra-arguments (list "-a" address))
 
            (when (eq major-mode 'mu4e-compose-mode)
