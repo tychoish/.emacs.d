@@ -908,7 +908,8 @@ that already runs after `org' is loaded."
         (org-time-string-to-time (match-string 0 heading))
       (error nil))))
 
-(defun org-migrate-subtree-to-denote ()
+;;;###autoload
+(defun orgx-migrate-subtree-to-denote ()
   "Extract the current Org subtree to a new denote note, replacing the heading with a link.
 Works from an `org-agenda-mode' buffer or an `org-mode' buffer: in the
 former, first jumps to the underlying entry via `org-agenda-goto'.
@@ -1056,7 +1057,7 @@ the toc-org write hook."
   "C-l" #'org-agenda-open-link
   "M-c" #'org-agenda-goto-calendar
   "/"   #'orgx-agenda-for-file
-  "C-e" #'org-migrate-subtree-to-denote)
+  "C-e" #'orgx-migrate-subtree-to-denote)
 
 (define-minor-mode orgx-agenda-minor-mode
   "Personal org-agenda keybindings and setup."

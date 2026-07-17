@@ -1485,7 +1485,7 @@ return until the minibuffer session ends."
          ("l" . denote-org-link-to-heading)
          ("b" . denote-org-backlinks-for-heading)
          ("x" . denote-org-extract-org-subtree)
-         ("r" . org-migrate-subtree-to-denote)
+         ("r" . orgx-migrate-subtree-to-denote)
          ("d" . denote-org-dblock-insert-links)
          ("p" . denote-org-dblock-insert-backlinks)
          ("f" . denote-org-dblock-insert-files)))

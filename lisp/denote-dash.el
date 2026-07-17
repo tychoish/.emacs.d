@@ -44,7 +44,7 @@
 (declare-function denote-org-dblock-insert-links "denote-org")
 (declare-function denote-org-dblock-insert-backlinks "denote-org")
 (declare-function denote-org-dblock-insert-files "denote-org")
-(declare-function org-migrate-subtree-to-denote "orgx")
+(declare-function orgx-migrate-subtree-to-denote "orgx")
 (declare-function org-back-to-heading "org")
 (declare-function org-end-of-meta-data "org")
 (declare-function org-end-of-subtree "org")
@@ -1535,7 +1535,7 @@ either, it errors instead of prompting at all."
     ("hc" "clear persisted folds" denote-dash-hierarchy-clear-fold-sequences)]
    ["Org" :if-derived org-mode
     ("ox" "extract subtree"    denote-org-extract-org-subtree)
-    ("or" "extract + link"     org-migrate-subtree-to-denote)
+    ("or" "extract + link"     orgx-migrate-subtree-to-denote)
     ("ol" "link to heading"    denote-org-link-to-heading)
     ("ob" "heading backlinks"  denote-org-backlinks-for-heading)
     ("od" "dblock: links"      denote-org-dblock-insert-links)
