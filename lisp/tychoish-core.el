@@ -553,36 +553,26 @@
 		 (vertico-flat-annotate . t)
 		 (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
 
-(use-package prescient
+(use-package orderless
   :ensure t
-  :commands (prescient-persist-mode)
-  :init
-  (add-lazy-init
-   :name "<core> prescient-persist"
-   :delay 1
-   :operation 'prescient-persist-mode)
-  :config
-  ;; Prescient's own knobs; cross-cutting filter/sort selection is owned
-  ;; by the completion-flavor system below.
-  (setq prescient-completion-highlight-matches t)
-  (setq prescient-filter-method '(literal prefix initialism anchored fuzzy regexp))
-  (setq prescient-save-file (sprite-state-path "prescient.el"))
-  (setq prescient-sort-full-matches-first t)
-  (setq prescient-sort-length-enable nil))
-
-(use-package vertico-prescient
-  :ensure t
+  :after (vertico)
   :defer t
-  :init
-  (add-lazy-init
-   :name "<core> vertico prescient"
-   :delay 1
-   :operation 'vertico-prescient-mode)
+  :init 
+  (setq completion-styles '(orderless basic))
+  (setq completion-category-overrides
+	'((file (styles basic partial-completion))
+          (consult-grep (styles basic))
+          (buffer (styles orderless basic))
+          (command (styles orderless basic))
+          (symbol (styles orderless basic))))
+  (setq completion-preview-sort-function nil)
+
   :config
-  ;; Sort-override stays on so prescient can win when a flavor enables it.
-  ;; Filtering is owned by the completion-flavor system below.
-  (setq vertico-prescient-override-sorting t)
-  (setq vertico-prescient-enable-sorting t))
+  ;; Orderless's own behavior knobs only; cross-cutting `completion-styles' and
+  ;; `completion-category-overrides' are owned by the completion-flavor system.
+  (setq orderless-component-separator #'orderless-escapable-split)
+  (setq orderless-matching-styles
+	'(orderless-literal orderless-prefixes orderless-initialism orderless-regexp)))
 
 (use-package marginalia
   :ensure t
@@ -681,37 +671,6 @@
 	     completion-cycle-threshold
 	     completion-cycling)
 	 (consult-completion-in-region beg end table pred))))))
-
-(use-package corfu-prescient
-  :ensure t
-  :defer t
-  :after (prescient)
-  :init
-  ;; A `:hook (corfu-mode . corfu-prescient-mode)' would re-enable this
-  ;; global mode every time `corfu-mode' activates in a new buffer --
-  ;; since it's called non-interactively with no arg, that always turns
-  ;; the mode ON, silently undoing `bootstrap-completion-use-orderless'
-  ;; (or any flavor that disables it). Enable once, like
-  ;; `vertico-prescient-mode', and let the flavor system own on/off state.
-  (add-lazy-init
-   :name "<core> corfu prescient"
-   :delay 1
-   :operation 'corfu-prescient-mode)
-  :config
-  ;; Same as `vertico-prescient' -- filtering is flavor-owned.
-  (setq corfu-prescient-override-sorting t)
-  (setq corfu-prescient-enable-sorting t))
-
-(use-package orderless
-  :ensure t
-  :after (vertico)
-  :defer t
-  :config
-  ;; Orderless's own behavior knobs only; cross-cutting `completion-styles' and
-  ;; `completion-category-overrides' are owned by the completion-flavor system.
-  (setq orderless-component-separator #'orderless-escapable-split)
-  (setq orderless-matching-styles
-	'(orderless-literal orderless-prefixes orderless-initialism orderless-regexp)))
 
 (use-package popon
   :ensure t
