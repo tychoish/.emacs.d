@@ -12,8 +12,6 @@
 (declare-function builder-org-babel-execute-directory "builder")
 
 (with-gc-suppressed
- (setq use-package-compute-statistics t)
-
  (defvar tychoish/startup-complete-time nil
    "Timestamp reflecting when the instance' startup process actually completed.")
  (defvar tychoish/eglot-default-server-configuration nil
@@ -101,29 +99,40 @@ Called from `after-init-hook' so the full config is loaded first."
  (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 99)
  (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
 
+ (defvar bootstrap-vendored-packages
+   '((xtdlib                    "external/xtdlib"                    "https://github.com/tychoish/xtdlib.el")
+     (sprite                    "external/sprite"                    "https://github.com/tychoish/sprite")
+     (annotated-completing-read "external/annotated-completing-read" "https://github.com/tychoish/annotated-completing-read")
+     (magit-dash                "external/magit-dash"                "https://github.com/tychoish/magit-dash.git")
+     ;; (agent-shell-notifications "external/agent-shell-notifications" "") ;; skipped because of upstream dependency bug
+     (agent-shell-queue         "external/agent-shell-queue"         "https://github.com/tychoish/agent-shell-queue")
+     (agent-shell-manager       "external/agent-shell-manager"       "https://github.com/ElleNajt/agent-shell-manager.git")
+     (consult-mu                "external/consult-mu"                "https://github.com/armindarvish/consult-mu.git"))
+   "(PACKAGE PATH URL) entries bootstrapped via `bootstrap-package'.
+PATH is relative to `user-emacs-directory'.  Every one of these is a
+plain git checkout/submodule in external: URL is only used as a fallback
+for a machine where the checkout doesn't yet exist.")
+
  (defun bootstrap-package (package path url)
-   "Ensure PACKAGE at PATH (relative to `user-emacs-directory') is on `load-path', using a local checkout or `package-vc-install'."
-   (unless (package-installed-p package)
-     (let ((checkout (expand-file-name path user-emacs-directory)))
-       (if (file-directory-p checkout)
-           (add-to-list 'load-path checkout)
-         (package-vc-install `(,package :url ,url))))))
+   "Ensure PACKAGE is installed and activated.
+Registers the local checkout at PATH relative to `user-emacs-directory',
+and falls back to `package-vc-install' from URL when PATH does not exist
+locally.."
+   (let ((pkg-dir (expand-file-name (symbol-name package) package-user-dir)))
+     (unless (or (package-installed-p package) (file-exists-p pkg-dir))
+       (let ((checkout (expand-file-name path user-emacs-directory)))
+         (if (file-directory-p checkout)
+             (package-vc-install-from-checkout checkout (symbol-name package))
+           (package-vc-install `(,package :url ,url)))))))
 
  (with-file-name-handler-disabled
   (with-slow-op-timer "<init> package"
-    ;; `sprite-state-path' isn't available yet -- `sprite' itself is one of
-    ;; the packages `bootstrap-package' below may need to install -- so this
-    ;; path is hardcoded rather than going through the usual state-path
-    ;; helper. It's intentionally shared (not per-instance): every instance
-    ;; reads the same `elpa/' directory, so one quickstart cache for all of
-    ;; them is correct, not a gap.
     (setq package-quickstart t)
+    ;; `sprite-state-path' isn't available yet, so this is a bit of a hack
     (setq package-quickstart-file (expand-file-name "state/package-quickstart.el" user-emacs-directory))
-    ;; `package-activate-all' (unlike `package-initialize') actually checks
-    ;; `package-quickstart-file' before doing the full per-package autoload
-    ;; scan; package.el keeps the quickstart file itself up to date via
-    ;; `package--quickstart-maybe-refresh' on every install/delete, so this
-    ;; only needs bootstrapping once with `M-x package-quickstart-refresh'.
+    ;; `package-activate-all' checks `package-quickstart-file' before
+    ;; doing the full package autoload scan.  This only needs
+    ;; bootstrapping once with `M-x package-quickstart-refresh'.
     (package-activate-all)
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
@@ -132,13 +141,10 @@ Called from `after-init-hook' so the full config is loaded first."
             ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/"))))
 
   (with-slow-op-timer "<init> external"
-    (bootstrap-package 'xtdlib "external/xtdlib" "https://github.com/tychoish/xtdlib.el")
-    (bootstrap-package 'sprite "external/sprite" "https://github.com/tychoish/sprite"))
+    (seq-do (lambda (spec) (apply #'bootstrap-package spec)) bootstrap-vendored-packages))
 
   (with-slow-op-timer "<init> sprite"
     (require 'sprite))
-
-  (setq custom-file (sprite-state-path "custom.el"))
 
   (with-slow-op-timer "<init> local-lisp"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))

@@ -31,7 +31,7 @@
 
 (declare-function anzu--reset-status "anzu")
 (declare-function flycheck-count-errors "flycheck")
-(declare-function sprite-list-menu "sprite")
+(declare-function sprite-list-menu "sprite-list")
 (declare-function nerd-icons-codicon "nerd-icons")
 (declare-function nerd-icons-octicon "nerd-icons")
 (declare-function nerd-icons-icon-for-buffer "nerd-icons")

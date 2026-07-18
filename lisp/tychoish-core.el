@@ -45,21 +45,20 @@
   :commands (package-build-archive package-build-all))
 
 (use-package annotated-completing-read
-  :ensure nil
-  :load-path "external/annotated-completing-read"
   :commands (annotated-completing-read
 	     annotated-completing-read-context-from-point
 	     annotated-completing-read-directory))
 
 (use-package sprite
-  :load-path "external/sprite"
-  :ensure nil
-  :commands (sprite-list sprite-create sprite-open-frame
-			 sprite-get-next sprite-get-or-create-next)
+  :init
+  (add-one-shot-hook
+   :name "set-custom-file"
+   :hook 'after-init-hook
+   :form (setq custom-file (sprite-state-path "custom.el"))
+   ;; Depth below 0: must run before `package--save-selected-packages'.
+   :depth -90)
   :config
-  (require 'sprite-heartbeat)
-  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
-  (add-hook 'emacs-startup-hook #'sprite-defs-activate))
+  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
 
 (use-package hud
   :ensure nil
@@ -1032,7 +1031,6 @@
   :commands (magit-gh))
 
 (use-package magit-dash
-  :load-path "external/magit-dash"
   :bind (:map tychoish/magit-map
          ("d" . magit-dash-open)
 	 ("o" . magit-dash-open-repo)
@@ -2766,8 +2764,6 @@ Useful after changing `eglot-workspace-configuration' or
   (tychoish/agent-shell--apply-environment))
 
 (use-package agent-shell-queue
-  :ensure nil
-  :load-path "external/agent-shell-queue"
   :after agent-shell
   :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
          (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
@@ -2885,8 +2881,6 @@ Useful after changing `eglot-workspace-configuration' or
               (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment-discussion" :face nerd-icons-purple)))))
 
 (use-package agent-shell-manager
-  :load-path "external/agent-shell-manager"
-  :ensure nil
   :after (agent-shell)
   :bind (:map tychoish/robot-agent-shell-map
          ("," . agent-shell-manager-toggle))

@@ -195,7 +195,6 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
     (display-buffer buf)))
 
 (use-package consult-mu
-  :load-path "external/consult-mu"
   :commands (consult-mu)
   :init
   (setq consult-mu-maxnum 200)
