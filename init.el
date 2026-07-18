@@ -12,6 +12,8 @@
 (declare-function builder-org-babel-execute-directory "builder")
 
 (with-gc-suppressed
+ (setq use-package-compute-statistics t)
+
  (defvar tychoish/startup-complete-time nil
    "Timestamp reflecting when the instance' startup process actually completed.")
  (defvar tychoish/eglot-default-server-configuration nil
@@ -41,6 +43,7 @@ lived instances. Other ephemeral instance names ones may be useful.")
  (defun cli/time-reporting ()
    (when (string-prefix-p "--with-slow-op-timing" argi)
      (message "[op]: enabling time reporting")
+     (setq use-package-compute-statistics t)
      (setq slow-op-reporting t)))
 
  (defvar cli/org-exec-file nil
@@ -108,7 +111,20 @@ Called from `after-init-hook' so the full config is loaded first."
 
  (with-file-name-handler-disabled
   (with-slow-op-timer "<init> package"
-    (package-initialize)
+    ;; `sprite-state-path' isn't available yet -- `sprite' itself is one of
+    ;; the packages `bootstrap-package' below may need to install -- so this
+    ;; path is hardcoded rather than going through the usual state-path
+    ;; helper. It's intentionally shared (not per-instance): every instance
+    ;; reads the same `elpa/' directory, so one quickstart cache for all of
+    ;; them is correct, not a gap.
+    (setq package-quickstart t)
+    (setq package-quickstart-file (expand-file-name "state/package-quickstart.el" user-emacs-directory))
+    ;; `package-activate-all' (unlike `package-initialize') actually checks
+    ;; `package-quickstart-file' before doing the full per-package autoload
+    ;; scan; package.el keeps the quickstart file itself up to date via
+    ;; `package--quickstart-maybe-refresh' on every install/delete, so this
+    ;; only needs bootstrapping once with `M-x package-quickstart-refresh'.
+    (package-activate-all)
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
             ("nongnu" . "https://elpa.nongnu.org/nongnu/")

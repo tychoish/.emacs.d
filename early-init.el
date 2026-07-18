@@ -27,9 +27,9 @@ requires (bootstrap, tychoish-core, tychoish-mail, orgx, user/*.el)
 have already loaded once with reporting off, so every `with-slow-op-timer'
 call in the main synchronous init path would go unmeasured.")
 
-(defvar slow-op-threshold 0.001
+(defvar slow-op-threshold 0.01
   "Minimum duration in seconds for `with-slow-op-timer' to emit a log message.
-Set to 0.1 (100ms) to surface meaningfully slow operations without noise.")
+Set to 0.01 (10ms) to surface meaningfully slow operations without noise.")
 
 (defmacro with-slow-op-timer (name &rest body)
   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."

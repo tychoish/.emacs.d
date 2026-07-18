@@ -557,16 +557,15 @@
   :ensure t
   :after (vertico)
   :defer t
-  :init 
+  :init
   (setq completion-styles '(orderless basic))
   (setq completion-category-overrides
-	'((file (styles basic partial-completion))
+	'((file (styles orderless basic partial-completion))
           (consult-grep (styles basic))
           (buffer (styles orderless basic))
           (command (styles orderless basic))
           (symbol (styles orderless basic))))
   (setq completion-preview-sort-function nil)
-
   :config
   ;; Orderless's own behavior knobs only; cross-cutting `completion-styles' and
   ;; `completion-category-overrides' are owned by the completion-flavor system.

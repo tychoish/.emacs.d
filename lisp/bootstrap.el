@@ -34,7 +34,8 @@
 ;;; Code:
 
 (use-package f
-  :ensure t)
+  :ensure t
+  :defer t)
 
 (require 'xtdlib)
 (require 'sprite)
@@ -485,7 +486,9 @@ or `describe-symbol' as fallback."
 (defvar desktop-dirname nil)
 
 (defun bootstrap-set-up-emacs-instance-persistence ()
-  (setq package-quickstart-file (sprite-state-path "package-quickstart.el"))
+  ;; `package-quickstart-file'/`package-quickstart' are set in init.el,
+  ;; before `package-activate-all' runs -- this is deliberately shared
+  ;; across instances, not per-instance state, so it does not belong here.
   (setq project-list-file (sprite-state-path "projects.el"))
   (setq savehist-file (sprite-state-path "history.el"))
   (setq bookmark-default-file (sprite-state-path "bookmarks.el"))
@@ -704,10 +707,14 @@ or `describe-symbol' as fallback."
  :operation 'bootstrap-ensure-default-font
  :delay 0.1)
 
-(add-one-shot-hook
+;; Deliberately an idle timer, not `after-first-frame-created' -- that hook
+;; already fires `which-key-mode' synchronously, and stacking a
+;; potentially-slow `desktop-read' right behind it in the same hook pass
+;; blocks redisplay of the very first frame.
+(add-lazy-init
  :name "restore-desktop"
- :hook after-first-frame-created
- :operation 'bootstrap-desktop-read-init)
+ :operation 'bootstrap-desktop-read-init
+ :delay 0.5)
 
 (add-lazy-init
  :name "emacs-instance-persistence"
@@ -1639,7 +1646,7 @@ interactively then remove duplicate items from the `kill-ring'."
 ;; stdlib -- configuration of default/included emacs packages
 
 ;;; no need for use-package for minimal configurations of packages
-;;; that are included with emacs by default and that already have
+;;; that are included with emacs by default and that alreadye have
 ;;; appropriate autoloads.
 
 (with-eval-after-load 'compile
