@@ -533,9 +533,9 @@
   (setq vertico-resize t)
   (setq vertico-count 25)
   (setq vertico-cycle t)
-  :config
   (defvar vertico-multiform-categories nil)
   (defvar vertico-multiform-commands nil)
+  :config
   (defmacro tychoish/vertico-disable-sort-for (command)
     "Disable sorting in vertico rendering for COMMAND, matching against `this-command'"
     `(add-to-list 'vertico-multiform-commands
@@ -1549,10 +1549,13 @@ return until the minibuffer session ends."
 
 (use-package orgx-capture
   :ensure nil
-  :commands (orgx-add-project-file-capture-templates
-	     orgx-capture-add-note-templates
+  :commands (orgx-capture-add-note-templates
+	     orgx-add-project-file-capture-templates
 	     orgx-capture-add-journal-templates
 	     orgx-capture-add-task-templates)
+  :init
+  (with-eval-after-load 'org
+    (require 'orgx-capture))
   :config
   (orgx--setup-standard-capture-templates))
 
@@ -2714,7 +2717,6 @@ Useful after changing `eglot-workspace-configuration' or
                     (car (split-string (downcase (string-trim agent-name))))
                     slug))))
   :config
-  (require 'agent-shell-queue)
   (require 'agent-shell-menu)
 
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
@@ -2944,6 +2946,22 @@ call-site that has access to SHELL-BUFFER."
   (advice-add 'agent-shell-notifications--make-notification-plist :around
 	      #'tychoish/agent-shell-notifications--add-buffer-name)
   (setq agent-shell-notifications-timeout 30))
+
+(use-package tychoish-mail
+  :ensure nil
+  :commands (tychoish-mail-select-account
+	     consult-mu-bookmark)
+  :init
+  (bind-keys
+   :prefix "C-c m"
+   :prefix-map tychoish/mail-map
+   ("a" . tychoish-mail-select-account)
+   ("m" . mu4e)
+   ("d" . mu4e-search-maildir)
+   ("b" . mu4e-search-bookmark)
+   ("c" . mu4e-compose-new)
+   ("C-;" . consult-mu)
+   (";" . consult-mu-bookmark)))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

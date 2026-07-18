@@ -143,9 +143,6 @@ locally.."
   (with-slow-op-timer "<init> external"
     (seq-do (lambda (spec) (apply #'bootstrap-package spec)) bootstrap-vendored-packages))
 
-  (with-slow-op-timer "<init> sprite"
-    (require 'sprite))
-
   (with-slow-op-timer "<init> local-lisp"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
     (with-slow-op-timer "<init> bootstrap"
@@ -154,9 +151,6 @@ locally.."
     ;; remaining use-package declarations.
     (with-slow-op-timer "<init> tychoish-core"
       (require 'tychoish-core))
-
-    (with-slow-op-timer "<init> tychoish-mail"
-      (require 'tychoish-mail))
 
     ;; load the user/*.el files
     (with-slow-op-timer "<init> user-files"

@@ -383,8 +383,6 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (interactive)
   (orgx-archive-completed-tasks #'org-archive-subtree " to file"))
 
-;; consult-tycho: org-capture
-
 ;;;###autoload
 (defun orgx-capture ()
   "Select a capture template interactively."

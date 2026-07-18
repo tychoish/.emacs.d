@@ -30,17 +30,6 @@
 (defvar tychoish/mail-accounts-table (make-hash-table :test #'equal))
 (defvar tychoish/mail-account-current nil)
 
-(bind-keys
- :prefix "C-c m"
- :prefix-map tychoish/mail-map
- ("a" . tychoish-mail-select-account)
- ("m" . mu4e)
- ("d" . mu4e-search-maildir)
- ("b" . mu4e-search-bookmark)
- ("c" . mu4e-compose-new)
- ("C-;" . consult-mu)
- (";" . consult-mu-bookmark))
-
 (with-eval-after-load 'mu4e
   (seq-do (lambda (hook) (add-hook hook #'tychoish--record-home-frame))
           '(mu4e-main-mode-hook

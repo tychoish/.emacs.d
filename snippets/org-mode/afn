@@ -1,5 +1,5 @@
 # -*- mode: snippet -*-
-# name: footnote
+# name: footnote (anonymous/inline)
 # key: >afn
 # --
 [fn:: ${1:note}] $0
