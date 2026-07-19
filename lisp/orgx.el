@@ -519,20 +519,16 @@ result."
   "Max width, in characters, of `orgx-denote-agenda-category'.")
 
 (defun orgx-denote-agenda-category ()
-  "Short category label for the denote agenda: sequence + title, or title alone.
+  "Sequence-number label for the denote agenda.
 Denote filenames encode the identifier, signature, and keywords and are
-much too long for the agenda's category column. When the file has a
-Folgezettel sequence (its `denote-sequence' signature, e.g. \"3d2b\"),
-show that plus as much of the #+TITLE as fits; otherwise show the title
-alone. Falls back to the bare file name (no directory or extension) when
-a file has no title. Always truncated to
-`orgx-denote-agenda-category-width' characters."
+much too long for the agenda's category column, so show only the file's
+Folgezettel sequence (its `denote-sequence' signature, e.g. \"3d2b\") —
+no title or file name attached. Empty when the file has no sequence.
+Always truncated to `orgx-denote-agenda-category-width' characters."
   (let* ((file (buffer-file-name))
-         (seq (and file (denote-retrieve-filename-signature file)))
-         (title (or (org-get-title) (file-name-base file)))
-         (label (if seq (format "%s %s" seq title) title)))
+         (seq (or (and file (denote-retrieve-filename-signature file)) "")))
     (truncate-string-to-width
-     label orgx-denote-agenda-category-width nil nil "…")))
+     seq orgx-denote-agenda-category-width nil nil "…")))
 
 ;;;###autoload
 (defun orgx-agenda-denote-todos ()
