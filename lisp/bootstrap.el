@@ -224,7 +224,8 @@ more arguments than the function cares about."
  ("e" . browse-url)
  ("f" . browse-url-firefox)
  ("c" . browse-url-chrome)
- ("g" . eww-search-words))
+ ("g" . eww-search-words)
+ ("a" . tychoish-browse-url-add-external-host))
 
 (bind-keys
  :prefix "C-c g"
@@ -373,8 +374,52 @@ more arguments than the function cares about."
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq confirm-kill-emacs nil)
 
-(setq browse-url-browser-function 'eww-browse-url)
+(declare-function eww-current-url "eww")
+(declare-function url-host "url-parse")
+(declare-function url-generic-parse-url "url-parse")
+
+(defvar tychoish-browse-url-external-hosts nil
+  "Host suffixes that should open via `browse-url-generic' instead of eww.
+An entry matches any URL whose host is it or a subdomain of it (e.g.
+\"github.com\" matches both github.com and gist.github.com). Populated
+interactively with `tychoish-browse-url-add-external-host'; persisted
+across sessions via `savehist-additional-variables'.")
+
+(defun tychoish-browse-url--external-host-p (url)
+  "Return non-nil when URL's host matches `tychoish-browse-url-external-hosts'."
+  (when-let* ((host (url-host (url-generic-parse-url url))))
+    (seq-some (lambda (suffix) (string-suffix-p suffix host)) tychoish-browse-url-external-hosts)))
+
+(defun tychoish-browse-url-dispatch (url &rest args)
+  "Open URL via `browse-url-generic' for known JS-heavy/external hosts, eww otherwise.
+Routing is controlled by `tychoish-browse-url-external-hosts'; add to it
+with `tychoish-browse-url-add-external-host'."
+  (apply (if (tychoish-browse-url--external-host-p url)
+             #'browse-url-generic
+           #'eww-browse-url)
+         url args))
+
+(defun tychoish-browse-url-add-external-host ()
+  "Route the current eww page's host through `browse-url-generic' from now on.
+Must be called from an eww buffer.  Adds the host to
+`tychoish-browse-url-external-hosts', which `tychoish-browse-url-dispatch'
+consults on every future `browse-url' call."
+  (interactive)
+  (unless (derived-mode-p 'eww-mode)
+    (user-error "Not in an eww buffer"))
+  (let* ((url (eww-current-url))
+         (host (and url (url-host (url-generic-parse-url url)))))
+    (unless host
+      (user-error "Could not determine host for the current eww page"))
+    (add-to-list 'tychoish-browse-url-external-hosts host)
+    (message "browse-url: routing %s to the external browser from now on" host)))
+
+(with-eval-after-load 'savehist
+  (add-to-list 'savehist-additional-variables 'tychoish-browse-url-external-hosts))
+
+(setq browse-url-browser-function #'tychoish-browse-url-dispatch)
 (setq browse-url-generic-program "chrome")
+(setq tychoish-browse-url-external-hosts '("github.com"))
 (setq shr-color-visible-luminance-min 80)
 (setq shr-use-colors nil)
 (setq shr-use-fonts nil)
