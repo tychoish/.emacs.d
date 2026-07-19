@@ -1355,6 +1355,11 @@ clipboard."
   :commands (denote-notion-push
 	     denote-notion-pull))
 
+(use-package org-docsgen
+  :ensure nil
+  :commands (org-docsgen-run
+	     org-docsgen-regenerate-readme))
+
 (use-package consult-notes
   :ensure t
   :bind (:map tychoish/denote-map

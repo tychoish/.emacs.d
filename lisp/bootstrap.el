@@ -848,6 +848,26 @@ Returns the list of files that were recompiled."
 				       (byte-recompile-file f current-prefix-arg))
 			     f)))))
 
+(defun bootstrap-recompile-vendored-packages ()
+  "Recompile all `.el' files in each `bootstrap-vendored-packages' checkout.
+Only scans each package's top-level directory, not its test/ subdirectory
+\(matching `bootstrap-byte-recompile-emacs-directory''s scope\). Useful
+after `git pull'-ing one of these external/ checkouts, since
+`bootstrap-package' only installs/compiles a package the first time it
+sees the checkout and never notices later updates on its own.
+With a prefix argument, force recompilation of every file regardless of
+timestamps. Returns the list of files that were recompiled."
+  (interactive)
+  (thread-last bootstrap-vendored-packages
+	       (seq-map (lambda (spec) (expand-file-name (nth 1 spec) user-emacs-directory)))
+	       (seq-filter #'file-directory-p)
+	       (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
+	       (seq-filter #'file-regular-p)
+	       (seq-keep (lambda (f)
+			   (unless (eq 'no-byte-compile
+				       (byte-recompile-file f current-prefix-arg))
+			     f)))))
+
 (declare-function package-installed-p "package")
 (declare-function package-desc-p "package")
 

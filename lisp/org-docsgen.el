@@ -14,11 +14,16 @@
 (declare-function org-babel-execute-src-block "ob-core")
 
 (defun org-docsgen--find-el-files ()
-  "Return sorted non-test .el files in the directory of the current org buffer."
+  "Return sorted non-test, non-generated .el files in the current org buffer's directory.
+Excludes test files as well as `-pkg.el' and `-autoloads.el': these are
+generated package metadata, never meant to be `require'd or scanned as
+documentable source (`-pkg.el' in particular is only ever valid as data
+read by package.el, not as code — it commonly contains unquoted symbols
+like `:kind vc' that error if actually evaluated via `load')."
   (seq-sort
    #'string<
    (seq-remove
-    (lambda (f) (string-match-p "-test\\.el$\\|test-.*\\.el$\\|/test/" f))
+    (lambda (f) (string-match-p "-test\\.el$\\|test-.*\\.el$\\|/test/\\|-pkg\\.el$\\|-autoloads\\.el$" f))
     (directory-files (file-name-directory (buffer-file-name)) t "\\.el$" t))))
 
 (defun org-docsgen--current-level ()
@@ -265,17 +270,26 @@ SECTION-STYLE is `ruler' (default: long ;;;;... lines) or `triple-semi'
           (org-docsgen--emit sections scope level))))))
 
 ;;;###autoload
-(defun org-docsgen-regenerate-readme (readme-file)
-  "Regenerate README-FILE's API reference by re-running its `org-docsgen-run' block.
+(defun org-docsgen-regenerate-readme (readme-file-or-dir)
+  "Regenerate the API reference in README-FILE-OR-DIR by re-running its
+`org-docsgen-run' block.
+README-FILE-OR-DIR is either a README.org path or a package directory
+containing one (e.g. \"external/foo\" resolves to
+\"external/foo/README.org\").
 Locates the first `#+BEGIN_SRC emacs-lisp' block calling `org-docsgen-run',
 executes it, and saves the buffer.  Binds `org-confirm-babel-evaluate' to
 nil for the duration of the call so this can run non-interactively (e.g.
 via emacsclient) without blocking on a confirmation prompt -- the block is
 config-authored source, not untrusted content, so skipping the prompt here
 is safe.  Intended for use by agent skills via emacsclient:
-  emacsclient --eval \\='(org-docsgen-regenerate-readme \"external/foo/README.org\")\\='"
-  (interactive "fREADME.org file: ")
-  (let ((expanded (expand-file-name readme-file)))
+  emacsclient --eval \\='(org-docsgen-regenerate-readme \"external/foo\")\\='"
+  (interactive "fREADME.org file or package directory: ")
+  (let* ((path (expand-file-name readme-file-or-dir))
+         (expanded (if (file-directory-p path)
+                       (expand-file-name "README.org" path)
+                     path)))
+    (unless (file-exists-p expanded)
+      (user-error "org-docsgen-regenerate-readme: no such file %s" expanded))
     (with-current-buffer (find-file-noselect expanded)
       (save-excursion
         (goto-char (point-min))

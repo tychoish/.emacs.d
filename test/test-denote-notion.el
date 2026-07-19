@@ -555,11 +555,21 @@ still resolves to the right file."
     (should (equal (denote-notion--file-at-point) "/from/denote-dash.md"))))
 
 (ert-deftest test-denote-notion/file-at-point-falls-back-to-buffer-file-name ()
-  "Falls back to `buffer-file-name' when `denote-dash' isn't loaded."
-  (should-not (fboundp 'denote-dash--file-at-point))
-  (test-denote-notion--with-fixture test-denote-notion--md-fixture
-    (with-current-buffer (find-file-noselect file)
-      (should (equal (denote-notion--file-at-point) file)))))
+  "Falls back to `buffer-file-name' when `denote-dash--file-at-point' is unavailable.
+Stubs `fboundp' itself (rather than asserting `denote-dash' is unloaded)
+because CI runs every test file in one Emacs process — `test-denote-dash.el'
+loads first and permanently defines `denote-dash--file-at-point' for the
+rest of the run, so the real function is fboundp by the time this test
+runs even though this test only cares about the fallback branch."
+  (let ((real-fboundp (symbol-function 'fboundp)))
+    (cl-letf (((symbol-function 'fboundp)
+               (lambda (sym)
+                 (if (eq sym 'denote-dash--file-at-point)
+                     nil
+                   (funcall real-fboundp sym)))))
+      (test-denote-notion--with-fixture test-denote-notion--md-fixture
+        (with-current-buffer (find-file-noselect file)
+          (should (equal (denote-notion--file-at-point) file)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; denote-notion--rich-text-value
