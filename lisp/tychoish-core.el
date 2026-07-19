@@ -2881,11 +2881,11 @@ Useful after changing `eglot-workspace-configuration' or
     (seq-do (lambda (entry)
               (add-to-list 'nerd-icons-mode-icon-alist entry))
             '((agent-shell-queue-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-purple)
-              (agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-file-text" :face nerd-icons-purple)
+              (agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-preview" :face nerd-icons-purple)
               (agent-shell-queue-edit-mode nerd-icons-codicon "nf-cod-edit" :face nerd-icons-purple)
               (agent-shell-queue-capture-mode nerd-icons-codicon "nf-cod-record" :face nerd-icons-purple)
-              (agent-shell-queue-raw-edit-mode nerd-icons-codicon "nf-cod-file-code" :face nerd-icons-purple)
-              (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment-discussion" :face nerd-icons-purple)))))
+              (agent-shell-queue-raw-edit-mode nerd-icons-codicon "nf-cod-file_code" :face nerd-icons-purple)
+              (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment_discussion" :face nerd-icons-purple)))))
 
 (use-package agent-shell-manager
   :after (agent-shell)
