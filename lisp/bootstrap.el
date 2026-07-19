@@ -1552,19 +1552,12 @@ Does nothing if the current post is not in the drafts folder."
 
 If REMOVE-DUPS or `clean-kill-ring-prevent-duplicates' is non-nil, or if called
 interactively then remove duplicate items from the `kill-ring'."
-  ;; from: https://github.com/NicholasBHubbard/clean-kill-ring.el/blob/main/clean-kill-ring.el
   (interactive (list t))
-  (let ((new-kill-ring nil)
-        (this-kill-ring-member nil)
-        (i (1- (length kill-ring))))
-    (while (>= i 0)
-      (setq this-kill-ring-member (nth i kill-ring))
-      (unless (clean-kill-ring-filter-catch-p this-kill-ring-member)
-        (push this-kill-ring-member new-kill-ring))
-      (setq i (1- i)))
-    (if (or remove-dups clean-kill-ring-prevent-duplicates)
-        (setq kill-ring (delete-dups new-kill-ring))
-      (setq kill-ring new-kill-ring))))
+  (let ((cleaned (seq-remove #'clean-kill-ring-filter-catch-p kill-ring)))
+    (setq kill-ring
+          (if (or remove-dups clean-kill-ring-prevent-duplicates)
+              (delete-dups cleaned)
+            cleaned))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1602,35 +1595,6 @@ interactively then remove duplicate items from the `kill-ring'."
        (interactive "sName: ")
        (bootstrap-create-note-file name :path ,path))))
 
-(cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
-  (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
-        (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
-    `(progn
-       (defun ,local-function-symbol ()
-         ,(format "Set LLM backend for the current buffer to `%s'" model)
-         (interactive)
-         (setq-local gptel-model ,model)
-         ,(when api-key
-            `(setq-local gptel-api-key (lambda () ,api-key)))
-         (setq-local gptel-backend ,backend)
-         (message "[gptel] set backend to %s for the local buffer" ,name))
-
-       (defun ,default-function-symbol ()
-         ,(format "Set the default LLM backend for the current session to `%s'" model)
-         (interactive)
-         (setq-default gptel-model ,model)
-         ,(when api-key
-            `(setq-default gptel-api-key (lambda () ,api-key)))
-         (setq-default gptel-backend ,backend)
-         (message "[gptel] set default backend to %s" ,name))
-
-       (bind-keys
-	:map gptel-mode-map
-	(,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
-	(,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-        :map tychoish/robot-gptel-set-default-model-map
-	(,(downcase key) . ,default-function-symbol)))))
-
 (defun bootstrap-set-notes-directory (&optional path)
   (when path
     (setq local-notes-directory (expand-file-name path)))
@@ -1654,39 +1618,17 @@ interactively then remove duplicate items from the `kill-ring'."
   local-notes-directory)
 
 
-(with-eval-after-load 'rst
-  (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
-
-  (bind-keys
-   :map rst-mode-map
-   ("C-c C-t h" . rst-adjust))
-
-  (defun tychoish/set-up-rst-mode ()
-    (turn-on-auto-fill)
-    (setq-local fill-column 78)
-    (setq-local rst-level-face-max 0)
-    (set-face-background 'rst-level-1 nil)
-    (set-face-background 'rst-level-2 nil)
-    (set-face-background 'rst-level-3 nil)
-    (set-face-background 'rst-level-4 nil)
-    (set-face-background 'rst-level-5 nil)
-    (set-face-background 'rst-level-6 nil)
-    (local-unset-key (kbd "C-c C-s")))
-
-  (add-hook 'rst-mode-hook 'tychoish/set-up-rst-mode))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 
 (defun find-ssh-agent-socket-candidates ()
-  (let ((v (format "/run/user/%d/ssh-agent.socket" (user-uid))))
-    (thread-last  (if (listp v) v (list v))
-                  (append (sort (copy-sequence (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
-                  (seq-uniq)
-                  (seq-remove #'null)
-                  (seq-filter #'f-writable?)
-                  (nreverse))))
+  (thread-last (list (format "/run/user/%d/ssh-agent.socket" (user-uid)))
+               (append (sort (copy-sequence (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
+               (seq-uniq)
+               (seq-remove #'null)
+               (seq-filter #'f-writable?)
+               (nreverse)))
 
 (defun bootstrap-set-up-ssh-agent ()
   (interactive)
@@ -1724,14 +1666,6 @@ interactively then remove duplicate items from the `kill-ring'."
 
 (add-hook 'which-key-mode-hook 'which-key-setup-side-window-bottom)
 (add-hook 'abbrev-mode-hook 'bootstrap-load-abbrev-files)
-
-(setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
-
-(add-hook 'LaTeX-mode-hook 'turn-on-reftex)
-(add-hook 'LaTeX-mode-hook 'visual-line-mode)
-(add-hook 'LaTeX-mode-hook 'turn-off-auto-fill)
-
-(add-to-list 'auto-mode-alist '("\\.tex\\'" . LaTeX-mode))
 
 (add-to-list 'auto-mode-alist '("\\.el\\'" . emacs-lisp-mode))
 
@@ -1886,8 +1820,8 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
 
 (defun bootstrap-core-use-package-sizes ()
   "Return (PACKAGE-NAME . LINE-COUNT) pairs for every top-level use-package
-block in bootstrap-core.el, sorted by LINE-COUNT descending."
-  (let ((file (expand-file-name "lisp/bootstrap-core.el" user-emacs-directory))
+block in tychoish-core.el, sorted by LINE-COUNT descending."
+  (let ((file (expand-file-name "lisp/tychoish-core.el" user-emacs-directory))
         results)
     (with-temp-buffer
       (set-syntax-table emacs-lisp-mode-syntax-table)
@@ -1907,7 +1841,7 @@ block in bootstrap-core.el, sorted by LINE-COUNT descending."
 
 ;;;###autoload
 (defun bootstrap-core-use-package-sizes-report ()
-  "Display use-package blocks from bootstrap-core.el sorted by line count."
+  "Display use-package blocks from tychoish-core.el sorted by line count."
   (interactive)
   (let* ((results (bootstrap-core-use-package-sizes))
          (buf (get-buffer-create "*use-package-sizes*")))

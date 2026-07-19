@@ -1908,6 +1908,35 @@ return until the minibuffer session ends."
 (use-package nxml-mode
   :mode (("\\.xml$'". nxml-mode)))
 
+(use-package rst
+  :mode ("\\.rst\\'" . rst-mode)
+  :bind (:map rst-mode-map
+              ("C-c C-t h" . rst-adjust))
+  :config
+  (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
+
+  (defun tychoish/set-up-rst-mode ()
+    (turn-on-auto-fill)
+    (setq-local fill-column 78)
+    (setq-local rst-level-face-max 0)
+    (set-face-background 'rst-level-1 nil)
+    (set-face-background 'rst-level-2 nil)
+    (set-face-background 'rst-level-3 nil)
+    (set-face-background 'rst-level-4 nil)
+    (set-face-background 'rst-level-5 nil)
+    (set-face-background 'rst-level-6 nil)
+    (local-unset-key (kbd "C-c C-s")))
+
+  (add-hook 'rst-mode-hook 'tychoish/set-up-rst-mode))
+
+(use-package tex-mode
+  :mode ("\\.tex\\'" . LaTeX-mode)
+  :hook ((LaTeX-mode . turn-on-reftex)
+         (LaTeX-mode . visual-line-mode)
+         (LaTeX-mode . turn-off-auto-fill))
+  :config
+  (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")"))
+
 (use-package web-mode
   :ensure t
   :mode (("\\.html$" . web-mode)
@@ -2484,6 +2513,35 @@ Useful after changing `eglot-workspace-configuration' or
 ;; ROBOTS (AI) Integration
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
+  (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
+        (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
+    `(progn
+       (defun ,local-function-symbol ()
+         ,(format "Set LLM backend for the current buffer to `%s'" model)
+         (interactive)
+         (setq-local gptel-model ,model)
+         ,(when api-key
+            `(setq-local gptel-api-key (lambda () ,api-key)))
+         (setq-local gptel-backend ,backend)
+         (message "[gptel] set backend to %s for the local buffer" ,name))
+
+       (defun ,default-function-symbol ()
+         ,(format "Set the default LLM backend for the current session to `%s'" model)
+         (interactive)
+         (setq-default gptel-model ,model)
+         ,(when api-key
+            `(setq-default gptel-api-key (lambda () ,api-key)))
+         (setq-default gptel-backend ,backend)
+         (message "[gptel] set default backend to %s" ,name))
+
+       (bind-keys
+	:map gptel-mode-map
+	(,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
+	(,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
+        :map tychoish/robot-gptel-set-default-model-map
+	(,(downcase key) . ,default-function-symbol)))))
 
 (use-package gptel
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
