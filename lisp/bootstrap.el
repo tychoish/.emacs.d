@@ -37,10 +37,8 @@
   :ensure t
   :defer t)
 
-(require 'xtdlib)
-(require 'sprite)
-(require 'subr-x)
-(require 'map)
+(eval-when-compile
+  (require 'xtdlib))
 
 (declare-function which-key-add-key-based-replacements "which-key")
 
@@ -200,27 +198,6 @@ more arguments than the function cares about."
  ("d" . bootstrap-load-dark-theme)
  ("l" . bootstrap-load-light-theme))
 
-(defun tychoish-describe-symbol-dwim (prefix)
-  "Look up symbol at point contextually.
-With PREFIX arg, always use `describe-symbol'.
-Otherwise: use `slime-describe-symbol' if slime is connected,
-`consult-eglot-symbols' if in an eglot-managed buffer,
-or `describe-symbol' as fallback."
-  (interactive "P")
-  (cond
-   (prefix
-    (call-interactively #'describe-symbol))
-   ((and (fboundp 'slime-describe-symbol)
-         (fboundp 'slime-connected-p)
-         (slime-connected-p))
-    (call-interactively #'slime-describe-symbol))
-   ((and (fboundp 'eglot-current-server)
-         (fboundp 'consult-eglot-symbols)
-         (eglot-current-server))
-    (consult-eglot-symbols))
-   (t
-    (call-interactively #'describe-symbol))))
-
 (bind-keys
  :prefix "C-c h"
  :prefix-map tychoish/docs-map
@@ -297,11 +274,11 @@ or `describe-symbol' as fallback."
  :prefix "m"
  :prefix-map tychoish/robot-gptel-set-default-model-map)
 
-(which-key-customize '("project-grep" . tychoish/ecclectic-grep-project-map)
-  :map tychoish/ecclectic-grep-map :key "p")
-
 (make-read-extended-command-for-prefix  "clipboard"
   :bind-key "C-x x c")
+
+(which-key-customize '("project-grep" . tychoish/ecclectic-grep-project-map)
+  :map tychoish/ecclectic-grep-map :key "p")
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
@@ -629,8 +606,6 @@ or `describe-symbol' as fallback."
        (defun ,operation ()
 	 (setq ,variable (current-time))))))
 
-(create-toggle-functions slow-op-reporting)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
@@ -751,10 +726,10 @@ or `describe-symbol' as fallback."
     (file-name-concat user-emacs-directory "user")
     (funcall (lambda (path) (when (file-directory-p path) (f-entries path))))
     (seq-filter (lambda (it) (string-suffix-p ".el" it)))
-    (seq-map #'file-name-nondirectory)
-    (seq-map #'file-name-sans-extension)
-    (seq-map #'intern)
-    (seq-map #'bootstrap--load-user-file)))
+    (seq-map (lambda (file) (bootstrap--load-user-file
+                             (intern
+                              (file-name-sans-extension
+                               (file-name-nondirectory file))))))))
 
 (defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
   "cache mapping file names to files' mtime to avoid re-importing files")
@@ -791,8 +766,6 @@ or `describe-symbol' as fallback."
     (unless (file-exists-p path)
       (make-directory path t))
     (chmod path #o700)))
-
-
 
 (defun bootstrap-set-up-ephemeral-instance-file-locks ()
   (let* ((path (car (thread-last (list (format "/run/user/%d" (user-uid))
@@ -913,6 +886,27 @@ Returns the list of files that were recompiled."
   "Kills all eldoc and help buffers"
   (interactive)
   (kill-matching-buffers "\\*Help\\*\\|\\*eldoc.*\\*" nil t))
+
+(defun tychoish-describe-symbol-dwim (prefix)
+  "Look up symbol at point contextually.
+With PREFIX arg, always use `describe-symbol'.
+Otherwise: use `slime-describe-symbol' if slime is connected,
+`consult-eglot-symbols' if in an eglot-managed buffer,
+or `describe-symbol' as fallback."
+  (interactive "P")
+  (cond
+   (prefix
+    (call-interactively #'describe-symbol))
+   ((and (fboundp 'slime-describe-symbol)
+         (fboundp 'slime-connected-p)
+         (slime-connected-p))
+    (call-interactively #'slime-describe-symbol))
+   ((and (fboundp 'eglot-current-server)
+         (fboundp 'consult-eglot-symbols)
+         (eglot-current-server))
+    (consult-eglot-symbols))
+   (t
+    (call-interactively #'describe-symbol))))
 
 (defun contextual-menubar (&optional frame)
   "Display the menubar in FRAME (default: selected frame) if on a graphical display, but hide it if in terminal."
@@ -1264,9 +1258,6 @@ leaves the file on disk.  Never prompts when called non-interactively."
     (if electric-pair-eagerness
         (electric-pair-default-inhibit char)
       (electric-pair-conservative-inhibit char))))
-
-(create-toggle-functions electric-pair-inhibition)
-(create-toggle-functions electric-pair-eagerness)
 
 (with-eval-after-load 'elec-pair
   (add-to-list 'electric-pair-pairs '(?< . ?>)))
@@ -1718,6 +1709,10 @@ interactively then remove duplicate items from the `kill-ring'."
   (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
+
+(create-toggle-functions slow-op-reporting)
+(create-toggle-functions electric-pair-inhibition)
+(create-toggle-functions electric-pair-eagerness)
 
 (declare-function magit-list-module-paths "magit-submodule")
 (declare-function magit-run-git "magit-process")

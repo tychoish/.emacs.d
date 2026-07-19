@@ -86,10 +86,10 @@ Called from `after-init-hook' so the full config is loaded first."
    (let ((startup-time (float-time (time-subtract tychoish/startup-complete-time before-init-time)))
 	 (init-time (float-time (time-subtract after-init-time before-init-time)))
 	 (wall-time (float-time (time-since before-init-time))))
-     (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
-     (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
      (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
-     (alert (format "started (pid=%d) [user=%s sys=%s wall=%s]" (emacs-pid) startup-time init-time wall-time)
+     (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
+     (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
+     (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
 	    :title (format "emacs-%s" sprite-instance-id))))
 
  (defun tychoish/startup-mark-complete ()
@@ -141,7 +141,7 @@ locally.."
             ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/"))))
 
   (with-slow-op-timer "<init> external"
-    (seq-do (lambda (spec) (apply #'bootstrap-package spec)) bootstrap-vendored-packages))
+    (mapc (lambda (spec) (apply #'bootstrap-package spec)) bootstrap-vendored-packages))
 
   (with-slow-op-timer "<init> local-lisp"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
