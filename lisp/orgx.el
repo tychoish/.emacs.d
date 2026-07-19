@@ -218,11 +218,6 @@
 
 (setq org-archive-default-command #'org-archive-to-archive-sibling)
 
-;; Capture template integrations for external packages.
-
-(with-eval-after-load 'agent-shell-queue-org
-  (keymap-set orgx-minor-mode-commands-map "q" #'agent-shell-queue-org-refile-from-heading))
-
 ;; Startup hooks and advice are registered in the `use-package orgx' :init
 ;; block in `tychoish-core.el' so they can trigger this file's deferred load.
 
@@ -767,6 +762,13 @@ new note's identifier reflects that date."
   "C-M-TAB" #'org-cycle-force-archived
   "C-c C-w" #'whitespace-cleanup
   "C-c o"   orgx-minor-mode-commands-map)
+
+;; Capture template integrations for external packages.
+
+(with-eval-after-load 'agent-shell-queue-org
+  (bind-keys
+   :map orgx-minor-mode-commands-map
+   ("q" . agent-shell-queue-org-refile-from-heading)))
 
 (define-minor-mode orgx-minor-mode
   "Personal org-mode keybindings and buffer setup.

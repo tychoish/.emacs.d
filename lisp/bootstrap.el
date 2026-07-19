@@ -435,6 +435,7 @@ consults on every future `browse-url' call."
 (when (>= emacs-major-version 29)
   (setq package-install-upgrade-built-in t))
 (setq package-user-dir (concat user-emacs-directory "elpa"))
+(setq load-prefer-newer t)
 
 (setq lpr-add-switches "-T ''")
 

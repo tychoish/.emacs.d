@@ -2893,7 +2893,14 @@ Useful after changing `eglot-workspace-configuration' or
          ("," . agent-shell-manager-toggle))
   :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
   :config
-  (setq agent-shell-manager-side 'bottom))
+  (setq agent-shell-manager-side 'bottom)
+  (make-read-extended-command-for-prefix "agent-shell-manager"
+    :bind-map agent-shell-manager-mode-map
+    :bind-key "x")
+  (bind-keys
+   :map agent-shell-manager-mode-map
+   ("?" . execute-extended-agent-shell-manager-command))
+  (agent-shell-menu-mode-key "," agent-shell-manager-toggle))
 
 (use-package agent-shell-notifications
   :load-path "external/agent-shell-notifications"
