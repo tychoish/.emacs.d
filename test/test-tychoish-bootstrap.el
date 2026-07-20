@@ -1012,7 +1012,7 @@
   (declare (indent 0))
   `(progn
      (require 'delight)
-     (bootstrap-set-up-delightful-mode-lighters)
+     ;; don't need to set up lighters here because they're loaded from use-package
      ,@body))
 
 (ert-deftest bootstrap/delight-fundamental-mode-name ()

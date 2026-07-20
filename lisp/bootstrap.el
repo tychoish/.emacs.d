@@ -148,35 +148,13 @@ more arguments than the function cares about."
  ("s-<down>" . increase-window-down)
  ("s-<up>" . increase-window-up)
  ("s-<right>" . increase-window-right)
+ ("M-." . xref-find-definitions)
  ("M-/" . dabbrev-completion)
- ("C-M-/" . dabbrev-expand))
-
-(bind-keys
- :map minibuffer-local-map
- ("C-g" . bootstrap-super-abort-minibuffers)
- ("C-l" . backward-kill-word))
-
-(bind-keys
- ;; these are all from bootstrap-common.el
- :map global-map
+ ("C-M-/" . dabbrev-expand)
  ("M-<up>" . move-text-up)
- ("M-<down>" . move-text-down)
- :prefix "C-c f"
- :prefix-map tychoish/display-map
- ("=" . text-scale-increase)
- ("-" . text-scale-decrease)
- ("0" . text-scale-reset)
- ("h" . auto-fill-mode)
- ("s" . visual-line-mode)
- :map tychoish/display-map ;; "C-c f"
- :prefix "o"
- :prefix-map tychoish/display-opacity-map
- ("=" . opacity-increase)
- ("-" . opacity-decrease)
- ("0" . opacity-reset))
+ ("M-<down>" . move-text-down))
 
 (bind-keys
- ;; these are all from bootstrap-common.el
  :prefix "C-c t"
  :prefix-map tychoish/core-map
  ("w" . toggle-local-whitespace-cleanup)
@@ -184,6 +162,63 @@ more arguments than the function cares about."
  ("k" . execute-extended-clipboard-command)
  ("p" . toggle-electric-pair-inhibition)
  ("e" . toggle-electric-pair-eagerness)
+ :prefix "C-c f"
+ :prefix-map tychoish/display-map
+ ("=" . text-scale-increase)
+ ("-" . text-scale-decrease)
+ ("0" . text-scale-reset)
+ ("h" . auto-fill-mode)
+ ("s" . visual-line-mode)
+ :prefix "C-c k"
+ :prefix-map tychoish/kill-map
+ ("s" . backward-kill-sentence)
+ ("p" . backward-kill-paragraph)
+ ("f" . backward-kill-sexp)
+ ("d" . delete-region)
+ ("w" . delete-trailing-whitespace)
+ :prefix "C-c w"
+ :prefix-map tychoish/web-browser-map ;; C-c w
+ ("d" . browse-url-generic)
+ ("e" . browse-url)
+ ("f" . browse-url-firefox)
+ ("c" . browse-url-chrome)
+ ("g" . eww-search-words)
+ ("a" . tychoish-browse-url-add-external-host)
+ :prefix "C-c g"
+ :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
+ ("o" . occur)
+ ("g" . grep)
+ :prefix "C-c ."
+ :prefix-map tychoish/completion-map
+ ("TAB" . completion-at-point)
+ ("." . completion-at-point)
+ ("/" . dabbrev-completion)
+ ("p" . completion-at-point)
+ ("f" . bootstrap-completion-select-flavor)
+ :prefix "C-c l"
+ :prefix-map tychoish/ide-map
+ ("m" . imenu)
+ ("c" . xref-find-references)
+ ("d" . xref-find-definitions)
+ ("p" . xref-go-back)
+ ("n" . xref-go-forward)
+ ("o" . xref-find-definitions-other-window)
+ :prefix "C-c h"
+ :prefix-map tychoish/docs-map
+ ("s" . tychoish-describe-symbol-dwim)
+ ("v" . describe-variable)
+ ("q" . kill-eldoc-and-help-buffers)
+ ("j" . jump-to-elisp-help)
+ ("e" . eldoc)
+ ("b" . eldoc-doc-buffer)
+ :prefix "C-c s"
+ :prefix-map tychoish/shell-map
+ ("m" . eshell)
+ :prefix "C-c r"
+ :prefix-map tychoish/robot-map)
+
+(bind-keys
+ ;; these are all from bootstrap-common.el
  :map tychoish/core-map ;; "C-c t"
  :prefix "b"
  :prefix-map tychoish/blogging-map
@@ -196,84 +231,21 @@ more arguments than the function cares about."
  :prefix-map tychoish/theme-map
  ("r" . disable-all-themes) ;; reset
  ("d" . bootstrap-load-dark-theme)
- ("l" . bootstrap-load-light-theme))
-
-(bind-keys
- :prefix "C-c h"
- :prefix-map tychoish/docs-map
- ("s" . tychoish-describe-symbol-dwim)
- ("v" . describe-variable)
- ("q" . kill-eldoc-and-help-buffers)
- ("j" . jump-to-elisp-help)
- ("e" . eldoc)
- ("b" . eldoc-doc-buffer))
-
-(bind-keys
- :prefix "C-c k"
- :prefix-map tychoish/kill-map
- ("s" . backward-kill-sentence)
- ("p" . backward-kill-paragraph)
- ("f" . backward-kill-sexp)
- ("d" . delete-region)
- ("w" . delete-trailing-whitespace))
-
-(bind-keys
- :prefix "C-c w"
- :prefix-map tychoish/web-browser-map ;; C-c w
- ("d" . browse-url-generic)
- ("e" . browse-url)
- ("f" . browse-url-firefox)
- ("c" . browse-url-chrome)
- ("g" . eww-search-words)
- ("a" . tychoish-browse-url-add-external-host))
-
-(bind-keys
- :prefix "C-c g"
- :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
- ("o" . occur)
- ("g" . grep))
-
-(bind-keys
+ ("l" . bootstrap-load-light-theme)
+ :map minibuffer-local-map
+ ("C-g" . bootstrap-super-abort-minibuffers)
+ ("C-l" . backward-kill-word)
+ :map tychoish/display-map ;; "C-c f"
+ :prefix "o"
+ :prefix-map tychoish/display-opacity-map
+ ("=" . opacity-increase)
+ ("-" . opacity-decrease)
+ ("0" . opacity-reset)
  :map tychoish/ecclectic-grep-map
  :prefix "p"
  :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
  ("f" . find-grep))
 
-(bind-keys
- :prefix "C-c ."
- :prefix-map tychoish/completion-map
- ("TAB" . completion-at-point)
- ("." . completion-at-point)
- ("/" . dabbrev-completion)
- ("p" . completion-at-point)
- ("f" . bootstrap-completion-select-flavor))
-
-(bind-keys
- :map global-map
- ("M-." . xref-find-definitions)
- :prefix "C-c l"
- :prefix-map tychoish/ide-map
- ("m" . imenu)
- ("c" . xref-find-references)
- ("d" . xref-find-definitions)
- ("p" . xref-go-back)
- ("n" . xref-go-forward)
- ("o" . xref-find-definitions-other-window))
-
-(bind-keys
- :prefix "C-c s"
- :prefix-map tychoish/shell-map
- ("m" . eshell))
-
-(bind-keys
- :prefix "C-c r"
- :prefix-map tychoish/robot-map
- :map tychoish/robot-map
- :prefix "g"
- :prefix-map tychoish/robot-gptel-map
- :map tychoish/robot-gptel-map
- :prefix "m"
- :prefix-map tychoish/robot-gptel-set-default-model-map)
 
 (make-read-extended-command-for-prefix  "clipboard"
   :bind-key "C-x x c")
@@ -678,30 +650,6 @@ consults on every future `browse-url' call."
 (unless (gui-p)
   (push '(background-color . nil) default-frame-alist))
 
-(defun bootstrap-set-up-delightful-mode-lighters ()
-  (with-slow-op-timer
-    "<bootstrap.el> after-init [delight]"
-
-    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
-    (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
-    (delight 'fundamental-mode "fun" 'simple)
-    (delight 'sh-mode "sh" 'sh-script)
-    (delight 'org-mode "org" 'org-mode)
-    (delight 'org-agenda-mode "agenda" 'org-agenda)
-    (delight 'rst-mode "rst" 'rst-mode)
-
-    (delight 'projectile-mode nil 'projectile)
-    (delight 'flycheck-mode " fc" 'flycheck)
-
-    (delight 'eglot--managed-mode nil 'eglot)
-    (delight 'eldoc-mode nil 'eldoc)
-
-    (delight 'visual-line-mode " wr" 'simple)
-    (delight 'auto-fill-function " afm" 'simple)
-    (delight 'overwrite-mode " om" 'simple)
-    (delight 'refill-mode " rf" 'refill)
-    (delight 'auto-revert-mode nil 'autorevert)))
-
 (add-lazy-init
  :name "<bootstrap> late enable modes"
  :operation 'bootstrap-init-late-enable-modes
@@ -741,9 +689,6 @@ consults on every future `browse-url' call."
  :name "emacs-instance-persistence"
  :operation 'bootstrap-set-up-emacs-instance-persistence
  :delay 0.25)
-
-(with-eval-after-load 'delight
-  (bootstrap-set-up-delightful-mode-lighters))
 
 (add-one-shot-hook
  :name "emacs-lockfile-setup"
@@ -1693,13 +1638,6 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
 (defun tychoish-byte-compile-and-delete-artifact (file)
   "Byte-compile FILE for error checking, then delete the .elc artifact.
 FILE is resolved relative to `user-emacs-directory'.
-
-Some files (e.g. bootstrap.el, tychoish-core.el) declare `no-byte-compile: t'
-because they are never meant to ship a compiled artifact, but that is not a
-reason to skip validating them: `byte-compile-file' honors that declaration
-and silently no-ops, so the check runs against a scratch copy with the
-declaration stripped from its first line, and only that scratch copy (and
-its .elc) is deleted -- FILE itself is never touched.
 
 Returns t if compilation produced no errors, nil otherwise; see
 `*Compile-Log*' for warnings and errors.  Intended for use by agent skills

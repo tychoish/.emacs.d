@@ -21,7 +21,30 @@
 
 (use-package delight
   :ensure t
-  :commands (delight))
+  :commands (delight)
+  :config
+  (with-slow-op-timer
+    "<bootstrap.el> after-init [delight]"
+
+    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
+    (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
+    (delight 'fundamental-mode "fun" 'simple)
+    (delight 'sh-mode "sh" 'sh-script)
+    (delight 'org-mode "org" 'org-mode)
+    (delight 'org-agenda-mode "agenda" 'org-agenda)
+    (delight 'rst-mode "rst" 'rst-mode)
+
+    (delight 'projectile-mode nil 'projectile)
+    (delight 'flycheck-mode " fc" 'flycheck)
+
+    (delight 'eglot--managed-mode nil 'eglot)
+    (delight 'eldoc-mode nil 'eldoc)
+
+    (delight 'visual-line-mode " wr" 'simple)
+    (delight 'auto-fill-function " afm" 'simple)
+    (delight 'overwrite-mode " om" 'simple)
+    (delight 'refill-mode " rf" 'refill)
+    (delight 'auto-revert-mode nil 'autorevert)))
 
 (use-package uuidgen
   :ensure t
@@ -2559,35 +2582,6 @@ Useful after changing `eglot-workspace-configuration' or
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
-  (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
-        (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
-    `(progn
-       (defun ,local-function-symbol ()
-         ,(format "Set LLM backend for the current buffer to `%s'" model)
-         (interactive)
-         (setq-local gptel-model ,model)
-         ,(when api-key
-            `(setq-local gptel-api-key (lambda () ,api-key)))
-         (setq-local gptel-backend ,backend)
-         (message "[gptel] set backend to %s for the local buffer" ,name))
-
-       (defun ,default-function-symbol ()
-         ,(format "Set the default LLM backend for the current session to `%s'" model)
-         (interactive)
-         (setq-default gptel-model ,model)
-         ,(when api-key
-            `(setq-default gptel-api-key (lambda () ,api-key)))
-         (setq-default gptel-backend ,backend)
-         (message "[gptel] set default backend to %s" ,name))
-
-       (bind-keys
-	:map gptel-mode-map
-	(,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
-	(,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-        :map tychoish/robot-gptel-set-default-model-map
-	(,(downcase key) . ,default-function-symbol)))))
-
 (use-package gptel
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :commands (gptel gptel-rewrite)
@@ -2597,10 +2591,15 @@ Useful after changing `eglot-workspace-configuration' or
   (defvar openai-api-key nil)
 
   (bind-keys
+   :map tychoish/robot-map
+   :prefix "g"
+   :prefix-map tychoish/robot-gptel-map
    :map tychoish/robot-gptel-map
    ("g" . gptel)
    ("r" . gptel-rewrite)
-   ("m" . gptel-menu))
+   ("m" . gptel-menu)
+   :prefix "m"
+   :prefix-map tychoish/robot-gptel-set-default-model-map)
 
   (make-read-extended-command-for-prefix "gptel"
     :bind-map tychoish/robot-gptel-map
@@ -2612,6 +2611,34 @@ Useful after changing `eglot-workspace-configuration' or
     :bind-key "b"
     :key-alias "gptel-set-backend")
 
+  (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
+    (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
+          (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
+      `(progn
+	 (defun ,local-function-symbol ()
+           ,(format "Set LLM backend for the current buffer to `%s'" model)
+           (interactive)
+           (setq-local gptel-model ,model)
+           ,(when api-key
+              `(setq-local gptel-api-key (lambda () ,api-key)))
+           (setq-local gptel-backend ,backend)
+           (message "[gptel] set backend to %s for the local buffer" ,name))
+
+	 (defun ,default-function-symbol ()
+           ,(format "Set the default LLM backend for the current session to `%s'" model)
+           (interactive)
+           (setq-default gptel-model ,model)
+           ,(when api-key
+              `(setq-default gptel-api-key (lambda () ,api-key)))
+           (setq-default gptel-backend ,backend)
+           (message "[gptel] set default backend to %s" ,name))
+
+	 (bind-keys
+	  :map gptel-mode-map
+	  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
+	  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
+          :map tychoish/robot-gptel-set-default-model-map
+	  (,(downcase key) . ,default-function-symbol)))))
   :config
   (bind-keys
    :map gptel-mode-map
