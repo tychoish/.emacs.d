@@ -88,15 +88,6 @@ All constraints are validated at macro-expansion time."
    (t `(with-eval-after-load 'which-key
          (which-key-add-key-based-replacements ,key ,new-text)))))
 
-(defmacro flex-defun (name args &rest body)
-  "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
-Useful for functions used as hooks or advice targets where callers may pass
-more arguments than the function cares about."
-  (declare (indent defun) (doc-string 3))
-  `(defun ,name ,(append args '(&rest _)) ,@body))
-
-(declare-function browse-url-chrome "browse-url")
-
 (unless (fboundp 'mouse-major-mode-menu)
   (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map))
 
@@ -152,9 +143,8 @@ more arguments than the function cares about."
  ("M-/" . dabbrev-completion)
  ("C-M-/" . dabbrev-expand)
  ("M-<up>" . move-text-up)
- ("M-<down>" . move-text-down))
-
-(bind-keys
+ ("M-<down>" . move-text-down)
+ ;; top level C-c <> maps
  :prefix "C-c t"
  :prefix-map tychoish/core-map
  ("w" . toggle-local-whitespace-cleanup)
@@ -218,7 +208,7 @@ more arguments than the function cares about."
  :prefix-map tychoish/robot-map)
 
 (bind-keys
- ;; these are all from bootstrap-common.el
+ ;; these are all nested keymaps:
  :map tychoish/core-map ;; "C-c t"
  :prefix "b"
  :prefix-map tychoish/blogging-map
@@ -245,7 +235,6 @@ more arguments than the function cares about."
  :prefix "p"
  :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
  ("f" . find-grep))
-
 
 (make-read-extended-command-for-prefix  "clipboard"
   :bind-key "C-x x c")
@@ -323,21 +312,6 @@ more arguments than the function cares about."
 
 (setq next-line-add-newlines nil)
 (setq undo-auto-current-boundary-timer t)
-
-(setq select-enable-primary nil)
-(setq select-enable-clipboard nil)
-
-;; `mark-even-if-inactive' defaults to t, so `region-beginning'/`region-end'
-;; use a stale mark instead of erroring when there's no active region, so
-;; commands like `clipboard-kill-ring-save' (bound to "s-c") silently kill
-;; an empty string whenever pressed without a real selection. Reject empty
-;; strings at the source so no kill-ring consumer (yank, M-y, consult,
-;; embark, ...) ever sees them.
-(defun ad:kill-new-reject-empty (string &optional _replace)
-  "Prevent empty STRING from being added to the kill ring."
-  (not (string-empty-p string)))
-
-(advice-add 'kill-new :before-while #'ad:kill-new-reject-empty)
 
 (setq query-replace-highlight t)
 (setq search-highlight t)
@@ -464,8 +438,6 @@ consults on every future `browse-url' call."
   "Return t when the current session is or may be a GUI session."
   (when (or (daemonp) (window-system))
     t))
-
-(defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
 (with-eval-after-load 'eshell
   (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
@@ -676,10 +648,6 @@ consults on every future `browse-url' call."
  :operation 'bootstrap-ensure-default-font
  :delay 0.1)
 
-;; Deliberately an idle timer, not `after-first-frame-created' -- that hook
-;; already fires `which-key-mode' synchronously, and stacking a
-;; potentially-slow `desktop-read' right behind it in the same hook pass
-;; blocks redisplay of the very first frame.
 (add-lazy-init
  :name "restore-desktop"
  :operation 'bootstrap-desktop-read-init
@@ -779,6 +747,10 @@ consults on every future `browse-url' call."
 
 ;; package.el management and elisp tools
 
+(defun jump-to-elisp-help ()
+  (interactive)
+  (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
+
 (defun bootstrap-byte-recompile-emacs-directory ()
   "Recompile all `.el' files in `user-emacs-directory' and its direct subdirectories.
 With a prefix argument, force recompilation of every file regardless of timestamps.
@@ -843,7 +815,6 @@ timestamps. Returns the list of files that were recompiled."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; frame/window -- setup and manage frames and windows
-
 
 ;;;; Frame-local buffer display policies
 ;;
@@ -1449,6 +1420,15 @@ Does nothing if the current post is not in the drafts folder."
 
 ;; clean kill ring -- "deduplicate kill-ring"
 
+(setq select-enable-primary nil)
+(setq select-enable-clipboard nil)
+
+(defun ad:kill-new-reject-empty (string &optional _replace)
+  "Prevent empty STRING from being added to the kill ring."
+  (not (string-empty-p string)))
+
+(advice-add 'kill-new :before-while #'ad:kill-new-reject-empty)
+
 (defvar clean-kill-ring-filters '(string-blank-p))
 (defvar clean-kill-ring-prevent-duplicates t)
 
@@ -1470,30 +1450,6 @@ interactively then remove duplicate items from the `kill-ring'."
           (if (or remove-dups clean-kill-ring-prevent-duplicates)
               (delete-dups cleaned)
             cleaned))))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; project.el -- groups of related files
-
-(defun project-find-go-module (dir)
-  (when-let* ((root (or (locate-dominating-file dir "go.work")
-                        (locate-dominating-file dir "go.mod"))))
-    (cons 'go-module root)))
-
-(defun project-find-cmake-project (dir)
-  (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
-    (cons 'cmake-root root)))
-
-(cl-defmethod project-root ((project (head go-module))) (cdr project))
-(cl-defmethod project-root ((project (head cmake-root))) (cdr project))
-
-(add-hook 'project-find-functions #'project-find-go-module)
-(add-hook 'project-find-functions #'project-find-cmake-project)
-
-(defun jump-to-elisp-help ()
-  (interactive)
-  (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

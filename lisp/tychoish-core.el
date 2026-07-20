@@ -23,28 +23,25 @@
   :ensure t
   :commands (delight)
   :config
-  (with-slow-op-timer
-    "<bootstrap.el> after-init [delight]"
+  (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
+  (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
+  (delight 'fundamental-mode "fun" 'simple)
+  (delight 'sh-mode "sh" 'sh-script)
+  (delight 'org-mode "org" 'org-mode)
+  (delight 'org-agenda-mode "agenda" 'org-agenda)
+  (delight 'rst-mode "rst" 'rst-mode)
 
-    (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
-    (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
-    (delight 'fundamental-mode "fun" 'simple)
-    (delight 'sh-mode "sh" 'sh-script)
-    (delight 'org-mode "org" 'org-mode)
-    (delight 'org-agenda-mode "agenda" 'org-agenda)
-    (delight 'rst-mode "rst" 'rst-mode)
+  (delight 'projectile-mode nil 'projectile)
+  (delight 'flycheck-mode " fc" 'flycheck)
 
-    (delight 'projectile-mode nil 'projectile)
-    (delight 'flycheck-mode " fc" 'flycheck)
+  (delight 'eglot--managed-mode nil 'eglot)
+  (delight 'eldoc-mode nil 'eldoc)
 
-    (delight 'eglot--managed-mode nil 'eglot)
-    (delight 'eldoc-mode nil 'eldoc)
-
-    (delight 'visual-line-mode " wr" 'simple)
-    (delight 'auto-fill-function " afm" 'simple)
-    (delight 'overwrite-mode " om" 'simple)
-    (delight 'refill-mode " rf" 'refill)
-    (delight 'auto-revert-mode nil 'autorevert)))
+  (delight 'visual-line-mode " wr" 'simple)
+  (delight 'auto-fill-function " afm" 'simple)
+  (delight 'overwrite-mode " om" 'simple)
+  (delight 'refill-mode " rf" 'refill)
+  (delight 'auto-revert-mode nil 'autorevert))
 
 (use-package uuidgen
   :ensure t
@@ -1783,6 +1780,15 @@ return until the minibuffer session ends."
 	 ("go.work" . go-mod-ts-mode)
 	 ("go.mod" . go-mod-ts-mode))
   :init
+  (cl-defmethod project-root ((project (head go-module))) (cdr project))
+
+  (defun project-find-go-module (dir)
+    (when-let* ((root (or (locate-dominating-file dir "go.work")
+                          (locate-dominating-file dir "go.mod"))))
+      (cons 'go-module root)))
+
+  (add-hook 'project-find-functions #'project-find-go-module)
+
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
     (setq-local fill-column 100)
@@ -2487,6 +2493,16 @@ Useful after changing `eglot-workspace-configuration' or
   (setq flycheck-eglot-enable-diagnostic-tags nil)
   (flycheck-add-next-checker 'eglot-check 'go-gofmt))
 
+(use-package cmake-ts-mode
+  :defer t
+  :init
+  (cl-defmethod project-root ((project (head cmake-root))) (cdr project))
+
+  (defun project-find-cmake-project (dir)
+    (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
+      (cons 'cmake-root root)))
+
+  (add-hook 'project-find-functions #'project-find-cmake-project))
 
 (use-package treesit
   :defer t

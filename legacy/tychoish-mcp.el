@@ -1,3 +1,9 @@
+(defmacro flex-defun (name args &rest body)
+  "Like `defun', but append `&rest _' to ARGS so extra arguments are silently ignored.
+Useful for functions used as hooks or advice targets where callers may pass
+more arguments than the function cares about."
+  (declare (indent defun) (doc-string 3))
+  `(defun ,name ,(append args '(&rest _)) ,@body))
 
 (tychoish/mcp-servers-init)
 
