@@ -8,6 +8,9 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'bootstrap)
+;; `disable-all-themes' / `bootstrap-ensure-*-theme' live in tychoish-core's
+;; modus-themes `:init' block (moved out of bootstrap.el), not in bootstrap.el.
+(require 'tychoish-core)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; gui-p

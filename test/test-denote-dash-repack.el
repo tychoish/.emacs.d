@@ -242,7 +242,8 @@ Branch one is 1/1a/1a1, branch two is 2/2a; 1 and 2 are root siblings."
   "Swapping root 1 with sibling 2 renumbers each whole subtree, not just the root."
   (let ((dir (make-temp-file "denote-dash-test-" t)))
     (unwind-protect
-        (let* ((tree (denote-dash-test--make-tree dir))
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (tree (denote-dash-test--make-tree dir))
                (denote-directory (list dir)))
           (with-current-buffer (find-file-noselect (plist-get tree :root1))
             (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
@@ -260,7 +261,8 @@ Branch one is 1/1a/1a1, branch two is 2/2a; 1 and 2 are root siblings."
   "Swapping root 2 with previous sibling 1 gives the same result as swap-with-next."
   (let ((dir (make-temp-file "denote-dash-test-" t)))
     (unwind-protect
-        (let* ((tree (denote-dash-test--make-tree dir))
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (tree (denote-dash-test--make-tree dir))
                (denote-directory (list dir)))
           (with-current-buffer (find-file-noselect (plist-get tree :root2))
             (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
@@ -278,7 +280,8 @@ Branch one is 1/1a/1a1, branch two is 2/2a; 1 and 2 are root siblings."
   "Frontmatter signature is fixed on descendants too, not just the swapped roots."
   (let ((dir (make-temp-file "denote-dash-test-" t)))
     (unwind-protect
-        (let* ((tree (denote-dash-test--make-tree dir))
+        (let* ((denote-sequence-scheme 'alphanumeric)
+               (tree (denote-dash-test--make-tree dir))
                (denote-directory (list dir)))
           (with-current-buffer (find-file-noselect (plist-get tree :root1))
             (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
