@@ -162,7 +162,8 @@
   (add-one-shot-hook
    :name "<modus-themes> ensure light theme"
    :hook after-first-frame-created
-   :form (bootstrap-ensure-light-theme))
+   :form (bootstrap-ensure-light-theme)
+   :idle-timer 0.01)
   :config
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
@@ -288,9 +289,7 @@
 	 :map tychoish/consult-mode-map ;; "C-c C-;"
 	 ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
-	 :map tychoish/ecclectic-grep-map ;; "C-c g"
-	 :prefix "r"
-	 :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
+	 :map tychoish/ecclectic-rg-map ;; "C-c g r"
 	 ("d" . find-ripgrep)
 	 ("c" . find-ripgrep-compile)
 	 ("m" . find-merge-conflicts)
@@ -429,12 +428,11 @@
   :delight anzu-mode
   :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :hook ((isearch-mode) . anzu-mode)
-  :bind (:prefix "C-c q"
-		 :prefix-map tychoish/anzu-map
-		 ("r" . anzu-query-replace)
-		 ("e" . anzu-query-replace-regexp)
-		 :map isearch-mode-map
-		 ("C-o" . isearch-occur))
+  :bind (:map tychoish/anzu-map
+	      ("r" . anzu-query-replace)
+	      ("e" . anzu-query-replace-regexp)
+	      :map isearch-mode-map
+	      ("C-o" . isearch-occur))
   :init
   (setq anzu-cons-mode-line-p nil)
   :config
@@ -818,6 +816,12 @@
 	 :map tychoish/docs-map
 	 ("i" . consult-info)
 	 ("m" . consult-man)
+	 :map tychoish/consult-mode-map
+	 ("h" . consult-history)
+	 :map tychoish/ecclectic-grep-map ;; "C-c g"
+	 ("f" . consult-grep)
+	 :map tychoish/ecclectic-grep-project-map ;; "C-c g p"
+	 ("g" . consult-git-grep)        	  ;; for git(?)
 	 ;; Minibuffer history
 	 :map minibuffer-local-map
 	 ("M-s" . consult-history)		   ;; orig. next-matching-history-element
@@ -826,21 +830,12 @@
 	 ("M-e" . consult-isearch-history)	   ;; orig. isearch-edit-string
 	 ("M-s e" . consult-isearch-history)	   ;; orig. isearch-edit-string
 	 ("M-s l" . consult-line)		   ;; needed by consult-line to detect isearch
-	 ("M-s L" . consult-line-multi))	   ;; needed by consult-line to detect isearch
-  :bind (:prefix "C-c C-;"
-		 :prefix-map tychoish/consult-mode-map
-		 ("h" . consult-history))
-  :bind (:map tychoish/ecclectic-grep-map ;; "C-c g"
-	      ("f" . consult-grep)
-	      :map tychoish/ecclectic-grep-map ;; "C-c g"
-	      :prefix "s"
-	      :prefix-map tychoish/consult-search-map
-	      ("l" . consult-line)
-	      ("m" . consult-line-multi)
-	      ("k" . consult-keep-lines)
-	      ("f" . consult-focus-lines)
-	      :map tychoish/ecclectic-grep-project-map ;; "C-c g p"
-	      ("g" . consult-git-grep))			;; for git(?)
+	 ("M-s L" . consult-line-multi) 	   ;; needed by consult-line to detect isearch
+	 :map tychoish/consult-search-map ;; "C-c g s"
+	 ("l" . consult-line)
+	 ("m" . consult-line-multi)
+	 ("k" . consult-keep-lines)
+	 ("f" . consult-focus-lines))
   :hook (completion-list-mode . consult-preview-at-point-mode)
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
@@ -975,9 +970,7 @@
 (use-package revbufs
   :ensure t
   :bind (("C-x x a" . revbufs)
-	 :prefix "C-x C-b"
-	 :prefix-map tychoish/buffer-control-map
-	 ("k" . kill-this-buffer)
+	 :map tychoish/buffer-control-map
 	 ("d" . kill-buffers-in-directory)
 	 ("<SPC>" . revert-buffer-quick)
 	 ("m" . kill-buffers-matching-mode)
@@ -1029,8 +1022,7 @@
   :commands (magit-toplevel magit-status magit-branch magit-blame)
   :init
   (bind-keys
-   :prefix "C-x g"
-   :prefix-map tychoish/magit-map
+   :map tychoish/magit-map
    ("s" . magit-status)
    ("f" . magit-branch)
    ("b" . magit-blame))
@@ -1089,12 +1081,16 @@
   :commands (magit-gh))
 
 (use-package magit-dash
-  :bind (:map tychoish/magit-map
-         ("d" . magit-dash-open)
-	 ("o" . magit-dash-open-repo)
-	 :map magit-mode-map
-	 ("C-c C-d" . magit-dash-open-other-window))
-  :commands (magit-dash-view magit-dash-gh-pr-dashboard-open)
+  :commands (magit-dash-view
+	     magit-dash-open
+	     magit-dash-open-repo
+	     magit-dash-open-other-window
+	     magit-dash-gh-pr-dashboard-open)
+  :init
+  (bind-keys
+   :map tychoish/magit-map
+   ("d" . magit-dash-open)
+   ("o" . magit-dash-open-repo))
   :config
   (require 'magit-gh)
   (require 'magit-dash-open)
@@ -1109,6 +1105,9 @@
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
+  (bind-keys
+   :map magit-mode-map
+   ("C-c C-d" . magit-dash-open-other-window))
 
   (with-eval-after-load 'nerd-icons
     (setq nerd-icons-mode-icon-alist
@@ -1128,9 +1127,7 @@
   :defer t
   :init
   (bind-keys
-   :map tychoish/magit-map
-   :prefix "m"
-   :prefix-map tychoish/smerge-map
+   :map tychoish/smerge-map
    ("n" . smerge-vc-next-conflict)
    ("k" . smerge-kill-current)
    ("s" . smerge-start-session)
@@ -1158,7 +1155,7 @@
 (use-package git-link
   :ensure t
   :bind (:map tychoish/magit-map
-	      ("l" . git-link))
+	 ("l" . git-link))
   :config
   (defun ad:git-link--new-copy-to-clipboard (link)
     "Also copy LINK to the system clipboard.
@@ -1321,8 +1318,7 @@ clipboard."
 	     denote-rename-file-using-front-matter)
   :init
   (bind-keys
-   :prefix "C-c d"
-   :prefix-map tychoish/denote-map
+   :map tychoish/denote-map
    ("n" . denote)
    ("m" . denote-open-or-create)
    ("f" . consult-denote-find)
@@ -1466,9 +1462,7 @@ return until the minibuffer session ends."
              denote-sequence-new-parent denote-sequence-link)
   :init
   (bind-keys
-   :map tychoish/denote-map
-   :prefix "s"
-   :prefix-map tychoish/denote-sequence-map
+   :map tychoish/denote-sequence-map
    ("c" . denote-sequence-new-child)
    ("s" . denote-sequence-new-sibling)
    ("r" . denote-sequence-rename-as-parent)
@@ -1502,9 +1496,7 @@ return until the minibuffer session ends."
              denote-org-dblock-insert-backlinks
              denote-org-dblock-insert-files
              denote-org-dblock-insert-files-as-headings)
-  :bind (:map tychoish/denote-map
-         :prefix "o"
-	 :prefix-map tychoish/denote-org-map
+  :bind (:map tychoish/denote-org-map
          ("l" . denote-org-link-to-heading)
          ("b" . denote-org-backlinks-for-heading)
          ("x" . denote-org-extract-org-subtree)
@@ -1532,9 +1524,7 @@ return until the minibuffer session ends."
              denote-explore-barchart-filetypes)
   :init
   (bind-keys
-   :map tychoish/denote-map
-   :prefix "e"
-   :prefix-map tychoish/denote-explore-map
+   :map tychoish/denote-explore-map
    ("n" . denote-explore-count-notes)
    ("c" . denote-explore-count-keywords)
    ("r" . denote-explore-random-note)
@@ -1555,9 +1545,7 @@ return until the minibuffer session ends."
 (use-package denote-review
   :ensure t
   :after denote
-  :bind (:map tychoish/denote-map
-	 :prefix "c"
-	 :prefix-map tychoish/denote-review-map
+  :bind (:map tychoish/denote-review-map
          ("d" . denote-review-set-date)
          ("l" . denote-review-display-list))
   :commands (denote-review-set-date-dired-marked-files)
@@ -1583,8 +1571,7 @@ return until the minibuffer session ends."
 	     ad:org-agenda--open-files)
   :init
   (bind-keys
-   :prefix "C-c o"
-   :prefix-map orgx-global-map
+   :map orgx-global-map ;; "C-c o"
    ("a" . orgx-agenda-view)
    ("c" . orgx-capture)
    ("4" . org-agenda)
@@ -1595,9 +1582,7 @@ return until the minibuffer session ends."
    ("j" . orgx-capture)
    ("u" . orgx-agenda-untagged-in-file)
    ("/" . orgx-agenda-for-file)
-   :map orgx-global-map
-   :prefix "l"
-   :prefix-map orgx-link-map
+   :map orgx-link-map ;; "C-c o l"
    ("s" . org-store-link)
    ("i" . org-insert-link)
    ("a" . org-annotate-file))
@@ -2059,8 +2044,7 @@ return until the minibuffer session ends."
   :ensure t
   :init
   (defvar-keymap tychoish/docker-map)
-  :bind (:prefix "C-x d"
-         :prefix-map tychoish/docker-map
+  :bind (:map tychoish/docker-map
 	 ("d" . docker)
 	 ("c" . docker-containers)
 	 ("i" . docker-images)
@@ -2273,15 +2257,13 @@ return until the minibuffer session ends."
 	   bash-ts-mode
 	   bash-mode
 	   sh-mode) . #'eglot-ensure))
-  :bind (:map tychoish/ide-map ;; "C-c l"
-	      :prefix "l"
-	      :prefix-map tychoish/eglot-global-map
-	      ("s" . eglot)
-	      ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
-	      ("k" . eglot-shutdown)
-	      ("l" . eglot-list-connections)
-	      ("c" . execute-extended-eglot-command)
-	      ("g" . eglot-forget-pending-continuations))
+  :bind (:map tychoish/eglot-global-map ;; "C-c l l"
+	 ("s" . eglot)
+	 ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
+	 ("k" . eglot-shutdown)
+	 ("l" . eglot-list-connections)
+	 ("c" . execute-extended-eglot-command)
+	 ("g" . eglot-forget-pending-continuations))
   :commands (eglot-code-action-rewrite eglot-code-action-extract eglot-code-actions eglot-format eglot-rename eglot-code-action-organize-imports)
   :functions (eglot-alternatives)
   :init
@@ -2612,15 +2594,10 @@ Useful after changing `eglot-workspace-configuration' or
   (defvar openai-api-key nil)
 
   (bind-keys
-   :map tychoish/robot-map
-   :prefix "g"
-   :prefix-map tychoish/robot-gptel-map
    :map tychoish/robot-gptel-map
    ("g" . gptel)
    ("r" . gptel-rewrite)
-   ("m" . gptel-menu)
-   :prefix "m"
-   :prefix-map tychoish/robot-gptel-set-default-model-map)
+   ("m" . gptel-menu))
 
   (make-read-extended-command-for-prefix "gptel"
     :bind-map tychoish/robot-gptel-map
@@ -2766,13 +2743,12 @@ Useful after changing `eglot-workspace-configuration' or
   :commands (eat eat-project eat-other-window eat-project-other-window)
   :init
   (bind-keys
-   :map tychoish/shell-map
-   :prefix "e"
-   :prefix-map tychoish/shell-eat-map
+   :map tychoish/shell-eat-map ;; "C-c s e"
    ("e" . eat)
    ("o" . eat-other-window)
    ("p" . eat-project)
    ("P" . eat-project-other-window))
+
   (make-read-extended-command-for-prefix "eat"
     :bind-map tychoish/shell-eat-map
     :bind-key "m"))
@@ -2795,9 +2771,7 @@ Useful after changing `eglot-workspace-configuration' or
   (delight 'agent-shell-completion-mode nil "agent-shell-menu")
 
   (bind-keys
-   :map tychoish/robot-map
-   :prefix "s"
-   :prefix-map tychoish/robot-agent-shell-map
+   :map tychoish/robot-agent-shell-map ;; "C-c r s"
    ("o" . agent-shell)
    ("t" . agent-shell-toggle)
    ("b" . agent-shell-switch-buffer)
@@ -2805,6 +2779,7 @@ Useful after changing `eglot-workspace-configuration' or
    ("e" . agent-shell-new-temp-shell)
    ("w" . agent-shell-new-worktree-shell)
    ("v" . tychoish/agent-shell-toggle-terse-output))
+
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map tychoish/robot-agent-shell-map
     :bind-key "x")
@@ -3116,8 +3091,7 @@ call-site that has access to SHELL-BUFFER."
 	     consult-mu-bookmark)
   :init
   (bind-keys
-   :prefix "C-c m"
-   :prefix-map tychoish/mail-map
+   :map tychoish/mail-map
    ("a" . tychoish-mail-select-account)
    ("m" . mu4e)
    ("d" . mu4e-search-maildir)

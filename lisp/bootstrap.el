@@ -201,11 +201,36 @@ All constraints are validated at macro-expansion time."
  ("j" . jump-to-elisp-help)
  ("e" . eldoc)
  ("b" . eldoc-doc-buffer)
+ :prefix "C-x C-b"
+ :prefix-map tychoish/buffer-control-map
+ ("k" . kill-this-buffer)
  :prefix "C-c s"
  :prefix-map tychoish/shell-map
  ("m" . eshell)
  :prefix "C-c r"
- :prefix-map tychoish/robot-map)
+ :prefix-map tychoish/robot-map
+ ("" . nil)
+ :prefix "C-x g"
+ :prefix-map tychoish/magit-map
+ ("" . nil)
+ :prefix "C-c q"
+ :prefix-map tychoish/anzu-map
+ ("" . nil)
+ :prefix "C-c C-;"
+ :prefix-map tychoish/consult-mode-map
+ ("" . nil)
+ :prefix "C-c d"
+ :prefix-map tychoish/denote-map
+ ("" . nil)
+ :prefix "C-x d"
+ :prefix-map tychoish/docker-map
+ ("" . nil)
+ :prefix "C-c o"
+ :prefix-map orgx-global-map
+ ("" . nil)
+ :prefix "C-c m"
+ :prefix-map tychoish/mail-map
+ ("" . nil))
 
 (bind-keys
  ;; these are all nested keymaps:
@@ -234,7 +259,59 @@ All constraints are validated at macro-expansion time."
  :map tychoish/ecclectic-grep-map
  :prefix "p"
  :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
- ("f" . find-grep))
+ ("f" . find-grep)
+ :map tychoish/ecclectic-grep-map ;; "C-c g"
+ :prefix "r"
+ :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
+ ("" . nil)
+ :map tychoish/ecclectic-grep-map ;; "C-c g"
+ :prefix "s"
+ :prefix-map tychoish/consult-search-map ;; "C-c g s"
+ ("" . nil)
+ :map tychoish/magit-map
+ :prefix "m"
+ :prefix-map tychoish/smerge-map
+ ("" . nil)
+ :map tychoish/denote-map
+ :prefix "s"
+ :prefix-map tychoish/denote-sequence-map
+ ("" . nil)
+ :map tychoish/denote-map
+ :prefix "o"
+ :prefix-map tychoish/denote-org-map
+ ("" . nil)
+ :map tychoish/denote-map
+ :prefix "e"
+ :prefix-map tychoish/denote-explore-map
+ ("" . nil)
+ :map tychoish/denote-map
+ :prefix "c"
+ :prefix-map tychoish/denote-review-map
+ ("" . nil)
+ :map orgx-global-map ;; "C-c o"
+ :prefix "l"
+ :prefix-map orgx-link-map
+ ("" . nil)
+ :map tychoish/ide-map ;; "C-c l"
+ :prefix "l"
+ :prefix-map tychoish/eglot-global-map
+ ("" . nil)
+ :map tychoish/robot-map ;; "C-c r"
+ :prefix "g"
+ :prefix-map tychoish/robot-gptel-map
+ ("" . nil)
+ :map tychoish/robot-gptel-map ;; "C-c r g"
+ :prefix "m"
+ :prefix-map tychoish/robot-gptel-set-default-model-map
+ ("" . nil)
+ :map tychoish/robot-map ;; "C-c r"
+ :prefix "s"
+ :prefix-map tychoish/robot-agent-shell-map
+ ("" . nil)
+ :map tychoish/shell-map  ;; "C-c s"
+ :prefix "e"
+ :prefix-map tychoish/shell-eat-map
+ ("" . nil))
 
 (make-read-extended-command-for-prefix  "clipboard"
   :bind-key "C-x x c")
