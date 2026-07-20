@@ -430,6 +430,18 @@ consults on every future `browse-url' call."
 				   ("gnu"      . 25)
 				   ("jcs-elpa" . 10)))
 
+(defun ad:refresh-package-quickstart (&rest _)
+  "Regenerate `package-quickstart-file' after packages change on disk.
+Without this, the cached quickstart autoloads keep pointing at
+whatever version directory existed when it was last generated;
+once `package-install'/`package-upgrade'/etc. delete that
+directory, autoloading the package signals a stale
+\"Cannot open load file\" error instead of a clear one."
+  (package-quickstart-refresh))
+
+(seq-do (lambda (fn) (advice-add fn :after #'ad:refresh-package-quickstart))
+        '(package-install package-delete package-upgrade package-upgrade-all package-vc-install))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; id-state -- emacs daemon/instance identification for state config
