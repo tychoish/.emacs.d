@@ -158,6 +158,11 @@
     (when (load-theme 'modus-vivendi t t)
       (enable-theme 'modus-vivendi))
     (add-to-list 'default-frame-alist '(alpha . 95)))
+
+  (add-one-shot-hook
+   :name "<modus-themes> ensure light theme"
+   :hook after-first-frame-created
+   :form (bootstrap-ensure-light-theme))
   :config
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
