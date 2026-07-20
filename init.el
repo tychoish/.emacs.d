@@ -118,12 +118,13 @@ for a machine where the checkout doesn't yet exist.")
 Registers the local checkout at PATH relative to `user-emacs-directory',
 and falls back to `package-vc-install' from URL when PATH does not exist
 locally.."
-   (let ((pkg-dir (expand-file-name (symbol-name package) package-user-dir)))
-     (unless (or (package-installed-p package) (file-exists-p pkg-dir))
-       (let ((checkout (expand-file-name path user-emacs-directory)))
-         (if (file-directory-p checkout)
-             (package-vc-install-from-checkout checkout (symbol-name package))
-           (package-vc-install `(,package :url ,url)))))))
+   (with-slow-op-timer (format "<init> [external] %s" package)
+     (let ((pkg-dir (expand-file-name (symbol-name package) package-user-dir)))
+       (unless (or (package-installed-p package) (file-exists-p pkg-dir))
+	 (let ((checkout (expand-file-name path user-emacs-directory)))
+           (if (file-directory-p checkout)
+               (package-vc-install-from-checkout checkout (symbol-name package))
+             (package-vc-install `(,package :url ,url))))))))
 
  (with-file-name-handler-disabled
   (with-slow-op-timer "<init> package"
@@ -140,21 +141,21 @@ locally.."
             ("gnu" . "https://elpa.gnu.org/packages/")
             ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/"))))
 
-  (with-slow-op-timer "<init> external"
+  (with-slow-op-timer "<init> [external]"
     (mapc (lambda (spec) (apply #'bootstrap-package spec)) bootstrap-vendored-packages))
 
-  (with-slow-op-timer "<init> local-lisp"
+  (with-slow-op-timer "<init> [local]"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
-    (with-slow-op-timer "<init> bootstrap"
+    (with-slow-op-timer "<init> [local] bootstrap"
       (require 'bootstrap))
 
     ;; remaining use-package declarations.
-    (with-slow-op-timer "<init> tychoish-core"
-      (require 'tychoish-core))
+    (with-slow-op-timer "<init> [local] tychoish-core"
+      (require 'tychoish-core)))
 
-    ;; load the user/*.el files
-    (with-slow-op-timer "<init> user-files"
-      (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
-      (bootstrap-set-up-user-local-config)))))
+  ;; load the user/*.el files
+  (with-slow-op-timer "<init> [user]"
+    (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
+    (bootstrap-set-up-user-local-config))))
 
 (provide 'init)

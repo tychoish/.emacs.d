@@ -1,3 +1,9 @@
+(cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
+  (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
+    `(progn
+       (add-hook 'emacs-startup-hook ',operation ,depth)
+       (defun ,operation ()
+	 (setq ,variable (current-time))))))
 
 (use-package ctags-update
   :ensure t

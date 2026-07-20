@@ -473,6 +473,10 @@ consults on every future `browse-url' call."
   (setq recentf-max-menu-items 100)
   (setq recentf-save-file (sprite-state-path "recentf.el"))
 
+  (if (equal "solo" sprite-instance-id)
+      (bootstrap-set-up-ephemeral-instance-file-locks)
+    (bootstrap-set-up-named-instance-file-locks))
+
   (with-silence
     (recentf-mode 1)
     (savehist-mode 1))
@@ -589,13 +593,6 @@ consults on every future `browse-url' call."
 
 (advice-add 'native--compile-async-skip-p :around 'fixed-native--compile-async-skip-p)
 
-(cl-defmacro set-to-current-time-on-startup (variable &optional (depth 75))
-  (let ((operation (intern (format "set-%s-to-current-time" (symbol-name variable)))))
-    `(progn
-       (add-hook 'emacs-startup-hook ',operation ,depth)
-       (defun ,operation ()
-	 (setq ,variable (current-time))))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
@@ -659,24 +656,15 @@ consults on every future `browse-url' call."
  :delay 0.25)
 
 (add-one-shot-hook
- :name "emacs-lockfile-setup"
- :form (progn
-         (if (equal "solo" sprite-instance-id)
-	     (bootstrap-set-up-ephemeral-instance-file-locks)
-	   (bootstrap-set-up-named-instance-file-locks)))
- :hook emacs-startup-hook)
-
-(add-one-shot-hook
  :name "ssh-agent"
  :form (bootstrap-set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
-(add-hook 'emacs-startup-hook #'bootstrap-ensure-light-theme)
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 
 (defun bootstrap--load-user-file (feat)
   (with-slow-op-timer
-    (format "<%s.el> load user directory file" feat)
+    (format "<init> [user] %s.el" feat)
     (require feat)))
 
 (defun bootstrap-set-up-user-local-config ()
