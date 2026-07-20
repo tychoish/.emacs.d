@@ -105,6 +105,39 @@
     (setq-default custom-theme-directory theme-directory)
     (add-to-list 'custom-theme-load-path theme-directory)
     (add-to-list 'load-path theme-directory))
+
+  (defun disable-all-themes ()
+    (interactive)
+    (mapc #'disable-theme custom-enabled-themes))
+
+  (defun bootstrap-load-light-theme ()
+    (interactive)
+
+    (unless (member 'modus-operandi custom-enabled-themes)
+      (when custom-enabled-themes
+	(disable-all-themes))
+
+      (if (custom-theme-p 'modus-operandi)
+	  (enable-theme 'modus-operandi)
+	(load-theme 'modus-operandi t nil)))
+
+    (unless (map-elt default-frame-alist 'alpha)
+      (add-to-list 'default-frame-alist '(alpha . 97))))
+
+  (defun bootstrap-ensure-light-theme ()
+    (unless custom-enabled-themes
+      (bootstrap-load-light-theme)))
+
+  (defun bootstrap-ensure-dark-theme ()
+    (unless custom-enabled-themes
+      (bootstrap-load-dark-theme)))
+
+  (defun bootstrap-load-dark-theme ()
+    (interactive)
+    (disable-all-themes)
+    (when (load-theme 'modus-vivendi t t)
+      (enable-theme 'modus-vivendi))
+    (add-to-list 'default-frame-alist '(alpha . 95)))
   :config
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
@@ -113,15 +146,16 @@
 	  (message-separator bg-main))))
 
 
-(defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
-  "Return empty string instead of signaling for an unresolvable buffer icon."
-  (condition-case nil
-      (apply orig args)
-    (error "")))
 
 (use-package nerd-icons
   :ensure t
   :defer t
+  :init
+  (defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
+    "Return empty string instead of signaling for an unresolvable buffer icon."
+    (condition-case nil
+	(apply orig args)
+      (error "")))
   :config
   (add-to-list 'nerd-icons-mode-icon-alist
                '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))
@@ -166,6 +200,8 @@
 	     projectile-project-root
 	     projectile-mode-on
 	     projectile-save-project-buffers)
+  :hook ((prog-mode . projectile-mode)
+	 (text-mode . projectile-mode))
   :init
   (which-key-customize "projectile" :key "C-c p")
   ;; previously added projectile-mode to the after-init-hook (probably
@@ -199,9 +235,6 @@
   (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
   (setq projectile-frecency-file (sprite-state-path "projectile-frecency.eld"))
   :config
-  (add-hook 'prog-mode-hook #'projectile-mode)
-  (add-hook 'text-mode-hook #'projectile-mode)
-
   (defun projectile-mode-enable-for-buffer (buf)
     (with-current-buffer buf
       (projectile-mode 1)))
@@ -269,7 +302,7 @@
       (consult-ripgrep
        (or (when directory (string-trim directory))
 	   (annotated-completing-read-directory)
-	   (annotated-completing-read--project-root))
+	   (approximate-project-root))
        (if (and (or context (not initial)) (not (eq context 'override)))
 	   (annotated-completing-read-context-from-point
 	    :prompt "rg(init):")
@@ -279,7 +312,7 @@
     "Start an iterative rg session in the project root, if possible, falling back as necessary."
     (interactive "P")
     (consult-rg
-     :directory (or (annotated-completing-read--project-root)
+     :directory (or (approximate-project-root)
 		    (annotated-completing-read-directory))
      :initial initial
      :context (or context current-prefix-arg 'override)))
@@ -338,14 +371,14 @@
     "Run `rg' from the system at the project root. Output is written to a compile buffer."
     (interactive)
     (ripgrep-compile
-     :directory (annotated-completing-read--project-root)
+     :directory (approximate-project-root)
      :regexp (find-ripgrep--resolve-regexp
-	      :directory (annotated-completing-read--project-root))))
+	      :directory (approximate-project-root))))
 
   (defun find-merge-conflicts ()
     "Use ripgrep to identify all merge conflict artifacts"
     (interactive)
-    (let ((root (annotated-completing-read--project-root)))
+    (let ((root (approximate-project-root)))
       (ripgrep-compile
        :regexp "^(=======$|<<<<<<<|>>>>>>>)"
        :directory root
@@ -2077,6 +2110,18 @@ return until the minibuffer session ends."
 	      :map compilation-mode-map
 	      ("C" . compile))
   :config
+  (add-to-list 'compilation-error-regexp-alist 'go-test)
+  (add-to-list 'compilation-error-regexp-alist 'go-panic)
+
+  (setq compilation-error-regexp-alist-alist ; first remove the standard conf; it's not good.
+        (remove 'go-panic (remove 'go-test compilation-error-regexp-alist-alist)))
+
+  (add-to-list 'compilation-error-regexp-alist-alist
+               ;; '(go-test . ("^\\s-+\\k([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t) ;; the standard, it works (ish)
+               '(go-test . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2)))
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(go-panic . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2)))
+
   (defun compile-add-error-syntax (name regexp file line &optional col level)
     "Register new compilation error syntax."
     (add-to-list 'compilation-error-regexp-alist-alist (list name regexp file line col level))

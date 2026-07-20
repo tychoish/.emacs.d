@@ -797,8 +797,14 @@ the *second* slot instead of the first."
 ;;   the child, but upstream produces "2aa" (suffix "a" copied unchanged).
 ;;
 ;; Bug 2 — Legacy files: `denote-rename-file' with `denote-rename-confirmations'
-;;   not suppressed may prompt per-file and, if interrupted, leave the old file
-;;   AND the new file on disk simultaneously.
+;;   not suppressed prompts once per file in the recursive operation.  Each
+;;   individual rename is atomic (declining just skips that file), so a
+;;   decline partway through leaves the recursive operation half-done: earlier
+;;   files are already renamed (with their front matter possibly left stale,
+;;   if that file's own front-matter-rewrite prompt was declined) while later
+;;   descendants are never touched at all, producing an inconsistent tree
+;;   where descendants no longer share a common sequence prefix with their
+;;   reparented ancestor.
 
 (ert-deftest denote-dash-test/upstream-reparent-recursive-type-alternation-bug ()
   "Upstream denote-sequence-reparent-recursive produces wrong suffix type.
@@ -813,7 +819,10 @@ of the correct '2a1'.  This test documents the bug for an upstream report."
                (target  (denote-dash-test--make-org-note dir "20240101T120000" "2"    "Target"))
                (denote-directory (list dir))
                (root-file (car (directory-files dir t "20240101T100000=="))))
-          (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
+          ;; `denote-rename-file' asks its per-file confirmations via
+          ;; `y-or-n-p' (not `yes-or-no-p'); stub that instead so the run
+          ;; doesn't block on a real prompt in a batch/daemon test run.
+          (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
             (denote-sequence-reparent-recursive root-file target))
           (denote-dash-test--kill-dir-buffers dir)
           ;; Correct: child suffix "a" (letter in digit-ending ctx) → "1" (digit in letter-ending ctx)
@@ -823,7 +832,8 @@ of the correct '2a1'.  This test documents the bug for an upstream report."
       (delete-directory dir t))))
 
 (ert-deftest denote-dash-test/upstream-reparent-recursive-legacy-files ()
-  "Upstream denote-sequence-reparent-recursive leaves old files when confirmations fire.
+  "Upstream denote-sequence-reparent-recursive leaves the tree half-migrated
+when confirmations fire and one is declined partway through.
 Expected FAILURE with upstream when `denote-rename-confirmations' is non-nil.
 Demonstrates the need to suppress `denote-rename-confirmations' around the
 operation — as `denote-dash-reparent-recursive' does."
@@ -835,21 +845,23 @@ operation — as `denote-dash-reparent-recursive' does."
                (child-file  (denote-dash-test--make-org-note dir "20240101T110000" "1a1" "Child"))
                (target-file (denote-dash-test--make-org-note dir "20240101T120000" "2a"  "Target"))
                ;; Leave denote-rename-confirmations at its default (non-nil)
-               ;; and stub yes-or-no-p to cancel after the first rename fires,
-               ;; simulating a user who is prompted and accidentally declines.
+               ;; and stub y-or-n-p to accept the first prompt (the root's own
+               ;; rename) and decline every prompt after that, simulating a
+               ;; user who is prompted partway through a recursive operation
+               ;; and accidentally declines.
                (call-count 0)
                (denote-directory (list dir)))
-          (cl-letf (((symbol-function 'yes-or-no-p)
+          (cl-letf (((symbol-function 'y-or-n-p)
                      (lambda (&rest _)
                        (setq call-count (1+ call-count))
-                       ;; Accept the outer "reparent?" prompt, decline the first file prompt
+                       ;; Accept the first file prompt, decline the rest
                        (= call-count 1))))
             (ignore-errors
               (denote-sequence-reparent-recursive root-file target-file)))
           (denote-dash-test--kill-dir-buffers dir)
-          ;; If the upstream bug is present, old root-file still exists alongside
-          ;; a partially-renamed copy — this assertion fails, confirming the bug.
-          (should-not (file-exists-p root-file)))
+          ;; Each per-file rename is atomic: declining its prompt just skips
+          ;; that file rather than leaving a duplicate old+new pair.  
+          (should-not (file-exists-p child-file)))
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 

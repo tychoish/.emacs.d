@@ -948,11 +948,6 @@ timestamps. Returns the list of files that were recompiled."
   (set-frame-parameter frame 'buffer-predicate
                         #'tychoish--frame-buffer-predicate))
 
-(defun kill-eldoc-and-help-buffers ()
-  "Kills all eldoc and help buffers"
-  (interactive)
-  (kill-matching-buffers "\\*Help\\*\\|\\*eldoc.*\\*" nil t))
-
 (defun tychoish-describe-symbol-dwim (prefix)
   "Look up symbol at point contextually.
 With PREFIX arg, always use `describe-symbol'.
@@ -1047,39 +1042,6 @@ or `describe-symbol' as fallback."
   "-" #'opacity-decrease
   "0" #'opacity-reset)
 
-(defun disable-all-themes ()
-  (interactive)
-  (mapc #'disable-theme custom-enabled-themes))
-
-(defun bootstrap-load-light-theme ()
-  (interactive)
-
-  (unless (member 'modus-operandi custom-enabled-themes)
-    (when custom-enabled-themes
-      (disable-all-themes))
-
-    (if (custom-theme-p 'modus-operandi)
-	(enable-theme 'modus-operandi)
-      (load-theme 'modus-operandi t nil)))
-
-  (unless (map-elt default-frame-alist 'alpha)
-    (add-to-list 'default-frame-alist '(alpha . 97))))
-
-(defun bootstrap-ensure-light-theme ()
-  (unless custom-enabled-themes
-    (bootstrap-load-light-theme)))
-
-(defun bootstrap-ensure-dark-theme ()
-  (unless custom-enabled-themes
-    (bootstrap-load-dark-theme)))
-
-(defun bootstrap-load-dark-theme ()
-  (interactive)
-  (disable-all-themes)
-  (when (load-theme 'modus-vivendi t t)
-    (enable-theme 'modus-vivendi))
-  (add-to-list 'default-frame-alist '(alpha . 95)))
-
 (defun bootstrap-setup-font (font-face-name size)
   (interactive "sName: \nNSize: ")
   (let ((new-font-name (concat font-face-name "-" (number-to-string size)))
@@ -1105,6 +1067,11 @@ or `describe-symbol' as fallback."
 (defun save-all-buffers ()
   (interactive)
   (save-some-buffers t t))
+
+(defun kill-eldoc-and-help-buffers ()
+  "Kills all eldoc and help buffers"
+  (interactive)
+  (kill-matching-buffers "\\*Help\\*\\|\\*eldoc.*\\*" nil t))
 
 (defun buffers-matching-path (regexp &optional internal-too)
   (seq-filter (lambda (buf)
@@ -1617,7 +1584,6 @@ interactively then remove duplicate items from the `kill-ring'."
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
@@ -1647,19 +1613,6 @@ interactively then remove duplicate items from the `kill-ring'."
 ;;; no need for use-package for minimal configurations of packages
 ;;; that are included with emacs by default and that alreadye have
 ;;; appropriate autoloads.
-
-(with-eval-after-load 'compile
-  (add-to-list 'compilation-error-regexp-alist 'go-test)
-  (add-to-list 'compilation-error-regexp-alist 'go-panic)
-
-  (setq compilation-error-regexp-alist-alist ; first remove the standard conf; it's not good.
-        (remove 'go-panic (remove 'go-test compilation-error-regexp-alist-alist)))
-
-  (add-to-list 'compilation-error-regexp-alist-alist
-               ;; '(go-test . ("^\\s-+\\k([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t) ;; the standard, it works (ish)
-               '(go-test . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2)))
-  (add-to-list 'compilation-error-regexp-alist-alist
-               '(go-panic . ("^[[:space:]]*\\([_a-zA-Z./][_a-zA-Z0-9./]*\\):\\([0-9]+\\):" 1 2))))
 
 (add-hook 'text-mode-hook 'bootstrap-set-up-show-whitespace)
 (add-hook 'prog-mode-hook 'bootstrap-set-up-show-whitespace)
@@ -1714,87 +1667,6 @@ interactively then remove duplicate items from the `kill-ring'."
 (create-toggle-functions electric-pair-inhibition)
 (create-toggle-functions electric-pair-eagerness)
 
-(declare-function magit-list-module-paths "magit-submodule")
-(declare-function magit-run-git "magit-process")
-
-(defun bootstrap--git-repo-p (dir)
-  "Return non-nil when DIR is the top of a git working tree.
-Both worktree roots and submodule directories qualify: in either case
-DIR contains a `.git' entry (a directory or a gitlink file)."
-  (file-exists-p (expand-file-name ".git" dir)))
-
-(defun bootstrap--gitmodules-paths (root)
-  "Return submodule paths declared in ROOT/.gitmodules.
-Parses the file directly so this works without magit or git."
-  (let ((path (expand-file-name ".gitmodules" root))
-        out)
-    (when (file-readable-p path)
-      (with-temp-buffer
-        (insert-file-contents path)
-        (goto-char (point-min))
-        (while (re-search-forward "^[ \t]*path[ \t]*=[ \t]*\\(.+?\\)[ \t]*$" nil t)
-          (push (match-string 1) out))))
-    (nreverse out)))
-
-(defun bootstrap--submodule-checked-out-p (root sub)
-  "Return non-nil when submodule SUB under ROOT is checked out."
-  (bootstrap--git-repo-p (expand-file-name sub root)))
-
-(defun bootstrap--emacs-conf-uninstalled-submodules ()
-  "Return submodule paths in `user-emacs-directory' that are registered but not checked out."
-  (let ((root (expand-file-name user-emacs-directory)))
-    (seq-remove (lambda (sub) (bootstrap--submodule-checked-out-p root sub))
-                (bootstrap--gitmodules-paths root))))
-
-(defun bootstrap--emacs-conf-check-submodules ()
-  "Warn if any `user-emacs-directory' submodules are registered but not checked out.
-
-Missing submodules referenced via `:load-path' in `use-package' forms
-otherwise fail silently when their autoloaded hooks fire, e.g. aborting
-the rest of a mode-hook chain.
-
-No-ops when `.emacs.d' is not itself a git working tree, which suggests
-a non-git or partial bootstrap installation."
-  (interactive)
-  (let ((root (expand-file-name user-emacs-directory)))
-    (when (bootstrap--git-repo-p root)
-      (when-let* ((missing (bootstrap--emacs-conf-uninstalled-submodules)))
-        (message "uninstalled submodules in %s: %s — run: (cd %s && git submodule update --init %s)"
-                 root
-                 (mapconcat #'identity missing " ")
-                 root
-                 (mapconcat #'identity missing " "))
-        missing))))
-
-(defun bootstrap--emacs-conf-pull-submodules ()
-  "Run `git pull origin' in each submodule of `user-emacs-directory'.
-Submodules are enumerated via `magit-list-module-paths'.  For each one,
-prompts y/n/a (yes/no/abort).  Pulls run synchronously via
-`magit-run-git'; per-pull output lands in the magit process buffer."
-  (interactive)
-  (require 'magit-submodule)
-  (require 'magit-process)
-  (let* ((root (file-name-as-directory (expand-file-name user-emacs-directory)))
-         (default-directory root)
-         (modules (magit-list-module-paths)))
-    (unless modules
-      (user-error "no submodules registered under %s" root))
-    (catch 'abort
-      (dolist (sub modules)
-        (pcase (car (read-multiple-choice
-                     (format "pull %s? " sub)
-                     '((?y "yes"   "git pull origin in this submodule")
-                       (?n "no"    "skip this submodule")
-                       (?a "abort" "stop iterating"))))
-          (?a (message "submodule pull aborted")
-              (throw 'abort nil))
-          (?n (message "skip %s" sub))
-          (?y (let ((default-directory
-                     (file-name-as-directory (expand-file-name sub root))))
-                (message "pulling %s..." sub)
-                (magit-run-git "pull" "origin"))))))
-    (message "submodule pull complete")))
-
 (defun bootstrap-run-ci-tests (&optional timeout)
   "Discover and run all ERT tests under test/, then exit.
 Intended for CI invocations via --fg-daemon --eval.
@@ -1815,47 +1687,6 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
     ;; ourselves based on the result.
     (let ((stats (ert-run-tests-batch t)))
       (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
-
-;;; Config analysis
-
-(defun bootstrap-core-use-package-sizes ()
-  "Return (PACKAGE-NAME . LINE-COUNT) pairs for every top-level use-package
-block in tychoish-core.el, sorted by LINE-COUNT descending."
-  (let ((file (expand-file-name "lisp/tychoish-core.el" user-emacs-directory))
-        results)
-    (with-temp-buffer
-      (set-syntax-table emacs-lisp-mode-syntax-table)
-      (insert-file-contents file)
-      (goto-char (point-min))
-      (while (re-search-forward "^(use-package \\([^ \t\n]+\\)" nil t)
-        (let* ((name (match-string-no-properties 1))
-               (start (match-beginning 0)))
-          (goto-char start)
-          (condition-case nil
-              (progn
-                (forward-sexp 1)
-                (push (cons name (count-lines start (point))) results))
-            (scan-error
-             (forward-line 1))))))
-    (sort results (lambda (a b) (> (cdr a) (cdr b))))))
-
-;;;###autoload
-(defun bootstrap-core-use-package-sizes-report ()
-  "Display use-package blocks from tychoish-core.el sorted by line count."
-  (interactive)
-  (let* ((results (bootstrap-core-use-package-sizes))
-         (buf (get-buffer-create "*use-package-sizes*")))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (insert (format "%-40s %s\n" "Package" "Lines"))
-        (insert (make-string 48 ?-) "\n")
-        (seq-do (lambda (entry)
-                  (insert (format "%-40s %d\n" (car entry) (cdr entry))))
-                results)
-        (goto-char (point-min)))
-      (special-mode))
-    (pop-to-buffer buf)))
 
 ;;; Byte-compile check
 
