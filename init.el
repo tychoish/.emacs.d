@@ -113,6 +113,33 @@ PATH is relative to `user-emacs-directory'.  Every one of these is a
 plain git checkout/submodule in external: URL is only used as a fallback
 for a machine where the checkout doesn't yet exist.")
 
+ (defvar bootstrap--package-contents-refreshed nil
+   "Non-nil once `package-refresh-contents' has run during this bootstrap.")
+
+ (defun bootstrap-ensure-melpa-dependencies (main-file)
+   "Install, via `package-install', any archive dependency declared in
+MAIN-FILE's `Package-Requires' header that isn't already installed.
+Vendored packages (see `bootstrap-vendored-packages') are assumed to be
+handled by `bootstrap-package' itself and are skipped here.  Needed
+because `package-vc-install-from-checkout' byte-compiles the checkout
+immediately, before the dependency's own `use-package :ensure t' form
+(in `tychoish-core') has had a chance to install it."
+   (when (file-exists-p main-file)
+     (let* ((desc (with-temp-buffer
+                    (insert-file-contents main-file)
+                    (package-buffer-info)))
+            (deps (seq-map #'car (package-desc-reqs desc))))
+       (seq-do
+        (lambda (dep)
+          (unless (or (eq dep 'emacs)
+                      (package-installed-p dep)
+                      (assq dep bootstrap-vendored-packages))
+            (unless bootstrap--package-contents-refreshed
+              (package-refresh-contents)
+              (setq bootstrap--package-contents-refreshed t))
+            (package-install dep)))
+        deps))))
+
  (defun bootstrap-package (package path url)
    "Ensure PACKAGE is installed and activated.
 Registers the local checkout at PATH relative to `user-emacs-directory',
@@ -123,7 +150,10 @@ locally.."
        (unless (or (package-installed-p package) (file-exists-p pkg-dir))
 	 (let ((checkout (expand-file-name path user-emacs-directory)))
            (if (file-directory-p checkout)
-               (package-vc-install-from-checkout checkout (symbol-name package))
+               (progn
+                 (bootstrap-ensure-melpa-dependencies
+                  (expand-file-name (format "%s.el" package) checkout))
+                 (package-vc-install-from-checkout checkout (symbol-name package)))
              (package-vc-install `(,package :url ,url))))))))
 
  (with-file-name-handler-disabled

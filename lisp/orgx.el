@@ -264,7 +264,7 @@
   (interactive)
   (let* ((files (thread-last (org-agenda-files)
                              (seq-mapcat (lambda (it)
-                                           (if (f-directory-p it)
+                                           (if (file-directory-p it)
                                                (f-glob "*.org" it)
                                              (list it))))
                              (seq-remove (lambda (it)

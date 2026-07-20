@@ -12,8 +12,8 @@
 
 ;;; Code:
 
-(declare-function approximate-project-root "xtdlib")
-(declare-function approximate-project-name "xtdlib")
+(declare-function approximate-project-root "xtd-project")
+(declare-function approximate-project-name "xtd-project")
 
 (use-package cond-let
   :ensure t

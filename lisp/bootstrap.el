@@ -316,8 +316,10 @@ All constraints are validated at macro-expansion time."
 (make-read-extended-command-for-prefix  "clipboard"
   :bind-key "C-x x c")
 
-(which-key-customize '("project-grep" . tychoish/ecclectic-grep-project-map)
-  :map tychoish/ecclectic-grep-map :key "p")
+(which-key-customize
+  '("project-grep" . tychoish/ecclectic-grep-project-map)
+  :map tychoish/ecclectic-grep-map
+  :key "p")
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
@@ -760,15 +762,17 @@ consults on every future `browse-url' call."
 
 (defun should-read-abbrev-file-p (path)
   (or (not (map-contains-key bootstrap-abbrev-files-cache path))
-      (time-less-p (map-elt bootstrap-abbrev-files-cache path) (f-mtime path))))
+      (time-less-p (map-elt bootstrap-abbrev-files-cache path)
+                   (file-attribute-modification-time (file-attributes path)))))
 
 (defun bootstrap-load-abbrev-files ()
   (thread-last  (f-entries (file-name-concat user-emacs-directory "abbrev"))
-                (seq-filter (lambda (it) (f-ext-p it "el")))
+                (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")))
                 (seq-filter #'file-exists-p)
                 (seq-filter #'should-read-abbrev-file-p)
                 (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
-                (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it) (f-mtime it)))))
+                (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
+                                         (file-attribute-modification-time (file-attributes it))))))
 
   (delight 'abbrev-mode "abb")
   (setq save-abbrevs t))
@@ -1229,8 +1233,8 @@ leaves the file on disk.  Never prompts when called non-interactively."
     (with-current-buffer buf
       (let ((file-name (buffer-file-name buf)))
 	(cond ((null file-name) nil)
-	      ((f-directory-p file-name) file-name)
-	      ((f-file-p file-name) (file-name-directory file-name))
+	      ((file-directory-p file-name) file-name)
+	      ((file-regular-p file-name) (file-name-directory file-name))
 	      (t default-directory))))))
 
 ;; display-buffer: reference (read-only file) buffers reuse an existing

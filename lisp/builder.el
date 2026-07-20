@@ -44,18 +44,18 @@
 (require 'annotated-completing-read)
 (require 'eglot-test-at-point)
 
-(declare-function approximate-project-root "xtdlib")
-(declare-function approximate-project-name "xtdlib")
-(declare-function approximate-project-buffers "xtdlib")
-(declare-function mode-buffers "xtdlib")
-(declare-function mode-buffers-for-project "xtdlib")
-(declare-function compile-buffer-name "xtdlib")
-(declare-function s-join-with-space "xtdlib")
-(declare-function s-join-with-pipe "xtdlib")
-(declare-function s-join-with-kebab "xtdlib")
-(declare-function s-join-with-hyphen "xtdlib")
-(declare-function s-shortest "xtdlib")
-(declare-function s-trimmed-or-nil "xtdlib")
+(declare-function approximate-project-root "xtd-project")
+(declare-function approximate-project-name "xtd-project")
+(declare-function approximate-project-buffers "xtd-project")
+(declare-function mode-buffers "xtd-project")
+(declare-function mode-buffers-for-project "xtd-project")
+(declare-function compile-buffer-name "xtd-project")
+(declare-function s-join-with-space "xtd-s")
+(declare-function s-join-with-pipe "xtd-s")
+(declare-function s-join-with-kebab "xtd-s")
+(declare-function s-join-with-hyphen "xtd-s")
+(declare-function s-shortest "xtd-s")
+(declare-function s-trimmed-or-nil "xtd-s")
 
 (declare-function lm-header "lisp-mnt")
 (declare-function package-build-archive "package-build")
@@ -464,7 +464,7 @@ call `builder-add-candidates'."
 			    (append
 			     (annotated-completing-read--directory-parents default-directory project-root-directory)
 			     (seq-map #'f-full
-				      (seq-filter #'f-directory-p
+				      (seq-filter #'file-directory-p
 						 (seq-keep #'buffer-directory (approximate-project-buffers)))))))
 	   (operation-table (make-hash-table :test #'equal)))
 
@@ -699,7 +699,7 @@ call `builder-add-candidates'."
 				     (buffer-file-name)
 				   (thing-at-point 'filename)))
 		       (exists (file-exists-p filename))
-		       (is-golang (f-ext-p filename "go"))
+		       (is-golang (string-equal (file-name-extension filename) "go"))
 		       (short-filename (f-collapse-homedir filename))
 		       (basename (file-name-nondirectory filename)))
 	     (-l (make-builder-candidate
@@ -918,7 +918,7 @@ call `builder-add-candidates'."
 
 (defun builder--el-files-in-directory (directory)
   "Return a list of .el files in DIRECTORY, excluding byte-compiled .elc files."
-  (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries directory #'f-file-p)))
+  (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")) (f-entries directory #'file-regular-p)))
 
 (builder-register-candidates
  :name "emacs-lisp-file"
@@ -1115,7 +1115,7 @@ Strips a trailing \".el\" from the directory name so a project in
   "Return the absolute path to the main .el file under ROOT, or nil.
 Looks for <NAME>.el where NAME comes from `builder-elisp-package--name'."
   (let ((path (f-join root (concat (builder-elisp-package--name root) ".el"))))
-    (and (f-file-p path) path)))
+    (and (file-regular-p path) path)))
 
 (defun builder-elisp-package-p (&optional root)
   "Return non-nil if ROOT looks like an elisp package.
@@ -1125,7 +1125,7 @@ ROOT defaults to `approximate-project-root'."
 (defun builder-elisp-package--pkg-file (root)
   "Return absolute path to <NAME>-pkg.el under ROOT, or nil if absent."
   (let ((path (f-join root (concat (builder-elisp-package--name root) "-pkg.el"))))
-    (and (f-file-p path) path)))
+    (and (file-regular-p path) path)))
 
 (defun builder-elisp-package--source-files (root)
   "Return the list of top-level .el source files under ROOT.
@@ -1136,17 +1136,17 @@ byte-compiled as ordinary sources."
          (skip (list (concat name "-pkg.el")
                      (concat name "-autoloads.el"))))
     (seq-remove (lambda (it) (member (file-name-nondirectory it) skip))
-		 (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries root #'f-file-p)))))
+		 (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")) (f-entries root #'file-regular-p)))))
 
 (defun builder-elisp-package--test-files (root)
   "Return the list of test files under ROOT/test (test-*.el or *-test.el)."
   (let ((test-dir (f-join root "test")))
-    (when (f-directory-p test-dir)
+    (when (file-directory-p test-dir)
       (seq-filter (lambda (it)
 		     (let ((name (file-name-nondirectory it)))
 		       (or (string-prefix-p "test-" name)
 			   (string-suffix-p "-test.el" name))))
-		   (seq-filter (lambda (it) (f-ext-p it "el")) (f-entries test-dir #'f-file-p))))))
+		   (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")) (f-entries test-dir #'file-regular-p))))))
 
 (defun builder-elisp-package--read-pkg-deps (pkg-file)
   "Return dep symbols from a multi-file package's <NAME>-pkg.el descriptor.
@@ -1171,12 +1171,12 @@ If it is a file, read `Package-Requires' from that file. The pseudo-
 package `emacs' is omitted, since it is not installable."
   (require 'lisp-mnt)
   (cond
-   ((and file-or-root (f-directory-p file-or-root))
+   ((and file-or-root (file-directory-p file-or-root))
     (or (when-let* ((pkg (builder-elisp-package--pkg-file file-or-root)))
           (builder-elisp-package--read-pkg-deps pkg))
         (when-let* ((main (builder-elisp-package--main-file file-or-root)))
           (builder-elisp-package--read-deps main))))
-   ((and file-or-root (f-file-p file-or-root))
+   ((and file-or-root (file-regular-p file-or-root))
     (with-temp-buffer
       (insert-file-contents file-or-root)
       (when-let* ((line (lm-header "Package-Requires")))
@@ -1205,7 +1205,7 @@ opens the *ert* selector."
       (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
     (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
     (let* ((test-dir (f-join root "test"))
-           (load-path (seq-filter #'identity (list root (and (f-directory-p test-dir) test-dir) load-path))))
+           (load-path (seq-filter #'identity (list root (and (file-directory-p test-dir) test-dir) load-path))))
       (load main-file nil t)
       (dolist (it (builder-elisp-package--source-files root))
         (unless (f-equal-p it main-file)
@@ -1249,7 +1249,7 @@ are not included. The tarball lands in <root>/build/packages/."
          (main-file (builder-elisp-package--main-file root)))
     (unless main-file
       (user-error "no <%s>.el at %s" name root))
-    (unless (f-directory-p (f-join root ".git"))
+    (unless (file-directory-p (f-join root ".git"))
       (user-error "package build requires a git repository at %s" root))
     (unless (zerop (call-process "git" nil nil nil "-C" root
                                  "rev-parse" "--verify" "HEAD"))
@@ -1283,11 +1283,11 @@ are not included. The tarball lands in <root>/build/packages/."
   (interactive)
   (let ((root (file-name-as-directory (approximate-project-root))))
     (dolist (it (list (f-join root "build") (f-join root ".cache")))
-      (when (f-directory-p it)
+      (when (file-directory-p it)
         (delete-directory it t)
         (message "removed %s" it)))
-    (dolist (it (seq-filter (lambda (it) (f-ext-p it "elc"))
-			  (f-entries root #'f-file-p t)))
+    (dolist (it (seq-filter (lambda (it) (string-equal (file-name-extension it) "elc"))
+			  (f-entries root #'file-regular-p t)))
       (delete-file it)
       (message "removed %s" it))
     (when noninteractive (kill-emacs 0))))
@@ -1431,7 +1431,7 @@ PACKAGES to `package-selected-packages' and echoes the result."
 (builder-register-candidates
  :name "emacs-lisp-cask"
  :pipeline
- (when (f-file-p (f-join project-root-directory "Cask"))
+ (when (file-regular-p (f-join project-root-directory "Cask"))
    (-l (make-builder-candidate
         :name (format "cask-install <%s>" project-name)
         :command "cask install"
@@ -1469,7 +1469,7 @@ to load test files found under test/ and run ert."
   (interactive)
   (let* ((root (file-name-as-directory (approximate-project-root)))
          (project-name (file-name-nondirectory (directory-file-name root)))
-         (has-cask (f-file-p (f-join root "Cask")))
+         (has-cask (file-regular-p (f-join root "Cask")))
          (image (if has-cask
                     "silex/emacs:30.2-ci-cask"
                   "silex/emacs:30.2"))
