@@ -46,10 +46,6 @@
   "Buffer name used as a last-resort fallback when no other buffer is available.
 Override in user/*.el to customize per machine or instance.")
 
-
-(unless (fboundp 'mouse-major-mode-menu)
-  (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map))
-
 (bind-keys
  ("C-x m" . execute-extended-command)
  ("C-x C-m" . execute-extended-command)
@@ -309,13 +305,14 @@ Override in user/*.el to customize per machine or instance.")
   (unless bootstrap-abbrev-files-cache
     (setq bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
 
-  (thread-last  (f-entries (file-name-concat user-emacs-directory "abbrev"))
-                (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")))
-                (seq-filter #'file-exists-p)
-                (seq-filter #'should-read-abbrev-file-p)
-                (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
-                (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
-                                         (file-attribute-modification-time (file-attributes it)))))))
+  (thread-last
+    (f-entries (file-name-concat user-emacs-directory "abbrev"))
+    (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")))
+    (seq-filter #'file-exists-p)
+    (seq-filter #'should-read-abbrev-file-p)
+    (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
+    (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
+                             (file-attribute-modification-time (file-attributes it)))))))
 
 (setq save-abbrevs t)
 
@@ -546,12 +543,26 @@ Override in user/*.el to customize per machine or instance.")
 (add-lazy-init
  :name "<bootstrap> late enable modes"
  :operation 'bootstrap-init-late-enable-modes
- :delay 0.67)
+ :delay 0.34)
 
 (add-one-shot-hook
  :name "<bootstrap> enable which-key"
  :hook after-first-frame-created
  :form (which-key-mode 1))
+
+(add-one-shot-hook
+ :name "<bootstrap> alias mouse mode"
+ :hook after-first-frame-created
+ :form (unless (fboundp 'mouse-major-mode-menu)
+	 (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map)))
+
+(add-one-shot-hook
+ :name "<bootstrap> display-buffer-alist"
+ :hook 'after-first-frame-created
+ :form (add-to-list 'display-buffer-alist
+		    '(bootstrap--readonly-file-buffer-p
+		      (bootstrap--reuse-readonly-file-window
+                       display-buffer-use-some-window))))
 
 (add-one-shot-hook
  :name "<bootstrap> enable popper"
@@ -1059,11 +1070,6 @@ leaves the file on disk.  Never prompts when called non-interactively."
     (set-window-buffer win buffer)
     win))
 
-(add-to-list 'display-buffer-alist
-             '(bootstrap--readonly-file-buffer-p
-               (bootstrap--reuse-readonly-file-window
-                display-buffer-use-some-window)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; editing -- text editing, experience, and manipulation
@@ -1109,8 +1115,6 @@ leaves the file on disk.  Never prompts when called non-interactively."
 (defalias 'turn-off-hard-wrap 'turn-on-soft-wrap)
 (defalias 'toggle-soft-wrap 'toggle-on-soft-wrap)
 (defalias 'toggle-hard-wrap 'toggle-off-soft-wrap)
-
-(declare-function visual-fill-column-mode "`visual-fill-column'")
 
 (defun turn-on-soft-wrap ()
   (interactive)
@@ -1250,12 +1254,14 @@ interactively then remove duplicate items from the `kill-ring'."
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 
 (defun find-ssh-agent-socket-candidates ()
-  (thread-last (list (format "/run/user/%d/ssh-agent.socket" (user-uid)))
-               (append (sort (copy-sequence (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
-               (seq-uniq)
-               (seq-remove #'null)
-               (seq-filter #'file-writable-p)
-               (nreverse)))
+  (thread-last
+    (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))
+    (append (list (format "/run/user/%d/ssh-agent.socket" (user-uid))))
+    (seq-sort #'string-lessp)
+    (seq-uniq)
+    (seq-remove #'null)
+    (seq-filter #'file-writable-p)
+    (nreverse)))
 
 (defun bootstrap-set-up-ssh-agent ()
   (interactive)
@@ -1330,8 +1336,8 @@ Reports the number of files queued and the time taken to dispatch them.
 Runs once on a 60-second idle timer after startup; also callable interactively.
 Compilation itself is async — Emacs stays responsive while .eln files are built."
   (interactive)
-  (when (string-match "NATIVE_COMP" system-configuration-features)
-  (if (not (fboundp 'native-compile-async))
+  (if (not (or (string-match "NATIVE_COMP" system-configuration-features)
+	       (fboundp 'native-compile-async)))
       (message "Native compilation not available in this build")
     (let* ((lisp-dir (expand-file-name "lisp" user-emacs-directory))
            (elpa-dir (expand-file-name "elpa" user-emacs-directory))
@@ -1339,10 +1345,9 @@ Compilation itself is async — Emacs stays responsive while .eln files are buil
                    #'file-regular-p
                    (append
                     (when (file-directory-p lisp-dir)
-                      (directory-files-recursively lisp-dir "\\.el\\'"))
+		      (directory-files-recursively lisp-dir "\\.el\\'"))
                     (when (file-directory-p elpa-dir)
-                      (directory-files-recursively elpa-dir "\\.el\\'")))
-                   ))
+		      (directory-files-recursively elpa-dir "\\.el\\'")))))
            (n (length files)))
       (with-slow-op-timer "native-compile-all-local: dispatch"
         (native-compile-async files))
@@ -1351,7 +1356,7 @@ Compilation itself is async — Emacs stays responsive while .eln files are buil
             (native-compile-prune-cache))
         (error (message "native-compile-prune-cache error: %s"
                         (error-message-string err))))
-      (message "native-compile-all-local: queued %d .el files" n)))))
+      (message "native-compile-all-local: queued %d .el files" n))))
 
 (provide 'bootstrap)
 ;;; bootstrap.el ends here
