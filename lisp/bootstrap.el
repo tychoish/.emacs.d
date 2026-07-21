@@ -95,15 +95,12 @@ Override in user/*.el to customize per machine or instance.")
  ("s-<up>" . increase-window-up)
  ("s-<right>" . increase-window-right)
  ("M-." . xref-find-definitions)
- ("M-/" . dabbrev-completion)
- ("C-M-/" . dabbrev-expand)
  ("M-<up>" . move-text-up)
  ("M-<down>" . move-text-down))
 
 ;; top level C-c <> maps
 (defvar-keymap tychoish/core-map  ;; "C-c t"
   "w" #'toggle-local-whitespace-cleanup
-  "s" #'whitespace-cleanup
   "k" #'execute-extended-clipboard-command
   "p" #'toggle-electric-pair-inhibition
   "e" #'toggle-electric-pair-eagerness)
@@ -136,7 +133,6 @@ Override in user/*.el to customize per machine or instance.")
 (defvar-keymap tychoish/completion-map ;; "C-c ."
   "TAB" #'completion-at-point
   "." #'completion-at-point
-  "/" #'dabbrev-completion
   "p" #'completion-at-point)
 
 (defvar-keymap tychoish/ide-map ;; "C-c l"
@@ -158,8 +154,7 @@ Override in user/*.el to customize per machine or instance.")
 (defvar-keymap tychoish/buffer-control-map ;; "C-x C-b"
   "k" #'kill-this-buffer)
 
-(defvar-keymap tychoish/shell-map ;; "C-c s"
-  "m" #'eshell)
+(defvar-keymap tychoish/shell-map) ;; "C-c s"
 
 (defvar-keymap tychoish/robot-map) ;; "C-c r"
 (defvar-keymap tychoish/magit-map) ;; "C-x g"
@@ -173,11 +168,6 @@ Override in user/*.el to customize per machine or instance.")
 ;; nested keymaps
 (defvar-keymap tychoish/blogging-map ;; "C-c t b"
   "m" #'bootstrap-insert-date)
-
-(defvar-keymap tychoish/theme-map ;; "C-c t t"
-  "r" #'disable-all-themes ;; reset
-  "d" #'bootstrap-load-dark-theme
-  "l" #'bootstrap-load-light-theme)
 
 (defvar-keymap tychoish/display-opacity-map ;; "C-c f o"
   "=" #'opacity-increase
@@ -205,7 +195,6 @@ Override in user/*.el to customize per machine or instance.")
 (keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
 (keymap-set global-map "C-c t" tychoish/core-map)
 (keymap-set tychoish/core-map "b" tychoish/blogging-map)
-(keymap-set tychoish/core-map "t" tychoish/theme-map)
 (keymap-set global-map "C-c f" tychoish/display-map)
 (keymap-set tychoish/display-map "o" tychoish/display-opacity-map)
 (keymap-set global-map "C-c k" tychoish/kill-map)

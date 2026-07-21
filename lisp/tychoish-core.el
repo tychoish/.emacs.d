@@ -184,6 +184,12 @@
       (enable-theme 'modus-vivendi))
     (add-to-list 'default-frame-alist '(alpha . 95)))
 
+  (defvar-keymap tychoish/theme-map ;; "C-c t t"
+    "r" #'disable-all-themes ;; reset
+    "d" #'bootstrap-load-dark-theme
+    "l" #'bootstrap-load-light-theme)
+  (keymap-set tychoish/core-map "t" tychoish/theme-map)
+
   (add-one-shot-hook
    :name "<modus-themes> ensure light theme"
    :hook after-first-frame-created
@@ -663,6 +669,10 @@ All constraints are validated at macro-expansion time."
 (use-package dabbrev
   :ensure nil
   :defer t
+  :bind (("M-/" . dabbrev-completion)
+         ("C-M-/" . dabbrev-expand)
+         (:map tychoish/completion-map
+               ("/" . dabbrev-completion)))
   :config
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
   (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
@@ -1823,6 +1833,8 @@ return until the minibuffer session ends."
 (use-package whitespace
   :ensure nil
   :defer t
+  :bind (:map tychoish/core-map
+              ("s" . whitespace-cleanup))
   :init
   (defun bootstrap-set-up-show-whitespace ()
     (setq-local show-trailing-whitespace t))
@@ -2960,6 +2972,8 @@ Useful after changing `eglot-workspace-configuration' or
 (use-package eshell
   :ensure nil
   :defer t
+  :bind (:map tychoish/shell-map
+              ("m" . eshell))
   :config
   (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell")))
   (with-eval-after-load "em-cmpl"
