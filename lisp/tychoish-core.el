@@ -2487,13 +2487,50 @@ return until the minibuffer session ends."
   ;; ever connects, and defer file-watch registration instead of blocking the
   ;; process filter when the cache is still cold.
 
+  (defconst tychoish/projectile-warm-cache-idle-delay 3
+    "Idle seconds between warming successive queued projects' Projectile caches.")
+
+  (defvar tychoish/projectile-warm-cache-queue nil
+    "Project roots waiting to be indexed by `tychoish/projectile-warm-cache-process-queue'.")
+
+  (defvar tychoish/projectile-warm-cache-idle-timer nil
+    "Idle timer that pops one root off `tychoish/projectile-warm-cache-queue' at a time.")
+
+  (defun tychoish/projectile-warm-cache-process-queue ()
+    "Index the next queued project, or cancel the timer once the queue is empty.
+Runs on `tychoish/projectile-warm-cache-idle-delay' idle windows, one
+project per firing, so a desktop restore with many cached projects
+doesn't launch an indexing process per project all at once."
+    (if-let* ((root (pop tychoish/projectile-warm-cache-queue)))
+        (unless (tychoish/projectile-cache-warm-p root)
+          (projectile-index-project-async root))
+      (when tychoish/projectile-warm-cache-idle-timer
+        (cancel-timer tychoish/projectile-warm-cache-idle-timer)
+        (setq tychoish/projectile-warm-cache-idle-timer nil))))
+
+  (declare-function tychoish/projectile-warm-cache-process-queue "tychoish-core")
+  (declare-function tychoish/projectile-cache-warm-p "tychoish-core")
+
+  (defun tychoish/projectile-warm-cache-enqueue (root)
+    "Queue ROOT for background Projectile indexing on the next idle window."
+    (unless (or (member root tychoish/projectile-warm-cache-queue)
+                (tychoish/projectile-cache-warm-p root))
+      (setq tychoish/projectile-warm-cache-queue
+            (append tychoish/projectile-warm-cache-queue (list root))))
+    (unless tychoish/projectile-warm-cache-idle-timer
+      (setq tychoish/projectile-warm-cache-idle-timer
+            (run-with-idle-timer tychoish/projectile-warm-cache-idle-delay t
+                                  #'tychoish/projectile-warm-cache-process-queue))))
+
   (defun tychoish/projectile-warm-cache-for-buffer ()
-    "Kick off background Projectile indexing for the current buffer's project.
+    "Queue background Projectile indexing for the current buffer's project.
 Runs on the first visit to a project in a session, well before
-`eglot-ensure' would otherwise force a synchronous, cold index."
+`eglot-ensure' would otherwise force a synchronous, cold index. Queued
+rather than dispatched immediately so a desktop restore with many
+cached projects doesn't index all of them at once."
     (when-let* ((root (and (bound-and-true-p projectile-mode)
                             (projectile-project-root))))
-      (projectile-index-project-async root)))
+      (tychoish/projectile-warm-cache-enqueue root)))
 
   (defun tychoish/projectile-warm-cache-on-project-change (_new-root _previous-root)
     (tychoish/projectile-warm-cache-for-buffer))
