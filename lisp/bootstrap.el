@@ -46,47 +46,6 @@
   "Buffer name used as a last-resort fallback when no other buffer is available.
 Override in user/*.el to customize per machine or instance.")
 
-(defun bootstrap--which-key-add-replacement (map key new-text)
-  "Register a which-key annotation for KEY with NEW-TEXT, scoped to MAP when supported.
-Falls back to `which-key-add-key-based-replacements' on Emacs versions that lack
-the keymap-scoped variant."
-  (if (and map (fboundp 'which-key-add-keymap-based-replacements))
-      (which-key-add-keymap-based-replacements map key new-text)
-    (which-key-add-key-based-replacements key new-text)))
-
-(cl-defmacro which-key-customize (new-text &key map key form)
-  "Register a which-key annotation, deferred until which-key is loaded.
-
-NEW-TEXT is the replacement label (a string, or a cons (LABEL . COMMAND)
-for keymap-based replacements that also bind a prefix command).
-:KEY  — key sequence string; required unless :FORM is used.
-:MAP  — keymap (symbol or quoted symbol); uses the keymap-scoped API when
-        available, falling back to the global-key variant otherwise.
-:FORM — arbitrary expression; mutually exclusive with NEW-TEXT, :KEY, and :MAP.
-
-All constraints are validated at macro-expansion time."
-  (declare (indent 1))
-  (cond
-   (form
-    (when key
-      (user-error "which-key-customize: :form is mutually exclusive with :key"))
-    (when map
-      (user-error "which-key-customize: :form is mutually exclusive with :map"))
-    (when new-text
-      (user-error "which-key-customize: :form is mutually exclusive with new-text")))
-   (t
-    (unless new-text
-      (user-error "which-key-customize: new-text is required when :form is not provided"))
-    (unless key
-      (user-error "which-key-customize: :key is required when :form is not provided"))
-    (unless (stringp key)
-      (user-error "which-key-customize: :key must be a string literal, got: %S" key))))
-  (cond
-   (form `(with-eval-after-load 'which-key ,form))
-   (map `(with-eval-after-load 'which-key
-           (bootstrap--which-key-add-replacement ,map ,key ,new-text)))
-   (t `(with-eval-after-load 'which-key
-         (which-key-add-key-based-replacements ,key ,new-text)))))
 
 (unless (fboundp 'mouse-major-mode-menu)
   (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map))
@@ -313,204 +272,108 @@ All constraints are validated at macro-expansion time."
  :prefix-map tychoish/shell-eat-map
  ("" . nil))
 
-(make-read-extended-command-for-prefix  "clipboard"
-  :bind-key "C-x x c")
+(declare-function electric-pair-default-inhibit "elec-pair")
+(declare-function electric-pair-conservative-inhibit "elec-pair")
 
-(which-key-customize
-  '("project-grep" . tychoish/ecclectic-grep-project-map)
-  :map tychoish/ecclectic-grep-map
-  :key "p")
+(defvar electric-pair-inhibition nil)
+(defvar electric-pair-eagerness t)
 
-(put 'downcase-region 'disabled nil)
-(put 'narrow-to-region 'disabled nil)
-(put 'upcase-region 'disabled nil)
-(put 'list-timers 'disabled nil)
-(put 'list-threads 'disabled nil)
+(defun bootstrap-electric-pair-inhibition (char)
+  (if electric-pair-inhibition
+      nil
+    (if electric-pair-eagerness
+        (electric-pair-default-inhibit char)
+      (electric-pair-conservative-inhibit char))))
 
-(use-package dired
-  :defer t
-  :init
-  (put 'dired-find-alternate-file 'disabled nil)
-  :config
-  (bind-keys
-   :map dired-mode-map
-   ("w" . wdired-change-to-wdired-mode)))
+(with-eval-after-load 'elec-pair
+  (setq electric-pair-inhibit-predicate #'bootstrap-electric-pair-inhibition)
+  (add-to-list 'electric-pair-pairs '(?< . ?>)))
 
-(use-package warnings
-  :defer t
-  :config
-  (add-to-list 'warning-suppress-log-types '(frameset)))
+(setq electric-indent-chars '(?\n ?:))
 
-(setq ad-redefinition-action 'accept)
-(setq switch-to-prev-buffer-skip 'visible)
-(setq ring-bell-function #'ignore)
-(setq font-lock-support-mode 'jit-lock-mode)
-(setq jit-lock-stealth-time nil)
+(with-eval-after-load 'transient
+  (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
+
+(defvar bootstrap-abbrev-files-cache nil
+  "cache mapping file names to files' mtime to avoid re-importing files")
+
+(defun should-read-abbrev-file-p (path)
+  (unless bootstrap-abbrev-files-cache
+    (setq bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
+
+  (or (not (map-contains-key bootstrap-abbrev-files-cache path))
+      (time-less-p (map-elt bootstrap-abbrev-files-cache path)
+                   (file-attribute-modification-time (file-attributes path)))))
+
+(defun bootstrap-load-abbrev-files ()
+  (unless bootstrap-abbrev-files-cache
+    (setq bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
+
+  (thread-last  (f-entries (file-name-concat user-emacs-directory "abbrev"))
+                (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")))
+                (seq-filter #'file-exists-p)
+                (seq-filter #'should-read-abbrev-file-p)
+                (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
+                (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
+                                         (file-attribute-modification-time (file-attributes it)))))))
+
+(setq save-abbrevs t)
+
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
-(setq tooltip-resize-echo-area t)
-
-(setq truncate-lines t)
-(setq use-dialog-box nil)
-(setq indent-tabs-mode nil) ; (setq tab-width 4)
-(setq tab-always-indent t)
-(setq cursor-in-non-selected-windows nil)
-(setq comment-auto-fill-only-comments t)
-(setq electric-indent-chars '(?\n ?:))
 
 (setq backup-by-copying t)
-(setq make-backup-files t)
 (setq delete-old-versions t)
+(setq confirm-kill-processes nil)
+(setq confirm-nonexistent-file-or-buffer nil)
+(setq find-file-visit-truename t)
 (setq auto-revert-verbose nil)
 (setq auto-revert-avoid-polling t)
 (setq auto-revert-interval 60)
 
-(setq split-height-threshold 100)
+(setq ring-bell-function #'ignore)
+(setq truncate-lines t)
+(setq use-dialog-box nil)
+(setq cursor-in-non-selected-windows nil)
 (setq scroll-conservatively 25)
 (setq scroll-preserve-screen-position t)
 (setq indicate-empty-lines t)
-(setq use-short-answers t) ;; (fset 'yes-or-no-p 'y-or-n-p)
-(setq shell-command-dont-erase-buffer 'end-last-out)
-(setq show-paren-delay 0.25)
-
-(setq checkdoc-force-docstrings-flag nil)
-(setq checkdoc-spellcheck-documentation-flag t)
-(setq ansi-color-for-comint-mode t)
-(setq makefile-electric-keys t)
-
-(setq which-key-idle-delay .25)
-(setq which-key-idle-secondary-delay 0.125)
-(setq which-key-lighter "")
-
-(setq completion-cycle-threshold 2)
+(setq use-short-answers t)
+(setq load-prefer-newer t)
 (setq completion-ignore-case t)
 (setq enable-recursive-minibuffers t)
 (setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
 (setq read-buffer-completion-ignore-case t)
+(setq indent-tabs-mode nil) ; (setq tab-width 4)
+(setq shell-command-dont-erase-buffer 'end-last-out)
 (setq read-extended-command-predicate #'command-completion-default-include-p)
-(setq read-file-name-completion-ignore-case t)
-(setq text-mode-ispell-word-completion nil)
-
-(setq next-line-add-newlines nil)
 (setq undo-auto-current-boundary-timer t)
-
-(setq query-replace-highlight t)
-(setq search-highlight t)
-
-(setq confirm-kill-processes nil)
-(setq confirm-nonexistent-file-or-buffer nil)
-(setq confirm-kill-emacs nil)
-
-(declare-function eww-current-url "eww")
-(declare-function url-host "url-parse")
-(declare-function url-generic-parse-url "url-parse")
-
-(defvar tychoish-browse-url-external-hosts nil
-  "Host suffixes that should open via `browse-url-generic' instead of eww.
-An entry matches any URL whose host is it or a subdomain of it (e.g.
-\"github.com\" matches both github.com and gist.github.com). Populated
-interactively with `tychoish-browse-url-add-external-host'; persisted
-across sessions via `savehist-additional-variables'.")
-
-(defun tychoish-browse-url--external-host-p (url)
-  "Return non-nil when URL's host matches `tychoish-browse-url-external-hosts'."
-  (when-let* ((host (url-host (url-generic-parse-url url))))
-    (seq-some (lambda (suffix) (string-suffix-p suffix host)) tychoish-browse-url-external-hosts)))
-
-(defun tychoish-browse-url-dispatch (url &rest args)
-  "Open URL via `browse-url-generic' for known JS-heavy/external hosts, eww otherwise.
-Routing is controlled by `tychoish-browse-url-external-hosts'; add to it
-with `tychoish-browse-url-add-external-host'."
-  (apply (if (tychoish-browse-url--external-host-p url)
-             #'browse-url-generic
-           #'eww-browse-url)
-         url args))
-
-(defun tychoish-browse-url-add-external-host ()
-  "Route the current eww page's host through `browse-url-generic' from now on.
-Must be called from an eww buffer.  Adds the host to
-`tychoish-browse-url-external-hosts', which `tychoish-browse-url-dispatch'
-consults on every future `browse-url' call."
-  (interactive)
-  (unless (derived-mode-p 'eww-mode)
-    (user-error "Not in an eww buffer"))
-  (let* ((url (eww-current-url))
-         (host (and url (url-host (url-generic-parse-url url)))))
-    (unless host
-      (user-error "Could not determine host for the current eww page"))
-    (add-to-list 'tychoish-browse-url-external-hosts host)
-    (message "browse-url: routing %s to the external browser from now on" host)))
-
-(with-eval-after-load 'savehist
-  (add-to-list 'savehist-additional-variables 'tychoish-browse-url-external-hosts))
-
-(setq browse-url-browser-function #'tychoish-browse-url-dispatch)
-(setq browse-url-generic-program "chrome")
-(setq tychoish-browse-url-external-hosts '("github.com"))
-(setq shr-color-visible-luminance-min 80)
-(setq shr-use-colors nil)
-(setq shr-use-fonts nil)
-(setq eww-search-prefix "https://lite.duckduckgo.com/search?q=")
-
-(setq eldoc-minor-mode-string "")
-(setq eldoc-echo-area-use-multiline-p t)
-(setq eldoc-echo-area-prefer-doc-buffer nil)
-(setq eldoc-documentation-strategy #'eldoc-documentation-compose)
-(setq eldoc-echo-area-display-truncation-message nil)
-(setq max-mini-window-height 0.5)
-
-(when (>= emacs-major-version 29)
-  (setq package-install-upgrade-built-in t))
-(setq package-user-dir (concat user-emacs-directory "elpa"))
-(setq load-prefer-newer t)
-
+(setq comment-auto-fill-only-comments t)
+(setq tooltip-resize-echo-area t)
+(setq select-enable-clipboard nil) ;; select-enable-primary already defaults to nil.
+(setq text-mode-ispell-word-completion nil)
 (setq lpr-add-switches "-T ''")
+(setq completion-cycle-threshold 2)
+(setq read-file-name-completion-ignore-case t)
 
-(setq electric-pair-inhibit-predicate #'bootstrap-electric-pair-inhibition)
-
+(setq switch-to-prev-buffer-skip 'visible)
+(setq split-height-threshold 100)
 (setq window-sides-vertical t)
-(setq uniquify-buffer-name-style 'post-forward-angle-brackets)
-(setq find-file-visit-truename t)
+(setq ad-redefinition-action 'accept)
 
-(setq byte-compile-warnings
-      ;; OMIT: free-vars docstrings-wide
-      '(callargs
-        constants
-        docstrings
-        docstrings-non-ascii-quotes
-        docstrings-control-chars
-        empty-body
-        ignored-return-value
-        interactive-only
-        lexical
-        lexical-dynamic
-        make-local
-        mutate-constant
-        noruntime
-        not-unused
-        obsolete
-        redefine
-        suspicious
-        unresolved))
+(setq checkdoc-force-docstrings-flag nil)
+(setq checkdoc-spellcheck-documentation-flag t)
 
-(setq whitespace-style
-      '(face
-        trailing
-        tabs
-        spaces
-        lines
-        newline
-        missing-newline-at-eof
-        empty
-        space-mark
-        tab-mark
-        newline-mark))
+(setq show-paren-delay 0.25)
 
-(setq package-archive-priorities '(("melpa"    . 100)
-				   ("nongnu"   . 50)
-				   ("gnu"      . 25)
-				   ("jcs-elpa" . 10)))
+(make-read-extended-command-for-prefix  "clipboard"
+  :bind-key "C-x x c")
+
+(add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
+(add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
+(add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)
+(add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -520,12 +383,6 @@ consults on every future `browse-url' call."
   "Return t when the current session is or may be a GUI session."
   (when (or (daemonp) (window-system))
     t))
-
-(with-eval-after-load 'eshell
-  (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell"))))
-
-(with-eval-after-load 'transient
-  (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -643,6 +500,8 @@ consults on every future `browse-url' call."
   (setq x-alt-keysym 'meta)
   (setq x-super-keysym 'super))
 
+(setq system-uses-terminfo t)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; silent startup -- avoid printing or using the Messages buffer
@@ -650,21 +509,7 @@ consults on every future `browse-url' call."
 (defun display-startup-echo-area-message ()
   "Called during setup, intentially a noop, which omit the message."  nil)
 
-(defun emacs-repository-version-git (_dir)
-  "Noop definition of function to speed up startup" "")
-
-(defun emacs-repository-get-version (&optional _dir _ext)
-  "Noop definition of function to speed up startup" "")
-
-(defun ad:suppress-message (f &rest arg)
-  (with-silence
-    (apply f arg)))
-
-(when (fboundp 'emacs-repository-branch-git)
-  (advice-add 'emacs-repository-branch-git :around #'ad:suppress-message))
-(when (fboundp 'emacs-repository-version-git)
-  (advice-add 'emacs-repository-version-git :around #'ad:suppress-message))
-
+;; TODO remove these after emacs 31
 (defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
   "Hacky fix to resolve issue with native comp."
   ;; https://emacs.stackexchange.com/questions/82010/why-is-emacs-recompiling-some-packages-on-every-startup
@@ -698,9 +543,6 @@ consults on every future `browse-url' call."
   (with-silence
     (repeat-mode 1)))
 
-(unless (gui-p)
-  (push '(background-color . nil) default-frame-alist))
-
 (add-lazy-init
  :name "<bootstrap> late enable modes"
  :operation 'bootstrap-init-late-enable-modes
@@ -714,7 +556,7 @@ consults on every future `browse-url' call."
 (add-one-shot-hook
  :name "<bootstrap> enable popper"
  :hook '(compilation-mode-hook help-mode-hook special-mode-hook)
- :form (when (fboundp 'popper-mode)
+ :form (when (boundp 'popper-mode)
          (popper-mode +1)))
 
 (add-one-shot-hook
@@ -725,7 +567,7 @@ consults on every future `browse-url' call."
 (add-lazy-init
  :name "<bootstrap> ensure default font"
  :operation 'bootstrap-ensure-default-font
- :delay 0.1)
+ :delay 0.075)
 
 (add-lazy-init
  :name "restore-desktop"
@@ -742,7 +584,10 @@ consults on every future `browse-url' call."
  :form (bootstrap-set-up-ssh-agent)
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
-(add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
+(add-lazy-init
+ :name "native-compile-async"
+ :delay 60
+ :operation #'tychoish-native-compile-all-local)
 
 (defun bootstrap--load-user-file (feat)
   (with-slow-op-timer
@@ -759,26 +604,6 @@ consults on every future `browse-url' call."
                              (intern
                               (file-name-sans-extension
                                (file-name-nondirectory file))))))))
-
-(defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
-  "cache mapping file names to files' mtime to avoid re-importing files")
-
-(defun should-read-abbrev-file-p (path)
-  (or (not (map-contains-key bootstrap-abbrev-files-cache path))
-      (time-less-p (map-elt bootstrap-abbrev-files-cache path)
-                   (file-attribute-modification-time (file-attributes path)))))
-
-(defun bootstrap-load-abbrev-files ()
-  (thread-last  (f-entries (file-name-concat user-emacs-directory "abbrev"))
-                (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")))
-                (seq-filter #'file-exists-p)
-                (seq-filter #'should-read-abbrev-file-p)
-                (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
-                (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
-                                         (file-attribute-modification-time (file-attributes it))))))
-
-  (delight 'abbrev-mode "abb")
-  (setq save-abbrevs t))
 
 (defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))
@@ -812,16 +637,14 @@ consults on every future `browse-url' call."
       (make-directory solo-lock-path t))
     (chmod solo-lock-path #o700)))
 
-(defun bootstrap-set-up-show-whitespace ()
-  (setq-local show-trailing-whitespace t))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; package.el management and elisp tools
+;; elisp tools
 
-(defun jump-to-elisp-help ()
-  (interactive)
-  (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
+(setq package-archive-priorities '(("melpa" . 100)
+                                    ("nongnu" . 50)
+                                    ("gnu" . 25)
+                                    ("jcs-elpa" . 10)))
 
 (defun bootstrap-byte-recompile-emacs-directory ()
   "Recompile all `.el' files in `user-emacs-directory' and its direct subdirectories.
@@ -831,12 +654,12 @@ Returns the list of files that were recompiled."
   (thread-last (cons user-emacs-directory
                      (seq-filter #'file-directory-p
                                  (directory-files user-emacs-directory t "^[^.]")))
-	       (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
-	       (seq-filter #'file-regular-p)
-	       (seq-keep (lambda (f)
-			   (unless (eq 'no-byte-compile
-				       (byte-recompile-file f current-prefix-arg))
-			     f)))))
+               (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
+               (seq-filter #'file-regular-p)
+               (seq-keep (lambda (f)
+                           (unless (eq 'no-byte-compile
+                                       (byte-recompile-file f current-prefix-arg))
+                             f)))))
 
 (defun bootstrap-recompile-vendored-packages ()
   "Recompile all `.el' files in each `bootstrap-vendored-packages' checkout.
@@ -849,36 +672,14 @@ With a prefix argument, force recompilation of every file regardless of
 timestamps. Returns the list of files that were recompiled."
   (interactive)
   (thread-last bootstrap-vendored-packages
-	       (seq-map (lambda (spec) (expand-file-name (nth 1 spec) user-emacs-directory)))
-	       (seq-filter #'file-directory-p)
-	       (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
-	       (seq-filter #'file-regular-p)
-	       (seq-keep (lambda (f)
-			   (unless (eq 'no-byte-compile
-				       (byte-recompile-file f current-prefix-arg))
-			     f)))))
-
-(declare-function package-installed-p "package")
-(declare-function package-desc-p "package")
-
-(autoload 'async-package-do-action "async-package")
-
-(defun async-package-operation (op pkgs)
-  (let* ((ops '(install upgrade 'reinstall))
-	 (valid-packages (seq-filter (lambda (it) (or (symbolp it) (package-desc-p it))) pkgs))
-	 (filename (concat (file-name-concat temporary-file-directory
-			                     (string-join (list
-						           "emacs" sprite-instance-id
-						           "async-package"
-						           (symbol-name op))
-					                  "-")) ".log")))
-    (unless (member op ops)
-      (user-error "%s is not a valid operation %S" op ops))
-
-    (unless valid-packages
-      (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
-
-    (async-package-do-action op valid-packages filename)))
+               (seq-map (lambda (spec) (expand-file-name (nth 1 spec) user-emacs-directory)))
+               (seq-filter #'file-directory-p)
+               (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
+               (seq-filter #'file-regular-p)
+               (seq-keep (lambda (f)
+                           (unless (eq 'no-byte-compile
+                                       (byte-recompile-file f current-prefix-arg))
+                             f)))))
 
 (defun package-install-async (pkgs)
   (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
@@ -946,12 +747,12 @@ or `describe-symbol' as fallback."
   (cond
    (prefix
     (call-interactively #'describe-symbol))
-   ((and (fboundp 'slime-describe-symbol)
-         (fboundp 'slime-connected-p)
+   ((and (boundp 'slime-describe-symbol)
+         (boundp 'slime-connected-p)
          (slime-connected-p))
     (call-interactively #'slime-describe-symbol))
-   ((and (fboundp 'eglot-current-server)
-         (fboundp 'consult-eglot-symbols)
+   ((and (boundp 'eglot-current-server)
+         (boundp 'consult-eglot-symbols)
          (eglot-current-server))
     (consult-eglot-symbols))
    (t
@@ -996,8 +797,6 @@ or `describe-symbol' as fallback."
 (add-hook 'after-make-frame-functions #'frame-enable-xterm-mouse-for-tty)
 (add-hook 'server-after-make-frame-hook #'current-frame-enable-xterm-mouse-for-tty)
 (add-hook 'window-setup-hook #'current-frame-enable-xterm-mouse-for-tty)
-
-(setq system-uses-terminfo t)
 
 ;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
 
@@ -1119,19 +918,17 @@ each buffer, unless NO-ASK is non-nil."
 	(message "killed %d buffers matching '%S'" (length killed) (string-join killed ", "))
       killed)))
 
-(defconst reference-source-paths
-  (append (cons package-user-dir package-directory-list) (list "/usr/share/emacs/.*" "/usr/lib/go/.*" ".*/src/emacs.*/src/.*"))
-  "paths of reference files, typically opened by jump-to-definition")
-
 (defun kill-all-reference-and-source-buffers ()
   "Kill all buffers for files in external (upstream) sources, likely opened
 by jump-to-definition."
   (interactive)
-  (let ((killed (thread-last  reference-source-paths
-		              (seq-map #'force-kill-buffers-matching-path)
-		              (seq-filter 'identity)
-                              (seq-filter #'stringp)
-		              (seq-map #'f-collapse-homedir))))
+  (let ((killed (thread-last
+		  '("/usr/share/emacs/.*" "/usr/lib/go/.*" ".*/src/emacs.*/src/.*")
+		  (append (cons package-user-dir package-directory-list))
+		  (seq-map #'force-kill-buffers-matching-path)
+		  (seq-filter 'identity)
+                  (seq-filter #'stringp)
+		  (seq-map #'f-collapse-homedir))))
     (if (called-interactively-p 'any)
 	(message "killed %s refrence/source buffers [%s]" (length killed) (string-join killed ", "))
       killed)))
@@ -1270,22 +1067,6 @@ leaves the file on disk.  Never prompts when called non-interactively."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; editing -- text editing, experience, and manipulation
-
-(declare-function electric-pair-default-inhibit "elec-pair")
-(declare-function electric-pair-conservative-inhibit "elec-pair")
-
-(defvar electric-pair-inhibition nil)
-(defvar electric-pair-eagerness t)
-
-(defun bootstrap-electric-pair-inhibition (char)
-  (if electric-pair-inhibition
-      nil
-    (if electric-pair-eagerness
-        (electric-pair-default-inhibit char)
-      (electric-pair-conservative-inhibit char))))
-
-(with-eval-after-load 'elec-pair
-  (add-to-list 'electric-pair-pairs '(?< . ?>)))
 
 ;; move-text  -- use arrow keys to move whole
 
@@ -1428,12 +1209,13 @@ leaves the file on disk.  Never prompts when called non-interactively."
   (interactive)
   (insert (format-time-string "%Y-%m-%d")))
 
+(defun jump-to-elisp-help ()
+  (interactive)
+  (apropos-documentation (symbol-name (intern-soft (thing-at-point 'symbol)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; clean kill ring -- "deduplicate kill-ring"
-
-(setq select-enable-primary nil)
-(setq select-enable-clipboard nil)
 
 (defun ad:kill-new-reject-empty (string &optional _replace)
   "Prevent empty STRING from being added to the kill ring."
@@ -1465,8 +1247,6 @@ interactively then remove duplicate items from the `kill-ring'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 
 (defun find-ssh-agent-socket-candidates ()
@@ -1486,63 +1266,6 @@ interactively then remove duplicate items from the `kill-ring'."
 		 (<= 1 (length sockets)))
 	(setq env-value (setenv "SSH_AUTH_SOCK" (car sockets)))))
     env-value))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; stdlib -- configuration of default/included emacs packages
-
-;;; no need for use-package for minimal configurations of packages
-;;; that are included with emacs by default and that alreadye have
-;;; appropriate autoloads.
-
-(add-hook 'text-mode-hook 'bootstrap-set-up-show-whitespace)
-(add-hook 'prog-mode-hook 'bootstrap-set-up-show-whitespace)
-
-(add-hook 'which-key-mode-hook 'which-key-setup-side-window-bottom)
-(add-hook 'abbrev-mode-hook 'bootstrap-load-abbrev-files)
-
-(add-to-list 'auto-mode-alist '("\\.el\\'" . emacs-lisp-mode))
-
-(add-to-list 'auto-mode-alist '("\\`[Mm]akefile" . makefile-mode))
-(add-to-list 'auto-mode-alist '("[Mm]akefile\\'" . makefile-mode))
-(add-to-list 'auto-mode-alist '("\\.mk\\'" . makefile-mode))
-
-(add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.timer\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.target\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.mount\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.automount\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.slice\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.socket\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.conf\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
-(add-to-list 'auto-mode-alist '("\\.rst\\'" . rst-mode))
-
-(add-to-list 'auto-mode-alist '("\\.zsh\\'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.zshrc\\'" . sh-mode))
-(add-to-list 'auto-mode-alist '("\\.bash_profile\\'" . sh-mode))
-(add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
-
-(with-eval-after-load "em-cmpl"
-  (add-hook 'eshell-mode 'eshell-cmpl-initialize))
-
-(with-eval-after-load 'comint
-  (bind-keys
-   :map comint-mode-map
-   ("M-n" . comint-next-input)
-   ("M-p" . comint-previous-input)
-   ([down] . comint-next-matching-input-from-input)
-   ([up] . comint-previous-matching-input-from-input)))
-
-(with-eval-after-load 'dabbrev
-  (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
-  (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'archive-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'image-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
 (create-toggle-functions slow-op-reporting)
 (create-toggle-functions electric-pair-inhibition)
@@ -1607,6 +1330,7 @@ Reports the number of files queued and the time taken to dispatch them.
 Runs once on a 60-second idle timer after startup; also callable interactively.
 Compilation itself is async — Emacs stays responsive while .eln files are built."
   (interactive)
+  (when (string-match "NATIVE_COMP" system-configuration-features)
   (if (not (fboundp 'native-compile-async))
       (message "Native compilation not available in this build")
     (let* ((lisp-dir (expand-file-name "lisp" user-emacs-directory))
@@ -1627,10 +1351,7 @@ Compilation itself is async — Emacs stays responsive while .eln files are buil
             (native-compile-prune-cache))
         (error (message "native-compile-prune-cache error: %s"
                         (error-message-string err))))
-      (message "native-compile-all-local: queued %d .el files" n))))
-
-(when (string-match "NATIVE_COMP" system-configuration-features)
-  (run-with-idle-timer 60 nil #'tychoish-native-compile-all-local))
+      (message "native-compile-all-local: queued %d .el files" n)))))
 
 (provide 'bootstrap)
 ;;; bootstrap.el ends here

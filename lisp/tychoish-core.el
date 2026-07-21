@@ -26,6 +26,8 @@
   :ensure t
   :commands (delight)
   :config
+  (delight 'abbrev-mode "abb")
+
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
   (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
   (delight 'fundamental-mode "fun" 'simple)
@@ -61,7 +63,27 @@
 	     dired-async-mode)
   :init
   (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
-  (add-hook 'dired-mode-hook 'dired-async-mode))
+  (add-hook 'dired-mode-hook 'dired-async-mode)
+
+  (declare-function package-desc-p "package")
+  (autoload 'async-package-do-action "async-package")
+
+  (defun async-package-operation (op pkgs)
+    (let* ((ops '(install upgrade 'reinstall))
+           (valid-packages (seq-filter (lambda (it) (or (symbolp it) (package-desc-p it))) pkgs))
+           (filename (concat (file-name-concat temporary-file-directory
+                                                (string-join (list
+                                                               "emacs" sprite-instance-id
+                                                               "async-package"
+                                                               (symbol-name op))
+                                                              "-")) ".log")))
+      (unless (member op ops)
+        (user-error "%s is not a valid operation %S" op ops))
+
+      (unless valid-packages
+        (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
+
+      (async-package-do-action op valid-packages filename))))
 
 (use-package package-build
   :ensure t
@@ -167,14 +189,13 @@
    :hook after-first-frame-created
    :form (bootstrap-ensure-light-theme)
    :idle-timer 0.01)
+
   :config
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
 	'((border-mode-line-active bg-mode-line-active)
 	  (border-mode-line-inactive bg-mode-line-inactive)
 	  (message-separator bg-main))))
-
-
 
 (use-package nerd-icons
   :ensure t
@@ -214,6 +235,62 @@
 			   :keymap tychoish/theme-map
 			   :key "s"))
 
+(use-package which-key
+  :ensure nil
+  :defer t
+  :hook (which-key-mode . which-key-setup-side-window-bottom)
+  :init
+  (defun bootstrap--which-key-add-replacement (map key new-text)
+    "Register a which-key annotation for KEY with NEW-TEXT, scoped to MAP when supported.
+Falls back to `which-key-add-key-based-replacements' on Emacs versions that lack
+the keymap-scoped variant."
+    (if (and map (fboundp 'which-key-add-keymap-based-replacements))
+	(which-key-add-keymap-based-replacements map key new-text)
+      (which-key-add-key-based-replacements key new-text)))
+
+  (cl-defmacro which-key-customize (new-text &key map key form)
+    "Register a which-key annotation, deferred until which-key is loaded.
+
+NEW-TEXT is the replacement label (a string, or a cons (LABEL . COMMAND)
+for keymap-based replacements that also bind a prefix command).
+:KEY  — key sequence string; required unless :FORM is used.
+:MAP  — keymap (symbol or quoted symbol); uses the keymap-scoped API when
+        available, falling back to the global-key variant otherwise.
+:FORM — arbitrary expression; mutually exclusive with NEW-TEXT, :KEY, and :MAP.
+
+All constraints are validated at macro-expansion time."
+    (declare (indent 1))
+    (cond
+     (form
+      (when key
+	(user-error "which-key-customize: :form is mutually exclusive with :key"))
+      (when map
+	(user-error "which-key-customize: :form is mutually exclusive with :map"))
+      (when new-text
+	(user-error "which-key-customize: :form is mutually exclusive with new-text")))
+     (t
+      (unless new-text
+	(user-error "which-key-customize: new-text is required when :form is not provided"))
+      (unless key
+	(user-error "which-key-customize: :key is required when :form is not provided"))
+      (unless (stringp key)
+	(user-error "which-key-customize: :key must be a string literal, got: %S" key))))
+    (cond
+     (form `(with-eval-after-load 'which-key ,form))
+     (map `(with-eval-after-load 'which-key
+             (bootstrap--which-key-add-replacement ,map ,key ,new-text)))
+     (t `(with-eval-after-load 'which-key
+           (which-key-add-key-based-replacements ,key ,new-text)))))
+  :config
+  (setq which-key-idle-delay .25)
+  (setq which-key-idle-secondary-delay 0.125)
+  (setq which-key-lighter "")
+
+  (which-key-customize
+      '("project-grep" . tychoish/ecclectic-grep-project-map)
+    :map tychoish/ecclectic-grep-map
+    :key "p"))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Project / Repository Tools
@@ -233,9 +310,7 @@
 	 (text-mode . projectile-mode))
   :init
   (which-key-customize "projectile" :key "C-c p")
-  ;; previously added projectile-mode to the after-init-hook (probably
-  ;; to get keybindings to load correctly,) appears unnecessary, but
-  ;; wanted to leave note here.
+
   (defun tychoish/save-buffers-in-project-directory (dir)
     (let ((default-directory (expand-file-name dir)))
       (alert (projectile-save-project-buffers)
@@ -281,6 +356,16 @@
     "Disable `projectile-mode' in all live buffers."
     (interactive)
     (seq-do #'projectile-mode-disable-for-buffer (buffer-list))))
+
+(use-package dired
+  :ensure nil
+  :defer t
+  :init
+  (put 'dired-find-alternate-file 'disabled nil)
+  :config
+  (bind-keys
+   :map dired-mode-map
+   ("w" . wdired-change-to-wdired-mode)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -574,6 +659,16 @@
   :ensure t
   :after yasnippet
   :defer t)
+
+(use-package dabbrev
+  :ensure nil
+  :defer t
+  :config
+  (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
+  (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
 (use-package vertico
   :ensure t
@@ -1725,20 +1820,57 @@ return until the minibuffer session ends."
              flyspell-correct-previous
              flyspell-correct-wrapper))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; modes for programming languages other formats
+(use-package whitespace
+  :ensure nil
+  :defer t
+  :init
+  (defun bootstrap-set-up-show-whitespace ()
+    (setq-local show-trailing-whitespace t))
+  :config
+  (setq whitespace-style
+        '(face
+          trailing
+          tabs
+          spaces
+          lines
+          newline
+          missing-newline-at-eof
+          empty
+          space-mark
+          tab-mark
+          newline-mark)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; programming major-modes
+
+(use-package make-mode
+  :ensure nil
+  :defer t
+  :mode (("[Mm]akefile\\'" . makefile-mode)
+         ("\\.mk\\'" . makefile-mode))
+  :config
+  (setq makefile-electric-keys t))
+
+(use-package conf-mode
+  :ensure nil
+  :defer t
+  :mode (("\\.service\\'" . conf-unix-mode)
+         ("\\.timer\\'" . conf-unix-mode)
+         ("\\.target\\'" . conf-unix-mode)
+         ("\\.mount\\'" . conf-unix-mode)
+         ("\\.automount\\'" . conf-unix-mode)
+         ("\\.slice\\'" . conf-unix-mode)
+         ("\\.socket\\'" . conf-unix-mode)
+         ("\\.path\\'" . conf-unix-mode)
+         ("\\.conf\\'" . conf-unix-mode)))
 
 (use-package yaml-mode
   :ensure t
   :mode (("\\.yaml$" . yaml-mode)
 	 ("\\.yml$" . yaml-mode))
   :init
-  ;; Emacs's own built-in `\.ya?ml\'' → `yaml-ts-mode' entry in
+  ;; Emacs's own built-in `\.yaml\'' → `yaml-ts-mode' entry in
   ;; `auto-mode-alist' sits ahead of the :mode entries above, so it wins
   ;; the match regardless of load order.  Remapping `yaml-ts-mode' to
   ;; `yaml-mode' here intercepts at mode-selection time instead of
@@ -2233,6 +2365,39 @@ return until the minibuffer session ends."
     (flycheck-remove-next-checker 'markdown-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'org-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
+
+(use-package warnings
+  :ensure nil
+  :defer t
+  :init
+  (put 'downcase-region 'disabled nil)
+  (put 'narrow-to-region 'disabled nil)
+  (put 'upcase-region 'disabled nil)
+  (put 'list-timers 'disabled nil)
+  (put 'list-threads 'disabled nil)
+
+  (setq byte-compile-warnings
+        ;; OMIT: free-vars docstrings-wide
+        '(callargs
+          constants
+          docstrings
+          docstrings-non-ascii-quotes
+          docstrings-control-chars
+          empty-body
+          ignored-return-value
+          interactive-only
+          lexical
+          lexical-dynamic
+          make-local
+          mutate-constant
+          noruntime
+          not-unused
+          obsolete
+          redefine
+          suspicious
+          unresolved))
+  :config
+  (add-to-list 'warning-suppress-log-types '(frameset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2754,6 +2919,25 @@ Useful after changing `eglot-workspace-configuration' or
   (make-read-extended-command-for-prefix "eat"
     :bind-map tychoish/shell-eat-map
     :bind-key "m"))
+
+(use-package eshell
+  :ensure nil
+  :defer t
+  :config
+  (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell")))
+  (with-eval-after-load "em-cmpl"
+    (add-hook 'eshell-mode 'eshell-cmpl-initialize)))
+
+(use-package comint
+  :ensure nil
+  :defer t
+  :config
+  (bind-keys
+   :map comint-mode-map
+   ("M-n" . comint-next-input)
+   ("M-p" . comint-previous-input)
+   ([down] . comint-next-matching-input-from-input)
+   ([up] . comint-previous-matching-input-from-input)))
 
 (use-package shell-maker
   :ensure t

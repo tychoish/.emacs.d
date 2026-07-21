@@ -25,6 +25,8 @@
 
 ;; Autoloads and forward declarations
 
+(add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
+
 (autoload 'org-agenda-files "org")
 (autoload 'org-save-all-org-buffers "org")
 (autoload 'org-store-link "ol")

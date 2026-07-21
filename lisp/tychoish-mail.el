@@ -37,6 +37,8 @@
             mu4e-view-mode-hook
             mu4e-compose-mode-hook)))
 
+(add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
+
 (with-eval-after-load 'message
   (bind-key "M-q" 'ignore message-mode-map)
   (setq-default message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
