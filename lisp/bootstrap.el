@@ -653,9 +653,9 @@ Override in user/*.el to customize per machine or instance.")
 ;; elisp tools
 
 (setq package-archive-priorities '(("melpa" . 100)
-                                    ("nongnu" . 50)
-                                    ("gnu" . 25)
-                                    ("jcs-elpa" . 10)))
+                                   ("nongnu" . 50)
+                                   ("gnu" . 25)
+                                   ("jcs-elpa" . 10)))
 
 (defun bootstrap-byte-recompile-emacs-directory ()
   "Recompile all `.el' files in `user-emacs-directory' and its direct subdirectories.
