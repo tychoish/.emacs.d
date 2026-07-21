@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (eval-when-compile
-  (require 'xtdlib))
+  (require 'xtd-macro))
 
 (require 'map)
 (require 'mu4e-autoloads nil t)

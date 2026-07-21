@@ -10,8 +10,7 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'subr-x)
-  (require 'xtdlib))
+  (require 'subr-x))
 
 (declare-function denote-org-capture "denote")
 (declare-function denote-last-path "denote")

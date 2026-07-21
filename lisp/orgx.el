@@ -15,8 +15,7 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'subr-x)
-  (require 'xtdlib))
+  (require 'subr-x))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -217,6 +216,28 @@
   (setq org-agenda-start-on-weekday nil))
 
 (setq org-archive-default-command #'org-archive-to-archive-sibling)
+
+(defun bootstrap-set-notes-directory (&optional path)
+  (when path
+    (setq local-notes-directory (expand-file-name path)))
+
+  (unless local-notes-directory
+    (error "must have defined the `local-notes-directory'"))
+
+  (setq org-directory (file-name-concat local-notes-directory "org"))
+  (setq org-agenda-files (thread-last (list org-directory user-org-directories)
+                                      (flatten-tree)
+                                      (seq-map #'expand-file-name)
+			              (seq-filter 'identity)
+			              (seq-map #'string-trim)
+			              (seq-remove #'string-empty-p)
+                                      (seq-uniq)))
+  (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
+  (setq org-default-notes-file (file-name-concat org-directory "records.org"))
+  (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
+  (setq deft-directory (file-name-concat local-notes-directory "deft"))
+  (setq denote-directory (file-name-concat local-notes-directory "denote"))
+  local-notes-directory)
 
 ;; Startup hooks and advice are registered in the `use-package orgx' :init
 ;; block in `tychoish-core.el' so they can trigger this file's deferred load.

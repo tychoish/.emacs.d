@@ -44,7 +44,7 @@ The configuration is split into:
 | `lisp/bootstrap.el`                 | Keybindings, global `setq` settings, hooks, startup functions. Loaded before `tychoish-core`. |
 | `lisp/tychoish-core.el`             | All `use-package` forms. Organized by functional area with section headers.                   |
 | `lisp/tychoish-mail.el`             | Mu4e and mail account configuration.                                                          |
-| `lisp/tychoish-org.el`              | Org-mode, org-roam, capture templates.                                                        |
+| `lisp/orgx.el`                      | Org-mode, org-roam, capture templates.                                                        |
 | `lisp/xtdlib.el`                    | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
 | `lisp/builder.el`                   | Compilation buffer system.                                                                    |
 | `lisp/annotated-completing-read.el` | annotated-completing-read (ACR) completion utility.                                           |
@@ -89,7 +89,7 @@ early-init.el
        ├─ bootstrap (keybindings, settings, hooks)
        ├─ tychoish-core (use-package forms)
        ├─ tychoish-mail
-       ├─ tychoish-org
+       ├─ orgx
        └─ user/*.el
 ```
 

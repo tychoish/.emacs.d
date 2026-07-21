@@ -140,23 +140,23 @@ immediately, before the dependency's own `use-package :ensure t' form
             (package-install dep)))
         deps))))
 
- (defun bootstrap-package (package path url)
-   "Ensure PACKAGE is installed and activated.
+ (with-file-name-handler-disabled
+  (defun bootstrap-package (package path url)
+    "Ensure PACKAGE is installed and activated.
 Registers the local checkout at PATH relative to `user-emacs-directory',
 and falls back to `package-vc-install' from URL when PATH does not exist
 locally.."
-   (with-slow-op-timer (format "<init> [external] %s" package)
-     (let ((pkg-dir (expand-file-name (symbol-name package) package-user-dir)))
-       (unless (or (package-installed-p package) (file-exists-p pkg-dir))
-	 (let ((checkout (expand-file-name path user-emacs-directory)))
-           (if (file-directory-p checkout)
-               (progn
-                 (bootstrap-ensure-melpa-dependencies
-                  (expand-file-name (format "%s.el" package) checkout))
-                 (package-vc-install-from-checkout checkout (symbol-name package)))
-             (package-vc-install `(,package :url ,url))))))))
+    (with-slow-op-timer (format "<init> [external] %s" package)
+      (let ((pkg-dir (expand-file-name (symbol-name package) package-user-dir)))
+	(unless (or (package-installed-p package) (file-exists-p pkg-dir))
+	  (let ((checkout (expand-file-name path user-emacs-directory)))
+            (if (file-directory-p checkout)
+		(progn
+                  (bootstrap-ensure-melpa-dependencies
+                   (expand-file-name (format "%s.el" package) checkout))
+                  (package-vc-install-from-checkout checkout (symbol-name package)))
+              (package-vc-install `(,package :url ,url))))))))
 
- (with-file-name-handler-disabled
   (with-slow-op-timer "<init> package"
     (setq package-quickstart t)
     ;; `sprite-state-path' isn't available yet, so this is a bit of a hack
@@ -172,7 +172,10 @@ locally.."
             ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/"))))
 
   (with-slow-op-timer "<init> [external]"
-    (mapc (lambda (spec) (apply #'bootstrap-package spec)) bootstrap-vendored-packages))
+    (mapc (lambda (spec)
+	      (unless (package-installed-p (car spec))
+		(apply #'bootstrap-package spec)))
+	    bootstrap-vendored-packages))
 
   (with-slow-op-timer "<init> [local]"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))

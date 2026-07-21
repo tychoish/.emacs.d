@@ -15,6 +15,9 @@
 (declare-function approximate-project-root "xtd-project")
 (declare-function approximate-project-name "xtd-project")
 
+(eval-when-compile
+  (require 'xtd-macro))
+
 (use-package cond-let
   :ensure t
   :defer t)
@@ -316,7 +319,7 @@
   (which-key-customize '("rg-grep" . tychoish/ecclectic-rg-map)
     :map tychoish/ecclectic-grep-map :key "r")
   :config
-  (setenv "RIPGREP_CONFIG_PATH" (f-expand "~/.ripgreprc"))
+  (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
 
   (cl-defun consult-rg (&key directory initial context)
@@ -555,7 +558,7 @@
   :hook ((text-mode prog-mode) . yas-minor-mode)
   :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
   :config
-  (add-to-list 'load-path (f-join user-emacs-directory "snippets"))
+  (add-to-list 'load-path (file-name-concat user-emacs-directory "snippets"))
   (which-key-customize "yasnippet" :key "C-c &"))
 
 (use-package yasnippet-capf
@@ -696,9 +699,7 @@
 	     ([backtab] . corfu-insert-separator)
 	     ("C-j" . corfu-quick-jump)
 	     ("M-d" . corfu-popupinfo-toggle)
-	     ("C-i" . corfu-popupinfo-toggle)
 	     ("M-m" . corfu-move-to-minibuffer)
-	     ("C-m" . corfu-move-to-minibuffer)
 	     ("M-S-m" . corfu-move-to-minibuffer))
 
   (setq corfu-cycle t)
@@ -731,7 +732,7 @@
   :commands (popon-kill popon-create popon-x-y-at-posn))
 
 (use-package corfu-terminal
-  :load-path "external/"
+  :ensure t
   :commands (corfu-terminal-mode)
   :init
   ;; `corfu-mode-hook' fires on both enable and disable; bare
@@ -1568,7 +1569,8 @@ return until the minibuffer session ends."
 	     orgx-minor-mode-turn-on
 	     orgx-agenda-minor-mode-turn-on
 	     orgx--install-auxiliary-packages
-	     ad:org-agenda--open-files)
+	     ad:org-agenda--open-files
+	     bootstrap-set-notes-directory)
   :init
   (bind-keys
    :map orgx-global-map ;; "C-c o"
@@ -1827,7 +1829,7 @@ return until the minibuffer session ends."
     (unless gopath
       (setq gopath (setenv "GOPATH" (expand-file-name "~/go"))))
 
-    (setq local-go-bin (f-expand (concat gopath "/bin")))
+    (setq local-go-bin (expand-file-name (concat gopath "/bin")))
     (add-to-list 'exec-path local-go-bin)
 
     (unless (string-search local-go-bin current-path)
@@ -2817,7 +2819,7 @@ Useful after changing `eglot-workspace-configuration' or
 
   (defun agent-shell-dot-subdir (subdir)
     "Resolve SUBDIR under the per-instance agent-shell state path."
-    (f-join (sprite-state-path "agent-shell") subdir))
+    (file-name-concat (sprite-state-path "agent-shell") subdir))
 
   (defun agent-shell-corfu-setup ()
     "Configure corfu auto-completion for agent-shell buffers."

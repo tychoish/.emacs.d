@@ -1,4 +1,4 @@
-;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t -*-
+;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; no-byte-compile: t -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -35,10 +35,10 @@
 
 (use-package f
   :ensure t
-  :defer t)
+  :commands (f-glob f-collapse-homedir f-entries f-ancestor-of-p))
 
 (eval-when-compile
-  (require 'xtdlib))
+  (require 'xtd-macro))
 
 (declare-function which-key-add-key-based-replacements "which-key")
 
@@ -324,22 +324,25 @@ All constraints are validated at macro-expansion time."
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
-(put 'dired-find-alternate-file 'disabled nil)
 (put 'list-timers 'disabled nil)
 (put 'list-threads 'disabled nil)
 
-(with-eval-after-load 'dired
+(use-package dired
+  :defer t
+  :init
+  (put 'dired-find-alternate-file 'disabled nil)
+  :config
   (bind-keys
    :map dired-mode-map
    ("w" . wdired-change-to-wdired-mode)))
 
-(with-eval-after-load "warnings"
+(use-package warnings
+  :defer t
+  :config
   (add-to-list 'warning-suppress-log-types '(frameset)))
 
 (setq ad-redefinition-action 'accept)
-
 (setq switch-to-prev-buffer-skip 'visible)
-
 (setq ring-bell-function #'ignore)
 (setq font-lock-support-mode 'jit-lock-mode)
 (setq jit-lock-stealth-time nil)
@@ -967,6 +970,8 @@ or `describe-symbol' as fallback."
 (defun frame-unset-background-for-tty (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
   (unless (display-graphic-p frame)
+    (set-face-background 'default "undefined" frame)
+    (set-face-background 'default "undefined" frame)
     (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
 
 (defun current-frame-unset-background-for-tty ()
@@ -991,6 +996,8 @@ or `describe-symbol' as fallback."
 (add-hook 'after-make-frame-functions #'frame-enable-xterm-mouse-for-tty)
 (add-hook 'server-after-make-frame-hook #'current-frame-enable-xterm-mouse-for-tty)
 (add-hook 'window-setup-hook #'current-frame-enable-xterm-mouse-for-tty)
+
+(setq system-uses-terminfo t)
 
 ;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
 
@@ -1421,70 +1428,6 @@ leaves the file on disk.  Never prompts when called non-interactively."
   (interactive)
   (insert (format-time-string "%Y-%m-%d")))
 
-(defvar bootstrap-blog-path (expand-file-name "~/blog")
-  "Path to the blog's project directory.")
-
-(defvar bootstrap-blog-extension ".md"
-  "File extension for the blog files.")
-
-(defun bootstrap-blog-create-post (title)
-  "Create a new file for a post of with the specified TITLE."
-  (interactive "sPost Title: ")
-  (let* ((slug (f-make-slug title))
-         (draft-fn (file-name-concat bootstrap-blog-path (concat slug "-" bootstrap-blog-extension))))
-    (if (file-exists-p draft-fn)
-        (find-file draft-fn)
-      (kill-new title)
-      (find-file draft-fn)
-      (yas-expand-snippet
-       (yas-lookup-snippet "hugo")))
-    (message "working on post: %s" draft-fn)))
-
-(defun bootstrap-create-note-file (title &optional &key path)
-  "Create a new file for a post of with the specified TITLE."
-  (interactive "sName: ")
-  (let* ((slug (f-make-slug title))
-         (datetime (format-time-string "%Y-%02m-%02d"))
-         (draft-fn (file-name-concat (or path
-			                 (annotated-completing-read-directory))
-			             (concat datetime "." slug "." bootstrap-blog-extension))))
-    (if (file-exists-p draft-fn)
-        (find-file draft-fn)
-      (find-file draft-fn)
-      (insert (concat "# " title))
-      (goto-char (point-max))
-      (whitespace-cleanup)
-      (insert "\n"))
-    (message "new note: %s" draft-fn)))
-
-(defun bootstrap-blog-publish-post ()
-  "Move the blog post in the current buffer to the publication location.
-Does nothing if the current post is not in the drafts folder."
-  (interactive)
-  (let* ((publish-directory (file-name-concat bootstrap-blog-path "content" "post"))
-         (original-file-name (buffer-file-name (current-buffer)))
-         (published-file-name (file-name-concat publish-directory (file-name-nondirectory original-file-name)))
-         (current-point (point)))
-    (cond
-     ((not (equal (file-name-extension original-file-name t) bootstrap-blog-extension))
-      (message "post %s has incorrect extension" original-file-name))
-     ((buffer-modified-p)
-      (message "file %s is modified. please save before publishing" original-file-name))
-     ((file-exists-p published-file-name)
-      (message "published file exists with same name. not publishing"))
-     (t
-      (message "publishing: %s" published-file-name)
-      (rename-file original-file-name published-file-name)
-      (kill-buffer nil)
-      (find-file published-file-name)
-      (set-window-point (selected-window) current-point)
-      (message "published %s to %s" original-file-name publish-directory)))))
-
-(defun bootstrap-blog-open-drafts-dired ()
-  "Open a dired buffer for the drafts folder."
-  (interactive)
-  (find-file (expand-file-name bootstrap-blog-path)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; clean kill ring -- "deduplicate kill-ring"
@@ -1522,38 +1465,6 @@ interactively then remove duplicate items from the `kill-ring'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; macros -- configuration and setup
-
-(cl-defmacro bootstrap-define-project-notes (&key project path)
-  (let ((symbol (intern (format "bootstrap-create-%s-note" project)))
-	(path (expand-file-name path)))
-    `(defun ,symbol (name)
-       ,(format "Create a date prefixed note file in the %s project in %s." project path)
-       (interactive "sName: ")
-       (bootstrap-create-note-file name :path ,path))))
-
-(defun bootstrap-set-notes-directory (&optional path)
-  (when path
-    (setq local-notes-directory (expand-file-name path)))
-
-  (unless local-notes-directory
-    (error "must have defined the `local-notes-directory'"))
-
-  (setq org-directory (file-name-concat local-notes-directory "org"))
-  (setq org-agenda-files (thread-last (list org-directory user-org-directories)
-                                      (flatten-tree)
-                                      (seq-map #'expand-file-name)
-			              (seq-filter 'identity)
-			              (seq-map #'string-trim)
-			              (seq-remove #'string-empty-p)
-                                      (seq-uniq)))
-  (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
-  (setq org-default-notes-file (file-name-concat org-directory "records.org"))
-  (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
-  (setq deft-directory (file-name-concat local-notes-directory "deft"))
-  (setq denote-directory (file-name-concat local-notes-directory "denote"))
-  local-notes-directory)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
@@ -1563,7 +1474,7 @@ interactively then remove duplicate items from the `kill-ring'."
                (append (sort (copy-sequence (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))) #'string-lessp))
                (seq-uniq)
                (seq-remove #'null)
-               (seq-filter #'f-writable?)
+               (seq-filter #'file-writable-p)
                (nreverse)))
 
 (defun bootstrap-set-up-ssh-agent ()

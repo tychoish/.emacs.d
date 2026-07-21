@@ -40,7 +40,10 @@
 (require 'subr-x)
 (require 'map)
 
-(eval-when-compile (require 'xtdlib))
+(eval-when-compile
+  (require 'xtd-macro))
+(require 'xtd-project)
+(require 'xtd-s)
 (require 'annotated-completing-read)
 (require 'eglot-test-at-point)
 
