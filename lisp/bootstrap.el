@@ -98,175 +98,151 @@ Override in user/*.el to customize per machine or instance.")
  ("M-/" . dabbrev-completion)
  ("C-M-/" . dabbrev-expand)
  ("M-<up>" . move-text-up)
- ("M-<down>" . move-text-down)
- ;; top level C-c <> maps
- :prefix "C-c t"
- :prefix-map tychoish/core-map
- ("w" . toggle-local-whitespace-cleanup)
- ("s" . whitespace-cleanup)
- ("k" . execute-extended-clipboard-command)
- ("p" . toggle-electric-pair-inhibition)
- ("e" . toggle-electric-pair-eagerness)
- :prefix "C-c f"
- :prefix-map tychoish/display-map
- ("=" . text-scale-increase)
- ("-" . text-scale-decrease)
- ("0" . text-scale-reset)
- ("h" . auto-fill-mode)
- ("s" . visual-line-mode)
- :prefix "C-c k"
- :prefix-map tychoish/kill-map
- ("s" . backward-kill-sentence)
- ("p" . backward-kill-paragraph)
- ("f" . backward-kill-sexp)
- ("d" . delete-region)
- ("w" . delete-trailing-whitespace)
- :prefix "C-c w"
- :prefix-map tychoish/web-browser-map ;; C-c w
- ("d" . browse-url-generic)
- ("e" . browse-url)
- ("f" . browse-url-firefox)
- ("c" . browse-url-chrome)
- ("g" . eww-search-words)
- ("a" . tychoish-browse-url-add-external-host)
- :prefix "C-c g"
- :prefix-map tychoish/ecclectic-grep-map ;;  "C-c g"
- ("o" . occur)
- ("g" . grep)
- :prefix "C-c ."
- :prefix-map tychoish/completion-map
- ("TAB" . completion-at-point)
- ("." . completion-at-point)
- ("/" . dabbrev-completion)
- ("p" . completion-at-point)
- ("f" . bootstrap-completion-select-flavor)
- :prefix "C-c l"
- :prefix-map tychoish/ide-map
- ("m" . imenu)
- ("c" . xref-find-references)
- ("d" . xref-find-definitions)
- ("p" . xref-go-back)
- ("n" . xref-go-forward)
- ("o" . xref-find-definitions-other-window)
- :prefix "C-c h"
- :prefix-map tychoish/docs-map
- ("s" . tychoish-describe-symbol-dwim)
- ("v" . describe-variable)
- ("q" . kill-eldoc-and-help-buffers)
- ("j" . jump-to-elisp-help)
- ("e" . eldoc)
- ("b" . eldoc-doc-buffer)
- :prefix "C-x C-b"
- :prefix-map tychoish/buffer-control-map
- ("k" . kill-this-buffer)
- :prefix "C-c s"
- :prefix-map tychoish/shell-map
- ("m" . eshell)
- :prefix "C-c r"
- :prefix-map tychoish/robot-map
- ("" . nil)
- :prefix "C-x g"
- :prefix-map tychoish/magit-map
- ("" . nil)
- :prefix "C-c q"
- :prefix-map tychoish/anzu-map
- ("" . nil)
- :prefix "C-c C-;"
- :prefix-map tychoish/consult-mode-map
- ("" . nil)
- :prefix "C-c d"
- :prefix-map tychoish/denote-map
- ("" . nil)
- :prefix "C-x d"
- :prefix-map tychoish/docker-map
- ("" . nil)
- :prefix "C-c o"
- :prefix-map orgx-global-map
- ("" . nil)
- :prefix "C-c m"
- :prefix-map tychoish/mail-map
- ("" . nil))
+ ("M-<down>" . move-text-down))
 
-(bind-keys
- ;; these are all nested keymaps:
- :map tychoish/core-map ;; "C-c t"
- :prefix "b"
- :prefix-map tychoish/blogging-map
- ("m" . bootstrap-insert-date)
- ("p" . bootstrap-blog-publish-post)
- ("n" . bootstrap-blog-create-post)
- ("d" . bootstrap-blog-open-drafts-dired)
- :map tychoish/core-map ;; "C-c t"
- :prefix "t"
- :prefix-map tychoish/theme-map
- ("r" . disable-all-themes) ;; reset
- ("d" . bootstrap-load-dark-theme)
- ("l" . bootstrap-load-light-theme)
- :map minibuffer-local-map
- ("C-g" . bootstrap-super-abort-minibuffers)
- ("C-l" . backward-kill-word)
- :map tychoish/display-map ;; "C-c f"
- :prefix "o"
- :prefix-map tychoish/display-opacity-map
- ("=" . opacity-increase)
- ("-" . opacity-decrease)
- ("0" . opacity-reset)
- :map tychoish/ecclectic-grep-map
- :prefix "p"
- :prefix-map tychoish/ecclectic-grep-project-map ;; "C-c g p"
- ("f" . find-grep)
- :map tychoish/ecclectic-grep-map ;; "C-c g"
- :prefix "r"
- :prefix-map tychoish/ecclectic-rg-map ;; "C-c g r"
- ("" . nil)
- :map tychoish/ecclectic-grep-map ;; "C-c g"
- :prefix "s"
- :prefix-map tychoish/consult-search-map ;; "C-c g s"
- ("" . nil)
- :map tychoish/magit-map
- :prefix "m"
- :prefix-map tychoish/smerge-map
- ("" . nil)
- :map tychoish/denote-map
- :prefix "s"
- :prefix-map tychoish/denote-sequence-map
- ("" . nil)
- :map tychoish/denote-map
- :prefix "o"
- :prefix-map tychoish/denote-org-map
- ("" . nil)
- :map tychoish/denote-map
- :prefix "e"
- :prefix-map tychoish/denote-explore-map
- ("" . nil)
- :map tychoish/denote-map
- :prefix "c"
- :prefix-map tychoish/denote-review-map
- ("" . nil)
- :map orgx-global-map ;; "C-c o"
- :prefix "l"
- :prefix-map orgx-link-map
- ("" . nil)
- :map tychoish/ide-map ;; "C-c l"
- :prefix "l"
- :prefix-map tychoish/eglot-global-map
- ("" . nil)
- :map tychoish/robot-map ;; "C-c r"
- :prefix "g"
- :prefix-map tychoish/robot-gptel-map
- ("" . nil)
- :map tychoish/robot-gptel-map ;; "C-c r g"
- :prefix "m"
- :prefix-map tychoish/robot-gptel-set-default-model-map
- ("" . nil)
- :map tychoish/robot-map ;; "C-c r"
- :prefix "s"
- :prefix-map tychoish/robot-agent-shell-map
- ("" . nil)
- :map tychoish/shell-map  ;; "C-c s"
- :prefix "e"
- :prefix-map tychoish/shell-eat-map
- ("" . nil))
+;; top level C-c <> maps
+(defvar-keymap tychoish/core-map  ;; "C-c t"
+  "w" #'toggle-local-whitespace-cleanup
+  "s" #'whitespace-cleanup
+  "k" #'execute-extended-clipboard-command
+  "p" #'toggle-electric-pair-inhibition
+  "e" #'toggle-electric-pair-eagerness)
+
+(defvar-keymap tychoish/display-map ;; "C-c f"
+  "=" #'text-scale-increase
+  "-" #'text-scale-decrease
+  "0" #'text-scale-reset
+  "h" #'auto-fill-mode
+  "s" #'visual-line-mode)
+
+(defvar-keymap tychoish/kill-map ;; "C-c k"
+  "s" #'backward-kill-sentence
+  "p" #'backward-kill-paragraph
+  "f" #'backward-kill-sexp
+  "d" #'delete-region
+  "w" #'delete-trailing-whitespace)
+
+(defvar-keymap tychoish/web-browser-map ;; "C-c w"
+  "d" #'browse-url-generic
+  "e" #'browse-url
+  "f" #'browse-url-firefox
+  "c" #'browse-url-chrome
+  "g" #'eww-search-words
+  "a" #'tychoish-browse-url-add-external-host)
+
+(defvar-keymap tychoish/ecclectic-grep-map ;; "C-c g"
+  "o" #'occur
+  "g" #'grep)
+
+(defvar-keymap tychoish/completion-map ;; "C-c ."
+  "TAB" #'completion-at-point
+  "." #'completion-at-point
+  "/" #'dabbrev-completion
+  "p" #'completion-at-point
+  "f" #'bootstrap-completion-select-flavor)
+
+(defvar-keymap tychoish/ide-map ;; "C-c l"
+  "m" #'imenu
+  "c" #'xref-find-references
+  "d" #'xref-find-definitions
+  "p" #'xref-go-back
+  "n" #'xref-go-forward
+  "o" #'xref-find-definitions-other-window)
+
+(defvar-keymap tychoish/docs-map ;; "C-c h"
+  "s" #'tychoish-describe-symbol-dwim
+  "v" #'describe-variable
+  "q" #'kill-eldoc-and-help-buffers
+  "j" #'jump-to-elisp-help
+  "e" #'eldoc
+  "b" #'eldoc-doc-buffer)
+
+(defvar-keymap tychoish/buffer-control-map ;; "C-x C-b"
+  "k" #'kill-this-buffer)
+
+(defvar-keymap tychoish/shell-map ;; "C-c s"
+  "m" #'eshell)
+
+(defvar-keymap tychoish/robot-map) ;; "C-c r"
+(defvar-keymap tychoish/magit-map) ;; "C-x g"
+(defvar-keymap tychoish/anzu-map) ;; "C-c q"
+(defvar-keymap tychoish/consult-mode-map) ;; "C-c C-;"
+(defvar-keymap tychoish/denote-map) ;; "C-c d"
+(defvar-keymap tychoish/docker-map) ;; "C-x d"
+(defvar-keymap orgx-global-map) ;; "C-c o"
+(defvar-keymap tychoish/mail-map) ;; "C-c m"
+
+;; nested keymaps
+(defvar-keymap tychoish/blogging-map ;; "C-c t b"
+  "m" #'bootstrap-insert-date
+  "p" #'bootstrap-blog-publish-post
+  "n" #'bootstrap-blog-create-post
+  "d" #'bootstrap-blog-open-drafts-dired)
+
+(defvar-keymap tychoish/theme-map ;; "C-c t t"
+  "r" #'disable-all-themes ;; reset
+  "d" #'bootstrap-load-dark-theme
+  "l" #'bootstrap-load-light-theme)
+
+(defvar-keymap tychoish/display-opacity-map ;; "C-c f o"
+  "=" #'opacity-increase
+  "-" #'opacity-decrease
+  "0" #'opacity-reset)
+
+(defvar-keymap tychoish/ecclectic-grep-project-map ;; "C-c g p"
+  "f" #'find-grep)
+
+(defvar-keymap tychoish/ecclectic-rg-map) ;; "C-c g r"
+(defvar-keymap tychoish/consult-search-map) ;; "C-c g s"
+(defvar-keymap tychoish/smerge-map) ;; "C-x g m"
+(defvar-keymap tychoish/denote-sequence-map) ;; "C-c d s"
+(defvar-keymap tychoish/denote-org-map) ;; "C-c d o"
+(defvar-keymap tychoish/denote-explore-map) ;; "C-c d e"
+(defvar-keymap tychoish/denote-review-map) ;; "C-c d c"
+(defvar-keymap orgx-link-map) ;; "C-c o l"
+(defvar-keymap tychoish/eglot-global-map) ;; "C-c l l"
+(defvar-keymap tychoish/robot-gptel-map) ;; "C-c r g"
+(defvar-keymap tychoish/robot-gptel-set-default-model-map) ;; "C-c r g m"
+(defvar-keymap tychoish/robot-agent-shell-map) ;; "C-c r s"
+(defvar-keymap tychoish/shell-eat-map) ;; "C-c s e"
+
+(keymap-set minibuffer-local-map "C-g" #'bootstrap-super-abort-minibuffers)
+(keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
+(keymap-set global-map "C-c t" tychoish/core-map)
+(keymap-set tychoish/core-map "b" tychoish/blogging-map)
+(keymap-set tychoish/core-map "t" tychoish/theme-map)
+(keymap-set global-map "C-c f" tychoish/display-map)
+(keymap-set tychoish/display-map "o" tychoish/display-opacity-map)
+(keymap-set global-map "C-c k" tychoish/kill-map)
+(keymap-set global-map "C-c w" tychoish/web-browser-map)
+(keymap-set global-map "C-c g" tychoish/ecclectic-grep-map)
+(keymap-set tychoish/ecclectic-grep-map "p" tychoish/ecclectic-grep-project-map)
+(keymap-set tychoish/ecclectic-grep-map "r" tychoish/ecclectic-rg-map)
+(keymap-set tychoish/ecclectic-grep-map "s" tychoish/consult-search-map)
+(keymap-set global-map "C-c ." tychoish/completion-map)
+(keymap-set global-map "C-c l" tychoish/ide-map)
+(keymap-set tychoish/ide-map "l" tychoish/eglot-global-map)
+(keymap-set global-map "C-c h" tychoish/docs-map)
+(keymap-set global-map "C-x C-b" tychoish/buffer-control-map)
+(keymap-set global-map "C-c s" tychoish/shell-map)
+(keymap-set tychoish/shell-map "e" tychoish/shell-eat-map)
+(keymap-set global-map "C-c r" tychoish/robot-map)
+(keymap-set tychoish/robot-map "s" tychoish/robot-agent-shell-map)
+(keymap-set tychoish/robot-map "g" tychoish/robot-gptel-map)
+(keymap-set tychoish/robot-gptel-map "m" tychoish/robot-gptel-set-default-model-map)
+(keymap-set global-map "C-x g" tychoish/magit-map)
+(keymap-set tychoish/magit-map "m" tychoish/smerge-map)
+(keymap-set global-map "C-c q" tychoish/anzu-map)
+(keymap-set global-map "C-c C-;" tychoish/consult-mode-map)
+(keymap-set global-map "C-c d" tychoish/denote-map)
+(keymap-set tychoish/denote-map "s" tychoish/denote-sequence-map)
+(keymap-set tychoish/denote-map "o" tychoish/denote-org-map)
+(keymap-set tychoish/denote-map "e" tychoish/denote-explore-map)
+(keymap-set tychoish/denote-map "c" tychoish/denote-review-map)
+(keymap-set global-map "C-x d" tychoish/docker-map)
+(keymap-set global-map "C-c o" orgx-global-map)
+(keymap-set orgx-global-map "l" orgx-link-map)
+(keymap-set global-map "C-c m" tychoish/mail-map)
 
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
