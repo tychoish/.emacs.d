@@ -127,8 +127,7 @@ Override in user/*.el to customize per machine or instance.")
   "e" #'browse-url
   "f" #'browse-url-firefox
   "c" #'browse-url-chrome
-  "g" #'eww-search-words
-  "a" #'tychoish-browse-url-add-external-host)
+  "g" #'eww-search-words)
 
 (defvar-keymap tychoish/ecclectic-grep-map ;; "C-c g"
   "o" #'occur
@@ -138,8 +137,7 @@ Override in user/*.el to customize per machine or instance.")
   "TAB" #'completion-at-point
   "." #'completion-at-point
   "/" #'dabbrev-completion
-  "p" #'completion-at-point
-  "f" #'bootstrap-completion-select-flavor)
+  "p" #'completion-at-point)
 
 (defvar-keymap tychoish/ide-map ;; "C-c l"
   "m" #'imenu
@@ -174,10 +172,7 @@ Override in user/*.el to customize per machine or instance.")
 
 ;; nested keymaps
 (defvar-keymap tychoish/blogging-map ;; "C-c t b"
-  "m" #'bootstrap-insert-date
-  "p" #'bootstrap-blog-publish-post
-  "n" #'bootstrap-blog-create-post
-  "d" #'bootstrap-blog-open-drafts-dired)
+  "m" #'bootstrap-insert-date)
 
 (defvar-keymap tychoish/theme-map ;; "C-c t t"
   "r" #'disable-all-themes ;; reset
