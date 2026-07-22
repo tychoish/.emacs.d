@@ -48,6 +48,8 @@
 (require 'annotated-completing-read)
 (require 'eglot-test-at-point)
 
+(declare-function buffer-line-count "hud-mode")
+(declare-function buffer-directory "hud-mode")
 (declare-function approximate-project-root "xtd-project")
 (declare-function approximate-project-name "xtd-project")
 (declare-function approximate-project-buffers "xtd-project")
@@ -1490,6 +1492,129 @@ to load test files found under test/ and run ert."
      command
      'compilation-mode
      (compile-buffer-name buf-name))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; emacs config -- CI tests, byte-compile checks, native-compile warm-up
+
+;;;###autoload
+(defun builder-emacs-conf-run-ci-tests (&optional timeout)
+  "Discover and run all ERT tests under test/, then exit.
+Intended for CI invocations via --fg-daemon --eval.
+Installs a TIMEOUT-second kill guard (default 240) before running."
+  (let ((test-dir (expand-file-name "test" user-emacs-directory))
+        (noninteractive t))
+    (add-to-list 'load-path test-dir)
+    (load (expand-file-name "test-helper" test-dir) nil t)
+    (run-with-timer (or timeout 240) nil (lambda () (kill-emacs 1)))
+    (condition-case err
+        (seq-do (lambda (file) (load file nil t))
+                (directory-files test-dir t "\\`test-.*\\.el\\'"))
+      (error
+       (message "builder-emacs-conf-run-ci-tests: error loading test files: %S" err)
+       (kill-emacs 1)))
+    ;; ert-run-tests-batch-and-exit requires noninteractive=t (--batch only).
+    ;; In --fg-daemon mode we call ert-run-tests-batch directly and kill-emacs
+    ;; ourselves based on the result.
+    (let ((stats (ert-run-tests-batch t)))
+      (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
+
+;;;###autoload
+(defun builder-emacs-conf-byte-compile-and-delete-artifact (file)
+  "Byte-compile FILE for error checking, then delete the .elc artifact.
+FILE is resolved relative to `user-emacs-directory'.
+
+Returns t if compilation produced no errors, nil otherwise; see
+`*Compile-Log*' for warnings and errors.  Intended for use by agent skills
+via emacsclient:
+  emacsclient --eval \\='(builder-emacs-conf-byte-compile-and-delete-artifact \"lisp/foo.el\")\\='"
+  (let* ((expanded (expand-file-name file user-emacs-directory))
+         (scratch (make-temp-file "builder-emacs-conf-byte-compile-" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-buffer
+            (insert-file-contents expanded)
+            (goto-char (point-min))
+            (when (re-search-forward "-\\*-.*-\\*-" (line-end-position) t)
+              (replace-match
+               (replace-regexp-in-string
+                "[ \t]*;[ \t]*no-byte-compile:[ \t]*t[ \t]*" ""
+                (match-string 0))
+               t t))
+            (write-region (point-min) (point-max) scratch nil 'silent))
+          (byte-compile-file scratch))
+      (let ((elc (concat (file-name-sans-extension scratch) ".elc")))
+        (when (file-exists-p elc)
+          (delete-file elc)))
+      (delete-file scratch))))
+
+;;;###autoload
+(defun builder-emacs-conf-native-compile-all ()
+  "Queue native compilation of all .el files in lisp/ and elpa/, then prune cache.
+Reports the number of files queued and the time taken to dispatch them.
+Runs once on a 60-second idle timer after startup; also callable interactively.
+Compilation itself is async — Emacs stays responsive while .eln files are built."
+  (interactive)
+  (if (not (or (string-match "NATIVE_COMP" system-configuration-features)
+	       (fboundp 'native-compile-async)))
+      (message "Native compilation not available in this build")
+    (let* ((lisp-dir (expand-file-name "lisp" user-emacs-directory))
+           (elpa-dir (expand-file-name "elpa" user-emacs-directory))
+           (files (seq-filter
+                   #'file-regular-p
+                   (append
+                    (when (file-directory-p lisp-dir)
+		      (directory-files-recursively lisp-dir "\\.el\\'"))
+                    (when (file-directory-p elpa-dir)
+		      (directory-files-recursively elpa-dir "\\.el\\'")))))
+           (n (length files)))
+      (with-slow-op-timer "native-compile-all-local: dispatch"
+        (native-compile-async files))
+      (condition-case err
+          (when (fboundp 'native-compile-prune-cache)
+            (native-compile-prune-cache))
+        (error (message "native-compile-prune-cache error: %s"
+                        (error-message-string err))))
+      (message "builder-emacs-conf-native-compile-all: queued %d .el files" n))))
+
+(defvar bootstrap-vendored-packages)
+
+;;;###autoload
+(defun builder-emacs-conf-byte-recompile-directory ()
+  "Recompile all `.el' files in `user-emacs-directory' and its direct subdirectories.
+With a prefix argument, force recompilation of every file regardless of timestamps.
+Returns the list of files that were recompiled."
+  (interactive)
+  (thread-last (cons user-emacs-directory
+                     (seq-filter #'file-directory-p
+                                 (directory-files user-emacs-directory t "^[^.]")))
+               (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
+               (seq-filter #'file-regular-p)
+               (seq-keep (lambda (f)
+                           (unless (eq 'no-byte-compile
+                                       (byte-recompile-file f current-prefix-arg))
+                             f)))))
+
+;;;###autoload
+(defun builder-emacs-conf-recompile-vendored-packages ()
+  "Recompile all `.el' files in each `bootstrap-vendored-packages' checkout.
+Only scans each package's top-level directory, not its test/ subdirectory
+\(matching `builder-emacs-conf-byte-recompile-directory''s scope\). Useful
+after `git pull'-ing one of these external/ checkouts, since
+`bootstrap-package' only installs/compiles a package the first time it
+sees the checkout and never notices later updates on its own.
+With a prefix argument, force recompilation of every file regardless of
+timestamps. Returns the list of files that were recompiled."
+  (interactive)
+  (thread-last bootstrap-vendored-packages
+               (seq-map (lambda (spec) (expand-file-name (nth 1 spec) user-emacs-directory)))
+               (seq-filter #'file-directory-p)
+               (seq-mapcat (lambda (dir) (directory-files dir t "\\.el\\'")))
+               (seq-filter #'file-regular-p)
+               (seq-keep (lambda (f)
+                           (unless (eq 'no-byte-compile
+                                       (byte-recompile-file f current-prefix-arg))
+                             f)))))
 
 (provide 'builder)
 ;;; builder.el ends here

@@ -31,7 +31,7 @@
 (defvar tychoish/mail-account-current nil)
 
 (with-eval-after-load 'mu4e
-  (seq-do (lambda (hook) (add-hook hook #'tychoish--record-home-frame))
+  (seq-do (lambda (hook) (add-hook hook #'hud--record-home-frame))
           '(mu4e-main-mode-hook
             mu4e-headers-mode-hook
             mu4e-view-mode-hook
@@ -439,7 +439,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 	:documentation "(given) name, used to populate `USER-FULL-NAME'"
 	:type 'string)
   (keybinding "m"
-	      :documentation "keybinding in the tychoish/mail-map keymap"
+	      :documentation "keybinding in the hud-mail-map keymap"
 	      :type 'char)
   (fetchmail mu4e-get-mail-command
 	     :documentation "external command to run to fetch mail."
@@ -505,7 +505,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
          (configure-account-symbol (intern account-name))
 	 (maildir (expand-file-name maildir)))
 
-    (define-key tychoish/mail-map (kbd key) configure-account-symbol)
+    (define-key hud-mail-map (kbd key) configure-account-symbol)
 
     (setf (map-elt tychoish/mail-accounts-table account-name)
           (tychoish/mail-make-account

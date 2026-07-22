@@ -80,5 +80,22 @@
     (setq major-mode 'tychoish-core-test--nonexistent-mode-xyz)
     (should (stringp (nerd-icons-icon-for-buffer)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; python-ts-mode buffer-local setup hook
+
+(ert-deftest tychoish-core/python-ts-mode-setup-runs-on-hook ()
+  "`tychoish/python-setup' must be registered on the actual mode hook.
+
+Regression test: this was previously wired to the symbol `python-ts-mode'
+\(the mode function itself, which is never a hook variable\) instead of
+`python-ts-mode-hook', so the setup never ran.  Also previously the
+use-package block was named `python-ts-mode', but that symbol is never
+`provide'd -- `python-ts-mode' is defined inside python.el, which only
+provides the feature `python' -- so `with-eval-after-load' never fired
+from a plain `require'.  The block is now named `python' to match the
+feature it actually depends on, so a plain `require' triggers it."
+  (require 'python)
+  (should (memq 'tychoish/python-setup python-ts-mode-hook)))
+
 (provide 'test-tychoish-core)
 ;;; test-tychoish-core.el ends here

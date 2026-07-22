@@ -33,4 +33,4 @@ jobs:
       - run: apt-get install -y aspell aspell-en
       - run: ln -sf "$GITHUB_WORKSPACE" ~/.emacs.d
       - run: find ~/.emacs.d -name "*.elc" -delete
-      - run: emacs --fg-daemon --eval '(bootstrap-run-ci-tests)'
+      - run: emacs --fg-daemon --eval '(builder-emacs-conf-run-ci-tests)'

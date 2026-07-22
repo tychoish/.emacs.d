@@ -18,6 +18,44 @@
 (eval-when-compile
   (require 'xtd-macro))
 
+;; Required eagerly (not deferred via :commands below) since many other
+;; use-package :init/:config blocks below reference hud-mode-map/hud-*-map
+;; directly, at load time, not through an autoloaded command.
+(require 'hud-mode)
+
+(use-package hud-mode
+  :ensure nil
+  :commands (hud-mode
+	     buffer-line-count
+	     buffer-directory
+	     save-all-buffers
+	     kill-eldoc-and-help-buffers
+	     kill-buffers-in-directory
+	     kill-buffers-matching-name
+	     force-kill-buffers-matching-path
+	     kill-buffers-matching-path
+	     kill-all-reference-and-source-buffers
+	     kill-buffers-matching-mode
+	     kill-buffers-visiting-missing-files
+	     kill-buffer-and-delete-file
+	     pin-buffer-to-window-toggle
+	     clean-kill-ring-clean
+	     hud-opacity-increase
+	     hud-opacity-decrease
+	     hud-opacity-reset)
+  :config
+  (make-read-extended-command-for-prefix "clipboard"
+    :bind-map hud-mode-map
+    :bind-key "C-x x c")
+
+  (create-toggle-functions slow-op-reporting)
+  (create-toggle-functions electric-pair-inhibition)
+  (create-toggle-functions electric-pair-eagerness))
+
+(use-package f
+  :ensure t
+  :commands (f-glob f-collapse-homedir f-entries f-ancestor-of-p))
+
 (use-package cond-let
   :ensure t
   :defer t)
@@ -64,7 +102,7 @@
   :init
   (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
   (add-hook 'dired-mode-hook 'dired-async-mode)
-
+  :config
   (declare-function package-desc-p "package")
   (autoload 'async-package-do-action "async-package")
 
@@ -107,12 +145,12 @@
 
 (use-package hud
   :ensure nil
-  :commands (hud-dispatch hud-select)
   :bind (("C-x ." . hud-dispatch)
 	 ("C-x ," . hud-select)
-	 :map tychoish/core-map
+	 :map hud-core-map
          ("m" . hud-dispatch)
-         ("," . hud-select)))
+         ("," . hud-select))
+  :commands (hud-dispatch hud-select))
 
 (use-package arch
   :ensure nil
@@ -139,21 +177,29 @@
 ;;
 ;; UI, Display, Rendering, Window Management
 
+(use-package windmove
+  :ensure nil
+  :defer t
+  :bind (("M-h" . windmove-left)
+	 ("M-j" . windmove-down)
+	 ("M-k" . windmove-up)
+	 ("M-l" . windmove-right)
+	 ("S-<left>" . windmove-left)
+	 ("S-<down>" . windmove-down)
+	 ("S-<right>" . windmove-right)
+	 ("S-<up>" . windmove-up)))
+
 (use-package modus-themes
   :ensure t
   :defer t
   :defines (modus-themes-deuteranopia modus-themes-common-palette-overrides)
+  :bind (:map hud-theme-map ;; "C-c t t"
+              ("r" . disable-all-themes) ;; reset
+              ("d" . bootstrap-load-dark-theme)
+              ("l" . bootstrap-load-light-theme))
   :init
   (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
-
-  (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
-    (setq-default custom-theme-directory theme-directory)
-    (add-to-list 'custom-theme-load-path theme-directory)
-    (add-to-list 'load-path theme-directory))
-
-  (defun disable-all-themes ()
-    (interactive)
-    (mapc #'disable-theme custom-enabled-themes))
+  (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
   (defun bootstrap-load-light-theme ()
     (interactive)
@@ -173,6 +219,22 @@
     (unless custom-enabled-themes
       (bootstrap-load-light-theme)))
 
+  (add-one-shot-hook
+   :name "<modus-themes> ensure light theme"
+   :hook after-first-frame-created
+   :form (bootstrap-ensure-light-theme)
+   :idle-timer 0.01)
+
+  :config
+  (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
+    (setq-default custom-theme-directory theme-directory)
+    (add-to-list 'custom-theme-load-path theme-directory)
+    (add-to-list 'load-path theme-directory))
+
+  (defun disable-all-themes ()
+    (interactive)
+    (mapc #'disable-theme custom-enabled-themes))
+
   (defun bootstrap-ensure-dark-theme ()
     (unless custom-enabled-themes
       (bootstrap-load-dark-theme)))
@@ -184,19 +246,6 @@
       (enable-theme 'modus-vivendi))
     (add-to-list 'default-frame-alist '(alpha . 95)))
 
-  (defvar-keymap tychoish/theme-map ;; "C-c t t"
-    "r" #'disable-all-themes ;; reset
-    "d" #'bootstrap-load-dark-theme
-    "l" #'bootstrap-load-light-theme)
-  (keymap-set tychoish/core-map "t" tychoish/theme-map)
-
-  (add-one-shot-hook
-   :name "<modus-themes> ensure light theme"
-   :hook after-first-frame-created
-   :form (bootstrap-ensure-light-theme)
-   :idle-timer 0.01)
-
-  :config
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
 	'((border-mode-line-active bg-mode-line-active)
@@ -235,10 +284,10 @@
 	   'window-setup-hook))
   :config
   (create-toggle-functions hud-modeline-icons
-			   :keymap tychoish/theme-map
+			   :keymap hud-theme-map
 			   :key "i")
   (create-toggle-functions hud-modeline-show-buffer-size
-			   :keymap tychoish/theme-map
+			   :keymap hud-theme-map
 			   :key "s"))
 
 (use-package which-key
@@ -246,14 +295,6 @@
   :defer t
   :hook (which-key-mode . which-key-setup-side-window-bottom)
   :init
-  (defun bootstrap--which-key-add-replacement (map key new-text)
-    "Register a which-key annotation for KEY with NEW-TEXT, scoped to MAP when supported.
-Falls back to `which-key-add-key-based-replacements' on Emacs versions that lack
-the keymap-scoped variant."
-    (if (and map (fboundp 'which-key-add-keymap-based-replacements))
-	(which-key-add-keymap-based-replacements map key new-text)
-      (which-key-add-key-based-replacements key new-text)))
-
   (cl-defmacro which-key-customize (new-text &key map key form)
     "Register a which-key annotation, deferred until which-key is loaded.
 
@@ -284,7 +325,9 @@ All constraints are validated at macro-expansion time."
     (cond
      (form `(with-eval-after-load 'which-key ,form))
      (map `(with-eval-after-load 'which-key
-             (bootstrap--which-key-add-replacement ,map ,key ,new-text)))
+             (if (and ,map (fboundp 'which-key-add-keymap-based-replacements))
+                 (which-key-add-keymap-based-replacements ,map ,key ,new-text)
+               (which-key-add-key-based-replacements ,key ,new-text))))
      (t `(with-eval-after-load 'which-key
            (which-key-add-key-based-replacements ,key ,new-text)))))
   :config
@@ -293,8 +336,8 @@ All constraints are validated at macro-expansion time."
   (setq which-key-lighter "")
 
   (which-key-customize
-      '("project-grep" . tychoish/ecclectic-grep-project-map)
-    :map tychoish/ecclectic-grep-map
+      '("project-grep" . hud-ecclectic-grep-project-map)
+    :map hud-ecclectic-grep-map
     :key "p"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -305,18 +348,18 @@ All constraints are validated at macro-expansion time."
   :ensure t
   :delight (projectile-mode "" projectile)
   :bind-keymap ("C-c p" . projectile-command-map)
-  :bind (:map tychoish/ecclectic-grep-project-map
+  :bind (:map hud-ecclectic-grep-project-map
 	      ("a" . projectile-ag))
+  :hook ((prog-mode . projectile-mode)
+	 (text-mode . projectile-mode))
   :commands (projectile-mode
 	     projectile-project-name
 	     projectile-project-root
 	     projectile-mode-on
 	     projectile-save-project-buffers)
-  :hook ((prog-mode . projectile-mode)
-	 (text-mode . projectile-mode))
   :init
   (which-key-customize "projectile" :key "C-c p")
-
+  :config
   (defun tychoish/save-buffers-in-project-directory (dir)
     (let ((default-directory (expand-file-name dir)))
       (alert (projectile-save-project-buffers)
@@ -344,7 +387,7 @@ All constraints are validated at macro-expansion time."
   (setq projectile-require-project-root nil)
   (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
   (setq projectile-frecency-file (sprite-state-path "projectile-frecency.eld"))
-  :config
+
   (defun projectile-mode-enable-for-buffer (buf)
     (with-current-buffer buf
       (projectile-mode 1)))
@@ -366,12 +409,21 @@ All constraints are validated at macro-expansion time."
 (use-package dired
   :ensure nil
   :defer t
-  :init
-  (put 'dired-find-alternate-file 'disabled nil)
   :config
+  (put 'dired-find-alternate-file 'disabled nil)
   (bind-keys
    :map dired-mode-map
    ("w" . wdired-change-to-wdired-mode)))
+
+(use-package recentf
+  :ensure nil
+  :defer t
+  :bind ("C-x C-r" . recentf)
+  :init
+  (setq recentf-auto-cleanup 'never)
+  (setq recentf-keep '(file-remote-p file-readable-p))
+  (setq recentf-max-menu-items 100)
+  (setq recentf-save-file (sprite-state-path "recentf.el")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -380,10 +432,10 @@ All constraints are validated at macro-expansion time."
 (use-package ripgrep
   :ensure t
   :bind (("M-g r" . consult-rg)
-	 :map tychoish/consult-mode-map ;; "C-c C-;"
+	 :map hud-consult-mode-map ;; "C-c C-;"
 	 ("d" . consult-rg-pwd)
 	 ("r" . consult-rg)
-	 :map tychoish/ecclectic-rg-map ;; "C-c g r"
+	 :map hud-ecclectic-rg-map ;; "C-c g r"
 	 ("d" . find-ripgrep)
 	 ("c" . find-ripgrep-compile)
 	 ("m" . find-merge-conflicts)
@@ -392,10 +444,10 @@ All constraints are validated at macro-expansion time."
 	 ("l" . consult-rg-pwd-wizard)
 	 ("r" . consult-rg-project)
 	 ("p" . consult-rg-project-wizard)
-	 :map tychoish/ecclectic-grep-project-map
+	 :map hud-ecclectic-grep-project-map
 	 ("r" . consult-rg-project)
 	 ("p" . find-ripgrep-project))
-  :defines (tychoish/ecclectic-rg-map)
+  :defines (hud-ecclectic-rg-map)
   :commands (consult-rg
 	     consult-rg-pwd
 	     consult-rg-pwd-wizard
@@ -407,8 +459,8 @@ All constraints are validated at macro-expansion time."
 	     find-merge-conflicts
 	     ripgrep-regexp)
   :init
-  (which-key-customize '("rg-grep" . tychoish/ecclectic-rg-map)
-    :map tychoish/ecclectic-grep-map :key "r")
+  (which-key-customize '("rg-grep" . hud-ecclectic-rg-map)
+    :map hud-ecclectic-grep-map :key "r")
   :config
   (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
@@ -505,7 +557,7 @@ All constraints are validated at macro-expansion time."
 
 (use-package deadgrep
   :ensure t
-  :bind (:map tychoish/ecclectic-rg-map
+  :bind (:map hud-ecclectic-rg-map
 	      ("x" . #'deadgrep))
   :commands (deadgrep))
 
@@ -520,13 +572,13 @@ All constraints are validated at macro-expansion time."
 (use-package anzu
   :ensure t
   :delight anzu-mode
-  :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :hook ((isearch-mode) . anzu-mode)
-  :bind (:map tychoish/anzu-map
+  :bind (:map hud-anzu-map
 	      ("r" . anzu-query-replace)
 	      ("e" . anzu-query-replace-regexp)
 	      :map isearch-mode-map
 	      ("C-o" . isearch-occur))
+  :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :init
   (setq anzu-cons-mode-line-p nil)
   :config
@@ -541,7 +593,7 @@ All constraints are validated at macro-expansion time."
 
 (use-package cape
   :ensure t
-  :bind (:map tychoish/completion-map ;; "C-c ."
+  :bind (:map hud-completion-map ;; "C-c ."
 	      ;; this is mostly copy-pasta from cape-mode-map, with tweaks
 	      ("t" . complete-tag)
 	      ("d" . cape-dabbrev)
@@ -654,7 +706,7 @@ All constraints are validated at macro-expansion time."
 
 (use-package yasnippet-capf
   :ensure t
-  :bind (:map tychoish/completion-map
+  :bind (:map hud-completion-map
 	      ("s" . yasnippet-capf))
   :commands (yasnippet-capf)
   :init
@@ -671,7 +723,7 @@ All constraints are validated at macro-expansion time."
   :defer t
   :bind (("M-/" . dabbrev-completion)
          ("C-M-/" . dabbrev-expand)
-         (:map tychoish/completion-map
+         (:map hud-completion-map
                ("/" . dabbrev-completion)))
   :config
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
@@ -768,7 +820,7 @@ All constraints are validated at macro-expansion time."
 (use-package corfu
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
-  :bind (:map tychoish/completion-map
+  :bind (:map hud-completion-map
 	      ("m" . corfu-at-point)
 	      ("x" . corfu-at-point))
   :hook (((prog-mode text-mode) . corfu-mode)
@@ -781,31 +833,32 @@ All constraints are validated at macro-expansion time."
   (defun tychoish/corfu-prog-mode-setup ()
     (setq-local corfu-auto-prefix 3))
 
+  (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
+  (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
+  :config
   (defun corfu-at-point ()
     "Run `completion-at-point', but force using corfu, which may be useful in gui terminals"
     (interactive)
     (let ((completion-in-region-function #'corfu--in-region))
       (completion-at-point)))
 
-  (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
-  (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
-
   (add-hook 'corfu-mode-hook 'corfu-history-mode)
   (add-hook 'corfu-mode-hook 'corfu-indexed-mode)
   (add-hook 'corfu-mode-hook 'corfu-popupinfo-mode)
-  :config
-  (bind-keys :map corfu-map
-	     ("C-<tab>" . corfu-quick-complete)
-	     ([tab] . corfu-complete)
-	     ("<return>" . corfu-insert)
-	     ("C-<return>" . corfu-quick-insert)
-	     ("M-SPC" . corfu-insert-separator)
-	     ("C-SPC" . corfu-insert-separator)
-	     ([backtab] . corfu-insert-separator)
-	     ("C-j" . corfu-quick-jump)
-	     ("M-d" . corfu-popupinfo-toggle)
-	     ("M-m" . corfu-move-to-minibuffer)
-	     ("M-S-m" . corfu-move-to-minibuffer))
+
+  (bind-keys
+   :map corfu-map
+   ("C-<tab>" . corfu-quick-complete)
+   ([tab] . corfu-complete)
+   ("<return>" . corfu-insert)
+   ("C-<return>" . corfu-quick-insert)
+   ("M-SPC" . corfu-insert-separator)
+   ("C-SPC" . corfu-insert-separator)
+   ([backtab] . corfu-insert-separator)
+   ("C-j" . corfu-quick-jump)
+   ("M-d" . corfu-popupinfo-toggle)
+   ("M-m" . corfu-move-to-minibuffer)
+   ("M-S-m" . corfu-move-to-minibuffer))
 
   (setq corfu-cycle t)
   (setq corfu-quit-at-boundary t)
@@ -859,7 +912,7 @@ All constraints are validated at macro-expansion time."
   :ensure t
   :after (corfu nerd-icons)
   :commands (nerd-icons-corfu-formatter)
-  :init
+  :config
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
 (use-package nerd-icons-xref
@@ -875,6 +928,17 @@ All constraints are validated at macro-expansion time."
    :name "<core> nerd icons"
    :delay 0.8
    :operation 'nerd-icons-completion-mode))
+
+(use-package xref
+  :ensure nil
+  :defer t
+  :bind (("M-." . xref-find-definitions)
+	 (:map hud-ide-map ;; "C-c l"
+	       ("c" . xref-find-references)
+	       ("d" . xref-find-definitions)
+	       ("p" . xref-go-back)
+	       ("n" . xref-go-forward)
+	       ("o" . xref-find-definitions-other-window))))
 
 (use-package consult
   :ensure t
@@ -896,6 +960,7 @@ All constraints are validated at macro-expansion time."
 	 ("C-x t b" . consult-buffer-other-tab)	   ;; orig. switch-to-buffer-other-tab
 	 ("C-x r b" . consult-bookmark)		   ;; orig. bookmark-jump
 	 ("C-x p b" . consult-project-buffer)	   ;; orig. project-switch-to-buffer
+	 ("C-x C-r" . consult-recent-file)	   ;; orig. recentf
 	 ;; Custom M-# bindings for fast register access
 	 ("M-'" . consult-register-store)	   ;; orig. abbrev-prefix-mark (unrelated)
 	 ("M-#" . consult-register-load)
@@ -917,16 +982,16 @@ All constraints are validated at macro-expansion time."
 	 ("M-s c" . consult-locate)
 	 ;; Isearch integration
 	 ("M-s e" . consult-isearch-history)
-	 :map tychoish/completion-map
+	 :map hud-completion-map
 	 ("c" . consult-at-point)
-	 :map tychoish/docs-map
+	 :map hud-docs-map
 	 ("i" . consult-info)
 	 ("m" . consult-man)
-	 :map tychoish/consult-mode-map
+	 :map hud-consult-mode-map
 	 ("h" . consult-history)
-	 :map tychoish/ecclectic-grep-map ;; "C-c g"
+	 :map hud-ecclectic-grep-map ;; "C-c g"
 	 ("f" . consult-grep)
-	 :map tychoish/ecclectic-grep-project-map ;; "C-c g p"
+	 :map hud-ecclectic-grep-project-map ;; "C-c g p"
 	 ("g" . consult-git-grep)        	  ;; for git(?)
 	 ;; Minibuffer history
 	 :map minibuffer-local-map
@@ -937,7 +1002,7 @@ All constraints are validated at macro-expansion time."
 	 ("M-s e" . consult-isearch-history)	   ;; orig. isearch-edit-string
 	 ("M-s l" . consult-line)		   ;; needed by consult-line to detect isearch
 	 ("M-s L" . consult-line-multi) 	   ;; needed by consult-line to detect isearch
-	 :map tychoish/consult-search-map ;; "C-c g s"
+	 :map hud-consult-search-map ;; "C-c g s"
 	 ("l" . consult-line)
 	 ("m" . consult-line-multi)
 	 ("k" . consult-keep-lines)
@@ -946,13 +1011,12 @@ All constraints are validated at macro-expansion time."
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
   :commands (consult-find consult-git-grep consult-grep)
-  :init
+  :config
   (defun consult-at-point ()
     "Run `completion-at-point', but force using consult, which may be useful in tty terminals"
     (interactive)
     (let ((completion-in-region-function #'consult-completion-in-region))
       (completion-at-point)))
-  :config
   (setq register-preview-delay 0.05)
 
   ;; Use Consult to select xref locations with preview
@@ -1017,7 +1081,7 @@ All constraints are validated at macro-expansion time."
 (use-package consult-flycheck
   :ensure t
   :bind (("M-g f" . flycheck-mode)
-	 :map tychoish/consult-mode-map
+	 :map hud-consult-mode-map
 	 ("c" . consult-flycheck)
 	 :map flycheck-command-map
 	 (";" . consult-flycheck)))
@@ -1025,7 +1089,7 @@ All constraints are validated at macro-expansion time."
 (use-package consult-flyspell
   :ensure t
   :after (flyspell)
-  :bind (:map tychoish/consult-mode-map
+  :bind (:map hud-consult-mode-map
 	      ("f" . consult-flyspell))
   :commands (consult-flyspell flyspell-correct-consult)
   :config
@@ -1037,7 +1101,7 @@ All constraints are validated at macro-expansion time."
 (use-package consult-eglot
   :ensure t
   :after (eglot)
-  :bind (:map tychoish/docs-map
+  :bind (:map hud-docs-map
 	      ("a" . consult-eglot-symbols))
   :commands (consult-eglot-symbols)
   :config
@@ -1054,9 +1118,9 @@ All constraints are validated at macro-expansion time."
 (use-package consult-yasnippet
   :ensure t
   :after (yasnippet)
-  :bind (:map tychoish/consult-mode-map
+  :bind (:map hud-consult-mode-map
 	      ("s" . consult-yasnippet)
-	      :map tychoish/completion-map
+	      :map hud-completion-map
 	      ("y" . consult-yasnippet)))
 
 (use-package embark-consult
@@ -1071,12 +1135,17 @@ All constraints are validated at macro-expansion time."
 	     make-builder-candidate
 	     builder-register-candidates
 	     builder--read-command
-	     builder-compile-project))
+	     builder-compile-project
+	     builder-emacs-conf-run-ci-tests
+	     builder-emacs-conf-byte-compile-and-delete-artifact
+	     builder-emacs-conf-native-compile-all
+	     builder-emacs-conf-byte-recompile-directory
+	     builder-emacs-conf-recompile-vendored-packages))
 
 (use-package revbufs
   :ensure t
   :bind (("C-x x a" . revbufs)
-	 :map tychoish/buffer-control-map
+	 :map hud-buffer-control-map
 	 ("d" . kill-buffers-in-directory)
 	 ("<SPC>" . revert-buffer-quick)
 	 ("m" . kill-buffers-matching-mode)
@@ -1100,9 +1169,8 @@ All constraints are validated at macro-expansion time."
          ("C-c \\" . popper-cycle)
          ("C-c C-'"  . popper-kill-latest-popup))
   :commands (popper-mode popper-echo-mode popper-cycle popper-toggle)
-  :init
-  (add-hook 'popper-mode-hook 'popper-echo-mode)
   :config
+  (add-hook 'popper-mode-hook 'popper-echo-mode)
   (setq popper-reference-buffers
         '("\\*Messages\\*"
           "\\*Warnings\\*"
@@ -1125,15 +1193,14 @@ All constraints are validated at macro-expansion time."
 (use-package magit
   :ensure t
   :after (cond-let)
+  :bind (:map hud-magit-map
+         ("s" . magit-status)
+	 ("f" . magit-branch)
+	 ("b" . magit-blame))
   :commands (magit-toplevel magit-status magit-branch magit-blame)
   :init
-  (bind-keys
-   :map tychoish/magit-map
-   ("s" . magit-status)
-   ("f" . magit-branch)
-   ("b" . magit-blame))
   (make-read-extended-command-for-prefix "magit"
-    :bind-map tychoish/magit-map
+    :bind-map hud-magit-map
     :bind-key "x")
   :config
   (setq vc-follow-symlinks t)
@@ -1194,7 +1261,7 @@ All constraints are validated at macro-expansion time."
 	     magit-dash-gh-pr-dashboard-open)
   :init
   (bind-keys
-   :map tychoish/magit-map
+   :map hud-magit-map
    ("d" . magit-dash-open)
    ("o" . magit-dash-open-repo))
   :config
@@ -1231,17 +1298,16 @@ All constraints are validated at macro-expansion time."
 (use-package smerge-mode
   :after (magit)
   :defer t
+  :bind
+   (:map hud-smerge-map
+    ("n" . smerge-vc-next-conflict)
+    ("k" . smerge-kill-current)
+    ("s" . smerge-start-session)
+    ("r" . smerge-kill-and-vc-next-conflict)
+    ("t" . smerge-keep-current))
   :init
-  (bind-keys
-   :map tychoish/smerge-map
-   ("n" . smerge-vc-next-conflict)
-   ("k" . smerge-kill-current)
-   ("s" . smerge-start-session)
-   ("r" . smerge-kill-and-vc-next-conflict)
-   ("t" . smerge-keep-current))
-
   (make-read-extended-command-for-prefix "smerge"
-    :bind-map tychoish/smerge-map
+    :bind-map hud-smerge-map
     :bind-key "x")
   :config
   (defun smerge-kill-and-vc-next-conflict ()
@@ -1260,7 +1326,7 @@ All constraints are validated at macro-expansion time."
 
 (use-package git-link
   :ensure t
-  :bind (:map tychoish/magit-map
+  :bind (:map hud-magit-map
 	 ("l" . git-link))
   :config
   (defun ad:git-link--new-copy-to-clipboard (link)
@@ -1280,8 +1346,8 @@ clipboard."
 
 (use-package alert
   :ensure t
-  :commands (alert)
   :defines (alert-styles alert-libnotify-command)
+  :commands (alert)
   :config
   (setq alert-log-messages nil)
   (setq alert-fade-time 15)
@@ -1312,8 +1378,8 @@ clipboard."
 
 (use-package emojify
   :ensure t
-  :commands (global-emojify-mode)
   :delight emojify-mode
+  :commands (global-emojify-mode)
   :config
   (setq emojify-emoji-styles '(ascii unicode github))
   (setq emojify-display-style 'unicode)
@@ -1414,6 +1480,17 @@ clipboard."
 
 (use-package denote
   :ensure t
+  :bind (:map hud-denote-map
+         ("n" . denote)
+	 ("m" . denote-open-or-create)
+	 ("f" . consult-denote-find)
+	 ("l" . denote-link)
+	 ("b" . denote-backlinks)
+	 ("r" . denote-dash-rename-file)
+	 ("." . denote-dash-dispatch)
+	 ("," . denote-dash)
+	 ("k" . denote-dash-save-and-kill-all-notes)
+	 ("u" . denote-dash-rename-file-using-front-matter))
   :commands (denote
 	     denote-backlinks
 	     denote-dired
@@ -1423,20 +1500,8 @@ clipboard."
 	     denote-rename-file
 	     denote-rename-file-using-front-matter)
   :init
-  (bind-keys
-   :map tychoish/denote-map
-   ("n" . denote)
-   ("m" . denote-open-or-create)
-   ("f" . consult-denote-find)
-   ("l" . denote-link)
-   ("b" . denote-backlinks)
-   ("r" . denote-dash-rename-file)
-   ("." . denote-dash-dispatch)
-   ("," . denote-dash)
-   ("k" . denote-dash-save-and-kill-all-notes)
-   ("u" . denote-dash-rename-file-using-front-matter))
   (make-read-extended-command-for-prefix "denote"
-    :bind-map tychoish/denote-map
+    :bind-map hud-denote-map
     :bind-key "x"
     :key-alias "denote-commands")
   :config
@@ -1522,7 +1587,7 @@ clipboard."
 
 (use-package consult-notes
   :ensure t
-  :bind (:map tychoish/denote-map
+  :bind (:map hud-denote-map
          (";" . consult-notes)
          ("/" . consult-notes-search-in-all-notes))
   :commands (consult-notes consult-notes-search-in-all-notes)
@@ -1546,7 +1611,7 @@ return until the minibuffer session ends."
 
 (use-package consult-denote
   :ensure t
-  :bind (:map tychoish/denote-map
+  :bind (:map hud-denote-map
          ("f" . consult-denote-find)
          ("g" . consult-denote-grep))
   :commands (consult-denote-find consult-denote-grep consult-denote-mode))
@@ -1554,7 +1619,7 @@ return until the minibuffer session ends."
 (use-package denote-journal
   :ensure t
   :after denote
-  :bind (:map tychoish/denote-map
+  :bind (:map hud-denote-map
          ("j" . denote-journal-new-entry))
   :commands (denote-journal-new-entry denote-journal-new-entry-after-last)
   :config
@@ -1564,19 +1629,17 @@ return until the minibuffer session ends."
 (use-package denote-sequence
   :ensure t
   :after denote
+  :bind (:map hud-denote-sequence-map
+	 ("c" . denote-sequence-new-child)
+	 ("s" . denote-sequence-new-sibling)
+	 ("r" . denote-sequence-rename-as-parent)
+	 ("p" . denote-sequence-new-parent)
+	 ("l" . denote-sequence-link)
+	 ("m" . denote-dash-reparent)
+	 ("n" . denote-dash-renumber-recursive)
+	 ("i" . denote-dash-insert-sequence-note))
   :commands (denote-sequence-new-child denote-sequence-new-sibling
              denote-sequence-new-parent denote-sequence-link)
-  :init
-  (bind-keys
-   :map tychoish/denote-sequence-map
-   ("c" . denote-sequence-new-child)
-   ("s" . denote-sequence-new-sibling)
-   ("r" . denote-sequence-rename-as-parent)
-   ("p" . denote-sequence-new-parent)
-   ("l" . denote-sequence-link)
-   ("m" . denote-dash-reparent)
-   ("n" . denote-dash-renumber-recursive)
-   ("i" . denote-dash-insert-sequence-note))
   :config
   (setq denote-sequence-scheme 'alphanumeric)
   (add-to-list 'display-buffer-alist
@@ -1592,6 +1655,14 @@ return until the minibuffer session ends."
 (use-package denote-org
   :ensure t
   :after denote
+  :bind (:map hud-denote-org-map
+         ("l" . denote-org-link-to-heading)
+         ("b" . denote-org-backlinks-for-heading)
+         ("x" . denote-org-extract-org-subtree)
+         ("r" . orgx-migrate-subtree-to-denote)
+         ("d" . denote-org-dblock-insert-links)
+         ("p" . denote-org-dblock-insert-backlinks)
+         ("f" . denote-org-dblock-insert-files))
   :commands (denote-org-link-to-heading
              denote-org-backlinks-for-heading
              denote-org-extract-org-subtree
@@ -1601,19 +1672,24 @@ return until the minibuffer session ends."
              denote-org-dblock-insert-missing-links
              denote-org-dblock-insert-backlinks
              denote-org-dblock-insert-files
-             denote-org-dblock-insert-files-as-headings)
-  :bind (:map tychoish/denote-org-map
-         ("l" . denote-org-link-to-heading)
-         ("b" . denote-org-backlinks-for-heading)
-         ("x" . denote-org-extract-org-subtree)
-         ("r" . orgx-migrate-subtree-to-denote)
-         ("d" . denote-org-dblock-insert-links)
-         ("p" . denote-org-dblock-insert-backlinks)
-         ("f" . denote-org-dblock-insert-files)))
+             denote-org-dblock-insert-files-as-headings))
 
 (use-package denote-explore
   :ensure t
   :after denote
+  :bind (:map hud-denote-explore-map
+         ("n" . denote-explore-count-notes)
+         ("c" . denote-explore-count-keywords)
+         ("r" . denote-explore-random-note)
+         ("l" . denote-explore-random-link)
+         ("d" . denote-explore-duplicate-notes)
+         ("s" . denote-explore-single-keywords)
+         ("z" . denote-explore-zero-keywords)
+         ("k" . denote-explore-rename-keyword)
+         ("m" . denote-explore-missing-links)
+         ("y" . denote-explore-sync-metadata)
+         ("b" . denote-explore-barchart-keywords)
+         ("t" . denote-explore-barchart-timeline))
   :commands (denote-explore-count-notes
              denote-explore-count-keywords
              denote-explore-random-note
@@ -1628,21 +1704,6 @@ return until the minibuffer session ends."
              denote-explore-barchart-keywords
              denote-explore-barchart-timeline
              denote-explore-barchart-filetypes)
-  :init
-  (bind-keys
-   :map tychoish/denote-explore-map
-   ("n" . denote-explore-count-notes)
-   ("c" . denote-explore-count-keywords)
-   ("r" . denote-explore-random-note)
-   ("l" . denote-explore-random-link)
-   ("d" . denote-explore-duplicate-notes)
-   ("s" . denote-explore-single-keywords)
-   ("z" . denote-explore-zero-keywords)
-   ("k" . denote-explore-rename-keyword)
-   ("m" . denote-explore-missing-links)
-   ("y" . denote-explore-sync-metadata)
-   ("b" . denote-explore-barchart-keywords)
-   ("t" . denote-explore-barchart-timeline))
   :config
   (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
   (setq denote-explore-network-format "graphviz")
@@ -1651,7 +1712,7 @@ return until the minibuffer session ends."
 (use-package denote-review
   :ensure t
   :after denote
-  :bind (:map tychoish/denote-review-map
+  :bind (:map hud-denote-review-map
          ("d" . denote-review-set-date)
          ("l" . denote-review-display-list))
   :commands (denote-review-set-date-dired-marked-files)
@@ -1665,6 +1726,21 @@ return until the minibuffer session ends."
 
 (use-package orgx
   :ensure nil
+  :bind (:map orgx-global-map ;; "C-c o"
+              ("a" . orgx-agenda-view)
+              ("c" . orgx-capture)
+              ("4" . org-agenda)
+              ("k" . org-capture)
+              ("f" . orgx-agenda-files-open)
+              ("s" . org-save-all-org-buffers)
+              ("r" . orgx-agenda-files-reload)
+              ("j" . orgx-capture)
+              ("u" . orgx-agenda-untagged-in-file)
+              ("/" . orgx-agenda-for-file))
+        (:map orgx-link-map ;; "C-c o l"
+              ("s" . org-store-link)
+              ("i" . org-insert-link)
+              ("a" . org-annotate-file))
   :commands (orgx-capture
 	     orgx-agenda-view
 	     orgx-agenda-files-open
@@ -1677,22 +1753,6 @@ return until the minibuffer session ends."
 	     ad:org-agenda--open-files
 	     bootstrap-set-notes-directory)
   :init
-  (bind-keys
-   :map orgx-global-map ;; "C-c o"
-   ("a" . orgx-agenda-view)
-   ("c" . orgx-capture)
-   ("4" . org-agenda)
-   ("k" . org-capture)
-   ("f" . orgx-agenda-files-open)
-   ("s" . org-save-all-org-buffers)
-   ("r" . orgx-agenda-files-reload)
-   ("j" . orgx-capture)
-   ("u" . orgx-agenda-untagged-in-file)
-   ("/" . orgx-agenda-for-file)
-   :map orgx-link-map ;; "C-c o l"
-   ("s" . org-store-link)
-   ("i" . org-insert-link)
-   ("a" . org-annotate-file))
   (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
   (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
   (add-one-shot-hook
@@ -1721,13 +1781,13 @@ return until the minibuffer session ends."
   :commands (tychoish/markdown-align-tables
              tychoish/markdown-align-tables-in-file
              tychoish/markdown-align-tables-dired)
-  :init
+  :config
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (defun tychoish/markdown-setup-imenu ()
     (setq imenu-generic-expression markdown-imenu-generic-expression))
   (add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)
-  :config
+
   (if (eq system-type 'darwin)
       (setq markdown-command "/usr/local/bin/mmd --nosmart")
     (setq markdown-command "/usr/bin/markdown"))
@@ -1833,12 +1893,27 @@ return until the minibuffer session ends."
 (use-package whitespace
   :ensure nil
   :defer t
-  :bind (:map tychoish/core-map
-              ("s" . whitespace-cleanup))
+  :bind (("C-c C-w" . whitespace-cleanup)
+         (:map hud-core-map
+               ("s" . whitespace-cleanup)
+               ("w" . toggle-local-whitespace-cleanup)))
   :init
   (defun bootstrap-set-up-show-whitespace ()
     (setq-local show-trailing-whitespace t))
+
+  (add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
+  (add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)
   :config
+  (defun toggle-local-whitespace-cleanup ()
+    "Reset the before-save hook to preven cleaning up."
+    (interactive)
+    (if (setq-local show-trailing-whitespace (not show-trailing-whitespace))
+        (progn
+          (add-hook 'before-save-hook 'whitespace-cleanup nil t)
+          (message "turned on whitespace-cleanup for '%s'" (buffer-file-name (current-buffer))))
+      (remove-hook 'before-save-hook 'whitespace-cleanup)
+      (message "turned off whitespace-cleanup for '%s'" (buffer-file-name (current-buffer)))))
+
   (setq whitespace-style
         '(face
           trailing
@@ -1899,12 +1974,12 @@ return until the minibuffer session ends."
 			 :hover t
 			 :completion t))))
   :config
-  (add-hook 'yaml-mode-hook (bootstrap-set-tab-width 2)))
+  (add-hook 'yaml-mode-hook (hud-set-tab-width 2)))
 
 (use-package yaml-pro
   :ensure t
-  :commands (yaml-pro-mode)
-  :hook (yaml-mode . yaml-pro-mode))
+  :hook (yaml-mode . yaml-pro-mode)
+  :commands (yaml-pro-mode))
 
 (use-package go-ts-mode
   :ensure nil
@@ -1924,24 +1999,6 @@ return until the minibuffer session ends."
       (cons 'go-module root)))
 
   (add-hook 'project-find-functions #'project-find-go-module)
-
-  (defun tychoish/go-mode-setup ()
-    (setq-local tab-width 8)
-    (setq-local fill-column 100)
-    (setq-local compilation-error-screen-columns nil)
-    (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint)))
-
-  (defun tychoish/go-mode-setup-for-buffer (buf)
-    (with-current-buffer buf
-      (tychoish/go-mode-setup)))
-
-  (defun go-mode-set-up-all-buffers ()
-    (interactive)
-    (thread-last (buffer-list)
-		 (seq-filter (lambda (buf) (with-current-buffer buf
-					     (or (derived-mode-p 'go-ts-mode)
-						 (derived-mode-p 'go-mode)))))
-		 (mapc #'tychoish/go-mode-setup-for-buffer)))
 
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
@@ -1963,10 +2020,28 @@ return until the minibuffer session ends."
 						:compositeLiteralFields :json-false
 						:rangeVariableTypes :json-false
 						:functionTypeParameters :json-false)))
+  :config
+  (defun tychoish/go-mode-setup ()
+    (setq-local tab-width 8)
+    (setq-local fill-column 100)
+    (setq-local compilation-error-screen-columns nil)
+    (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint)))
+
+  (defun tychoish/go-mode-setup-for-buffer (buf)
+    (with-current-buffer buf
+      (tychoish/go-mode-setup)))
+
+  (defun go-mode-set-up-all-buffers ()
+    (interactive)
+    (thread-last (buffer-list)
+		 (seq-filter (lambda (buf) (with-current-buffer buf
+					     (or (derived-mode-p 'go-ts-mode)
+						 (derived-mode-p 'go-mode)))))
+		 (mapc #'tychoish/go-mode-setup-for-buffer)))
 
   (add-hook 'go-ts-mode-hook 'tychoish/go-mode-setup)
   (add-hook 'go-mode-hook 'tychoish/go-mode-setup)
-  :config
+
   (let ((current-path (getenv "PATH"))
 	(gopath (getenv "GOPATH")))
 
@@ -1988,14 +2063,13 @@ return until the minibuffer session ends."
   :mode (("\\.rs\\'" . rustic-mode)
 	 ("Cargo.lock" . toml-ts-mode))
   :commands (rust-resolve-fmt-path rustic-mode)
-  :init
-  (add-hook 'rustic-mode-hook 'rustic-mode-auto-save-hook)
-
+  :config
   (defun rustic-mode-auto-save-hook ()
     "Enable auto-saving in rustic-mode buffers."
     (when buffer-file-name
       (setq-local compilation-ask-about-save nil)))
-  :config
+  (add-hook 'rustic-mode-hook 'rustic-mode-auto-save-hook)
+
   (setq rust-mode-treesitter-derive t)
   (setq rustic-lsp-client 'eglot)
   (setq rustic-format-trigger 'on-save)
@@ -2019,7 +2093,7 @@ return until the minibuffer session ends."
 
   (add-to-list 'flycheck-checkers 'rustic-clippy))
 
-(use-package python-ts-mode
+(use-package python
   :ensure nil
   :delight
   (python-ts-mode "py.ts")
@@ -2027,7 +2101,6 @@ return until the minibuffer session ends."
   :mode (("\\.py$" . python-ts-mode))
   :init
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
-  (add-hook 'python-ts-mode 'tychoish/python-setup)
   (add-to-list 'tychoish/eglot-default-server-configuration
 	       '((:pylsp (:plugins
 			  :black (:enabled t)
@@ -2047,12 +2120,12 @@ return until the minibuffer session ends."
 			  :pyflakes (:enabled :json-false)
 			  :pycodestyle (:enabled :json-false)))))
 
+  :config
   (defun tychoish/python-setup ()
     (setq-local python-indent-offset 4)
     (setq-local tab-width 4)
     (setq-local fill-column 100))
-  :config
-  (require 'python)
+  (add-hook 'python-ts-mode-hook 'tychoish/python-setup)
 
   (declare-function python-indent-shift-left "python")
   (declare-function python-indent-shift-right "python")
@@ -2166,13 +2239,13 @@ return until the minibuffer session ends."
   (slime-mode "sl")
   (slime-autodoc-mode "")
   :mode ("\\.lisp" . lisp-mode)
-  :bind (:map tychoish/docs-map
+  :bind (:map hud-docs-map
 	      ("c" . hyperspec-lookup))
   :commands (slime slime-connect)
   :config
   (make-read-extended-command-for-prefix "slime"
     :key-alias "slime-commands"
-    :bind-map tychoish/ide-map
+    :bind-map hud-ide-map
     :bind-key "s")
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
@@ -2183,14 +2256,12 @@ return until the minibuffer session ends."
 
 (use-package journalctl-mode
   :ensure t
-  :bind (:map tychoish/core-map
+  :bind (:map hud-core-map
 	      ("j" . journalctl)))
 
 (use-package docker
   :ensure t
-  :init
-  (defvar-keymap tychoish/docker-map)
-  :bind (:map tychoish/docker-map
+  :bind (:map hud-docker-map
 	 ("d" . docker)
 	 ("c" . docker-containers)
 	 ("i" . docker-images)
@@ -2201,7 +2272,7 @@ return until the minibuffer session ends."
   (setq docker-terminal-backend 'eat)
   (make-read-extended-command-for-prefix "docker"
     :bind-key "x"
-    :bind-map tychoish/docker-map)
+    :bind-map hud-docker-map)
   (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2214,14 +2285,14 @@ return until the minibuffer session ends."
   :bind (("C-c f f" . flycheck-mode))
   :defines (flycheck-checkers)
   :commands (flycheck-disable-checker flycheck-mode global-flycheck-mode)
-  :init
+  :config
   (defun tychoish/flycheck-prefer-eldoc ()
     (add-hook 'eldoc-documentation-functions #'flycheck-eldoc nil t) ;; local
     (setq-local eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
     (setq-local flycheck-display-errors-function nil)
     (setq-local flycheck-help-echo nil))
   (add-hook 'flycheck-mode-hook 'tychoish/flycheck-prefer-eldoc)
-  :config
+
   (setq-default flycheck-disable-checker '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt))
   (setq flycheck-keymap-prefix (kbd "C-c f"))
   ;; the order of the following 3 operations is important.
@@ -2269,7 +2340,7 @@ return until the minibuffer session ends."
 
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
-  :bind (:map tychoish/core-map
+  :bind (:map hud-core-map
 	      ("c" . tychoish-compile)
 	      :map compilation-mode-map
 	      ("C" . compile))
@@ -2348,6 +2419,8 @@ return until the minibuffer session ends."
   :defines (c-aspell-dynamic markdow-aspell-dynamic mail-aspell-dynamic html-aspell-dynamic)
   :functions (flycheck-aspell--start-checker flycheck-aspell--parse)
   :config
+  (eval-when-compile
+    (require 'xtd-dash))
   (mapc (make-add-to-list-fn flycheck-checkers)
 	'(c-aspell-dynamic org-aspell-dynamic rst-aspell-dynamic html-aspell-dynamic markdown-aspell-dynamic mail-aspell-dynamic))
 
@@ -2418,7 +2491,7 @@ return until the minibuffer session ends."
 (use-package eglot
   :ensure nil
   :defines (eglot-mode-map eglot-alternatives)
-  :functions (eglot-format-buffer eglot-managed-p eglot-completion-at-point)
+  :functions (eglot-format-buffer eglot-managed-p eglot-completion-at-point eglot-alternatives)
   :hook (((js-mode
 	   js-ts-mode
 	   typescript-ts-mode
@@ -2436,7 +2509,7 @@ return until the minibuffer session ends."
 	   bash-ts-mode
 	   bash-mode
 	   sh-mode) . #'eglot-ensure))
-  :bind (:map tychoish/eglot-global-map ;; "C-c l l"
+  :bind (:map hud-eglot-global-map ;; "C-c l l"
 	 ("s" . eglot)
 	 ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
 	 ("k" . eglot-shutdown)
@@ -2444,15 +2517,14 @@ return until the minibuffer session ends."
 	 ("c" . execute-extended-eglot-command)
 	 ("g" . eglot-forget-pending-continuations))
   :commands (eglot-code-action-rewrite eglot-code-action-extract eglot-code-actions eglot-format eglot-rename eglot-code-action-organize-imports)
-  :functions (eglot-alternatives)
-  :init
+  :config
   (defun tychoish/eglot-ensure-hook ()
     ;; toggle it on and off so that the left-fringe isn't weird.
     (flycheck-eglot-mode -1)
     (flycheck-eglot-mode 1))
 
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
-  :config
+
   (autoload 'eglot-test-at-point "eglot-test-at-point")
   (bind-keys
    :map eglot-mode-map
@@ -2475,7 +2547,7 @@ return until the minibuffer session ends."
     :key-alias "eglot-commands")
 
   (make-read-extended-command-for-prefix "xref"
-    :bind-map tychoish/ide-map
+    :bind-map hud-ide-map
     :bind-key "x"
     :key-alias "xref-commands")
 
@@ -2689,9 +2761,8 @@ Useful after changing `eglot-workspace-configuration' or
   :ensure t
   :hook (eglot-managed-mode . flycheck-eglot-mode)
   :commands (flycheck-eglot-mode)
-  :init
-  (setq-default flycheck-eglot-exclusive nil)
   :config
+  (setq-default flycheck-eglot-exclusive nil)
   (add-to-list 'flycheck-checkers 'eglot-check)
   (setq flycheck-eglot-enable-diagnostic-tags nil)
   (flycheck-add-next-checker 'eglot-check 'go-gofmt))
@@ -2803,27 +2874,25 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package gptel
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
+  :bind (:map hud-robot-gptel-map
+              ("g" . gptel)
+              ("r" . gptel-rewrite)
+              ("m" . gptel-menu))
   :commands (gptel gptel-rewrite)
   :init
-  (defvar gemini-api-key nil)
-  (defvar anthropic-api-key nil)
-  (defvar openai-api-key nil)
-
-  (bind-keys
-   :map tychoish/robot-gptel-map
-   ("g" . gptel)
-   ("r" . gptel-rewrite)
-   ("m" . gptel-menu))
-
   (make-read-extended-command-for-prefix "gptel"
-    :bind-map tychoish/robot-gptel-map
+    :bind-map hud-robot-gptel-map
     :bind-key "m"
     :key-alias "gptel-commands")
 
   (make-read-extended-command-for-prefix "gptel-set-backend"
-    :bind-map tychoish/robot-gptel-map
+    :bind-map hud-robot-gptel-map
     :bind-key "b"
     :key-alias "gptel-set-backend")
+  :config
+  (defvar gemini-api-key nil)
+  (defvar anthropic-api-key nil)
+  (defvar openai-api-key nil)
 
   (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
     (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
@@ -2851,9 +2920,9 @@ Useful after changing `eglot-workspace-configuration' or
 	  :map gptel-mode-map
 	  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
 	  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-          :map tychoish/robot-gptel-set-default-model-map
+          :map hud-robot-gptel-set-default-model-map
 	  (,(downcase key) . ,default-function-symbol)))))
-  :config
+
   (bind-keys
    :map gptel-mode-map
    ("C-c m" . gptel-menu))
@@ -2942,7 +3011,7 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
-  :bind (:map tychoish/robot-gptel-map
+  :bind (:map hud-robot-gptel-map
 	      ("w" . gptel-aibo-summon))
   :commands (gptel-aibo-summon gptel-aibo))
 
@@ -2951,7 +3020,7 @@ Useful after changing `eglot-workspace-configuration' or
   :commands (gptel-agent)
   :init
   (bind-keys
-   :map tychoish/robot-gptel-map
+   :map hud-robot-gptel-map
    ("a" . gptel-agent)))
 
 (use-package eat
@@ -2959,20 +3028,20 @@ Useful after changing `eglot-workspace-configuration' or
   :commands (eat eat-project eat-other-window eat-project-other-window)
   :init
   (bind-keys
-   :map tychoish/shell-eat-map ;; "C-c s e"
+   :map hud-shell-eat-map ;; "C-c s e"
    ("e" . eat)
    ("o" . eat-other-window)
    ("p" . eat-project)
    ("P" . eat-project-other-window))
 
   (make-read-extended-command-for-prefix "eat"
-    :bind-map tychoish/shell-eat-map
+    :bind-map hud-shell-eat-map
     :bind-key "m"))
 
 (use-package eshell
   :ensure nil
   :defer t
-  :bind (:map tychoish/shell-map
+  :bind (:map hud-shell-map
               ("m" . eshell))
   :config
   (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell")))
@@ -3008,7 +3077,7 @@ Useful after changing `eglot-workspace-configuration' or
   (delight 'agent-shell-completion-mode nil "agent-shell-menu")
 
   (bind-keys
-   :map tychoish/robot-agent-shell-map ;; "C-c r s"
+   :map hud-robot-agent-shell-map ;; "C-c r s"
    ("o" . agent-shell)
    ("t" . agent-shell-toggle)
    ("b" . agent-shell-switch-buffer)
@@ -3018,12 +3087,12 @@ Useful after changing `eglot-workspace-configuration' or
    ("v" . tychoish/agent-shell-toggle-terse-output))
 
   (make-read-extended-command-for-prefix "agent-shell"
-    :bind-map tychoish/robot-agent-shell-map
+    :bind-map hud-robot-agent-shell-map
     :bind-key "x")
   (which-key-customize nil
     :form (push '((nil . "^agent-shell-") . (nil . ""))
                 which-key-replacement-alist))
-
+  :config
   (defconst tychoish/agent-shell-terse-persona
     "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
     "CLAUDE_PERSONA value that requests terse output from the agent.")
@@ -3084,7 +3153,7 @@ Useful after changing `eglot-workspace-configuration' or
             (format "*%s-%s*"
                     (car (split-string (downcase (string-trim agent-name))))
                     slug))))
-  :config
+
   (require 'agent-shell-menu)
 
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
@@ -3099,7 +3168,7 @@ Useful after changing `eglot-workspace-configuration' or
    ("C-c C-p" . agent-shell-resolve-permissions)
    ("C-c C-a" . agent-shell-menu-select-action)
    ("C-c b" . agent-shell-switch-buffer)
-   ("C-c j" . tychoish/robot-agent-shell-map)
+   ("C-c j" . hud-robot-agent-shell-map)
    ("C-c m" . agent-shell-menu-select-action)
    ("C-c x" . agent-shell-menu-select-command)
    ("C-c TAB" . agent-shell-menu-select-collapse)
@@ -3160,15 +3229,14 @@ Useful after changing `eglot-workspace-configuration' or
              agent-shell-queue-insert-wait
              agent-shell-queue-item-menu
 	     agent-shell-menu-project-buffers)
-  :init
-  (defvar-keymap tychoish/robot-agent-shell-map)
   :config
+  (defvar-keymap hud-robot-agent-shell-map)
   (setq agent-shell-queue-write-log-enabled t)
   (require 'agent-shell-menu)
   (bind-keys
    :map agent-shell-queue-mode-map
-   ("C-c j" . tychoish/robot-agent-shell-map)
-   :map tychoish/robot-agent-shell-map
+   ("C-c j" . hud-robot-agent-shell-map)
+   :map hud-robot-agent-shell-map
    ("q" . agent-shell-queue-buffer-open)
    ("/" . agent-shell-queue-capture)
    ("m" . agent-shell-menu-dispatch))
@@ -3252,7 +3320,7 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-manager
   :after (agent-shell)
-  :bind (:map tychoish/robot-agent-shell-map
+  :bind (:map hud-robot-agent-shell-map
          ("," . agent-shell-manager-toggle))
   :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
   :config
@@ -3328,7 +3396,7 @@ call-site that has access to SHELL-BUFFER."
 	     consult-mu-bookmark)
   :init
   (bind-keys
-   :map tychoish/mail-map
+   :map hud-mail-map
    ("a" . tychoish-mail-select-account)
    ("m" . mu4e)
    ("d" . mu4e-search-maildir)
