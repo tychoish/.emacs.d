@@ -1,4 +1,4 @@
-;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; no-byte-compile: t -*-
+;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -33,8 +33,7 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'xtd-macro))
+(require 'xtd-macro)
 
 (declare-function which-key-add-key-based-replacements "which-key")
 (declare-function f-glob "f")
@@ -419,18 +418,19 @@ Override in user/*.el to customize per machine or instance.")
   (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
   (async-package-operation 'install pkgs))
 
-(defun ad:use-package-statistics-convert--higher-precision-time (result)
-  "Reformat the duration column in RESULT with higher precision.
+(with-eval-after-load 'use-package-core
+  (defun ad:use-package-statistics-convert--higher-precision-time (result)
+    "Reformat the duration column in RESULT with higher precision.
 `use-package-statistics-convert' only reports two decimal places;
 this widens it to four for finer-grained startup profiling."
-  (let* ((package (car result))
-	 (statistics (map-elt use-package-statistics package)))
-    (setf (aref (cadr result) 3)
-	  (format "%.4f" (use-package-statistics-time statistics)))
-    result))
+    (let* ((package (car result))
+	   (statistics (map-elt use-package-statistics package)))
+      (setf (aref (cadr result) 3)
+	    (format "%.4f" (use-package-statistics-time statistics)))
+      result))
 
-(advice-add #'use-package-statistics-convert :filter-return
-	    #'ad:use-package-statistics-convert--higher-precision-time)
+  (advice-add #'use-package-statistics-convert :filter-return
+	      #'ad:use-package-statistics-convert--higher-precision-time))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

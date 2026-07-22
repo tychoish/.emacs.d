@@ -13,22 +13,21 @@
     (require 'subr-x))
 
   (defvar tychoish/startup-complete-time nil
-    "Timestamp reflecting when the instance' startup process actually completed.")
+    "Timestamp when startup finished.")
   (defvar tychoish/eglot-default-server-configuration nil
-    "Define eglot Server configuration variable early for use later.")
+    "Eglot server configuration, populated later.")
 
   (defvar sprite-instance-id nil
-    "Name of emacs instance. `work', `personal', and `hud' are common long
-lived instances. Other ephemeral instance names ones may be useful.")
+    "Name of this Emacs instance, e.g. `work', `personal', `hud'.")
 
   (defvar local-notes-directory nil
-    "Defines where notes (e.g. org, roam, deft, etc.) stores are located.")
+    "Directory where notes (org, roam, deft, etc.) are stored.")
 
   (defvar user-org-directories nil
-    "Defines additional directories where org files might exist.")
+    "Additional directories that may contain org files.")
 
   (defvar tychoish-disable-external-notifications nil
-    "disable external notification support.")
+    "Disable external notifications when non-nil.")
 
   (setq initial-major-mode 'fundamental-mode)
   (setq initial-scratch-message nil)
@@ -39,9 +38,8 @@ lived instances. Other ephemeral instance names ones may be useful.")
   ;; (setq server-port 2286)
 
   (defun cli/time-reporting ()
-    ;; `slow-op-reporting' and `use-package-compute-statistics' are already
-    ;; set from `early-init.el' by the time this runs -- see the comment on
-    ;; `slow-op-reporting' there. This just acknowledges the flag.
+    ;; `early-init.el' already set `slow-op-reporting' and
+    ;; `use-package-compute-statistics'; this just acknowledges the flag.
     (when (string-prefix-p "--with-slow-op-timing" argi)
       (message "[op]: enabling time reporting")))
 
@@ -55,8 +53,8 @@ lived instances. Other ephemeral instance names ones may be useful.")
       t))
 
   (defun cli/org-exec-run ()
-    "Execute the org file named by `cli/org-exec-file' then exit Emacs.
-Called from `after-init-hook' so the full config is loaded first."
+    "Execute `cli/org-exec-file', then exit Emacs.
+Runs from `after-init-hook', after the full config has loaded."
     (when cli/org-exec-file
       (builder-org-babel-execute-file cli/org-exec-file)
       (kill-emacs 0)))
@@ -71,8 +69,8 @@ Called from `after-init-hook' so the full config is loaded first."
       t))
 
   (defun cli/org-exec-dir-run ()
-    "Execute all org files in `cli/org-exec-dir' then exit Emacs.
-Called from `after-init-hook' so the full config is loaded first."
+    "Execute all org files in `cli/org-exec-dir', then exit Emacs.
+Runs from `after-init-hook', after the full config has loaded."
     (when cli/org-exec-dir
       (builder-org-babel-execute-directory cli/org-exec-dir)
       (kill-emacs 0)))
@@ -104,27 +102,20 @@ Called from `after-init-hook' so the full config is loaded first."
     '((xtdlib                    "external/xtdlib"                    "https://github.com/tychoish/xtdlib.el")
       (sprite                    "external/sprite"                    "https://github.com/tychoish/sprite")
       (annotated-completing-read "external/annotated-completing-read" "https://github.com/tychoish/annotated-completing-read")
+      ;; (consult-mu                "external/consult-mu"                "https://github.com/armindarvish/consult-mu.git")
+      ;; (agent-shell-manager       "external/agent-shell-manager"       "https://github.com/ElleNajt/agent-shell-manager.git")
       (magit-dash                "external/magit-dash"                "https://github.com/tychoish/magit-dash.git")
-      ;; (agent-shell-notifications "external/agent-shell-notifications" "") ;; skipped because of upstream dependency bug
-      (agent-shell-queue         "external/agent-shell-queue"         "https://github.com/tychoish/agent-shell-queue")
-      (agent-shell-manager       "external/agent-shell-manager"       "https://github.com/ElleNajt/agent-shell-manager.git")
-      (consult-mu                "external/consult-mu"                "https://github.com/armindarvish/consult-mu.git"))
+      ;; (agent-shell-notifications "external/agent-shell-notifications" "") ;; disabled: upstream dependency bug
+      (agent-shell-queue         "external/agent-shell-queue"         "https://github.com/tychoish/agent-shell-queue"))
     "(PACKAGE PATH URL) entries bootstrapped via `bootstrap-package'.
-PATH is relative to `user-emacs-directory'.  Every one of these is a
-plain git checkout/submodule in external: URL is only used as a fallback
-for a machine where the checkout doesn't yet exist.")
+PATH is relative to `user-emacs-directory'. Each is a git checkout under
+`external/'; URL is a fallback for machines where the checkout is missing.")
 
   (defvar bootstrap--package-contents-refreshed nil
     "Non-nil once `package-refresh-contents' has run during this bootstrap.")
 
   (defun bootstrap-ensure-melpa-dependencies (main-file)
-    "Install, via `package-install', any archive dependency declared in
-MAIN-FILE's `Package-Requires' header that isn't already installed.
-Vendored packages (see `bootstrap-vendored-packages') are assumed to be
-handled by `bootstrap-package' itself and are skipped here.  Needed
-because `package-vc-install-from-checkout' byte-compiles the checkout
-immediately, before the dependency's own `use-package :ensure t' form
-(in `tychoish-core') has had a chance to install it."
+    "Install any missing dependency declared in MAIN-FILE's `Package-Requires'."
     (when (file-exists-p main-file)
       (let* ((desc (with-temp-buffer
                      (insert-file-contents main-file)
@@ -142,18 +133,7 @@ immediately, before the dependency's own `use-package :ensure t' form
          deps))))
 
   (defun bootstrap-package-quickstart-stale-p ()
-    "Return non-nil when `package-quickstart-file' omits the directory of a
-package that `package.el' currently considers installed.  This happens when
-`package-user-dir' (e.g. the `elpa' submodule) is updated -- a new package
-added, a version bumped -- without a following `M-x package-quickstart-refresh',
-so the quickstart cache falls out of sync with what is actually on disk.
-
-Deliberately avoids `package-initialize', which would parse every package's
-`-pkg.el' file just to recover its directory -- exactly the full scan
-`package-quickstart-file' exists to skip.  `file-exists-p' on the expected
-descriptor file name replicates `package-load-descriptor's own filtering
-(skips non-package entries like an `archives' or `gnupg' directory) without
-reading or parsing any package's contents."
+    "Return non-nil when `package-quickstart-file' is missing an installed package."
     (and (file-exists-p package-quickstart-file)
          (file-directory-p package-user-dir)
          (let ((quickstart-contents (with-temp-buffer
@@ -166,10 +146,7 @@ reading or parsing any package's contents."
                      (directory-files package-user-dir t "\\`[^.]" t)))))
 
   (defun bootstrap-package (package path url)
-    "Ensure PACKAGE is installed and activated.
-Registers the local checkout at PATH relative to `user-emacs-directory',
-and falls back to `package-vc-install' from URL when PATH does not exist
-locally.."
+    "Ensure PACKAGE is installed and activated."
     (with-slow-op-timer (format "<init> [external] %s" package)
       (let ((pkg-dir (expand-file-name (symbol-name package) package-user-dir)))
 	(unless (or (package-installed-p package) (file-exists-p pkg-dir))

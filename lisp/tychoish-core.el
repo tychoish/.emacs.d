@@ -15,9 +15,6 @@
 (declare-function approximate-project-root "xtd-project")
 (declare-function approximate-project-name "xtd-project")
 
-(eval-when-compile
-  (require 'xtd-macro))
-
 ;; Required eagerly (not deferred via :commands below) since many other
 ;; use-package :init/:config blocks below reference hud-mode-map/hud-*-map
 ;; directly, at load time, not through an autoloaded command.
@@ -109,13 +106,13 @@
 
   (defun async-package-operation (op pkgs)
     (let* ((ops '(install upgrade 'reinstall))
-           (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it))) pkgs))
+           (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it)) pkgs))
            (filename (concat (file-name-concat temporary-file-directory
                                                 (string-join (list
                                                                "emacs" sprite-instance-id
                                                                "async-package"
                                                                (symbol-name op))
-                                                              "-")) ".log"))
+                                                              "-")) ".log")))
       (unless (member op ops)
         (user-error "%s is not a valid operation %S" op ops))
 
@@ -728,21 +725,17 @@
   (defvar vertico-multiform-categories nil)
   (defvar vertico-multiform-commands nil)
   :config
-  (defmacro tychoish/vertico-disable-sort-for (command)
-    "Disable sorting in vertico rendering for COMMAND, matching against `this-command'"
-    `(add-to-list 'vertico-multiform-commands
-		  '(,command (vertico-sort-function . nil)
-			     (vertico-sort-override-function . nil))))
+  (add-to-list 'vertico-multiform-commands '(yank (vertico-sort-function . nil)
+						  (vertico-sort-override-function . nil)))
+  (add-to-list 'vertico-multiform-commands '(yank-from-kill-ring (vertico-sort-function . nil)
+								 (vertico-sort-override-function . nil)))
+  (add-to-list 'vertico-multiform-commands '(consult-yank-from-kill-ring (vertico-sort-function . nil)
+									 (vertico-sort-override-function . nil)))
+  (add-to-list 'vertico-multiform-commands '(consult-yank-pop (vertico-sort-function . nil)
+							      (vertico-sort-override-function . nil)))
 
-  (tychoish/vertico-disable-sort-for yank)
-  (tychoish/vertico-disable-sort-for yank-from-kill-ring)
-  (tychoish/vertico-disable-sort-for consult-yank-from-kill-ring)
-  (tychoish/vertico-disable-sort-for consult-yank-pop)
-
-  (add-to-list 'vertico-multiform-commands
-	       '("\\`execute-extended-command"
-		 (vertico-flat-annotate . t)
-		 (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
+  (add-to-list 'vertico-multiform-commands '("\\`execute-extended-command" (vertico-flat-annotate . t)
+					     (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
 
 (use-package orderless
   :ensure t
