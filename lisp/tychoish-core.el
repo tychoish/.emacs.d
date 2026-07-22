@@ -1,4 +1,4 @@
-;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t; no-byte-compile: t -*-
+;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t -*-
 
 ;; Package-Requires: ((emacs "30.1"))
 
@@ -79,6 +79,7 @@
 
   (delight 'eglot--managed-mode nil 'eglot)
   (delight 'eldoc-mode nil 'eldoc)
+  (delight 'telega-chat-auto-fill-mode nil)
 
   (delight 'visual-line-mode " wr" 'simple)
   (delight 'auto-fill-function " afm" 'simple)
@@ -306,14 +307,14 @@
 
 (use-package projectile
   :ensure t
-  :delight (projectile-mode "" projectile)
-  :hook ((prog-mode . projectile-mode)
-	 (text-mode . projectile-mode))
   :commands (projectile-mode
 	     projectile-project-name
 	     projectile-project-root
 	     projectile-mode-on
 	     projectile-save-project-buffers)
+  :init
+  (add-hook 'prog-mode-hook #'projectile-mode-on)
+  (add-hook 'text-mode-hook #'projectile-mode-on)
   :config
   (keymap-set hud-mode-map "C-c p" '(projectile-command-map . "projectile"))
   (keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag)
@@ -776,8 +777,8 @@
   :ensure t
   :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
   :bind (:map hud-completion-map
-	      ("m" . corfu-at-point)
-	      ("x" . corfu-at-point))
+         ("m" . corfu-at-point)
+         ("x" . corfu-at-point))
   :hook (((prog-mode text-mode) . corfu-mode)
 	 ((shell-mode eshell-mode eat-mode) . corfu-mode)
 	 (telega-chat-mode . corfu-mode))
@@ -1344,19 +1345,15 @@ clipboard."
 
 (use-package telega
   :ensure t
-  :delight
-  (telega-chat-auto-fill-mode "")
   :defines (telega-chat-mode-hook)
-  :bind-keymap (("C-c v" . telega-prefix-map)
-		("C-c n" . telega-prefix-map))
   :commands (telega
 	     telega-chat-mode
 	     telega-extras-switch-to-root
 	     telega-extras-force-kill
 	     telega-extras-disconnect)
   :init
-  (which-key-add-key-based-replacements "C-c n" "+telega-prefix")
-  (which-key-add-key-based-replacements "C-c v" "+telega-prefix")
+  (keymap-set hud-mode-map "C-c v" '(telega-prefix-map . "+telega-prefix"))
+  (keymap-set hud-mode-map "C-c n" '(telega-prefix-map . "+telega-prefix"))
   :config
   (bind-keys
    :map telega-prefix-map
@@ -1452,8 +1449,7 @@ clipboard."
   :init
   (make-read-extended-command-for-prefix "denote"
     :bind-map hud-denote-map
-    :bind-key "x"
-    :key-alias "denote-commands")
+    :bind-key "x")
   :config
   (consult-denote-mode)
   (when (default-boundp 'denote-directory)
@@ -2803,7 +2799,9 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package dape
   :ensure t
-  :bind-keymap ("C-c C-d" . dape-global-map)
+  :defer t
+  :init
+  (keymap-set hud-mode-map "C-c C-d" '(dape-global-map . "dape-map"))
   :config
   (add-hook 'kill-emacs-hook 'dape-bakepoint-save)
   (add-hook 'dape-start-hook #'save-all-buffers)
@@ -2812,7 +2810,6 @@ Useful after changing `eglot-workspace-configuration' or
   ;; Pulse source line (performance hit)
   ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
   (setq dape-key-prefix (kbd "C-c C-d"))
-  (which-key-add-key-based-replacements "C-c C-d" "dape")
   (setq dape-buffer-window-arrangement 'right)
   (setq dape-cwd-function #'approximate-project-root))
 

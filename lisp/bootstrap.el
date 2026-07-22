@@ -284,16 +284,6 @@ Override in user/*.el to customize per machine or instance.")
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
-(disabled
- (defun with-hook-timing (inner &rest args)
-   (mapc (lambda (it)
-           (with-slow-op-timer (format "<hook> %s" it)
-             (funcall inner it)))
-         args))
-
- (advice-add 'run-hooks :around 'with-hook-timing)
- (advice-add 'run-hooks-with-args :around 'with-hook-timing))
-
 (defun bootstrap-init-late-enable-modes ()
   (column-number-mode 1)
   (delete-selection-mode 1)
