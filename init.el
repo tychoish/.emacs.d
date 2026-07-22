@@ -9,8 +9,6 @@
 
 (with-gc-suppressed
  (with-file-name-handler-disabled
-  (setq use-package-compute-statistics t)
-
   (eval-when-compile
     (require 'subr-x))
 
@@ -41,10 +39,11 @@ lived instances. Other ephemeral instance names ones may be useful.")
   ;; (setq server-port 2286)
 
   (defun cli/time-reporting ()
+    ;; `slow-op-reporting' and `use-package-compute-statistics' are already
+    ;; set from `early-init.el' by the time this runs -- see the comment on
+    ;; `slow-op-reporting' there. This just acknowledges the flag.
     (when (string-prefix-p "--with-slow-op-timing" argi)
-      (message "[op]: enabling time reporting")
-      (setq use-package-compute-statistics t)
-      (setq slow-op-reporting t)))
+      (message "[op]: enabling time reporting")))
 
   (defvar cli/org-exec-file nil
     "Org file to execute via `builder-org-babel-execute-file'; set by --org-exec.")
@@ -147,18 +146,24 @@ immediately, before the dependency's own `use-package :ensure t' form
 package that `package.el' currently considers installed.  This happens when
 `package-user-dir' (e.g. the `elpa' submodule) is updated -- a new package
 added, a version bumped -- without a following `M-x package-quickstart-refresh',
-so the quickstart cache falls out of sync with what is actually on disk."
+so the quickstart cache falls out of sync with what is actually on disk.
+
+Deliberately avoids `package-initialize', which would parse every package's
+`-pkg.el' file just to recover its directory -- exactly the full scan
+`package-quickstart-file' exists to skip.  `file-exists-p' on the expected
+descriptor file name replicates `package-load-descriptor's own filtering
+(skips non-package entries like an `archives' or `gnupg' directory) without
+reading or parsing any package's contents."
     (and (file-exists-p package-quickstart-file)
          (file-directory-p package-user-dir)
          (let ((quickstart-contents (with-temp-buffer
                                       (insert-file-contents package-quickstart-file)
-                                      (buffer-string)))
-               (package-alist nil))
-           (package-initialize 'no-activate)
-           (thread-last package-alist
-			(seq-map #'cadr)
-			(seq-some (lambda (desc)
-				    (not (string-search (package-desc-dir desc) quickstart-contents))))))))
+                                      (buffer-string))))
+           (seq-some (lambda (pkg-dir)
+                       (and (file-directory-p pkg-dir)
+                            (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
+                            (not (string-search pkg-dir quickstart-contents))))
+                     (directory-files package-user-dir t "\\`[^.]" t)))))
 
   (defun bootstrap-package (package path url)
     "Ensure PACKAGE is installed and activated.
@@ -179,16 +184,12 @@ locally.."
   (with-slow-op-timer "<init> package"
     (require 'package)
     (setq package-quickstart t)
-    ;; `sprite-state-path' isn't available yet, so this is a bit of a hack
-    (setq package-quickstart-file (expand-file-name "state/package-quickstart.el" user-emacs-directory))
-    ;; `package-activate-all' checks `package-quickstart-file' before
-    ;; doing the full package autoload scan.  This only needs
-    ;; bootstrapping once with `M-x package-quickstart-refresh'.
-    (package-activate-all)
+    (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
     (when (bootstrap-package-quickstart-stale-p)
       (message "[bootstrap] package-quickstart-file is stale relative to package-user-dir; refreshing")
-      (package-quickstart-refresh)
-      (package-activate-all))
+      (package-quickstart-refresh))
+    (package-activate-all)
+
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
             ("nongnu" . "https://elpa.nongnu.org/nongnu/")
