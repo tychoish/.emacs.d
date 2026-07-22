@@ -295,41 +295,6 @@
   :defer t
   :hook (which-key-mode . which-key-setup-side-window-bottom)
   :init
-  (cl-defmacro which-key-customize (new-text &key map key form)
-    "Register a which-key annotation, deferred until which-key is loaded.
-
-NEW-TEXT is the replacement label (a string, or a cons (LABEL . COMMAND)
-for keymap-based replacements that also bind a prefix command).
-:KEY  — key sequence string; required unless :FORM is used.
-:MAP  — keymap (symbol or quoted symbol); uses the keymap-scoped API when
-        available, falling back to the global-key variant otherwise.
-:FORM — arbitrary expression; mutually exclusive with NEW-TEXT, :KEY, and :MAP.
-
-All constraints are validated at macro-expansion time."
-    (declare (indent 1))
-    (cond
-     (form
-      (when key
-	(user-error "which-key-customize: :form is mutually exclusive with :key"))
-      (when map
-	(user-error "which-key-customize: :form is mutually exclusive with :map"))
-      (when new-text
-	(user-error "which-key-customize: :form is mutually exclusive with new-text")))
-     (t
-      (unless new-text
-	(user-error "which-key-customize: new-text is required when :form is not provided"))
-      (unless key
-	(user-error "which-key-customize: :key is required when :form is not provided"))
-      (unless (stringp key)
-	(user-error "which-key-customize: :key must be a string literal, got: %S" key))))
-    (cond
-     (form `(with-eval-after-load 'which-key ,form))
-     (map `(with-eval-after-load 'which-key
-             (if (and ,map (fboundp 'which-key-add-keymap-based-replacements))
-                 (which-key-add-keymap-based-replacements ,map ,key ,new-text)
-               (which-key-add-key-based-replacements ,key ,new-text))))
-     (t `(with-eval-after-load 'which-key
-           (which-key-add-key-based-replacements ,key ,new-text)))))
   :config
   (setq which-key-idle-delay .25)
   (setq which-key-idle-secondary-delay 0.125)
@@ -342,8 +307,6 @@ All constraints are validated at macro-expansion time."
 (use-package projectile
   :ensure t
   :delight (projectile-mode "" projectile)
-  :bind (:map hud-ecclectic-grep-project-map
-         ("a" . projectile-ag))
   :hook ((prog-mode . projectile-mode)
 	 (text-mode . projectile-mode))
   :commands (projectile-mode
@@ -353,6 +316,7 @@ All constraints are validated at macro-expansion time."
 	     projectile-save-project-buffers)
   :config
   (keymap-set hud-mode-map "C-c p" '(projectile-command-map . "projectile"))
+  (keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag)
 
   (defun tychoish/save-buffers-in-project-directory (dir)
     (let ((default-directory (expand-file-name dir)))
@@ -2848,7 +2812,7 @@ Useful after changing `eglot-workspace-configuration' or
   ;; Pulse source line (performance hit)
   ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
   (setq dape-key-prefix (kbd "C-c C-d"))
-  (which-key-customize "dape" :key "C-c C-d")
+  (which-key-add-key-based-replacements "C-c C-d" "dape")
   (setq dape-buffer-window-arrangement 'right)
   (setq dape-cwd-function #'approximate-project-root))
 
@@ -3069,9 +3033,8 @@ Useful after changing `eglot-workspace-configuration' or
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map hud-robot-agent-shell-map
     :bind-key "x")
-  (which-key-customize nil
-    :form (push '((nil . "^agent-shell-") . (nil . ""))
-                which-key-replacement-alist))
+  (with-eval-after-load 'which-key
+    (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
   :config
   (defconst tychoish/agent-shell-terse-persona
     "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
