@@ -21,10 +21,10 @@
 ;; Required eagerly (not deferred via :commands below) since many other
 ;; use-package :init/:config blocks below reference hud-mode-map/hud-*-map
 ;; directly, at load time, not through an autoloaded command.
-(require 'hud-mode)
 
 (use-package hud-mode
   :ensure nil
+  :demand t
   :commands (hud-mode
 	     buffer-line-count
 	     buffer-directory
