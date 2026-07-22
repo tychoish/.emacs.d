@@ -64,11 +64,12 @@
   :ensure t
   :commands (delight)
   :config
+  (delight 'fundamental-mode "fun" 'simple)
+
   (delight 'abbrev-mode "abb")
 
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
   (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
-  (delight 'fundamental-mode "fun" 'simple)
   (delight 'sh-mode "sh" 'sh-script)
   (delight 'org-mode "org" 'org-mode)
   (delight 'org-agenda-mode "agenda" 'org-agenda)
@@ -93,9 +94,6 @@
 
 (use-package async
   :ensure t
-  :delight
-  (async-bytecomp-package-mode "" async-bytecomp)
-  (dired-async-mode "" dired-async)
   :commands (async-start
 	     async-start-process
 	     async-bytecomp-package-mode
@@ -104,18 +102,20 @@
   (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
   (add-hook 'dired-mode-hook 'dired-async-mode)
   :config
+  (delight 'async-bytecomp-package-mode "" 'async-bytecomp)
+  (delight 'dired-async-mode "" 'dired-async)
   (declare-function package-desc-p "package")
   (autoload 'async-package-do-action "async-package")
 
   (defun async-package-operation (op pkgs)
     (let* ((ops '(install upgrade 'reinstall))
-           (valid-packages (seq-filter (lambda (it) (or (symbolp it) (package-desc-p it))) pkgs))
+           (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it))) pkgs))
            (filename (concat (file-name-concat temporary-file-directory
                                                 (string-join (list
                                                                "emacs" sprite-instance-id
                                                                "async-package"
                                                                (symbol-name op))
-                                                              "-")) ".log")))
+                                                              "-")) ".log"))
       (unless (member op ops)
         (user-error "%s is not a valid operation %S" op ops))
 
@@ -146,12 +146,12 @@
 
 (use-package hud
   :ensure nil
-  :bind (("C-x ." . hud-dispatch)
-	 ("C-x ," . hud-select)
-	 :map hud-core-map
-         ("m" . hud-dispatch)
-         ("," . hud-select))
-  :commands (hud-dispatch hud-select))
+  :commands (hud-dispatch hud-select)
+  :init
+  (keymap-set hud-mode-map "C-x ." #'hud-dispatch)
+  (keymap-set hud-mode-map "C-x ," #'hud-select)
+  (keymap-set hud-core-map "m" #'hud-dispatch)
+  (keymap-set hud-core-map "," #'hud-select))
 
 (use-package arch
   :ensure nil
@@ -181,24 +181,25 @@
 (use-package windmove
   :ensure nil
   :defer t
-  :bind (("M-h" . windmove-left)
-	 ("M-j" . windmove-down)
-	 ("M-k" . windmove-up)
-	 ("M-l" . windmove-right)
-	 ("S-<left>" . windmove-left)
-	 ("S-<down>" . windmove-down)
-	 ("S-<right>" . windmove-right)
-	 ("S-<up>" . windmove-up)))
+  :init
+  (keymap-set hud-mode-map "M-h" #'windmove-left)
+  (keymap-set hud-mode-map "M-j" #'windmove-down)
+  (keymap-set hud-mode-map "M-k" #'windmove-up)
+  (keymap-set hud-mode-map "M-l" #'windmove-right)
+  (keymap-set hud-mode-map "S-<left>" #'windmove-left)
+  (keymap-set hud-mode-map "S-<down>" #'windmove-down)
+  (keymap-set hud-mode-map "S-<up>" #'windmove-up)
+  (keymap-set hud-mode-map "S-<right>" #'windmove-right))
 
 (use-package modus-themes
   :ensure t
   :defer t
   :defines (modus-themes-deuteranopia modus-themes-common-palette-overrides)
-  :bind (:map hud-theme-map ;; "C-c t t"
-              ("r" . disable-all-themes) ;; reset
-              ("d" . bootstrap-load-dark-theme)
-              ("l" . bootstrap-load-light-theme))
   :init
+  (keymap-set hud-theme-map "r" #'disable-all-themes) ;; "C-c t t"
+  (keymap-set hud-theme-map "d" #'bootstrap-load-dark-theme) ;; "C-c t t"
+  (keymap-set hud-theme-map "l" #'bootstrap-load-light-theme) ;; "C-c t t"
+
   (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
   (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
@@ -269,12 +270,14 @@
 
 (use-package nerd-icons-dired
   :ensure t
-  :delight (nerd-icons-dired-mode "")
-  :hook (dired-mode . nerd-icons-dired-mode))
+  :commands (nerd-icons-dired-mode)
+  :init
+  (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
+  :config
+  (delight 'nerd-icons-dired-mode ""))
 
 (use-package hud-modeline
   :ensure nil
-  :load-path "lisp"
   :commands (hud-modeline-mode)
   :init
   (add-one-shot-hook
@@ -294,8 +297,9 @@
 (use-package which-key
   :ensure nil
   :defer t
-  :hook (which-key-mode . which-key-setup-side-window-bottom)
+  :commands (which-key-setup-side-window-bottom)
   :init
+  (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
   :config
   (setq which-key-idle-delay .25)
   (setq which-key-idle-secondary-delay 0.125)
@@ -310,13 +314,15 @@
   :commands (projectile-mode
 	     projectile-project-name
 	     projectile-project-root
-	     projectile-mode-on
 	     projectile-save-project-buffers)
   :init
-  (add-hook 'prog-mode-hook #'projectile-mode-on)
-  (add-hook 'text-mode-hook #'projectile-mode-on)
+  (defun turn-on-projectile-mode ()
+    (interactive)
+    (projectile-mode 1))
+  (add-hook 'prog-mode-hook #'turn-on-projectile-mode)
+  (add-hook 'text-mode-hook #'turn-on-projectile-mode)
   :config
-  (keymap-set hud-mode-map "C-c p" '(projectile-command-map . "projectile"))
+  (keymap-set hud-mode-map "C-c p" (cons "projectile" projectile-command-map))
   (keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag)
 
   (defun tychoish/save-buffers-in-project-directory (dir)
@@ -370,18 +376,17 @@
   :defer t
   :config
   (put 'dired-find-alternate-file 'disabled nil)
-  (bind-keys
-   :map dired-mode-map
-   ("w" . wdired-change-to-wdired-mode)))
+  (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
 
 (use-package recentf
   :ensure nil
   :defer t
-  :bind ("C-x C-r" . recentf)
   :init
+  (keymap-set global-map "C-x C-r" #'recentf)
   (setq recentf-auto-cleanup 'never)
   (setq recentf-keep '(file-remote-p file-readable-p))
   (setq recentf-max-menu-items 100)
+  :config
   (setq recentf-save-file (sprite-state-path "recentf.el")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -390,22 +395,6 @@
 
 (use-package ripgrep
   :ensure t
-  :bind (("M-g r" . consult-rg)
-	 :map hud-consult-mode-map ;; "C-c C-;"
-	 ("d" . consult-rg-pwd)
-	 ("r" . consult-rg)
-	 :map hud-ecclectic-rg-map ;; "C-c g r"
-	 ("d" . find-ripgrep)
-	 ("c" . find-ripgrep-compile)
-	 ("m" . find-merge-conflicts)
-	 ("g" . consult-rg)
-	 ("s" . consult-rg-pwd)
-	 ("l" . consult-rg-pwd-wizard)
-	 ("r" . consult-rg-project)
-	 ("p" . consult-rg-project-wizard)
-	 :map hud-ecclectic-grep-project-map
-	 ("r" . consult-rg-project)
-	 ("p" . find-ripgrep-project))
   :defines (hud-ecclectic-rg-map)
   :commands (consult-rg
 	     consult-rg-pwd
@@ -417,6 +406,22 @@
 	     find-ripgrep-project
 	     find-merge-conflicts
 	     ripgrep-regexp)
+  :init
+  (keymap-set global-map "M-g r" #'consult-rg)
+  ;; "C-c C-;"
+  (keymap-set hud-consult-mode-map "d" #'consult-rg-pwd)
+  (keymap-set hud-consult-mode-map "r" #'consult-rg)
+  ;; "C-c g r"
+  (keymap-set hud-ecclectic-rg-map "d" #'find-ripgrep)
+  (keymap-set hud-ecclectic-rg-map "c" #'find-ripgrep-compile)
+  (keymap-set hud-ecclectic-rg-map "m" #'find-merge-conflicts)
+  (keymap-set hud-ecclectic-rg-map "g" #'consult-rg)
+  (keymap-set hud-ecclectic-rg-map "s" #'consult-rg-pwd)
+  (keymap-set hud-ecclectic-rg-map "l" #'consult-rg-pwd-wizard)
+  (keymap-set hud-ecclectic-rg-map "r" #'consult-rg-project)
+  (keymap-set hud-ecclectic-rg-map "p" #'consult-rg-project-wizard)
+  (keymap-set hud-ecclectic-grep-project-map "r" #'consult-rg-project)
+  (keymap-set hud-ecclectic-grep-project-map "p" #'find-ripgrep-project)
   :config
   (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
@@ -513,31 +518,30 @@
 
 (use-package deadgrep
   :ensure t
-  :bind (:map hud-ecclectic-rg-map
-	      ("x" . #'deadgrep))
-  :commands (deadgrep))
+  :commands (deadgrep)
+  :init
+  (keymap-set hud-ecclectic-rg-map "x" #'deadgrep))
 
 (use-package wgrep
   :ensure t
   :after (grep)
-  :bind (:map grep-mode-map
-	      ("w" . wgrep-change-to-wgrep-mode))
+  :commands (wgrep-change-to-wgrep-mode)
+  :init
+  (keymap-set grep-mode-map "w" #'wgrep-change-to-wgrep-mode)
   :config
   (setq wgrep-enable-key "w"))
 
 (use-package anzu
   :ensure t
-  :delight anzu-mode
-  :hook ((isearch-mode) . anzu-mode)
-  :bind (:map hud-anzu-map
-	      ("r" . anzu-query-replace)
-	      ("e" . anzu-query-replace-regexp)
-	      :map isearch-mode-map
-	      ("C-o" . isearch-occur))
   :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
   :init
+  (keymap-set hud-anzu-map "r" #'anzu-query-replace)
+  (keymap-set hud-anzu-map "e" #'anzu-query-replace-regexp)
+  (keymap-set isearch-mode-map "C-o" #'isearch-occur)
+  (add-hook 'isearch-mode-hook #'anzu-mode)
   (setq anzu-cons-mode-line-p nil)
   :config
+  (delight 'anzu-mode)
   (seq-do #'make-variable-buffer-local
           '(anzu--total-matched anzu--current-position anzu--state
             anzu--cached-count anzu--cached-positions anzu--last-command
@@ -549,27 +553,39 @@
 
 (use-package cape
   :ensure t
-  :bind (:map hud-completion-map ;; "C-c ."
-	      ;; this is mostly copy-pasta from cape-mode-map, with tweaks
-	      ("t" . complete-tag)
-	      ("d" . cape-dabbrev)
-	      ("h" . cape-history)
-	      ("f" . cape-file)
-	      ("n" . cape-elisp-symbol)
-	      ("b" . cape-elisp-block)
-	      ("a" . cape-abbrev)
-	      ("l" . cape-line)
-	      ("w" . cape-dict)
-	      ("k" . cape-keyword)
-	      (":" . cape-emoji)
-	      ("e" . cape-emoji)
-	      ("\\" . cape-tex)
-	      ("/" . cape-sgml)
-	      ("u" . cape-rfc1345))
   :commands (cape-capf-inside-code
 	     cape-capf-inside-comment
-	     cape-capf-inside-string)
+	     cape-capf-inside-string
+	     cape-dabbrev
+	     cape-history
+	     cape-file
+	     cape-elisp-symbol
+	     cape-elisp-block
+	     cape-abbrev
+	     cape-line
+	     cape-dict
+	     cape-keyword
+	     cape-emoji
+	     cape-tex
+	     cape-sgml
+	     cape-rfc1345)
   :init
+  ;; "C-c ." this is mostly copy-pasta from cape-mode-map, with tweaks
+  (keymap-set hud-completion-map "t" #'complete-tag)
+  (keymap-set hud-completion-map "d" #'cape-dabbrev)
+  (keymap-set hud-completion-map "h" #'cape-history)
+  (keymap-set hud-completion-map "f" #'cape-file)
+  (keymap-set hud-completion-map "n" #'cape-elisp-symbol)
+  (keymap-set hud-completion-map "b" #'cape-elisp-block)
+  (keymap-set hud-completion-map "a" #'cape-abbrev)
+  (keymap-set hud-completion-map "l" #'cape-line)
+  (keymap-set hud-completion-map "w" #'cape-dict)
+  (keymap-set hud-completion-map "k" #'cape-keyword)
+  (keymap-set hud-completion-map ":" #'cape-emoji)
+  (keymap-set hud-completion-map "e" #'cape-emoji)
+  (keymap-set hud-completion-map "\\" #'cape-tex)
+  (keymap-set hud-completion-map "/" #'cape-sgml)
+  (keymap-set hud-completion-map "u" #'cape-rfc1345)
   (eval-and-compile
     (defmacro cape-capf-wrapper (wrapper inner)
       (when inner
@@ -653,19 +669,23 @@
 
 (use-package yasnippet
   :ensure t
-  :delight (yas-minor-mode " ys")
-  :hook ((text-mode prog-mode) . yas-minor-mode)
   :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
+  :init
+  (add-hook 'text-mode-hook #'yas-minor-mode)
+  (add-hook 'prog-mode-hook #'yas-minor-mode)
   :config
+  (delight 'yas-minor-mode " ys")
   (add-to-list 'load-path (file-name-concat user-emacs-directory "snippets"))
-  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
+  (keymap-set hud-yasnippet-map "C-s" #'yas-insert-snippet)
+  (keymap-set hud-yasnippet-map "C-n" #'yas-new-snippet)
+  (keymap-set hud-yasnippet-map "C-v" #'yas-visit-snippet-file)
+  (keymap-set yas-minor-mode-map "C-c &" '("yasnippet" . hud-yasnippet-map)))
 
 (use-package yasnippet-capf
   :ensure t
-  :bind (:map hud-completion-map
-	      ("s" . yasnippet-capf))
   :commands (yasnippet-capf)
   :init
+  (keymap-set hud-completion-map "s" #'yasnippet-capf)
   (declare-function yasnippet-capf "yasnippet-capf")
   (add-hook 'completion-at-point-functions #'yasnippet-capf))
 
@@ -677,10 +697,10 @@
 (use-package dabbrev
   :ensure nil
   :defer t
-  :bind (("M-/" . dabbrev-completion)
-         ("C-M-/" . dabbrev-expand)
-         (:map hud-completion-map
-               ("/" . dabbrev-completion)))
+  :init
+  (keymap-set global-map "M-/" #'dabbrev-completion)
+  (keymap-set global-map "C-M-/" #'dabbrev-expand)
+  (keymap-set hud-completion-map "/" #'dabbrev-completion)
   :config
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
   (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
@@ -746,10 +766,9 @@
 
 (use-package marginalia
   :ensure t
-  :bind (:map minibuffer-local-map
-	      ("C-c a" . marginalia-cycle))
-  :commands (marginalia-mode)
+  :commands (marginalia-mode marginalia-cycle)
   :init
+  (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
   (add-one-shot-hook
    :name "marginalia"
    :function marginalia-mode
@@ -759,9 +778,11 @@
 
 (use-package embark
   :ensure t
-  :bind (("C-." . embark-act)	      ;; pick some comfortable binding
-	 ("C-c H" . embark-bindings) ;; alternative for `describe-bindings'
-	 ("M-;" . embark-dwim))	       ;; good alternative: M-.
+  :commands (embark-act embark-bindings embark-dwim)
+  :init
+  (keymap-set global-map "C-." #'embark-act)	      ;; pick some comfortable binding
+  (keymap-set global-map "C-c H" #'embark-bindings) ;; alternative for `describe-bindings'
+  (keymap-set global-map "M-;" #'embark-dwim)	       ;; good alternative: M-.
   :config
   (setq embark-prompter #'embark-keymap-prompter)
   ;; (prefix-help-command #'embark-prefix-help-command)
@@ -775,46 +796,43 @@
 
 (use-package corfu
   :ensure t
-  :defines (corfu-margin-formatters corfu-continue-commands corfu-popupinfo--function)
-  :bind (:map hud-completion-map
-         ("m" . corfu-at-point)
-         ("x" . corfu-at-point))
-  :hook (((prog-mode text-mode) . corfu-mode)
-	 ((shell-mode eshell-mode eat-mode) . corfu-mode)
-	 (telega-chat-mode . corfu-mode))
+  :defer t
+  :commands (corfu-mode corfu--in-region)
   :init
   (defun tychoish/corfu-text-mode-setup ()
+    (corfu-mode)
     (setq-local corfu-auto-prefix 2))
 
   (defun tychoish/corfu-prog-mode-setup ()
+    (corfu-mode)
     (setq-local corfu-auto-prefix 3))
 
-  (add-hook 'text-mode-hook 'tychoish/corfu-text-mode-setup)
-  (add-hook 'prog-mode-hook 'tychoish/corfu-prog-mode-setup)
+  (add-hook 'text-mode-hook #'tychoish/corfu-text-mode-setup)
+  (add-hook 'prog-mode-hook #'tychoish/corfu-prog-mode-setup)
   :config
+  (add-hook 'corfu-mode-hook #'tychoish--corfu-maybe-terminal)
   (defun corfu-at-point ()
     "Run `completion-at-point', but force using corfu, which may be useful in gui terminals"
     (interactive)
     (let ((completion-in-region-function #'corfu--in-region))
       (completion-at-point)))
 
+  (keymap-set hud-completion-map "m" #'corfu-at-point)
+  (keymap-set hud-completion-map "x" #'corfu-at-point)
+
   (add-hook 'corfu-mode-hook 'corfu-history-mode)
   (add-hook 'corfu-mode-hook 'corfu-indexed-mode)
   (add-hook 'corfu-mode-hook 'corfu-popupinfo-mode)
 
-  (bind-keys
-   :map corfu-map
-   ("C-<tab>" . corfu-quick-complete)
-   ([tab] . corfu-complete)
-   ("<return>" . corfu-insert)
-   ("C-<return>" . corfu-quick-insert)
-   ("M-SPC" . corfu-insert-separator)
-   ("C-SPC" . corfu-insert-separator)
-   ([backtab] . corfu-insert-separator)
-   ("C-j" . corfu-quick-jump)
-   ("M-d" . corfu-popupinfo-toggle)
-   ("M-m" . corfu-move-to-minibuffer)
-   ("M-S-m" . corfu-move-to-minibuffer))
+  (keymap-set corfu-map "C-<tab>" #'corfu-quick-complete)
+  (keymap-set corfu-map "<tab>" #'corfu-complete)
+  (keymap-set corfu-map "<return>" #'corfu-insert)
+  (keymap-set corfu-map "C-<return>" #'corfu-quick-insert)
+  (keymap-set corfu-map "M-SPC" #'corfu-insert-separator)
+  (keymap-set corfu-map "C-SPC" #'corfu-insert-separator)
+  (keymap-set corfu-map "<backtab>" #'corfu-insert-separator)
+  (keymap-set corfu-map "C-j" #'corfu-quick-jump)
+  (keymap-set corfu-map "M-d" #'corfu-popupinfo-toggle)
 
   (setq corfu-cycle t)
   (setq corfu-quit-at-boundary t)
@@ -829,33 +847,12 @@
   (setq global-corfu-minibuffer nil)
   (setq read-file-name-completion-ignore-case t)
   (setq read-buffer-completion-ignore-case t)
-  (setq completion-ignore-case t)
-
-  (defun corfu-move-to-minibuffer ()
-    (interactive)
-    (pcase completion-in-region--data
-      (`(,beg ,end ,table ,pred ,extras)
-       (let ((completion-extra-properties extras)
-	     (this-command 'consult-completion-in-region)
-	     completion-cycle-threshold
-	     completion-cycling)
-	 (consult-completion-in-region beg end table pred))))))
-
-(use-package popon
-  :ensure t
-  :commands (popon-kill popon-create popon-x-y-at-posn))
+  (setq completion-ignore-case t))
 
 (use-package corfu-terminal
   :ensure t
   :commands (corfu-terminal-mode)
   :init
-  ;; `corfu-mode-hook' fires on both enable and disable; bare
-  ;; `corfu-terminal-mode' would toggle the global state with every
-  ;; buffer activation/deactivation, leaving it OFF after an even
-  ;; number of toggles. That breaks `corfu--popup-support-p' in TTY
-  ;; and makes `corfu--in-region' fall through to the default
-  ;; *Completions* buffer.
-  (add-hook 'corfu-mode-hook #'tychoish--corfu-maybe-terminal)
   (defun tychoish--corfu-maybe-terminal ()
     (unless (or (bound-and-true-p corfu-terminal-mode)
 		(display-graphic-p))
@@ -864,22 +861,28 @@
   (setq corfu-terminal-disable-on-gui t)
   (setq corfu-terminal-enable-on-minibuffer nil))
 
+(use-package popon
+  :ensure t
+  :commands (popon-kill popon-create popon-x-y-at-posn))
+
 (use-package nerd-icons-corfu
   :ensure t
-  :after (corfu nerd-icons)
+  ;; :after (corfu nerd-icons)
   :commands (nerd-icons-corfu-formatter)
   :config
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
 (use-package nerd-icons-xref
   :ensure t
-  :hook (nerd-icons-completion-mode . nerd-icons-xref-mode))
+  :commands (nerd-icons-xref-mode)
+  :init
+  (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode))
 
 (use-package nerd-icons-completion
   :ensure t
-  :hook ((marginalia-mode . nerd-icons-completion-marginalia-setup))
-  :commands (nerd-icons-completion-mode)
+  :commands (nerd-icons-completion-mode nerd-icons-completion-marginalia-setup)
   :init
+  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
   (add-lazy-init
    :name "<core> nerd icons"
    :delay 0.8
@@ -888,85 +891,115 @@
 (use-package xref
   :ensure nil
   :defer t
-  :bind (("M-." . xref-find-definitions)
-	 (:map hud-ide-map ;; "C-c l"
-	       ("c" . xref-find-references)
-	       ("d" . xref-find-definitions)
-	       ("p" . xref-go-back)
-	       ("n" . xref-go-forward)
-	       ("o" . xref-find-definitions-other-window))))
+  :init
+  (keymap-set global-map "M-." #'xref-find-definitions)
+  ;; "C-c l"
+  (keymap-set hud-ide-map "c" #'xref-find-references)
+  (keymap-set hud-ide-map "d" #'xref-find-definitions)
+  (keymap-set hud-ide-map "p" #'xref-go-back)
+  (keymap-set hud-ide-map "n" #'xref-go-forward)
+  (keymap-set hud-ide-map "o" #'xref-find-definitions-other-window))
 
 (use-package consult
   :ensure t
-  :bind (("C-c C-x C-m" . consult-mode-command)
-	 ("C-c C-; m" . consult-kmacro)
-	 ("C-c C-x r r" . consult-register)
-	 ("C-c C-x r s" . consult-register-store)
-	 ("C-c C-x r l" . consult-register-load)
-	 ("C-c e" . consult-compile-error)
-	 ("C-c C-s" . consult-line)
-	 ("C-c f C-f" . consult-find)
-	 ;; tychoish/wacky
-	 ([remap Info-search] . consult-info)
-	 ;; C-x bindings in `ctl-x-map'
-	 ("C-x :" . consult-complex-command)	   ;; orig. repeat-complex-command
-	 ("C-x b" . consult-buffer)		 ;; orig. list-buffers
-	 ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
-	 ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
-	 ("C-x t b" . consult-buffer-other-tab)	   ;; orig. switch-to-buffer-other-tab
-	 ("C-x r b" . consult-bookmark)		   ;; orig. bookmark-jump
-	 ("C-x p b" . consult-project-buffer)	   ;; orig. project-switch-to-buffer
-	 ("C-x C-r" . consult-recent-file)	   ;; orig. recentf
-	 ;; Custom M-# bindings for fast register access
-	 ("M-'" . consult-register-store)	   ;; orig. abbrev-prefix-mark (unrelated)
-	 ("M-#" . consult-register-load)
-	 ("C-M-#" . consult-register)
-	 ;; Other custom bindings
-	 ("M-y" . consult-yank-from-kill-ring)		      ;; orig. yank-pop
-	 ("C-M-I" . consult-imenu-multi)
-	 ;; M-g bindings in `goto-map'
-	 ("M-g e" . consult-compile-error)
-	 ("M-g g" . consult-goto-line)		   ;; orig. goto-line
-	 ("M-g M-g" . consult-goto-line)	   ;; orig. goto-line
-	 ("M-g m" . consult-mark)
-	 ("M-g k" . consult-global-mark)
-	 ("M-g i" . consult-imenu)
-	 ("M-g s" . consult-line)
-	 ("M-i" . consult-imenu)
-	 ;; M-s bindings in `search-map'
-	 ("M-s d" . consult-find)		   ;; Alternative: consult-find
-	 ("M-s c" . consult-locate)
-	 ;; Isearch integration
-	 ("M-s e" . consult-isearch-history)
-	 :map hud-completion-map
-	 ("c" . consult-at-point)
-	 :map hud-docs-map
-	 ("i" . consult-info)
-	 ("m" . consult-man)
-	 :map hud-consult-mode-map
-	 ("h" . consult-history)
-	 :map hud-ecclectic-grep-map ;; "C-c g"
-	 ("f" . consult-grep)
-	 :map hud-ecclectic-grep-project-map ;; "C-c g p"
-	 ("g" . consult-git-grep)        	  ;; for git(?)
-	 ;; Minibuffer history
-	 :map minibuffer-local-map
-	 ("M-s" . consult-history)		   ;; orig. next-matching-history-element
-	 ("M-r" . consult-history)		   ;; orig. previous-matching-history-element
-	 :map isearch-mode-map
-	 ("M-e" . consult-isearch-history)	   ;; orig. isearch-edit-string
-	 ("M-s e" . consult-isearch-history)	   ;; orig. isearch-edit-string
-	 ("M-s l" . consult-line)		   ;; needed by consult-line to detect isearch
-	 ("M-s L" . consult-line-multi) 	   ;; needed by consult-line to detect isearch
-	 :map hud-consult-search-map ;; "C-c g s"
-	 ("l" . consult-line)
-	 ("m" . consult-line-multi)
-	 ("k" . consult-keep-lines)
-	 ("f" . consult-focus-lines))
-  :hook (completion-list-mode . consult-preview-at-point-mode)
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
-  :commands (consult-find consult-git-grep consult-grep)
+  :commands (consult-find
+	     consult-git-grep
+	     consult-grep
+	     consult-mode-command
+	     consult-kmacro
+	     consult-register
+	     consult-register-store
+	     consult-register-load
+	     consult-compile-error
+	     consult-line
+	     consult-info
+	     consult-complex-command
+	     consult-buffer
+	     consult-buffer-other-window
+	     consult-buffer-other-frame
+	     consult-buffer-other-tab
+	     consult-bookmark
+	     consult-project-buffer
+	     consult-recent-file
+	     consult-yank-from-kill-ring
+	     consult-imenu-multi
+	     consult-goto-line
+	     consult-mark
+	     consult-global-mark
+	     consult-imenu
+	     consult-locate
+	     consult-isearch-history
+	     consult-line-multi
+	     consult-keep-lines
+	     consult-focus-lines
+	     consult-history
+	     consult-man
+	     consult-at-point
+	     consult-preview-at-point-mode)
+  :init
+  (add-hook 'completion-list-mode-hook #'consult-preview-at-point-mode)
+  (keymap-set global-map "C-c C-x C-m" #'consult-mode-command)
+  (keymap-set global-map "C-c C-; m" #'consult-kmacro)
+  (keymap-set global-map "C-c C-x r r" #'consult-register)
+  (keymap-set global-map "C-c C-x r s" #'consult-register-store)
+  (keymap-set global-map "C-c C-x r l" #'consult-register-load)
+  (keymap-set global-map "C-c e" #'consult-compile-error)
+  (keymap-set global-map "C-c C-s" #'consult-line)
+  (keymap-set global-map "C-c f C-f" #'consult-find)
+  ;; tychoish/wacky
+  (keymap-set global-map "<remap> <Info-search>" #'consult-info)
+  ;; C-x bindings in `ctl-x-map'
+  (keymap-set global-map "C-x :" #'consult-complex-command)	   ;; orig. repeat-complex-command
+  (keymap-set global-map "C-x b" #'consult-buffer)		 ;; orig. list-buffers
+  (keymap-set global-map "C-x 4 b" #'consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+  (keymap-set global-map "C-x 5 b" #'consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+  (keymap-set global-map "C-x t b" #'consult-buffer-other-tab)	   ;; orig. switch-to-buffer-other-tab
+  (keymap-set global-map "C-x r b" #'consult-bookmark)		   ;; orig. bookmark-jump
+  (keymap-set global-map "C-x p b" #'consult-project-buffer)	   ;; orig. project-switch-to-buffer
+  (keymap-set global-map "C-x C-r" #'consult-recent-file)	   ;; orig. recentf
+  ;; Custom M-# bindings for fast register access
+  (keymap-set global-map "M-'" #'consult-register-store)	   ;; orig. abbrev-prefix-mark (unrelated)
+  (keymap-set global-map "M-#" #'consult-register-load)
+  (keymap-set global-map "C-M-#" #'consult-register)
+  ;; Other custom bindings
+  (keymap-set global-map "M-y" #'consult-yank-from-kill-ring)		      ;; orig. yank-pop
+  (keymap-set global-map "C-M-I" #'consult-imenu-multi)
+  ;; M-g bindings in `goto-map'
+  (keymap-set global-map "M-g e" #'consult-compile-error)
+  (keymap-set global-map "M-g g" #'consult-goto-line)		   ;; orig. goto-line
+  (keymap-set global-map "M-g M-g" #'consult-goto-line)	   ;; orig. goto-line
+  (keymap-set global-map "M-g m" #'consult-mark)
+  (keymap-set global-map "M-g k" #'consult-global-mark)
+  (keymap-set global-map "M-g i" #'consult-imenu)
+  (keymap-set global-map "M-g s" #'consult-line)
+  (keymap-set global-map "M-i" #'consult-imenu)
+  ;; M-s bindings in `search-map'
+  (keymap-set global-map "M-s d" #'consult-find)		   ;; Alternative: consult-find
+  (keymap-set global-map "M-s c" #'consult-locate)
+  ;; Isearch integration
+  (keymap-set global-map "M-s e" #'consult-isearch-history)
+  (keymap-set hud-completion-map "c" #'consult-at-point)
+  (keymap-set hud-docs-map "i" #'consult-info)
+  (keymap-set hud-docs-map "m" #'consult-man)
+  (keymap-set hud-consult-mode-map "h" #'consult-history)
+  ;; "C-c g"
+  (keymap-set hud-ecclectic-grep-map "f" #'consult-grep)
+  ;; "C-c g p"
+  (keymap-set hud-ecclectic-grep-project-map "g" #'consult-git-grep)        	  ;; for git(?)
+  ;; Minibuffer history
+  (keymap-set minibuffer-local-map "M-s" #'consult-history)		   ;; orig. next-matching-history-element
+  (keymap-set minibuffer-local-map "M-r" #'consult-history)		   ;; orig. previous-matching-history-element
+  (keymap-set isearch-mode-map "M-e" #'consult-isearch-history)	   ;; orig. isearch-edit-string
+  (keymap-set isearch-mode-map "M-s e" #'consult-isearch-history)	   ;; orig. isearch-edit-string
+  (keymap-set isearch-mode-map "M-s l" #'consult-line)		   ;; needed by consult-line to detect isearch
+  (keymap-set isearch-mode-map "M-s L" #'consult-line-multi) 	   ;; needed by consult-line to detect isearch
+  ;; "C-c g s"
+  (keymap-set hud-consult-search-map "l" #'consult-line)
+  (keymap-set hud-consult-search-map "m" #'consult-line-multi)
+  (keymap-set hud-consult-search-map "k" #'consult-keep-lines)
+  (keymap-set hud-consult-search-map "f" #'consult-focus-lines)
   :config
   (defun consult-at-point ()
     "Run `completion-at-point', but force using consult, which may be useful in tty terminals"
@@ -1036,18 +1069,19 @@
 
 (use-package consult-flycheck
   :ensure t
-  :bind (("M-g f" . flycheck-mode)
-	 :map hud-consult-mode-map
-	 ("c" . consult-flycheck)
-	 :map flycheck-command-map
-	 (";" . consult-flycheck)))
+  :commands (consult-flycheck)
+  :init
+  (keymap-set global-map "M-g f" #'flycheck-mode)
+  (keymap-set hud-consult-mode-map "c" #'consult-flycheck)
+  (with-eval-after-load 'flycheck
+    (keymap-set flycheck-command-map ";" #'consult-flycheck)))
 
 (use-package consult-flyspell
   :ensure t
   :after (flyspell)
-  :bind (:map hud-consult-mode-map
-	      ("f" . consult-flyspell))
   :commands (consult-flyspell flyspell-correct-consult)
+  :init
+  (keymap-set hud-consult-mode-map "f" #'consult-flyspell)
   :config
   (defun consult-flyspell--round-trip ()
     (flyspell-correct-at-point)
@@ -1057,9 +1091,9 @@
 (use-package consult-eglot
   :ensure t
   :after (eglot)
-  :bind (:map hud-docs-map
-	      ("a" . consult-eglot-symbols))
   :commands (consult-eglot-symbols)
+  :init
+  (keymap-set hud-docs-map "a" #'consult-eglot-symbols)
   :config
   (consult-customize
    consult-eglot-symbols
@@ -1074,57 +1108,59 @@
 (use-package consult-yasnippet
   :ensure t
   :after (yasnippet)
-  :bind (:map hud-consult-mode-map
-	      ("s" . consult-yasnippet)
-	      :map hud-completion-map
-	      ("y" . consult-yasnippet)))
+  :commands (consult-yasnippet)
+  :init
+  (keymap-set hud-consult-mode-map "s" #'consult-yasnippet)
+  (keymap-set hud-completion-map "y" #'consult-yasnippet))
 
 (use-package embark-consult
-  :ensure t ; only need to install it, embark loads it after consult if found
-  :hook (embark-collect-mode . consult-preview-at-point-mode))
+  :ensure t
+  :defer t
+  :init
+  (add-hook 'embark-collect-mode-hook #'consult-preview-at-point-mode))
 
 (use-package builder
-  :after (compile)
-  :bind (:map compilation-mode-map
-	      ("d" . builder-change-directory))
   :commands (annotated-completing-read-directory
 	     make-builder-candidate
 	     builder-register-candidates
 	     builder--read-command
 	     builder-compile-project
+	     builder-change-directory
 	     builder-emacs-conf-run-ci-tests
 	     builder-emacs-conf-byte-compile-and-delete-artifact
 	     builder-emacs-conf-native-compile-all
 	     builder-emacs-conf-byte-recompile-directory
-	     builder-emacs-conf-recompile-vendored-packages))
+	     builder-emacs-conf-recompile-vendored-packages)
+  :init
+  (with-eval-after-load 'compile
+    (keymap-set compilation-mode-map "d" #'builder-change-directory)))
 
 (use-package revbufs
   :ensure t
-  :bind (("C-x x a" . revbufs)
-	 :map hud-buffer-control-map
-	 ("d" . kill-buffers-in-directory)
-	 ("<SPC>" . revert-buffer-quick)
-	 ("m" . kill-buffers-matching-mode)
-	 ("h" . bury-buffer)
-	 ("r" . revbufs)
-	 ("b" . switch-to-buffer)
-	 ("n" . switch-to-buffer-other-window))
   :commands (revbufs)
+  :init
+  (keymap-set global-map "C-x x a" #'revbufs)
+  (keymap-set hud-buffer-control-map "d" #'kill-buffers-in-directory)
+  (keymap-set hud-buffer-control-map "<SPC>" #'revert-buffer-quick)
+  (keymap-set hud-buffer-control-map "m" #'kill-buffers-matching-mode)
+  (keymap-set hud-buffer-control-map "h" #'bury-buffer)
+  (keymap-set hud-buffer-control-map "r" #'revbufs)
+  (keymap-set hud-buffer-control-map "b" #'switch-to-buffer)
+  (keymap-set hud-buffer-control-map "n" #'switch-to-buffer-other-window)
   :config
-  (bind-keys
-   :map revbufs-mode-map
-   ("C-k" . revbufs-kill)
-   ("q" . bury-buffer))
+  (keymap-set revbufs-mode-map "C-k" #'revbufs-kill)
+  (keymap-set revbufs-mode-map "q" #'bury-buffer)
 
   (defalias 'revbufs-kill
     (kmacro "C-f C-f C-f C-k")))
 
 (use-package popper
   :ensure t
-  :bind (("C-c '" . popper-toggle)
-         ("C-c \\" . popper-cycle)
-         ("C-c C-'"  . popper-kill-latest-popup))
-  :commands (popper-mode popper-echo-mode popper-cycle popper-toggle)
+  :commands (popper-mode popper-echo-mode popper-cycle popper-toggle popper-kill-latest-popup)
+  :init
+  (keymap-set global-map "C-c '" #'popper-toggle)
+  (keymap-set global-map "C-c \\" #'popper-cycle)
+  (keymap-set global-map "C-c C-'" #'popper-kill-latest-popup)
   :config
   (add-hook 'popper-mode-hook 'popper-echo-mode)
   (setq popper-reference-buffers
@@ -1149,12 +1185,11 @@
 (use-package magit
   :ensure t
   :after (cond-let)
-  :bind (:map hud-magit-map
-         ("s" . magit-status)
-	 ("f" . magit-branch)
-	 ("b" . magit-blame))
   :commands (magit-toplevel magit-status magit-branch magit-blame)
   :init
+  (keymap-set hud-magit-map "s" #'magit-status)
+  (keymap-set hud-magit-map "f" #'magit-branch)
+  (keymap-set hud-magit-map "b" #'magit-blame)
   (make-read-extended-command-for-prefix "magit"
     :bind-map hud-magit-map
     :bind-key "x")
@@ -1188,14 +1223,12 @@
            configs)))))
 
   (defvar-keymap magit-command-mode-map) ;; "/"
-  (keymap-set magit-mode-map "/" magit-command-mode-map)
+  (keymap-set magit-mode-map "/" '(magit-command-mode-map . "magit-command"))
   (keymap-set magit-command-mode-map "x" '(execute-extended-magit-command . "magit-commands"))
   (keymap-set magit-command-mode-map "m" '(execute-extended-magit-command . "(s)merge-commands"))
 
-  (bind-keys
-   :map magit-status-mode-map
-   ("C-n" . next-line)
-   ("C-p" . previous-line))
+  (keymap-set magit-status-mode-map "C-n" #'next-line)
+  (keymap-set magit-status-mode-map "C-p" #'previous-line)
 
   (when (fboundp 'hud-modeline-set-segment-action)
     (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
@@ -1211,10 +1244,8 @@
 	     magit-dash-open-other-window
 	     magit-dash-gh-pr-dashboard-open)
   :init
-  (bind-keys
-   :map hud-magit-map
-   ("d" . magit-dash-open)
-   ("o" . magit-dash-open-repo))
+  (keymap-set hud-magit-map "d" #'magit-dash-open)
+  (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
   :config
   (require 'magit-gh)
   (require 'magit-dash-open)
@@ -1229,9 +1260,7 @@
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
-  (bind-keys
-   :map magit-mode-map
-   ("C-c C-d" . magit-dash-open-other-window))
+  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
 
   (with-eval-after-load 'nerd-icons
     (setq nerd-icons-mode-icon-alist
@@ -1249,14 +1278,13 @@
 (use-package smerge-mode
   :after (magit)
   :defer t
-  :bind
-   (:map hud-smerge-map
-    ("n" . smerge-vc-next-conflict)
-    ("k" . smerge-kill-current)
-    ("s" . smerge-start-session)
-    ("r" . smerge-kill-and-vc-next-conflict)
-    ("t" . smerge-keep-current))
+  :commands (smerge-kill-and-vc-next-conflict)
   :init
+  (keymap-set hud-smerge-map "n" #'smerge-vc-next-conflict)
+  (keymap-set hud-smerge-map "k" #'smerge-kill-current)
+  (keymap-set hud-smerge-map "s" #'smerge-start-session)
+  (keymap-set hud-smerge-map "r" #'smerge-kill-and-vc-next-conflict)
+  (keymap-set hud-smerge-map "t" #'smerge-keep-current)
   (make-read-extended-command-for-prefix "smerge"
     :bind-map hud-smerge-map
     :bind-key "x")
@@ -1269,7 +1297,9 @@
 
 (use-package sqlite-mode-extras
   :ensure t
-  :hook ((sqlite-mode . sqlite-extras-minor-mode)))
+  :commands (sqlite-extras-minor-mode)
+  :init
+  (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode))
 
 (use-package gist
   :ensure t
@@ -1277,8 +1307,9 @@
 
 (use-package git-link
   :ensure t
-  :bind (:map hud-magit-map
-	 ("l" . git-link))
+  :commands (git-link)
+  :init
+  (keymap-set hud-magit-map "l" #'git-link)
   :config
   (defun ad:git-link--new-copy-to-clipboard (link)
     "Also copy LINK to the system clipboard.
@@ -1329,9 +1360,9 @@ clipboard."
 
 (use-package emojify
   :ensure t
-  :delight emojify-mode
   :commands (global-emojify-mode)
   :config
+  (delight 'emojify-mode)
   (setq emojify-emoji-styles '(ascii unicode github))
   (setq emojify-display-style 'unicode)
   (setq emojify-point-entered-behaviour 'echo))
@@ -1355,20 +1386,18 @@ clipboard."
   (keymap-set hud-mode-map "C-c v" '(telega-prefix-map . "+telega-prefix"))
   (keymap-set hud-mode-map "C-c n" '(telega-prefix-map . "+telega-prefix"))
   :config
-  (bind-keys
-   :map telega-prefix-map
-   :prefix "d"
-   :prefix-map tychoish/telega-buffer-management-map
-   ("h" . telega-extras-bury-chat-buffers)
-   ("k" . telega-extras-kill-chat-buffers)
-   :map telega-chat-mode-map
-   ("C-c C-f" . telega-chat-buffer-auto-fill)
-   :map telega-root-mode-map
-   ("C-c C-f" . telega-root-buffer-auto-fill)
-   ("<tab>" . telega-extras-root-cycle-next)
-   ("h" . telega-extras-bury-chat-buffers)
-   ("C-k" . telega-extras-kill-chat-buffers)
-   ("d" . telega-extras-disconnect))
+  (add-hook 'telega-chat-mode-hook 'tychoish/corfu-text-mode-setup)
+
+  (defvar-keymap tychoish/telega-buffer-management-map) ;; "d"
+  (keymap-set telega-prefix-map "d" '(tychoish/telega-buffer-management-map . "telega-buffer-management"))
+  (keymap-set tychoish/telega-buffer-management-map "h" #'telega-extras-bury-chat-buffers)
+  (keymap-set tychoish/telega-buffer-management-map "k" #'telega-extras-kill-chat-buffers)
+  (keymap-set telega-chat-mode-map "C-c C-f" #'telega-chat-buffer-auto-fill)
+  (keymap-set telega-root-mode-map "C-c C-f" #'telega-root-buffer-auto-fill)
+  (keymap-set telega-root-mode-map "<tab>" #'telega-extras-root-cycle-next)
+  (keymap-set telega-root-mode-map "h" #'telega-extras-bury-chat-buffers)
+  (keymap-set telega-root-mode-map "C-k" #'telega-extras-kill-chat-buffers)
+  (keymap-set telega-root-mode-map "d" #'telega-extras-disconnect)
 
   (make-read-extended-command-for-prefix "telega"
     :bind-map telega-prefix-map
@@ -1427,17 +1456,6 @@ clipboard."
 
 (use-package denote
   :ensure t
-  :bind (:map hud-denote-map
-         ("n" . denote)
-	 ("m" . denote-open-or-create)
-	 ("f" . consult-denote-find)
-	 ("l" . denote-link)
-	 ("b" . denote-backlinks)
-	 ("r" . denote-dash-rename-file)
-	 ("." . denote-dash-dispatch)
-	 ("," . denote-dash)
-	 ("k" . denote-dash-save-and-kill-all-notes)
-	 ("u" . denote-dash-rename-file-using-front-matter))
   :commands (denote
 	     denote-backlinks
 	     denote-dired
@@ -1447,6 +1465,16 @@ clipboard."
 	     denote-rename-file
 	     denote-rename-file-using-front-matter)
   :init
+  (keymap-set hud-denote-map "n" #'denote)
+  (keymap-set hud-denote-map "m" #'denote-open-or-create)
+  (keymap-set hud-denote-map "f" #'consult-denote-find)
+  (keymap-set hud-denote-map "l" #'denote-link)
+  (keymap-set hud-denote-map "b" #'denote-backlinks)
+  (keymap-set hud-denote-map "r" #'denote-dash-rename-file)
+  (keymap-set hud-denote-map "." #'denote-dash-dispatch)
+  (keymap-set hud-denote-map "," #'denote-dash)
+  (keymap-set hud-denote-map "k" #'denote-dash-save-and-kill-all-notes)
+  (keymap-set hud-denote-map "u" #'denote-dash-rename-file-using-front-matter)
   (make-read-extended-command-for-prefix "denote"
     :bind-map hud-denote-map
     :bind-key "x")
@@ -1533,10 +1561,10 @@ clipboard."
 
 (use-package consult-notes
   :ensure t
-  :bind (:map hud-denote-map
-         (";" . consult-notes)
-         ("/" . consult-notes-search-in-all-notes))
   :commands (consult-notes consult-notes-search-in-all-notes)
+  :init
+  (keymap-set hud-denote-map ";" #'consult-notes)
+  (keymap-set hud-denote-map "/" #'consult-notes-search-in-all-notes)
   :config
   (consult-notes-denote-mode 1)
 
@@ -1557,17 +1585,17 @@ return until the minibuffer session ends."
 
 (use-package consult-denote
   :ensure t
-  :bind (:map hud-denote-map
-         ("f" . consult-denote-find)
-         ("g" . consult-denote-grep))
-  :commands (consult-denote-find consult-denote-grep consult-denote-mode))
+  :commands (consult-denote-find consult-denote-grep consult-denote-mode)
+  :init
+  (keymap-set hud-denote-map "f" #'consult-denote-find)
+  (keymap-set hud-denote-map "g" #'consult-denote-grep))
 
 (use-package denote-journal
   :ensure t
   :after denote
-  :bind (:map hud-denote-map
-         ("j" . denote-journal-new-entry))
   :commands (denote-journal-new-entry denote-journal-new-entry-after-last)
+  :init
+  (keymap-set hud-denote-map "j" #'denote-journal-new-entry)
   :config
   (setq denote-journal-title-format nil)
   (setq denote-journal-directory (file-name-concat local-notes-directory "denote" "journal")))
@@ -1575,17 +1603,18 @@ return until the minibuffer session ends."
 (use-package denote-sequence
   :ensure t
   :after denote
-  :bind (:map hud-denote-sequence-map
-	 ("c" . denote-sequence-new-child)
-	 ("s" . denote-sequence-new-sibling)
-	 ("r" . denote-sequence-rename-as-parent)
-	 ("p" . denote-sequence-new-parent)
-	 ("l" . denote-sequence-link)
-	 ("m" . denote-dash-reparent)
-	 ("n" . denote-dash-renumber-recursive)
-	 ("i" . denote-dash-insert-sequence-note))
   :commands (denote-sequence-new-child denote-sequence-new-sibling
-             denote-sequence-new-parent denote-sequence-link)
+             denote-sequence-new-parent denote-sequence-link
+             denote-sequence-rename-as-parent)
+  :init
+  (keymap-set hud-denote-sequence-map "c" #'denote-sequence-new-child)
+  (keymap-set hud-denote-sequence-map "s" #'denote-sequence-new-sibling)
+  (keymap-set hud-denote-sequence-map "r" #'denote-sequence-rename-as-parent)
+  (keymap-set hud-denote-sequence-map "p" #'denote-sequence-new-parent)
+  (keymap-set hud-denote-sequence-map "l" #'denote-sequence-link)
+  (keymap-set hud-denote-sequence-map "m" #'denote-dash-reparent)
+  (keymap-set hud-denote-sequence-map "n" #'denote-dash-renumber-recursive)
+  (keymap-set hud-denote-sequence-map "i" #'denote-dash-insert-sequence-note)
   :config
   (setq denote-sequence-scheme 'alphanumeric)
   (add-to-list 'display-buffer-alist
@@ -1601,14 +1630,6 @@ return until the minibuffer session ends."
 (use-package denote-org
   :ensure t
   :after denote
-  :bind (:map hud-denote-org-map
-         ("l" . denote-org-link-to-heading)
-         ("b" . denote-org-backlinks-for-heading)
-         ("x" . denote-org-extract-org-subtree)
-         ("r" . orgx-migrate-subtree-to-denote)
-         ("d" . denote-org-dblock-insert-links)
-         ("p" . denote-org-dblock-insert-backlinks)
-         ("f" . denote-org-dblock-insert-files))
   :commands (denote-org-link-to-heading
              denote-org-backlinks-for-heading
              denote-org-extract-org-subtree
@@ -1618,24 +1639,20 @@ return until the minibuffer session ends."
              denote-org-dblock-insert-missing-links
              denote-org-dblock-insert-backlinks
              denote-org-dblock-insert-files
-             denote-org-dblock-insert-files-as-headings))
+             denote-org-dblock-insert-files-as-headings
+             orgx-migrate-subtree-to-denote)
+  :init
+  (keymap-set hud-denote-org-map "l" #'denote-org-link-to-heading)
+  (keymap-set hud-denote-org-map "b" #'denote-org-backlinks-for-heading)
+  (keymap-set hud-denote-org-map "x" #'denote-org-extract-org-subtree)
+  (keymap-set hud-denote-org-map "r" #'orgx-migrate-subtree-to-denote)
+  (keymap-set hud-denote-org-map "d" #'denote-org-dblock-insert-links)
+  (keymap-set hud-denote-org-map "p" #'denote-org-dblock-insert-backlinks)
+  (keymap-set hud-denote-org-map "f" #'denote-org-dblock-insert-files))
 
 (use-package denote-explore
   :ensure t
   :after denote
-  :bind (:map hud-denote-explore-map
-         ("n" . denote-explore-count-notes)
-         ("c" . denote-explore-count-keywords)
-         ("r" . denote-explore-random-note)
-         ("l" . denote-explore-random-link)
-         ("d" . denote-explore-duplicate-notes)
-         ("s" . denote-explore-single-keywords)
-         ("z" . denote-explore-zero-keywords)
-         ("k" . denote-explore-rename-keyword)
-         ("m" . denote-explore-missing-links)
-         ("y" . denote-explore-sync-metadata)
-         ("b" . denote-explore-barchart-keywords)
-         ("t" . denote-explore-barchart-timeline))
   :commands (denote-explore-count-notes
              denote-explore-count-keywords
              denote-explore-random-note
@@ -1650,6 +1667,19 @@ return until the minibuffer session ends."
              denote-explore-barchart-keywords
              denote-explore-barchart-timeline
              denote-explore-barchart-filetypes)
+  :init
+  (keymap-set hud-denote-explore-map "n" #'denote-explore-count-notes)
+  (keymap-set hud-denote-explore-map "c" #'denote-explore-count-keywords)
+  (keymap-set hud-denote-explore-map "r" #'denote-explore-random-note)
+  (keymap-set hud-denote-explore-map "l" #'denote-explore-random-link)
+  (keymap-set hud-denote-explore-map "d" #'denote-explore-duplicate-notes)
+  (keymap-set hud-denote-explore-map "s" #'denote-explore-single-keywords)
+  (keymap-set hud-denote-explore-map "z" #'denote-explore-zero-keywords)
+  (keymap-set hud-denote-explore-map "k" #'denote-explore-rename-keyword)
+  (keymap-set hud-denote-explore-map "m" #'denote-explore-missing-links)
+  (keymap-set hud-denote-explore-map "y" #'denote-explore-sync-metadata)
+  (keymap-set hud-denote-explore-map "b" #'denote-explore-barchart-keywords)
+  (keymap-set hud-denote-explore-map "t" #'denote-explore-barchart-timeline)
   :config
   (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
   (setq denote-explore-network-format "graphviz")
@@ -1658,10 +1688,12 @@ return until the minibuffer session ends."
 (use-package denote-review
   :ensure t
   :after denote
-  :bind (:map hud-denote-review-map
-         ("d" . denote-review-set-date)
-         ("l" . denote-review-display-list))
-  :commands (denote-review-set-date-dired-marked-files)
+  :commands (denote-review-set-date-dired-marked-files
+             denote-review-set-date
+             denote-review-display-list)
+  :init
+  (keymap-set hud-denote-review-map "d" #'denote-review-set-date)
+  (keymap-set hud-denote-review-map "l" #'denote-review-display-list)
   :config
   (setq denote-review-insert-after "date"))
 
@@ -1672,21 +1704,6 @@ return until the minibuffer session ends."
 
 (use-package orgx
   :ensure nil
-  :bind (:map orgx-global-map ;; "C-c o"
-              ("a" . orgx-agenda-view)
-              ("c" . orgx-capture)
-              ("4" . org-agenda)
-              ("k" . org-capture)
-              ("f" . orgx-agenda-files-open)
-              ("s" . org-save-all-org-buffers)
-              ("r" . orgx-agenda-files-reload)
-              ("j" . orgx-capture)
-              ("u" . orgx-agenda-untagged-in-file)
-              ("/" . orgx-agenda-for-file))
-        (:map orgx-link-map ;; "C-c o l"
-              ("s" . org-store-link)
-              ("i" . org-insert-link)
-              ("a" . org-annotate-file))
   :commands (orgx-capture
 	     orgx-agenda-view
 	     orgx-agenda-files-open
@@ -1697,8 +1714,24 @@ return until the minibuffer session ends."
 	     orgx-agenda-minor-mode-turn-on
 	     orgx--install-auxiliary-packages
 	     ad:org-agenda--open-files
-	     bootstrap-set-notes-directory)
+	     bootstrap-set-notes-directory
+	     org-annotate-file)
   :init
+  ;; "C-c o"
+  (keymap-set orgx-global-map "a" #'orgx-agenda-view)
+  (keymap-set orgx-global-map "c" #'orgx-capture)
+  (keymap-set orgx-global-map "4" #'org-agenda)
+  (keymap-set orgx-global-map "k" #'org-capture)
+  (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
+  (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
+  (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
+  (keymap-set orgx-global-map "j" #'orgx-capture)
+  (keymap-set orgx-global-map "u" #'orgx-agenda-untagged-in-file)
+  (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
+  ;; "C-c o l"
+  (keymap-set orgx-link-map "s" #'org-store-link)
+  (keymap-set orgx-link-map "i" #'org-insert-link)
+  (keymap-set orgx-link-map "a" #'org-annotate-file)
   (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
   (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
   (add-one-shot-hook
@@ -1722,12 +1755,12 @@ return until the minibuffer session ends."
 
 (use-package markdown-mode
   :ensure t
-  :delight (markdown-mode "mdwn")
   :mode ("\\.mdwn" "\\.md" "\\.markdown" "\\.txt")
   :commands (tychoish/markdown-align-tables
              tychoish/markdown-align-tables-in-file
              tychoish/markdown-align-tables-dired)
   :config
+  (delight 'markdown-mode "mdwn")
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (defun tychoish/markdown-setup-imenu ()
@@ -1781,7 +1814,6 @@ return until the minibuffer session ends."
 (use-package flyspell
   :ensure t
   :defer t
-  :delight (flyspell-mode " fs")
   :init
   (defun tychoish--flyspell-run-in-text-buffer (buf)
     (when (buffer-live-p buf)
@@ -1801,15 +1833,17 @@ return until the minibuffer session ends."
     "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
     (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-prog-buffer (current-buffer)))
 
-  :hook ((prog-mode . tychoish--flyspell-prog-mode-idle)
-	 (text-mode . tychoish--flyspell-mode-idle)
-	 (telega-chat-mode . tychoish--flyspell-mode-idle))
-  :bind (("C-c [" . flyspell-correct-next)
-	 ("C-c ]" . flyspell-correct-previous)
-	 ("M-$" . flyspell-correct-at-point)
-	 ("C-;" . flyspell-correct-previous))
+  (keymap-set global-map "C-c [" #'flyspell-correct-next)
+  (keymap-set global-map "C-c ]" #'flyspell-correct-previous)
+  (keymap-set global-map "M-$" #'flyspell-correct-at-point)
+  (keymap-set global-map "C-;" #'flyspell-correct-previous)
+
+  (add-hook 'prog-mode-hook #'tychoish--flyspell-prog-mode-idle)
+  (add-hook 'text-mode-hook #'tychoish--flyspell-mode-idle)
+  (add-hook 'telega-chat-mode-hook #'tychoish--flyspell-mode-idle)
   :commands (flyspell-mode flyspell-prog-mode flyspell-correct-wrapper)
   :config
+  (delight 'flyspell-mode " fs")
   (setq ispell-list-command "list")
   (setq flyspell-issue-message-flag nil)
   (setq ispell-program-name "aspell")
@@ -1839,13 +1873,14 @@ return until the minibuffer session ends."
 (use-package whitespace
   :ensure nil
   :defer t
-  :bind (("C-c C-w" . whitespace-cleanup)
-         (:map hud-core-map
-               ("s" . whitespace-cleanup)
-               ("w" . toggle-local-whitespace-cleanup)))
+  :commands (toggle-local-whitespace-cleanup)
   :init
   (defun bootstrap-set-up-show-whitespace ()
     (setq-local show-trailing-whitespace t))
+
+  (keymap-set global-map "C-c C-w" #'whitespace-cleanup)
+  (keymap-set hud-core-map "s" #'whitespace-cleanup)
+  (keymap-set hud-core-map "w" #'toggle-local-whitespace-cleanup)
 
   (add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
   (add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)
@@ -1924,15 +1959,12 @@ return until the minibuffer session ends."
 
 (use-package yaml-pro
   :ensure t
-  :hook (yaml-mode . yaml-pro-mode)
-  :commands (yaml-pro-mode))
+  :commands (yaml-pro-mode)
+  :init
+  (add-hook 'yaml-mode-hook #'yaml-pro-mode))
 
 (use-package go-ts-mode
   :ensure nil
-  :delight
-  (go-ts-mode "go.ts")
-  (go-mod-ts-mode "go.mod.ts")
-  (go-mode "go")
   :mode (("\\.go$" . go-ts-mode)
 	 ("go.work" . go-mod-ts-mode)
 	 ("go.mod" . go-mod-ts-mode))
@@ -1967,6 +1999,9 @@ return until the minibuffer session ends."
 						:rangeVariableTypes :json-false
 						:functionTypeParameters :json-false)))
   :config
+  (delight 'go-ts-mode "go.ts")
+  (delight 'go-mod-ts-mode "go.mod.ts")
+  (delight 'go-mode "go")
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
     (setq-local fill-column 100)
@@ -2002,14 +2037,13 @@ return until the minibuffer session ends."
 
 (use-package rustic
   :ensure t
-  :delight
-  (rust-mode "rs")
-  (rustic-mode "rs(x)")
   :after (rust-mode flycheck)
   :mode (("\\.rs\\'" . rustic-mode)
 	 ("Cargo.lock" . toml-ts-mode))
   :commands (rust-resolve-fmt-path rustic-mode)
   :config
+  (delight 'rust-mode "rs")
+  (delight 'rustic-mode "rs(x)")
   (defun rustic-mode-auto-save-hook ()
     "Enable auto-saving in rustic-mode buffers."
     (when buffer-file-name
@@ -2041,9 +2075,6 @@ return until the minibuffer session ends."
 
 (use-package python
   :ensure nil
-  :delight
-  (python-ts-mode "py.ts")
-  (python-mode "py")
   :mode (("\\.py$" . python-ts-mode))
   :init
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
@@ -2067,6 +2098,8 @@ return until the minibuffer session ends."
 			  :pycodestyle (:enabled :json-false)))))
 
   :config
+  (delight 'python-ts-mode "py.ts")
+  (delight 'python-mode "py")
   (defun tychoish/python-setup ()
     (setq-local python-indent-offset 4)
     (setq-local tab-width 4)
@@ -2116,9 +2149,9 @@ return until the minibuffer session ends."
 
 (use-package terraform-mode
   :ensure t
-  :delight (terraform-mode "tf")
   :mode ("\\.tf" "\\.tfvars" "\\.tfvars.example")
   :config
+  (delight 'terraform-mode "tf")
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
 
@@ -2127,9 +2160,8 @@ return until the minibuffer session ends."
 
 (use-package rst
   :mode ("\\.rst\\'" . rst-mode)
-  :bind (:map rst-mode-map
-              ("C-c C-t h" . rst-adjust))
   :config
+  (keymap-set rst-mode-map "C-c C-t h" #'rst-adjust)
   (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
 
   (defun tychoish/set-up-rst-mode ()
@@ -2148,9 +2180,10 @@ return until the minibuffer session ends."
 
 (use-package tex-mode
   :mode ("\\.tex\\'" . LaTeX-mode)
-  :hook ((LaTeX-mode . turn-on-reftex)
-         (LaTeX-mode . visual-line-mode)
-         (LaTeX-mode . turn-off-auto-fill))
+  :init
+  (add-hook 'LaTeX-mode-hook #'turn-on-reftex)
+  (add-hook 'LaTeX-mode-hook #'visual-line-mode)
+  (add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
   :config
   (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")"))
 
@@ -2180,15 +2213,14 @@ return until the minibuffer session ends."
   :mode "\\.ninja\\'")
 
 (use-package slime
-  :delight
-  (lisp-mode "lisp")
-  (slime-mode "sl")
-  (slime-autodoc-mode "")
   :mode ("\\.lisp" . lisp-mode)
-  :bind (:map hud-docs-map
-	      ("c" . hyperspec-lookup))
-  :commands (slime slime-connect)
+  :commands (slime slime-connect hyperspec-lookup)
+  :init
+  (keymap-set hud-docs-map "c" #'hyperspec-lookup)
   :config
+  (delight 'lisp-mode "lisp")
+  (delight 'slime-mode "sl")
+  (delight 'slime-autodoc-mode "")
   (make-read-extended-command-for-prefix "slime"
     :key-alias "slime-commands"
     :bind-map hud-ide-map
@@ -2202,18 +2234,20 @@ return until the minibuffer session ends."
 
 (use-package journalctl-mode
   :ensure t
-  :bind (:map hud-core-map
-	      ("j" . journalctl)))
+  :commands (journalctl)
+  :init
+  (keymap-set hud-core-map "j" #'journalctl))
 
 (use-package docker
   :ensure t
-  :bind (:map hud-docker-map
-	 ("d" . docker)
-	 ("c" . docker-containers)
-	 ("i" . docker-images)
-	 ("v" . docker-volumes)
-	 ("m" . docker-contexts)
-	 ("p" . docker-compose))
+  :commands (docker docker-containers docker-images docker-volumes docker-contexts docker-compose)
+  :init
+  (keymap-set hud-docker-map "d" #'docker)
+  (keymap-set hud-docker-map "c" #'docker-containers)
+  (keymap-set hud-docker-map "i" #'docker-images)
+  (keymap-set hud-docker-map "v" #'docker-volumes)
+  (keymap-set hud-docker-map "m" #'docker-contexts)
+  (keymap-set hud-docker-map "p" #'docker-compose)
   :config
   (setq docker-terminal-backend 'eat)
   (make-read-extended-command-for-prefix "docker"
@@ -2227,11 +2261,12 @@ return until the minibuffer session ends."
 
 (use-package flycheck
   :ensure t
-  :delight (flycheck-mode " fc")
-  :bind (("C-c f f" . flycheck-mode))
   :defines (flycheck-checkers)
   :commands (flycheck-disable-checker flycheck-mode global-flycheck-mode)
+  :init
+  (keymap-set global-map "C-c f f" #'flycheck-mode)
   :config
+  (delight 'flycheck-mode " fc")
   (defun tychoish/flycheck-prefer-eldoc ()
     (add-hook 'eldoc-documentation-functions #'flycheck-eldoc nil t) ;; local
     (setq-local eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
@@ -2255,11 +2290,11 @@ return until the minibuffer session ends."
 	 (funcall callback
 		  (format "%s: %s"
 			  (let ((level (flycheck-error-level err)))
-			    (pcase level
-			      ('info (propertize "I" 'face 'flycheck-error-list-info))
-			      ('error (propertize "E" 'face 'flycheck-error-list-error))
-			      ('warning (propertize "W" 'face 'flycheck-error-list-warning))
-			      (_ level)))
+			    (cond
+			     ((eq level 'info) (propertize "I" 'face 'flycheck-error-list-info))
+			     ((eq level 'error) (propertize "E" 'face 'flycheck-error-list-error))
+			     ((eq level 'warning) (propertize "W" 'face 'flycheck-error-list-warning))
+			     (t level)))
 			  (flycheck-error-message err))
 		  :thing (or (flycheck-error-id err)
 			     (flycheck-error-group err))
@@ -2286,11 +2321,11 @@ return until the minibuffer session ends."
 
 (use-package compile
   :defines (compile-add-error-syntax compilation-mode-map)
-  :bind (:map hud-core-map
-	      ("c" . tychoish-compile)
-	      :map compilation-mode-map
-	      ("C" . compile))
+  :commands (tychoish-compile)
+  :init
+  (keymap-set hud-core-map "c" #'tychoish-compile)
   :config
+  (keymap-set compilation-mode-map "C" #'compile)
   (add-to-list 'compilation-error-regexp-alist 'go-test)
   (add-to-list 'compilation-error-regexp-alist 'go-panic)
 
@@ -2360,10 +2395,9 @@ return until the minibuffer session ends."
 (use-package flycheck-aspell
   :ensure t
   :defer t
-  :after (flycheck flyspell
-		   (:any org-mode rst-mode markdown-mode message-mode sgml-mode html-mode html-ts-mode))
-  :defines (c-aspell-dynamic markdow-aspell-dynamic mail-aspell-dynamic html-aspell-dynamic)
-  :functions (flycheck-aspell--start-checker flycheck-aspell--parse)
+  :after (flycheck
+	  flyspell
+	  (:any org-mode rst-mode markdown-mode message-mode sgml-mode html-mode html-ts-mode))
   :config
   (eval-when-compile
     (require 'xtd-dash))
@@ -2436,33 +2470,42 @@ return until the minibuffer session ends."
 
 (use-package eglot
   :ensure nil
-  :defines (eglot-mode-map eglot-alternatives)
-  :functions (eglot-format-buffer eglot-managed-p eglot-completion-at-point eglot-alternatives)
-  :hook (((js-mode
-	   js-ts-mode
-	   typescript-ts-mode
-	   go-ts-mode
-	   go-mod-ts-mode
-	   yaml-mode
-	   rustic-mode
-	   c++-ts-mode
-	   c-ts-mode
-	   c-or-c++-mode
-	   python-mode
-	   python-ts-mode
-	   go-mode
-	   go-mod-mode
-	   bash-ts-mode
-	   bash-mode
-	   sh-mode) . #'eglot-ensure))
-  :bind (:map hud-eglot-global-map ;; "C-c l l"
-	 ("s" . eglot)
-	 ("r" . eglot-reconnect) ;; TODO this should only be on when minor mode
-	 ("k" . eglot-shutdown)
-	 ("l" . eglot-list-connections)
-	 ("c" . execute-extended-eglot-command)
-	 ("g" . eglot-forget-pending-continuations))
-  :commands (eglot-code-action-rewrite eglot-code-action-extract eglot-code-actions eglot-format eglot-rename eglot-code-action-organize-imports)
+  ;; :defines (eglot-mode-map eglot-alternatives)
+  ;; :functions (eglot-format-buffer eglot-managed-p eglot-completion-at-point eglot-alternatives)
+  :commands (eglot-code-action-rewrite
+	     eglot-code-action-extract
+	     eglot-code-actions
+	     eglot-format
+	     eglot-rename
+	     eglot-code-action-organize-imports
+	     eglot-code-action-inline
+	     eglot-update-workspace
+	     execute-extended-eglot-command)
+  :init
+  (add-hook 'js-mode-hook #'eglot-ensure)
+  (add-hook 'js-ts-mode-hook #'eglot-ensure)
+  (add-hook 'typescript-ts-mode-hook #'eglot-ensure)
+  (add-hook 'go-ts-mode-hook #'eglot-ensure)
+  (add-hook 'go-mod-ts-mode-hook #'eglot-ensure)
+  (add-hook 'yaml-mode-hook #'eglot-ensure)
+  (add-hook 'rustic-mode-hook #'eglot-ensure)
+  (add-hook 'c++-ts-mode-hook #'eglot-ensure)
+  (add-hook 'c-ts-mode-hook #'eglot-ensure)
+  (add-hook 'c-or-c++-mode-hook #'eglot-ensure)
+  (add-hook 'python-mode-hook #'eglot-ensure)
+  (add-hook 'python-ts-mode-hook #'eglot-ensure)
+  (add-hook 'go-mode-hook #'eglot-ensure)
+  (add-hook 'go-mod-mode-hook #'eglot-ensure)
+  (add-hook 'bash-ts-mode-hook #'eglot-ensure)
+  (add-hook 'bash-mode-hook #'eglot-ensure)
+  (add-hook 'sh-mode-hook #'eglot-ensure)
+  ;; "C-c l l"
+  (keymap-set hud-eglot-global-map "s" #'eglot)
+  (keymap-set hud-eglot-global-map "r" #'eglot-reconnect) ;; TODO this should only be on when minor mode
+  (keymap-set hud-eglot-global-map "k" #'eglot-shutdown)
+  (keymap-set hud-eglot-global-map "l" #'eglot-list-connections)
+  (keymap-set hud-eglot-global-map "c" #'execute-extended-eglot-command)
+  (keymap-set hud-eglot-global-map "g" #'eglot-forget-pending-continuations)
   :config
   (defun tychoish/eglot-ensure-hook ()
     ;; toggle it on and off so that the left-fringe isn't weird.
@@ -2472,30 +2515,27 @@ return until the minibuffer session ends."
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
 
   (autoload 'eglot-test-at-point "eglot-test-at-point")
-  (bind-keys
-   :map eglot-mode-map
-   :prefix "C-c l"
-   :prefix-map tychoish/eglot-map
-   ("s" . consult-eglot-symbols)
-   ("r" . eglot-rename)
-   ("a" . eglot-code-actions)
-   ("i" . eglot-code-action-inline)
-   ("f" . eglot-format-buffer)
-   ("o" . eglot-code-action-organize-imports)
-   ("q" . eglot-code-action-quickfix)
-   ("w" . eglot-code-action-rewrite)
-   ("t" . eglot-test-at-point)
-   ("u" . eglot-update-workspace))
+
+  (defvar-keymap tychoish/eglot-map) ;; "C-c l"
+  (keymap-set eglot-mode-map "C-c l" '(tychoish/eglot-map . "eglot"))
+  (keymap-set tychoish/eglot-map "s" #'consult-eglot-symbols)
+  (keymap-set tychoish/eglot-map "r" #'eglot-rename)
+  (keymap-set tychoish/eglot-map "a" #'eglot-code-actions)
+  (keymap-set tychoish/eglot-map "i" #'eglot-code-action-inline)
+  (keymap-set tychoish/eglot-map "f" #'eglot-format-buffer)
+  (keymap-set tychoish/eglot-map "o" #'eglot-code-action-organize-imports)
+  (keymap-set tychoish/eglot-map "q" #'eglot-code-action-quickfix)
+  (keymap-set tychoish/eglot-map "w" #'eglot-code-action-rewrite)
+  (keymap-set tychoish/eglot-map "t" #'eglot-test-at-point)
+  (keymap-set tychoish/eglot-map "u" #'eglot-update-workspace)
 
   (make-read-extended-command-for-prefix "eglot"
     :bind-map tychoish/eglot-map
-    :bind-key "e"
-    :key-alias "eglot-commands")
+    :bind-key "e")
 
   (make-read-extended-command-for-prefix "xref"
     :bind-map hud-ide-map
-    :bind-key "x"
-    :key-alias "xref-commands")
+    :bind-key "x")
 
   (setq eglot-menu-string "eg")
 
@@ -2705,8 +2745,9 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package flycheck-eglot
   :ensure t
-  :hook (eglot-managed-mode . flycheck-eglot-mode)
   :commands (flycheck-eglot-mode)
+  :init
+  (add-hook 'eglot-managed-mode-hook #'flycheck-eglot-mode)
   :config
   (setq-default flycheck-eglot-exclusive nil)
   (add-to-list 'flycheck-checkers 'eglot-check)
@@ -2821,21 +2862,19 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package gptel
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
-  :bind (:map hud-robot-gptel-map
-              ("g" . gptel)
-              ("r" . gptel-rewrite)
-              ("m" . gptel-menu))
-  :commands (gptel gptel-rewrite)
+  :commands (gptel gptel-rewrite gptel-menu)
   :init
+  (keymap-set hud-robot-gptel-map "g" #'gptel)
+  (keymap-set hud-robot-gptel-map "r" #'gptel-rewrite)
+  (keymap-set hud-robot-gptel-map "m" #'gptel-menu)
+
   (make-read-extended-command-for-prefix "gptel"
     :bind-map hud-robot-gptel-map
-    :bind-key "m"
-    :key-alias "gptel-commands")
+    :bind-key "x")
 
   (make-read-extended-command-for-prefix "gptel-set-backend"
     :bind-map hud-robot-gptel-map
-    :bind-key "b"
-    :key-alias "gptel-set-backend")
+    :bind-key "b")
   :config
   (defvar gemini-api-key nil)
   (defvar anthropic-api-key nil)
@@ -2863,16 +2902,11 @@ Useful after changing `eglot-workspace-configuration' or
            (setq-default gptel-backend ,backend)
            (message "[gptel] set default backend to %s" ,name))
 
-	 (bind-keys
-	  :map gptel-mode-map
-	  (,(format "C-c r a m %s" (upcase key)) . ,default-function-symbol)
-	  (,(format "C-c r a m %s" (downcase key)) . ,local-function-symbol)
-          :map hud-robot-gptel-set-default-model-map
-	  (,(downcase key) . ,default-function-symbol)))))
+	 (keymap-set gptel-mode-map ,(format "C-c r a m %s" (upcase key)) #',default-function-symbol)
+	 (keymap-set gptel-mode-map ,(format "C-c r a m %s" (downcase key)) #',local-function-symbol)
+	 (keymap-set hud-robot-gptel-set-default-model-map ,(downcase key) #',default-function-symbol))))
 
-  (bind-keys
-   :map gptel-mode-map
-   ("C-c m" . gptel-menu))
+  (keymap-set gptel-mode-map "C-c m" #'gptel-menu)
 
   (setq gptel-include-reasoning 'ignore)
 
@@ -2958,39 +2992,40 @@ Useful after changing `eglot-workspace-configuration' or
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
-  :bind (:map hud-robot-gptel-map
-	      ("w" . gptel-aibo-summon))
-  :commands (gptel-aibo-summon gptel-aibo))
+  :commands (gptel-aibo-summon gptel-aibo)
+  :init
+  (keymap-set hud-robot-gptel-map "w" #'gptel-aibo-summon))
 
 (use-package gptel-agent
   :after (gptel)
   :commands (gptel-agent)
   :init
-  (bind-keys
-   :map hud-robot-gptel-map
-   ("a" . gptel-agent)))
+  (keymap-set hud-robot-gptel-map "a" #'gptel-agent))
 
 (use-package eat
   :ensure t
   :commands (eat eat-project eat-other-window eat-project-other-window)
   :init
-  (bind-keys
-   :map hud-shell-eat-map ;; "C-c s e"
-   ("e" . eat)
-   ("o" . eat-other-window)
-   ("p" . eat-project)
-   ("P" . eat-project-other-window))
+  ;; "C-c s e"
+  (keymap-set hud-shell-eat-map "e" #'eat)
+  (keymap-set hud-shell-eat-map "o" #'eat-other-window)
+  (keymap-set hud-shell-eat-map "p" #'eat-project)
+  (keymap-set hud-shell-eat-map "P" #'eat-project-other-window)
 
   (make-read-extended-command-for-prefix "eat"
     :bind-map hud-shell-eat-map
-    :bind-key "m"))
+    :bind-key "m")
+  :config
+  (add-hook 'eat-mode-hook 'tychoish/corfu-prog-mode-setup))
 
 (use-package eshell
   :ensure nil
   :defer t
-  :bind (:map hud-shell-map
-              ("m" . eshell))
+  :init
+  (keymap-set hud-shell-map "m" #'eshell)
   :config
+  (add-hook 'eshell-mode-hook 'tychoish/corfu-prog-mode-setup)
+
   (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell")))
   (with-eval-after-load "em-cmpl"
     (add-hook 'eshell-mode 'eshell-cmpl-initialize)))
@@ -2999,12 +3034,11 @@ Useful after changing `eglot-workspace-configuration' or
   :ensure nil
   :defer t
   :config
-  (bind-keys
-   :map comint-mode-map
-   ("M-n" . comint-next-input)
-   ("M-p" . comint-previous-input)
-   ([down] . comint-next-matching-input-from-input)
-   ([up] . comint-previous-matching-input-from-input)))
+  (add-hook 'shell-mode-hook 'tychoish/corfu-prog-mode-setup)
+  (keymap-set comint-mode-map "M-n" #'comint-next-input)
+  (keymap-set comint-mode-map "M-p" #'comint-previous-input)
+  (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
+  (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
 
 (use-package shell-maker
   :ensure t
@@ -3015,24 +3049,23 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell
   :ensure t
-  :delight ((agent-shell-completion-mode "")
-	    (agent-shell-ui-mode ""))
-  :bind (:map hud-robot-agent-shell-map ;; "C-c r s"
-         ("o" . agent-shell)
-	 ("t" . agent-shell-toggle)
-	 ("b" . agent-shell-switch-buffer)
-	 ("n" . agent-shell-new-shell)
-	 ("e" . agent-shell-new-temp-shell)
-	 ("w" . agent-shell-new-worktree-shell)
-	 ("v" . tychoish/agent-shell-toggle-terse-output))
-  :commands (agent-shell agent-shell-new-shell agent-shell-toggle agent-shell-resolve-permissions)
+  :commands (agent-shell agent-shell-new-shell agent-shell-new-temp-shell agent-shell-new-worktree-shell agent-shell-toggle agent-shell-resolve-permissions)
   :init
+  (keymap-set hud-robot-agent-shell-map "o" #'agent-shell)
+  (keymap-set hud-robot-agent-shell-map "t" #'agent-shell-toggle)
+  (keymap-set hud-robot-agent-shell-map "b" #'agent-shell-switch-buffer)
+  (keymap-set hud-robot-agent-shell-map "n" #'agent-shell-new-shell)
+  (keymap-set hud-robot-agent-shell-map "e" #'agent-shell-new-temp-shell)
+  (keymap-set hud-robot-agent-shell-map "w" #'agent-shell-new-worktree-shell)
+  (keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map hud-robot-agent-shell-map
     :bind-key "x")
   (with-eval-after-load 'which-key
     (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
   :config
+  (delight 'agent-shell-completion-mode nil 'agent-shell-completion)
+  (delight 'agent-shell-ui-mode nil 'agent-shell-ui)
   (defconst tychoish/agent-shell-terse-persona
     "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
     "CLAUDE_PERSONA value that requests terse output from the agent.")
@@ -3101,19 +3134,17 @@ Useful after changing `eglot-workspace-configuration' or
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
   (add-to-list 'agent-shell-agent-configs (agent-shell-omp-make-agent-config))
 
-  (bind-keys
-   :map agent-shell-mode-map
-   ("C-c C-c" . agent-shell-submit)
-   ("C-c C-k" . agent-shell-interrupt)
-   ("C-c C-p" . agent-shell-resolve-permissions)
-   ("C-c C-a" . agent-shell-menu-select-action)
-   ("C-c b" . agent-shell-switch-buffer)
-   ("C-c j" . hud-robot-agent-shell-map)
-   ("C-c m" . agent-shell-menu-select-action)
-   ("C-c x" . agent-shell-menu-select-command)
-   ("C-c TAB" . agent-shell-menu-select-collapse)
-   ("C-TAB" . agent-shell-next-item)
-   ("M-SPC" . agent-shell-menu-select-session-mode))
+  (keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
+  (keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
+  (keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
+  (keymap-set agent-shell-mode-map "C-c C-a" #'agent-shell-menu-select-action)
+  (keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
+  (keymap-set agent-shell-mode-map "C-c j" '(hud-robot-agent-shell-map . "robot-agent-shell"))
+  (keymap-set agent-shell-mode-map "C-c m" #'agent-shell-menu-select-action)
+  (keymap-set agent-shell-mode-map "C-c x" #'agent-shell-menu-select-command)
+  (keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
+  (keymap-set agent-shell-mode-map "C-TAB" #'agent-shell-next-item)
+  (keymap-set agent-shell-mode-map "M-SPC" #'agent-shell-menu-select-session-mode)
 
   (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
   (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
@@ -3144,8 +3175,7 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-queue
   :after agent-shell
-  :hook ((agent-shell-queue-capture-mode . agent-shell-queue-capture-corfu-setup)
-         (agent-shell-queue-edit-mode . agent-shell-queue-capture-corfu-setup))
+  :defer t
   :commands (agent-shell-queue-buffer-open
              agent-shell-queue-enqueue
              agent-shell-queue-edit-task
@@ -3173,13 +3203,11 @@ Useful after changing `eglot-workspace-configuration' or
   (defvar-keymap hud-robot-agent-shell-map)
   (setq agent-shell-queue-write-log-enabled t)
   (require 'agent-shell-menu)
-  (bind-keys
-   :map agent-shell-queue-mode-map
-   ("C-c j" . hud-robot-agent-shell-map)
-   :map hud-robot-agent-shell-map
-   ("q" . agent-shell-queue-buffer-open)
-   ("/" . agent-shell-queue-capture)
-   ("m" . agent-shell-menu-dispatch))
+  (keymap-set agent-shell-queue-mode-map "C-c j" '(hud-robot-agent-shell-map . "robot-agent-shell"))
+  (keymap-set hud-robot-agent-shell-map "q" #'agent-shell-queue-buffer-open)
+  (keymap-set hud-robot-agent-shell-map "/" #'agent-shell-queue-capture)
+  (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-menu-dispatch)
+  (keymap-unset agent-shell-mode-map "<spc>")
 
   (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key "p" agent-shell-menu-resolve-permission)
@@ -3204,6 +3232,9 @@ Useful after changing `eglot-workspace-configuration' or
 		(append '(cape-dabbrev agent-shell-queue-capture--slash-command-capf)
 			(remq t completion-at-point-functions))))
 
+  (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-capture-corfu-setup)
+  (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-capture-corfu-setup)
+
   (defun agent-shell-queue-capture--slash-command-capf ()
     "Complete agent slash commands after / in capture buffers with a live target."
     (when-let* ((shell-buf (and (boundp 'agent-shell-queue--capture-target)
@@ -3225,10 +3256,10 @@ Useful after changing `eglot-workspace-configuration' or
 
   (defun tychoish--agent-shell-queue-state-file ()
     "Queue state file under the per-instance agent-shell state directory."
-    (let ((ext (pcase agent-shell-queue-serialization-format
-                 ('json "json")
-                 ('yaml "yaml")
-                 (_ "el"))))
+    (let ((ext (cond
+                ((eq agent-shell-queue-serialization-format 'json) "json")
+                ((eq agent-shell-queue-serialization-format 'yaml) "yaml")
+                (t "el"))))
       (expand-file-name (concat "queue." ext)
                         (sprite-state-path "agent-shell"))))
 
@@ -3260,38 +3291,31 @@ Useful after changing `eglot-workspace-configuration' or
 
 (use-package agent-shell-manager
   :after (agent-shell)
-  :bind (:map hud-robot-agent-shell-map
-         ("," . agent-shell-manager-toggle))
   :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
+  :init
+  (keymap-set hud-robot-agent-shell-map "," #'agent-shell-manager-toggle)
   :config
   (setq agent-shell-manager-side 'bottom)
   (make-read-extended-command-for-prefix "agent-shell-manager"
     :bind-map agent-shell-manager-mode-map
     :bind-key "x")
-  (bind-keys
-   :map agent-shell-manager-mode-map
-   ("?" . execute-extended-agent-shell-manager-command))
+  (keymap-set agent-shell-manager-mode-map "?" #'execute-extended-agent-shell-manager-command)
   (agent-shell-menu-mode-key "," agent-shell-manager-toggle))
 
 (use-package agent-shell-notifications
   :load-path "external/agent-shell-notifications"
   :ensure nil
   :after (agent-shell alert)
-  :delight (agent-shell-notifications-mode "")
-  :hook ((agent-shell-mode . agent-shell-notifications-mode)
-	 (agent-shell-viewport-edit-mode . agent-shell-notifications-viewport-edit-mode)
-	 (agent-shell-viewport-view-mode . agent-shell-notifications-viewport-view-mode))
+  :commands (agent-shell-notifications-mode)
   :init
-  ;; Pre-set provider/send/close so the package's load-time
-  ;; `agent-shell-notifications-set-provider' call sees them populated and
-  ;; skips `require'ing a backend feature.
+  (add-hook 'agent-shell-mode-hook #'agent-shell-notifications-mode)
+  (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-mode)
+  (add-hook 'agent-shell-viewport-edit-view-hook #'agent-shell-notifications-mode)
+  :config
+  (delight 'agent-shell-notifications-mode nil 'agent-shell-manager)
+
   (defun tychoish/agent-shell-notifications-alert-send (plist)
-    "Send agent-shell notification PLIST through `alert'.
-The originating shell buffer name (injected via
-`tychoish/agent-shell-notifications--add-buffer-name') is appended to the
-title. The plist's `:timeout' is bound to `alert-fade-time' when positive
-so the configured `agent-shell-notifications-timeout' controls how long
-notifications stay visible for alert styles that honor it."
+    "Send agent-shell notification PLIST through `alert'."
     (let* ((title (plist-get plist :title))
 	   (body (plist-get plist :body))
 	   (icon (plist-get plist :app-icon))
@@ -3313,21 +3337,17 @@ notifications stay visible for alert styles that honor it."
     "No-op close: `alert' styles dismiss themselves." nil)
 
   (defun tychoish/agent-shell-notifications--add-buffer-name (orig type shell-buffer event)
-    "Around-advise `agent-shell-notifications--make-notification-plist'.
-Adds `:shell-buffer-name' to the plist so the send function can include
-the originating shell buffer in the notification title — this is the only
-call-site that has access to SHELL-BUFFER."
+    "Adds `:shell-buffer-name' to the plist alert payload."
     (append (funcall orig type shell-buffer event)
 	    (list :shell-buffer-name (buffer-name shell-buffer))))
+
+  (advice-add 'agent-shell-notifications--make-notification-plist :around #'tychoish/agent-shell-notifications--add-buffer-name)
 
   (setq agent-shell-notifications-provider nil)
   (setq agent-shell-notifications-send-function #'tychoish/agent-shell-notifications-alert-send)
   (setq agent-shell-notifications-close-function #'tychoish/agent-shell-notifications-alert-close)
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
-  :config
-  (advice-add 'agent-shell-notifications--make-notification-plist :around
-	      #'tychoish/agent-shell-notifications--add-buffer-name)
   (setq agent-shell-notifications-timeout 30))
 
 (use-package tychoish-mail
@@ -3335,15 +3355,13 @@ call-site that has access to SHELL-BUFFER."
   :commands (tychoish-mail-select-account
 	     consult-mu-bookmark)
   :init
-  (bind-keys
-   :map hud-mail-map
-   ("a" . tychoish-mail-select-account)
-   ("m" . mu4e)
-   ("d" . mu4e-search-maildir)
-   ("b" . mu4e-search-bookmark)
-   ("c" . mu4e-compose-new)
-   ("C-;" . consult-mu)
-   (";" . consult-mu-bookmark)))
+  (keymap-set hud-mail-map "a" #'tychoish-mail-select-account)
+  (keymap-set hud-mail-map "m" #'mu4e)
+  (keymap-set hud-mail-map "d" #'mu4e-search-maildir)
+  (keymap-set hud-mail-map "b" #'mu4e-search-bookmark)
+  (keymap-set hud-mail-map "c" #'mu4e-compose-new)
+  (keymap-set hud-mail-map "C-;" #'consult-mu)
+  (keymap-set hud-mail-map ";" #'consult-mu-bookmark))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here

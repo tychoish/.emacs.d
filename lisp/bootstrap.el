@@ -285,24 +285,28 @@ Override in user/*.el to customize per machine or instance.")
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
 (defun bootstrap-init-late-enable-modes ()
-  (column-number-mode 1)
-  (delete-selection-mode 1)
-  (winner-mode 1)
-  (electric-pair-mode 1)
-  (set-fringe-mode '(4 . 4))
-  (hud-mode 1)
-  (with-silence
-    (repeat-mode 1)))
+  (with-slow-op-timer "<bootstrap> [modes] set-fringe-mode"
+    (set-fringe-mode '(4 . 4)))
+  (with-slow-op-timer "<bootstrap> [modes] column-number-mode"
+    (column-number-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] delete-selection-mode"
+    (delete-selection-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] winner-mode"
+    (winner-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] electric-pair-mode"
+    (electric-pair-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] hud-mode"
+    (hud-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] which-key"
+    (which-key-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] repeat"
+    (with-silence
+      (repeat-mode 1))))
 
 (add-lazy-init
- :name "<bootstrap> late enable modes"
+ :name "<bootstrap> [modes] late batch"
  :operation 'bootstrap-init-late-enable-modes
- :delay 0.34)
-
-(add-one-shot-hook
- :name "<bootstrap> enable which-key"
- :hook after-first-frame-created
- :form (which-key-mode 1))
+ :delay 0.1275)
 
 (add-one-shot-hook
  :name "<bootstrap> alias mouse mode"
@@ -414,6 +418,19 @@ Override in user/*.el to customize per machine or instance.")
 (defun package-install-async (pkgs)
   (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
   (async-package-operation 'install pkgs))
+
+(defun ad:use-package-statistics-convert--higher-precision-time (result)
+  "Reformat the duration column in RESULT with higher precision.
+`use-package-statistics-convert' only reports two decimal places;
+this widens it to four for finer-grained startup profiling."
+  (let* ((package (car result))
+	 (statistics (map-elt use-package-statistics package)))
+    (setf (aref (cadr result) 3)
+	  (format "%.4f" (use-package-statistics-time statistics)))
+    result))
+
+(advice-add #'use-package-statistics-convert :filter-return
+	    #'ad:use-package-statistics-convert--higher-precision-time)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
