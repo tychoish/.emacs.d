@@ -333,12 +333,7 @@ All constraints are validated at macro-expansion time."
   :config
   (setq which-key-idle-delay .25)
   (setq which-key-idle-secondary-delay 0.125)
-  (setq which-key-lighter "")
-
-  (which-key-customize
-      '("project-grep" . hud-ecclectic-grep-project-map)
-    :map hud-ecclectic-grep-map
-    :key "p"))
+  (setq which-key-lighter ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -347,9 +342,8 @@ All constraints are validated at macro-expansion time."
 (use-package projectile
   :ensure t
   :delight (projectile-mode "" projectile)
-  :bind-keymap ("C-c p" . projectile-command-map)
   :bind (:map hud-ecclectic-grep-project-map
-	      ("a" . projectile-ag))
+         ("a" . projectile-ag))
   :hook ((prog-mode . projectile-mode)
 	 (text-mode . projectile-mode))
   :commands (projectile-mode
@@ -357,9 +351,9 @@ All constraints are validated at macro-expansion time."
 	     projectile-project-root
 	     projectile-mode-on
 	     projectile-save-project-buffers)
-  :init
-  (which-key-customize "projectile" :key "C-c p")
   :config
+  (keymap-set hud-mode-map "C-c p" '(projectile-command-map . "projectile"))
+
   (defun tychoish/save-buffers-in-project-directory (dir)
     (let ((default-directory (expand-file-name dir)))
       (alert (projectile-save-project-buffers)
@@ -458,9 +452,6 @@ All constraints are validated at macro-expansion time."
 	     find-ripgrep-project
 	     find-merge-conflicts
 	     ripgrep-regexp)
-  :init
-  (which-key-customize '("rg-grep" . hud-ecclectic-rg-map)
-    :map hud-ecclectic-grep-map :key "r")
   :config
   (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
@@ -702,7 +693,7 @@ All constraints are validated at macro-expansion time."
   :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
   :config
   (add-to-list 'load-path (file-name-concat user-emacs-directory "snippets"))
-  (which-key-customize "yasnippet" :key "C-c &"))
+  (which-key-add-key-based-replacements "C-c &" "yasnippet"))
 
 (use-package yasnippet-capf
   :ensure t
@@ -1231,15 +1222,10 @@ All constraints are validated at macro-expansion time."
                (puthash key (nconc (gethash key configs) (list val)) configs)))
            configs)))))
 
-  (bind-keys
-   :map magit-mode-map
-   :prefix "/"
-   :prefix-map magit-command-mode-map
-   ("x" . execute-extended-magit-command)
-   ("m" . execute-extended-smerge-command))
-
-  (which-key-customize "(s)merge-commands" :map 'magit-command-mode-map :key "m")
-  (which-key-customize "magit-commands" :map 'magit-command-mode-map :key "x")
+  (defvar-keymap magit-command-mode-map) ;; "/"
+  (keymap-set magit-mode-map "/" magit-command-mode-map)
+  (keymap-set magit-command-mode-map "x" '(execute-extended-magit-command . "magit-commands"))
+  (keymap-set magit-command-mode-map "m" '(execute-extended-magit-command . "(s)merge-commands"))
 
   (bind-keys
    :map magit-status-mode-map
@@ -1405,8 +1391,8 @@ clipboard."
 	     telega-extras-force-kill
 	     telega-extras-disconnect)
   :init
-  (which-key-customize "telega-prefix" :key "C-c n")
-  (which-key-customize "telega-prefix" :key "C-c v")
+  (which-key-add-key-based-replacements "C-c n" "+telega-prefix")
+  (which-key-add-key-based-replacements "C-c v" "+telega-prefix")
   :config
   (bind-keys
    :map telega-prefix-map

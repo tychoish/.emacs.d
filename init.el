@@ -9,6 +9,8 @@
 
 (with-gc-suppressed
  (with-file-name-handler-disabled
+  (setq use-package-compute-statistics t)
+
   (eval-when-compile
     (require 'subr-x))
 
