@@ -3070,22 +3070,16 @@ Useful after changing `eglot-workspace-configuration' or
   :ensure t
   :delight ((agent-shell-completion-mode "")
 	    (agent-shell-ui-mode ""))
-  :defer t
+  :bind (:map hud-robot-agent-shell-map ;; "C-c r s"
+         ("o" . agent-shell)
+	 ("t" . agent-shell-toggle)
+	 ("b" . agent-shell-switch-buffer)
+	 ("n" . agent-shell-new-shell)
+	 ("e" . agent-shell-new-temp-shell)
+	 ("w" . agent-shell-new-worktree-shell)
+	 ("v" . tychoish/agent-shell-toggle-terse-output))
   :commands (agent-shell agent-shell-new-shell agent-shell-toggle agent-shell-resolve-permissions)
   :init
-  (delight 'agent-shell-ui-mode nil "agent-shell-menu")
-  (delight 'agent-shell-completion-mode nil "agent-shell-menu")
-
-  (bind-keys
-   :map hud-robot-agent-shell-map ;; "C-c r s"
-   ("o" . agent-shell)
-   ("t" . agent-shell-toggle)
-   ("b" . agent-shell-switch-buffer)
-   ("n" . agent-shell-new-shell)
-   ("e" . agent-shell-new-temp-shell)
-   ("w" . agent-shell-new-worktree-shell)
-   ("v" . tychoish/agent-shell-toggle-terse-output))
-
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map hud-robot-agent-shell-map
     :bind-key "x")

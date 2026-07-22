@@ -40,32 +40,6 @@
 (declare-function f-glob "f")
 (declare-function f-entries "f")
 
-(defvar bootstrap-fallback-buffer-name "*scratch*"
-  "Buffer name used as a last-resort fallback when no other buffer is available.
-Override in user/*.el to customize per machine or instance.")
-
-(declare-function electric-pair-default-inhibit "elec-pair")
-(declare-function electric-pair-conservative-inhibit "elec-pair")
-
-(defvar electric-pair-inhibition nil)
-(defvar electric-pair-eagerness t)
-
-(defun bootstrap-electric-pair-inhibition (char)
-  (if electric-pair-inhibition
-      nil
-    (if electric-pair-eagerness
-        (electric-pair-default-inhibit char)
-      (electric-pair-conservative-inhibit char))))
-
-(with-eval-after-load 'elec-pair
-  (setq electric-pair-inhibit-predicate #'bootstrap-electric-pair-inhibition)
-  (add-to-list 'electric-pair-pairs '(?< . ?>)))
-
-(setq electric-indent-chars '(?\n ?:))
-
-(with-eval-after-load 'transient
-  (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
-
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
@@ -117,6 +91,29 @@ Override in user/*.el to customize per machine or instance.")
 (setq checkdoc-spellcheck-documentation-flag t)
 
 (setq show-paren-delay 0.25)
+
+(defvar bootstrap-fallback-buffer-name "*scratch*"
+  "Buffer name used as a last-resort fallback when no other buffer is available.
+Override in user/*.el to customize per machine or instance.")
+
+(defvar electric-pair-inhibition nil)
+(defvar electric-pair-eagerness t)
+
+(setq electric-indent-chars '(?\n ?:))
+
+(defun bootstrap-electric-pair-inhibition (char)
+  (if electric-pair-inhibition
+      nil
+    (if electric-pair-eagerness
+        (electric-pair-default-inhibit char)
+      (electric-pair-conservative-inhibit char))))
+
+(with-eval-after-load 'elec-pair
+  (setq electric-pair-inhibit-predicate #'bootstrap-electric-pair-inhibition)
+  (add-to-list 'electric-pair-pairs '(?< . ?>)))
+
+(with-eval-after-load 'transient
+  (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
 
 (add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
@@ -287,15 +284,15 @@ Override in user/*.el to customize per machine or instance.")
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
-(defun with-hook-timing (inner &rest args)
-  (mapc (lambda (it)
-          (with-slow-op-timer (format "<hook> %s" it)
-            (funcall inner it)))
-        args))
+(disabled
+ (defun with-hook-timing (inner &rest args)
+   (mapc (lambda (it)
+           (with-slow-op-timer (format "<hook> %s" it)
+             (funcall inner it)))
+         args))
 
-(when slow-op-reporting
-  (advice-add 'run-hooks :around 'with-hook-timing)
-  (advice-add 'run-hooks-with-args :around 'with-hook-timing))
+ (advice-add 'run-hooks :around 'with-hook-timing)
+ (advice-add 'run-hooks-with-args :around 'with-hook-timing))
 
 (defun bootstrap-init-late-enable-modes ()
   (column-number-mode 1)
