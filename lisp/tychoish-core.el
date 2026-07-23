@@ -73,12 +73,13 @@
   (delight 'rst-mode "rst" 'rst-mode)
 
   (delight 'projectile-mode nil 'projectile)
-  (delight 'flycheck-mode " fc" 'flycheck)
-
   (delight 'eglot--managed-mode nil 'eglot)
   (delight 'eldoc-mode nil 'eldoc)
   (delight 'telega-chat-auto-fill-mode nil)
 
+  (delight 'anzu-mode " az" 'anzu)
+  (delight 'flyspell-mode " fs" 'flyspell)
+  (delight 'flycheck-mode " fc" 'flycheck)
   (delight 'visual-line-mode " wr" 'simple)
   (delight 'auto-fill-function " afm" 'simple)
   (delight 'overwrite-mode " om" 'simple)
@@ -1376,8 +1377,8 @@ clipboard."
 	     telega-extras-force-kill
 	     telega-extras-disconnect)
   :init
-  (keymap-set hud-mode-map "C-c v" '(telega-prefix-map . "+telega-prefix"))
-  (keymap-set hud-mode-map "C-c n" '(telega-prefix-map . "+telega-prefix"))
+  (keymap-set hud-mode-map "C-c v" (cons "+telega-prefix" telega-prefix-map))
+  (keymap-set hud-mode-map "C-c n" (cons "+telega-prefix" telega-prefix-map))
   :config
   (add-hook 'telega-chat-mode-hook 'tychoish/corfu-text-mode-setup)
 

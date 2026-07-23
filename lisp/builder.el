@@ -41,6 +41,7 @@
 (require 'map)
 
 (eval-when-compile
+  (require 'xtd-f)
   (require 'xtd-macro))
 
 (require 'xtd-project)
@@ -50,18 +51,6 @@
 
 (declare-function buffer-line-count "hud-mode")
 (declare-function buffer-directory "hud-mode")
-(declare-function approximate-project-root "xtd-project")
-(declare-function approximate-project-name "xtd-project")
-(declare-function approximate-project-buffers "xtd-project")
-(declare-function mode-buffers "xtd-project")
-(declare-function mode-buffers-for-project "xtd-project")
-(declare-function compile-buffer-name "xtd-project")
-(declare-function s-join-with-space "xtd-s")
-(declare-function s-join-with-pipe "xtd-s")
-(declare-function s-join-with-kebab "xtd-s")
-(declare-function s-join-with-hyphen "xtd-s")
-(declare-function s-shortest "xtd-s")
-(declare-function s-trimmed-or-nil "xtd-s")
 
 (declare-function lm-header "lisp-mnt")
 (declare-function package-build-archive "package-build")
@@ -769,6 +758,7 @@ call `builder-add-candidates'."
          '(("" "")
            ("-race" "+race")))))
     test-names)))
+
 (builder-register-candidates
  :name "go-modules"
  :pipeline (let ((go-mod-directories (f-directories-containing-file-go-mod directories)))
