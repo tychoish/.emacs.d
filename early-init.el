@@ -41,7 +41,7 @@ call in the main synchronous init path would go unmeasured.")
 	    (return-value (let ((inhibit-message t)) ,@body))
 	    (duration (time-to-seconds (time-since time))))
        (when (> duration slow-op-threshold)
-	 (let (inhibit-message)
+	 (let ((inhibit-message t))
 	   (message "[op]: %s: %.06fs" ,name duration)))
        return-value)))
 
