@@ -3336,19 +3336,6 @@ Falls back to the full list when filtering would leave no choices."
               (agent-shell-queue-raw-edit-mode nerd-icons-codicon "nf-cod-file_code" :face nerd-icons-purple)
               (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment_discussion" :face nerd-icons-purple)))))
 
-(use-package agent-shell-manager
-  :after (agent-shell)
-  :commands (agent-shell-manager-toggle agent-shell-manager-find-buffer)
-  :init
-  (keymap-set hud-robot-agent-shell-map "," #'agent-shell-manager-toggle)
-  :config
-  (setq agent-shell-manager-side 'bottom)
-  (make-read-extended-command-for-prefix "agent-shell-manager"
-    :bind-map agent-shell-manager-mode-map
-    :bind-key "x")
-  (keymap-set agent-shell-manager-mode-map "?" #'execute-extended-agent-shell-manager-command)
-  (agent-shell-menu-mode-key "," agent-shell-manager-toggle))
-
 (use-package agent-shell-notifications
   :load-path "external/agent-shell-notifications"
   :ensure nil
@@ -3359,8 +3346,6 @@ Falls back to the full list when filtering would leave no choices."
   (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-mode)
   (add-hook 'agent-shell-viewport-edit-view-hook #'agent-shell-notifications-mode)
   :config
-  (delight 'agent-shell-notifications-mode nil 'agent-shell-manager)
-
   (defun tychoish/agent-shell-notifications-alert-send (plist)
     "Send agent-shell notification PLIST through `alert'."
     (let* ((title (plist-get plist :title))
