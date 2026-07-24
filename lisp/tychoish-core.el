@@ -1236,10 +1236,12 @@
 	     magit-dash-open
 	     magit-dash-open-repo
 	     magit-dash-open-other-window
+	     magit-dash-gh-menu
 	     magit-dash-gh-pr-dashboard-open)
   :init
   (keymap-set hud-magit-map "d" #'magit-dash-open)
   (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
+  (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
   :config
   (require 'magit-gh)
   (require 'magit-dash-open)
@@ -3153,12 +3155,12 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
                  (reusable-frames . t)))
 
   (defun ad:agent-shell--refresh-session-title (orig-fn &optional event)
-    (let ((agent-name (map-nested-elt agent-shell--state '(:agent-config :mode-line-name)))
-          (title (map-nested-elt agent-shell--state '(:session :title))))
-      (unless (and (equal agent-name "Claude")
-                   (stringp title)
-                   (not (string-empty-p title)))
-        (funcall orig-fn event))))
+    (unless (and-let* ((agent-name (map-nested-elt agent-shell--state '(:agent-config :mode-line-name)))
+                       ((equal agent-name "Claude"))
+                       (title (map-nested-elt agent-shell--state '(:session :title)))
+                       ((stringp title))
+                       ((not (string-empty-p title)))))
+      (funcall orig-fn event)))
 
   (advice-add 'agent-shell--refresh-session-title :around
               #'ad:agent-shell--refresh-session-title)

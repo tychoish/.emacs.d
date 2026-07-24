@@ -544,38 +544,79 @@ the same way here as there."
         (denote-sequence--get-new-child target-seq))
     (denote-sequence--get-new-parent)))
 
-(defun denote-dash--reparent-recursive-apply (current-file new-seq)
-  "Re-parent CURRENT-FILE and all descendants onto NEW-SEQ.
-Corrects the type alternation (letter/digit) of descendant sequences when the
-old and new roots end in different character types — a bug in the upstream
-`denote-sequence-reparent-recursive'.
-
-Suppresses `denote-rename-confirmations' for the duration: this is a single
-logical operation that may rename many descendants, and prompting once per
-file (as `denote-rename-file' does by default) would be unusable for any
-subtree beyond a couple of files."
+(defun denote-dash--recursive-reseq-plan (current-file new-seq)
+  "Return the (FILE . NEW-SEQ) rename plan for moving CURRENT-FILE's subtree to NEW-SEQ.
+Includes CURRENT-FILE itself plus every descendant, each rewritten under
+NEW-SEQ with its relative suffix preserved, correcting the type alternation
+(letter/digit) of descendant sequences when the old and new roots end in
+different character types — a bug in the upstream
+`denote-sequence-reparent-recursive'.  Shared by
+`denote-dash--reparent-recursive-apply' and `denote-dash-renumber-recursive'."
   (let* ((root-seq (denote-retrieve-filename-signature current-file))
          (descendants (when root-seq
                         (denote-sequence-get-relative root-seq 'all-children)))
-         (rename-fn (lambda (file seq)
-                      (denote-rename-file file 'keep-current 'keep-current
-                                          seq 'keep-current 'keep-current)))
          (old-last-type (when root-seq (denote-dash--seq-last-type root-seq)))
-         (new-last-type (denote-dash--seq-last-type new-seq))
-         (child-pairs (seq-keep (lambda (child)
-                                   (when-let* ((child-seq (denote-retrieve-filename-signature child)))
-                                     (list child child-seq
-                                           (concat new-seq
-                                                   (denote-dash--alphanumeric-suffix-rewrite
-                                                    (string-remove-prefix root-seq child-seq)
-                                                    old-last-type new-last-type)))))
-                                 descendants))
-         (denote-rename-confirmations nil))
-    (denote-dash--hierarchy-remap-fold-sequence-many
-     (cons (cons root-seq new-seq)
-           (seq-map (lambda (e) (cons (nth 1 e) (nth 2 e))) child-pairs)))
-    (funcall rename-fn current-file new-seq)
-    (seq-do (lambda (e) (funcall rename-fn (nth 0 e) (nth 2 e))) child-pairs)))
+         (new-last-type (denote-dash--seq-last-type new-seq)))
+    (cons
+     (cons current-file new-seq)
+     (seq-keep (lambda (child)
+                 (when-let* ((child-seq (denote-retrieve-filename-signature child)))
+                   (cons child
+                         (concat new-seq
+                                 (denote-dash--alphanumeric-suffix-rewrite
+                                  (string-remove-prefix root-seq child-seq)
+                                  old-last-type new-last-type)))))
+               descendants))))
+
+(defun denote-dash--apply-reseq-plan (plan)
+  "Rename every (FILE . NEW-SEQ) pair in PLAN via `denote-rename-file'.
+Unlike `denote-dash--apply-repack-plan', entries need no staging through
+temporary signatures: reparent/renumber targets always land under a
+different subtree than any source file, so no two entries can collide
+mid-rename.  Suppresses `denote-rename-confirmations' for the duration —
+per-file prompting would be unusable across a whole subtree."
+  (let ((denote-rename-confirmations nil))
+    (seq-do (lambda (pair)
+              (denote-rename-file (car pair) 'keep-current 'keep-current
+                                  (cdr pair) 'keep-current 'keep-current))
+            plan)))
+
+(defun denote-dash--recursive-reseq-confirm-and-apply (plan operation-verb)
+  "Apply PLAN, previewing and confirming first when it spans multiple files.
+PLAN is a list of (FILE . NEW-SEQ) pairs, as returned by
+`denote-dash--recursive-reseq-plan'.  When PLAN has only one entry (the
+target file has no descendants), applies it directly with no prompt — the
+operation can only ever affect that one file.  When PLAN has more than one
+entry, pops the same *Denote Repack Preview* buffer used by
+`denote-dash-repack-sequence-children' and asks for confirmation before
+renaming anything; declining leaves every file untouched.
+
+OPERATION-VERB names the operation for the confirmation prompt and the
+cancellation message (e.g. \"Reparent\", \"Renumber\").
+
+Returns non-nil if PLAN was applied, nil if the user declined."
+  (if (<= (length plan) 1)
+      (progn (denote-dash--apply-reseq-plan plan) t)
+    (pop-to-buffer (denote-dash--repack-preview-buffer plan))
+    (if (yes-or-no-p (format "%s %d files (this note + %d descendant%s) as previewed? "
+                             operation-verb (length plan) (1- (length plan))
+                             (if (= (length plan) 2) "" "s")))
+        (progn (denote-dash--apply-reseq-plan plan) t)
+      (message "%s cancelled; no files were changed." operation-verb)
+      nil)))
+
+(defun denote-dash--reparent-recursive-apply (current-file new-seq)
+  "Re-parent CURRENT-FILE and all descendants onto NEW-SEQ.
+Builds the plan via `denote-dash--recursive-reseq-plan' and applies it via
+`denote-dash--recursive-reseq-confirm-and-apply', which previews and
+confirms whenever CURRENT-FILE has descendants and applies directly,
+without prompting, when it does not."
+  (let* ((plan (denote-dash--recursive-reseq-plan current-file new-seq))
+         (seq-pairs (seq-map (lambda (pair)
+                                (cons (denote-retrieve-filename-signature (car pair)) (cdr pair)))
+                              plan)))
+    (when (denote-dash--recursive-reseq-confirm-and-apply plan "Reparent")
+      (denote-dash--hierarchy-remap-fold-sequence-many seq-pairs))))
 
 ;;;###autoload
 (defun denote-dash-reparent (current-file file-with-sequence &optional recursive)
@@ -596,30 +637,31 @@ this is offered as its own y-or-n-p question before the child-of prompt,
 so promoting a note out of its hierarchy doesn't require reaching for
 `denote-dash-renumber-recursive' and typing a sequence by hand.
 
-Also prompts whether to reparent RECURSIVE-ly instead of relying on a
-prefix argument the caller has to already know about; the plain
-`denote-sequence-reparent' prefix-arg convention isn't discoverable from a
-`denote-dash' or sequence-hierarchy buffer.
+Only offers the \"reparent recursively?\" question when CURRENT-FILE
+actually has descendants; a leaf note is reparented directly with no
+recursion question at all, since recursing over zero descendants is a
+no-op.  When it does have descendants and RECURSIVE ends up non-nil, the
+multi-file rename goes through `denote-dash--reparent-recursive-apply',
+which previews and confirms before touching any file; see that function.
 
 Suppresses `denote-rename-confirmations' for the duration: this is a single
 logical operation, and per-file prompting (as `denote-rename-file' does by
-default) would be unusable for any subtree beyond a couple of files.  With
-RECURSIVE, also corrects the type alternation (letter/digit) of descendant
-sequences when the old and new roots end in different character types — a
-bug in the upstream `denote-sequence-reparent-recursive'; see
-`denote-dash--reparent-recursive-apply'."
+default) would be unusable for any subtree beyond a couple of files."
   (interactive
    (let* ((current-file (denote-dash--target-file))
           (root-p (y-or-n-p
                    (format "Make `%s' a new top-level sequence (no parent)? "
-                           (propertize current-file 'face 'denote-faces-prompt-current-name)))))
+                           (propertize current-file 'face 'denote-faces-prompt-current-name))))
+          (has-descendants (when-let* ((seq (denote-retrieve-filename-signature current-file)))
+                              (denote-sequence-get-relative seq 'all-children))))
      (list
       current-file
       (unless root-p
         (denote-sequence-file-prompt
          (format "Reparent `%s' to be a child of"
                  (propertize current-file 'face 'denote-faces-prompt-current-name))))
-      (y-or-n-p "Reparent recursively (include descendants)? "))))
+      (and has-descendants
+           (y-or-n-p "Reparent recursively (include descendants)? ")))))
   (let ((denote-rename-confirmations nil)
         (old-seq (denote-retrieve-filename-signature current-file)))
     (if recursive
@@ -640,9 +682,11 @@ bug in the upstream `denote-sequence-reparent-recursive'; see
 FILE-WITH-SEQUENCE may be nil, meaning \"promote to a new top-level
 sequence\"; see `denote-dash-reparent' for the full explanation.
 
-Direct, prompt-free entry point for the recursive case; see
-`denote-dash-reparent' for the interactive command that asks whether to
-recurse instead of requiring a separate command."
+Direct entry point for the recursive case; see `denote-dash-reparent' for
+the interactive command that asks whether to recurse instead of requiring
+a separate command.  Still previews and confirms via
+`denote-dash--reparent-recursive-apply' whenever CURRENT-FILE has
+descendants; only a genuinely single-file case is prompt-free."
   (interactive
    (let* ((current-file (denote-dash--target-file))
           (root-p (y-or-n-p
@@ -663,13 +707,12 @@ recurse instead of requiring a separate command."
 Like `denote-dash-reparent-recursive', but NEW-SEQ is the target sequence
 itself rather than derived as a new child of another file's sequence — use
 this to move a subtree to a specific sequence ID instead of appending it
-under a parent.  Corrects the type alternation (letter/digit) of descendant
-sequences when the old and new roots end in different character types.
+under a parent.
 
-Suppresses `denote-rename-confirmations' for the duration: this is a single
-logical operation that may rename many descendants, and prompting once per
-file (as `denote-rename-file' does by default) would be unusable for any
-subtree beyond a couple of files."
+Builds the plan via `denote-dash--recursive-reseq-plan' and applies it via
+`denote-dash--recursive-reseq-confirm-and-apply' — previewing and
+confirming whenever CURRENT-FILE has descendants, applying directly
+without a prompt when it does not."
   (interactive
    (let ((current-file (denote-dash--target-file)))
      (list
@@ -678,28 +721,14 @@ subtree beyond a couple of files."
        (read-string
         (format "Renumber `%s' (recursively) to sequence: "
                 (propertize current-file 'face 'denote-faces-prompt-current-name)))))))
-  (let* ((root-seq (or (denote-retrieve-filename-signature current-file)
-                       (user-error "File has no sequence: %s" (file-name-nondirectory current-file))))
-         (descendants (denote-sequence-get-relative root-seq 'all-children))
-         (rename-fn (lambda (file seq)
-                      (denote-rename-file file 'keep-current 'keep-current
-                                          seq 'keep-current 'keep-current)))
-         (old-last-type (denote-dash--seq-last-type root-seq))
-         (new-last-type (denote-dash--seq-last-type new-seq))
-         (child-pairs (seq-keep (lambda (child)
-                                   (when-let* ((child-seq (denote-retrieve-filename-signature child)))
-                                     (list child child-seq
-                                           (concat new-seq
-                                                   (denote-dash--alphanumeric-suffix-rewrite
-                                                    (string-remove-prefix root-seq child-seq)
-                                                    old-last-type new-last-type)))))
-                                 descendants))
-         (denote-rename-confirmations nil))
-    (denote-dash--hierarchy-remap-fold-sequence-many
-     (cons (cons root-seq new-seq)
-           (seq-map (lambda (e) (cons (nth 1 e) (nth 2 e))) child-pairs)))
-    (funcall rename-fn current-file new-seq)
-    (seq-do (lambda (e) (funcall rename-fn (nth 0 e) (nth 2 e))) child-pairs)))
+  (unless (denote-retrieve-filename-signature current-file)
+    (user-error "File has no sequence: %s" (file-name-nondirectory current-file)))
+  (let* ((plan (denote-dash--recursive-reseq-plan current-file new-seq))
+         (seq-pairs (seq-map (lambda (pair)
+                                (cons (denote-retrieve-filename-signature (car pair)) (cdr pair)))
+                              plan)))
+    (when (denote-dash--recursive-reseq-confirm-and-apply plan "Renumber")
+      (denote-dash--hierarchy-remap-fold-sequence-many seq-pairs))))
 
 ;;; Sequence insertion
 

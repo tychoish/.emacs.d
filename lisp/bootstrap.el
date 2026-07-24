@@ -190,8 +190,7 @@ Override in user/*.el to customize per machine or instance.")
     (with-gc-suppressed
      (require 'desktop)
      (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
-       (with-file-name-handler-disabled
-	(with-silence (desktop-read)))))
+       (with-silence (desktop-read))))
 
     (run-with-idle-timer 120 t #'bootstrap-desktop-save)
 

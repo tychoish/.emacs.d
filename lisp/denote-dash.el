@@ -364,31 +364,33 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
 (defun denote-dash--compute-entries ()
   "Return the full list of `tabulated-list-mode' entries for the current state."
   (let* ((files (denote-directory-files))
-         (all-seq-ids (thread-last files
-                                   (seq-map #'denote-retrieve-filename-signature)
-                                   (seq-filter #'identity))))
-    (thread-last files
-                 (seq-filter (lambda (f) (denote-dash--file-visible-p f all-seq-ids)))
-                 (seq-map (lambda (file)
-                            (let ((seq-id (denote-retrieve-filename-signature file)))
-                              (list file
-                                    (apply #'vector
-                                           (seq-map
-                                            (lambda (col)
-                                              (pcase col
-                                                ('fold      (denote-dash--fold-indicator seq-id))
-                                                ('sequence  (or seq-id ""))
-                                                ('title     (if (eq denote-dash-title-source 'front-matter)
-                                                               (denote-retrieve-title-or-filename file (denote-filetype-heuristics file))
-                                                             (or (denote-retrieve-filename-title file) (file-name-base file))))
-                                                ('keywords  (string-join (denote-extract-keywords-from-path file) " "))
-                                                ('modified  (format-time-string "%Y-%m-%d" (file-attribute-modification-time (file-attributes file))))
-                                                ('id        (denote-dash--format-id (denote-retrieve-filename-identifier file)))
-                                                ('directory (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
-                                                ('git       (or (denote-dash--git-status-char file) " "))
-                                                ('review    (funcall denote-dash-review-indicator-function
-                                                                     (denote-dash--review-pending-p file)))))
-                                            denote-dash--visible-columns)))))))))
+         (all-seq-ids (thread-last
+			files
+                        (seq-map #'denote-retrieve-filename-signature)
+                        (seq-filter #'identity))))
+    (thread-last
+      files
+      (seq-filter (lambda (f) (denote-dash--file-visible-p f all-seq-ids)))
+      (seq-map (lambda (file)
+                 (let ((seq-id (denote-retrieve-filename-signature file)))
+                   (list file
+                         (apply #'vector
+                                (seq-map
+                                 (lambda (col)
+                                   (pcase col
+                                     ('fold      (denote-dash--fold-indicator seq-id))
+                                     ('sequence  (or seq-id ""))
+                                     ('title     (if (eq denote-dash-title-source 'front-matter)
+                                                     (denote-retrieve-title-or-filename file (denote-filetype-heuristics file))
+                                                   (or (denote-retrieve-filename-title file) (file-name-base file))))
+                                     ('keywords  (string-join (denote-extract-keywords-from-path file) " "))
+                                     ('modified  (format-time-string "%Y-%m-%d" (file-attribute-modification-time (file-attributes file))))
+                                     ('id        (denote-dash--format-id (denote-retrieve-filename-identifier file)))
+                                     ('directory (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
+                                     ('git       (or (denote-dash--git-status-char file) " "))
+                                     ('review    (funcall denote-dash-review-indicator-function
+                                                          (denote-dash--review-pending-p file)))))
+                                 denote-dash--visible-columns)))))))))
 
 ;;; Column format
 
@@ -781,11 +783,12 @@ Use this when a rename swaps two whole subtrees, e.g.
 
 (defun denote-dash--all-keywords ()
   "Return a sorted, deduplicated list of all keywords across all Denote notes."
-  (thread-last (denote-directory-files)
-               (seq-map #'denote-extract-keywords-from-path)
-               (apply #'append)
-               (seq-uniq)
-               (seq-sort #'string<)))
+  (thread-last
+    (denote-directory-files)
+    (seq-map #'denote-extract-keywords-from-path)
+    (apply #'append)
+    (seq-uniq)
+    (seq-sort #'string<)))
 
 (defun denote-dash-filter (arg)
   "Filter notes by keyword selection using completing-read-multiple.
@@ -913,9 +916,10 @@ prefix argument they are AND'd."
   (setq denote-dash--global-cycle-depth nil)
   (seq-do (lambda (seq-id)
             (setf (map-elt denote-dash--fold-state seq-id) 'folded))
-          (thread-last (denote-directory-files)
-                       (seq-map #'denote-retrieve-filename-signature)
-                       (seq-filter #'identity)))
+          (thread-last
+	    (denote-directory-files)
+            (seq-map #'denote-retrieve-filename-signature)
+            (seq-filter #'identity)))
   (denote-dash-refresh))
 
 (defun denote-dash-expand-all ()
@@ -928,13 +932,13 @@ prefix argument they are AND'd."
 (defun denote-dash-global-cycle ()
   "Step through global fold depths: 0 (roots only) → 1 → … → nil (all expanded)."
   (interactive)
-  (let* ((max-depth (seq-reduce
-                     #'max
-                     (thread-last (denote-directory-files)
+  (let* ((max-depth (seq-reduce #'max
+				(thread-last
+				  (denote-directory-files)
                                   (seq-map #'denote-retrieve-filename-signature)
                                   (seq-filter #'identity)
                                   (seq-map #'denote-dash--sequence-depth))
-                     0))
+				0))
          (next (cond
                 ((null denote-dash--global-cycle-depth) 0)
                 ((>= denote-dash--global-cycle-depth max-depth) nil)
@@ -1270,33 +1274,33 @@ syntax) is left to the author."
   (interactive
    (list (denote-dash--target-file)
          (denote--valid-file-type (or (denote-file-type-prompt) denote-file-type))))
-  (let* ((old-file-type (denote-filetype-heuristics file)))
-    (when (eq old-file-type new-file-type)
-      (user-error "File is already of type %s" new-file-type))
-    (let* ((id (or (denote-retrieve-filename-identifier file) ""))
-           (date (denote-retrieve-front-matter-date-value file old-file-type))
-           (title (or (denote-retrieve-title-or-filename file old-file-type) ""))
-           (keywords (denote-retrieve-front-matter-keywords-value file old-file-type))
-           (signature (or (denote-retrieve-filename-signature file) ""))
-           (new-front-matter (denote--format-front-matter title date keywords id signature new-file-type))
-           (new-name (denote-format-file-name (file-name-directory file) id keywords title
-                                              (denote--file-extension new-file-type) signature)))
-      (unless (yes-or-no-p (format "Convert %s from %s to %s (front matter + extension only)? "
-                                   (file-name-nondirectory file) old-file-type new-file-type))
-        (user-error "Cancelled"))
-      (let ((buf (find-file-noselect file)))
-        (with-current-buffer buf
-          (save-excursion
-            (goto-char (point-min))
-            (delete-region (point-min) (denote-dash--front-matter-end old-file-type))
-            (goto-char (point-min))
-            (insert new-front-matter))
-          (save-buffer))
-        (kill-buffer buf))
-      (unless (string= (expand-file-name file) (expand-file-name new-name))
-        (rename-file file new-name))
-      (message "Converted %s -> %s" (file-name-nondirectory file) (file-name-nondirectory new-name))
-      (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh)))))
+  (let* ((old-file-type (denote-filetype-heuristics file))
+         (_ (when (eq old-file-type new-file-type)
+              (user-error "File is already of type %s" new-file-type)))
+         (id (or (denote-retrieve-filename-identifier file) ""))
+         (date (denote-retrieve-front-matter-date-value file old-file-type))
+         (title (or (denote-retrieve-title-or-filename file old-file-type) ""))
+         (keywords (denote-retrieve-front-matter-keywords-value file old-file-type))
+         (signature (or (denote-retrieve-filename-signature file) ""))
+         (new-front-matter (denote--format-front-matter title date keywords id signature new-file-type))
+         (new-name (denote-format-file-name (file-name-directory file) id keywords title
+                                            (denote--file-extension new-file-type) signature))
+         (_ (unless (yes-or-no-p (format "Convert %s from %s to %s (front matter + extension only)? "
+                                         (file-name-nondirectory file) old-file-type new-file-type))
+              (user-error "Cancelled")))
+         (buf (find-file-noselect file)))
+    (with-current-buffer buf
+      (save-excursion
+        (goto-char (point-min))
+        (delete-region (point-min) (denote-dash--front-matter-end old-file-type))
+        (goto-char (point-min))
+        (insert new-front-matter))
+      (save-buffer))
+    (kill-buffer buf)
+    (unless (string= (expand-file-name file) (expand-file-name new-name))
+      (rename-file file new-name))
+    (message "Converted %s -> %s" (file-name-nondirectory file) (file-name-nondirectory new-name))
+    (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh))))
 
 ;;; Target file resolution
 
@@ -1337,11 +1341,11 @@ notes only, since sequence operations require one."
   "Return the `[D:SIGNATURE] TITLE' label FILE's buffer would be named.
 Mirrors `tychoish--denote-rename-buffer' so a candidate reads the same as
 the buffer name a user would see after visiting FILE."
-  (let* ((sig (denote-retrieve-filename-signature file))
-         (title (denote-retrieve-title-or-filename file (denote-filetype-heuristics file))))
-    (if (and sig (not (string-empty-p sig)))
-        (format "[D:%s] %s" sig title)
-      title)))
+  (if-let* ((title (denote-retrieve-title-or-filename file (denote-filetype-heuristics file)))
+            (sig (denote-retrieve-filename-signature file))
+            ((not (string-empty-p sig))))
+      (format "[D:%s] %s" sig title)
+    title))
 
 (defun denote-dash--note-annotation (file)
   "Return a keywords + last-modified-date annotation string for FILE."
@@ -1394,8 +1398,11 @@ instead of retyped."
 Reuses the same title/keywords/signature/date/identifier resolution as
 `denote-rename-file' itself, so the only thing this changes is how FILE is
 selected."
-  (let* ((denote-prompts prompts))
-    (apply #'denote-rename-file file (denote--rename-get-file-info-from-prompts-or-existing file))))
+  (let* ((denote-prompts prompts)
+	 (target (denote--rename-get-file-info-from-prompts-or-existing file))
+	 (output (apply #'denote-rename-file file target)))
+    (message "[denote]: renamed %s" target)
+    output))
 
 ;;;###autoload
 (defun denote-dash-rename-file (&optional file)
@@ -1427,23 +1434,19 @@ either, it errors instead of prompting at all."
   (denote-rename-file-using-front-matter (denote-dash--resolve-file-interactive file)))
 
 (defun denote-dash--resolve-file-interactive (&optional file)
-  (when-let* ((_ (not file))
-	      (_ (called-interactively-p))
-	      (buffer-file (buffer-file-name (current-buffer)))
-	      (_ (file-exists-p buffer-file)))
-    (setq file buffer-file))
-
-  (unless (and file
-	       (denote-file-has-denoted-filename-p file)
-	       (thread-last (denote-directories)
-			    (seq-map (lambda (dir) (file-in-directory-p file dir)))
-			    (seq-filter #'identity)))
-     (setq file (denote-dash-note-prompt "select denote: ")))
-
-  (unless file
-    (user-error "must specify denote file"))
-
-  file)
+  "Return FILE, or resolve it from context, prompting only as a last resort.
+Uses `denote-dash--file-at-point' — the same context resolution as
+`denote-dash--target-file' — so a `denote-dash-mode' row, a
+`denote-sequence-hierarchy-mode' row, Dired, or a visited Denote buffer is
+all it takes to avoid any prompt at all.  Previously this checked
+`called-interactively-p' before trying `buffer-file-name', which fails
+when the command is invoked through a keymap or transient binding that
+does not preserve interactive-call framing — that alone forced the
+fallback prompt even when the visited buffer unambiguously named FILE."
+  (or file
+      (denote-dash--file-at-point)
+      (denote-dash-note-prompt "select denote: ")
+      (user-error "must specify denote file")))
 
 ;;; Dispatch transient
 ;;
