@@ -530,35 +530,35 @@
       (kill-buffer other))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-set-tab-width (macro)
+;;; hud-set-tab-width (macro)
 
 (ert-deftest bootstrap/set-tab-width-macro-defines-function ()
   "Macro defines a function with the expected name."
-  (bootstrap-set-tab-width 4)
-  (should (fboundp 'bootstrap-set-local-tab-width-4)))
+  (hud-set-tab-width 4)
+  (should (fboundp 'hud-set-local-tab-width-4)))
 
 (ert-deftest bootstrap/set-tab-width-macro-generated-fn-works ()
   "Generated function sets `tab-width' buffer-locally."
-  (bootstrap-set-tab-width 6)
+  (hud-set-tab-width 6)
   (with-temp-buffer
-    (bootstrap-set-local-tab-width-6)
+    (hud-set-local-tab-width-6)
     (should (= 6 tab-width))))
 
 (ert-deftest bootstrap/set-tab-width-macro-rejects-non-integer ()
   "Macro signals `wrong-type-argument' for a non-integer argument."
-  (should-error (eval '(bootstrap-set-tab-width "four") t)
+  (should-error (eval '(hud-set-tab-width "four") t)
                 :type 'wrong-type-argument))
 
 (ert-deftest bootstrap/set-tab-width-macro-rejects-float ()
   "Macro signals `wrong-type-argument' for a float argument."
-  (should-error (eval '(bootstrap-set-tab-width 4.0) t)
+  (should-error (eval '(hud-set-tab-width 4.0) t)
                 :type 'wrong-type-argument))
 
 (ert-deftest bootstrap/set-tab-width-macro-large-warns ()
   "Macro calls `warn' for a tab width >= 32."
   (let ((warned nil))
     (cl-letf (((symbol-function 'warn) (lambda (&rest _) (setq warned t))))
-      (eval '(bootstrap-set-tab-width 32) t))
+      (eval '(hud-set-tab-width 32) t))
     (should warned)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

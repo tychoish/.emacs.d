@@ -225,19 +225,9 @@
    :form (bootstrap-ensure-light-theme)
    :idle-timer 0.01)
 
-  :config
-  (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
-    (setq-default custom-theme-directory theme-directory)
-    (add-to-list 'custom-theme-load-path theme-directory)
-    (add-to-list 'load-path theme-directory))
-
   (defun disable-all-themes ()
     (interactive)
     (mapc #'disable-theme custom-enabled-themes))
-
-  (defun bootstrap-ensure-dark-theme ()
-    (unless custom-enabled-themes
-      (bootstrap-load-dark-theme)))
 
   (defun bootstrap-load-dark-theme ()
     (interactive)
@@ -245,6 +235,16 @@
     (when (load-theme 'modus-vivendi t t)
       (enable-theme 'modus-vivendi))
     (add-to-list 'default-frame-alist '(alpha . 95)))
+
+  (defun bootstrap-ensure-dark-theme ()
+    (unless custom-enabled-themes
+      (bootstrap-load-dark-theme)))
+
+  :config
+  (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
+    (setq-default custom-theme-directory theme-directory)
+    (add-to-list 'custom-theme-load-path theme-directory)
+    (add-to-list 'load-path theme-directory))
 
   (setq modus-themes-deuteranopia t)
   (setq modus-themes-common-palette-overrides
@@ -2720,7 +2720,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (setq-default eglot-workspace-configuration tychoish/eglot-default-server-configuration)
 
   (defun eglot-update-workspace ()
-    "Push updated workspace configuration to the current eglot server.
+    "Push updated workspace configuration to the current eglot server."
     (interactive)
     (eglot-signal-didChangeConfiguration (eglot--current-server-or-lose)))
 
