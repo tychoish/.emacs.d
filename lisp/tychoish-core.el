@@ -2511,7 +2511,7 @@ return until the minibuffer session ends."
   (autoload 'eglot-test-at-point "eglot-test-at-point")
 
   (defvar-keymap tychoish/eglot-map) ;; "C-c l"
-  (keymap-set eglot-mode-map "C-c l" '(tychoish/eglot-map . "eglot"))
+  (keymap-set eglot-mode-map "C-c l" (cons "eglot" tychoish/eglot-map))
   (keymap-set tychoish/eglot-map "s" #'consult-eglot-symbols)
   (keymap-set tychoish/eglot-map "r" #'eglot-rename)
   (keymap-set tychoish/eglot-map "a" #'eglot-code-actions)
@@ -2721,8 +2721,6 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
 
   (defun eglot-update-workspace ()
     "Push updated workspace configuration to the current eglot server.
-Useful after changing `eglot-workspace-configuration' or
-`tychoish/eglot-default-server-configuration' without restarting eglot."
     (interactive)
     (eglot-signal-didChangeConfiguration (eglot--current-server-or-lose)))
 
