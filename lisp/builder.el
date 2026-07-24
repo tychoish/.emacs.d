@@ -1606,5 +1606,50 @@ timestamps. Returns the list of files that were recompiled."
                                        (byte-recompile-file f current-prefix-arg))
                              f)))))
 
+;;;###autoload
+(defun builder-emacs-conf-generate-loaddefs (&optional package)
+  "Regenerate the `*-autoloads.el' file for a vendored package's checkout.
+PACKAGE is a symbol key into `bootstrap-vendored-packages'; interactively
+prompts among them, or regenerates every checkout with a prefix argument.
+
+`bootstrap-package' only calls `package-vc-install-from-checkout' (which
+generates the autoloads file) the first time it sees a checkout — edits
+made to an `external/' package afterward, including new, renamed, or
+moved `;;;###autoload' cookies, never refresh that file on their own (see
+`builder-emacs-conf-recompile-vendored-packages' for the equivalent
+byte-compile staleness). Regeneration runs in a fresh batch Emacs
+subprocess so the result reflects only what is on disk, not whatever
+this session already has loaded. Returns the list of package symbols
+regenerated."
+  (interactive
+   (list (unless current-prefix-arg
+           (intern (completing-read "Regenerate loaddefs for: "
+                                     (seq-map (lambda (it) (symbol-name (car it)))
+                                               bootstrap-vendored-packages)
+                                     nil t)))))
+  (let* ((specs (seq-filter (lambda (spec) (or (null package) (eq (car spec) package)))
+                            bootstrap-vendored-packages))
+         (regenerated
+          (seq-keep
+           (lambda (spec)
+             (when (file-directory-p (expand-file-name (nth 1 spec) user-emacs-directory))
+               (let* ((dir (expand-file-name (nth 1 spec) user-emacs-directory))
+                      (output (expand-file-name (format "%s-autoloads.el" (car spec)) dir))
+                      (out-buf (generate-new-buffer " *loaddefs-generate*"))
+                      (status (unwind-protect
+                                  (call-process "emacs" nil out-buf nil
+                                                "--batch" "--eval"
+                                                (format "(loaddefs-generate %S %S)" dir output))
+                                (kill-buffer out-buf))))
+                 (if (zerop status)
+                     (car spec)
+                   (message "builder: loaddefs-generate failed for %s" (car spec))
+                   nil))))
+           specs)))
+    (when (called-interactively-p 'interactive)
+      (message "builder: regenerated loaddefs for %s"
+               (if regenerated (mapconcat #'symbol-name regenerated ", ") "none")))
+    regenerated))
+
 (provide 'builder)
 ;;; builder.el ends here
