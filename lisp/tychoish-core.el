@@ -1229,7 +1229,11 @@
 
 (use-package magit-gh
   :ensure t
-  :commands (magit-gh))
+  :commands (magit-gh)
+  :config
+  (transient-append-suffix 'magit-gh [2]
+    ["magit-dash"
+     ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
 
 (use-package magit-dash
   :commands (magit-dash-view
@@ -1243,19 +1247,13 @@
   (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
   (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
   :config
-  (require 'magit-gh)
-  (require 'magit-dash-open)
-  (require 'magit-dash-submodules)
-  (require 'magit-dash-gh-pr)
-  (require 'magit-dash-gh)
-  (require 'magit-dash-gh-actions)
-  (require 'magit-dash-timer)
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
   (setq magit-dash-gh-prune-pr-limit 50)
   (setq magit-dash-show-discovered-submodules nil)
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
+
   (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
 
   (with-eval-after-load 'nerd-icons
