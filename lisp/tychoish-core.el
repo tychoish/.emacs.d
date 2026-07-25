@@ -1257,6 +1257,7 @@
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
   (setq magit-dash-gh-prune-pr-limit 50)
   (setq magit-dash-show-discovered-submodules nil)
+  (setq magit-dash-render-branch-name-as-basename t)
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
