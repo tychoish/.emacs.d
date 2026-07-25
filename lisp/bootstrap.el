@@ -170,51 +170,51 @@ Override in user/*.el to customize per machine or instance.")
 (defun bootstrap-desktop-read-init ()
   ;; only read the desktop if we're not in the "solo" (no ID) emacs
   ;; instance.
-  (unless (equal "solo" sprite-instance-id)
-    (setq desktop-dirname (file-name-concat user-emacs-directory sprite--conf-state-directory))
-    (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
-    (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-    (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~/")))
+  (with-gc-suppressed
+   (require 'desktop)
+   (unless (equal "solo" sprite-instance-id)
+     (setq desktop-dirname (file-name-concat user-emacs-directory sprite--conf-state-directory))
+     (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
+     (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
+     (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~/")))
 
-    (setq desktop-save t)
-    (setq desktop/last-save-time (current-time))
-    (setq desktop-restore-frames nil)
-    (setq desktop-restore-in-current-display nil)
+     (setq desktop-save t)
+     (setq desktop/last-save-time (current-time))
+     (setq desktop-restore-frames nil)
+     (setq desktop-restore-in-current-display nil)
 
-    (if (daemonp)
-        (setq desktop-restore-eager nil
-              desktop-load-locked-desktop t)
-      (setq desktop-restore-eager t
-            desktop-load-locked-desktop nil))
+     (if (daemonp)
+         (setq desktop-restore-eager nil
+               desktop-load-locked-desktop t)
+       (setq desktop-restore-eager t
+             desktop-load-locked-desktop nil))
 
-    (with-gc-suppressed
-     (require 'desktop)
      (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
-       (with-silence (desktop-read))))
+       (with-silence (desktop-read)))
 
-    (run-with-idle-timer 120 t #'bootstrap-desktop-save)
+     (run-with-idle-timer 120 t #'bootstrap-desktop-save))
 
-    (add-to-list 'desktop-globals-to-save 'register-alist)
-    (add-to-list 'desktop-globals-to-save 'file-name-history)
-    (add-to-list 'desktop-modes-not-to-save 'dired-mode)
-    (add-to-list 'desktop-modes-not-to-save 'Info-mode)
-    (add-to-list 'desktop-modes-not-to-save 'org-mode)
-    (add-to-list 'desktop-modes-not-to-save 'eww-mode)
-    (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
-    (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
+   (add-to-list 'desktop-globals-to-save 'register-alist)
+   (add-to-list 'desktop-globals-to-save 'file-name-history)
+   (add-to-list 'desktop-modes-not-to-save 'dired-mode)
+   (add-to-list 'desktop-modes-not-to-save 'Info-mode)
+   (add-to-list 'desktop-modes-not-to-save 'org-mode)
+   (add-to-list 'desktop-modes-not-to-save 'eww-mode)
+   (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
+   (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
 
-    (setq desktop-buffers-not-to-save
-          (concat "\\("
-                  "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
-                  "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
-                  "\\)$"))
+   (setq desktop-buffers-not-to-save
+         (concat "\\("
+                 "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
+                 "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
+                 "\\)$"))
 
-    (setq desktop-files-not-to-save
-          (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
-                  "^/usr/lib/go/.*\\|"
-                  "^/usr/lib/rustlib/.*\\|"
-                  "^/home.+go/pkg/mod\\|"
-                  "^/home.+\\.cargo"))))
+   (setq desktop-files-not-to-save
+         (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
+                 "^/usr/lib/go/.*\\|"
+                 "^/usr/lib/rustlib/.*\\|"
+                 "^/home.+go/pkg/mod\\|"
+                 "^/home.+\\.cargo"))))
 
 (defvar bootstrap-abbrev-files-cache nil
   "cache mapping file names to files' mtime to avoid re-importing files")

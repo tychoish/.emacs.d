@@ -59,7 +59,7 @@
 
 (use-package delight
   :ensure t
-  :commands (delight)
+  :defer t
   :config
   (delight 'fundamental-mode "fun" 'simple)
 
@@ -91,14 +91,11 @@
 
 (use-package uuidgen
   :ensure t
-  :commands (uuidgen))
+  :defer t)
 
 (use-package async
   :ensure t
-  :commands (async-start
-	     async-start-process
-	     async-bytecomp-package-mode
-	     dired-async-mode)
+  :defer t
   :init
   (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
   (add-hook 'dired-mode-hook 'dired-async-mode)
@@ -127,12 +124,10 @@
 
 (use-package package-build
   :ensure t
-  :commands (package-build-archive package-build-all))
+  :defer t)
 
 (use-package annotated-completing-read
-  :commands (annotated-completing-read
-	     annotated-completing-read-context-from-point
-	     annotated-completing-read-directory))
+  :defer t)
 
 (use-package sprite
   :init
@@ -272,7 +267,7 @@
 
 (use-package nerd-icons-dired
   :ensure t
-  :commands (nerd-icons-dired-mode)
+  :defer t
   :init
   (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
   :config
@@ -280,6 +275,7 @@
 
 (use-package hud-modeline
   :ensure nil
+  :defer t
   :commands (hud-modeline-mode)
   :init
   (add-one-shot-hook
@@ -299,7 +295,6 @@
 (use-package which-key
   :ensure nil
   :defer t
-  :commands (which-key-setup-side-window-bottom)
   :init
   (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
   :config
@@ -313,10 +308,8 @@
 
 (use-package projectile
   :ensure t
-  :commands (projectile-mode
-	     projectile-project-name
-	     projectile-project-root
-	     projectile-save-project-buffers)
+  :commands (projectile-project-name
+	     projectile-project-root)
   :init
   (defun turn-on-projectile-mode ()
     (interactive)
@@ -350,10 +343,10 @@
 
   (setq projectile-enable-caching t)
   (setq projectile-use-git-grep t)
-  (setq projectile-completion-system 'default)
+  (setq projectile-enable-caching 'persistent)
   (setq projectile-require-project-root nil)
   (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
-  (setq projectile-frecency-file (sprite-state-path "projectile-frecency.eld"))
+  (setq projectile-frecency-file (sprite-state-path "projectile-frecency.el"))
 
   (defun projectile-mode-enable-for-buffer (buf)
     (with-current-buffer buf
@@ -406,8 +399,7 @@
 	     find-ripgrep
 	     find-ripgrep-compile
 	     find-ripgrep-project
-	     find-merge-conflicts
-	     ripgrep-regexp)
+	     find-merge-conflicts)
   :init
   (keymap-set global-map "M-g r" #'consult-rg)
   ;; "C-c C-;"
@@ -520,12 +512,13 @@
 
 (use-package deadgrep
   :ensure t
-  :commands (deadgrep)
+  :defer t
   :init
   (keymap-set hud-ecclectic-rg-map "x" #'deadgrep))
 
 (use-package wgrep
   :ensure t
+  :defer t
   :commands (wgrep-change-to-wgrep-mode)
   :after (grep)
   :init
@@ -535,7 +528,7 @@
 
 (use-package anzu
   :ensure t
-  :commands (anzu-query-replace anzu-query-replace-regexp global-anzu-mode anzu-mode)
+  :defer t
   :init
   (keymap-set hud-anzu-map "r" #'anzu-query-replace)
   (keymap-set hud-anzu-map "e" #'anzu-query-replace-regexp)
@@ -555,22 +548,7 @@
 
 (use-package cape
   :ensure t
-  :commands (cape-capf-inside-code
-	     cape-capf-inside-comment
-	     cape-capf-inside-string
-	     cape-dabbrev
-	     cape-history
-	     cape-file
-	     cape-elisp-symbol
-	     cape-elisp-block
-	     cape-abbrev
-	     cape-line
-	     cape-dict
-	     cape-keyword
-	     cape-emoji
-	     cape-tex
-	     cape-sgml
-	     cape-rfc1345)
+  :defer t
   :init
   ;; "C-c ." this is mostly copy-pasta from cape-mode-map, with tweaks
   (keymap-set hud-completion-map "t" #'complete-tag)
@@ -620,40 +598,42 @@
 
   (defun tychoish/elisp-capf-setup  ()
     (setq-local completion-at-point-functions
-		(thread-last (list #'cape-elisp-symbol
-				   (cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
-				   #'cape-dabbrev
-				   (cape-capf-wrapper cape-capf-inside-code cape-keyword)
-				   #'yasnippet-capf
-				   (thread-last (tychoish/get-available-word-capfs)
-						(seq-map (lambda (in)
-							   `(progn
-							      (list (cape-capf-wrapper cape-capf-inside-comment ,in)
-								    (cape-capf-wrapper cape-capf-inside-string ,in)))))
-						(seq-map 'eval))
-				   #'cape-emoji)
-			     (flatten-tree)
-			     (seq-filter 'identity)
-			     (seq-uniq))))
+		(thread-last
+		  (list #'cape-elisp-symbol
+			(cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
+			#'cape-dabbrev
+			(cape-capf-wrapper cape-capf-inside-code cape-keyword)
+			#'yasnippet-capf
+			(thread-last (tychoish/get-available-word-capfs)
+				     (seq-map (lambda (in)
+						`(progn
+						   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
+							 (cape-capf-wrapper cape-capf-inside-string ,in)))))
+				     (seq-map 'eval))
+			#'cape-emoji)
+		  (flatten-tree)
+		  (seq-filter 'identity)
+		  (seq-uniq))))
 
   (defun tychoish/eglot-capf-setup ()
     (interactive) ;; todo remove
     (setq-local completion-category-defaults nil)
     (setq-local completion-at-point-functions
-		(thread-last (list #'eglot-completion-at-point
-				   #'cape-dabbrev
-				   (thread-last (tychoish/get-available-word-capfs)
-						(seq-map (lambda (in)
-							   `(progn
-							      (list (cape-capf-wrapper cape-capf-inside-comment ,in)
-								    (cape-capf-wrapper cape-capf-inside-string ,in)))))
-						(seq-map 'eval))
-				   #'yasnippet-capf
-				   #'cape-emoji
-				   #'cape-file)
-			     (flatten-tree)
-			     (seq-filter 'identity)
-			     (seq-uniq))))
+		(thread-last
+		  (list #'eglot-completion-at-point
+			#'cape-dabbrev
+			(thread-last (tychoish/get-available-word-capfs)
+				     (seq-map (lambda (in)
+						`(progn
+						   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
+							 (cape-capf-wrapper cape-capf-inside-string ,in)))))
+				     (seq-map 'eval))
+			#'yasnippet-capf
+			#'cape-emoji
+			#'cape-file)
+		  (flatten-tree)
+		  (seq-filter 'identity)
+		  (seq-uniq))))
 
   (with-eval-after-load 'eglot
     (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster))
@@ -671,7 +651,7 @@
 
 (use-package yasnippet
   :ensure t
-  :commands (yas-global-mode yas-insert-snippet yas-minor-mode yas-expand-snippet yas-lookup-snippet)
+  :commands (yas-insert-snippet yas-expand-snippet yas-lookup-snippet)
   :init
   (add-hook 'text-mode-hook #'yas-minor-mode)
   (add-hook 'prog-mode-hook #'yas-minor-mode)
@@ -685,7 +665,7 @@
 
 (use-package yasnippet-capf
   :ensure t
-  :commands (yasnippet-capf)
+  :defer t
   :init
   (keymap-set hud-completion-map "s" #'yasnippet-capf)
   (declare-function yasnippet-capf "yasnippet-capf")
@@ -712,8 +692,8 @@
 
 (use-package vertico
   :ensure t
+  :defer t
   :defines (vertico-multiform-categories vertico-sort-function vertico-multiform-commands)
-  :commands (vertico-mode vertico-multiform-mode)
   :init
   (add-lazy-init
    :name "<core> vertico primary"
@@ -764,7 +744,7 @@
 
 (use-package marginalia
   :ensure t
-  :commands (marginalia-mode marginalia-cycle)
+  :defer t
   :init
   (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
   (add-one-shot-hook
@@ -776,7 +756,7 @@
 
 (use-package embark
   :ensure t
-  :commands (embark-act embark-bindings embark-dwim)
+  :defer t
   :init
   (keymap-set global-map "C-." #'embark-act)	      ;; pick some comfortable binding
   (keymap-set global-map "C-c H" #'embark-bindings) ;; alternative for `describe-bindings'
@@ -795,7 +775,7 @@
 (use-package corfu
   :ensure t
   :defer t
-  :commands (corfu-mode corfu--in-region)
+  :commands (corfu--in-region)
   :init
   (defun tychoish/corfu-text-mode-setup ()
     (corfu-mode)
@@ -849,7 +829,7 @@
 
 (use-package corfu-terminal
   :ensure t
-  :commands (corfu-terminal-mode)
+  :defer t
   :init
   (defun tychoish--corfu-maybe-terminal ()
     (unless (or (bound-and-true-p corfu-terminal-mode)
@@ -861,23 +841,23 @@
 
 (use-package popon
   :ensure t
-  :commands (popon-kill popon-create popon-x-y-at-posn))
+  :defer t)
 
 (use-package nerd-icons-corfu
   :ensure t
-  :commands (nerd-icons-corfu-formatter)
+  :defer t
   :config
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
 (use-package nerd-icons-xref
   :ensure t
-  :commands (nerd-icons-xref-mode)
+  :defer t
   :init
   (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode))
 
 (use-package nerd-icons-completion
   :ensure t
-  :commands (nerd-icons-completion-mode nerd-icons-completion-marginalia-setup)
+  :defer t
   :init
   (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
   (add-lazy-init
@@ -901,39 +881,7 @@
   :ensure t
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
-  :commands (consult-find
-	     consult-git-grep
-	     consult-grep
-	     consult-mode-command
-	     consult-kmacro
-	     consult-register
-	     consult-register-store
-	     consult-register-load
-	     consult-compile-error
-	     consult-line
-	     consult-info
-	     consult-complex-command
-	     consult-buffer
-	     consult-buffer-other-window
-	     consult-buffer-other-frame
-	     consult-buffer-other-tab
-	     consult-bookmark
-	     consult-project-buffer
-	     consult-recent-file
-	     consult-yank-from-kill-ring
-	     consult-imenu-multi
-	     consult-goto-line
-	     consult-mark
-	     consult-global-mark
-	     consult-imenu
-	     consult-locate
-	     consult-isearch-history
-	     consult-line-multi
-	     consult-keep-lines
-	     consult-focus-lines
-	     consult-history
-	     consult-man
-	     consult-at-point
+  :commands (consult-at-point
 	     consult-preview-at-point-mode)
   :init
   (add-hook 'completion-list-mode-hook #'consult-preview-at-point-mode)
@@ -1066,7 +1014,7 @@
 
 (use-package consult-flycheck
   :ensure t
-  :commands (consult-flycheck)
+  :defer t
   :init
   (keymap-set global-map "M-g f" #'flycheck-mode)
   (keymap-set hud-consult-mode-map "c" #'consult-flycheck)
@@ -1075,7 +1023,8 @@
 
 (use-package consult-flyspell
   :ensure t
-  :commands (consult-flyspell flyspell-correct-consult)
+  :defer t
+  :commands (flyspell-correct-consult)
   :init
   (keymap-set hud-consult-mode-map "f" #'consult-flyspell)
   :config
@@ -1086,7 +1035,7 @@
 
 (use-package consult-eglot
   :ensure t
-  :commands (consult-eglot-symbols)
+  :defer t
   :init
   (keymap-set hud-docs-map "a" #'consult-eglot-symbols)
   :config
@@ -1098,11 +1047,11 @@
 
 (use-package consult-gh
   :ensure t
-  :commands (consult-gh))
+  :defer t)
 
 (use-package consult-yasnippet
   :ensure t
-  :commands (consult-yasnippet)
+  :defer t
   :init
   (keymap-set hud-consult-mode-map "s" #'consult-yasnippet)
   (keymap-set hud-completion-map "y" #'consult-yasnippet))
@@ -1114,8 +1063,7 @@
   (add-hook 'embark-collect-mode-hook #'consult-preview-at-point-mode))
 
 (use-package builder
-  :commands (annotated-completing-read-directory
-	     make-builder-candidate
+  :commands (make-builder-candidate
 	     builder-register-candidates
 	     builder--read-command
 	     builder-compile-project
@@ -1131,7 +1079,7 @@
 
 (use-package revbufs
   :ensure t
-  :commands (revbufs)
+  :defer t
   :init
   (keymap-set global-map "C-x x a" #'revbufs)
   (keymap-set hud-buffer-control-map "d" #'kill-buffers-in-directory)
@@ -1150,7 +1098,7 @@
 
 (use-package popper
   :ensure t
-  :commands (popper-mode popper-echo-mode popper-cycle popper-toggle popper-kill-latest-popup)
+  :commands (popper-cycle popper-toggle popper-kill-latest-popup)
   :init
   (keymap-set global-map "C-c '" #'popper-toggle)
   (keymap-set global-map "C-c \\" #'popper-cycle)
@@ -1178,7 +1126,8 @@
 
 (use-package magit
   :ensure t
-  :commands (magit-toplevel magit-status magit-branch magit-blame)
+  :defer t
+  :commands (magit-toplevel)
   :init
   (keymap-set hud-magit-map "s" #'magit-status)
   (keymap-set hud-magit-map "f" #'magit-branch)
@@ -1228,7 +1177,7 @@
 
 (use-package magit-gh
   :ensure t
-  :commands (magit-gh)
+  :defer t
   :config
   (unless (condition-case nil
               (transient-get-suffix 'magit-gh "g")
@@ -1238,12 +1187,7 @@
        ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
 
 (use-package magit-dash
-  :commands (magit-dash-view
-	     magit-dash-open
-	     magit-dash-open-repo
-	     magit-dash-open-other-window
-	     magit-dash-gh-menu
-	     magit-dash-gh-pr-dashboard-open)
+  :defer t
   :init
   (keymap-set hud-magit-map "d" #'magit-dash-open)
   (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
@@ -1293,17 +1237,18 @@
 
 (use-package sqlite-mode-extras
   :ensure t
+  :defer t
   :commands (sqlite-extras-minor-mode)
   :init
   (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode))
 
 (use-package gist
   :ensure t
-  :commands (gist-region gist-buffer gist-list gist-region-private gist-buffer-private))
+  :defer t)
 
 (use-package git-link
   :ensure t
-  :commands (git-link)
+  :defer t
   :init
   (keymap-set hud-magit-map "l" #'git-link)
   :config
@@ -1324,8 +1269,8 @@ clipboard."
 
 (use-package alert
   :ensure t
+  :defer t
   :defines (alert-styles alert-libnotify-command)
-  :commands (alert)
   :config
   (setq alert-log-messages nil)
   (setq alert-fade-time 15)
@@ -1356,7 +1301,7 @@ clipboard."
 
 (use-package emojify
   :ensure t
-  :commands (global-emojify-mode)
+  :defer t
   :config
   (delight 'emojify-mode)
   (setq emojify-emoji-styles '(ascii unicode github))
@@ -1373,8 +1318,7 @@ clipboard."
 (use-package telega
   :ensure t
   :defines (telega-chat-mode-hook)
-  :commands (telega
-	     telega-chat-mode
+  :commands (telega-chat-mode
 	     telega-extras-switch-to-root
 	     telega-extras-force-kill
 	     telega-extras-disconnect)
@@ -1452,14 +1396,8 @@ clipboard."
 
 (use-package denote
   :ensure t
-  :commands (denote
-	     denote-backlinks
-	     denote-dired
-	     denote-link
-	     denote-open-or-create
-	     denote-org-capture
-	     denote-rename-file
-	     denote-rename-file-using-front-matter)
+  :defer t
+  :commands (denote-dired)
   :init
   (keymap-set hud-denote-map "n" #'denote)
   (keymap-set hud-denote-map "m" #'denote-open-or-create)
@@ -1557,7 +1495,7 @@ clipboard."
 
 (use-package consult-notes
   :ensure t
-  :commands (consult-notes consult-notes-search-in-all-notes)
+  :defer t
   :init
   (keymap-set hud-denote-map ";" #'consult-notes)
   (keymap-set hud-denote-map "/" #'consult-notes-search-in-all-notes)
@@ -1581,14 +1519,15 @@ return until the minibuffer session ends."
 
 (use-package consult-denote
   :ensure t
-  :commands (consult-denote-find consult-denote-grep consult-denote-mode)
+  :defer t
   :init
   (keymap-set hud-denote-map "f" #'consult-denote-find)
   (keymap-set hud-denote-map "g" #'consult-denote-grep))
 
 (use-package denote-journal
   :ensure t
-  :commands (denote-journal-new-entry denote-journal-new-entry-after-last)
+  :defer t
+  :commands (denote-journal-new-entry-after-last)
   :init
   (keymap-set hud-denote-map "j" #'denote-journal-new-entry)
   :config
@@ -1597,9 +1536,7 @@ return until the minibuffer session ends."
 
 (use-package denote-sequence
   :ensure t
-  :commands (denote-sequence-new-child denote-sequence-new-sibling
-             denote-sequence-new-parent denote-sequence-link
-             denote-sequence-rename-as-parent)
+  :defer t
   :init
   (keymap-set hud-denote-sequence-map "c" #'denote-sequence-new-child)
   (keymap-set hud-denote-sequence-map "s" #'denote-sequence-new-sibling)
@@ -1623,17 +1560,8 @@ return until the minibuffer session ends."
 
 (use-package denote-org
   :ensure t
-  :commands (denote-org-link-to-heading
-             denote-org-backlinks-for-heading
-             denote-org-extract-org-subtree
-             denote-org-convert-links-to-file-type
-             denote-org-convert-links-to-denote-type
-             denote-org-dblock-insert-links
-             denote-org-dblock-insert-missing-links
-             denote-org-dblock-insert-backlinks
-             denote-org-dblock-insert-files
-             denote-org-dblock-insert-files-as-headings
-             orgx-migrate-subtree-to-denote)
+  :defer t
+  :commands (orgx-migrate-subtree-to-denote)
   :init
   (keymap-set hud-denote-org-map "l" #'denote-org-link-to-heading)
   (keymap-set hud-denote-org-map "b" #'denote-org-backlinks-for-heading)
@@ -1645,20 +1573,7 @@ return until the minibuffer session ends."
 
 (use-package denote-explore
   :ensure t
-  :commands (denote-explore-count-notes
-             denote-explore-count-keywords
-             denote-explore-random-note
-             denote-explore-random-link
-             denote-explore-random-keyword
-             denote-explore-duplicate-notes
-             denote-explore-single-keywords
-             denote-explore-zero-keywords
-             denote-explore-rename-keyword
-             denote-explore-sync-metadata
-             denote-explore-missing-links
-             denote-explore-barchart-keywords
-             denote-explore-barchart-timeline
-             denote-explore-barchart-filetypes)
+  :defer t
   :init
   (keymap-set hud-denote-explore-map "n" #'denote-explore-count-notes)
   (keymap-set hud-denote-explore-map "c" #'denote-explore-count-keywords)
@@ -1679,9 +1594,7 @@ return until the minibuffer session ends."
 
 (use-package denote-review
   :ensure t
-  :commands (denote-review-set-date-dired-marked-files
-             denote-review-set-date
-             denote-review-display-list)
+  :defer t
   :init
   (keymap-set hud-denote-review-map "d" #'denote-review-set-date)
   (keymap-set hud-denote-review-map "l" #'denote-review-display-list)
@@ -1705,8 +1618,7 @@ return until the minibuffer session ends."
 	     orgx-agenda-minor-mode-turn-on
 	     orgx--install-auxiliary-packages
 	     ad:org-agenda--open-files
-	     bootstrap-set-notes-directory
-	     org-annotate-file)
+	     bootstrap-set-notes-directory)
   :init
   ;; "C-c o"
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
@@ -1832,7 +1744,6 @@ return until the minibuffer session ends."
   (add-hook 'prog-mode-hook #'tychoish--flyspell-prog-mode-idle)
   (add-hook 'text-mode-hook #'tychoish--flyspell-mode-idle)
   (add-hook 'telega-chat-mode-hook #'tychoish--flyspell-mode-idle)
-  :commands (flyspell-mode flyspell-prog-mode flyspell-correct-wrapper)
   :config
   (delight 'flyspell-mode " fs")
   (setq ispell-list-command "list")
@@ -1855,11 +1766,8 @@ return until the minibuffer session ends."
 
 (use-package flyspell-correct
   :ensure t
-  :after flyspell
-  :commands (flyspell-correct-at-point
-             flyspell-correct-next
-             flyspell-correct-previous
-             flyspell-correct-wrapper))
+  :defer t
+  :after flyspell)
 
 (use-package whitespace
   :ensure nil
@@ -1950,7 +1858,7 @@ return until the minibuffer session ends."
 
 (use-package yaml-pro
   :ensure t
-  :commands (yaml-pro-mode)
+  :defer t
   :init
   (add-hook 'yaml-mode-hook #'yaml-pro-mode))
 
@@ -2028,10 +1936,11 @@ return until the minibuffer session ends."
 
 (use-package rustic
   :ensure t
+  :defer t
   :after (rust-mode flycheck)
   :mode (("\\.rs\\'" . rustic-mode)
 	 ("Cargo.lock" . toml-ts-mode))
-  :commands (rust-resolve-fmt-path rustic-mode)
+  :commands (rust-resolve-fmt-path)
   :config
   (delight 'rust-mode "rs")
   (delight 'rustic-mode "rs(x)")
@@ -2204,8 +2113,8 @@ return until the minibuffer session ends."
   :mode "\\.ninja\\'")
 
 (use-package slime
+  :defer t
   :mode ("\\.lisp" . lisp-mode)
-  :commands (slime slime-connect hyperspec-lookup)
   :init
   (keymap-set hud-docs-map "c" #'hyperspec-lookup)
   :config
@@ -2225,13 +2134,13 @@ return until the minibuffer session ends."
 
 (use-package journalctl-mode
   :ensure t
-  :commands (journalctl)
+  :defer t
   :init
   (keymap-set hud-core-map "j" #'journalctl))
 
 (use-package docker
   :ensure t
-  :commands (docker docker-containers docker-images docker-volumes docker-contexts docker-compose)
+  :defer t
   :init
   (keymap-set hud-docker-map "d" #'docker)
   (keymap-set hud-docker-map "c" #'docker-containers)
@@ -2252,8 +2161,9 @@ return until the minibuffer session ends."
 
 (use-package flycheck
   :ensure t
+  :defer t
   :defines (flycheck-checkers)
-  :commands (flycheck-disable-checker flycheck-mode global-flycheck-mode)
+  :commands (flycheck-disable-checker)
   :init
   (keymap-set global-map "C-c f f" #'flycheck-mode)
   :config
@@ -2301,9 +2211,9 @@ return until the minibuffer session ends."
 
 (use-package flycheck-golangci-lint
   :ensure t
+  :defer t
   :defines (golangci-lint)
   :after (flycheck go-ts-mode)
-  :commands (flycheck-golangci-lint-setup)
   :config
   (setq flycheck-go-vet-shadow t)
   (setq flycheck-go-build-install-deps nil)
@@ -2311,6 +2221,7 @@ return until the minibuffer session ends."
   (setq flycheck-golangci-lint-tests t))
 
 (use-package compile
+  :defer t
   :defines (compile-add-error-syntax compilation-mode-map)
   :commands (tychoish-compile)
   :init
@@ -2402,7 +2313,7 @@ return until the minibuffer session ends."
   :ensure t
   :defer t
   :after (flycheck (:any markdown-mode rst-mode org-mode))
-  :commands (flycheck-vale-setup flycheck-vale-toggle-enabled tychoish/flycheck-vale-enable tychoish/flycheck-vale-disable)
+  :commands (tychoish/flycheck-vale-enable tychoish/flycheck-vale-disable)
   :config
   (defun tychoish/flycheck-vale-enable ()
     (interactive)
@@ -2734,7 +2645,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
 
 (use-package flycheck-eglot
   :ensure t
-  :commands (flycheck-eglot-mode)
+  :defer t
   :init
   (add-hook 'eglot-managed-mode-hook #'flycheck-eglot-mode)
   :config
@@ -2850,8 +2761,8 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (use-package gptel
+  :defer t
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
-  :commands (gptel gptel-rewrite gptel-menu)
   :init
   (keymap-set hud-robot-gptel-map "g" #'gptel)
   (keymap-set hud-robot-gptel-map "r" #'gptel-rewrite)
@@ -2870,6 +2781,8 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (defvar openai-api-key nil)
 
   (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
+    (declare (indent defun) (debug (def-form form)))
+
     (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
           (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
       `(progn
@@ -2900,31 +2813,11 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (setq gptel-include-reasoning 'ignore)
 
   (make-gptel-set-up-backend-functions
-   :name "claude-opus-4-6"
-   :key "o"
-   :backend (gptel-make-anthropic "claude-opus" :key anthropic-api-key :stream t)
-   :model 'claude-opus-4-6
-   :api-key anthropic-api-key)
-
-  (make-gptel-set-up-backend-functions
-   :name "claude-sonnet-4-6"
+   :name "sonnet-5"
    :key "s"
    :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
-   :model 'claude-sonnet-4-6
+   :model 'claude-sonnet-5
    :api-key anthropic-api-key)
-
-  (make-gptel-set-up-backend-functions
-   :name "claude-haiku-4-5"
-   :key "h"
-   :backend (gptel-make-anthropic "claude" :key anthropic-api-key :stream t)
-   :model 'claude-haiku-4-5
-   :api-key anthropic-api-key)
-
-  (make-gptel-set-up-backend-functions
-   :name "gemini-pro-latest"
-   :key "g"
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-   :model 'gemini-flash-lite-latest)
 
   (make-gptel-set-up-backend-functions
    :name "gemini-flash"
@@ -2942,7 +2835,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
    :name "copilot"
    :key "c"
    :backend (gptel-make-gh-copilot "copilot")
-   :model 'claude-3.5-sonnet)
+   :model 'gpt-5-mini)
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5"
@@ -2952,48 +2845,29 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
    :api-key openai-api-key)
 
   (make-gptel-set-up-backend-functions
-   :name "gpt-5-mini"
+   :name "gpt-5.6-terra"
    :key "m"
    :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-5-mini
+   :model 'gpt-5.6-terra
    :api-key openai-api-key)
 
-  (make-gptel-set-up-backend-functions
-   :name "gpt-5-nano"
-   :key "n"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-5-nano
-   :api-key openai-api-key)
-
-  (make-gptel-set-up-backend-functions
-   :name "gpt-4o"
-   :key "4"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-4o)
-
-  (make-gptel-set-up-backend-functions
-   :name "gpt-4o-mini"
-   :key "M"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-4o-mini)
-
-  (gptel-set-backend-default-claude-sonnet-4-6)
+  (gptel-set-backend-default-sonnet-5)
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
-  :commands (gptel-aibo-summon gptel-aibo)
+  :defer t
   :init
   (keymap-set hud-robot-gptel-map "w" #'gptel-aibo-summon))
 
 (use-package gptel-agent
+  :defer t
   :after (gptel)
-  :commands (gptel-agent)
   :init
   (keymap-set hud-robot-gptel-map "a" #'gptel-agent))
 
 (use-package eat
   :ensure t
-  :commands (eat eat-project eat-other-window eat-project-other-window)
+  :defer t
   :init
   ;; "C-c s e"
   (keymap-set hud-shell-eat-map "e" #'eat)
@@ -3038,7 +2912,8 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
 
 (use-package agent-shell
   :ensure t
-  :commands (agent-shell agent-shell-new-shell agent-shell-new-temp-shell agent-shell-new-worktree-shell agent-shell-toggle agent-shell-resolve-permissions)
+  :defer t
+  :commands (agent-shell-resolve-permissions)
   :init
   (keymap-set hud-robot-agent-shell-map "o" #'agent-shell)
   (keymap-set hud-robot-agent-shell-map "t" #'agent-shell-toggle)
@@ -3121,7 +2996,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-anthropic-default-session-mode-id "auto")
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
-  (add-to-list 'agent-shell-agent-configs (agent-shell-omp-make-agent-config))
+  (setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
 
   (keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
   (keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
@@ -3160,7 +3035,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (advice-add 'agent-shell--refresh-session-title :around
               #'ad:agent-shell--refresh-session-title)
 
-  (defvar tychoish/agent-shell-filter-uninstalled-agents nil
+  (defvar tychoish/agent-shell-filter-uninstalled-agents t
     "When non-nil, `agent-shell-select-config' only lists agents whose
 backing executable is found on `exec-path'.  Installed-status is cached
 in `tychoish/agent-shell--installed-cache'; call
@@ -3220,29 +3095,7 @@ Falls back to the full list when filtering would leave no choices."
 (use-package agent-shell-queue
   :after agent-shell
   :defer t
-  :commands (agent-shell-queue-buffer-open
-             agent-shell-queue-enqueue
-             agent-shell-queue-edit-task
-             agent-shell-queue-pause
-             agent-shell-queue-resume
-             agent-shell-queue-capture
-             agent-shell-queue-capture-unassigned
-             agent-shell-queue-capture-from-region
-             agent-shell-queue-capture-from-context
-             agent-shell-queue-org-refile-from-heading
-             agent-shell-queue-capture-from-clipboard
-             agent-shell-queue-insert-pause
-             agent-shell-queue-insert-clear-context
-             agent-shell-queue-raw-edit
-             agent-shell-queue-import
-             agent-shell-queue-reload
-             agent-shell-queue-set-scope
-             agent-shell-queue-scope-global
-             agent-shell-queue-export
-             agent-shell-queue-enqueue-emacs
-             agent-shell-queue-insert-wait
-             agent-shell-queue-item-menu
-	     agent-shell-menu-project-buffers)
+  :commands (agent-shell-queue-item-menu)
   :config
   (defvar-keymap hud-robot-agent-shell-map)
   (setq agent-shell-queue-write-log-enabled t)
@@ -3336,6 +3189,7 @@ Falls back to the full list when filtering would leave no choices."
 (use-package agent-shell-notifications
   :load-path "external/agent-shell-notifications"
   :ensure nil
+  :defer t
   :after (agent-shell alert)
   :commands (agent-shell-notifications-mode)
   :init
@@ -3381,16 +3235,14 @@ Falls back to the full list when filtering would leave no choices."
 
 (use-package tychoish-mail
   :ensure nil
-  :commands (tychoish-mail-select-account
-	     consult-mu-bookmark)
+  :defer t
+  :commands (tychoish-mail-select-account)
   :init
   (keymap-set hud-mail-map "a" #'tychoish-mail-select-account)
   (keymap-set hud-mail-map "m" #'mu4e)
   (keymap-set hud-mail-map "d" #'mu4e-search-maildir)
   (keymap-set hud-mail-map "b" #'mu4e-search-bookmark)
-  (keymap-set hud-mail-map "c" #'mu4e-compose-new)
-  (keymap-set hud-mail-map "C-;" #'consult-mu)
-  (keymap-set hud-mail-map ";" #'consult-mu-bookmark))
+  (keymap-set hud-mail-map "c" #'mu4e-compose-new))
 
 (provide 'tychoish-core)
 ;;; tychoish-core.el ends here
