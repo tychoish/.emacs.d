@@ -33,6 +33,7 @@
 (autoload 'org-insert-link "ol")
 (autoload 'org-annotate-file "org-annotate-file")
 (autoload 'annotated-completing-read "annotated-completing-read")
+(autoload 'org-id-get-create "org-id")
 
 (declare-function org-agenda-goto "org-agenda")
 (declare-function org-archive-set-tag "org-archive")

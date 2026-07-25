@@ -71,6 +71,9 @@
   (delight 'org-mode "org" 'org-mode)
   (delight 'org-agenda-mode "agenda" 'org-agenda)
   (delight 'rst-mode "rst" 'rst-mode)
+  (delight 'nerd-icons-dired-mode nil 'nerd-icons-dired)
+  (delight 'nerd-icons-xref-mode nil 'nerd-icons-xref)
+  (delight 'nerd-icons-completion-mode nil 'nerd-icons-completion)
 
   (delight 'projectile-mode nil 'projectile)
   (delight 'eglot--managed-mode nil 'eglot)
@@ -1232,9 +1235,12 @@
   :ensure t
   :commands (magit-gh)
   :config
-  (transient-append-suffix 'magit-gh [2]
-    ["magit-dash"
-     ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
+  (unless (condition-case nil
+              (transient-get-suffix 'magit-gh "g")
+            (error nil))
+    (transient-append-suffix 'magit-gh [2]
+      ["magit-dash"
+       ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
 
 (use-package magit-dash
   :commands (magit-dash-view
