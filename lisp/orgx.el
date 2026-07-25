@@ -118,11 +118,12 @@
           ("INCOMPLETE" . "orange")
           ("SCHEDULED" . "green")
           ("BACKLOG" . (:foreground "orange" :weight bold))
-          ("PROJECT" . (:foreground "blue" :weight bold))))
+          ("PROJECT" . (:foreground "blue" :weight bold))
+          ("ANSWERED" . (:foreground "green" :weight bold))))
 
   ;; org.el
   (setq org-todo-keywords
-        '((sequence "TODO(t)" "|" "DONE(d!)")
+        '((sequence "TODO(t)" "|" "DONE(d!)" "ANSWERED(a@)")
           (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
   (setq org-tag-alist
         '((:startgroup . nil)
@@ -133,7 +134,8 @@
           ("@desk" . ?d)
           ("@personal" . ?p)
           ("@work" . ?w)
-          (:endgroup . nil)))
+          (:endgroup . nil)
+          ("question" . ?q)))
 
   (setq org-tags-column -70)
   (setq org-enforce-todo-checkbox-dependencies t)
@@ -178,12 +180,16 @@
   (setq org-agenda-custom-commands
         '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
            ((org-agenda-skip-function-global nil)))
-          ("d" "Denote TODOs" todo ""
+          ("d" "Denote Files Agenda" tags-todo "-question"
            ((org-agenda-files (orgx-denote-files))
             (org-agenda-skip-function-global nil)
-            (org-agenda-overriding-header "TODO items across the denote tree")
+            (org-agenda-overriding-header "Denote Files Agenda")
+            (org-agenda-sorting-strategy '(user-defined-up))
+            (org-agenda-cmp-user-defined #'orgx-agenda-cmp-denote-signature)
             (org-agenda-prefix-format
-             '((todo . " %i %-16(orgx-denote-agenda-category) ")))))
+             '((tags . " %i %-16(orgx-denote-agenda-category) ")))))
+          ("q" "Human Questions" tags-todo "question"
+           ((org-agenda-overriding-header "Human questions awaiting a response")))
           ("u" "Untagged TODOs (local)" todo ""
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
             (org-agenda-overriding-header "TODOs with no local tags")))
@@ -553,14 +559,45 @@ Always truncated to `orgx-denote-agenda-category-width' characters."
     (truncate-string-to-width
      seq orgx-denote-agenda-category-width nil nil "…")))
 
+(defun orgx-agenda-cmp-denote-signature (a b)
+  "Order agenda lines A and B by the denote signature of their source file.
+Used as `org-agenda-cmp-user-defined' for the \"Denote Files Agenda\"
+custom command so entries group by Folgezettel sequence (i.e. file name)
+rather than by keyword, deadline, or file order."
+  (let* ((file-a (buffer-file-name (marker-buffer (get-text-property 0 'org-marker a))))
+         (file-b (buffer-file-name (marker-buffer (get-text-property 0 'org-marker b))))
+         (sig-a (or (denote-retrieve-filename-signature file-a) ""))
+         (sig-b (or (denote-retrieve-filename-signature file-b) "")))
+    (cond ((string< sig-a sig-b) -1)
+          ((string< sig-b sig-a) 1))))
+
 ;;;###autoload
 (defun orgx-agenda-denote-todos ()
-  "Show all TODO-keyword items across every org file in the denote tree.
-Convenience entry point for the \"D\" custom agenda command, which scans
+  "Show all TODO-keyword items (except human questions) across the denote tree.
+Convenience entry point for the \"d\" custom agenda command, which scans
 `orgx-denote-files' (recursively, including denote/journal/ and
-any other subdirectories) rather than the usual `org-agenda-files'."
+any other subdirectories) rather than the usual `org-agenda-files',
+ordered by denote signature. Items tagged :question: are implementation
+TODOs' human counterpart and surface in the \"q\" agenda view instead."
   (interactive)
-  (org-agenda nil "D"))
+  (org-agenda nil "d"))
+
+;;;###autoload
+(defun orgx-insert-question (question)
+  "Insert a TODO heading tagged :question: for QUESTION, with a Response slot.
+Creates a new heading at point via `org-insert-heading-respect-content',
+tags it :question: so it surfaces in the \"Human Questions\" agenda view
+distinct from implementation TODOs, and stamps it with an `org-id' so the
+entry can be linked to directly. Resolve it by marking the heading
+ANSWERED, which — like GONEAWAY — prompts for a closing note to record
+the answer."
+  (interactive "sQuestion: ")
+  (org-insert-heading-respect-content)
+  (insert (concat "TODO " question))
+  (org-toggle-tag "question" 'on)
+  (org-id-get-create)
+  (org-end-of-meta-data t)
+  (insert "Response:: \n"))
 
 (defconst orgx-agenda-builtin-views
   '(("a" "Agenda (week/day)")
