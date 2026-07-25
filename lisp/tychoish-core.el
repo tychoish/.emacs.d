@@ -1182,7 +1182,6 @@
 
 (use-package magit
   :ensure t
-  :after (cond-let)
   :commands (magit-toplevel magit-status magit-branch magit-blame)
   :init
   (keymap-set hud-magit-map "s" #'magit-status)
