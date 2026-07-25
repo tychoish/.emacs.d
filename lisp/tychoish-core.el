@@ -140,7 +140,8 @@
    ;; Depth below 0: must run before `package--save-selected-packages'.
    :depth -90)
   :config
-  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name)))))
+  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
+  (keymap-set hud-core-map "s" (cons "sprite" sprite-mode-map)))
 
 (use-package hud
   :ensure nil
@@ -1873,8 +1874,8 @@ return until the minibuffer session ends."
     (setq-local show-trailing-whitespace t))
 
   (keymap-set global-map "C-c C-w" #'whitespace-cleanup)
-  (keymap-set hud-core-map "s" #'whitespace-cleanup)
-  (keymap-set hud-core-map "w" #'toggle-local-whitespace-cleanup)
+  (keymap-set hud-whitespace-map "c" #'whitespace-cleanup)
+  (keymap-set hud-whitespace-map "t" #'toggle-local-whitespace-cleanup)
 
   (add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
   (add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)

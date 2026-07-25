@@ -102,6 +102,8 @@
 
 (defvar-keymap hud-theme-map) ;; "C-c t t"
 
+(defvar-keymap hud-whitespace-map) ;; "C-c t w"
+
 (defvar-keymap hud-ecclectic-grep-project-map ;; "C-c g p"
   "f" #'find-grep)
 
@@ -133,6 +135,7 @@
 (keymap-set hud-mode-map "C-c t" (cons "core" hud-core-map))
 (keymap-set hud-core-map "b" (cons "blogging" hud-blogging-map))
 (keymap-set hud-core-map "t" (cons "theme" hud-theme-map))
+(keymap-set hud-core-map "w" (cons "whitespace" hud-whitespace-map))
 (keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))
 (keymap-set hud-display-map "o" (cons "opacity" hud-display-opacity-map))
 (keymap-set hud-mode-map "C-c k" (cons "kill" hud-kill-map))

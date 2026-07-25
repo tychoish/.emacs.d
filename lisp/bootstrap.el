@@ -295,6 +295,8 @@ Override in user/*.el to customize per machine or instance.")
     (electric-pair-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] hud-mode"
     (hud-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] sprite-mode"
+    (sprite-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] which-key"
     (which-key-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] repeat"
