@@ -102,7 +102,6 @@ Runs from `after-init-hook', after the full config has loaded."
     '((xtdlib                    "external/xtdlib"                    "https://github.com/tychoish/xtdlib.el")
       (sprite                    "external/sprite"                    "https://github.com/tychoish/sprite")
       (annotated-completing-read "external/annotated-completing-read" "https://github.com/tychoish/annotated-completing-read")
-      (consult-mu                "external/consult-mu"                "https://github.com/armindarvish/consult-mu.git")
       (magit-dash                "external/magit-dash"                "https://github.com/tychoish/magit-dash.git")
       ;; (agent-shell-notifications "external/agent-shell-notifications" "") ;; disabled: upstream dependency bug
       (agent-shell-queue         "external/agent-shell-queue"         "https://github.com/tychoish/agent-shell-queue"))
