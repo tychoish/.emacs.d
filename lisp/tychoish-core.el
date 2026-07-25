@@ -144,7 +144,7 @@
    :depth -90)
   :config
   (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
-  (keymap-set hud-core-map "s" (cons "sprite" sprite-mode-map)))
+  (setq sprite-mode-map-prefix (cons "s" 'hud-core-map)))
 
 (use-package hud
   :ensure nil
