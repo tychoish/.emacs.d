@@ -526,8 +526,8 @@
 
 (use-package wgrep
   :ensure t
-  :after (grep)
   :commands (wgrep-change-to-wgrep-mode)
+  :after (grep)
   :init
   (keymap-set grep-mode-map "w" #'wgrep-change-to-wgrep-mode)
   :config
@@ -865,7 +865,6 @@
 
 (use-package nerd-icons-corfu
   :ensure t
-  ;; :after (corfu nerd-icons)
   :commands (nerd-icons-corfu-formatter)
   :config
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
@@ -1076,7 +1075,6 @@
 
 (use-package consult-flyspell
   :ensure t
-  :after (flyspell)
   :commands (consult-flyspell flyspell-correct-consult)
   :init
   (keymap-set hud-consult-mode-map "f" #'consult-flyspell)
@@ -1088,7 +1086,6 @@
 
 (use-package consult-eglot
   :ensure t
-  :after (eglot)
   :commands (consult-eglot-symbols)
   :init
   (keymap-set hud-docs-map "a" #'consult-eglot-symbols)
@@ -1105,7 +1102,6 @@
 
 (use-package consult-yasnippet
   :ensure t
-  :after (yasnippet)
   :commands (consult-yasnippet)
   :init
   (keymap-set hud-consult-mode-map "s" #'consult-yasnippet)
@@ -1277,7 +1273,6 @@
               (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
 
 (use-package smerge-mode
-  :after (magit)
   :defer t
   :commands (smerge-kill-and-vc-next-conflict)
   :init
@@ -1593,7 +1588,6 @@ return until the minibuffer session ends."
 
 (use-package denote-journal
   :ensure t
-  :after denote
   :commands (denote-journal-new-entry denote-journal-new-entry-after-last)
   :init
   (keymap-set hud-denote-map "j" #'denote-journal-new-entry)
@@ -1603,7 +1597,6 @@ return until the minibuffer session ends."
 
 (use-package denote-sequence
   :ensure t
-  :after denote
   :commands (denote-sequence-new-child denote-sequence-new-sibling
              denote-sequence-new-parent denote-sequence-link
              denote-sequence-rename-as-parent)
@@ -1630,7 +1623,6 @@ return until the minibuffer session ends."
 
 (use-package denote-org
   :ensure t
-  :after denote
   :commands (denote-org-link-to-heading
              denote-org-backlinks-for-heading
              denote-org-extract-org-subtree
@@ -1653,7 +1645,6 @@ return until the minibuffer session ends."
 
 (use-package denote-explore
   :ensure t
-  :after denote
   :commands (denote-explore-count-notes
              denote-explore-count-keywords
              denote-explore-random-note
@@ -1688,7 +1679,6 @@ return until the minibuffer session ends."
 
 (use-package denote-review
   :ensure t
-  :after denote
   :commands (denote-review-set-date-dired-marked-files
              denote-review-set-date
              denote-review-display-list)
@@ -1700,7 +1690,7 @@ return until the minibuffer session ends."
 
 (use-package denote-journal-capture
   :ensure t
-  :after (denote denote-journal)
+  :commands (denote-journal-capture-mode)
   :defer t)
 
 (use-package orgx
