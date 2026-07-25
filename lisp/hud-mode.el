@@ -33,98 +33,201 @@
 
 ;; keymap definitions -- top level C-c <> maps
 
-(defvar-keymap hud-core-map  ;; "C-c t"
-  "k" #'execute-extended-clipboard-command
-  "p" #'toggle-electric-pair-inhibition
-  "e" #'toggle-electric-pair-eagerness)
+(defvar-keymap hud-core-map
+  :name "core"
+  :doc "Core commands under C-c t (hud-mode).")
 
-(defvar-keymap hud-display-map ;; "C-c f"
-  "=" #'text-scale-increase
-  "-" #'text-scale-decrease
-  "0" #'text-scale-reset
-  "h" #'auto-fill-mode
-  "s" #'visual-line-mode)
+(keymap-set hud-core-map "k" #'execute-extended-clipboard-command)
+(keymap-set hud-core-map "p" #'toggle-electric-pair-inhibition)
+(keymap-set hud-core-map "e" #'toggle-electric-pair-eagerness)
 
-(defvar-keymap hud-kill-map ;; "C-c k"
-  "s" #'backward-kill-sentence
-  "p" #'backward-kill-paragraph
-  "f" #'backward-kill-sexp
-  "d" #'delete-region
-  "w" #'delete-trailing-whitespace)
+(defvar-keymap hud-display-map
+  :name "display"
+  :doc "Display commands under C-c f (hud-mode).")
 
-(defvar-keymap hud-web-browser-map ;; "C-c w"
-  "d" #'browse-url-generic
-  "e" #'browse-url
-  "f" #'browse-url-firefox
-  "c" #'browse-url-chrome
-  "g" #'eww-search-words)
+(keymap-set hud-display-map "=" #'text-scale-increase)
+(keymap-set hud-display-map "-" #'text-scale-decrease)
+(keymap-set hud-display-map "0" #'text-scale-reset)
+(keymap-set hud-display-map "h" #'auto-fill-mode)
+(keymap-set hud-display-map "s" #'visual-line-mode)
 
-(defvar-keymap hud-docs-map ;; "C-c h"
-  "s" #'hud-describe-symbol-dwim
-  "v" #'describe-variable
-  "q" #'kill-eldoc-and-help-buffers
-  "j" #'jump-to-elisp-help
-  "e" #'eldoc
-  "b" #'eldoc-doc-buffer)
+(defvar-keymap hud-kill-map
+  :name "kill"
+  :doc "Kill/delete commands under C-c k (hud-mode).")
 
-(defvar-keymap hud-ecclectic-grep-map ;; "C-c g"
-  "o" #'occur
-  "g" #'grep)
+(keymap-set hud-kill-map "s" #'backward-kill-sentence)
+(keymap-set hud-kill-map "p" #'backward-kill-paragraph)
+(keymap-set hud-kill-map "f" #'backward-kill-sexp)
+(keymap-set hud-kill-map "d" #'delete-region)
+(keymap-set hud-kill-map "w" #'delete-trailing-whitespace)
 
-(defvar-keymap hud-ide-map ;; "C-c l"
-  "m" #'imenu)
+(defvar-keymap hud-web-browser-map
+  :name "web-browser"
+  :doc "Web browser commands under C-c w (hud-mode).")
 
-(defvar-keymap hud-completion-map ;; "C-c ."
-  "TAB" #'completion-at-point
-  "." #'completion-at-point
-  "p" #'completion-at-point)
+(keymap-set hud-web-browser-map "d" #'browse-url-generic)
+(keymap-set hud-web-browser-map "e" #'browse-url)
+(keymap-set hud-web-browser-map "f" #'browse-url-firefox)
+(keymap-set hud-web-browser-map "c" #'browse-url-chrome)
+(keymap-set hud-web-browser-map "g" #'eww-search-words)
 
-(defvar-keymap hud-shell-map) ;; "C-c s"
-(defvar-keymap hud-denote-map) ;; "C-c d"
-(defvar-keymap hud-robot-map) ;; "C-c r"
-(defvar-keymap hud-anzu-map) ;; "C-c q"
-(defvar-keymap hud-mail-map) ;; "C-c m"
-(defvar-keymap hud-magit-map) ;; "C-x g"
-(defvar-keymap hud-docker-map) ;; "C-x d"
-(defvar-keymap orgx-global-map) ;; "C-c o"
+(defvar-keymap hud-docs-map
+  :name "docs"
+  :doc "Documentation commands under C-c h (hud-mode).")
+
+(keymap-set hud-docs-map "s" #'hud-describe-symbol-dwim)
+(keymap-set hud-docs-map "v" #'describe-variable)
+(keymap-set hud-docs-map "q" #'kill-eldoc-and-help-buffers)
+(keymap-set hud-docs-map "j" #'jump-to-elisp-help)
+(keymap-set hud-docs-map "e" #'eldoc)
+(keymap-set hud-docs-map "b" #'eldoc-doc-buffer)
+
+(defvar-keymap hud-ecclectic-grep-map
+  :name "grep"
+  :doc "Grep commands under C-c g (hud-mode).")
+
+(keymap-set hud-ecclectic-grep-map "o" #'occur)
+(keymap-set hud-ecclectic-grep-map "g" #'grep)
+
+(defvar-keymap hud-ide-map
+  :name "ide"
+  :doc "IDE/language commands under C-c l (hud-mode).")
+
+(keymap-set hud-ide-map "m" #'imenu)
+
+(defvar-keymap hud-completion-map
+  :name "completion"
+  :doc "Completion commands under C-c . (hud-mode).")
+
+(keymap-set hud-completion-map "TAB" #'completion-at-point)
+(keymap-set hud-completion-map "." #'completion-at-point)
+(keymap-set hud-completion-map "p" #'completion-at-point)
+
+(defvar-keymap hud-shell-map
+  :name "shell"
+  :doc "Shell commands under C-c s (hud-mode).")
+
+(defvar-keymap hud-denote-map
+  :name "denote"
+  :doc "Denote commands under C-c d (hud-mode).")
+
+(defvar-keymap hud-robot-map
+  :name "robot"
+  :doc "Robot/agent commands under C-c r (hud-mode).")
+
+(defvar-keymap hud-anzu-map
+  :name "anzu"
+  :doc "Anzu commands under C-c q (hud-mode).")
+
+(defvar-keymap hud-mail-map
+  :name "mail"
+  :doc "Mail commands under C-c m (hud-mode).")
+
+(defvar-keymap hud-magit-map
+  :name "magit"
+  :doc "Magit commands under C-x g (hud-mode).")
+
+(defvar-keymap hud-docker-map
+  :name "docker"
+  :doc "Docker commands under C-x d (hud-mode).")
+
+(defvar-keymap orgx-global-map
+  :name "org"
+  :doc "Org commands under C-c o (hud-mode).")
 
 ;; nested keymaps
-(defvar-keymap hud-display-opacity-map ;; "C-c f o"
-  "=" #'hud-opacity-increase
-  "-" #'hud-opacity-decrease
-  "0" #'hud-opacity-reset)
+(defvar-keymap hud-display-opacity-map
+  :name "opacity"
+  :doc "Opacity commands under C-c f o (hud-mode).")
 
-(defvar-keymap hud-buffer-control-map ;; "C-x C-b"
-  "k" #'kill-this-buffer)
+(defvar-keymap hud-buffer-control-map
+  :name "buffer-control"
+  :doc "Buffer control commands under C-x C-b (hud-mode).")
 
-(defvar-keymap hud-blogging-map ;; "C-c t b"
-  "m" #'hud-insert-date)
 
-(defvar-keymap hud-theme-map) ;; "C-c t t"
+(defvar-keymap hud-blogging-map
+  :name "blogging"
+  :doc "Blogging commands under C-c t b (hud-mode).")
 
-(defvar-keymap hud-whitespace-map) ;; "C-c t w"
 
-(defvar-keymap hud-ecclectic-grep-project-map ;; "C-c g p"
-  "f" #'find-grep)
+(defvar-keymap hud-theme-map
+  :name "theme"
+  :doc "Theme commands under C-c t t (hud-mode).")
 
-(defvar-keymap hud-ecclectic-rg-map) ;; "C-c g r"
-(defvar-keymap hud-consult-search-map) ;; "C-c g s"
-(defvar-keymap hud-eglot-global-map) ;; "C-c l l"
-(defvar-keymap hud-robot-agent-shell-map) ;; "C-c r s"
-(defvar-keymap hud-shell-eat-map) ;; "C-c s e"
-(defvar-keymap hud-denote-sequence-map) ;; "C-c d s"
-(defvar-keymap hud-denote-org-map) ;; "C-c d o"
-(defvar-keymap hud-denote-explore-map) ;; "C-c d e"
-(defvar-keymap hud-denote-review-map) ;; "C-c d c"
-(defvar-keymap hud-consult-mode-map) ;; "C-c C-;"
-(defvar-keymap hud-smerge-map) ;; "C-x g m"
-(defvar-keymap orgx-link-map) ;; "C-c o l"
-(defvar-keymap hud-robot-gptel-map) ;; "C-c r g"
-(defvar-keymap hud-robot-gptel-set-default-model-map) ;; "C-c r g m"
-(defvar-keymap hud-yasnippet-map) ;; "C-c &" (in `yas-minor-mode-map')
+(defvar-keymap hud-whitespace-map
+  :name "whitespace"
+  :doc "Whitespace commands under C-c t w (hud-mode).")
+
+(defvar-keymap hud-ecclectic-grep-project-map
+  :name "project-grep"
+  :doc "Project grep commands under C-c g p (hud-mode).")
+
+(keymap-set hud-ecclectic-grep-project-map "f" #'find-grep)
+
+(defvar-keymap hud-ecclectic-rg-map
+  :name "+ripgrep"
+  :doc "Ripgrep commands under C-c g r (hud-mode).")
+
+(defvar-keymap hud-consult-search-map
+  :name "consult-search"
+  :doc "Consult search commands under C-c g s (hud-mode).")
+
+(defvar-keymap hud-eglot-global-map
+  :name "eglot"
+  :doc "Eglot commands under C-c l l (hud-mode).")
+
+(defvar-keymap hud-robot-agent-shell-map
+  :name "agent-shell"
+  :doc "Agent shell commands under C-c r s (hud-mode).")
+
+(defvar-keymap hud-shell-eat-map
+  :name "shell-eat"
+  :doc "Shell eat commands under C-c s e (hud-mode).")
+
+(defvar-keymap hud-denote-sequence-map
+  :name "denote-sequence"
+  :doc "Denote sequence commands under C-c d s (hud-mode).")
+
+(defvar-keymap hud-denote-org-map
+  :name "denote-org"
+  :doc "Denote org commands under C-c d o (hud-mode).")
+
+(defvar-keymap hud-denote-explore-map
+  :name "denote-explore"
+  :doc "Denote explore commands under C-c d e (hud-mode).")
+
+(defvar-keymap hud-denote-review-map
+  :name "denote-review"
+  :doc "Denote review commands under C-c d c (hud-mode).")
+
+(defvar-keymap hud-consult-mode-map
+  :name "consult"
+  :doc "Consult commands under C-c C-; (hud-mode).")
+
+(defvar-keymap hud-smerge-map
+  :name "smerge"
+  :doc "Smerge commands under C-x g m (hud-mode).")
+
+(defvar-keymap orgx-link-map
+  :name "org-link"
+  :doc "Org link commands under C-c o l (hud-mode).")
+
+(defvar-keymap hud-robot-gptel-map
+  :name "gptel"
+  :doc "GPtel commands under C-c r g (hud-mode).")
+
+(defvar-keymap hud-robot-gptel-set-default-model-map
+  :name "gptel-set-default-model"
+  :doc "GPtel model selection under C-c r g m (hud-mode).")
+
+(defvar-keymap hud-yasnippet-map
+  :name "yasnippet"
+  :doc "YASnippet commands under C-c & (hud-mode).")
 
 ;; the mode's own container map -- populated below
-(defvar-keymap hud-mode-map)
+(defvar-keymap hud-mode-map
+  :name "hud"
+  :doc "Global keybindings for hud-mode.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -132,87 +235,95 @@
 
 (keymap-set minibuffer-local-map "C-g" #'hud-super-abort-minibuffers)
 (keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
-(keymap-set hud-mode-map "C-c t" (cons "core" hud-core-map))
+
+(keymap-set orgx-global-map "l" (cons "org-link" orgx-link-map))
+
+(keymap-set hud-blogging-map "m" #'hud-insert-date)
+(keymap-set hud-display-map "o" (cons "opacity" hud-display-opacity-map))
+(keymap-set hud-buffer-control-map "k" #'kill-this-buffer)
+(keymap-set hud-display-opacity-map "=" #'hud-opacity-increase)
+(keymap-set hud-display-opacity-map "-" #'hud-opacity-decrease)
+(keymap-set hud-display-opacity-map "0" #'hud-opacity-reset)
+(keymap-set hud-docs-map "h" #'help)
+(keymap-set hud-docs-map "a" #'mark-whole-buffer)
+
 (keymap-set hud-core-map "b" (cons "blogging" hud-blogging-map))
 (keymap-set hud-core-map "t" (cons "theme" hud-theme-map))
 (keymap-set hud-core-map "w" (cons "whitespace" hud-whitespace-map))
-(keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))
-(keymap-set hud-display-map "o" (cons "opacity" hud-display-opacity-map))
-(keymap-set hud-mode-map "C-c k" (cons "kill" hud-kill-map))
-(keymap-set hud-mode-map "C-c w" (cons "web-browser" hud-web-browser-map))
-(keymap-set hud-mode-map "C-c g" (cons "grep" hud-ecclectic-grep-map))
+
 (keymap-set hud-ecclectic-grep-map "p" (cons "project-grep" hud-ecclectic-grep-project-map))
 (keymap-set hud-ecclectic-grep-map "r" (cons "+ripgrep" hud-ecclectic-rg-map))
 (keymap-set hud-ecclectic-grep-map "s" (cons "consult-search" hud-consult-search-map))
-(keymap-set hud-mode-map "C-c ." (cons "completion" hud-completion-map))
-(keymap-set hud-mode-map "C-c l" (cons "ide" hud-ide-map))
+
+(keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
 (keymap-set hud-ide-map "l" (cons "eglot" hud-eglot-global-map))
-(keymap-set hud-mode-map "C-c h" (cons "docs" hud-docs-map))
-(keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
-(keymap-set hud-mode-map "C-c s" (cons "shell" hud-shell-map))
 (keymap-set hud-shell-map "e" (cons "shell-eat" hud-shell-eat-map))
-(keymap-set hud-mode-map "C-c r" (cons "robot" hud-robot-map))
 (keymap-set hud-robot-map "s" (cons "agent-shell" hud-robot-agent-shell-map))
 (keymap-set hud-robot-map "g" (cons "gptel" hud-robot-gptel-map))
 (keymap-set hud-robot-gptel-map "m" (cons "gptel-set-default-model" hud-robot-gptel-set-default-model-map))
 
-(keymap-set hud-mode-map "C-c q" (cons "anzu" hud-anzu-map))
-(keymap-set hud-mode-map "C-x g" (cons "magit" hud-magit-map))
-(keymap-set hud-mode-map "C-x d" (cons "docker" hud-docker-map))
-
-(keymap-set hud-mode-map "C-c o" (cons "org" orgx-global-map))
-(keymap-set orgx-global-map "l" (cons "org-link" orgx-link-map))
-(keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
-
-(keymap-set hud-mode-map "C-c d" (cons "denote" hud-denote-map))
 (keymap-set hud-denote-map "o" (cons "denote-org" hud-denote-org-map))
 (keymap-set hud-denote-map "s" (cons "denote-sequence" hud-denote-sequence-map))
 (keymap-set hud-denote-map "e" (cons "denote-explore" hud-denote-explore-map))
 (keymap-set hud-denote-map "c" (cons "denote-review" hud-denote-review-map))
 
+(keymap-set hud-mode-map "C-c t" (cons "core" hud-core-map))
+(keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))
+(keymap-set hud-mode-map "C-c k" (cons "kill" hud-kill-map))
+(keymap-set hud-mode-map "C-c w" (cons "web-browser" hud-web-browser-map))
+(keymap-set hud-mode-map "C-c g" (cons "grep" hud-ecclectic-grep-map))
+(keymap-set hud-mode-map "C-c ." (cons "completion" hud-completion-map))
+(keymap-set hud-mode-map "C-c h" (cons "docs" hud-docs-map))
+(keymap-set hud-mode-map "C-c l" (cons "ide" hud-ide-map))
+(keymap-set hud-mode-map "C-c s" (cons "shell" hud-shell-map))
+(keymap-set hud-mode-map "C-c r" (cons "robot" hud-robot-map))
+(keymap-set hud-mode-map "C-c q" (cons "anzu" hud-anzu-map))
+(keymap-set hud-mode-map "C-x g" (cons "magit" hud-magit-map))
+(keymap-set hud-mode-map "C-x d" (cons "docker" hud-docker-map))
+(keymap-set hud-mode-map "C-c d" (cons "denote" hud-denote-map))
+(keymap-set hud-mode-map "C-c o" (cons "org" orgx-global-map))
+(keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
+(keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
 (keymap-set hud-mode-map "C-c C-;" (cons "consult" hud-consult-mode-map))
-(keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
 
 ;; general bindings that used to go straight into global-map
-(keymap-set hud-mode-map "C-x m" #'execute-extended-command)
-(keymap-set hud-mode-map "C-x C-m" #'execute-extended-command)
-(keymap-set hud-mode-map "M-X" #'execute-extended-command-for-buffer)
 (keymap-set hud-mode-map "C-x l" #'goto-line)
 (keymap-set hud-mode-map "C-x f" #'find-file)
-(keymap-set hud-mode-map "C-x C-f" #'find-file)
-(keymap-set hud-docs-map "h" #'help)
 (keymap-set hud-mode-map "C-x h" #'mark-whole-buffer) ;; default
+(keymap-set hud-mode-map "C-x m" #'execute-extended-command)
+(keymap-set hud-mode-map "C-x C-m" #'execute-extended-command)
+(keymap-set hud-mode-map "C-x C-f" #'find-file)
 (keymap-set hud-mode-map "C-x C-x" #'exchange-point-and-mark)
-(keymap-set hud-mode-map "C-c u w" #'upcase-word)
-(keymap-set hud-mode-map "C-c u t" #'upcase-initials-region)
-(keymap-set hud-mode-map "C-c u r" #'upcase-region)
 (keymap-set hud-mode-map "C-x C-n" #'count-words)
 (keymap-set hud-mode-map "C-c i" #'indent-region)
 (keymap-set hud-mode-map "C-c c" #'comment-region)
-(keymap-set hud-mode-map "C-h" #'backward-kill-word)
+(keymap-set hud-mode-map "C-c u w" #'upcase-word)
+(keymap-set hud-mode-map "C-c u t" #'upcase-initials-region)
+(keymap-set hud-mode-map "C-c u r" #'upcase-region)
 (keymap-set hud-mode-map "C-c C-f" #'set-fill-column)
 (keymap-set hud-mode-map "C-c C-p" #'set-mark-command)
 (keymap-set hud-mode-map "C-c C-r" #'rename-buffer)
-(keymap-set hud-docs-map "a" #'mark-whole-buffer)
 (keymap-set hud-mode-map "C-z" #'undo)
 (keymap-set hud-mode-map "C-w" #'kill-region)
+(keymap-set hud-mode-map "C-h" #'backward-kill-word)
 (keymap-set hud-mode-map "C-<backspace>" #'backward-kill-word)
-(keymap-set hud-mode-map "M-<SPC>" #'set-mark-command)
 (keymap-set hud-mode-map "C-<tab>" #'completion-at-point)
+(keymap-set hud-mode-map "M-<SPC>" #'set-mark-command)
+(keymap-set hud-mode-map "M-X" #'execute-extended-command-for-buffer)
+(keymap-set hud-mode-map "s-c" #'clipboard-kill-ring-save) ;; (CUA/macOS) copy
+(keymap-set hud-mode-map "s-v" #'clipboard-yank)            ;; (CUA/macOS) paste
+(keymap-set hud-mode-map "s-x" #'clipboard-kill-region)     ;; (CUA/macOS) cut
 (keymap-set hud-mode-map "s-h" #'hud-increase-window-left)
 (keymap-set hud-mode-map "s-j" #'hud-increase-window-down)
 (keymap-set hud-mode-map "s-k" #'hud-increase-window-up)
 (keymap-set hud-mode-map "s-l" #'hud-increase-window-right)
-(keymap-set hud-mode-map "<mouse-2>" #'clipboard-yank)
 (keymap-set hud-mode-map "s-<left>" #'hud-increase-window-left)
 (keymap-set hud-mode-map "s-<down>" #'hud-increase-window-down)
 (keymap-set hud-mode-map "s-<up>" #'hud-increase-window-up)
 (keymap-set hud-mode-map "s-<right>" #'hud-increase-window-right)
-(keymap-set hud-mode-map "s-c" #'clipboard-kill-ring-save) ;; (CUA/macOS) copy
-(keymap-set hud-mode-map "s-v" #'clipboard-yank)            ;; (CUA/macOS) paste
-(keymap-set hud-mode-map "s-x" #'clipboard-kill-region)     ;; (CUA/macOS) cut
 (keymap-set hud-mode-map "M-<up>" #'move-text-up)
 (keymap-set hud-mode-map "M-<down>" #'move-text-down)
+(keymap-set hud-mode-map "<mouse-2>" #'clipboard-yank)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -524,10 +635,13 @@ or `describe-symbol' as fallback."
   (modify-frame-parameters nil '((alpha . 0.95))))
 
 (defvar-keymap hud-opacity-repeat-map
-  :repeat t
-  "=" #'hud-opacity-increase
-  "-" #'hud-opacity-decrease
-  "0" #'hud-opacity-reset)
+  :name "opacity-repeat"
+  :doc "Opacity repeat map for repeating opacity changes."
+  :repeat t)
+
+(keymap-set hud-opacity-repeat-map "=" #'hud-opacity-increase)
+(keymap-set hud-opacity-repeat-map "-" #'hud-opacity-decrease)
+(keymap-set hud-opacity-repeat-map "0" #'hud-opacity-reset)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -1622,7 +1622,6 @@ return until the minibuffer session ends."
 	     ad:org-agenda--open-files
 	     bootstrap-set-notes-directory)
   :init
-  ;; "C-c o"
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
   (keymap-set orgx-global-map "c" #'orgx-capture)
   (keymap-set orgx-global-map "4" #'org-agenda)
@@ -1631,9 +1630,9 @@ return until the minibuffer session ends."
   (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
   (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
   (keymap-set orgx-global-map "j" #'orgx-capture)
-  (keymap-set orgx-global-map "u" #'orgx-agenda-untagged-in-file)
+  (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
   (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
-  ;; "C-c o l"
+
   (keymap-set orgx-link-map "s" #'org-store-link)
   (keymap-set orgx-link-map "i" #'org-insert-link)
   (keymap-set orgx-link-map "a" #'org-annotate-file)
