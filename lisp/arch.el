@@ -153,6 +153,13 @@ With a prefix argument, always prompt regardless of this setting."
 (defvar arch--info-cache (make-hash-table :test #'equal)
   "Cache mapping package name string → info plist from pacman -Qi/-Si.")
 
+(defvar arch--cache-populated-p nil
+  "Non-nil once `arch--populate-cache' has run a full bulk populate.
+A single package looked up via `arch--cached-info' adds one entry to
+`arch--info-cache' without setting this flag, so callers can still tell
+the difference between \"cache has one stray entry\" and \"cache is
+actually populated\".")
+
 (defun arch--cache-get (pkg-name)
   "Return cached info plist for PKG-NAME, or nil."
   (map-elt arch--info-cache pkg-name))
@@ -166,6 +173,7 @@ With a prefix argument, always prompt regardless of this setting."
   "Clear all cached package info."
   (interactive)
   (clrhash arch--info-cache)
+  (setq arch--cache-populated-p nil)
   (message "arch: package cache cleared"))
 
 ;;;###autoload
@@ -173,6 +181,7 @@ With a prefix argument, always prompt regardless of this setting."
   "Clear and repopulate the package info cache from pacman -Qi."
   (interactive)
   (clrhash arch--info-cache)
+  (setq arch--cache-populated-p nil)
   (arch--populate-cache)
   (message "arch: cache reloaded (%d packages)" (hash-table-count arch--info-cache)))
 
@@ -196,7 +205,8 @@ With a prefix argument, always prompt regardless of this setting."
   "Populate the package info cache via the current backend's populate-cache-fn."
   (if-let* ((fn (arch-backend-populate-cache-fn (arch--default-backend))))
       (funcall fn)
-    (arch--pacman-populate-cache)))
+    (arch--pacman-populate-cache))
+  (setq arch--cache-populated-p t))
 
 (defun arch--cached-info (pkg-name)
   "Return info for PKG-NAME from cache, fetching via backend if absent."
@@ -650,7 +660,7 @@ Requires `arch-aur-backend' to support AUR-only search."
   "ACR-select from all sync-DB packages and open arch-info.
 Annotation mirrors the package list columns: [repo]  Stat  (version)  description."
   (interactive)
-  (when (zerop (hash-table-count arch--info-cache))
+  (unless arch--cache-populated-p
     (arch--populate-cache))
   (let* ((backend (arch--default-backend))
          (pkgs (if-let* ((fn (arch-backend-list-all-fn backend)))
@@ -1103,7 +1113,7 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
 (defun arch-list-refresh ()
   "Refresh the arch package list buffer."
   (interactive)
-  (when (zerop (hash-table-count arch--info-cache))
+  (unless arch--cache-populated-p
     (arch--populate-cache))
   (let* ((backend (or arch--list-backend (arch--default-backend)))
          (foreign (if-let* ((fn (arch-backend-foreign-fn backend)))
@@ -1485,7 +1495,7 @@ Rebuilds without pulling; use `arch-list-abs-install' to update the source first
   "Remove PKG-NAME via the default backend, selecting via ACR when interactive."
   (interactive
    (progn
-     (when (zerop (hash-table-count arch--info-cache))
+     (unless arch--cache-populated-p
        (arch--populate-cache))
      (list (annotated-completing-read
             (map-apply (lambda (name plist)
@@ -1507,7 +1517,7 @@ Rebuilds without pulling; use `arch-list-abs-install' to update the source first
   "Upgrade PKG-NAME via the default backend, selecting via ACR when interactive."
   (interactive
    (progn
-     (when (zerop (hash-table-count arch--info-cache))
+     (unless arch--cache-populated-p
        (arch--populate-cache))
      (let* ((upgradeable (map-keys (arch--upgradeable-packages))))
        (when (null upgradeable)

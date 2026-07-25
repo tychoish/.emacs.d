@@ -169,7 +169,9 @@
              arch-upgrade-all-yay
              arch-upgrade-system
              arch-abs-install
-             arch-abs-rebuild))
+             arch-abs-rebuild)
+  :config
+  (run-with-idle-timer 2 nil #'arch--populate-cache))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
