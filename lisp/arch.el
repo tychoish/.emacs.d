@@ -39,7 +39,9 @@
   default-install-method ; symbol — preferred method for this backend; nil defers to prompt
   remove-fn       ; (fn pkg-name)
   upgrade-fn      ; (fn pkg-name) — nil means unsupported
-  upgrade-all-fn) ; (fn) — nil means unsupported
+  upgrade-all-fn  ; (fn) — nil means unsupported
+  abs-install-fn  ; (fn pkg-name) — install/upgrade from source (clone/pull + build); nil = unsupported
+  abs-rebuild-fn) ; (fn pkg-name) — rebuild from existing source clone; nil = unsupported
 
 (defvar arch--backends (make-hash-table :test #'equal)
   "Registry of arch backends keyed by name string.")
@@ -494,24 +496,23 @@ versions, so upgrading those requires rebuilding individually via
   :type 'directory
   :group 'arch)
 
-(defun arch--abs-pkg-dir (pkg-name)
+(defun arch--aur-abs-pkg-dir (pkg-name)
   "Return the abs clone directory for PKG-NAME."
   (expand-file-name pkg-name arch-abs-directory))
 
-(defun arch--abs-clone-url (pkg-name)
+(defun arch--aur-abs-clone-url (pkg-name)
   "Return the AUR git URL for PKG-NAME."
   (format "https://aur.archlinux.org/%s.git" pkg-name))
 
-;;;###autoload
-(defun arch-abs-install (pkg-name)
-  "Install PKG-NAME from AUR: clone to abs dir, then run makepkg -sfi."
-  (interactive "sAUR package name: ")
+(defun arch--aur-abs-install (pkg-name)
+  "Install PKG-NAME from AUR: clone to abs dir, then run makepkg -sfi.
+Registered as the AUR backend's `abs-install-fn'; called via `arch-abs-install'."
   (make-directory arch-abs-directory t)
-  (let* ((pkg-dir (arch--abs-pkg-dir pkg-name))
+  (let* ((pkg-dir (arch--aur-abs-pkg-dir pkg-name))
          (fetch-cmd (if (file-directory-p pkg-dir)
                         (format "git -C %s pull --quiet" (shell-quote-argument pkg-dir))
                       (format "git clone %s %s"
-                              (shell-quote-argument (arch--abs-clone-url pkg-name))
+                              (shell-quote-argument (arch--aur-abs-clone-url pkg-name))
                               (shell-quote-argument pkg-dir)))))
     (arch--pkg-run pkg-name
                    (list "bash" "-c"
@@ -519,17 +520,34 @@ versions, so upgrading those requires rebuilding individually via
                                  fetch-cmd
                                  (shell-quote-argument pkg-dir))))))
 
-;;;###autoload
-(defun arch-abs-rebuild (pkg-name)
-  "Rebuild PKG-NAME in its existing abs directory without pulling."
-  (interactive "sAUR package name: ")
-  (let ((pkg-dir (arch--abs-pkg-dir pkg-name)))
+(defun arch--aur-abs-rebuild (pkg-name)
+  "Rebuild PKG-NAME in its existing abs directory without pulling.
+Registered as the AUR backend's `abs-rebuild-fn'; called via `arch-abs-rebuild'."
+  (let ((pkg-dir (arch--aur-abs-pkg-dir pkg-name)))
     (unless (file-directory-p pkg-dir)
       (user-error "No abs directory for %s; use arch-abs-install first" pkg-name))
     (arch--pkg-run pkg-name
                    (list "bash" "-c"
                          (format "cd %s && makepkg --syncdeps --force --install --noconfirm --noprogressbar"
                                  (shell-quote-argument pkg-dir))))))
+
+;;;###autoload
+(defun arch-abs-install (pkg-name)
+  "Install or upgrade PKG-NAME from AUR source via `arch-aur-backend's abs-install-fn."
+  (interactive "sAUR package name: ")
+  (funcall (or (arch-backend-abs-install-fn (arch--aur-backend))
+              (user-error "Backend %S does not support AUR source installs"
+                          (arch-backend-name (arch--aur-backend))))
+          pkg-name))
+
+;;;###autoload
+(defun arch-abs-rebuild (pkg-name)
+  "Rebuild PKG-NAME from its existing AUR source clone via `arch-aur-backend's abs-rebuild-fn."
+  (interactive "sAUR package name: ")
+  (funcall (or (arch-backend-abs-rebuild-fn (arch--aur-backend))
+              (user-error "Backend %S does not support AUR source rebuilds"
+                          (arch-backend-name (arch--aur-backend))))
+          pkg-name))
 
 ;;; ACR search/select
 
@@ -569,7 +587,7 @@ always prompts when called with a prefix argument."
          (all-methods (arch-backend-install-methods backend))
          (methods (seq-filter (lambda (m)
                                 (or (not (eq (car m) 'rebuild))
-                                    (file-directory-p (arch--abs-pkg-dir pkg-name))))
+                                    (file-directory-p (arch--aur-abs-pkg-dir pkg-name))))
                               all-methods))
          (effective-default (or arch-default-install-method
                                 (arch-backend-default-install-method backend)))
@@ -1590,12 +1608,14 @@ individually via `arch-abs-install'."
     :upgradeable-fn #'arch--upgradeable-packages
     :populate-cache-fn #'arch--pacman-populate-cache
     :aur-list-fn #'arch--yay-aur-list
-    :install-methods '((abs     . arch-abs-install)
-                       (rebuild . arch-abs-rebuild))
+    :install-methods '((abs     . arch--aur-abs-install)
+                       (rebuild . arch--aur-abs-rebuild))
     :default-install-method 'abs
     :remove-fn #'arch--yay-remove
-    :upgrade-fn #'arch-abs-install
-    :upgrade-all-fn #'arch--pacman-upgrade-all-warn-aur)))
+    :upgrade-fn #'arch--aur-abs-install
+    :upgrade-all-fn #'arch--pacman-upgrade-all-warn-aur
+    :abs-install-fn #'arch--aur-abs-install
+    :abs-rebuild-fn #'arch--aur-abs-rebuild)))
 
 (provide 'arch)
 ;;; arch.el ends here
