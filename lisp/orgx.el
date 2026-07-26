@@ -182,28 +182,54 @@
 
 ;; org-agenda keybindings and configuration.
 
+(defun orgx--denote-agenda-settings (header)
+  "Return shared `org-agenda-custom-commands' SETTINGS for a denote view.
+Scopes the view to `orgx-denote-files', sorts by denote signature via
+`orgx-agenda-cmp-denote-signature', and shows only the file's sequence
+number (via `orgx-denote-agenda-category') in place of the full denote
+filename — for both the \"todo\" and \"tags\" agenda line types, since
+custom commands built from `todo' and `tags-todo' render through
+different `org-agenda-prefix-format' keys. HEADER overrides the agenda
+header text, or leaves the default when nil."
+  `((org-agenda-files (orgx-denote-files))
+    (org-agenda-skip-function-global nil)
+    (org-agenda-overriding-header ,header)
+    (org-agenda-sorting-strategy '(user-defined-up))
+    (org-agenda-cmp-user-defined #'orgx-agenda-cmp-denote-signature)
+    (org-agenda-prefix-format '((todo . " %i %-16(orgx-denote-agenda-category) ")
+                                 (tags . " %i %-16(orgx-denote-agenda-category) ")))))
+
 (with-eval-after-load 'org-agenda
   (setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
 
   (setq org-agenda-custom-commands
-        '(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
+        `(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
            ((org-agenda-skip-function-global nil)))
-          ("d" "Denote Files Agenda" tags-todo "-question"
-           ((org-agenda-files (orgx-denote-files))
-            (org-agenda-skip-function-global nil)
-            (org-agenda-overriding-header "Denote Files Agenda")
-            (org-agenda-sorting-strategy '(user-defined-up))
-            (org-agenda-cmp-user-defined #'orgx-agenda-cmp-denote-signature)
-            (org-agenda-prefix-format
-             '((tags . " %i %-16(orgx-denote-agenda-category) ")))))
-          ("q" "Human Questions" tags-todo "question"
-           ((org-agenda-overriding-header "Human questions awaiting a response")))
           ("u" "Untagged TODOs (local)" todo ""
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
             (org-agenda-overriding-header "TODOs with no local tags")))
           ("h" "Untagged headings (local)" tags "LEVEL>=1-TODO={.+}"
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
             (org-agenda-overriding-header "Headings with no local tags")))
+	  ("d" . "denote database files")
+          ("da" "Denote Agenda" todo ""
+           ,(orgx--denote-agenda-settings "Denote Agenda: All"))
+          ("dt" "Denote Agenda Tasks" tags-todo "-question"
+           ,(orgx--denote-agenda-settings "Denote Agenda: Tasks"))
+          ("dn" "Denote Agenda (non-agent)" tags-todo "-agent-question"
+           ,(orgx--denote-agenda-settings "Denote Agenda: Non-agent tasks"))
+          ("dg" "Denote Agenda (agent only)" tags-todo "agent"
+           ,(orgx--denote-agenda-settings "Denote Agenda: Agent tasks"))
+          ("dq" "Human Questions" tags-todo "question"
+           ,(orgx--denote-agenda-settings "Human questions awaiting a response"))
+          ("dc" "Denote Composite Agenda"
+           ((tags-todo "question"
+                       ((org-agenda-overriding-header "Human questions")))
+            (tags-todo "-agent-question"
+                       ((org-agenda-overriding-header "Tasks")))
+            (tags-todo "agent"
+                       ((org-agenda-overriding-header "Agent tasks"))))
+           ,(orgx--denote-agenda-settings nil))
 	  ("i" . "including inherited")
           ("iu" "Untagged TODOs (incl. inherited)" todo ""
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
@@ -582,13 +608,13 @@ rather than by keyword, deadline, or file order."
 ;;;###autoload
 (defun orgx-agenda-denote-todos ()
   "Show all TODO-keyword items (except human questions) across the denote tree.
-Convenience entry point for the \"d\" custom agenda command, which scans
+Convenience entry point for the \"dt\" custom agenda command, which scans
 `orgx-denote-files' (recursively, including denote/journal/ and
 any other subdirectories) rather than the usual `org-agenda-files',
 ordered by denote signature. Items tagged :question: are implementation
-TODOs' human counterpart and surface in the \"q\" agenda view instead."
+TODOs' human counterpart and surface in the \"dq\" agenda view instead."
   (interactive)
-  (org-agenda nil "d"))
+  (org-agenda nil "dt"))
 
 ;;;###autoload
 (defun orgx-insert-question (question)
@@ -627,14 +653,65 @@ Questions\" agenda view unanswered. Reverts the state change and signals
     ("s" "Search keywords"))
   "Standard org-agenda built-in views included in `orgx-agenda-view'.")
 
+(defun orgx--agenda-view-candidate (entry width)
+  "Candidate label for ENTRY, its dispatch key left-justified to WIDTH."
+  (concat (string-pad (car entry) width) ": " (cadr entry)))
+
+(defun orgx--agenda-view-settings (entry)
+  "Return the general SETTINGS alist for a custom-command ENTRY, or nil.
+Handles both a simple command, (key desc type match settings), and a
+composite series of blocks, (key desc (cmd1 cmd2 ...) settings) — the
+latter has a list, not a symbol, in the type slot."
+  (when (>= (length entry) 3)
+    (if (listp (nth 2 entry))
+        (when (>= (length entry) 4) (nth 3 entry))
+      (when (>= (length entry) 5) (nth 4 entry)))))
+
+(defun orgx--agenda-view-annotation (entry)
+  "Detailed annotation for ENTRY: command type, match, header, and file scope."
+  (if (< (length entry) 3)
+      "built-in"
+    (let* ((type (nth 2 entry))
+           (match (when (>= (length entry) 4) (nth 3 entry)))
+           (match-label
+            (cond
+             ((and (symbolp match) (functionp match)) (symbol-name match))
+             ((and (stringp match) (not (string-empty-p match))) match)))
+           (settings (orgx--agenda-view-settings entry))
+           (header (cadr (assq 'org-agenda-overriding-header settings)))
+           (files-p (assq 'org-agenda-files settings)))
+      (string-join
+       (seq-filter #'identity
+                   (list (unless (listp type) (symbol-name type))
+                         match-label
+                         (when files-p "denote files")
+                         (when (and header (not (equal header (cadr entry))))
+                           header)))
+       "  "))))
+
+(defun orgx--agenda-view-group (entry)
+  "Group label for ENTRY: built-in, denote-scoped, or global by command type.
+File scope (whether the view is restricted to `orgx-denote-files') is a
+more useful split than raw command type here, since almost every custom
+command in this config is `tags-todo' — grouping by type alone would
+dump nearly everything into one bucket. Global commands still fall back
+to a per-type label so that bucket doesn't become one dumping ground of
+its own."
+  (cond
+   ((< (length entry) 3) "Built-in")
+   ((assq 'org-agenda-files (orgx--agenda-view-settings entry)) "Denote")
+   (t (format "Global: %s" (capitalize (format "%s" (nth 2 entry)))))))
+
 ;;;###autoload
 (defun orgx-agenda-view ()
   "Select an org-agenda view via annotated completing read.
 Includes both the standard built-in views and any entries in
-`org-agenda-custom-commands'.  Each candidate is annotated with its
-key and, for custom commands, the match string or filter function
-name.  Candidates are grouped by command type (built-in, tags, todo,
-etc.)."
+`org-agenda-custom-commands'.  Each candidate is labeled with its
+dispatch key (e.g. \"da: Denote Agenda ALL\") and annotated with its
+command type, match string or filter function, overriding header, and
+file scope.  Candidates are grouped by file scope — Built-in, Denote,
+or Global (further split by command type) — via
+`orgx--agenda-view-group'."
   (interactive)
   (require 'org-agenda)
   (let* ((customs (seq-filter (lambda (e)
@@ -642,35 +719,20 @@ etc.)."
 				     (stringp (cadr e))))
                               org-agenda-custom-commands))
          (all (append orgx-agenda-builtin-views customs))
-         (desc->entry (seq-map (lambda (e) (cons (cadr e) e)) all))
-         (acr-table
-          (seq-map
-           (lambda (e)
-             (let* ((match (when (>= (length e) 4) (nth 3 e)))
-                    (match-label
-                     (cond
-                      ((and (symbolp match) (functionp match)) (symbol-name match))
-                      ((and (stringp match) (not (string-empty-p match))) match)))
-                    (annotation (string-join
-                                 (seq-filter #'identity
-                                             (list (format "[%s]" (car e))
-                                                   match-label))
-                                 "  ")))
-               (cons (cadr e) annotation)))
-           all))
-         (choice
-          (annotated-completing-read
-           acr-table
-           :prompt "Agenda view: "
-           :require-match t
-           :category 'org-agenda
-           :group-name (lambda (desc)
-                         (when-let* ((entry (cdr (assoc desc desc->entry))))
-                           (if (< (length entry) 3)
-                               "Built-in"
-                             (capitalize (format "%s" (nth 2 entry)))))))))
-    (when-let* ((entry (cdr (assoc choice desc->entry))))
-      (org-agenda nil (car entry)))))
+         (key-width (apply #'max (seq-map (lambda (e) (length (car e))) all)))
+         (acr-table (seq-map (lambda (e)
+                                (cons (orgx--agenda-view-candidate e key-width)
+                                      (cons (orgx--agenda-view-annotation e) e)))
+                              all))
+         (entry (annotated-completing-read
+                 acr-table
+                 :prompt "Agenda view: "
+                 :require-match t
+                 :category 'org-agenda
+                 :group-name (lambda (candidate)
+                               (when-let* ((e (cddr (assoc candidate acr-table))))
+                                 (orgx--agenda-view-group e))))))
+    (org-agenda nil (car entry))))
 
 ;; auxiliary package installation
 

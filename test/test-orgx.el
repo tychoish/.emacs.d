@@ -158,5 +158,32 @@
     (org-back-to-heading)
     (org-todo "DONE")
     (should (equal "DONE" (org-get-todo-state)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; orgx--agenda-view-candidate
+
+(ert-deftest orgx/agenda-view-candidate-pads-key-to-width ()
+  "Dispatch key is left-justified to the given width before the colon."
+  (should (equal "da: Denote Agenda ALL"
+                 (orgx--agenda-view-candidate '("da" "Denote Agenda ALL") 2)))
+  (should (equal "a : Agenda (week/day)"
+                 (orgx--agenda-view-candidate '("a" "Agenda (week/day)") 2))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; orgx--denote-agenda-settings
+
+(ert-deftest orgx/denote-agenda-settings-sets-header ()
+  "HEADER is threaded through to org-agenda-overriding-header."
+  (let ((settings (orgx--denote-agenda-settings "My Header")))
+    (should (equal "My Header" (cadr (assq 'org-agenda-overriding-header settings))))))
+
+(ert-deftest orgx/denote-agenda-settings-covers-todo-and-tags-prefix-formats ()
+  "Prefix format is set for both the todo and tags agenda line types."
+  (let* ((settings (orgx--denote-agenda-settings "Header"))
+         (prefix-form (cadr (assq 'org-agenda-prefix-format settings)))
+         (prefix-alist (eval prefix-form)))
+    (should (assq 'todo prefix-alist))
+    (should (assq 'tags prefix-alist))))
+
 (provide 'test-orgx)
 ;;; test-orgx.el ends here
