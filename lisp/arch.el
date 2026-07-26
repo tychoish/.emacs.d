@@ -37,6 +37,7 @@
   aur-list-fn            ; (fn) → list of AUR package name strings (for widened list); nil = unsupported
   install-methods        ; alist of (symbol . fn) — method dispatch table, e.g. ((direct . fn) (abs . fn))
   default-install-method ; symbol — preferred method for this backend; nil defers to prompt
+  install-batch-fn ; (fn pkg-names) — install many packages in one operation; nil = unsupported
   remove-fn       ; (fn pkg-name)
   upgrade-fn      ; (fn pkg-name) — nil means unsupported
   upgrade-all-fn  ; (fn) — nil means unsupported
@@ -250,6 +251,34 @@ If REQUIRE-SUCCESS is non-nil, return nil when the command exits non-zero."
      :sentinel #'arch--pkg-sentinel)
     (display-buffer buf)))
 
+(defconst arch--worker-buffer-name "*arch-package-worker*"
+  "Name of the shared buffer used for batch-install operations.")
+
+(defun arch--worker-buffer ()
+  "Return the shared batch-install worker buffer, creating it if needed."
+  (get-buffer-create arch--worker-buffer-name))
+
+(defun arch--worker-run (args)
+  "Run ARGS in the shared worker buffer, appending to existing content.
+Parallels `arch--pkg-run', but always targets the one constant worker
+buffer instead of a per-package buffer, so a batch install produces one
+linear scrollback instead of one buffer per package."
+  (let ((buf (arch--worker-buffer)))
+    (with-current-buffer buf
+      (unless (derived-mode-p 'special-mode)
+        (special-mode))
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (insert (propertize (format "\n$ %s\n" (mapconcat #'identity args " "))
+                            'face 'bold))))
+    (make-process
+     :name "arch-worker"
+     :buffer buf
+     :command args
+     :filter #'arch--pkg-filter
+     :sentinel #'arch--pkg-sentinel)
+    (display-buffer buf)))
+
 (defun arch--pkg-filter (proc output)
   "Insert OUTPUT into PROC's buffer, rendering ANSI escape sequences as faces."
   (with-current-buffer (process-buffer proc)
@@ -438,6 +467,10 @@ list display once info is fetched and cached via `arch-list-fetch-info'."
 (defun arch--pacman-install (pkg-name)
   "Install PKG-NAME via pacman."
   (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync" pkg-name)))
+
+(defun arch--pacman-install-batch (pkg-names)
+  "Install PKG-NAMES via one pacman --sync invocation into the worker buffer."
+  (arch--worker-run (append (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync") pkg-names)))
 
 (defun arch--pacman-remove (pkg-name)
   "Remove PKG-NAME via pacman."
@@ -895,12 +928,12 @@ lookup used by the package list view."
 
 ;;;###autoload
 (defun arch-kill-progress-buffers ()
-  "Kill all *arch:<pkg>* install/build/upgrade progress buffers.
+  "Kill all *arch:<pkg>* and the shared worker install/build/upgrade progress buffers.
 Buffers with a still-running process are left alone."
   (interactive)
   (let ((killed 0) (skipped 0))
     (seq-do (lambda (buf)
-              (when (string-match-p "^\\*arch:" (buffer-name buf))
+              (when (arch--progress-buffer-p buf nil)
                 (if (get-buffer-process buf)
                     (setq skipped (1+ skipped))
                   (kill-buffer buf)
@@ -960,10 +993,12 @@ See `arch-abs-rebuild'."
 ;; than popping a new one, but never displace the arch package list window
 
 (defun arch--progress-buffer-p (buf _action)
-  "Return non-nil if BUF is an *arch:<pkg>* progress buffer.
+  "Return non-nil if BUF is an *arch:<pkg>* or the shared worker progress buffer.
 BUF may be a buffer or a buffer name, per the `display-buffer-alist'
 condition-function contract."
-  (string-match-p "^\\*arch:" (if (bufferp buf) (buffer-name buf) buf)))
+  (let ((name (if (bufferp buf) (buffer-name buf) buf)))
+    (or (string-match-p "^\\*arch:" name)
+        (equal name arch--worker-buffer-name))))
 
 (defun arch--takeover-window (buffer _alist)
   "Action: display BUFFER by taking over another arch progress window.
@@ -1198,6 +1233,24 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
   (tabulated-list-print t)
   (message "arch: filter cleared"))
 
+(defun arch-explicit-packages ()
+  "Return (name . source) pairs for every explicitly-installed package.
+SOURCE is \"pacman\" for an official-repo package or \"aur\" for a
+foreign package, classified the same way `arch--filter-explicit-p' and
+`arch--filter-aur-p' classify packages for the list view.  This is the
+one public accessor `arch-sets.el' uses to build an export; it does not
+reach into `arch--info-cache' or `arch-pkg' internals directly."
+  (unless arch--cache-populated-p
+    (arch--populate-cache))
+  (let ((foreign (arch--foreign-packages))
+        (upgradeable (arch--upgradeable-packages)))
+    (thread-last (arch--pacman-list)
+      (seq-map (lambda (pkg) (arch--enrich-pkg pkg foreign upgradeable)))
+      (seq-filter #'arch--filter-explicit-p)
+      (seq-map (lambda (pkg)
+                 (cons (arch-pkg-name pkg)
+                       (if (arch-pkg-aur-p pkg) "aur" "pacman")))))))
+
 ;;; Package actions
 
 (defun arch-list-actions ()
@@ -1292,13 +1345,19 @@ Wide mode: w toggles all-packages view (installed-only vs full sync DB).
   (map-keys arch--marked))
 
 (defun arch-list-install-marked ()
-  "Install all marked packages, selecting each method via `arch--install-dispatch'."
+  "Install all marked packages.
+Uses the current backend's `install-batch-fn' when available, so one
+operation and one shared worker buffer cover the whole batch; otherwise
+falls back to `arch--install-dispatch' per package."
   (interactive)
-  (let ((names (arch--list-marked-names)))
+  (let ((names (arch--list-marked-names))
+        (backend (or arch--list-backend (arch--default-backend))))
     (when (null names)
       (user-error "No packages marked"))
     (when (yes-or-no-p (format "Install %d marked packages? " (length names)))
-      (seq-do #'arch--install-dispatch names))))
+      (if-let* ((fn (arch-backend-install-batch-fn backend)))
+          (funcall fn names)
+        (seq-do #'arch--install-dispatch names)))))
 
 (defun arch-list-remove-marked ()
   "Remove all marked packages."
@@ -1589,6 +1648,7 @@ individually via `arch-abs-install'."
   :populate-cache-fn #'arch--pacman-populate-cache
   :install-methods '((direct . arch--pacman-install))
   :default-install-method 'direct
+  :install-batch-fn #'arch--pacman-install-batch
   :remove-fn #'arch--pacman-remove
   :upgrade-fn #'arch--pacman-upgrade
   :upgrade-all-fn #'arch--pacman-upgrade-all))

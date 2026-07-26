@@ -44,6 +44,7 @@ Use `map-into` to build a hash table from a list of cons cells without an explic
 | `lisp/annotated-completing-read.el` | annotated-completing-read (ACR) completion utility.                                           |
 | `elpa/agent-shell-menu/`            | ACR-based menus, transient prefixes, buffer/permission/command/collapse UI (own git repo)     |
 | `lisp/eglot-test-at-point.el`       | Eglot test runner helper.                                                                     |
+| `lisp/arch-sets.el`                 | Package-set export/import + `arch-set-mode` viewer for `arch.el`.                             |
 | `user/*.el`                         | Per-machine overrides. Loaded last; not committed.                                            |
 
 ### Every `.el` file must have

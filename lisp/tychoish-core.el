@@ -177,6 +177,12 @@
   :config
   (run-with-idle-timer 2 nil #'arch--populate-cache))
 
+(use-package arch-sets
+  :ensure nil
+  :commands (arch-sets-export-file
+             arch-sets-import-file
+             arch-sets-open-file))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; UI, Display, Rendering, Window Management
