@@ -457,17 +457,28 @@
         (forward-line -1))
       (move-to-column column t)))))
 
+(declare-function org-metaup "org")
+(declare-function org-metadown "org")
+
 ;;;###autoload
 (defun move-text-down (arg)
-  "Move region (transient-mark-mode active) or current line arg lines down."
+  "Move region (transient-mark-mode active) or current line arg lines down.
+In `org-mode', defers to `org-metadown' instead, which moves the
+subtree at point rather than just the current line."
   (interactive "*p")
-  (move-text-internal arg))
+  (if (derived-mode-p 'org-mode)
+      (org-metadown arg)
+    (move-text-internal arg)))
 
 ;;;###autoload
 (defun move-text-up (arg)
-  "Move region (transient-mark-mode active) or current line arg lines up."
+  "Move region (transient-mark-mode active) or current line arg lines up.
+In `org-mode', defers to `org-metaup' instead, which moves the subtree
+at point rather than just the current line."
   (interactive "*p")
-  (move-text-internal (- arg)))
+  (if (derived-mode-p 'org-mode)
+      (org-metaup arg)
+    (move-text-internal (- arg))))
 
 ;; word-wrapping  --
 

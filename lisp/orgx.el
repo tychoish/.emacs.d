@@ -201,6 +201,7 @@ header text, or leaves the default when nil."
 
 (with-eval-after-load 'org-agenda
   (setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
+  (setq org-agenda-sticky t)
 
   (setq org-agenda-custom-commands
         `(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
@@ -443,7 +444,10 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
 
 ;;;###autoload
 (defun orgx-capture ()
-  "Select a capture template interactively."
+  "Select a capture template interactively.
+Candidates are grouped primarily by target file. Templates with no file
+target (e.g. function-based integration targets) fall back to their
+key-prefix's root description when even that is unknown."
   (interactive)
   (let* ((key-table (make-hash-table :test #'equal))
          (annotation-table (make-hash-table :test #'equal))
@@ -462,7 +466,10 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
               (content (nth 4 template))
               (raw (if (stringp content) (string-replace "\n" " " content) ""))
               (preview (if (> (length raw) 32) (concat (substring raw 0 29) "...") raw))
-              (group (or (map-elt prefix-map (substring key-char 0 1)) "root capture (other)")))
+              (group (cond
+                      ((not (string-empty-p target-file)) target-file)
+                      ((map-elt prefix-map (substring key-char 0 1)))
+                      (t "Other"))))
          (setf (map-elt key-table description) key-char)
          (setf (map-elt annotation-table description)
                (format "[%s] <%s> '%s'" key-char target-file preview))
@@ -553,20 +560,60 @@ TODO-only, \\[universal-argument] \\[universal-argument] adds inherited-tag chec
                           (org-agenda-overriding-header ,header)))))
          (orgx-agenda-required-tag tag)
          (orgx-agenda-include-inherited-tags inherited)
-         (org-agenda-custom-commands `(("V" ,header (,block)))))
+         (org-agenda-custom-commands
+          `(("V" ,header (,block)
+             ((org-agenda-buffer-name
+               ,(format "*Org Agenda(%s:%s)*"
+                        (file-name-nondirectory file) (or tag "untagged"))))))))
     (org-agenda nil "V")))
 
 (defun orgx-agenda-for-file (file)
-  "Run a full org agenda restricted to FILE.
-FILE is selected from `org-agenda-files' with completion."
+  "Run a combined day/week agenda and TODO list restricted to FILE.
+If an org file is open, defaults to using this file. Otherwise, or with
+a prefix argument, prompts for users to select from open agenda files."
   (interactive
-   (list (completing-read "Agenda for file: "
-                          (mapcar #'file-name-nondirectory (org-agenda-files))
-                          nil t)))
-  (let ((org-agenda-files
-         (seq-filter (lambda (f) (string= (file-name-nondirectory f) file))
-                     (org-agenda-files))))
-    (org-agenda nil "a")))
+   (list (or (and (not current-prefix-arg)
+                  (buffer-file-name)
+                  (car (member (expand-file-name (buffer-file-name)) (org-agenda-files))))
+             (annotated-completing-read
+              (seq-map (lambda (f)
+                         (cons f (format "%-8s %s"
+                                         (file-size-human-readable
+                                          (or (file-attribute-size (file-attributes f)) 0))
+                                         (abbreviate-file-name (file-name-directory f)))))
+                       (org-agenda-files))
+              :prompt "Agenda for file: "
+              :category 'org-agenda
+              :require-match t))))
+  (let* ((org-agenda-files (list file))
+         (org-agenda-custom-commands
+          `(("V" "Agenda for file"
+             ((agenda "")
+              (alltodo "" ((org-agenda-overriding-header
+                            ,(format "Tasks in %s" (file-name-nondirectory file))))))
+             ((org-agenda-buffer-name
+               ,(format "*Org Agenda(%s)*" (file-name-nondirectory file))))))))
+    (org-agenda nil "V")))
+
+(defun orgx-agenda-switch-buffer ()
+  "Switch to a live sticky `*Org Agenda(...)*' buffer instead of re-running it.
+Lists every buffer whose name matches that pattern via
+`annotated-completing-read', annotated with whether it is currently
+visible in a window, and switches to the chosen one."
+  (interactive)
+  (let ((buffers (seq-filter (lambda (buf) (string-match-p "\\`\\*Org Agenda" (buffer-name buf)))
+                              (buffer-list))))
+    (unless buffers
+      (user-error "No sticky agenda buffers are open"))
+    (switch-to-buffer
+     (annotated-completing-read
+      (seq-map (lambda (buf)
+                 (cons (buffer-name buf)
+                       (if (get-buffer-window buf) "visible" "not visible")))
+                buffers)
+      :prompt "Switch to agenda buffer: "
+      :category 'buffer
+      :require-match t))))
 
 ;; denote agenda integration
 
@@ -575,8 +622,9 @@ FILE is selected from `org-agenda-files' with completion."
 Computed fresh on each call so newly added or renamed notes, and any
 change to `denote-directory', are always picked up — do not cache the
 result."
-  (thread-last (denote-directories)
-               (seq-mapcat (lambda (dir) (directory-files-recursively dir "\\.org\\'")))))
+  (thread-last
+    (denote-directories)
+    (seq-mapcat (lambda (dir) (directory-files-recursively dir "\\.org\\'")))))
 
 (defconst orgx-denote-agenda-category-width 16
   "Max width, in characters, of `orgx-denote-agenda-category'.")
@@ -617,21 +665,28 @@ TODOs' human counterpart and surface in the \"dq\" agenda view instead."
   (org-agenda nil "dt"))
 
 ;;;###autoload
-(defun orgx-insert-question (question)
-  "Insert a TODO heading tagged :question: for QUESTION, with a Response slot.
+(defun orgx-insert-question (question &optional context)
+  "Insert a TODO heading tagged :question: for QUESTION, with a Response child.
 Creates a new heading at point via `org-insert-heading-respect-content',
 tags it :question: so it surfaces in the \"Human Questions\" agenda view
 distinct from implementation TODOs, and stamps it with an `org-id' so the
-entry can be linked to directly. Resolve it by marking the heading
-ANSWERED, which — like GONEAWAY — prompts for a closing note to record
-the answer."
-  (interactive "sQuestion: ")
+entry can be linked to directly. Adds a \"Response\" child heading to hold
+the answer as a first-class subtree rather than an inline field, and —
+only when CONTEXT is non-empty — a sibling \"Context\" child heading
+first, for background or reference material. Resolve the question by
+marking the heading ANSWERED, which — like GONEAWAY — prompts for a
+closing note to record the answer."
+  (interactive "sQuestion: \nsContext (leave blank to skip): ")
   (org-insert-heading-respect-content)
   (insert (concat "TODO " question))
   (org-toggle-tag "question" 'on)
   (org-id-get-create)
-  (org-end-of-meta-data t)
-  (insert "Response:: \n"))
+  (let ((stars (make-string (1+ (org-current-level)) ?*)))
+    (unless (or (null context) (string-empty-p context))
+      (org-end-of-subtree)
+      (insert (concat "\n" stars " Context\n" context)))
+    (org-end-of-subtree)
+    (insert (concat "\n" stars " Response\n"))))
 
 (defun orgx-enforce-question-answered ()
   "Block closing a :question:-tagged heading with any DONE state but ANSWERED.
@@ -880,19 +935,19 @@ new note's identifier reflects that date."
   :name "orgx-personal"
   :doc "C-c o prefix in org-mode buffers (orgx-minor-mode).")
 
-(keymap-set orgx-minor-mode-commands-map "s" #'org-agenda)
+(keymap-set orgx-minor-mode-commands-map "4" #'org-agenda)
 (keymap-set orgx-minor-mode-commands-map "a" #'orgx-agenda-view)
 (keymap-set orgx-minor-mode-commands-map "h" #'consult-org-heading)
 (keymap-set orgx-minor-mode-commands-map "k" #'org-capture)
 (keymap-set orgx-minor-mode-commands-map "o" #'orgx-agenda-files-open)
-(keymap-set orgx-minor-mode-commands-map "r" #'orgx-agenda-files-reload)
-(keymap-set orgx-minor-mode-commands-map "/" #'orgx-agenda-for-file)
+(keymap-set orgx-minor-mode-commands-map "r" (cons "reload-agenda" #'orgx-agenda-files-reload))
+(keymap-set orgx-minor-mode-commands-map "/" (cons "agenda-for-file" #'orgx-agenda-for-file))
 (keymap-set orgx-minor-mode-commands-map "t" #'org-set-tags-command)
-(keymap-set orgx-minor-mode-commands-map "n" #'org-narrow-to-subtree)
-(keymap-set orgx-minor-mode-commands-map "p" #'org-insert-property-drawer)
+(keymap-set orgx-minor-mode-commands-map "n" (cons "narrow-to-subtree" #'org-narrow-to-subtree))
+(keymap-set orgx-minor-mode-commands-map "p" (cons "insert-proprty-drawer" #'org-insert-property-drawer))
 (keymap-set orgx-minor-mode-commands-map "w" #'org-refile)
 (keymap-set orgx-minor-mode-commands-map "d" #'orgx-date-now)
-(keymap-set orgx-minor-mode-commands-map "C-s" #'org-save-all-org-buffers)
+(keymap-set orgx-minor-mode-commands-map "s" #'org-save-all-org-buffers)
 
 (keymap-set orgx-minor-mode-commands-map "u" (cons "untaged-in-file" #'orgx-agenda-untagged-in-file))
 (keymap-set orgx-minor-mode-commands-map "c" (cons "capture" orgx-minor-mode-capture-map))
@@ -939,6 +994,8 @@ the toc-org write hook."
 (keymap-set orgx-agenda-minor-mode-map "M-c" #'org-agenda-goto-calendar)
 (keymap-set orgx-agenda-minor-mode-map "/" #'orgx-agenda-for-file)
 (keymap-set orgx-agenda-minor-mode-map "C-e" #'orgx-migrate-subtree-to-denote)
+(keymap-set orgx-agenda-minor-mode-map "C-b" #'orgx-agenda-switch-buffer)
+(keymap-set orgx-agenda-minor-mode-map "M-a" #'orgx-agenda-view)
 
 (define-minor-mode orgx-agenda-minor-mode
   "Personal org-agenda keybindings and setup."
