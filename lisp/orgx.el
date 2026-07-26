@@ -126,11 +126,12 @@
           ("SCHEDULED" . "green")
           ("BACKLOG" . (:foreground "orange" :weight bold))
           ("PROJECT" . (:foreground "blue" :weight bold))
-          ("ANSWERED" . (:foreground "green" :weight bold))))
+          ("ANSWERED" . (:foreground "blue" :weight bold))))
 
   ;; org.el
   (setq org-todo-keywords
-        '((sequence "TODO(t)" "|" "DONE(d!)" "ANSWERED(a@)")
+        '((sequence "TODO(t)" "|" "DONE(d!)")
+          (sequence "QUESTION(q)" "|" "ANSWERED(a@)")
           (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
   (setq org-tag-alist
         '((:startgroup . nil)
@@ -666,7 +667,7 @@ TODOs' human counterpart and surface in the \"dq\" agenda view instead."
 
 ;;;###autoload
 (defun orgx-insert-question (question &optional context)
-  "Insert a TODO heading tagged :question: for QUESTION, with a Response child.
+  "Insert a QUESTION-keyword heading tagged :question: for QUESTION.
 Creates a new heading at point via `org-insert-heading-respect-content',
 tags it :question: so it surfaces in the \"Human Questions\" agenda view
 distinct from implementation TODOs, and stamps it with an `org-id' so the
@@ -678,7 +679,7 @@ marking the heading ANSWERED, which — like GONEAWAY — prompts for a
 closing note to record the answer."
   (interactive "sQuestion: \nsContext (leave blank to skip): ")
   (org-insert-heading-respect-content)
-  (insert (concat "TODO " question))
+  (insert (concat "QUESTION " question))
   (org-toggle-tag "question" 'on)
   (org-id-get-create)
   (let ((stars (make-string (1+ (org-current-level)) ?*)))
