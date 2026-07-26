@@ -14,8 +14,7 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'subr-x))
+(require 'subr-x)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -48,6 +47,12 @@
 ;; takes effect dynamically and the byte compiler doesn't warn about an unused
 ;; lexical variable.
 (defvar org-archive-sibling-heading)
+
+;; `org-todo' dynamically binds these around `org-after-todo-state-change-hook';
+;; declared here so `orgx-enforce-question-answered' can read them without a
+;; free-variable warning.
+(defvar org-state)
+(defvar org-last-state)
 
 ;; `org-capture-templates' is populated by whatever loads capture templates
 ;; into it (`orgx-capture', `org-capture' itself, etc.); `orgx-capture' below
@@ -102,6 +107,7 @@
   (add-hook 'org-shiftleft-final-hook 'windmove-left)
   (add-hook 'org-shiftdown-final-hook 'windmove-down)
   (add-hook 'org-shiftright-final-hook 'windmove-right)
+  (add-hook 'org-after-todo-state-change-hook 'orgx-enforce-question-answered)
 
   (setq org-modules
 	'(org-capture
@@ -600,6 +606,19 @@ the answer."
   (org-id-get-create)
   (org-end-of-meta-data t)
   (insert "Response:: \n"))
+
+(defun orgx-enforce-question-answered ()
+  "Block closing a :question:-tagged heading with any DONE state but ANSWERED.
+Runs on `org-after-todo-state-change-hook'; a question is only actually
+answered once the Response slot is filled in, so GONEAWAY, INCOMPLETE,
+and the other done keywords would let it fall out of the \"Human
+Questions\" agenda view unanswered. Reverts the state change and signals
+`user-error' instead."
+  (when (and (member org-state org-done-keywords)
+             (not (string= org-state "ANSWERED"))
+             (member "question" (org-get-tags)))
+    (org-todo org-last-state)
+    (user-error "Headings tagged :question: can only be closed with ANSWERED, not %s" org-state)))
 
 (defconst orgx-agenda-builtin-views
   '(("a" "Agenda (week/day)")

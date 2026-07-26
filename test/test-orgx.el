@@ -126,5 +126,37 @@
             (should (equal "" (orgx-denote-agenda-category))))
 	(delete-file file)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; orgx-enforce-question-answered
+
+(ert-deftest orgx/enforce-question-answered-blocks-done ()
+  "A :question: heading refuses to close as DONE."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* TODO Sample question :question:\n")
+    (goto-char (point-min))
+    (org-back-to-heading)
+    (should-error (org-todo "DONE") :type 'user-error)
+    (should (equal "TODO" (org-get-todo-state)))))
+
+(ert-deftest orgx/enforce-question-answered-allows-answered ()
+  "A :question: heading may close as ANSWERED."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* TODO Sample question :question:\n")
+    (goto-char (point-min))
+    (org-back-to-heading)
+    (org-todo "ANSWERED")
+    (should (equal "ANSWERED" (org-get-todo-state)))))
+
+(ert-deftest orgx/enforce-question-answered-ignores-untagged-headings ()
+  "A heading without :question: closes normally with DONE."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* TODO Ordinary task\n")
+    (goto-char (point-min))
+    (org-back-to-heading)
+    (org-todo "DONE")
+    (should (equal "DONE" (org-get-todo-state)))))
 (provide 'test-orgx)
 ;;; test-orgx.el ends here
