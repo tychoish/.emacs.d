@@ -1214,6 +1214,92 @@ opens the *ert* selector."
         (ert-run-tests-batch-and-exit)
       (ert t))))
 
+(defun builder--ert-test-names ()
+  "Return the sorted names (strings) of every currently defined ert test."
+  (thread-last (ert-select-tests t t)
+               (seq-map (lambda (test) (symbol-name (ert-test-name test))))
+               (seq-sort #'string<)))
+
+(defconst builder--ert-prefix-separator-regexp "[-/:]+"
+  "Regexp for a run of separator characters used to derive ert test-name prefixes.")
+
+(defun builder--ert-test-name-prefixes (name)
+  "Return every separator-terminated prefix of ert test NAME."
+  (let (prefixes (start 0))
+    (while (string-match builder--ert-prefix-separator-regexp name start)
+      (setq start (match-end 0))
+      (push (substring name 0 start) prefixes))
+    (nreverse prefixes)))
+
+(defun builder--ert-known-prefixes ()
+  "Return each prefix shared by two or more currently defined ert test names.
+Derived generically from whichever separator convention (\"/\", \"-\", \"--\")
+a given test suite happens to use, rather than hardcoding module names."
+  (let ((counts (make-hash-table :test #'equal)))
+    (seq-do (lambda (name)
+              (seq-do (lambda (prefix) (cl-incf (map-elt counts prefix 0)))
+                      (builder--ert-test-name-prefixes name)))
+            (builder--ert-test-names))
+    (thread-last (map-keys counts)
+                 (seq-filter (lambda (prefix) (> (map-elt counts prefix) 1)))
+                 (seq-sort #'string<))))
+
+(defun builder--ert-prefix-candidates (&optional suffix)
+  "Return an ACR table of known ert test-name prefixes.
+Each candidate is annotated with how many currently loaded tests it
+matches, and has SUFFIX (e.g. \"*\" for a glob prompt) appended after
+counting so the annotation still reflects the bare prefix's matches."
+  (let ((names (builder--ert-test-names)))
+    (seq-map (lambda (prefix)
+               (cons (concat prefix suffix)
+                     (format "%d tests"
+                             (length (seq-filter (lambda (name) (string-prefix-p prefix name))
+                                                  names)))))
+             (builder--ert-known-prefixes))))
+
+(defun builder--ert-run-tests-matching (predicate description)
+  "Run every currently loaded ert test whose name satisfies PREDICATE.
+DESCRIPTION appears in the `user-error' raised when nothing matches."
+  (require 'ert)
+  (let ((matching (seq-filter predicate (builder--ert-test-names))))
+    (unless matching
+      (user-error "No ert tests match %s" description))
+    (ert (cons 'member (seq-map #'intern matching)))))
+
+;;;###autoload
+(defun builder-run-ert-tests-with-prefix (prefix)
+  "Run every currently loaded ert test whose name starts with PREFIX.
+PREFIX is read via `annotated-completing-read', offering every prefix
+shared by two or more loaded test names (see `builder--ert-known-prefixes')
+as a suggestion, annotated with its match count. Any string works —
+matching is a plain `string-prefix-p' test, not restricted to what's listed."
+  (interactive
+   (list (annotated-completing-read
+          (builder--ert-prefix-candidates)
+          :prompt "Test prefix: "
+          :category 'ert-test-prefix)))
+  (builder--ert-run-tests-matching
+   (lambda (name) (string-prefix-p prefix name))
+   (format "prefix %S" prefix)))
+
+;;;###autoload
+(defun builder-run-ert-tests-with-glob (pattern)
+  "Run every currently loaded ert test whose name matches glob PATTERN.
+PATTERN is read via `annotated-completing-read' the same way as
+`builder-run-ert-tests-with-prefix' (candidates are the known prefixes
+with a trailing \"*\"), but matching translates PATTERN through
+`wildcard-to-regexp' first, so \"*\" and \"?\" work as wildcards
+instead of literal characters."
+  (interactive
+   (list (annotated-completing-read
+          (builder--ert-prefix-candidates "*")
+          :prompt "Test name glob: "
+          :category 'ert-test-glob)))
+  (let ((regexp (wildcard-to-regexp pattern)))
+    (builder--ert-run-tests-matching
+     (lambda (name) (string-match-p regexp name))
+     (format "glob %S" pattern))))
+
 ;;;###autoload
 (defun builder-elisp-package-compile ()
   "Byte-compile every top-level .el source file in the elisp package at point.
