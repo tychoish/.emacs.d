@@ -167,6 +167,9 @@ nil disables the rule."
 (defvar-local denote-dash--filter-history nil
   "Minibuffer history for denote-dash filter expressions.")
 
+(defvar-local denote-dash--grep-filter-history nil
+  "Minibuffer history for `denote-dash-filter-grep'.")
+
 (defvar-local denote-dash--narrowed-sequences nil
   "List of sequence-ID strings to narrow to, or nil to show all sequences.")
 
@@ -175,6 +178,13 @@ nil disables the rule."
 
 (defvar-local denote-dash--active-directory nil
   "Directory path restriction, or nil to show notes from all directories.")
+
+(defvar-local denote-dash--grep-filter nil
+  "Regexp restricting displayed notes to those whose content matches it.
+Independent of `denote-dash--current-filter' (keywords/expression) and
+`denote-dash--narrowed-sequences' (sequence prefixes) — all three combine
+with AND in `denote-dash--file-visible-p'. nil shows all notes regardless
+of content.")
 
 (defvar-local denote-dash--visible-columns nil
   "Ordered list of column symbols currently displayed.")
@@ -350,6 +360,16 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
 
 ;;; Data layer
 
+(defun denote-dash--file-grep-matches-p (file regexp)
+  "Return non-nil if FILE's contents match REGEXP.
+Reads the whole file into a temporary buffer; only called while
+`denote-dash--grep-filter' is set, i.e. on an explicit refresh with a
+content filter active, not on every keystroke."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (goto-char (point-min))
+    (re-search-forward regexp nil t)))
+
 (defun denote-dash--file-visible-p (file all-seq-ids)
   "Return non-nil if FILE should appear given current filter, directory, and fold state."
   (let ((seq-id (denote-retrieve-filename-signature file)))
@@ -359,6 +379,8 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
              (and seq-id (denote-dash--sequence-in-narrow-p seq-id denote-dash--narrowed-sequences)))
          (or (null denote-dash--active-directory)
              (string-prefix-p (expand-file-name denote-dash--active-directory) file))
+         (or (null denote-dash--grep-filter)
+             (denote-dash--file-grep-matches-p file denote-dash--grep-filter))
          (or denote-dash--show-non-sequence seq-id)
          (denote-dash--fold-visible-p seq-id all-seq-ids))))
 
@@ -452,6 +474,7 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
   :doc "Keymap for `denote-dash-mode'.")
 (keymap-set denote-dash-mode-map "RET" #'denote-dash-open-note)
 (keymap-set denote-dash-mode-map "o" #'denote-dash-open-note-other-window)
+(keymap-set denote-dash-mode-map "/" #'denote-dash-filter-menu)
 (keymap-set denote-dash-mode-map "f" #'denote-dash-filter)
 (keymap-set denote-dash-mode-map "C-f" #'denote-dash-clear-filter)
 (keymap-set denote-dash-mode-map "e" #'denote-dash-filter-expression)
@@ -908,6 +931,22 @@ prefix argument they are AND'd."
            (current-prefix-arg `(and ,@toggles))
            (t `(or ,@toggles))))
     (denote-dash-refresh)))
+
+(defun denote-dash-filter-grep (regexp)
+  "Restrict displayed notes to those whose content matches REGEXP.
+Independent of the keyword/expression filter and sequence narrowing —
+combines with both via AND. Empty input clears the content filter."
+  (interactive (list (read-string "Grep filter (regexp): "
+                                  denote-dash--grep-filter
+                                  'denote-dash--grep-filter-history)))
+  (setq denote-dash--grep-filter (unless (string-empty-p regexp) regexp))
+  (denote-dash-refresh))
+
+(defun denote-dash-clear-grep-filter ()
+  "Clear the current content (grep) filter."
+  (interactive)
+  (setq denote-dash--grep-filter nil)
+  (denote-dash-refresh))
 
 ;;; Sequence narrowing
 
@@ -1588,6 +1627,8 @@ fallback prompt even when the visited buffer unambiguously named FILE."
     ("wt" "toggle seq"         denote-dash-toggle-sequence-narrow)
     ("ww" "widen"              denote-dash-widen)
     ("wk" "toggle keyword"     denote-dash-toggle-keyword)]
+    ("wg" "grep filter"        denote-dash-filter-grep)
+    ("wc" "clear grep filter"  denote-dash-clear-grep-filter)]
    ["Hierarchy" :if-derived denote-sequence-hierarchy-mode
     ("hz" "toggle persist fold" denote-dash-hierarchy-toggle-fold-sequence)
     ("hc" "clear persisted folds" denote-dash-hierarchy-clear-fold-sequences)]
