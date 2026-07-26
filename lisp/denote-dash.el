@@ -16,6 +16,7 @@
 (require 'seq)
 (require 'map)
 (require 'outline)
+
 (require 'denote)
 (require 'denote-sequence)
 (require 'annotated-completing-read)
@@ -441,45 +442,45 @@ ALL-SEQ-IDS is the precomputed list of all sequence IDs in the collection."
 ;;; Mode definition
 
 (defvar-keymap denote-dash-narrow-map
-  :doc "Keymap for sequence/keyword narrowing in `denote-dash-mode'."
-  "s" #'denote-dash-narrow-to-sequence
-  "t" #'denote-dash-toggle-sequence-narrow
-  "w" #'denote-dash-widen
-  "k" #'denote-dash-toggle-keyword)
+  :doc "Keymap for sequence/keyword narrowing in `denote-dash-mode'.")
+(keymap-set denote-dash-narrow-map "s" #'denote-dash-narrow-to-sequence)
+(keymap-set denote-dash-narrow-map "t" #'denote-dash-toggle-sequence-narrow)
+(keymap-set denote-dash-narrow-map "w" #'denote-dash-widen)
+(keymap-set denote-dash-narrow-map "k" #'denote-dash-toggle-keyword)
 
 (defvar-keymap denote-dash-mode-map
-  :doc "Keymap for `denote-dash-mode'."
-  "RET"     #'denote-dash-open-note
-  "o"       #'denote-dash-open-note-other-window
-  "f"       #'denote-dash-filter
-  "C-f"     #'denote-dash-clear-filter
-  "e"       #'denote-dash-filter-expression
-  "s"       #'denote-dash-filter-shortcut
-  "d"       #'denote-dash-cycle-directory
-  "c"       #'denote-dash-column-transient
-  "<tab>"   #'denote-dash-cycle-fold
-  "S-<tab>" #'denote-dash-global-cycle
-  "M-<tab>" #'denote-dash-expand-all
-  "z"       #'denote-dash-collapse-all
-  "t"       #'denote-dash-toggle-non-sequence
-  "r"       #'denote-rename-file-using-front-matter
-  "l"       #'denote-dash-lint-sequences
-  "C-r"     #'denote-dash-repack-sequence-children
-  "M-r"     #'denote-dash-swap-with-parent
-  "M-p"     #'denote-dash-swap-with-previous
-  "M-n"     #'denote-dash-swap-with-next
-  "C-n"     denote-dash-narrow-map
-  "k"       #'denote-dash-retag-sequence
-  "m"       #'denote-dash-reparent
-  "u"       #'denote-dash-renumber-recursive
-  "i"       #'denote-dash-insert-sequence-note
-  "h"       #'denote-dash-fix-sequence-frontmatter
-  "C-l"     #'denote-dash-fix-all-sequence-frontmatter
-  "v"       #'denote-dash-schedule-review-at-point
-  "n"       #'denote
-  "g"       #'denote-dash-refresh
-  "?"       #'denote-dash-dispatch
-  "q"       #'quit-window)
+  :doc "Keymap for `denote-dash-mode'.")
+(keymap-set denote-dash-mode-map "RET" #'denote-dash-open-note)
+(keymap-set denote-dash-mode-map "o" #'denote-dash-open-note-other-window)
+(keymap-set denote-dash-mode-map "f" #'denote-dash-filter)
+(keymap-set denote-dash-mode-map "C-f" #'denote-dash-clear-filter)
+(keymap-set denote-dash-mode-map "e" #'denote-dash-filter-expression)
+(keymap-set denote-dash-mode-map "s" #'denote-dash-filter-shortcut)
+(keymap-set denote-dash-mode-map "d" #'denote-dash-cycle-directory)
+(keymap-set denote-dash-mode-map "c" #'denote-dash-column-transient)
+(keymap-set denote-dash-mode-map "<tab>" #'denote-dash-cycle-fold)
+(keymap-set denote-dash-mode-map "S-<tab>" #'denote-dash-global-cycle)
+(keymap-set denote-dash-mode-map "M-<tab>" #'denote-dash-expand-all)
+(keymap-set denote-dash-mode-map "z" #'denote-dash-collapse-all)
+(keymap-set denote-dash-mode-map "t" #'denote-dash-toggle-non-sequence)
+(keymap-set denote-dash-mode-map "r" #'denote-rename-file-using-front-matter)
+(keymap-set denote-dash-mode-map "l" #'denote-dash-lint-sequences)
+(keymap-set denote-dash-mode-map "C-r" #'denote-dash-repack-sequence-children)
+(keymap-set denote-dash-mode-map "M-r" #'denote-dash-swap-with-parent)
+(keymap-set denote-dash-mode-map "M-p" #'denote-dash-swap-with-previous)
+(keymap-set denote-dash-mode-map "M-n" #'denote-dash-swap-with-next)
+(keymap-set denote-dash-mode-map "C-n" denote-dash-narrow-map)
+(keymap-set denote-dash-mode-map "k" #'denote-dash-retag-sequence)
+(keymap-set denote-dash-mode-map "m" #'denote-dash-reparent)
+(keymap-set denote-dash-mode-map "u" #'denote-dash-renumber-recursive)
+(keymap-set denote-dash-mode-map "i" #'denote-dash-insert-sequence-note)
+(keymap-set denote-dash-mode-map "h" #'denote-dash-fix-sequence-frontmatter)
+(keymap-set denote-dash-mode-map "C-l" #'denote-dash-fix-all-sequence-frontmatter)
+(keymap-set denote-dash-mode-map "v" #'denote-dash-schedule-review-at-point)
+(keymap-set denote-dash-mode-map "n" #'denote)
+(keymap-set denote-dash-mode-map "g" #'denote-dash-refresh)
+(keymap-set denote-dash-mode-map "?" #'denote-dash-dispatch)
+(keymap-set denote-dash-mode-map "q" #'quit-window)
 
 (define-derived-mode denote-dash-mode tabulated-list-mode "ddash"
   "Major mode for browsing and filtering Denote notes.
@@ -575,6 +576,33 @@ killed."
       (message "Saved %d and killed %d Denote buffer%s"
                saved (length buffers) (if (= (length buffers) 1) "" "s")))))
 
+;;; Sequence hierarchy switch-or-view
+
+(defun denote-dash-hierarchy-switch-or-view ()
+  "Select a visible hierarchy view window, or open a new one.
+When a window already displays a `denote-sequence-hierarchy-mode' buffer,
+select it instead of opening a duplicate view via
+`denote-sequence-view-hierarchy'."
+  (interactive)
+  (if-let* ((window (seq-find (lambda (win)
+                                 (with-current-buffer (window-buffer win)
+                                   (derived-mode-p 'denote-sequence-hierarchy-mode)))
+                               (window-list))))
+      (select-window window)
+    (call-interactively #'denote-sequence-view-hierarchy)))
+
+(defun denote-dash-hierarchy-view-by-note (&optional depth)
+  "View the sequence hierarchy scoped to a note chosen via ACR.
+Prompts for a Denote note with `denote-dash-note-prompt' and uses its
+sequence signature as the prefix for `denote-sequence-view-hierarchy',
+rather than typing a raw sequence string.  With a prefix argument, also
+prompt for DEPTH via `denote-sequence-depth-prompt'."
+  (interactive (list (when current-prefix-arg (denote-sequence-depth-prompt))))
+  (let* ((file (denote-dash-note-prompt "Hierarchy for note: "))
+         (prefix (or (denote-retrieve-filename-signature file)
+                     (user-error "Selected note has no sequence signature"))))
+    (denote-sequence-view-hierarchy prefix depth)))
+
 ;;; Sequence hierarchy buffer directory
 
 (defun denote-dash--hierarchy-sync-directory ()
@@ -603,6 +631,33 @@ path in the `denote-sequence-hierarchy-file' text property."
   (setq-local denote-open-link-function #'find-file))
 
 (add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-use-same-window)
+
+;;; Sequence hierarchy origin tracking
+
+(defvar-local denote-dash--hierarchy-origin-buffer nil
+  "Hierarchy buffer the current note was opened from, or nil.")
+
+(defun denote-dash--hierarchy-kill-return-to-origin ()
+  "Switch windows showing this buffer back to its hierarchy origin, if live.
+Added to `kill-buffer-hook' by `ad:denote-dash--hierarchy-track-origin' so
+that killing a note opened from a hierarchy view returns focus to that
+view rather than to whatever `switch-to-prev-buffer' picks next."
+  (when (buffer-live-p denote-dash--hierarchy-origin-buffer)
+    (seq-do (lambda (window) (set-window-buffer window denote-dash--hierarchy-origin-buffer))
+            (get-buffer-window-list (current-buffer) nil t))))
+
+(defun ad:denote-dash--hierarchy-track-origin (fn &rest args)
+  "Record the hierarchy buffer FN was called from on the note buffer it opens.
+`denote-sequence-hierarchy-find-file' is only invoked from a
+`denote-sequence-hierarchy-mode' buffer, so the buffer current when FN is
+called is always that origin."
+  (let ((origin (current-buffer)))
+    (apply fn args)
+    (unless (eq (current-buffer) origin)
+      (setq-local denote-dash--hierarchy-origin-buffer origin)
+      (add-hook 'kill-buffer-hook #'denote-dash--hierarchy-kill-return-to-origin nil t))))
+
+(advice-add 'denote-sequence-hierarchy-find-file :around #'ad:denote-dash--hierarchy-track-origin)
 
 ;;; Sequence hierarchy initial folding
 

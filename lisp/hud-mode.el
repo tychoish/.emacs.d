@@ -200,6 +200,10 @@
   :name "denote-review"
   :doc "Denote review commands under C-c d c (hud-mode).")
 
+(defvar-keymap hud-denote-hierarchy-map
+  :name "denote-hierarchy"
+  :doc "Denote sequence hierarchy view commands under C-c d h (hud-mode).")
+
 (defvar-keymap hud-consult-mode-map
   :name "consult"
   :doc "Consult commands under C-c C-; (hud-mode).")
@@ -266,6 +270,7 @@
 (keymap-set hud-denote-map "s" (cons "denote-sequence" hud-denote-sequence-map))
 (keymap-set hud-denote-map "e" (cons "denote-explore" hud-denote-explore-map))
 (keymap-set hud-denote-map "c" (cons "denote-review" hud-denote-review-map))
+(keymap-set hud-denote-map "h" (cons "denote-hierarchy" hud-denote-hierarchy-map))
 
 (keymap-set hud-mode-map "C-c t" (cons "core" hud-core-map))
 (keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))

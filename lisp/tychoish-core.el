@@ -87,7 +87,11 @@
   (delight 'auto-fill-function " afm" 'simple)
   (delight 'overwrite-mode " om" 'simple)
   (delight 'refill-mode " rf" 'refill)
-  (delight 'auto-revert-mode nil 'autorevert))
+  (delight 'auto-revert-mode nil 'autorevert)
+
+  (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
+  (delight 'outline-minor-mode nil 'outline)
+  (delight 'cursor-sensor-mode nil 'cursor-sensor))
 
 (use-package uuidgen
   :ensure t
@@ -1410,7 +1414,9 @@ clipboard."
   (keymap-set hud-denote-map "." #'denote-dash-dispatch)
   (keymap-set hud-denote-map "," #'denote-dash)
   (keymap-set hud-denote-map "k" #'denote-dash-save-and-kill-all-notes)
-  (keymap-set hud-denote-map "u" #'denote-dash-rename-file-using-front-matter)
+  (keymap-set hud-denote-map "u" '("rename-using-front-matter". denote-dash-rename-file-using-front-matter))
+  (keymap-set hud-denote-hierarchy-map "v" #'denote-dash-hierarchy-switch-or-view)
+  (keymap-set hud-denote-hierarchy-map "t" #'denote-dash-hierarchy-view-by-note)
   (make-read-extended-command-for-prefix "denote"
     :bind-map hud-denote-map
     :bind-key "x")
@@ -1467,7 +1473,9 @@ clipboard."
 	     denote-dash-save-and-kill-all-notes
 	     denote-dash-rename-file
 	     denote-dash-retag-file
-	     denote-dash-rename-file-using-front-matter))
+	     denote-dash-rename-file-using-front-matter
+	     denote-dash-hierarchy-switch-or-view
+	     denote-dash-hierarchy-view-by-note))
 
 (use-package denote-dash-repack
   :ensure nil
@@ -1552,7 +1560,7 @@ return until the minibuffer session ends."
   (setq denote-sequence-scheme 'alphanumeric)
   (add-to-list 'display-buffer-alist
                '("\\`\\*denote-sequence-hierarchy "
-                 (display-buffer-same-window))))
+                 (display-buffer-reuse-window display-buffer-pop-up-window))))
 
 (use-package denote-markdown
   :ensure t
