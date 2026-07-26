@@ -121,18 +121,20 @@
   ;; org-faces
   (setq org-todo-keyword-faces
         '(("TODO" . org-warning)
-          ("INPROGRESS" . "orange")
-          ("INCOMPLETE" . "orange")
-          ("SCHEDULED" . "green")
-          ("BACKLOG" . (:foreground "orange" :weight bold))
-          ("PROJECT" . (:foreground "blue" :weight bold))
-          ("ANSWERED" . (:foreground "blue" :weight bold))))
+	  ("DONE" . slate)
+          ("INPROGRESS" . yellow)
+          ("INCOMPLETE" . yellow)
+          ("SCHEDULED" . "orange")
+	  ("BACKLOG" . (:foreground yellow :weight bold))
+          ("PROJECT" . (:foreground slate :weight bold))
+          ("ANSWERED" . (:foreground slate :weight bold))))
 
   ;; org.el
   (setq org-todo-keywords
         '((sequence "TODO(t)" "|" "DONE(d!)")
           (sequence "QUESTION(q)" "|" "ANSWERED(a@)")
           (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
+
   (setq org-tag-alist
         '((:startgroup . nil)
           ("inbox" . ?i)
