@@ -435,15 +435,15 @@
 
 (ert-deftest builder-test/read-command-cons-pair-from-existing-table ()
   "`builder--read-command' with an explicit table returns a cons of
-the selected name and the candidate table."
+the selected candidate (resolved via ACR's target support) and the table."
   (let* ((tbl (make-hash-table :test #'equal))
          (c (make-builder-candidate :command "make" :name "build")))
     (ht-set tbl "build" c)
     (cl-letf (((symbol-function 'annotated-completing-read)
-               (lambda (_tbl &rest _) "build")))
+               (lambda (_tbl &rest _) c)))
       (let ((result (builder--read-command nil tbl)))
         (should (consp result))
-        (should (equal "build" (car result)))
+        (should (eq c (car result)))
         (should (eq tbl (cdr result)))))))
 
 (ert-deftest builder-test/read-command-unknown-selection-adds-candidate ()
@@ -455,13 +455,14 @@ the selected name and the candidate table."
                (lambda (&rest _) tbl)))
       (let ((result (builder--read-command nil tbl)))
         (should (consp result))
-        (should (equal "custom-cmd" (car result)))
+        (should (builder-candidate-p (car result)))
+        (should (equal "custom-cmd" (builder-candidate-command (car result))))
         (should (ht-contains-p (cdr result) "custom-cmd"))))))
 
 (ert-deftest builder-test/read-command-unknown-long-selection-name-matches-key ()
-  "Regression: for a typed command over 32 chars, the returned name must
-match the (truncated) key actually stored in the table, so callers can
-look the candidate back up with `map-elt'."
+  "Regression: for a typed command over 32 chars, the new candidate is stored
+under its truncated name and the same candidate object is returned directly,
+so callers no longer need to look it back up with `map-elt'."
   (let* ((tbl (make-hash-table :test #'equal))
          (long-cmd (make-string 64 ?x)))
     (cl-letf (((symbol-function 'annotated-completing-read)
@@ -469,10 +470,11 @@ look the candidate back up with `map-elt'."
               ((symbol-function 'builder--get-candidates)
                (lambda (&rest _) tbl)))
       (let* ((result (builder--read-command nil tbl))
-             (name (car result))
-             (candidates (cdr result)))
+             (candidate (car result))
+             (candidates (cdr result))
+             (name (builder-candidate-name candidate)))
         (should (ht-contains-p candidates name))
-        (should (builder-candidate-p (map-elt candidates name)))))))
+        (should (eq candidate (map-elt candidates name)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder-reset-finish-hooks

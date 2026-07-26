@@ -153,9 +153,7 @@
 	 (start-at (current-time))
 	 ;; Step 1: select and confirm command
 	 (cc-result (builder--read-command command))
-	 (candidate-name (car cc-result))
-	 (candidates (cdr cc-result))
-	 (candidate (map-elt candidates candidate-name))
+	 (candidate (car cc-result))
 	 (compile-command (read-from-minibuffer "edit command => " (builder-candidate-command candidate)))
 	 (op-default-directory (or (builder-candidate-directory candidate) default-directory))
 	 ;; Step 2: select buffer, pre-seeding the one that last ran this command
@@ -202,15 +200,13 @@
 			       (not (get-buffer-window active-buf t))
 			       (< 10 (float-time (time-since (current-idle-time)))))))
 
-	(when-let* ((candidate (map-elt candidates candidate-name))
-		    (hook (builder-candidate-hook candidate)))
-	  (when hook
-	    (add-one-shot-hook :name (format "post-%s-hook-operation" op-name)
-	     :hook 'compilation-finish-functions
-	     :make-unique t
-	     :local t
-	     :args (compilation-buffer msg)
-	     :form (funcall hook compilation-buffer msg))))
+	(when-let* ((hook (builder-candidate-hook candidate)))
+	  (add-one-shot-hook :name (format "post-%s-hook-operation" op-name)
+	   :hook 'compilation-finish-functions
+	   :make-unique t
+	   :local t
+	   :args (compilation-buffer msg)
+	   :form (funcall hook compilation-buffer msg)))
 
 	(let ((op-window (get-buffer-window (current-buffer) (selected-frame))))
 	  (if op-window (select-window op-window)
@@ -269,27 +265,27 @@ priority from CANDIDATES, with key length as a final tiebreaker."
 (defun builder--read-command (&optional command table)
   (let* ((candidates (or table
 			 (builder--get-candidates default-directory command)))
-         (annotation-table (let ((tbl (make-hash-table :test #'equal)))
-                             (map-do (lambda (name cand)
-                                        (map-put! tbl name (builder-candidate-annotation cand)))
-                                      candidates)
-                             tbl))
-         (selection-name
+         (selection
           (annotated-completing-read
-           annotation-table
+           (map-into
+            (seq-map (lambda (name)
+                       (let ((cand (map-elt candidates name)))
+                         (cons name (cons (builder-candidate-annotation cand) cand))))
+                     (map-keys candidates))
+            'hash-table)
            :prompt "compile command => "
            :require-match nil
            :history 'compile-history
            :sort-fn (builder--make-sort-fn candidates 'compile-history)))
-	 (candidate (or (map-elt candidates selection-name)
-			(let ((new-candidate (make-builder-candidate
-					       :command selection-name
-					       :directory default-directory
-					       :annotation "user input")))
-			  (builder--add-candidate candidates new-candidate)
-			  new-candidate)))
-	 (operation-name (builder-candidate-name candidate)))
-    (cons operation-name candidates)))
+	 (candidate (if (builder-candidate-p selection)
+			selection
+		      (let ((new-candidate (make-builder-candidate
+					     :command selection
+					     :directory default-directory
+					     :annotation "user input")))
+			(builder--add-candidate candidates new-candidate)
+			new-candidate))))
+    (cons candidate candidates)))
 
 (cl-defun builder--project-compilation-buffers (&optional &key name (project (approximate-project-name)))
   "Return a hash table of candidate compilation buffer names for PROJECT."
