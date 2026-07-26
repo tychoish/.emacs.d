@@ -1436,6 +1436,7 @@ clipboard."
   (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "migration" "agent" "plan" "singing"))
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
+  (setq denote-save-buffers t)
   (setq denote-prompts '(title keywords file-type))
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)

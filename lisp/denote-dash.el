@@ -976,6 +976,42 @@ combines with both via AND. Empty input clears the content filter."
   (setq denote-dash--narrowed-sequences nil)
   (denote-dash-refresh))
 
+;;; Unified filter menu
+
+(defconst denote-dash-filter-menu-actions
+  '(("sequence: toggle one"      denote-dash-toggle-sequence-narrow "add/remove one sequence prefix from the narrow set")
+    ("sequence: narrow (multi)"  denote-dash-narrow-to-sequence      "replace the narrow set, picking several at once")
+    ("sequence: widen (clear)"   denote-dash-widen                   "clear sequence narrowing")
+    ("tags: toggle one"          denote-dash-toggle-keyword          "add/remove one keyword from the filter")
+    ("tags: filter (multi)"      denote-dash-filter                  "replace the keyword filter, picking several at once")
+    ("tags: clear"               denote-dash-clear-filter            "clear the keyword filter")
+    ("expression: raw filter"    denote-dash-filter-expression       "set the filter from a Lisp (and/or/not ...) expression")
+    ("expression: shortcut"      denote-dash-filter-shortcut         "apply a named preset from `denote-dash-filter-shortcuts'")
+    ("content: grep"             denote-dash-filter-grep             "restrict to notes whose content matches a regexp")
+    ("content: clear grep"       denote-dash-clear-grep-filter       "clear the content (grep) filter")
+    ("directory: cycle"          denote-dash-cycle-directory         "cycle through configured Denote directories"))
+  "Actions for `denote-dash-filter-menu', as (NAME FN DESCRIPTION).
+Grouped by independent filter dimension — sequence prefix, tags/keywords,
+raw expression, content (grep), and directory — since each combines with
+the others via AND in `denote-dash--file-visible-p' rather than replacing
+it; picking one dimension here never resets another.")
+
+(defun denote-dash-filter-menu ()
+  "Pick and run one filter/narrow action, grouped by dimension.
+Single entry point over the existing sequence-narrow, keyword-filter,
+expression-filter, content-filter, and directory commands — those
+dimensions stay independent (see `denote-dash-filter-menu-actions');
+this only adds a discoverable `/' in front of them."
+  (interactive)
+  (let* ((table (seq-map (lambda (e) (cons (car e) (nth 2 e))) denote-dash-filter-menu-actions))
+         (choice (annotated-completing-read
+                  table
+                  :prompt "Filter/narrow: "
+                  :require-match t
+                  :category 'command))
+         (fn (nth 1 (assoc choice denote-dash-filter-menu-actions))))
+    (call-interactively fn)))
+
 ;;; Directory restriction
 
 (defun denote-dash-cycle-directory ()
@@ -1542,6 +1578,46 @@ fallback prompt even when the visited buffer unambiguously named FILE."
       (denote-dash-note-prompt "select denote: ")
       (user-error "must specify denote file")))
 
+;;; Hierarchy-view actions menu
+
+(defconst denote-dash-hierarchy-actions
+  '(("rename"             denote-dash-rename-file                   "change title/keywords/signature")
+    ("rename from fm"     denote-dash-rename-file-using-front-matter "sync filename to front matter")
+    ("retag"              denote-dash-retag-file                     "add/remove keywords")
+    ("reparent"           denote-dash-reparent                       "move under a new (or no) parent")
+    ("renumber"           denote-dash-renumber-recursive             "move to a specific sequence, recursively")
+    ("swap with parent"   denote-dash-swap-with-parent               "swap sequence position with parent")
+    ("swap with previous" denote-dash-swap-with-previous             "swap with previous sibling (with descendants)")
+    ("swap with next"     denote-dash-swap-with-next                 "swap with next sibling (with descendants)"))
+  "Actions for `denote-dash-hierarchy-actions-menu', as (NAME FN DESCRIPTION).
+Each FN already resolves its target file from `denote-dash--file-at-point'
+via its own interactive spec, so the menu itself never has to.")
+
+;;;###autoload
+(defun denote-dash-hierarchy-actions-menu ()
+  "Pick and run a rename/retag/sequence action on the hierarchy row at point.
+Candidates come from `denote-dash-hierarchy-actions'; each is one of the
+existing rename/retag/sequence commands, so this only adds a single
+entry point over them, not new file-mutating logic. Refreshes the
+hierarchy view in place afterward via `revert-buffer', so a rename,
+retag, or renumber shows up immediately without leaving the buffer."
+  (interactive)
+  (unless (denote-dash--file-at-point)
+    (user-error "No note at point"))
+  (let* ((table (seq-map (lambda (e) (cons (car e) (nth 2 e))) denote-dash-hierarchy-actions))
+         (choice (annotated-completing-read
+                  table
+                  :prompt "Hierarchy action: "
+                  :require-match t
+                  :category 'command))
+         (fn (nth 1 (assoc choice denote-dash-hierarchy-actions))))
+    (call-interactively fn)
+    (when (derived-mode-p 'denote-sequence-hierarchy-mode)
+      (revert-buffer))))
+
+(define-key denote-sequence-hierarchy-mode-map (kbd "a")
+            #'denote-dash-hierarchy-actions-menu)
+
 ;;; Dispatch transient
 ;;
 ;; Row 1: Find, Create, Rename, Sequence, View
@@ -1623,13 +1699,15 @@ fallback prompt even when the visited buffer unambiguously named FILE."
     ("ed" "duplicates"         denote-explore-duplicate-notes)]
    ["Dash" :if-derived denote-dash-mode
     ("c" "toggle columns…"     denote-dash-column-transient)
+    ("w/" "filter menu"        denote-dash-filter-menu)
     ("ws" "narrow to seq(s)"   denote-dash-narrow-to-sequence)
     ("wt" "toggle seq"         denote-dash-toggle-sequence-narrow)
     ("ww" "widen"              denote-dash-widen)
-    ("wk" "toggle keyword"     denote-dash-toggle-keyword)]
+    ("wk" "toggle keyword"     denote-dash-toggle-keyword)
     ("wg" "grep filter"        denote-dash-filter-grep)
     ("wc" "clear grep filter"  denote-dash-clear-grep-filter)]
    ["Hierarchy" :if-derived denote-sequence-hierarchy-mode
+    ("ha" "actions menu"       denote-dash-hierarchy-actions-menu)
     ("hz" "toggle persist fold" denote-dash-hierarchy-toggle-fold-sequence)
     ("hc" "clear persisted folds" denote-dash-hierarchy-clear-fold-sequences)]
    ["Org" :if-derived org-mode
