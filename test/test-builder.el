@@ -10,7 +10,10 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'ht)
+
 (require 'builder)
+(require 'sprite)
+(require 'sprite-direct)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; builder-candidate struct
@@ -488,6 +491,196 @@ so callers no longer need to look it back up with `map-elt'."
                (lambda (_mode) (list (current-buffer)))))
       (builder-reset-finish-hooks))
     (should (null compilation-finish-functions))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; isolated subprocess checks (byte-compile/load/test)
+
+(defun builder-test--write-temp-el (contents)
+  "Write CONTENTS to a fresh temp .el file and return its absolute path.
+Since it is already absolute, `expand-file-name' against
+`user-emacs-directory' (as callers do with FILE) leaves it unchanged."
+  (make-temp-file "builder-test-isolated-" nil ".el"
+                  (concat ";; -*- lexical-binding: t; -*-\n" contents)))
+
+(ert-deftest builder-test/report-log-creates-and-replaces-buffer ()
+  "`builder-emacs-conf--report-log' (re)populates a named buffer with OUTPUT."
+  (unwind-protect
+      (progn
+        (builder-emacs-conf--report-log "*builder-test-log*" "first")
+        (should (equal "first" (with-current-buffer "*builder-test-log*" (buffer-string))))
+        (builder-emacs-conf--report-log "*builder-test-log*" "second")
+        (should (equal "second" (with-current-buffer "*builder-test-log*" (buffer-string)))))
+    (kill-buffer "*builder-test-log*")))
+
+(ert-deftest builder-test/report-log-works-on-read-only-buffer ()
+  "Regression: a real `*Compile-Log*' is left read-only by `byte-compile-file',
+so `builder-emacs-conf--report-log' must not error out on one."
+  (unwind-protect
+      (progn
+        (with-current-buffer (get-buffer-create "*builder-test-log*")
+          (setq buffer-read-only t))
+        (builder-emacs-conf--report-log "*builder-test-log*" "replaced")
+        (should (equal "replaced" (with-current-buffer "*builder-test-log*" (buffer-string)))))
+    (kill-buffer "*builder-test-log*")))
+
+(ert-deftest builder-test/byte-compile-and-delete-artifact-still-compiles-no-byte-compile-file ()
+  "A file declaring `no-byte-compile: t' is still validated, not silently skipped."
+  (let ((file (make-temp-file "builder-test-nbc-" nil ".el"
+                              ";; -*- lexical-binding: t; no-byte-compile: t; -*-\n(defun builder-test-nbc-fn () (undefined-and-unmatched-paren\n")))
+    (unwind-protect
+        (should-not (builder-emacs-conf-byte-compile-and-delete-artifact file))
+      (delete-file file))))
+
+(ert-deftest builder-test/byte-compile-and-delete-artifact-passes-clean-file ()
+  "A file with no compile errors returns t and leaves no .elc behind."
+  (let ((file (builder-test--write-temp-el "(defun builder-test-clean-fn (x) (+ x 1))\n(provide 'builder-test-clean)\n")))
+    (unwind-protect
+        (progn
+          (should (builder-emacs-conf-byte-compile-and-delete-artifact file))
+          (should-not (file-exists-p (concat (file-name-sans-extension
+                                              (expand-file-name file user-emacs-directory))
+                                             ".elc"))))
+      (delete-file (expand-file-name file user-emacs-directory)))))
+
+(ert-deftest builder-test/byte-compile-and-delete-artifact-fails-on-syntax-error ()
+  "A file with invalid read syntax returns nil, and the log is populated."
+  (let ((file (builder-test--write-temp-el "(defun builder-test-broken-fn (x (+ x 1))\n")))
+    (unwind-protect
+        (progn
+          (should-not (builder-emacs-conf-byte-compile-and-delete-artifact file))
+          (should (> (length (with-current-buffer "*Compile-Log*" (buffer-string))) 0)))
+      (delete-file (expand-file-name file user-emacs-directory)))))
+
+(ert-deftest builder-test/load-check-passes-clean-file ()
+  "A file that loads without error returns t."
+  (let ((file (builder-test--write-temp-el "(defun builder-test-load-ok-fn () t)\n(provide 'builder-test-load-ok)\n")))
+    (unwind-protect
+        (should (builder-emacs-conf-load-check file))
+      (delete-file (expand-file-name file user-emacs-directory)))))
+
+(ert-deftest builder-test/load-check-fails-on-undefined-function-call ()
+  "A file that calls an undefined function at load time returns nil.
+This is the isolation regression case: the isolated subprocess has none
+of this session's already-loaded features, so a call to a function this
+file never requires fails to load instead of silently succeeding."
+  (let ((file (builder-test--write-temp-el "(builder-test-totally-undefined-fn-xyz)\n")))
+    (unwind-protect
+        (progn
+          (should-not (builder-emacs-conf-load-check file))
+          (should (string-match-p "builder-test-totally-undefined-fn-xyz"
+                                  (with-current-buffer "*builder-load-check-log*" (buffer-string)))))
+      (delete-file (expand-file-name file user-emacs-directory)))))
+
+(ert-deftest builder-test/elisp-package-test-isolated-passes-and-fails ()
+  "Runs a throwaway elisp package's ERT suite in isolation, both ways."
+  (let* ((root (file-name-as-directory (make-temp-file "builder-test-pkg-" t)))
+         (test-dir (expand-file-name "test" root)))
+    (unwind-protect
+        (progn
+          (make-directory test-dir t)
+          (with-temp-file (expand-file-name (concat (file-name-nondirectory (directory-file-name root)) ".el") root)
+            (insert ";; -*- lexical-binding: t; -*-\n(defun builder-test-pkg-add (a b) (+ a b))\n(provide '"
+                    (file-name-nondirectory (directory-file-name root)) ")\n"))
+          (with-temp-file (expand-file-name "test-pkg.el" test-dir)
+            (insert "(ert-deftest builder-test-pkg/add () (should (= 3 (builder-test-pkg-add 1 2))))\n"))
+          (should (builder-emacs-conf-elisp-package-test-isolated root))
+
+          (with-temp-file (expand-file-name "test-pkg.el" test-dir)
+            (insert "(ert-deftest builder-test-pkg/add () (should (= 4 (builder-test-pkg-add 1 2))))\n"))
+          (should-not (builder-emacs-conf-elisp-package-test-isolated root)))
+      (delete-directory root t))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; sprite transport (mocked -- no live daemon; see the `sprite' package's
+;; own integration suite for real socket coverage of `sprite-direct')
+
+(ert-deftest builder-test/sprite-eval-resolves-target-and-wraps-form ()
+  "`builder-emacs-conf-sprite-eval' opens the sprite's target and sends
+FORM wrapped in `(progn (require \\='builder) FORM)'."
+  (let (sent-target sent-form)
+    (cl-letf (((symbol-function 'sprite-get-or-create-next) (lambda () 'fake-sprite))
+              ((symbol-function 'sprite-name) (lambda (_s) "worker-0"))
+              ((symbol-function 'sprite-direct-open)
+               (lambda (target) (setq sent-target target) target))
+              ((symbol-function 'sprite-direct-eval-non-blocking)
+               (lambda (conn form) (setq sent-form form) (list 'promise conn form))))
+      (let ((promise (builder-emacs-conf-sprite-eval '(+ 1 2))))
+        (should (equal "worker-0" sent-target))
+        (should (equal '(progn (require 'builder) (+ 1 2)) sent-form))
+        (should (equal '(promise "worker-0" (progn (require 'builder) (+ 1 2))) promise))))))
+
+(ert-deftest builder-test/sprite-eval-callback-wired-via-promise-then ()
+  "CALLBACK is wired via `sprite-direct-promise-then' when given, and left
+untouched when omitted."
+  (let (then-called)
+    (cl-letf (((symbol-function 'sprite-get-or-create-next) (lambda () 'fake-sprite))
+              ((symbol-function 'sprite-name) (lambda (_s) "worker-0"))
+              ((symbol-function 'sprite-direct-open) #'identity)
+              ((symbol-function 'sprite-direct-eval-non-blocking) (lambda (&rest _) 'fake-promise))
+              ((symbol-function 'sprite-direct-promise-then)
+               (lambda (promise callback) (setq then-called (list promise callback)))))
+      (builder-emacs-conf-sprite-eval '(+ 1 1))
+      (should-not then-called)
+      (let ((cb (lambda (_state _value) nil)))
+        (builder-emacs-conf-sprite-eval '(+ 1 1) :callback cb)
+        (should (equal (list 'fake-promise cb) then-called))))))
+
+(ert-deftest builder-test/sprite-byte-compile-check-sends-do-check-form ()
+  "`builder-emacs-conf-sprite-byte-compile-check' evaluates
+`builder-emacs-conf--do-byte-compile-check' with the expanded file path."
+  (let (sent-form)
+    (cl-letf (((symbol-function 'builder-emacs-conf-sprite-eval)
+               (lambda (form &rest _) (setq sent-form form) 'fake-promise)))
+      (should (eq 'fake-promise (builder-emacs-conf-sprite-byte-compile-check "lisp/foo.el")))
+      (should (equal `(builder-emacs-conf--do-byte-compile-check
+                       ,(expand-file-name "lisp/foo.el" user-emacs-directory))
+                     sent-form)))))
+
+(ert-deftest builder-test/sprite-load-check-sends-do-check-form ()
+  "`builder-emacs-conf-sprite-load-check' evaluates
+`builder-emacs-conf--do-load-check' with the expanded file path."
+  (let (sent-form)
+    (cl-letf (((symbol-function 'builder-emacs-conf-sprite-eval)
+               (lambda (form &rest _) (setq sent-form form) 'fake-promise)))
+      (should (eq 'fake-promise (builder-emacs-conf-sprite-load-check "lisp/foo.el")))
+      (should (equal `(builder-emacs-conf--do-load-check
+                       ,(expand-file-name "lisp/foo.el" user-emacs-directory))
+                     sent-form)))))
+
+(ert-deftest builder-test/sprite-test-check-sends-do-check-form-with-root ()
+  "`builder-emacs-conf-sprite-test-check' evaluates
+`builder-emacs-conf--do-elisp-package-test-check' with the expanded root."
+  (let (sent-form)
+    (cl-letf (((symbol-function 'builder-emacs-conf-sprite-eval)
+               (lambda (form &rest _) (setq sent-form form) 'fake-promise)))
+      (should (eq 'fake-promise (builder-emacs-conf-sprite-test-check "external/foo")))
+      (should (equal `(builder-emacs-conf--do-elisp-package-test-check
+                       ,(expand-file-name "external/foo"))
+                     sent-form)))))
+
+(ert-deftest builder-test/sprite-check-callback-reports-log-and-passes ()
+  "The default sprite-check callback populates BUFFER-NAME and reports success."
+  (let (alert-message)
+    (cl-letf (((symbol-function 'alert) (lambda (msg &rest _kw) (setq alert-message msg))))
+      (unwind-protect
+          (progn
+            (funcall (builder-emacs-conf--sprite-check-callback "*builder-test-sprite-log*" "some-file")
+                     :resolved (cons t "all good"))
+            (should (equal "all good" (with-current-buffer "*builder-test-sprite-log*" (buffer-string))))
+            (should (string-match-p "passed" alert-message)))
+        (kill-buffer "*builder-test-sprite-log*")))))
+
+(ert-deftest builder-test/sprite-check-callback-reports-failure ()
+  "The default sprite-check callback reports FAILED on a rejected promise
+or a resolved-but-unsuccessful result alike."
+  (let (alert-message)
+    (cl-letf (((symbol-function 'alert) (lambda (msg &rest _kw) (setq alert-message msg))))
+      (unwind-protect
+          (progn
+            (funcall (builder-emacs-conf--sprite-check-callback "*builder-test-sprite-log*" "some-file")
+                     :rejected (cons nil "boom"))
+            (should (string-match-p "FAILED" alert-message)))
+        (kill-buffer "*builder-test-sprite-log*")))))
 
 (provide 'test-builder)
 ;;; test-builder.el ends here

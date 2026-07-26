@@ -60,6 +60,12 @@
 (defvar package-build-verbose)
 (defvar package-build-releases)
 
+(declare-function sprite-name "sprite")
+(declare-function sprite-get-or-create-next "sprite")
+(declare-function sprite-direct-open "sprite-direct")
+(declare-function sprite-direct-eval-non-blocking "sprite-direct")
+(declare-function sprite-direct-promise-then "sprite-direct")
+
 (f-directories-containing-file-with-extension-function "go")
 (f-directories-containing-file-with-extension-function "py")
 (f-directories-containing-file-with-extension-function "rs")
@@ -1197,7 +1203,7 @@ opens the *ert* selector."
       (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
     (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
     (let* ((test-dir (f-join root "test"))
-           (load-path (seq-filter #'identity (list root (and (file-directory-p test-dir) test-dir) load-path))))
+           (load-path (append (seq-filter #'identity (list root (and (file-directory-p test-dir) test-dir))) load-path)))
       (load main-file nil t)
       (dolist (it (builder-elisp-package--source-files root))
         (unless (f-equal-p it main-file)
@@ -1505,21 +1511,38 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
     (let ((stats (ert-run-tests-batch t)))
       (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
 
-;;;###autoload
-(defun builder-emacs-conf-byte-compile-and-delete-artifact (file)
-  "Byte-compile FILE for error checking, then delete the .elc artifact.
-FILE is resolved relative to `user-emacs-directory'.
+;; Isolated checks: byte-compile / load / run tests somewhere other than
+;; the calling process, so its already-loaded packages, advice, or
+;; interactively-defined state can't mask a real problem.  Two
+;; non-overlapping transports; do not layer one on the other:
+;;
+;;   - subprocess (`emacs --batch', below): a throwaway process with only
+;;     lisp/ on `load-path'.  Catches a missing `require' -- there is no
+;;     "something else already loaded it" to fall back on.  A missing
+;;     `require' is still only a byte-compiler *warning*, so always check
+;;     the log, not just the returned boolean.
+;;
+;;   - sprite (further below): a persistent, already-running daemon with
+;;     the same init.el and loaded state as this session, so it does
+;;     *not* catch a missing `require'.  What it catches is this session
+;;     itself being the problem -- stale advice, a redefined function,
+;;     leftover buffer-local state from an in-progress task.
 
-Returns t if compilation produced no errors, nil otherwise; see
-`*Compile-Log*' for warnings and errors.  Intended for use by agent skills
-via emacsclient:
-  emacsclient --eval \\='(builder-emacs-conf-byte-compile-and-delete-artifact \"lisp/foo.el\")\\='"
-  (let* ((expanded (expand-file-name file user-emacs-directory))
-         (scratch (make-temp-file "builder-emacs-conf-byte-compile-" nil ".el")))
+(defun builder-emacs-conf--do-byte-compile-check (file)
+  "Byte-compile FILE; return (cons SUCCESS-P LOG).
+Strips a `no-byte-compile: t' local variable from a scratch copy first,
+so files like `bootstrap.el' that opt out of the normal build are still
+validated here.  LOG is only the portion of `*Compile-Log*' this call
+appended, so repeated calls in one process (as sprite checks do) don't
+return a prior call's leftovers.  Never signals; safe in any process."
+  (let* ((scratch (make-temp-file "builder-emacs-conf-byte-compile-" nil ".el"))
+         (elc (concat (file-name-sans-extension scratch) ".elc"))
+         (log-buf (get-buffer "*Compile-Log*"))
+         (log-start (when log-buf (with-current-buffer log-buf (point-max)))))
     (unwind-protect
         (progn
           (with-temp-buffer
-            (insert-file-contents expanded)
+            (insert-file-contents file)
             (goto-char (point-min))
             (when (re-search-forward "-\\*-.*-\\*-" (line-end-position) t)
               (replace-match
@@ -1528,11 +1551,299 @@ via emacsclient:
                 (match-string 0))
                t t))
             (write-region (point-min) (point-max) scratch nil 'silent))
-          (byte-compile-file scratch))
-      (let ((elc (concat (file-name-sans-extension scratch) ".elc")))
-        (when (file-exists-p elc)
-          (delete-file elc)))
+          (let* ((success (and (byte-compile-file scratch) t))
+                 (log-buf (get-buffer "*Compile-Log*")))
+            (cons success
+                  (when log-buf
+                    (with-current-buffer log-buf
+                      (buffer-substring-no-properties (or log-start (point-min)) (point-max)))))))
+      (when (file-exists-p elc)
+        (delete-file elc))
       (delete-file scratch))))
+
+(defun builder-emacs-conf--do-load-check (file)
+  "Load FILE; return (cons SUCCESS-P MESSAGE), MESSAGE nil on success.
+Never signals, unlike plain `load' -- both transports below need a value
+back across a process/wire boundary, not a propagated backtrace."
+  (condition-case err
+      (progn (load file nil t) (cons t nil))
+    (error (cons nil (error-message-string err)))))
+
+(defun builder-emacs-conf--do-elisp-package-test-check (root)
+  "Run ERT tests for the elisp package at ROOT; return (cons SUCCESS-P LOG).
+Loads the package the same way `builder-elisp-package-test' does, then
+runs only the tests those files just defined -- never
+`ert-run-tests-batch-and-exit' (calls `kill-emacs', fatal to a shared
+sprite daemon) and never \"every test the process knows about\" (would
+pull in unrelated suites in a reused sprite)."
+  (require 'ert)
+  (let* ((root (file-name-as-directory root))
+         (main-file (builder-elisp-package--main-file root)))
+    (unless main-file
+      (error "no <%s>.el at %s" (builder-elisp-package--name root) root))
+    (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
+    (let* ((test-dir (f-join root "test"))
+           (load-path (append (seq-filter #'identity (list root (and (file-directory-p test-dir) test-dir))) load-path))
+           (known-before (ert-select-tests t t)))
+      (load main-file nil t)
+      (seq-do (lambda (it) (unless (f-equal-p it main-file) (load it nil t)))
+              (builder-elisp-package--source-files root))
+      (seq-do (lambda (it) (load it nil t)) (builder-elisp-package--test-files root))
+      (let* ((new-tests (seq-difference (ert-select-tests t t) known-before))
+             (stats (ert-run-tests-batch (and new-tests (cons 'member new-tests)))))
+        (cons (zerop (ert-stats-completed-unexpected stats))
+              (format "%d/%d tests passed%s"
+                      (- (ert-stats-completed stats) (ert-stats-completed-unexpected stats))
+                      (ert-stats-total stats)
+                      (if (zerop (ert-stats-completed-unexpected stats))
+                          ""
+                        (format ", %d unexpected" (ert-stats-completed-unexpected stats)))))))))
+
+(defun builder-emacs-conf--read-result-file (result-file fallback-string)
+  "Read a (SUCCESS-P . LOG) cons written by `prin1' to RESULT-FILE.
+`make-temp-file' creates RESULT-FILE empty, so existence alone can't
+distinguish a written result from a child that crashed first -- checks
+for actual content, falling back to (cons nil FALLBACK-STRING)."
+  (if (> (file-attribute-size (file-attributes result-file)) 0)
+      (with-temp-buffer
+        (insert-file-contents result-file)
+        (read (current-buffer)))
+    (cons nil fallback-string)))
+
+(defun builder-emacs-conf--report-log (buffer-name output)
+  "Replace the contents of BUFFER-NAME with OUTPUT, creating it if needed.
+Leaves an isolated check's log inspectable under a well-known buffer
+name the way `*Compile-Log*' would be for an in-process compile; clears
+`inhibit-read-only' since that buffer is normally read-only."
+  (with-current-buffer (get-buffer-create buffer-name)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (or output "")))))
+
+;;;; async.el transport -- throwaway `emacs --batch' subprocess
+
+(defun builder-emacs-conf--isolated-batch-eval (form)
+  "Evaluate FORM in an isolated `emacs --batch' subprocess; return its value.
+The child has lisp/ on `load-path' and `builder' loaded, but none of the
+calling session's other packages, advice, or interactive state.  The
+return value crosses via a scratch result file, not stdout/stderr (which
+byte-compiler warnings also write to).  Returns (cons nil PROCESS-OUTPUT)
+if the child never wrote a result -- e.g. FORM signaled outside its own
+`condition-case', as the `do-*' checks above are careful not to."
+  (let* ((result-file (make-temp-file "builder-isolated-result-"))
+         (buf (generate-new-buffer " *builder-isolated-batch*")))
+    (unwind-protect
+        (progn
+          (call-process "emacs" nil buf nil
+                        "--batch" "-L" (expand-file-name "lisp" user-emacs-directory)
+                        "-f" "package-initialize" "--eval" "(require 'builder)"
+                        "--eval" (format "(with-temp-file %S (prin1 %S (current-buffer)))"
+                                        result-file form))
+          (builder-emacs-conf--read-result-file
+           result-file (with-current-buffer buf (buffer-string))))
+      (kill-buffer buf)
+      (when (file-exists-p result-file)
+        (delete-file result-file)))))
+
+;;;###autoload
+(defun builder-emacs-conf-byte-compile-and-delete-artifact (file)
+  "Byte-compile FILE for error checking in an isolated subprocess.
+FILE is resolved relative to `user-emacs-directory'.  Use this instead of
+plain `byte-compile-file'; see the isolation note above
+`builder-emacs-conf--do-byte-compile-check' for what that catches.
+
+Returns t if compilation produced no errors; check `*Compile-Log*'
+regardless, since a missing `require' shows up there as a warning
+(\"is not known to be defined\"), not necessarily a failure. For agent
+skills via emacsclient:
+  emacsclient --eval \\='(builder-emacs-conf-byte-compile-and-delete-artifact \"lisp/foo.el\")\\='"
+  (let* ((expanded (expand-file-name file user-emacs-directory))
+         (result (builder-emacs-conf--isolated-batch-eval
+                  `(builder-emacs-conf--do-byte-compile-check ,expanded))))
+    (builder-emacs-conf--report-log "*Compile-Log*" (cdr result))
+    (car result)))
+
+;;;###autoload
+(defun builder-emacs-conf-load-check (file)
+  "Load FILE in an isolated subprocess to check it loads cleanly.
+FILE is resolved relative to `user-emacs-directory'.  Use this instead of
+plain `load'; see the isolation note above
+`builder-emacs-conf--do-byte-compile-check' for what that catches.  A
+missing `require' surfaces here as a real void-function/void-variable
+error instead of silently succeeding.
+
+Returns t if FILE loaded without error; any error is left in
+`*builder-load-check-log*'. For agent skills via emacsclient:
+  emacsclient --eval \\='(builder-emacs-conf-load-check \"lisp/foo.el\")\\='"
+  (let* ((expanded (expand-file-name file user-emacs-directory))
+         (result (builder-emacs-conf--isolated-batch-eval
+                  `(builder-emacs-conf--do-load-check ,expanded))))
+    (builder-emacs-conf--report-log "*builder-load-check-log*" (cdr result))
+    (car result)))
+
+;;;###autoload
+(defun builder-emacs-conf-elisp-package-test-isolated (&optional root)
+  "Run ERT tests for the elisp package at ROOT in an isolated subprocess.
+ROOT defaults to `approximate-project-root'.  Use this instead of
+`builder-elisp-package-test'; see the isolation note above
+`builder-emacs-conf--do-byte-compile-check' for what that catches.
+
+Returns t if all tests passed; the ERT summary is left in
+`*builder-test-check-log*'. For agent skills via emacsclient:
+  emacsclient --eval \\='(builder-emacs-conf-elisp-package-test-isolated \"external/foo\")\\='"
+  (let* ((root (expand-file-name (or root (approximate-project-root))))
+         (result (builder-emacs-conf--isolated-batch-eval
+                  `(builder-emacs-conf--do-elisp-package-test-check ,root))))
+    (builder-emacs-conf--report-log "*builder-test-check-log*" (cdr result))
+    (car result)))
+
+;;;###autoload
+(defun builder-emacs-conf-async-byte-compile-check (&optional file)
+  "Byte-compile FILE in an isolated subprocess without blocking Emacs.
+FILE defaults to the current buffer's file, resolved relative to
+`user-emacs-directory'.  Use this over
+`builder-emacs-conf-byte-compile-and-delete-artifact' for interactive
+use, where blocking on the subprocess would freeze Emacs.  Reports
+pass/fail with `alert' and leaves the compile log in `*Compile-Log*',
+displaying that buffer on failure."
+  (interactive (list (buffer-file-name)))
+  (let* ((expanded (expand-file-name file user-emacs-directory))
+         (result-file (make-temp-file "builder-isolated-result-")))
+    (async-start-process
+     "builder-async-byte-compile" "emacs"
+     (lambda (proc)
+       (let* ((result (builder-emacs-conf--read-result-file
+                       result-file (with-current-buffer (process-buffer proc) (buffer-string))))
+              (success (car result)))
+         (when (file-exists-p result-file)
+           (delete-file result-file))
+         (builder-emacs-conf--report-log "*Compile-Log*" (cdr result))
+         (alert (format "isolated byte-compile %s" (if success "passed" "FAILED"))
+                :title (format "builder-emacs-conf-async-byte-compile-check: %s" file))
+         (if success
+             (kill-buffer (process-buffer proc))
+           (display-buffer "*Compile-Log*"))))
+     "--batch" "-L" (expand-file-name "lisp" user-emacs-directory)
+     "-f" "package-initialize" "--eval" "(require 'builder)"
+     "--eval" (format "(with-temp-file %S (prin1 (builder-emacs-conf--do-byte-compile-check %S) (current-buffer)))"
+                      result-file expanded))))
+
+;;;; sprite transport -- persistent daemon, reached over sprite-direct
+
+(cl-defun builder-emacs-conf-sprite-eval (form &key sprite callback)
+  "Evaluate FORM in a persistent sprite; return a `sprite-direct-promise'.
+Gets or creates a sprite via `sprite-get-or-create-next' (or uses SPRITE,
+a `sprite' struct, when given).  Use this over the subprocess transport
+above to rule out this session's own state -- stale advice, redefined
+functions -- as the cause of a failure; it will not catch a missing
+`require', since the sprite already has whatever this session has.  FORM
+runs after `(require \\='builder)', so the `builder-emacs-conf--do-*'
+checks can be called directly.  Never blocks; with CALLBACK, it's wired
+via `sprite-direct-promise-then' and called with (STATE VALUE) once the
+sprite responds -- without one, poll the promise or call
+`sprite-direct-promise-wait'."
+  (require 'sprite)
+  (require 'sprite-direct)
+  (let* ((target (sprite-name (or sprite (sprite-get-or-create-next))))
+         (conn (sprite-direct-open target))
+         (promise (sprite-direct-eval-non-blocking conn `(progn (require 'builder) ,form))))
+    (when callback
+      (sprite-direct-promise-then promise callback))
+    promise))
+
+(defun builder-emacs-conf--sprite-check-callback (buffer-name label)
+  "Return a `sprite-direct-promise' callback for a builder isolated check.
+Populates BUFFER-NAME with the log/message half of the check's (SUCCESS-P
+. LOG) result and reports pass/fail with `alert', titled LABEL."
+  (lambda (state value)
+    (builder-emacs-conf--report-log buffer-name (cdr value))
+    (alert (format "sprite check %s" (if (and (eq state :resolved) (car value)) "passed" "FAILED"))
+           :title label)))
+
+;;;###autoload
+(cl-defun builder-emacs-conf-sprite-byte-compile-check (file &key sprite callback)
+  "Byte-compile FILE in a persistent sprite instead of the calling process.
+FILE is resolved relative to `user-emacs-directory'.  Use to rule out
+this session's own state as the cause of a compile failure; see
+`builder-emacs-conf-sprite-eval'.  Returns a `sprite-direct-promise'
+immediately; without CALLBACK, pass/fail is reported with `alert' and
+the log is left in `*Compile-Log*' once the sprite responds."
+  (interactive (list (buffer-file-name)))
+  (let ((expanded (expand-file-name file user-emacs-directory)))
+    (builder-emacs-conf-sprite-eval
+     `(builder-emacs-conf--do-byte-compile-check ,expanded)
+     :sprite sprite
+     :callback (or callback
+                   (builder-emacs-conf--sprite-check-callback "*Compile-Log*" file)))))
+
+;;;###autoload
+(cl-defun builder-emacs-conf-sprite-load-check (file &key sprite callback)
+  "Load FILE in a persistent sprite instead of the calling process.
+FILE is resolved relative to `user-emacs-directory'.  Use to rule out
+this session's own state as the cause of a load failure; see
+`builder-emacs-conf-sprite-eval'.  Returns a `sprite-direct-promise'
+immediately; without CALLBACK, pass/fail is reported with `alert' and
+the result is left in `*builder-load-check-log*' once the sprite
+responds."
+  (interactive (list (buffer-file-name)))
+  (let ((expanded (expand-file-name file user-emacs-directory)))
+    (builder-emacs-conf-sprite-eval
+     `(builder-emacs-conf--do-load-check ,expanded)
+     :sprite sprite
+     :callback (or callback
+                   (builder-emacs-conf--sprite-check-callback "*builder-load-check-log*" file)))))
+
+;;;###autoload
+(cl-defun builder-emacs-conf-sprite-test-check (&optional root &key sprite callback)
+  "Run ERT tests for the elisp package at ROOT in a persistent sprite.
+ROOT defaults to `approximate-project-root'.  Use to rule out this
+session's own state as the cause of a test failure; see
+`builder-emacs-conf-sprite-eval'.  Returns a `sprite-direct-promise'
+immediately; without CALLBACK, pass/fail is reported with `alert' and
+the ERT summary is left in `*builder-test-check-log*' once the sprite
+responds."
+  (interactive (list (approximate-project-root)))
+  (let ((root (expand-file-name (or root (approximate-project-root)))))
+    (builder-emacs-conf-sprite-eval
+     `(builder-emacs-conf--do-elisp-package-test-check ,root)
+     :sprite sprite
+     :callback (or callback
+                   (builder-emacs-conf--sprite-check-callback "*builder-test-check-log*" root)))))
+
+;; Expose the isolated checks above as compile-buffer candidates, dispatched
+;; via emacsclient against this running session so `builder-emacs-conf-*'
+;; still does its own subprocess/sprite isolation internally.
+
+(builder-register-candidates
+ :name "emacs-lisp-file-isolated-check"
+ :pipeline
+ (when-let* ((filename (buffer-file-name))
+             (_ (derived-mode-p 'emacs-lisp-mode))
+             (short-name (f-collapse-homedir filename))
+             (basename (file-name-nondirectory filename))
+             (directory (f-dirname filename)))
+   (-l (make-builder-candidate
+        :name (format "isolated-byte-compile %s" basename)
+        :command (format "emacsclient --eval '(builder-emacs-conf-byte-compile-and-delete-artifact \"%s\")'" filename)
+        :directory directory
+        :annotation (format "byte-compile %s in a clean subprocess" short-name))
+       (make-builder-candidate
+        :name (format "isolated-load-check %s" basename)
+        :command (format "emacsclient --eval '(builder-emacs-conf-load-check \"%s\")'" filename)
+        :directory directory
+        :annotation (format "load %s in a clean subprocess" short-name)))))
+
+(builder-register-candidates
+ :name "emacs-lisp-package-isolated-test"
+ :pipeline
+ (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
+             (_ (builder-elisp-package-p project-root-directory))
+             (display-name (builder-elisp-package--name project-root-directory)))
+   (-l (make-builder-candidate
+        :name (format "test-package-isolated-<%s>" display-name)
+        :command (format "emacsclient --eval '(builder-emacs-conf-elisp-package-test-isolated \"%s\")'" project-root-directory)
+        :directory project-root-directory
+        :annotation (format "run ert tests for elisp package <%s> in an isolated subprocess" display-name)))))
 
 ;;;###autoload
 (defun builder-emacs-conf-native-compile-all ()

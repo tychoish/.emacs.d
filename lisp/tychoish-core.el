@@ -1076,6 +1076,13 @@
 	     builder-change-directory
 	     builder-emacs-conf-run-ci-tests
 	     builder-emacs-conf-byte-compile-and-delete-artifact
+	     builder-emacs-conf-load-check
+	     builder-emacs-conf-elisp-package-test-isolated
+	     builder-emacs-conf-async-byte-compile-check
+	     builder-emacs-conf-sprite-eval
+	     builder-emacs-conf-sprite-byte-compile-check
+	     builder-emacs-conf-sprite-load-check
+	     builder-emacs-conf-sprite-test-check
 	     builder-emacs-conf-native-compile-all
 	     builder-emacs-conf-byte-recompile-directory
 	     builder-emacs-conf-recompile-vendored-packages)
