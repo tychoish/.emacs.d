@@ -597,9 +597,9 @@ file never requires fails to load instead of silently succeeding."
 (ert-deftest builder-test/sprite-eval-resolves-target-and-wraps-form ()
   "`builder-emacs-conf-sprite-eval' opens the sprite's target and sends
 FORM wrapped in `(progn (require \\='builder) FORM)'."
-  (let (sent-target sent-form)
-    (cl-letf (((symbol-function 'sprite-get-or-create-next) (lambda () 'fake-sprite))
-              ((symbol-function 'sprite-name) (lambda (_s) "worker-0"))
+  (let (sent-target sent-form
+        (fake-sprite (sprite--make :name "worker-0")))
+    (cl-letf (((symbol-function 'sprite-get-or-create-next) (lambda () fake-sprite))
               ((symbol-function 'sprite-direct-open)
                (lambda (target) (setq sent-target target) target))
               ((symbol-function 'sprite-direct-eval-non-blocking)
@@ -612,9 +612,9 @@ FORM wrapped in `(progn (require \\='builder) FORM)'."
 (ert-deftest builder-test/sprite-eval-callback-wired-via-promise-then ()
   "CALLBACK is wired via `sprite-direct-promise-then' when given, and left
 untouched when omitted."
-  (let (then-called)
-    (cl-letf (((symbol-function 'sprite-get-or-create-next) (lambda () 'fake-sprite))
-              ((symbol-function 'sprite-name) (lambda (_s) "worker-0"))
+  (let (then-called
+        (fake-sprite (sprite--make :name "worker-0")))
+    (cl-letf (((symbol-function 'sprite-get-or-create-next) (lambda () fake-sprite))
               ((symbol-function 'sprite-direct-open) #'identity)
               ((symbol-function 'sprite-direct-eval-non-blocking) (lambda (&rest _) 'fake-promise))
               ((symbol-function 'sprite-direct-promise-then)
