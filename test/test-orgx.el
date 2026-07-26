@@ -62,14 +62,10 @@
   (should (eq orgx-minor-mode-commands-map
               (keymap-lookup orgx-minor-mode-map "C-c o"))))
 
-(ert-deftest orgx/personal-map-f-is-command ()
-  "f in orgx-minor-mode-commands-map is a command (not shadowed by archive prefix)."
-  (should (commandp (keymap-lookup orgx-minor-mode-commands-map "f"))))
-
-(ert-deftest orgx/personal-map-C-f-is-archive-submap ()
-  "C-f in orgx-minor-mode-commands-map leads to the archive submap."
+(ert-deftest orgx/personal-map-f-is-archive-submap ()
+  "f in orgx-minor-mode-commands-map leads to the archive submap."
   (should (eq orgx-minor-mode-archive-map
-              (keymap-lookup orgx-minor-mode-commands-map "C-f"))))
+              (keymap-lookup orgx-minor-mode-commands-map "f"))))
 
 (ert-deftest orgx/personal-map-c-is-capture-submap ()
   "c in orgx-minor-mode-commands-map leads to the capture submap."

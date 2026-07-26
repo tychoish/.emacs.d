@@ -877,16 +877,14 @@ new note's identifier reflects that date."
 ;;; C-c o audit (personal map vs global map)
 ;;;
 ;;; Personal (orgx-minor-mode-commands-map, active in org buffers via minor mode):
-;;;   s=org-agenda  a=orgx-agenda-view  u=orgx-agenda-untagged-in-file
-;;;   h=consult-org-heading  k=org-capture  f=orgx-agenda-files-open
+;;;   s=org-save-all-org-buffers  a=orgx-agenda-view  u=orgx-agenda-untagged-in-file
+;;;   h=consult-org-heading  k=org-capture  o=orgx-agenda-files-open
 ;;;   r=orgx-agenda-files-reload  /=orgx-agenda-for-file
 ;;;   t=org-set-tags-command  n=org-narrow-to-subtree
 ;;;   p=org-insert-property-drawer  w=org-refile  d=orgx-date-now
 ;;;   q=agent-shell-queue-org-refile-from-heading (set lazily on package load)
-;;;   C-s=org-save-all-org-buffers
 ;;;   c → orgx-minor-mode-capture-map (submap)
-;;;   C-f → orgx-minor-mode-archive-map (submap; f was archive before — moved to
-;;;          C-f to unblock f=orgx-agenda-files-open which was previously shadowed)
+;;;   f → orgx-minor-mode-archive-map (submap)
 ;;;
 ;;; Global (orgx-global-map, active everywhere):
 ;;;   a=orgx-agenda-view  c=orgx-capture  4=org-agenda
@@ -898,6 +896,7 @@ new note's identifier reflects that date."
 ;;; Cross-map precedence: minor-mode map shadows global in org buffers.
 ;;; Keys only in global (unreachable via minor-mode, acceptable):
 ;;;   4 (org-agenda direct), j (duplicate orgx-capture alias)
+;;;   f in global = orgx-agenda-files-open; f in personal = orgx-minor-mode-archive-map
 ;;;   c in global = orgx-capture; c in personal = orgx-minor-mode-capture-map
 ;;;     → in org buffers C-c o c opens capture submap; use C-c o c c for capture
 ;;;
