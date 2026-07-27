@@ -155,25 +155,25 @@
 
   (defvar erc-channels-to-visit nil
     "Channels that have not yet been visited by erc-next-channel-buffer")
+
   (defun erc-next-channel-buffer ()
     "Switch to the next unvisited channel. See erc-channels-to-visit"
     (interactive)
-    (when (null erc-channels-to-visit)
+    (unless erc-channels-to-visit
       (setq erc-channels-to-visit
             (remove (current-buffer) (erc-channel-list nil))))
-    (let ((target (pop erc-channels-to-visit)))
-      (if target
-          (switch-to-buffer target))))
+    (when-let* ((target (pop erc-channels-to-visit)))
+      (switch-to-buffer target)))
 
   (defun tychoish-next-erc-buffer ()
     "Switch to an IRC buffer, or run `erc-select'.
     When called repeatedly, cycle through the buffers."
     (interactive)
-    (let ((buffers (and (fboundp 'erc-buffer-list)
-                        (erc-buffer-list))))
-      (when (eq (current-buffer) (car buffers))
-        (bury-buffer)
-        (setq buffers (cdr buffers)))))
+    (when-let* ((buffers (and (fboundp 'erc-buffer-list)
+                              (erc-buffer-list)))
+		(eq (current-buffer) (car buffers)))
+      (bury-buffer)
+      (setq buffers (cdr buffers))))
 
   (defun ido-erc-buffer nil
     "Switch to ERC buffer using IDO to choose which one, or start ERC

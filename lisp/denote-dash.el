@@ -904,11 +904,10 @@ Without prefix ARG, build an AND expression; with prefix ARG, build OR."
 (defun denote-dash-filter-shortcut ()
   "Apply a named filter shortcut from `denote-dash-filter-shortcuts'."
   (interactive)
-  (when (null denote-dash-filter-shortcuts)
-    (user-error "No shortcuts configured; customize `denote-dash-filter-shortcuts'"))
-  (let* ((chosen (completing-read "Shortcut: "
-                                  (seq-map #'car denote-dash-filter-shortcuts) nil t))
-         (expr (cdr (assoc chosen denote-dash-filter-shortcuts))))
+  (let* ((shortcuts (or denote-dash-filter-shortcuts
+                        (user-error "No shortcuts configured; customize `denote-dash-filter-shortcuts'")))
+         (chosen (completing-read "Shortcut: " (seq-map #'car shortcuts) nil t))
+         (expr (cdr (assoc chosen shortcuts))))
     (setq denote-dash--current-filter expr)
     (denote-dash-refresh)))
 

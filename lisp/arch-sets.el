@@ -193,10 +193,9 @@ This is the one explicit confirmation step that installs anything —
 loading a file into `arch-set-mode' never installs on its own."
   (interactive)
   (let* ((installed (arch-sets--installed-names))
-         (missing (seq-remove (lambda (e) (arch-sets--entry-installed-p e installed))
-                              arch-sets--entries)))
-    (when (null missing)
-      (user-error "No missing packages"))
+         (missing (or (seq-remove (lambda (e) (arch-sets--entry-installed-p e installed))
+                                  arch-sets--entries)
+                      (user-error "No missing packages"))))
     (when (yes-or-no-p (format "Install %d missing package%s? "
                                (length missing) (if (= (length missing) 1) "" "s")))
       (arch-sets--install-entries missing)

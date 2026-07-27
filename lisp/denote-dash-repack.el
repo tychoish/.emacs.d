@@ -284,9 +284,8 @@ untouched.  Works from `denote-dash-mode' or interactively."
                           (denote-retrieve-filename-signature f))))))
   (let* ((prefix (if (string-empty-p prefix) nil prefix))
          (children (denote-dash--sequence-direct-children prefix))
-         (sorted (denote-sequence-sort-files children)))
-    (when (null sorted)
-      (user-error "No children found for %s" (or prefix "(root)")))
+         (sorted (or (denote-sequence-sort-files children)
+                     (user-error "No children found for %s" (or prefix "(root)")))))
     (let* ((expected (seq-map-indexed
                       (lambda (_f i)
                         (denote-dash--compact-child-seq (1+ i) prefix))

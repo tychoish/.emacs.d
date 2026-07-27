@@ -1350,10 +1350,9 @@ Uses the current backend's `install-batch-fn' when available, so one
 operation and one shared worker buffer cover the whole batch; otherwise
 falls back to `arch--install-dispatch' per package."
   (interactive)
-  (let ((names (arch--list-marked-names))
+  (let ((names (or (arch--list-marked-names)
+		   (user-error "No packages marked")))
         (backend (or arch--list-backend (arch--default-backend))))
-    (when (null names)
-      (user-error "No packages marked"))
     (when (yes-or-no-p (format "Install %d marked packages? " (length names)))
       (if-let* ((fn (arch-backend-install-batch-fn backend)))
           (funcall fn names)
@@ -1362,10 +1361,9 @@ falls back to `arch--install-dispatch' per package."
 (defun arch-list-remove-marked ()
   "Remove all marked packages."
   (interactive)
-  (let ((names (arch--list-marked-names))
+  (let ((names (or (arch--list-marked-names)
+		   (user-error "No packages marked")))
         (fn (arch-backend-remove-fn (or arch--list-backend (arch--default-backend)))))
-    (when (null names)
-      (user-error "No packages marked"))
     (when (yes-or-no-p (format "Remove %d marked packages? " (length names)))
       (seq-do (lambda (name) (funcall fn name)) names))))
 
@@ -1596,9 +1594,8 @@ Rebuilds without pulling; use `arch-list-abs-install' to update the source first
    (progn
      (unless arch--cache-populated-p
        (arch--populate-cache))
-     (let* ((upgradeable (map-keys (arch--upgradeable-packages))))
-       (when (null upgradeable)
-         (user-error "No packages with available upgrades"))
+     (let* ((upgradeable (or (map-keys (arch--upgradeable-packages))
+                             (user-error "No packages with available upgrades"))))
        (list (annotated-completing-read
               (seq-map (lambda (name)
                          (cons name

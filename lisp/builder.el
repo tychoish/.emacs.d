@@ -295,33 +295,28 @@ priority from CANDIDATES, with key length as a final tiebreaker."
 
 (cl-defun builder--project-compilation-buffers (&optional &key name (project (approximate-project-name)))
   "Return a hash table of candidate compilation buffer names for PROJECT."
-  (let ((buffer-table (make-hash-table :test #'equal))
+  (let ((buffer-table (map-into
+                       (seq-map (lambda (it)
+                                  (with-current-buffer it
+                                    (cons (buffer-name it)
+                                          (format "reuse buffer: project=%s errors=%s lines=%s command='%s'"
+                                                  project
+                                                  compilation-num-errors-found
+                                                  (buffer-line-count)
+                                                  (string-trim (or (car compilation-arguments) ""))))))
+                                (mode-buffers-for-project :mode 'compilation-mode))
+                       '(hash-table :test equal)))
         (default-names (list "push" "gen" "buf" "benchmark" "check" "compile" "run" "lint" "test" "build")))
     (when name
       (cl-pushnew name default-names :test #'equal))
 
-    (dolist (it (mode-buffers-for-project :mode 'compilation-mode))
-      (with-current-buffer it
-        (map-put!
-         buffer-table
-         (buffer-name it)
-         (format "reuse buffer: project=%s errors=%s lines=%s command='%s'"
-                 project
-                 compilation-num-errors-found
-                 (buffer-line-count)
-                 (string-trim (or (car compilation-arguments) ""))))))
-
     (dolist (it default-names)
       (let ((name (format "*%s-%s*" project it)))
         (if (map-contains-key buffer-table name)
-            (map-put!
-             buffer-table
-             (generate-new-buffer-name name)
-             (format "new %s buffer for project %s" name project))
-          (map-put!
-           buffer-table
-           name
-           (format "create default compilation buffer for %s" project)))))
+            (setf (map-elt buffer-table (generate-new-buffer-name name))
+                  (format "new %s buffer for project %s" name project))
+          (setf (map-elt buffer-table name)
+                (format "create default compilation buffer for %s" project)))))
 
     buffer-table))
 
@@ -372,7 +367,7 @@ priority from CANDIDATES, with key length as a final tiebreaker."
    :type integer))
 
 (defun builder--add-candidate (table candidate)
-  (map-put! table (builder-candidate-name candidate) candidate))
+  (setf (map-elt table (builder-candidate-name candidate)) candidate))
 
 (defun builder--add-candidates (table candidates)
   (seq-do (lambda (it) (builder--add-candidate table it))
