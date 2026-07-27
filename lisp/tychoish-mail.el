@@ -471,12 +471,12 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
        :name account-name
        :form `(when (or ,default
 			(and
-			 (or (member sprite-instance-id ',instances)
+			 (or (member (sprite-instance-name) ',instances)
 			     (null ',instances))
 			 (or (member (system-name) ',systems)
 			     (null ',systems))))
 		(,configure-account-symbol))
-       :hook 'after-first-frame-created
+       :hook 'after-init-hook
        :idle-timer 0.5))
 
     `(defun ,configure-account-symbol ()
