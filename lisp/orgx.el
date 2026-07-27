@@ -963,6 +963,8 @@ new note's identifier reflects that date."
 (keymap-set orgx-minor-mode-map "M-TAB" #'org-cycle)
 (keymap-set orgx-minor-mode-map "C-M-TAB" #'org-cycle-force-archived)
 (keymap-set orgx-minor-mode-map "C-c C-w" #'whitespace-cleanup)
+(keymap-set orgx-minor-mode-map "S-<up>" #'org-priority-up)
+(keymap-set orgx-minor-mode-map "S-<down>" #'org-priority-down)
 
 (keymap-set orgx-minor-mode-map "C-c o" (cons "orgx-commands" orgx-minor-mode-commands-map))
 
