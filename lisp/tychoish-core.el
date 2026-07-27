@@ -91,7 +91,8 @@
 
   (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
   (delight 'outline-minor-mode nil 'outline)
-  (delight 'cursor-sensor-mode nil 'cursor-sensor))
+  (delight 'cursor-sensor-mode nil 'cursor-sensor)
+  (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications))
 
 (use-package uuidgen
   :ensure t

@@ -183,7 +183,7 @@ Override in user/*.el to customize per machine or instance.")
      (setq desktop-restore-in-current-display nil)
 
      (if (daemonp)
-         (setq desktop-restore-eager nil
+         (setq desktop-restore-eager 0
                desktop-load-locked-desktop t)
        (setq desktop-restore-eager t
              desktop-load-locked-desktop nil))
