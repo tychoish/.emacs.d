@@ -35,7 +35,6 @@
 
 (require 'xtd-macro)
 
-(declare-function which-key-add-key-based-replacements "which-key")
 (declare-function f-glob "f")
 (declare-function f-entries "f")
 

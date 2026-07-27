@@ -377,7 +377,7 @@ the following configuration:
   `bootstrap-setup-font` also works interactively.
 
 - For using `mu4e` to manage email, in a multi-account setup. I wrote
-  a macro, `tychoish-define-mail-account` to add a new account.  I
+  a function, `tychoish-define-mail-account` to add a new account.  I
   have a few functions that I define here for changing my originating
   email address/mu database, which are bound to keys, but the basics
   are:

@@ -11,10 +11,7 @@
 (autoload 'annotated-completing-read-directory "annotated-completing-read")
 
 (declare-function mu4e "mu4e")
-(declare-function mu4e-compose-new "mu4e-compose")
 (declare-function mu4e-compose-reply "mu4e-compose")
-(declare-function mu4e-search-maildir "mu4e-search")
-(declare-function mu4e-search-bookmark "mu4e-search")
 (declare-function mu4e-headers-mark-for-read "mu4e-headers")
 (declare-function mu4e-headers-mark-for-unread "mu4e-headers")
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
@@ -26,9 +23,9 @@
 (declare-function mu4e-contact-name "mu4e-contacts")
 (declare-function cape-capf-prefix-length "cape")
 
-(defconst tychoish/mail-id-template "tychoish-mail-%s")
-(defvar tychoish/mail-accounts-table (make-hash-table :test #'equal))
-(defvar tychoish/mail-account-current nil)
+(defconst tychoish-mail-id-template "tychoish-mail-%s")
+(defvar tychoish-mail-accounts-table (make-hash-table :test #'equal))
+(defvar tychoish-mail-account-current nil)
 
 (with-eval-after-load 'mu4e
   (seq-do (lambda (hook) (add-hook hook #'hud--record-home-frame))
@@ -40,52 +37,44 @@
 (add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
 (with-eval-after-load 'message
-  (bind-key "M-q" 'ignore message-mode-map)
-  (setq-default message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
-  (setq-default message-citation-line-function 'message-insert-formatted-citation-line)
-  (setq-default message-interactive t)
-  (setq-default message-kill-buffer-on-exit nil)
-  (setq-default message-send-mail-function 'message-send-mail-with-sendmail)
-  (setq-default message-forward-as-mime nil)
-  (setq-default message-fill-column 80)
-  (setq-default message-cite-style message-cite-style-gmail)
-  (setq-default message-dont-reply-to-names t)
-  (setq-default message-signature t)
+  (keymap-set message-mode-map "M-q" #'ignore)
+  (setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
+  (setq message-citation-line-function 'message-insert-formatted-citation-line)
+  (setq message-send-mail-function 'message-send-mail-with-sendmail)
+  (setq message-fill-column 80)
+  (setq message-cite-style message-cite-style-gmail)
+  (setq message-dont-reply-to-names t)
   (add-to-list 'mm-discouraged-alternatives "text/richtext")
   (add-to-list 'mm-discouraged-alternatives "text/html")
   (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
 
 (with-eval-after-load 'mu4e-compose
-  (bind-keys
-   :map mu4e-compose-minor-mode-map
-   ("R" . compose-reply-wide-or-not-please-ask)
-   ("r" . mu4e-headers-mark-for-read)))
+  (keymap-set mu4e-compose-minor-mode-map "R" #'compose-reply-wide-or-not-please-ask)
+  (keymap-set mu4e-compose-minor-mode-map "r" #'mu4e-headers-mark-for-read))
 
 (with-eval-after-load 'mu4e-headers
   (add-to-list 'mu4e-headers-actions
-               '("generate refile rule" . tychoish/mail-generate-refile-rule) t)
-  (bind-keys
-   :map mu4e-headers-mode-map
-   ("C-r" . compose-reply-wide-or-not-please-ask)
-   ("R" . compose-reply-wide-or-not-please-ask)
-   ("r" . mu4e-headers-mark-for-read)
-   ("o" . mu4e-headers-mark-for-unread)
-   ("u" . mu4e-headers-mark-for-unread)
-   ("*" . mu4e-headers-mark-for-something)
-   ("#" . mu4e-mark-resolve-deferred-marks)
-   (";" . mu4e-mark-resolve-deferred-marks)))
+               '("generate refile rule" . tychoish-mail-generate-refile-rule) t)
+  (keymap-set mu4e-headers-mode-map "C-r" #'compose-reply-wide-or-not-please-ask)
+  (keymap-set mu4e-headers-mode-map "R" #'compose-reply-wide-or-not-please-ask)
+  (keymap-set mu4e-headers-mode-map "r" #'mu4e-headers-mark-for-read)
+  (keymap-set mu4e-headers-mode-map "o" #'mu4e-headers-mark-for-unread)
+  (keymap-set mu4e-headers-mode-map "u" #'mu4e-headers-mark-for-unread)
+  (keymap-set mu4e-headers-mode-map "*" #'mu4e-headers-mark-for-something)
+  (keymap-set mu4e-headers-mode-map "#" #'mu4e-mark-resolve-deferred-marks)
+  (keymap-set mu4e-headers-mode-map ";" #'mu4e-mark-resolve-deferred-marks))
 
 (with-eval-after-load 'mu4e-view
   (add-to-list 'mu4e-view-actions '("ViewInBrowser" . mu4e-action-view-in-browser) t)
-  (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish/mail-unsubscribe) t)
-  (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish/mail-generate-refile-rule) t))
+  (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish-mail-unsubscribe) t)
+  (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t))
 
-(add-hook 'mu4e-compose-pre-hook #'tychoish/mail-auto-switch-for-reply)
+(add-hook 'mu4e-compose-pre-hook #'tychoish-mail-auto-switch-for-reply)
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
 (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
-(add-hook 'mu4e-compose-mode-hook 'tychoish/set-up-message-mode-buffer)
+(add-hook 'mu4e-compose-mode-hook 'tychoish-mail-set-up-message-mode-buffer)
 
-(defconst tychoish/mail--refile-matchable-fields
+(defconst tychoish-mail--refile-matchable-fields
   '((:from . address)
     (:to . address)
     (:cc . address)
@@ -94,27 +83,23 @@
     (:list . string))
   "Alist of mu4e message fields available for refile rule generation.")
 
-(eval-and-compile
-  (defvar tychoish/mail--refile-clauses nil
-    "Accumulated refile rule forms built by `tychoish/mail-add-refile-rule'."))
+(defvar tychoish-mail--refile-rules nil
+  "Functions of one argument MSG, tried in order by `tychoish-mail-refile-folder'.")
 
-(defmacro tychoish/mail-add-refile-rule (&rest body)
-  "Add a refile rule and rebuild `tychoish/mail-refile-folder'.
-MSG is bound to the current mu4e message in BODY; return a maildir
-folder string or nil to fall through to the next rule."
-  (declare (indent 0))
-  (add-to-list 'tychoish/mail--refile-clauses (cons 'progn body) t)
-  `(defun tychoish/mail-refile-folder (msg)
-     "Return refile folder for MSG by trying each registered rule."
-     (or ,@tychoish/mail--refile-clauses "/archive")))
+(defun tychoish-mail-add-refile-rule (rule)
+  "Register RULE, a function of one argument MSG, as a refile rule.
+RULE should return a maildir folder string, or nil to fall through to the
+next registered rule."
+  (add-to-list 'tychoish-mail--refile-rules rule t))
 
-(defun tychoish/mail-refile-folder (_msg)
-  "Return default refile folder when no rules are defined."
-  "/archive")
+(defun tychoish-mail-refile-folder (msg)
+  "Return refile folder for MSG by trying each registered rule."
+  (or (seq-some (lambda (rule) (funcall rule msg)) tychoish-mail--refile-rules)
+      "/archive"))
 
-(setq mu4e-refile-folder #'tychoish/mail-refile-folder)
+(setq mu4e-refile-folder #'tychoish-mail-refile-folder)
 
-(defun tychoish/mail--field-display-value (msg field)
+(defun tychoish-mail--field-display-value (msg field)
   "Return a human-readable string for FIELD value in MSG."
   (let ((val (mu4e-message-field msg field)))
     (cond
@@ -128,8 +113,8 @@ folder string or nil to fall through to the next rule."
      ((stringp val) val)
      (t (format "%S" val)))))
 
-(defun tychoish/mail-generate-refile-rule (&optional msg)
-  "Build a `tychoish/mail-add-refile-rule' form from MSG or the current message.
+(defun tychoish-mail-generate-refile-rule (&optional msg)
+  "Build a `tychoish-mail-add-refile-rule' form from MSG or the current message.
 Prompts for a field (annotated with the message's current value), a regex
 pattern, and a destination folder.  Puts the resulting form on the kill ring."
   (interactive)
@@ -138,15 +123,15 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
          (candidates
           (seq-map (lambda (entry)
                      (cons (symbol-name (car entry))
-                           (tychoish/mail--field-display-value msg (car entry))))
-                   tychoish/mail--refile-matchable-fields))
+                           (tychoish-mail--field-display-value msg (car entry))))
+                   tychoish-mail--refile-matchable-fields))
          (field-name (annotated-completing-read candidates
 						:prompt "Match field: " :require-match t))
          (field (intern (concat ":" field-name)))
-         (field-type (map-elt tychoish/mail--refile-matchable-fields field))
+         (field-type (map-elt tychoish-mail--refile-matchable-fields field))
          (regex (read-string
                  (format "Regex (current: %s): "
-                         (tychoish/mail--field-display-value msg field))))
+                         (tychoish-mail--field-display-value msg field))))
          (folder (read-string "Refile to folder: " "/"))
          (body (pcase field-type
                  ('address
@@ -159,10 +144,10 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
                   `(when (string-match-p ,regex
                                          (or (mu4e-message-field msg ,field) ""))
                      ,folder)))))
-    (kill-new (pp-to-string `(tychoish/mail-add-refile-rule ,body)))
+    (kill-new (pp-to-string `(tychoish-mail-add-refile-rule (lambda (msg) ,body))))
     (message "Refile rule copied to kill ring")))
 
-(defun tychoish/mail-test-refile-rules ()
+(defun tychoish-mail-test-refile-rules ()
   "Test all refile rules on the current message and display results."
   (interactive)
   (let* ((msg (or (mu4e-message-at-point)
@@ -172,17 +157,17 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
       (erase-buffer)
       (insert (format "Refile test for: %s\n\n"
                       (or (mu4e-message-field msg :subject) "(no subject)")))
-      (if (null tychoish/mail--refile-clauses)
+      (if (null tychoish-mail--refile-rules)
           (insert "No refile rules defined.\n")
         (seq-map-indexed
-         (lambda (clause i)
+         (lambda (rule i)
            (let ((result (condition-case err
-                             (eval `(let ((msg ',msg)) ,clause))
+                             (funcall rule msg)
                            (error (format "ERROR: %S" err)))))
              (insert (format "Rule %d: %s\n" (1+ i) (or result "no match")))))
-         tychoish/mail--refile-clauses))
+         tychoish-mail--refile-rules))
       (insert (format "\nFinal result: %s\n"
-                      (tychoish/mail-refile-folder msg))))
+                      (tychoish-mail-refile-folder msg))))
     (display-buffer buf)))
 
 (setq mu4e-bookmarks
@@ -213,12 +198,9 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
 
 (setq compose-mail-user-agent-warnings nil)
 (setq sendmail-program "msmtp")
-(setq smtpmail-queue-mail nil)
 
 (setq mml-secure-openpgp-sign-with-sender t)
-(setq mc-gpg-user-id (getenv "GPG_KEY_ID"))
 
-(setq mail-signature t)
 (setq mail-specify-envelope-from t)
 (setq mail-user-agent 'mu4e-user-agent)
 
@@ -229,21 +211,13 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
         ("To"       "^To: *\\(.*\\)" 1)
         ("From"     "^From: *\\(.*\\)" 1)))
 
-
-(setq mu4e-compose-complete-addresses t)
 (setq mu4e-compose-complete-only-after "2015-01-01")
-(setq mu4e-compose-keep-self-cc nil)
-(setq mu4e-drafts-folder "/drafts")
-(setq mu4e-maildir-shortcuts nil)
 (setq mu4e-search-include-related nil)
 (setq mu4e-search-results-limit 1000)
-(setq mu4e-sent-folder "/sent")
-(setq mu4e-trash-folder "/trash")
-(setq mu4e-user-agent-string nil)
 (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
 (setq mu4e--header-separator mail-header-separator)
 
-(defun tychoish/set-up-message-mode-buffer ()
+(defun tychoish-mail-set-up-message-mode-buffer ()
   (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
   (setq mu4e--header-separator mail-header-separator)
   ;; mu4e--compose-setup-completion
@@ -261,7 +235,7 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
   (interactive)
   (mu4e-compose-reply (yes-or-no-p "Reply to all?")))
 
-(defun tychoish/mail-unsubscribe (msg)
+(defun tychoish-mail-unsubscribe (msg)
   "Unsubscribe from a mailing list using the List-Unsubscribe header in MSG.
 For mailto: URIs, opens a compose buffer pre-filled with the unsubscribe
 address, subject, and body.  For https: URIs, opens the URL in a browser."
@@ -325,8 +299,8 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
     signature-directory
     signature-text))
 
-(cl-defstruct (tychoish/mail-account
-               (:constructor tychoish/mail-make-account
+(cl-defstruct (tychoish-mail-account
+               (:constructor tychoish-mail-make-account
                              (&key id maildir name address keybinding signature signature-kind fetchmail
 				   &aux (maildir (cond
 						  ((not (stringp maildir)) (user-error "maildir must be a string"))
@@ -404,13 +378,13 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
   (interactive
    (list (annotated-completing-read
 	  (thread-last
-	    tychoish/mail-accounts-table
+	    tychoish-mail-accounts-table
 	    (map-apply (lambda (key value)
 			 (cons key (format
  				    "%s <%s>%s"
- 				    (tychoish/mail-account-name value)
- 				    (tychoish/mail-account-address value)
- 				    (if (equal tychoish/mail-account-current key)
+ 				    (tychoish-mail-account-name value)
+ 				    (tychoish-mail-account-address value)
+ 				    (if (equal tychoish-mail-account-current key)
  					(concat " " (propertize "[current]" 'face 'bold))
  				      ""))) )))
 	  :prompt "mail-account => "
@@ -419,7 +393,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
   (let ((select-account-operation (intern account-id)))
     (funcall select-account-operation)))
 
-(defun tychoish/mail-auto-switch-for-reply ()
+(defun tychoish-mail-auto-switch-for-reply ()
   "Auto-switch to the account the parent message was addressed to."
   (when-let* ((msg mu4e-compose-parent-message)
               (recipients (append (mu4e-message-field msg :to)
@@ -431,31 +405,84 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
                                           recipients)))
               (account-name (map-some
                              (lambda (name conf)
-                               (when (member (downcase (tychoish/mail-account-address conf))
+                               (when (member (downcase (tychoish-mail-account-address conf))
                                              addrs)
                                  name))
-                             tychoish/mail-accounts-table)))
+                             tychoish-mail-accounts-table)))
     (tychoish-mail-select-account account-name)))
 
-(cl-defmacro tychoish-define-mail-account
+(defun tychoish-mail--activate-account (account-name)
+  "Configure mu4e/message state to send and receive as ACCOUNT-NAME."
+  (let* ((conf (map-elt tychoish-mail-accounts-table account-name))
+         (account-id (tychoish-mail-account-id conf))
+         (maildir (tychoish-mail-account-maildir conf)))
+
+    (setq tychoish-mail-account-current account-name)
+    (setq message-directory maildir)
+    (setq smtpmail-queue-dir (file-name-concat maildir "queue" "cur"))
+    (setq mu4e-mu-home (file-name-concat maildir ".mu"))
+    (setq message-auto-save-directory (file-name-concat maildir "drafts"))
+    (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+    (setq mu4e--header-separator mail-header-separator)
+
+    (let ((signature-kind (tychoish-mail-account-signature-kind conf))
+          (signature (tychoish-mail-account-signature conf))
+          (address (tychoish-mail-account-address conf))
+          (given-name (tychoish-mail-account-name conf)))
+
+      (cond
+       ((eq signature-kind 'signature-directory)
+        (setq message-signature-directory (or signature (file-name-concat maildir "tools" "signatures")))
+        (setq message-signature-file (or address account-id account-name))
+        (setq message-signature t))
+       ((eq signature-kind 'signature-file)
+        (setq message-signature-directory nil)
+        (setq message-signature-file signature)
+        (setq message-signature t))
+       ((eq signature-kind 'signature-text)
+        (setq message-signature-directory nil)
+        (setq message-signature-file nil)
+        (setq message-signature signature)))
+
+      (setq user-mail-address address)
+      (setq user-full-name given-name)
+      (setq mu4e-compose-reply-to-address address)
+
+      (setq mail-host-address (replace-regexp-in-string ".*@" "" address))
+      (setq message-sendmail-extra-arguments (list "-a" address))
+
+      (when (eq major-mode 'mu4e-compose-mode)
+        (goto-char (point-min))
+        (let ((new-from (format "From: %s <%s>" given-name address)))
+          (while (re-search-forward "^From:.*$" nil t 1)
+            (replace-match new-from))))
+
+      (setq mu4e-get-mail-command (tychoish-mail-account-fetchmail conf))
+
+      (mu4e 'background)
+
+      (message "mail: configured address [%s]" address))))
+
+(cl-defun tychoish-define-mail-account
     (&key name address key id
 	  (command mu4e-get-mail-command)
 	  (maildir "~/mail")
 	  (instances '())
 	  (systems '())
 	  default)
-
+  "Register a mail account and bind KEY in `hud-mail-map' to activate it.
+Returns the symbol of the generated activation command."
   (unless (and name address key id maildir)
     (user-error "cannot define mail account without name, address, key and id %S" (list :name name :address address :key key :id id :maildir maildir)))
 
-  (let* ((account-name (format tychoish/mail-id-template id))
+  (let* ((account-name (format tychoish-mail-id-template id))
          (configure-account-symbol (intern account-name))
 	 (maildir (expand-file-name maildir)))
 
-    (define-key hud-mail-map (kbd key) configure-account-symbol)
+    (keymap-set hud-mail-map key configure-account-symbol)
 
-    (setf (map-elt tychoish/mail-accounts-table account-name)
-          (tychoish/mail-make-account
+    (setf (map-elt tychoish-mail-accounts-table account-name)
+          (tychoish-mail-make-account
            :name name
            :address address
            :keybinding key
@@ -464,6 +491,12 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
            :id id
            :signature-kind 'signature-directory
            :signature (file-name-concat maildir "tools" "signatures")))
+
+    (defalias configure-account-symbol
+      (lambda ()
+        (interactive)
+        (tychoish-mail--activate-account account-name))
+      (format "Switch mu4e to the %s <%s> account." name address))
 
     (when (or default
 	      (not (and (null systems) (null instances))))
@@ -475,63 +508,10 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 			     (null ',instances))
 			 (or (member (system-name) ',systems)
 			     (null ',systems))))
-		(,configure-account-symbol))
+			(,configure-account-symbol))
        :hook 'after-init-hook
        :idle-timer 0.5))
 
-    `(defun ,configure-account-symbol ()
-       (interactive)
-
-       (let* ((account-id ,id)
-	      (account-name ,account-name)
-	      ;; nothing beyond this point should access compilation env ->
-	      (conf (map-elt tychoish/mail-accounts-table account-name))
-	      (maildir (tychoish/mail-account-maildir conf)))
-
-	 (setq tychoish/mail-account-current account-name)
-	 (setq message-directory maildir)
-	 (setq smtpmail-queue-dir (file-name-concat maildir "queue" "cur"))
-	 (setq mu4e-mu-home (file-name-concat maildir ".mu"))
-	 (setq message-auto-save-directory (file-name-concat maildir "drafts"))
-	 (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
-	 (setq mu4e--header-separator mail-header-separator)
-
-	 (let ((signature-kind (tychoish/mail-account-signature-kind conf))
-	       (signature (tychoish/mail-account-signature conf))
-	       (address (tychoish/mail-account-address conf))
-	       (given-name (tychoish/mail-account-name conf)))
-
-           (cond
-            ((eq signature-kind 'signature-directory)
-             (setq message-signature-directory (or signature (file-name-concat maildir "tools" "signatures")))
-             (setq message-signature-file (or address account-id account-name))
-             (setq message-signature t))
-            ((eq (tychoish/mail-account-signature-kind conf) 'signature-file)
-             (setq message-signature-directory nil)
-             (setq message-signature-file signature)
-             (setq message-signature t))
-            ((eq (tychoish/mail-account-signature-kind conf) 'signature-text)
-             (setq message-signature-directory nil)
-             (setq message-signature-file nil)
-             (setq message-signature signature)))
-
-           (setq user-mail-address address)
-           (setq user-full-name given-name)
-           (setq mu4e-compose-reply-to-address address)
-
-           (setq mail-host-address (replace-regexp-in-string ".*@" "" address))
-           (setq message-sendmail-extra-arguments (list "-a" address))
-
-           (when (eq major-mode 'mu4e-compose-mode)
-             (goto-char (point-min))
-             (let ((new-from (format "From: %s <%s>" given-name address)))
-	       (while (re-search-forward "^From:.*$" nil t 1)
-		 (replace-match new-from))))
-
-           (setq mu4e-get-mail-command (tychoish/mail-account-fetchmail conf))
-
-	   (mu4e 'background)
-
-           (message (format "mail: configured address [%s]" address)))))))
+    configure-account-symbol))
 
 (provide 'tychoish-mail)

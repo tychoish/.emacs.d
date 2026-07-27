@@ -3238,7 +3238,9 @@ Falls back to the full list when filtering would leave no choices."
 (use-package tychoish-mail
   :ensure nil
   :defer t
-  :commands (tychoish-mail-select-account)
+  :commands (tychoish-mail-select-account
+	     tychoish-define-mail-account
+	     tychoish-mail-add-refile-rule)
   :init
   (keymap-set hud-mail-map "a" #'tychoish-mail-select-account)
   (keymap-set hud-mail-map "m" #'mu4e)
