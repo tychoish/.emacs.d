@@ -1396,7 +1396,7 @@ clipboard."
 (use-package denote
   :ensure t
   :defer t
-  :commands (denote-dired)
+  :commands (denote-dired denote-directories)
   :init
   (keymap-set hud-denote-map "n" #'denote)
   (keymap-set hud-denote-map "m" #'denote-open-or-create)

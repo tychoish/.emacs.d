@@ -121,15 +121,15 @@
   ;; org-faces
   (setq org-todo-keyword-faces
         '(("TODO" . org-warning)
-	  ("DONE" . slate)
-          ("INPROGRESS" . yellow)
-          ("INCOMPLETE" . yellow)
+	  ("DONE" . "slate gray")
+          ("INPROGRESS" . "yellow")
+          ("INCOMPLETE" . "yellow")
           ("SCHEDULED" . "orange")
-	  ("BACKLOG" . (:foreground yellow :weight bold))
-          ("PROJECT" . (:foreground slate :weight bold))
-          ("ANSWERED" . (:foreground slate :weight bold))))
+	  ("BACKLOG" . (:foreground "yellow" :weight bold))
+          ("PROJECT" . (:foreground "slate gray" :weight bold))
+          ("ANSWERED" . (:foreground "slate gray" :weight bold))))
 
-  ;; org.el
+  ;; ;; org.el
   (setq org-todo-keywords
         '((sequence "TODO(t)" "|" "DONE(d!)")
           (sequence "QUESTION(q)" "|" "ANSWERED(a@)")
