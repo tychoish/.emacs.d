@@ -94,10 +94,37 @@ PARENT is a (TYPE . ID) cons.  Returns (NAME . (PARENT . PROPERTIES)), or nil."
 ;;; ntn process wrapper
 
 (defun denote-notion--run (args)
-  "Run \"npx ntn\" with ARGS and return (EXIT-CODE . OUTPUT-STRING)."
-  (with-temp-buffer
-    (let ((exit-code (apply #'call-process "npx" nil (current-buffer) nil "ntn" args)))
-      (cons exit-code (buffer-string)))))
+  "Run \"npx ntn\" with ARGS and return a (EXIT-CODE STDOUT STDERR) list.
+STDOUT and STDERR are captured separately — `npx' echoes an \"npm notice
+run ...\" progress line to stderr that embeds the full command it's
+about to run, and npm's notice logger re-prefixes every embedded newline
+with its own \"npm notice \" marker; since a note's `--content' body is
+always multi-line, mixing that into STDOUT (as a single `call-process'
+buffer destination would) corrupts the JSON `denote-notion--run-json'
+parses from it."
+  (let ((stderr-file (make-temp-file "denote-notion-ntn-stderr")))
+    (unwind-protect
+        (with-temp-buffer
+          (let ((exit-code (apply #'call-process "npx" nil (list (current-buffer) stderr-file) nil "ntn" args)))
+            (list exit-code (buffer-string)
+                  (with-temp-buffer
+                    (insert-file-contents stderr-file)
+                    (buffer-string)))))
+      (delete-file stderr-file))))
+
+(defconst denote-notion--debug-buffer-name "*denote-notion-debug*"
+  "Name of the buffer holding raw `ntn' CLI output, for `denote-notion--run-json'.")
+
+(defun denote-notion--debug-log (args stdout stderr)
+  "Append the ntn invocation ARGS and its raw STDOUT/STDERR to the debug buffer.
+Recorded for every call, not just failures, since a payload that parses
+as JSON can still carry the wrong shape (see the map-elt call sites that
+assume specific keys)."
+  (with-current-buffer (get-buffer-create denote-notion--debug-buffer-name)
+    (goto-char (point-max))
+    (insert (format "\n--- ntn %s ---\n" (string-join args " ")))
+    (insert "-- stdout --\n" stdout)
+    (insert "-- stderr --\n" stderr)))
 
 (defun denote-notion--run-json (args)
   "Run \"npx ntn\" with ARGS and return the parsed JSON result.
@@ -111,11 +138,14 @@ a `user-error' with the CLI's own output when the exit code is
 non-zero."
   (let* ((args (if (equal (car args) "api") args (append args '("--json"))))
          (result (denote-notion--run args))
-         (exit-code (car result))
-         (output (cdr result)))
+         (exit-code (nth 0 result))
+         (stdout (nth 1 result))
+         (stderr (nth 2 result)))
+    (denote-notion--debug-log args stdout stderr)
     (unless (zerop exit-code)
-      (user-error "ntn %s failed: %s" (string-join args " ") output))
-    (json-parse-string output :object-type 'alist :array-type 'list)))
+      (user-error "ntn %s failed: %s" (string-join args " ")
+                  (if (string-empty-p stderr) stdout stderr)))
+    (json-parse-string stdout :object-type 'alist :array-type 'list)))
 
 ;;; Front matter get/set
 

@@ -122,10 +122,10 @@
   (setq org-todo-keyword-faces
         '(("TODO" . org-warning)
 	  ("DONE" . "slate gray")
-          ("INPROGRESS" . "yellow")
-          ("INCOMPLETE" . "yellow")
-          ("SCHEDULED" . "orange")
-	  ("BACKLOG" . (:foreground "yellow" :weight bold))
+          ("INPROGRESS" . warning)
+          ("INCOMPLETE" . warning)
+          ("SCHEDULED" . identifier)
+	  ("BACKLOG" . (:foreground warning :weight bold))
           ("PROJECT" . (:foreground "slate gray" :weight bold))
           ("ANSWERED" . (:foreground "slate gray" :weight bold))))
 
