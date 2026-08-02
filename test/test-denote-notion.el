@@ -151,18 +151,18 @@ Untracked body.
 ;; denote-notion--run / denote-notion--run-json (call-process stubbed)
 
 (ert-deftest test-denote-notion/run-returns-exit-code-and-output ()
-  "Wraps `call-process' output as (EXIT-CODE . OUTPUT-STRING)."
+  "Wraps `call-process' output as (EXIT-CODE STDOUT STDERR)."
   (cl-letf (((symbol-function 'call-process)
-             (lambda (_program _infile buffer _display &rest _args)
-               (with-current-buffer buffer (insert "hello"))
+             (lambda (_program _infile destination _display &rest _args)
+               (with-current-buffer (car destination) (insert "hello"))
                0)))
-    (should (equal (denote-notion--run '("whoami")) '(0 . "hello")))))
+    (should (equal (denote-notion--run '("whoami")) '(0 "hello" "")))))
 
 (ert-deftest test-denote-notion/run-json-parses-successful-output ()
   "Parses JSON output into an alist on a zero exit code."
   (cl-letf (((symbol-function 'call-process)
-             (lambda (_program _infile buffer _display &rest _args)
-               (with-current-buffer buffer (insert "{\"page\": {\"id\": \"abc\"}}"))
+             (lambda (_program _infile destination _display &rest _args)
+               (with-current-buffer (car destination) (insert "{\"page\": {\"id\": \"abc\"}}"))
                0)))
     (should (equal (map-elt (map-elt (denote-notion--run-json '("pages" "get" "abc")) 'page) 'id)
                    "abc"))))
@@ -170,8 +170,8 @@ Untracked body.
 (ert-deftest test-denote-notion/run-json-signals-on-failure ()
   "A non-zero exit code raises a `user-error' carrying the CLI output."
   (cl-letf (((symbol-function 'call-process)
-             (lambda (_program _infile buffer _display &rest _args)
-               (with-current-buffer buffer (insert "not found"))
+             (lambda (_program _infile destination _display &rest _args)
+               (with-current-buffer (car destination) (insert "not found"))
                1)))
     (should-error (denote-notion--run-json '("pages" "get" "missing")) :type 'user-error)))
 
