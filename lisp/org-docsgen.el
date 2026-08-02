@@ -80,12 +80,11 @@ like `:kind vc' that error if actually evaluated via `load')."
    (t 'function)))
 
 (defun org-docsgen--kind-tag (sym kind)
-  "Return a tag string for SYM with KIND."
+  "Return an org tag string for SYM with KIND, or nil when none applies."
   (cond
-   ((commandp sym) " [Command]")
-   ((eq kind 'custom) " [Option]")
-   ((eq kind 'variable) " [Variable]")
-   (t "")))
+   ((commandp sym) ":command:")
+   ((eq kind 'custom) ":option:")
+   ((eq kind 'variable) ":variable:")))
 
 (defun org-docsgen--format-sym (name kind heading)
   "Format a single symbol NAME of KIND under HEADING."
@@ -93,11 +92,12 @@ like `:kind vc' that error if actually evaluated via `load')."
          (fn-p (fboundp sym))
          (var-p (and (not fn-p) (boundp sym)))
          (doc (or (when fn-p (documentation sym))
-                  (when var-p (documentation-property sym 'variable-documentation)))))
-    (format "%s~%s~%s\n\n%s\n\n"
+                  (when var-p (documentation-property sym 'variable-documentation))))
+         (tag (org-docsgen--kind-tag sym kind)))
+    (format "%s%s%s\n\n%s\n\n"
             (concat heading (if doc "" "TODO "))
             name
-            (org-docsgen--kind-tag sym kind)
+            (if tag (concat " " tag) "")
             (if doc (org-docsgen--format-doc doc) "*no docstring*"))))
 
 (defun org-docsgen--include-p (name kind autoload-p nil-init-p scope include-kinds namespace)
