@@ -194,11 +194,17 @@ directory, autoloading the package signals a stale
      (setq desktop-restore-frames nil)
      (setq desktop-restore-in-current-display nil)
 
+     ;; Fully eager on every instance, daemon or not: restoring lazily
+     ;; (via `desktop-idle-create-buffers') means the idle timer that does
+     ;; that restoration competes with everything else -- including
+     ;; agent-shell/ACP's own idle-timer-driven message draining -- for
+     ;; potentially minutes after every restart, since Emacs is
+     ;; single-threaded. A slower, blocking startup is a better trade
+     ;; than that contention window.
+     (setq desktop-restore-eager t)
      (if (daemonp)
-         (setq desktop-restore-eager 0
-               desktop-load-locked-desktop t)
-       (setq desktop-restore-eager t
-             desktop-load-locked-desktop nil))
+         (setq desktop-load-locked-desktop t)
+       (setq desktop-load-locked-desktop nil))
 
      (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
        (with-silence (desktop-read)))

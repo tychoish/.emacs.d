@@ -2465,23 +2465,34 @@ return until the minibuffer session ends."
   (defconst tychoish/projectile-warm-cache-idle-delay 3
     "Idle seconds between warming successive queued projects' Projectile caches.")
 
+  (defconst tychoish/projectile-warm-cache-chunk-size 3
+    "Number of queued project roots to consider per idle firing.
+Roots whose cache turns out already warm are free to check; at most this
+many genuinely cold projects get a background indexing process launched
+per firing, so a desktop restore with many projects doesn't launch an
+indexing process per project all at once.")
+
   (defvar tychoish/projectile-warm-cache-queue nil
     "Project roots waiting to be indexed by `tychoish/projectile-warm-cache-process-queue'.")
 
   (defvar tychoish/projectile-warm-cache-idle-timer nil
-    "Idle timer that pops one root off `tychoish/projectile-warm-cache-queue' at a time.")
+    "Idle timer that pops a small batch off `tychoish/projectile-warm-cache-queue' at a time.")
 
   (defun tychoish/projectile-warm-cache-process-queue ()
-    "Index the next queued project, or cancel the timer once the queue is empty.
-Runs on `tychoish/projectile-warm-cache-idle-delay' idle windows, one
-project per firing, so a desktop restore with many cached projects
-doesn't launch an indexing process per project all at once."
-    (if-let* ((root (pop tychoish/projectile-warm-cache-queue)))
-        (unless (tychoish/projectile-cache-warm-p root)
-          (projectile-index-project-async root))
-      (when tychoish/projectile-warm-cache-idle-timer
-        (cancel-timer tychoish/projectile-warm-cache-idle-timer)
-        (setq tychoish/projectile-warm-cache-idle-timer nil))))
+    "Index a bounded batch of queued projects, or cancel the timer when empty.
+Runs on `tychoish/projectile-warm-cache-idle-delay' idle windows, up to
+`tychoish/projectile-warm-cache-chunk-size' projects per firing. Each
+root already warm (in memory, or loadable from its on-disk persistent
+cache — see `tychoish/projectile-cache-warm-p') is skipped entirely; only
+genuinely cold projects get a background indexing process launched."
+    (if (null tychoish/projectile-warm-cache-queue)
+        (when tychoish/projectile-warm-cache-idle-timer
+          (cancel-timer tychoish/projectile-warm-cache-idle-timer)
+          (setq tychoish/projectile-warm-cache-idle-timer nil))
+      (dotimes (_ tychoish/projectile-warm-cache-chunk-size)
+        (when-let* ((root (pop tychoish/projectile-warm-cache-queue)))
+          (unless (tychoish/projectile-cache-warm-p root)
+            (projectile-index-project-async root))))))
 
   (declare-function tychoish/projectile-warm-cache-process-queue "tychoish-core")
   (declare-function tychoish/projectile-cache-warm-p "tychoish-core")
@@ -2515,9 +2526,15 @@ cached projects doesn't index all of them at once."
             #'tychoish/projectile-warm-cache-on-project-change)
 
   (defun tychoish/projectile-cache-warm-p (root)
-    "Return non-nil if Projectile's in-memory file cache for ROOT is populated."
+    "Return non-nil if ROOT's Projectile file cache is already populated.
+Tries the in-memory cache first, then falls back to loading ROOT's
+on-disk persistent cache (cheap: a single small file read) so a project
+already indexed in a prior session isn't needlessly re-indexed in the
+background just because this is a fresh Emacs instance."
     (and (bound-and-true-p projectile-enable-caching)
-         (map-elt projectile-projects-cache root)))
+         (or (map-elt projectile-projects-cache root)
+             (and (eq projectile-enable-caching 'persistent)
+                  (projectile-load-project-cache root)))))
 
   (defun tychoish/eglot-defer-file-watch-registration (server id watchers root)
     "Register SERVER's file watches for ID/WATCHERS once ROOT's cache is warm.
