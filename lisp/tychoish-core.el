@@ -876,7 +876,16 @@
   (add-lazy-init
    :name "<core> nerd icons"
    :delay 0.8
-   :operation 'nerd-icons-completion-mode))
+   :operation 'nerd-icons-completion-mode)
+  :config
+  (cl-defmethod nerd-icons-completion-get-icon :around (cand (_cat (eql buffer)))
+    "Skip icon lookup when CAND names a killed buffer.
+`get-buffer' returns the buffer object even when dead, and the primary
+method has no liveness check, so it errors in `set-buffer' once a
+completion candidate outlives its buffer."
+    (if (buffer-live-p (get-buffer cand))
+        (cl-call-next-method)
+      "")))
 
 (use-package xref
   :ensure nil
