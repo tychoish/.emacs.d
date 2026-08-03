@@ -3013,6 +3013,52 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
 
   (require 'agent-shell-menu)
 
+  (defvar shell-maker--busy)
+
+  (defun ad:agent-shell-recover-stuck-push-end (orig-fn &rest args)
+    "Call ORIG-FN with ARGS, then recover a stuck busy state.
+
+Workaround for a bug in `agent-shell-experimental--on-session-push-end':
+when a session_push_end notification arrives but its matching
+session/push request is no longer in :active-requests (e.g. a stale or
+duplicate notification), the function silently no-ops and never calls
+its :on-finished callback. Since `shell-maker-finish-output' (the only
+place that clears `shell-maker--busy' for ACP sessions) is invoked
+exclusively from that callback, `shell-maker--busy' is left t forever
+with no user-visible failure -- see
+~/garen/emacs/agent-shell-acp-disconnect-plan.md."
+    (apply orig-fn args)
+    (when shell-maker--busy
+      (message "agent-shell: recovering stuck busy state after session_push_end")
+      (setq shell-maker--busy nil)
+      (when-let* ((on-finished (plist-get args :on-finished)))
+        (funcall on-finished))))
+  (advice-add 'agent-shell-experimental--on-session-push-end
+              :around #'ad:agent-shell-recover-stuck-push-end)
+
+  (defun ad:acp-route-incoming-message-isolate-errors (orig-fn &rest args)
+    "Call ORIG-FN with ARGS, isolating errors from response handling.
+
+Workaround for a bug in `acp--route-incoming-message': unlike its
+notification/request routing (whose handlers are each wrapped in
+`condition-case-unless-debug' by `acp--start-client'), its
+response-result branches (:on-success / :on-failure) call their
+callbacks unprotected. An error there escapes the `run-at-time' drain
+callback in `acp--start-client' before that closure resets its
+message-queue-busy flag to nil, which permanently wedges the per-client
+message drain: the process filter keeps enqueueing incoming
+notifications and responses, but nothing ever gets dispatched again --
+the agent keeps working, but the shell buffer never reports it again,
+and only killing the process (e.g. via interrupt) ends the session. See
+~/garen/emacs/agent-shell-acp-disconnect-plan.md."
+    (condition-case err
+        (apply orig-fn args)
+      (error
+       (message "acp: error routing incoming message, isolated to avoid wedging the drain loop: %S" err)
+       nil)))
+  (advice-add 'acp--route-incoming-message
+              :around #'ad:acp-route-incoming-message-isolate-errors)
+
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-anthropic-default-session-mode-id "auto")
   (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
