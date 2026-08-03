@@ -10,6 +10,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'cl-lib)
+(require 'xtd-project)
 
 (declare-function org-babel-execute-src-block "ob-core")
 
@@ -55,8 +56,14 @@ like `:kind vc' that error if actually evaluated via `load')."
                (split-string name "[ \t]+" t) " ")))
 
 (defun org-docsgen--format-doc (doc)
-  "Format DOC string for org output, separating the arglist (fn ...) para."
-  (let* ((paras (split-string doc "\n\n" t))
+  "Format DOC string for org output, separating the arglist (fn ...) para.
+DOC is expected to already have docstring escapes (e.g. `\\=' for a literal
+quote) resolved by `substitute-command-keys' via `documentation'/
+`documentation-property'; any that survive are stripped defensively so
+the source-level escaping convention never leaks into the generated org
+text."
+  (let* ((doc (replace-regexp-in-string "\\\\=\\(.\\)" "\\1" doc))
+         (paras (split-string doc "\n\n" t))
          (fn-para (seq-find (lambda (p) (string-match "\\`(fn " (string-trim p))) paras))
          (rest-paras (seq-remove (lambda (p) (string-match "\\`(fn " (string-trim p))) paras)))
     (mapconcat #'identity
@@ -259,15 +266,48 @@ SECTION-STYLE is `ruler' (default: long ;;;;... lines) or `triple-semi'
                 (add-to-list 'load-path (file-name-directory f))
                 (require (intern (file-name-base f)) nil t))
               files)
-      (if (listp scope)
-          (seq-do (lambda (name)
-                    (princ (org-docsgen--format-sym name 'function
-                                                    (org-docsgen--heading (1+ level)))))
-                  scope)
-        (let ((sections (if (eq section-style 'triple-semi)
-                            (org-docsgen--collect-triple-semi files scope include-kinds namespace)
-                          (org-docsgen--collect-ruler files scope include-kinds namespace))))
-          (org-docsgen--emit sections scope level))))))
+      ;; Buffer the whole body and trim trailing blank lines: each entry ends
+      ;; in "\n\n" for spacing between entries, which would otherwise leave a
+      ;; dangling blank line (or more) after the last one.
+      (princ
+       (concat
+        (string-trim-right
+         (with-output-to-string
+           (if (listp scope)
+               (seq-do (lambda (name)
+                         (princ (org-docsgen--format-sym name 'function
+                                                         (org-docsgen--heading (1+ level)))))
+                       scope)
+             (let ((sections (if (eq section-style 'triple-semi)
+                                 (org-docsgen--collect-triple-semi files scope include-kinds namespace)
+                               (org-docsgen--collect-ruler files scope include-kinds namespace))))
+               (org-docsgen--emit sections scope level)))))
+        "\n")))))
+
+(defun org-docsgen--buffer-has-run-p ()
+  "Return non-nil when the current buffer has an `org-docsgen-run' src block."
+  (save-excursion
+    (goto-char (point-min))
+    (and (re-search-forward "^#\\+BEGIN_SRC emacs-lisp" nil t)
+         (re-search-forward "org-docsgen-run" nil t))))
+
+;;;###autoload
+(defun org-docsgen-dwim ()
+  "Regenerate API docs for the current context.
+When the current buffer visits an org file with an `org-docsgen-run' src
+block, regenerate that buffer in place.  Otherwise regenerate the
+README.org in `default-directory', falling back to the one at
+`approximate-project-root'."
+  (interactive)
+  (cond
+   ((and (derived-mode-p 'org-mode) buffer-file-name (org-docsgen--buffer-has-run-p))
+    (org-docsgen-regenerate-readme buffer-file-name))
+   ((file-exists-p (expand-file-name "README.org" default-directory))
+    (org-docsgen-regenerate-readme default-directory))
+   ((file-exists-p (expand-file-name "README.org" (approximate-project-root)))
+    (org-docsgen-regenerate-readme (approximate-project-root)))
+   (t
+    (user-error "org-docsgen-dwim: no README.org in `default-directory' or project root"))))
 
 ;;;###autoload
 (defun org-docsgen-regenerate-readme (readme-file-or-dir)
