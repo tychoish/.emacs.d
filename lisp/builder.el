@@ -1926,12 +1926,60 @@ responds."
         :directory project-root-directory
         :annotation (format "run ert tests for elisp package <%s> in an isolated subprocess" display-name)))))
 
+(defconst builder--native-compile-chunk-size 25
+  "Number of files to check for staleness per idle tick during incremental native compilation.")
+
+(defconst builder--native-compile-idle-delay 10
+  "Idle seconds between successive chunks in `builder--native-compile-process-queue'.")
+
+(defvar builder--native-compile-queue nil
+  "Remaining .el files still to be checked/compiled by `builder--native-compile-process-queue'.")
+
+(defvar builder--native-compile-idle-timer nil
+  "Idle timer driving `builder--native-compile-process-queue'.")
+
+(declare-function comp-el-to-eln-filename "comp-run" (filename &optional base-dir))
+
+(defun builder--native-compile-stale-p (file)
+  "Return non-nil if FILE has no up-to-date native-compiled .eln."
+  (let ((eln (ignore-errors (comp-el-to-eln-filename file))))
+    (or (not eln)
+        (not (file-exists-p eln))
+        (file-newer-than-file-p file eln))))
+
+(defun builder--native-compile-process-queue ()
+  "Check/dispatch the next chunk of `builder--native-compile-queue'.
+Runs on `builder--native-compile-idle-delay' idle windows, a bounded chunk
+of files at a time, so a fresh startup's full lisp/+elpa/ file list is
+neither staleness-checked nor dispatched to `native-compile-async' in one
+synchronous burst. Only files without an up-to-date .eln are actually
+queued for compilation. Cancels itself and prunes the eln cache once the
+whole queue has been worked through."
+  (if (null builder--native-compile-queue)
+      (when builder--native-compile-idle-timer
+        (cancel-timer builder--native-compile-idle-timer)
+        (setq builder--native-compile-idle-timer nil)
+        (condition-case err
+            (when (fboundp 'native-compile-prune-cache)
+              (native-compile-prune-cache))
+          (error (message "native-compile-prune-cache error: %s"
+                          (error-message-string err)))))
+    (let (chunk)
+      (dotimes (_ builder--native-compile-chunk-size)
+        (when builder--native-compile-queue
+          (push (pop builder--native-compile-queue) chunk)))
+      (when-let* ((stale (seq-filter #'builder--native-compile-stale-p chunk)))
+        (native-compile-async stale)))))
+
 ;;;###autoload
 (defun builder-emacs-conf-native-compile-all ()
-  "Queue native compilation of all .el files in lisp/ and elpa/, then prune cache.
-Reports the number of files queued and the time taken to dispatch them.
-Runs once on a 60-second idle timer after startup; also callable interactively.
-Compilation itself is async — Emacs stays responsive while .eln files are built."
+  "Incrementally native-compile stale .el files in lisp/ and elpa/.
+Collects candidate files, then hands them to
+`builder--native-compile-process-queue', which works through them a
+bounded chunk at a time on an idle timer, skipping any file whose .eln is
+already up to date and only dispatching genuinely stale files to
+`native-compile-async'. Runs once on a 60-second idle timer after
+startup; also callable interactively to force a fresh sweep."
   (interactive)
   (if (not (or (string-match "NATIVE_COMP" system-configuration-features)
 	       (fboundp 'native-compile-async)))
@@ -1944,16 +1992,14 @@ Compilation itself is async — Emacs stays responsive while .eln files are buil
                     (when (file-directory-p lisp-dir)
 		      (directory-files-recursively lisp-dir "\\.el\\'"))
                     (when (file-directory-p elpa-dir)
-		      (directory-files-recursively elpa-dir "\\.el\\'")))))
-           (n (length files)))
-      (with-slow-op-timer "native-compile-all-local: dispatch"
-        (native-compile-async files))
-      (condition-case err
-          (when (fboundp 'native-compile-prune-cache)
-            (native-compile-prune-cache))
-        (error (message "native-compile-prune-cache error: %s"
-                        (error-message-string err))))
-      (message "builder-emacs-conf-native-compile-all: queued %d .el files" n))))
+		      (directory-files-recursively elpa-dir "\\.el\\'"))))))
+      (setq builder--native-compile-queue files)
+      (unless builder--native-compile-idle-timer
+        (setq builder--native-compile-idle-timer
+              (run-with-idle-timer builder--native-compile-idle-delay t
+                                    #'builder--native-compile-process-queue)))
+      (message "builder-emacs-conf-native-compile-all: queued %d .el files for incremental staleness check"
+               (length files)))))
 
 (defvar bootstrap-vendored-packages)
 
