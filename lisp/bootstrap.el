@@ -53,6 +53,39 @@
 (setq auto-revert-avoid-polling t)
 (setq auto-revert-interval 60)
 
+;; `ask-user-about-lock'/`ask-user-about-supersession-threat' only skip
+;; their blocking minibuffer prompt under `noninteractive' (`--batch'),
+;; not in a live daemon handling `emacsclient --eval' or firing a timer.
+;; Suppress only for those paths (see `tychoish--suppress-supersession-prompt'
+;; below) so a live interactive save still gets the real prompt.
+(setq create-lockfiles nil)
+
+(defvar tychoish--suppress-supersession-prompt nil
+  "Non-nil while handling an `emacsclient --eval' request or a timer callback.
+Bound by advice on `server-eval-and-print' and `timer-event-handler' --
+between them, every path with no human watching to answer
+`ask-user-about-supersession-threat' (which would otherwise hang the
+daemon indefinitely, e.g. an idle-timer-driven desktop/abbrev autosave
+racing a file an agent just rewrote on disk). A live interactive save,
+triggered directly by a keypress, still prompts normally.")
+
+(with-eval-after-load 'server
+  (advice-add 'server-eval-and-print :around
+              (lambda (orig-fn expr proc)
+                (let ((tychoish--suppress-supersession-prompt t))
+                  (funcall orig-fn expr proc)))))
+
+(advice-add 'timer-event-handler :around
+            (lambda (orig-fn timer)
+              (let ((tychoish--suppress-supersession-prompt t))
+                (funcall orig-fn timer))))
+
+(advice-add 'ask-user-about-supersession-threat :around
+            (lambda (orig-fn filename)
+              (if tychoish--suppress-supersession-prompt
+                  (message "%s changed on disk, editing file anyway" filename)
+                (funcall orig-fn filename))))
+
 (setq enable-recursive-minibuffers t)
 (setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
 
@@ -194,13 +227,11 @@ directory, autoloading the package signals a stale
      (setq desktop-restore-frames nil)
      (setq desktop-restore-in-current-display nil)
 
-     ;; Fully eager on every instance, daemon or not: restoring lazily
-     ;; (via `desktop-idle-create-buffers') means the idle timer that does
-     ;; that restoration competes with everything else -- including
-     ;; agent-shell/ACP's own idle-timer-driven message draining -- for
-     ;; potentially minutes after every restart, since Emacs is
-     ;; single-threaded. A slower, blocking startup is a better trade
-     ;; than that contention window.
+     ;; Fully eager everywhere, daemon or not. Lazy restore
+     ;; (`desktop-idle-create-buffers') runs on an idle timer that competes
+     ;; with everything else, including agent-shell/ACP's own message
+     ;; draining, for minutes after every restart, since Emacs is
+     ;; single-threaded. A slower, blocking startup beats that contention.
      (setq desktop-restore-eager t)
      (if (daemonp)
          (setq desktop-load-locked-desktop t)

@@ -3025,15 +3025,14 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (defun ad:agent-shell-recover-stuck-push-end (orig-fn &rest args)
     "Call ORIG-FN with ARGS, then recover a stuck busy state.
 
-Workaround for a bug in `agent-shell-experimental--on-session-push-end':
-when a session_push_end notification arrives but its matching
-session/push request is no longer in :active-requests (e.g. a stale or
+Works around a bug in `agent-shell-experimental--on-session-push-end'.
+When a session_push_end notification arrives but its matching
+session/push request is no longer in :active-requests (a stale or
 duplicate notification), the function silently no-ops and never calls
-its :on-finished callback. Since `shell-maker-finish-output' (the only
-place that clears `shell-maker--busy' for ACP sessions) is invoked
-exclusively from that callback, `shell-maker--busy' is left t forever
-with no user-visible failure -- see
-~/garen/emacs/agent-shell-acp-disconnect-plan.md."
+its :on-finished callback. `shell-maker-finish-output' is the only place
+that clears `shell-maker--busy' for ACP sessions, and it is invoked
+exclusively from that callback, so `shell-maker--busy' is left t forever
+with no user-visible failure."
     (apply orig-fn args)
     (when shell-maker--busy
       (message "agent-shell: recovering stuck busy state after session_push_end")
@@ -3044,20 +3043,7 @@ with no user-visible failure -- see
               :around #'ad:agent-shell-recover-stuck-push-end)
 
   (defun ad:acp-route-incoming-message-isolate-errors (orig-fn &rest args)
-    "Call ORIG-FN with ARGS, isolating errors from response handling.
-
-Workaround for a bug in `acp--route-incoming-message': unlike its
-notification/request routing (whose handlers are each wrapped in
-`condition-case-unless-debug' by `acp--start-client'), its
-response-result branches (:on-success / :on-failure) call their
-callbacks unprotected. An error there escapes the `run-at-time' drain
-callback in `acp--start-client' before that closure resets its
-message-queue-busy flag to nil, which permanently wedges the per-client
-message drain: the process filter keeps enqueueing incoming
-notifications and responses, but nothing ever gets dispatched again --
-the agent keeps working, but the shell buffer never reports it again,
-and only killing the process (e.g. via interrupt) ends the session. See
-~/garen/emacs/agent-shell-acp-disconnect-plan.md."
+    "Call ORIG-FN with ARGS, isolating errors from response handling."
     (condition-case err
         (apply orig-fn args)
       (error
@@ -3065,6 +3051,38 @@ and only killing the process (e.g. via interrupt) ends the session. See
        nil)))
   (advice-add 'acp--route-incoming-message
               :around #'ad:acp-route-incoming-message-isolate-errors)
+
+  (declare-function agent-shell-ui--group-header-range "agent-shell-ui")
+  (declare-function agent-shell-ui--block-range "agent-shell-ui")
+
+  (cl-defun ad:agent-shell-ui--group-children-bounded (&key group-qualified-id)
+    "Reimplementation of `agent-shell-ui--group-children' that cannot spin forever."
+    (when-let* ((header (agent-shell-ui--group-header-range group-qualified-id)))
+      (save-mark-and-excursion
+        (let ((children '())
+              (pos (map-elt header :end)))
+          (catch 'done
+            (while t
+              (goto-char pos)
+              (skip-chars-forward " \t\n")
+              (when (eobp) (throw 'done nil))
+              (let ((state (get-text-property (point) 'agent-shell-ui-state)))
+                (unless (and state (equal (map-elt state :group-id) group-qualified-id))
+                  (throw 'done nil))
+                (let* ((block (agent-shell-ui--block-range :position (point)))
+                       (end (map-elt block :end)))
+                  ;; Bail instead of spinning forever when the block
+                  ;; doesn't advance past `pos'.
+                  (when (or (null end) (<= end pos))
+                    (throw 'done nil))
+                  (push (list (cons :qualified-id (map-elt state :qualified-id))
+                              (cons :start (map-elt block :start))
+                              (cons :end end))
+                        children)
+                  (setq pos end)))))
+          (nreverse children)))))
+  (advice-add 'agent-shell-ui--group-children
+              :override #'ad:agent-shell-ui--group-children-bounded)
 
   (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
   (setq agent-shell-anthropic-default-session-mode-id "auto")
