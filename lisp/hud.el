@@ -296,12 +296,6 @@ Entries whose :if predicate returns nil are excluded."
 
 (hud-register-command
  :category 'mu4e
- :description "select mu4e bookmark"
- :command #'consult-mu-bookmark
- :transient-key "mb")
-
-(hud-register-command
- :category 'mu4e
  :command #'tychoish-mail-select-account
  :display-name "mail-select-account"
  :description "select mail account"
