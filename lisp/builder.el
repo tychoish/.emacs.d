@@ -1949,12 +1949,10 @@ responds."
 
 (defun builder--native-compile-process-queue ()
   "Check/dispatch the next chunk of `builder--native-compile-queue'.
-Runs on `builder--native-compile-idle-delay' idle windows, a bounded chunk
-of files at a time, so a fresh startup's full lisp/+elpa/ file list is
-neither staleness-checked nor dispatched to `native-compile-async' in one
-synchronous burst. Only files without an up-to-date .eln are actually
-queued for compilation. Cancels itself and prunes the eln cache once the
-whole queue has been worked through."
+Runs a bounded chunk per idle tick rather than staleness-checking and
+dispatching the whole lisp/+elpa/ file list in one synchronous burst.
+Only stale files (no up-to-date .eln) are queued for compilation.
+Cancels itself and prunes the eln cache once the queue drains."
   (if (null builder--native-compile-queue)
       (when builder--native-compile-idle-timer
         (cancel-timer builder--native-compile-idle-timer)
@@ -1975,11 +1973,9 @@ whole queue has been worked through."
 (defun builder-emacs-conf-native-compile-all ()
   "Incrementally native-compile stale .el files in lisp/ and elpa/.
 Collects candidate files, then hands them to
-`builder--native-compile-process-queue', which works through them a
-bounded chunk at a time on an idle timer, skipping any file whose .eln is
-already up to date and only dispatching genuinely stale files to
-`native-compile-async'. Runs once on a 60-second idle timer after
-startup; also callable interactively to force a fresh sweep."
+`builder--native-compile-process-queue' to work through in bounded,
+staleness-checked chunks on an idle timer. Runs once on a 60-second idle
+timer after startup; also callable interactively for a fresh sweep."
   (interactive)
   (if (not (or (string-match "NATIVE_COMP" system-configuration-features)
 	       (fboundp 'native-compile-async)))
