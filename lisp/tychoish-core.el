@@ -2978,12 +2978,16 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
     (setq agent-shell-anthropic-claude-environment
           (agent-shell-make-environment-variables
            "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona
+	   "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS" "1"
+	   "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS" "1"
 	   "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
            :inherit-env t))
 
     (setq agent-shell-omp-environment
 	  (agent-shell-make-environment-variables
 	   "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
+	   "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS" "1"
+	   "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS" "1"
 	   "OMP_DOCS_DIR" (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "omp" "projects"))))
 
   (defun tychoish/agent-shell-toggle-terse-output ()
