@@ -870,6 +870,10 @@ lookup used by the package list view."
       (with-current-buffer standard-output
         (setq arch--info-package pkg-name)
         (setq arch--info-aur-p (arch--pkg-aur-source-p pkg-name))
+        (when-let* ((_ arch--info-aur-p)
+                    (pkg-dir (arch--aur-abs-pkg-dir pkg-name))
+                    (_ (file-directory-p pkg-dir)))
+          (setq default-directory pkg-dir))
         (arch--info-render pkg-name plist files)
         (goto-char (point-min))))
     (when-let* ((buf (get-buffer buf-name)))
