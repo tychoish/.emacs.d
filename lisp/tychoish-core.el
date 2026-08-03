@@ -2293,7 +2293,14 @@ return until the minibuffer session ends."
 
   (setq-default compilation-save-buffers-predicate #'approximate-project-root)
   (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
-  (compile-add-error-syntax 'go-test "^\\(.+?\\.go\\):\\([0-9]+\\):" '(tychoish/go-test-filename-from-package (match-string 1)) 2)
+
+  (defun tychoish/go-test-filename-from-package (pkg)
+    "Convert go package path PKG to full file path."
+    (let ((gopath (getenv "GOPATH")))
+      (when gopath
+        (expand-file-name (concat gopath "/src/" pkg)))))
+
+  (compile-add-error-syntax 'go-test "^\\(.+?\\.go\\):\\([0-9]+\\):" (lambda () (tychoish/go-test-filename-from-package (match-string 1))) 2)
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
   (advice-add 'compilation-read-command :override 'tychoish-compilation-read-command))
 
