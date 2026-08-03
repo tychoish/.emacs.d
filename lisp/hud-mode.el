@@ -409,15 +409,25 @@
 
 (defun frame-unset-background-for-tty (frame)
   ;; https://stackoverflow.com/questions/19054228/emacs-disable-theme-background-color-in-terminal
+  ;;
+  ;; The sentinel strings "unspecified-bg"/"unspecified-fg" stick; the symbol
+  ;; `unspecified' does not -- Emacs's default-face realization silently
+  ;; resolves it back to the frame's concrete background-color parameter on
+  ;; the next redisplay, undoing the effect a moment after it's set.
   (unless (display-graphic-p frame)
-    (set-face-background 'default "undefined" frame)
-    (set-face-background 'default "undefined" frame)
-    (set-face-attribute 'default frame :background 'unspecified :foreground 'unspecified)))
+    (set-face-background 'default "unspecified-bg" frame)
+    (set-face-foreground 'default "unspecified-fg" frame)))
 
 (defun current-frame-unset-background-for-tty ()
   "Reset the background on the current frame, but only if its a TTY frame."
   (interactive)
   (frame-unset-background-for-tty (selected-frame)))
+
+(defun ad:unset-background-for-tty-frames-after-theme-enable (&rest _theme)
+  "Re-apply the TTY background unset to all TTY frames after a theme is enabled.
+Themes set an explicit `default' face background, which clobbers the
+unspecified background `frame-unset-background-for-tty' set for TTY frames."
+  (seq-do #'frame-unset-background-for-tty (frame-list)))
 
 (defun frame-enable-xterm-mouse-for-tty (frame)
   "Enable xterm-mouse-mode when FRAME is a tty frame."
@@ -897,6 +907,7 @@ interactively then remove duplicate items from the `kill-ring'."
 (add-hook 'after-make-frame-functions #'hud--install-buffer-predicate)
 (add-hook 'server-after-make-frame-hook #'current-frame-unset-background-for-tty)
 (add-hook 'window-setup-hook #'current-frame-unset-background-for-tty)
+(add-hook 'enable-theme-functions #'ad:unset-background-for-tty-frames-after-theme-enable)
 
 (add-hook 'after-make-frame-functions #'frame-enable-xterm-mouse-for-tty)
 (add-hook 'server-after-make-frame-hook #'current-frame-enable-xterm-mouse-for-tty)
