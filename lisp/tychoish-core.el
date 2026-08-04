@@ -2286,9 +2286,8 @@ return until the minibuffer session ends."
 
   (defun tychoish-compilation-read-command (command)
     (let* ((results (builder--read-command command))
-	   (name (car results))
-	   (candidates (cdr results))
-	   (command (builder-candidate-command (map-elt candidates name))))
+	   (candidate (car results))
+	   (command (builder-candidate-command candidate)))
       (read-from-minibuffer "edit command => " command)))
 
   (add-hook 'compilation-finish-functions #'alert-after-finish-in-background)

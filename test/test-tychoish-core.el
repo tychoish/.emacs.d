@@ -7,6 +7,9 @@
 
 (require 'ert)
 (require 'test-helper)
+(require 'cl-lib)
+(require 'tychoish-core)
+(require 'builder)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-buffer-name-format lambda
@@ -96,6 +99,20 @@ from a plain `require'.  The block is now named `python' to match the
 feature it actually depends on, so a plain `require' triggers it."
   (require 'python)
   (should (memq 'tychoish/python-setup python-ts-mode-hook)))
+
+(ert-deftest tychoish-core/compilation-read-command ()
+  "Test that `tychoish-compilation-read-command' processes `builder--read-command'
+correctly and reads from the minibuffer using the candidate's command."
+  (let* ((c (make-builder-candidate :command "make -j8" :name "build"))
+         (mock-results (cons c nil)))
+    (cl-letf (((symbol-function 'builder--read-command)
+               (lambda (_cmd) mock-results))
+              ((symbol-function 'read-from-minibuffer)
+               (lambda (prompt val)
+                 (should (equal "edit command => " prompt))
+                 (should (equal "make -j8" val))
+                 val)))
+      (should (equal "make -j8" (tychoish-compilation-read-command "make"))))))
 
 (provide 'test-tychoish-core)
 ;;; test-tychoish-core.el ends here
