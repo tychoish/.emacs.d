@@ -488,11 +488,12 @@ content filter active, not on every keystroke."
 (keymap-set denote-dash-mode-map "t" #'denote-dash-toggle-non-sequence)
 (keymap-set denote-dash-mode-map "r" #'denote-rename-file-using-front-matter)
 (keymap-set denote-dash-mode-map "l" #'denote-dash-lint-sequences)
-(keymap-set denote-dash-mode-map "C-r" #'denote-dash-repack-sequence-children)
+(keymap-set denote-dash-mode-map "n" #'next-line)
+(keymap-set denote-dash-mode-map "p" #'previous-line)
+(keymap-set denote-dash-mode-map "g" #'denote-dash-refresh)
 (keymap-set denote-dash-mode-map "M-r" #'denote-dash-swap-with-parent)
 (keymap-set denote-dash-mode-map "M-p" #'denote-dash-swap-with-previous)
 (keymap-set denote-dash-mode-map "M-n" #'denote-dash-swap-with-next)
-(keymap-set denote-dash-mode-map "C-n" denote-dash-narrow-map)
 (keymap-set denote-dash-mode-map "k" #'denote-dash-retag-sequence)
 (keymap-set denote-dash-mode-map "m" #'denote-dash-reparent)
 (keymap-set denote-dash-mode-map "u" #'denote-dash-renumber-recursive)
@@ -500,10 +501,11 @@ content filter active, not on every keystroke."
 (keymap-set denote-dash-mode-map "h" #'denote-dash-fix-sequence-frontmatter)
 (keymap-set denote-dash-mode-map "C-l" #'denote-dash-fix-all-sequence-frontmatter)
 (keymap-set denote-dash-mode-map "v" #'denote-dash-schedule-review-at-point)
-(keymap-set denote-dash-mode-map "n" #'denote)
-(keymap-set denote-dash-mode-map "g" #'denote-dash-refresh)
 (keymap-set denote-dash-mode-map "?" #'denote-dash-dispatch)
 (keymap-set denote-dash-mode-map "q" #'quit-window)
+(keymap-set denote-dash-mode-map "N" #'denote)
+(keymap-set denote-dash-mode-map "w" denote-dash-narrow-map)
+(keymap-set denote-dash-mode-map "C-c C-r" #'denote-dash-repack-sequence-children)
 
 (define-derived-mode denote-dash-mode tabulated-list-mode "ddash"
   "Major mode for browsing and filtering Denote notes.

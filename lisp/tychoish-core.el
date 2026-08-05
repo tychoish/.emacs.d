@@ -15,10 +15,6 @@
 (declare-function approximate-project-root "xtd-project")
 (declare-function approximate-project-name "xtd-project")
 
-;; Required eagerly (not deferred via :commands below) since many other
-;; use-package :init/:config blocks below reference hud-mode-map/hud-*-map
-;; directly, at load time, not through an autoloaded command.
-
 (use-package hud-mode
   :ensure nil
   :demand t
@@ -2886,7 +2882,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
    :model 'gpt-5.6-terra
    :api-key openai-api-key)
 
-  (gptel-set-backend-default-sonnet-5)
+  (gptel-set-backend-default-gemini-flash-lite)
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
