@@ -2824,7 +2824,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
            ,(when api-key
               `(setq-local gptel-api-key (lambda () ,api-key)))
            (setq-local gptel-backend ,backend)
-           (message "[gptel] set backend to %s for the local buffer" ,name))
+           (or (message "[gptel] set backend to %s for the local buffer" ,name)))
 
 	 (defun ,default-function-symbol ()
            ,(format "Set the default LLM backend for the current session to `%s'" model)
@@ -2833,7 +2833,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
            ,(when api-key
               `(setq-default gptel-api-key (lambda () ,api-key)))
            (setq-default gptel-backend ,backend)
-           (message "[gptel] set default backend to %s" ,name))
+           (or (message "[gptel] set default backend to %s" ,name)))
 
 	 (keymap-set gptel-mode-map ,(format "C-c r a m %s" (upcase key)) #',default-function-symbol)
 	 (keymap-set gptel-mode-map ,(format "C-c r a m %s" (downcase key)) #',local-function-symbol)
@@ -2846,33 +2846,39 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (make-gptel-set-up-backend-functions
    :name "sonnet-5"
    :key "s"
-   :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
    :model 'claude-sonnet-5
+   :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
    :api-key anthropic-api-key)
 
   (make-gptel-set-up-backend-functions
    :name "gemini-flash"
    :key "f"
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-   :model 'gemini-flash-lite-latest)
+   :model 'gemini-flash-latest
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
+
+  (make-gptel-set-up-backend-functions
+   :name "gemini-flash-preview"
+   :key "f"
+   :model 'gemini-3-flash-preview
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "gemini-flash-lite"
    :key "l"
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t)
-   :model 'gemini-flash-lite-latest)
+   :model 'gemini-flash-lite-latest
+   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
    :name "copilot"
    :key "c"
-   :backend (gptel-make-gh-copilot "copilot")
-   :model 'gpt-5-mini)
+   :model 'gpt-5-mini
+   :backend (gptel-make-gh-copilot "copilot"))
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5"
    :key "5"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
    :model 'gpt-5
+   :backend (gptel-make-openai "openai" :key openai-api-key)
    :api-key openai-api-key)
 
   (make-gptel-set-up-backend-functions
@@ -2882,7 +2888,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
    :model 'gpt-5.6-terra
    :api-key openai-api-key)
 
-  (gptel-set-backend-default-gemini-flash-lite)
+  (gptel-set-backend-default-gemini-flash-preview)
   (require 'gptel-integrations))
 
 (use-package gptel-aibo
