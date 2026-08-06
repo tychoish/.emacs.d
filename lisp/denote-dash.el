@@ -85,10 +85,10 @@ filter language: strings, (or ...), (and ...), (not ...)."
 
 (defcustom denote-dash-initial-columns '(sequence title keywords id)
   "Columns shown when the *denote-dash* buffer is first created.
-Valid symbols: fold, sequence, title, keywords, modified, id, directory, git."
+Valid symbols: fold, sequence, title, keywords, modified, id, directory, git, review, reviewdate."
   :type '(repeat (choice (const fold) (const sequence) (const title)
                          (const keywords) (const modified) (const id)
-                         (const directory) (const git)))
+                         (const directory) (const git) (const review) (const reviewdate)))
   :group 'denote-dash)
 
 (defcustom denote-dash-title-source 'front-matter
@@ -254,13 +254,39 @@ hierarchy levels alternate between digit and letter characters."
 
 ;;; Filter expression evaluator
 
+(defun denote-dash--matches-tags-p (keywords specs)
+  "Evaluate left-to-right tag specs SPECS against KEYWORDS.
+SPECS is a list of strings, each formatted as \"+tag\" (or bare \"tag\") or \"-tag\".
+If the first spec starts with \"-\", evaluation starts with t (all included)
+and \"-tag\" excludes matching notes, while \"+tag\" re-includes them.
+If the first spec starts with \"+\" or is bare, evaluation starts with nil
+(none included) and \"+tag\" includes matching notes, while \"-tag\" excludes them."
+  (when specs
+    (let* ((first (car specs))
+           (start-with-minus (string-prefix-p "-" first))
+           (matched (if start-with-minus t nil)))
+      (dolist (spec specs matched)
+        (let* ((is-minus (string-prefix-p "-" spec))
+               (tag (if (or (string-prefix-p "+" spec) (string-prefix-p "-" spec))
+                        (substring spec 1)
+                      spec))
+               (has-tag (member tag keywords)))
+          (cond
+           (is-minus
+            (when has-tag
+              (setq matched nil)))
+           (t
+            (when has-tag
+              (setq matched t)))))))))
+
 (defun denote-dash--matches-p (keywords expr)
   "Return non-nil if KEYWORDS (list of strings) satisfies filter EXPR.
-EXPR may be: nil (match all), a string (keyword member test),
+EXPR may be: nil (match all), a string, (tags ...),
 or (or ...), (and ...), (not ...) compound forms."
   (pcase expr
-    ('nil t)
-    ((pred stringp) (member expr keywords))
+    ('nil           t)
+    ((pred stringp) (denote-dash--matches-tags-p keywords (list expr)))
+    (`(tags . ,specs) (denote-dash--matches-tags-p keywords specs))
     (`(or  . ,args) (seq-some   (lambda (e) (denote-dash--matches-p keywords e)) args))
     (`(and . ,args) (seq-every-p (lambda (e) (denote-dash--matches-p keywords e)) args))
     (`(not ,arg)    (not (denote-dash--matches-p keywords arg)))))
@@ -270,6 +296,7 @@ or (or ...), (and ...), (not ...) compound forms."
   (pcase expr
     ('nil t)
     ((pred stringp) t)
+    (`(tags . ,specs) (and specs (seq-every-p #'stringp specs)))
     (`(or  . ,args) (seq-every-p #'denote-dash--valid-filter-p args))
     (`(and . ,args) (seq-every-p #'denote-dash--valid-filter-p args))
     (`(not ,arg)    (denote-dash--valid-filter-p arg))
@@ -412,7 +439,8 @@ content filter active, not on every keystroke."
                                      ('directory (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
                                      ('git       (or (denote-dash--git-status-char file) " "))
                                      ('review    (funcall denote-dash-review-indicator-function
-                                                          (denote-dash--review-pending-p file)))))
+                                                          (denote-dash--review-pending-p file)))
+                                     ('reviewdate (or (denote-review-check-date-of-file file (denote-review-search-regexp-for-filetype)) ""))))
                                  denote-dash--visible-columns)))))))))
 
 ;;; Column format
@@ -430,6 +458,7 @@ content filter active, not on every keystroke."
         ('directory 20)
         ('git       1)
         ('review    3)
+        ('reviewdate 10)
         (_          10))))
 
 (defun denote-dash--setup-columns ()
@@ -446,7 +475,8 @@ content filter active, not on every keystroke."
                             ('id        (list "ID" (denote-dash--column-width 'id) t))
                             ('directory (list "Dir" (denote-dash--column-width 'directory) t))
                             ('git       (list "G" (denote-dash--column-width 'git) nil))
-                            ('review    (list "Rev" (denote-dash--column-width 'review) nil))))
+                            ('review    (list "Rev" (denote-dash--column-width 'review) nil))
+                            ('reviewdate (list "Reviewdate" (denote-dash--column-width 'reviewdate) t))))
                         denote-dash--visible-columns)))
   (tabulated-list-init-header))
 
@@ -847,18 +877,145 @@ Use this when a rename swaps two whole subtrees, e.g.
   (when-let* ((file (tabulated-list-get-id)))
     (find-file-other-window file)))
 
+(defun ad:denote-dash--review-set-date-target-file (orig-fn &rest args)
+  "Make `denote-review-set-date' target the current note or note at point."
+  (if (and buffer-file-name (denote-file-has-identifier-p buffer-file-name))
+      (apply orig-fn args)
+    (when-let* ((file (or (denote-dash--file-at-point)
+                          (denote-dash-note-prompt "select denote: "))))
+      (let* ((existing (get-file-buffer file))
+             (buf (find-file-noselect file)))
+        (with-current-buffer buf
+          (apply orig-fn args)
+          (save-buffer))
+        (unless existing (kill-buffer buf))
+        (when (derived-mode-p 'denote-dash-mode)
+          (denote-dash-refresh))))))
+
+(advice-add 'denote-review-set-date :around #'ad:denote-dash--review-set-date-target-file)
+
 (defun denote-dash-schedule-review-at-point ()
   "Set today's reviewdate on the note at point, without leaving denote-dash."
   (interactive)
-  (when-let* ((file (tabulated-list-get-id)))
-    (let* ((existing (get-file-buffer file))
-           (denote-file-type (denote-filetype-heuristics file)))
-      (with-current-buffer (find-file-noselect file)
-        (denote-review-set-date)
-        (save-buffer)
-        (unless existing (kill-buffer))))
-    (denote-dash-refresh)))
+  (denote-review-set-date))
 
+;;; Review list functionality
+
+(defun denote-dash--review-timeframe-status (reviewdate)
+  "Return timeframe symbol (`past', `today', `week', or `later') for REVIEWDATE string."
+  (if-let* ((date-time (ignore-errors (date-to-time reviewdate))))
+      (let* ((review-day (time-to-days date-time))
+             (today-day (time-to-days (current-time)))
+             (diff (- review-day today-day)))
+        (cond
+         ((< diff 0) 'past)
+         ((= diff 0) 'today)
+         ((<= diff 7) 'week)
+         (t 'later)))
+    'later))
+
+(defun denote-dash--review-file-matches-filter-p (filename reviewdate filter)
+  "Return non-nil if FILENAME and REVIEWDATE match FILTER.
+FILTER can be a keyword string or a timeframe symbol (`due', `past', `today', `week', `all')."
+  (let ((status (denote-dash--review-timeframe-status reviewdate)))
+    (pcase filter
+      ('due   (memq status '(past today week)))
+      ('past  (eq status 'past))
+      ('today (eq status 'today))
+      ('week  (eq status 'week))
+      ('all   t)
+      ((pred symbolp) (memq status '(past today week)))
+      ((pred stringp)
+       (or (string-empty-p filter)
+           (string-match (rx "_" (literal filter)) filename)))
+      (_ t))))
+
+(defun denote-dash--review-collect-files (denotepath-and-filter)
+  "Fetch reviewdate from the files in DENOTEPATH-AND-FILTER.
+Filter filenames according to DENOTEPATH-AND-FILTER (cons of path and filter)."
+  (let* ((path (or (car-safe denotepath-and-filter) (denote-dash--denote-root)))
+         (filter (if (consp denotepath-and-filter) (cdr denotepath-and-filter) denotepath-and-filter))
+         (search-regexp (denote-review-search-regexp-for-filetype))
+         (denote-directory path)
+         (entries
+          (mapcan (lambda (filename)
+                    (and-let* ((reviewdate (denote-review-check-date-of-file
+                                            filename search-regexp)))
+                      (when (denote-dash--review-file-matches-filter-p filename reviewdate filter)
+                        (let ((status-str (pcase (denote-dash--review-timeframe-status reviewdate)
+                                            ('past "past")
+                                            ('today "today")
+                                            ('week "< 1 week")
+                                            (_ "later"))))
+                          `((,filename
+                             [,status-str
+                              ,reviewdate
+                              ,(file-name-nondirectory filename)]))))))
+                  (denote-directory-files nil t nil))))
+    (or entries
+        (user-error "No files with a reviewdate found (filter: %s)" filter))))
+
+(defun denote-dash-review-select-filter-prompt ()
+  "Prompt for a review timeframe or keyword filter."
+  (let* ((choices '(("due (past, today, < 1 week)" . due)
+                    ("past (overdue)"             . past)
+                    ("today"                      . today)
+                    ("in < 1 week"                . week)
+                    ("all notes with reviewdate"  . all)
+                    ("filter by keyword..."       . keyword)))
+         (picked (completing-read "Review filter: " choices nil t)))
+    (if (equal picked "filter by keyword...")
+        (if (fboundp 'denote-review-select-keyword)
+            (denote-review-select-keyword)
+          (cons (denote-dash--denote-root) (completing-read "Keyword: " (denote-dash--all-keywords))))
+      (cdr (assoc picked choices)))))
+
+;;;###autoload
+(defun denote-dash-review-display-list (&optional filter)
+  "Show buffer with reviewdates.
+FILTER can be a timeframe symbol (`due', `past', `today', `week', `all'),
+a cons of (PATH . KEYWORD-OR-TIMEFRAME), or nil.
+By default (when FILTER is nil or called interactively without prefix arg),
+filters to notes due for review (past, today, or in < 1 week).
+With a prefix argument C-u when called interactively, prompts for a filter."
+  (interactive
+   (list (if current-prefix-arg
+             (denote-dash-review-select-filter-prompt)
+           'due)))
+  (let* ((filter-spec (or filter 'due))
+         (path (cond ((consp filter-spec) (car filter-spec))
+                     (t (denote-dash--denote-root))))
+         (arg (if (consp filter-spec) (cdr filter-spec) filter-spec))
+         (cons-arg (cons path arg)))
+    (with-current-buffer (get-buffer-create "*denote-review-results*")
+      (if (fboundp 'denote-review-mode)
+          (denote-review-mode)
+        (tabulated-list-mode))
+      (setq tabulated-list-format
+            [("Status" 10 t)
+             ("Reviewdate" 12 t)
+             ("Filename" 60 t)])
+      (setq tabulated-list-sort-key (cons "Reviewdate" nil))
+      (tabulated-list-init-header)
+      (setq tabulated-list-entries (lambda () (denote-dash--review-collect-files cons-arg)))
+      (tabulated-list-print t)
+      (display-buffer (current-buffer))
+      (setq mode-line-buffer-identification
+            (format "*denote-review-results* [%s | %s]"
+                    path
+                    (cond
+                     ((symbolp arg) (symbol-name arg))
+                     ((stringp arg) (if (string-empty-p arg) "all" arg))
+                     (t "due"))))
+      (force-mode-line-update))))
+
+(defun ad:denote-dash--review-display-list (orig-fn &optional filter)
+  "Make `denote-review-display-list' use `denote-dash-review-display-list'."
+  (if (or filter current-prefix-arg (not (called-interactively-p 'any)))
+      (denote-dash-review-display-list filter)
+    (denote-dash-review-display-list 'due)))
+
+(advice-add 'denote-review-display-list :around #'ad:denote-dash--review-display-list)
 ;;; Filter commands
 
 (defun denote-dash--all-keywords ()
@@ -871,17 +1028,27 @@ Use this when a rename swaps two whole subtrees, e.g.
     (seq-sort #'string<)))
 
 (defun denote-dash-filter (arg)
-  "Filter notes by keyword selection using completing-read-multiple.
-Without prefix ARG, build an AND expression; with prefix ARG, build OR."
+  "Filter notes by keyword/tag selection.
+Prompts for one or more tags or tag specifications (e.g., \"+tag\", \"-tag\").
+Filters are applied left-to-right.  If the first spec starts with \"-\",
+all notes are initially included and \"-tag\" removes matches.  If the first
+spec starts with \"+\" or is bare, only notes matching \"+tag\" are added.
+With prefix ARG, prompt for raw expression."
   (interactive "P")
-  (let* ((selected (completing-read-multiple "Filter keywords: " (denote-dash--all-keywords)))
-         (expr (cond
-                ((null selected) nil)
-                ((= (length selected) 1) (car selected))
-                (arg `(or ,@selected))
-                (t `(and ,@selected)))))
-    (setq denote-dash--current-filter expr)
-    (denote-dash-refresh)))
+  (if arg
+      (call-interactively #'denote-dash-filter-expression)
+    (let* ((all-kws (denote-dash--all-keywords))
+           (candidates (apply #'append (mapcar (lambda (k) (list k (concat "+" k) (concat "-" k))) all-kws)))
+           (selected (completing-read-multiple "Filter tags (+tag, -tag): " candidates)))
+      (setq denote-dash--current-filter
+            (cond
+             ((null selected) nil)
+             ((and (= (length selected) 1)
+                   (not (string-prefix-p "+" (car selected)))
+                   (not (string-prefix-p "-" (car selected))))
+              (car selected))
+             (t `(tags ,@selected))))
+      (denote-dash-refresh))))
 
 (defun denote-dash-clear-filter ()
   "Remove the current filter and show all notes."
@@ -1089,8 +1256,9 @@ this only adds a discoverable `/' in front of them."
 ;;; Column ordering and toggle
 
 (defvar denote-dash-column-order
-  '(sequence fold title keywords id directory modified git review)
+  '(sequence fold title keywords id directory modified git review reviewdate)
   "Canonical display order for columns; determines left-to-right position.")
+(setq denote-dash-column-order '(sequence fold title keywords id directory modified git review reviewdate))
 
 (defvar denote-dash--persisted-columns nil
   "Column list saved across sessions for `*denote-dash*'.")
@@ -1143,6 +1311,10 @@ this only adds a discoverable `/' in front of them."
 (defun denote-dash-toggle-review-column ()
   "Toggle the review-pending status column."
   (interactive) (denote-dash--toggle-column 'review))
+
+(defun denote-dash-toggle-reviewdate-column ()
+  "Toggle the reviewdate column."
+  (interactive) (denote-dash--toggle-column 'reviewdate))
 
 (defun denote-dash-set-column-width ()
   "Interactively set the display width for a visible column."
@@ -1225,10 +1397,11 @@ this only adds a discoverable `/' in front of them."
     ("i" "id"        denote-dash-toggle-id-column)
     ("d" "directory" denote-dash-toggle-directory-column)
     ("g" "git"       denote-dash-toggle-git-column)
-    ("v" "review"    denote-dash-toggle-review-column)
+    ("v" "review status" denote-dash-toggle-review-column)
+    ("r" "review date"   denote-dash-toggle-reviewdate-column)
     ("o" "sort…"     denote-dash-sort-transient)]
    ["Display"
-    ("r" denote-dash-toggle-front-matter-titles)
+    ("e" denote-dash-toggle-front-matter-titles)
     ("w" "set column width" denote-dash-set-column-width)]])
 
 ;;; Savehist
@@ -1640,6 +1813,13 @@ retag, or renumber shows up immediately without leaving the buffer."
 ;;   n, j, id = bare single-key create commands
 
 ;;;###autoload
+(defun denote-dash--denote-review-available-p ()
+  "Return non-nil if `denote-review' is available."
+  (require 'denote-review nil t))
+
+(defun denote-dash--denote-explore-available-p ()
+  "Return non-nil if `denote-explore' is available."
+  (require 'denote-explore nil t))
 (transient-define-prefix denote-dash-dispatch ()
   "Dispatch Denote commands by area."
   [["Find"
@@ -1675,9 +1855,9 @@ retag, or renumber shows up immediately without leaving the buffer."
   [["Splice"
     ("rp" "reparent (asks recursive)" denote-dash-reparent)
     ("rn" "renumber recursive" denote-dash-renumber-recursive)]
-   ["Review"
-    ("vd" "set review date"    denote-review-set-date)
-    ("vl" "review list"        denote-review-display-list)]
+   ["Review" :if denote-dash--denote-review-available-p
+    ("rd" "set review date"    denote-review-set-date)
+    ("rl" "review list"        denote-dash-review-display-list)]
    ["Link"
     ("ll" "insert link"        denote-link)
     ("lp" "link (sequence)"    denote-sequence-link)]
@@ -1692,7 +1872,7 @@ retag, or renumber shows up immediately without leaving the buffer."
     ("vf" "dired"              denote-dired)
     ("vc" "close all notes"    denote-dash-close-all-notes)
     ("vk" "save+kill all notes" denote-dash-save-and-kill-all-notes)]
-   ["Explore"
+   ["Explore" :if denote-dash--denote-explore-available-p
     ("er" "random note"        denote-explore-random-note)
     ("em" "missing links"      denote-explore-missing-links)
     ("ek" "keyword chart"      denote-explore-barchart-keywords)

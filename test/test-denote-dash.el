@@ -740,6 +740,77 @@ date string (\"YYYY-MM-DD\") written as the note's reviewdate frontmatter."
   (should (equal "" (denote-dash-review-indicator-text nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Tag specs evaluator (+tag, -tag, left-to-right)
+
+(ert-deftest denote-dash-test/matches-tags-p-plus-first ()
+  "First spec +tag starts with none included, adds matches."
+  (should (denote-dash--matches-tags-p '("project" "elisp") '("+project")))
+  (should-not (denote-dash--matches-tags-p '("journal") '("+project"))))
+
+(ert-deftest denote-dash-test/matches-tags-p-minus-first ()
+  "First spec -tag starts with all included, removes matches."
+  (should-not (denote-dash--matches-tags-p '("draft" "journal") '("-draft")))
+  (should (denote-dash--matches-tags-p '("journal") '("-draft"))))
+
+(ert-deftest denote-dash-test/matches-tags-p-left-to-right-order ()
+  "Left-to-right evaluation overrides prior state."
+  ;; -draft excludes, then +project re-includes if note has project
+  (should (denote-dash--matches-tags-p '("draft" "project") '("-draft" "+project")))
+  ;; +project includes, then -draft excludes if note has draft
+  (should-not (denote-dash--matches-tags-p '("draft" "project") '("+project" "-draft"))))
+
+(ert-deftest denote-dash-test/valid-filter-tags-form ()
+  "(tags ...) is a valid filter expression."
+  (should (denote-dash--valid-filter-p '(tags "+project" "-draft"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Reviewdate column
+
+(ert-deftest denote-dash-test/reviewdate-column-setup ()
+  "The reviewdate column is valid in column order and setup."
+  (should (memq 'reviewdate denote-dash-column-order))
+  (let ((denote-dash--visible-columns '(sequence title reviewdate)))
+    (denote-dash--setup-columns)
+    (should (assoc "Reviewdate" (append tabulated-list-format nil)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; denote-review timeframe filtering
+
+(ert-deftest denote-dash-test/denote-review-timeframe-status ()
+  "Timeframe status correctly categorizes reviewdate strings relative to today."
+  (let ((today-str (format-time-string "%Y-%m-%d")))
+    (should (eq 'today (denote-dash--review-timeframe-status today-str)))
+    (should (eq 'past (denote-dash--review-timeframe-status "2020-01-01")))))
+
+(ert-deftest denote-dash-test/denote-review-target-file-context ()
+  "Target file resolution in review-set-date uses denote-dash--file-at-point."
+  (let ((dir (make-temp-file "denote-test" t)))
+    (unwind-protect
+        (let ((file (denote-dash-test--make-org-note-with-reviewdate dir "20260101T000000" "2020-01-01")))
+          (with-temp-buffer
+            (denote-dash-mode)
+            (setq tabulated-list-entries `((,file [" " "20260101T000000" "Title" "kw" "id"])))
+            (tabulated-list-print t)
+            (goto-char (point-min))
+            ;; Invoking set-date in denote-dash buffer should set review date on note at point
+            (denote-review-set-date)
+            (with-current-buffer (find-file-noselect file)
+              (goto-char (point-min))
+              (should (re-search-forward (format-time-string "%Y-%m-%d") nil t)))))
+      (delete-directory dir t))))
+(ert-deftest denote-dash-test/denote-review-display-list-default-filter ()
+  "denote-review-display-list without args filters into due notes (past, today, < 1 week)."
+  (let ((dir (make-temp-file "denote-test" t)))
+    (unwind-protect
+        (let* ((today-str (format-time-string "%Y-%m-%d"))
+               (file1 (denote-dash-test--make-org-note-with-reviewdate dir "20260101T000000" "2020-01-01"))
+               (file2 (denote-dash-test--make-org-note-with-reviewdate dir "20260101T000001" today-str))
+               (denote-directory dir))
+          (denote-review-display-list)
+          (with-current-buffer "*denote-review-results*"
+            (should (= 2 (length (funcall tabulated-list-entries))))))
+      (delete-directory dir t))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Transient key-collision regressions
 ;;
 ;; A transient's key strings must be unique and no single-char binding may
