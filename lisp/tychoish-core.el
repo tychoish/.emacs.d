@@ -2934,6 +2934,14 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   :ensure nil
   :defer t
   :config
+  (defun colorize-shell ()
+    "Apply ANSI colors to the agent-shell buffer."
+    (interactive)
+    (let ((inhibit-read-only t))
+      (ansi-color-apply-on-region (point-min) (point-max))))
+
+  (add-hook 'comint-mode-hook 'ansi-color-for-comint-mode-on)
+  (add-hook 'shell--mode-hook 'ansi-color-for-comint-mode-on)
   (add-hook 'shell-mode-hook 'tychoish/corfu-prog-mode-setup)
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
   (keymap-set comint-mode-map "M-p" #'comint-previous-input)
