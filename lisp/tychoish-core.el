@@ -2941,7 +2941,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
       (ansi-color-apply-on-region (point-min) (point-max))))
 
   (add-hook 'comint-mode-hook 'ansi-color-for-comint-mode-on)
-  (add-hook 'shell--mode-hook 'ansi-color-for-comint-mode-on)
+  (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
   (add-hook 'shell-mode-hook 'tychoish/corfu-prog-mode-setup)
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
   (keymap-set comint-mode-map "M-p" #'comint-previous-input)
@@ -3125,6 +3125,7 @@ with no user-visible failure."
 
   (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
   (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
+  (add-hook 'agent-shell-mode-hook #'ansi-color-for-comint-mode-on)
 
   (defun tychoish--agent-shell-buffer-p (buffer _action)
     "Return non-nil if BUFFER is an agent-shell communication buffer."
