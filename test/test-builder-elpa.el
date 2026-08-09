@@ -286,6 +286,7 @@
          (should (search-forward ";; Version: 1.0.0" nil t)))))))
 (ert-deftest builder-elpa-test-elpaish-bootstrap ()
   "Test loading elpaish packages.el and building the archive in both mode."
+  (skip-unless (file-directory-p (expand-file-name "~/src/elpaish")))
   (let ((elpaish-dir (expand-file-name "~/src/elpaish")))
     (should (file-exists-p (expand-file-name "packages.el" elpaish-dir)))
     (should (file-exists-p (expand-file-name "build.el" elpaish-dir)))
