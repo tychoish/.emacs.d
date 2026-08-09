@@ -99,20 +99,24 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
       (add-to-list 'org-capture-templates
                    (list (concat key char)
                          (format "%s %s <%s>" name kind (file-name-nondirectory path))))
-      (push (list (concat char key) (car first-sub) (cdr first-sub)) specs))
-    (dolist (entry (append specs
+      (push (list (concat char key) (car first-sub) (cdr first-sub)) specs)
+      (when-let* ((q-sub (assoc (concat char "q") default-subs)))
+        (push (cons (concat char key "q") (cdr q-sub)) specs)))
+    (dolist (entry (append (nreverse specs)
                            (seq-map (lambda (it) (cons (concat key (car it)) (cdr it)))
                                     default-subs)))
       (let* ((key-sequence (nth 0 entry))
              (template-anchor (nth 1 entry))
              (description (nth 2 entry))
-             (template (list key-sequence
-                             (format "%s (%s; %s)" kind name description)
-                             'entry target
-                             (funcall body-fn template-anchor)
-                             :prepend prepend
-                             :kill-buffer t
-                             :empty-lines-after 1)))
+             (extra-props (nthcdr 3 entry))
+             (template (append (list key-sequence
+                                     (format "%s (%s; %s)" kind name description)
+                                     'entry target
+                                     (funcall body-fn template-anchor)
+                                     :prepend prepend
+                                     :kill-buffer t
+                                     :empty-lines-after 1)
+                               extra-props)))
         (when (and time-prompt-suffix
                    (string-suffix-p time-prompt-suffix key-sequence))
           (setq template (append template (list :time-prompt t))))
@@ -142,6 +146,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :body-fn (lambda (anchor) (concat "* TODO %(~title~)\n" anchor "\n%?"))
    :first-sub (cons "%i" "selection")
    :default-subs '(("tt" "%i" "selection")
+                   ("tq" "" "quick task" :immediate-finish t)
                    ("tx" "%x" "X11 buffer")
                    ("tl" "%a" "org-link")
                    ("tk" "%c" "emacs kill-ring"))))
@@ -184,7 +189,7 @@ that already runs after `org' is loaded."
   (when (not (equal "" key))
     (when (string-search "jnt" key)
       (error "org-capture prefix key '%s' for '%s' contains well-known prefix" key path))
-    (when (string-search "xlk" key)
+    (when (string-search "xlkq" key)
       (error "org-capture prefix key '%s' for '%s' contains sub-template key" key path)))
 
   (unless name

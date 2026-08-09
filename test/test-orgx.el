@@ -235,5 +235,28 @@
 (ert-deftest orgx/denote-questions-command-exists ()
   "orgx-agenda-denote-questions is an interactive command targeting agenda key dq."
   (should (commandp #'orgx-agenda-denote-questions)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Quick task capture templates (tq / :immediate-finish t)
+
+(ert-deftest orgx/quick-task-templates-created ()
+  "orgx-capture-add-task-templates adds tq template with :immediate-finish t."
+  (let ((org-capture-templates nil))
+    (orgx-capture-add-task-templates :name "test" :path "/tmp/test.org")
+    (let ((tq-entry (assoc "tq" org-capture-templates)))
+      (should tq-entry)
+      (should (member :immediate-finish tq-entry))
+      (should (plist-get (cdr (member :immediate-finish tq-entry)) t))
+      (should (string-match-p "%(~title~)" (nth 4 tq-entry))))))
+
+(ert-deftest orgx/quick-task-templates-with-key ()
+  "orgx-capture-add-task-templates with key generates <key>tq and t<key>q entries with :immediate-finish t."
+  (let ((org-capture-templates nil))
+    (orgx-capture-add-task-templates :name "test" :path "/tmp/test.org" :key "p")
+    (let ((ptq-entry (assoc "ptq" org-capture-templates))
+          (tpq-entry (assoc "tpq" org-capture-templates)))
+      (should ptq-entry)
+      (should tpq-entry)
+      (should (member :immediate-finish ptq-entry))
+      (should (member :immediate-finish tpq-entry)))))
 (provide 'test-orgx)
 ;;; test-orgx.el ends here
