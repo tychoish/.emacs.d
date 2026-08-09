@@ -83,36 +83,10 @@
 (require 'telega-chat)
 (require 'map)
 
-;;; Registry & Dynamic Context Scope
+;;; Registry
 
 (defvar telega-bot-registry nil
   "Alist of active telega bot instances, keyed by bot name.")
-
-;; TODO see if it's possible to remove the dynamic binding API/system. 
-
-(defvar telega-bot--current-bot nil
-  "Dynamic binding for the bot currently handling an update.")
-
-(defvar telega-bot--current-chat-id nil
-  "Dynamic binding for the chat-id of the message being handled.")
-
-(defvar telega-bot--current-user-id nil
-  "Dynamic binding for the user-id of the sender.")
-
-(defvar telega-bot--current-thread-id nil
-  "Dynamic binding for the forum thread-id of the message.")
-
-(defvar telega-bot--current-msg-id nil
-  "Dynamic binding for the message-id being handled.")
-
-(defvar telega-bot--current-query-id nil
-  "Dynamic binding for the callback query-id.")
-
-(defvar telega-bot--current-msg nil
-  "Dynamic binding for the raw message plist.")
-
-(defvar telega-bot--current-update nil
-  "Dynamic binding for the raw update plist.")
 
 ;;; Core Structure
 
@@ -189,101 +163,70 @@
 
 ;;; Scoped Context Helpers for Implementors
 
-(cl-defun send-response (text &key keyboard thread-id chat-id)
-  "Send response TEXT in the current context without needing to manage IDs.
+(cl-defun telega-bot-send-response (text &key bot chat-id thread-id keyboard)
+  "Send response TEXT to CHAT-ID with optional THREAD-ID and KEYBOARD."
+  (when (and bot chat-id)
+    (telega-bot--log bot "Sending reply to chat %s: %s" chat-id text))
+  (ignore-errors
+    (telega-chat-send-message
+     (telega-chat-get chat-id) text
+     :reply-to-message-id thread-id
+     :reply-markup keyboard)))
 
-Arguments:
-  TEXT      - String message text to send.
-  :keyboard - Optional inline keyboard markup (from `send-keyboard' or `telega-bot-make-inline-keyboard').
-  :thread-id- Forum thread ID (defaults to current message's thread-id).
-  :chat-id  - Destination chat ID (defaults to current message's chat-id)."
-  (let ((target-chat (or chat-id telega-bot--current-chat-id))
-        (target-thread (or thread-id telega-bot--current-thread-id)))
-    (when telega-bot--current-bot
-      (telega-bot--log telega-bot--current-bot "Sending reply to chat %s: %s" target-chat text))
-    (ignore-errors
-      (telega-chat-send-message
-       (telega-chat-get target-chat) text
-       :reply-to-message-id target-thread
-       :reply-markup keyboard))))
 
-(cl-defun send-keyboard (text rows &key thread-id chat-id)
-  "Send TEXT with inline keyboard button ROWS in the current context.
+(cl-defun telega-bot-send-keyboard (text rows &key bot thread-id chat-id)
+  "Send TEXT with inline keyboard button ROWS."
+  (telega-bot-send-response text
+                            :bot bot
+                            :keyboard (telega-bot--make-inline-keyboard rows)
+                            :thread-id thread-id
+                            :chat-id chat-id))
 
-ROWS is a list of button rows:
-  `(((\"Label 1\" . \"callback_data_1\") (\"Label 2\" . \"callback_data_2\")))"
-  (send-response text
-                 :keyboard (telega-bot--make-inline-keyboard rows)
-                 :thread-id thread-id
-                 :chat-id chat-id))
 
-(cl-defun remove-keyboard (&key chat-id message-id)
-  "Remove the inline keyboard from the current or specified message."
-  (let ((target-chat (or chat-id telega-bot--current-chat-id))
-        (target-msg (or message-id telega-bot--current-msg-id)))
-    (when (and target-chat target-msg)
-      (telega-server-send
-       `(:@type "editMessageReplyMarkup"
-         :chat_id ,target-chat
-         :message_id ,target-msg
-         :reply_markup nil)))))
+(cl-defun telega-bot-remove-keyboard (&key chat-id message-id)
+  "Remove inline keyboard markup from CHAT-ID and MESSAGE-ID."
+  (when (and chat-id message-id)
+    (telega-server-send
+     `(:@type "editMessageReplyMarkup"
+       :chat_id ,chat-id
+       :message_id ,message-id
+       :reply_markup nil))))
 
-(cl-defun answer-callback (text &key alert query-id)
-  "Answer callback query with TEXT and optional ALERT toast."
-  (let ((target-query (or query-id telega-bot--current-query-id)))
-    (when target-query
-      (when telega-bot--current-bot
-        (telega-bot--log telega-bot--current-bot "Answering callback %s (alert=%s): %s" target-query alert text))
-      (telega-server-send
-       `(:@type "answerCallbackQuery"
-         :callback_query_id ,target-query
-         :text ,text
-         :show_alert ,(if alert t json-false))))))
 
-(cl-defun set-state (state &key data (bot telega-bot--current-bot) (user-id telega-bot--current-user-id) (chat-id telega-bot--current-chat-id))
-  "Set active conversation STATE for the current user/chat."
-  (when (and bot user-id chat-id)
-    (telega-bot-set-state bot user-id chat-id state :data data)))
+(cl-defun telega-bot-answer-callback (query-id text &key bot alert)
+  "Answer callback query QUERY-ID with TEXT and optional ALERT toast."
+  (when query-id
+    (when bot
+      (telega-bot--log bot "Answering callback %s (alert=%s): %s" query-id alert text))
+    (telega-server-send
+     `(:@type "answerCallbackQuery"
+       :callback_query_id ,query-id
+       :text ,text
+       :show_alert ,(if alert t json-false)))))
 
-(defun get-state (&optional bot user-id chat-id)
-  "Get active FSM state (state-sym . data) for the current user/chat."
-  (let ((bot (or bot telega-bot--current-bot))
-        (user-id (or user-id telega-bot--current-user-id))
-        (chat-id (or chat-id telega-bot--current-chat-id)))
-    (when (and bot user-id chat-id)
-      (telega-bot-get-state bot user-id chat-id))))
-
-(defun clear-state (&optional bot user-id chat-id)
-  "Clear active FSM state for the current user/chat."
-  (let ((bot (or bot telega-bot--current-bot))
-        (user-id (or user-id telega-bot--current-user-id))
-        (chat-id (or chat-id telega-bot--current-chat-id)))
-    (when (and bot user-id chat-id)
-      (telega-bot-clear-state bot user-id chat-id))))
-
-(cl-defun ask-yes-or-no (question &key
-				  on-yes on-no
-				  (yes-label "Yes")
-				  (no-label "No")
-				  (bot telega-bot--current-bot)
-				  (chat-id telega-bot--current-chat-id)
-				  (thread-id telega-bot--current-thread-id))
+(cl-defun telega-bot-ask-yes-or-no (question &key
+                                             on-yes on-no
+                                             (yes-label "Yes")
+                                             (no-label "No")
+                                             bot
+                                             chat-id
+                                             thread-id)
   "Send a Yes/No question with interactive buttons that auto-delete on click."
   (let* ((uniq (format "%d_%d" (time-convert nil 'integer) (random 100000)))
          (yes-data (concat "yon_y_" uniq))
          (no-data (concat "yon_n_" uniq)))
-    ;; Register one-shot callbacks in the bot
-    (setf (map-elt (telega-bot-callbacks bot) yes-data)
-          (lambda (&rest _args)
-            (when on-yes (funcall on-yes))))
-    (setf (map-elt (telega-bot-callbacks bot) no-data)
-          (lambda (&rest _args)
-            (when on-no (funcall on-no))))
-    ;; Send keyboard
-    (send-keyboard question
-                   `(((,yes-label . ,yes-data) (,no-label . ,no-data)))
-                   :chat-id chat-id
-                   :thread-id thread-id)))
+    (when bot
+      (setf (map-elt (telega-bot-callbacks bot) yes-data)
+            (lambda (&rest _args)
+              (when on-yes (funcall on-yes))))
+      (setf (map-elt (telega-bot-callbacks bot) no-data)
+            (lambda (&rest _args)
+              (when on-no (funcall on-no)))))
+    (telega-bot-send-keyboard question
+                              `(((,yes-label . ,yes-data) (,no-label . ,no-data)))
+                              :bot bot
+                              :chat-id chat-id
+                              :thread-id thread-id)))
 
 ;;; Functional Handler Registration
 
@@ -331,37 +274,63 @@ ROWS is a list of button rows:
        (seen-key (push item keys))))
     (cons has-bot (nreverse keys))))
 
+(defun telega-bot--wrap-body (body bot-expr rest-args-var has-bot bot-arg-name keys)
+  "Wrap BODY in a lexical environment providing context variables and helpers."
+  (let ((bot-var (gensym "bot"))
+        (chat-var (gensym "chat-id"))
+        (user-var (gensym "user-id"))
+        (thread-var (gensym "thread-id"))
+        (msg-var (gensym "msg-id"))
+        (query-var (gensym "query-id"))
+        (m-var (gensym "msg"))
+        (u-var (gensym "update"))
+        (t-var (gensym "text"))
+        (d-var (gensym "data")))
+    `(let* ((,bot-var (or (map-elt ,rest-args-var :bot) ,bot-expr))
+            (,chat-var (map-elt ,rest-args-var :chat-id))
+            (,user-var (map-elt ,rest-args-var :user-id))
+            (,thread-var (map-elt ,rest-args-var :thread-id))
+            (,msg-var (map-elt ,rest-args-var :msg-id))
+            (,query-var (map-elt ,rest-args-var :query-id))
+            (,m-var (map-elt ,rest-args-var :msg))
+            (,u-var (map-elt ,rest-args-var :update))
+            (,t-var (or (map-elt ,rest-args-var :text) ""))
+            (,d-var (map-elt ,rest-args-var :data))
+            (bot ,bot-var)
+            (chat-id ,chat-var)
+            (user-id ,user-var)
+            (thread-id ,thread-var)
+            (msg-id ,msg-var)
+            (query-id ,query-var)
+            (msg ,m-var)
+            (update ,u-var)
+            (text ,t-var)
+            (data ,d-var)
+            ,@(when (and has-bot bot-arg-name (not (eq bot-arg-name 'bot)))
+                `((,bot-arg-name ,bot-var)))
+            ,@(mapcar (lambda (k)
+                        `(,k (map-elt ,rest-args-var ,(intern (concat ":" (symbol-name k))))))
+                      (if has-bot (remq bot-arg-name keys) keys)))
+       (cl-flet ((send-response (text-arg &key keyboard (bot ,bot-var) (thread-id ,thread-var) (chat-id ,chat-var) &allow-other-keys)
+                   (telega-bot-send-response text-arg :bot bot :chat-id chat-id :thread-id thread-id :keyboard keyboard))
+                 (send-keyboard (text-arg rows-arg &key (bot ,bot-var) (thread-id ,thread-var) (chat-id ,chat-var) &allow-other-keys)
+                   (telega-bot-send-keyboard text-arg rows-arg :bot bot :thread-id thread-id :chat-id chat-id))
+                 (remove-keyboard (&key (chat-id ,chat-var) (message-id ,msg-var) &allow-other-keys)
+                   (telega-bot-remove-keyboard :chat-id chat-id :message-id message-id))
+                 (answer-callback (text-arg &key alert (bot ,bot-var) (query-id ,query-var) &allow-other-keys)
+                   (telega-bot-answer-callback query-id text-arg :bot bot :alert alert))
+                 (set-state (st-arg &key data (bot ,bot-var) (user-id ,user-var) (chat-id ,chat-var) &allow-other-keys)
+                   (telega-bot-set-state bot user-id chat-id st-arg :data data))
+                 (get-state (&optional (b ,bot-var) (u ,user-var) (c ,chat-var))
+                   (telega-bot-get-state b u c))
+                 (clear-state (&optional (b ,bot-var) (u ,user-var) (c ,chat-var))
+                   (telega-bot-clear-state b u c))
+                 (ask-yes-or-no (q-arg &key on-yes on-no (yes-label "Yes") (no-label "No") (bot ,bot-var) (chat-id ,chat-var) (thread-id ,thread-var) &allow-other-keys)
+                   (telega-bot-ask-yes-or-no q-arg :on-yes on-yes :on-no on-no :yes-label yes-label :no-label no-label :bot bot :chat-id chat-id :thread-id thread-id)))
+         ,@body))))
+
 (cl-defmacro telega-bot-register-handler (name bot-or-name &rest spec &key (operation :command) pattern state args &allow-other-keys)
-  "Register handler NAME for BOT-OR-NAME.
-
-Options:
-  :operation - One of:
-                 `:command'   : Standard slash command (e.g. \"/ping\").
-                 `:callback'  : Inline keyboard callback query (e.g. \"action_\").
-                 `:fuzzymatch': Regex or pattern match on message text.
-                 `:step'      : FSM conversation state step.
-                 `:fallback'  : Catch-all fallback handler.
-  :pattern   - Command string, callback prefix, or regex pattern.
-  :state     - State symbol for `:step' operations (defaults to NAME).
-  :args      - Parameter list: (bot &key text data ...) or (&key text data ...) or ().
-
-Context Helpers Available in Body:
-  `(send-response TEXT &key KEYBOARD THREAD-ID CHAT-ID)'
-      Reply with text to the current message's chat and thread.
-  `(send-keyboard TEXT ROWS &key THREAD-ID CHAT-ID)'
-      Send an inline button keyboard to the active chat.
-  `(remove-keyboard &key CHAT-ID MESSAGE-ID)'
-      Remove inline keyboard markup from the active message.
-  `(answer-callback TEXT &key ALERT)'
-      Acknowledge callback query and stop the Telegram loading spinner.
-  `(set-state STATE &key DATA)'
-      Set the active FSM state for the current (user . chat).
-  `(get-state)'
-      Retrieve `(state-sym . data)' for the current user/chat.
-  `(clear-state)'
-      Clear the active FSM state for the current user/chat.
-  `(ask-yes-or-no QUESTION &key ON-YES ON-NO YES-LABEL NO-LABEL)'
-      Prompt user with Yes/No buttons that auto-delete upon selection."
+  "Register handler NAME for BOT-OR-NAME."
   (declare (indent 2))
   (let* ((body (cl-loop for item on spec by #'cddr
                         while (keywordp (car item))
@@ -369,20 +338,12 @@ Context Helpers Available in Body:
          (parsed (telega-bot--parse-macro-args args))
          (has-bot (car parsed))
          (keys (cdr parsed))
-         (bindings (mapcar (lambda (k)
-                             `(,k (map-elt rest-args ,(intern (concat ":" (symbol-name k))))))
-                           keys))
-         (full-bindings (if has-bot
-                            (cons `(,(car args) (or (map-elt rest-args :bot) telega-bot--current-bot))
-                                  bindings)
-                          bindings))
-         (lambda-form (if full-bindings
-                          `(lambda (&rest rest-args)
-                             (let* ,full-bindings
-                               ,@body))
-                        `(lambda (&rest _rest-args)
-                           ,@body)))
+         (bot-arg-name (when has-bot (car args)))
          (bot-expr (telega-bot--macro-bot-expr bot-or-name))
+         (rest-var (gensym "rest-args"))
+         (wrapped-body (telega-bot--wrap-body body bot-expr rest-var has-bot bot-arg-name keys))
+         (lambda-form `(lambda (&rest ,rest-var)
+                         ,wrapped-body))
          (clean-op (cond
                     ((memq operation '(:step step :state state)) :step)
                     ((memq operation '(:callback callback)) :callback)
@@ -390,8 +351,7 @@ Context Helpers Available in Body:
                     ((memq operation '(:fallback fallback)) :fallback)
                     (t :command))))
     (if (eq clean-op :step)
-        (let* ((bot-var (if has-bot (car args) (gensym "bot")))
-               (clean-state (if (and (consp (or state name)) (eq (car (or state name)) 'quote))
+        (let* ((clean-state (if (and (consp (or state name)) (eq (car (or state name)) 'quote))
                                 (cadr (or state name))
                               (or state name)))
                (bot-sym (cond
@@ -406,11 +366,9 @@ Context Helpers Available in Body:
                                            :fn ,lambda-form)
              (cl-defmethod telega-bot-handle-state ((_bot-id (eql ,bot-sym))
                                                      (_state (eql ,clean-state))
-                                                     ,(if (memq 'text keys) 'text '_text)
-                                                     &key ,@(delq 'text (copy-sequence keys))
-                                                     ((:bot ,bot-var))
-                                                     &allow-other-keys)
-               ,@body)))
+                                                     _text
+                                                     &rest ,rest-var)
+               ,wrapped-body)))
       `(telega-bot--register-handler ',name ,bot-expr
                                      :operation ',clean-op
                                      :pattern ,pattern
@@ -444,7 +402,7 @@ Context Helpers Available in Body:
 
 (cl-defun telega-bot-reply (chat-id text &key thread-id keyboard)
   "Send TEXT to CHAT-ID with optional forum THREAD-ID and inline KEYBOARD."
-  (send-response text :chat-id chat-id :thread-id thread-id :keyboard keyboard))
+  (telega-bot-send-response text :chat-id chat-id :thread-id thread-id :keyboard keyboard))
 
 (defun telega-bot--make-inline-keyboard (rows)
   "Build inline keyboard payload from button ROWS: (((\"Text\" . \"data\")))."
@@ -463,9 +421,6 @@ Context Helpers Available in Body:
 
 (defalias 'telega-bot-make-inline-keyboard 'telega-bot--make-inline-keyboard)
 
-(cl-defun telega-bot-answer-callback (query-id text &key alert)
-  "Answer callback query QUERY-ID with TEXT and optional ALERT toast."
-  (answer-callback text :alert alert :query-id query-id))
 
 (cl-defun telega-bot-login (bot &key token)
   "Authenticate active TDLib session using BOT token."
@@ -549,14 +504,6 @@ Context Helpers Available in Body:
               (user-id (map-elt (map-elt msg :sender_id) :user_id)))
     (let* ((thread-id (map-elt msg :message_thread_id))
            (msg-id (map-elt msg :id))
-           (telega-bot--current-bot bot)
-           (telega-bot--current-chat-id chat-id)
-           (telega-bot--current-user-id user-id)
-           (telega-bot--current-thread-id thread-id)
-           (telega-bot--current-msg-id msg-id)
-           (telega-bot--current-query-id nil)
-           (telega-bot--current-msg msg)
-           (telega-bot--current-update update)
            (bot-sym (telega-bot--to-symbol bot)))
       (telega-bot--log bot "Received message: %s (chat %s, user %s)" text chat-id user-id)
       (cond
@@ -567,26 +514,28 @@ Context Helpers Available in Body:
              ;; A. Try generic method specialized on bot-id and state
              (telega-bot-handle-state
               bot-sym state-sym text
+              :text text
               :bot bot
               :data (cdr user-st)
               :thread-id thread-id
+              :msg-id msg-id
               :msg msg
               :chat-id chat-id
               :user-id user-id)
              ;; B. Try registered function in states table
              (when-let* ((fn (map-elt (telega-bot-states bot) state-sym)))
-               (funcall fn :bot bot :text text :data (cdr user-st) :thread-id thread-id :msg msg :chat-id chat-id :user-id user-id)
+              (funcall fn :bot bot :text text :data (cdr user-st) :thread-id thread-id :msg-id msg-id :msg msg :chat-id chat-id :user-id user-id)
                t)
              t))))
 
        ;; 2. Command Matcher via Hash Table & Fuzzy Search
        ((when-let* ((handler (telega-bot--find-message-handler bot text)))
-          (funcall handler :bot bot :text text :thread-id thread-id :msg msg :chat-id chat-id :user-id user-id)
+         (funcall handler :bot bot :text text :thread-id thread-id :msg-id msg-id :msg msg :chat-id chat-id :user-id user-id)
           t))
 
        ;; 3. Fallback
        ((telega-bot-fallback bot)
-        (funcall (telega-bot-fallback bot) :bot bot :text text :thread-id thread-id :msg msg :chat-id chat-id :user-id user-id))))))
+        (funcall (telega-bot-fallback bot) :bot bot :text text :thread-id thread-id :msg-id msg-id :msg msg :chat-id chat-id :user-id user-id))))))
 
 (defun telega-bot--dispatch-callback (bot update)
   "Route inline keyboard button presses, auto-answering and auto-deleting keyboards."
@@ -598,21 +547,14 @@ Context Helpers Available in Body:
               ((string-equal (map-elt payload :@type) "callbackQueryPayloadData"))
               (data (decode-coding-string (base64-decode-string (map-elt payload :data)) 'utf-8))
               (handler (telega-bot--find-callback-handler bot data)))
-    (let* ((telega-bot--current-bot bot)
-           (telega-bot--current-chat-id chat-id)
-           (telega-bot--current-user-id user-id)
-           (telega-bot--current-thread-id nil)
-           (telega-bot--current-msg-id msg-id)
-           (telega-bot--current-query-id query-id)
-           (telega-bot--current-msg nil)
-           (telega-bot--current-update update))
+    (let* ()
       (telega-bot--log bot "Received callback: %s (query %s, chat %s, user %s)" data query-id chat-id user-id)
       ;; 1. Auto-answer callback so Telegram client spinner stops
-      (answer-callback "")
+      (telega-bot-answer-callback query-id "" :bot bot)
       ;; 2. Auto-delete the inline keyboard after use
-      (remove-keyboard)
+      (telega-bot-remove-keyboard :chat-id chat-id :message-id msg-id)
       ;; 3. Execute the callback handler with pure keyword arguments
-      (funcall handler :bot bot :data data :query-id query-id :chat-id chat-id :user-id user-id :update update))))
+      (funcall handler :bot bot :data data :query-id query-id :chat-id chat-id :user-id user-id :msg-id msg-id :update update))))
 
 (defun telega-bot-dispatch (bot update)
   "Main event router using `cond` branching."

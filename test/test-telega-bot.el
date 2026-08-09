@@ -239,12 +239,11 @@
                  (setq sent-kb-rows (map-elt (map-elt args :reply-markup) :rows))
                  nil))
               ((symbol-function 'telega-server-send) (lambda (&rest _args) nil)))
-      ;; Run inside context
-      (let ((telega-bot--current-bot bot)
-            (telega-bot--current-chat-id 321))
-        (ask-yes-or-no "Delete file?"
-          :on-yes (lambda () (setq yes-triggered t))
-          :on-no (lambda () (setq no-triggered t))))
+      (telega-bot-ask-yes-or-no "Delete file?"
+        :bot bot
+        :chat-id 321
+        :on-yes (lambda () (setq yes-triggered t))
+        :on-no (lambda () (setq no-triggered t)))
 
       (should sent-kb-rows)
       (let* ((btn-row (car sent-kb-rows))
@@ -298,6 +297,44 @@
       ;; Deactivate by name
       (telega-bot-deactivate "LifecycleBot")
       (should-not (telega-bot-active bot)))))
+
+(ert-deftest telega-bot/no-dynamic-variables-lexical-scoping ()
+  "Test that dynamic variables are removed and handlers rely purely on lexical scope."
+  (should-not (boundp 'telega-bot--current-bot))
+  (should-not (boundp 'telega-bot--current-chat-id))
+  (should-not (boundp 'telega-bot--current-user-id))
+  (should-not (boundp 'telega-bot--current-thread-id))
+  (should-not (boundp 'telega-bot--current-msg-id))
+  (should-not (boundp 'telega-bot--current-query-id))
+  (should-not (boundp 'telega-bot--current-msg))
+  (should-not (boundp 'telega-bot--current-update))
+
+  (let ((bot (make-telega-bot :name "LexicalBot" :active t))
+        (received-chat nil)
+        (received-text nil)
+        (received-user nil))
+    (cl-letf (((symbol-function 'telega-chat-get) (lambda (id) id))
+              ((symbol-function 'telega-chat-send-message)
+               (lambda (chat text &rest _args)
+                 (setq received-chat chat
+                       received-text text)
+                 nil)))
+      (telega-bot-register-handler lex-cmd 'LexicalBot
+        :operation :command
+        :pattern "/lex"
+        :args (&key text user-id)
+        (setq received-user user-id)
+        (send-response (format "Lexical: %s" text)))
+
+      (telega-bot-dispatch bot '(:@type "updateNewMessage"
+                                 :message (:id 42
+                                           :chat_id 999
+                                           :sender_id (:user_id 777)
+                                           :content (:@type "messageText" :text (:text "/lex")))))
+
+      (should (equal received-chat 999))
+      (should (equal received-user 777))
+      (should (equal received-text "Lexical: /lex")))))
 
 (provide 'test-telega-bot)
 ;;; test-telega-bot.el ends here
