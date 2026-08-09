@@ -681,6 +681,54 @@ or a resolved-but-unsuccessful result alike."
                      :rejected (cons nil "boom"))
             (should (string-match-p "FAILED" alert-message)))
         (kill-buffer "*builder-test-sprite-log*")))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; elisp test file discovery and candidate generators
+
+(ert-deftest builder-test/elisp-package-test-files-discovery ()
+  "Test that `builder-elisp-package--test-files` finds tests in test/, tests/, and root."
+  (let ((temp-dir (make-temp-file "builder-test-dir-" t)))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "test" temp-dir) t)
+          (make-directory (expand-file-name "tests" temp-dir) t)
+          (with-temp-file (expand-file-name "test/test-foo.el" temp-dir) (insert ";; test"))
+          (with-temp-file (expand-file-name "tests/bar-test.el" temp-dir) (insert ";; test"))
+          (with-temp-file (expand-file-name "root-tests.el" temp-dir) (insert ";; test"))
+          (with-temp-file (expand-file-name "helper.el" temp-dir) (insert ";; not a test"))
+          (let ((files (builder-elisp-package--test-files temp-dir)))
+            (should (= (length files) 3))
+            (should (cl-some (lambda (f) (string-suffix-p "test-foo.el" f)) files))
+            (should (cl-some (lambda (f) (string-suffix-p "bar-test.el" f)) files))
+            (should (cl-some (lambda (f) (string-suffix-p "root-tests.el" f)) files))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/elisp-test-files-candidate-generator ()
+  "Test that candidate generator `builder-candidates-for-emacs-lisp-test-files` registers test file targets."
+  (let ((temp-dir (make-temp-file "builder-test-dir-" t))
+        (tbl (make-hash-table :test #'equal)))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "test" temp-dir) t)
+          (with-temp-file (expand-file-name "test/test-demo.el" temp-dir) (insert ";; test"))
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (builder-candidates-for-emacs-lisp-test-files temp-dir "demo" (list temp-dir) tbl))
+          (should (cl-some (lambda (k) (string-match-p "ert-test-file.*test-demo\\.el" k)) (ht-keys tbl))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/elisp-project-test-runner-candidate-generator ()
+  "Test candidate generator `builder-candidates-for-emacs-lisp-project-test` for non-package projects."
+  (let ((temp-dir (make-temp-file "builder-test-dir-" t))
+        (tbl (make-hash-table :test #'equal)))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "test" temp-dir) t)
+          (with-temp-file (expand-file-name "test/test-demo.el" temp-dir) (insert ";; test"))
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (builder-candidates-for-emacs-lisp-project-test temp-dir "demo" (list temp-dir) tbl))
+          (should (cl-some (lambda (k) (string-match-p "test-project-ert-all" k)) (ht-keys tbl))))
+      (delete-directory temp-dir t))))
 
 (provide 'test-builder)
 ;;; test-builder.el ends here

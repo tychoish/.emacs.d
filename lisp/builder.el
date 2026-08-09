@@ -1132,15 +1132,22 @@ byte-compiled as ordinary sources."
 		 (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")) (f-entries root #'file-regular-p)))))
 
 (defun builder-elisp-package--test-files (root)
-  "Return the list of test files under ROOT/test (test-*.el or *-test.el)."
-  (let ((test-dir (f-join root "test")))
-    (when (file-directory-p test-dir)
-      (seq-filter (lambda (it)
-		     (let ((name (file-name-nondirectory it)))
-		       (or (string-prefix-p "test-" name)
-			   (string-suffix-p "-test.el" name))))
-		   (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")) (f-entries test-dir #'file-regular-p))))))
-
+  "Return the list of test files under ROOT (test/, tests/, or root directory)."
+  (let ((dirs (seq-filter #'file-directory-p
+                          (list (f-join root "test")
+                                (f-join root "tests")
+                                root)))
+        (files nil))
+    (dolist (dir dirs)
+      (dolist (it (f-entries dir #'file-regular-p))
+        (when (string-equal (file-name-extension it) "el")
+          (let ((name (file-name-nondirectory it)))
+            (when (or (string-prefix-p "test-" name)
+                      (string-suffix-p "-test.el" name)
+                      (string-suffix-p "-tests.el" name)
+                      (not (f-equal-p dir root)))
+              (push it files))))))
+    (seq-uniq (nreverse files))))
 (defun builder-elisp-package--read-pkg-deps (pkg-file)
   "Return dep symbols from a multi-file package's <NAME>-pkg.el descriptor.
 Reads the `define-package' form's fourth argument (the requires list).
@@ -1186,29 +1193,31 @@ Use this from contexts that assume the user's `load-path' already provides them
 
 ;;;###autoload
 (defun builder-elisp-package-test ()
-  "Run ert tests for the elisp package at `approximate-project-root'.
-Loads <root>/<NAME>.el and any test/test-*.el or test/*-test.el files,
+  "Run ert tests for the elisp package at `approximate-project-root`.
+Loads package sources and any test/test-*.el or test/*-test.el files,
 then runs ert. In batch mode exits with the test status; otherwise
 opens the *ert* selector."
   (interactive)
   (require 'ert)
-  (let* ((root      (file-name-as-directory (approximate-project-root)))
-         (main-file (builder-elisp-package--main-file root)))
-    (unless main-file
-      (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
+  (let* ((root (file-name-as-directory (approximate-project-root)))
+         (main-file (builder-elisp-package--main-file root))
+         (test-files (builder-elisp-package--test-files root)))
+    (unless (or main-file test-files)
+      (user-error "No test files or package found at %s" root))
     (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
-    (let* ((test-dir (f-join root "test"))
-           (load-path (append (seq-filter #'identity (list root (and (file-directory-p test-dir) test-dir))) load-path)))
-      (load main-file nil t)
-      (dolist (it (builder-elisp-package--source-files root))
-        (unless (f-equal-p it main-file)
-          (load it nil t)))
-      (dolist (it (builder-elisp-package--test-files root))
+    (let* ((test-dirs (seq-filter #'file-directory-p
+                                  (list (f-join root "test") (f-join root "tests"))))
+           (load-path (append (cons root test-dirs) load-path)))
+      (when main-file
+        (load main-file nil t)
+        (dolist (it (builder-elisp-package--source-files root))
+          (unless (f-equal-p it main-file)
+            (load it nil t))))
+      (dolist (it test-files)
         (load it nil t)))
     (if noninteractive
         (ert-run-tests-batch-and-exit)
       (ert t))))
-
 (defun builder--ert-test-names ()
   "Return the sorted names (strings) of every currently defined ert test."
   (thread-last (ert-select-tests t t)
@@ -1503,6 +1512,39 @@ PACKAGES to `package-selected-packages' and echoes the result."
       ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
       ("clean-package"   "builder-elisp-package-clean"   "remove build artifacts of")))))
 
+(builder-register-candidates
+ :name "emacs-lisp-test-files"
+ :pipeline
+ (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
+             (test-files (builder-elisp-package--test-files project-root-directory))
+             (lisp-dir (f-join user-emacs-directory "lisp")))
+   (seq-map
+    (lambda (file)
+      (let ((rel-file (f-relative file project-root-directory)))
+        (make-builder-candidate
+         :name (format "ert-test-file <%s>" rel-file)
+         :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" --eval \"(progn (add-to-list 'load-path \\\"%s\\\") (when (file-directory-p \\\"%s\\\") (add-to-list 'load-path \\\"%s\\\")) (load \\\"%s\\\") (ert-run-tests-batch-and-exit))\""
+                          lisp-dir
+                          project-root-directory
+                          (expand-file-name "test" project-root-directory)
+                          (expand-file-name "test" project-root-directory)
+                          file)
+         :directory project-root-directory
+         :annotation (format "run ERT tests in %s" rel-file))))
+    test-files)))
+
+(builder-register-candidates
+ :name "emacs-lisp-project-test"
+ :pipeline
+ (when-let* ((_ (derived-mode-p 'emacs-lisp-mode))
+             (_ (not (builder-elisp-package-p project-root-directory)))
+             (test-files (builder-elisp-package--test-files project-root-directory))
+             (lisp-dir (f-join user-emacs-directory "lisp")))
+   (list (make-builder-candidate
+          :name (format "test-project-ert-all-<%s>" project-name)
+          :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" -f builder-elisp-package-test" lisp-dir)
+          :directory project-root-directory
+          :annotation (format "run all ERT tests for project <%s>" project-name)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; emacs-lisp -- Cask project operations
