@@ -441,6 +441,90 @@ nil and every installed package was misreported as AUR."
                (chosen (arch--takeover-window new-buf nil)))
           (should (eq chosen win3))
           (should (eq (window-buffer win3) new-buf)))))))
+;;; Post-operation hooks & bury flag
+
+(ert-deftest arch-test-ensure-pkg-with-struct ()
+  "arch--ensure-pkg returns an existing arch-pkg struct unchanged."
+  (let ((pkg (arch-pkg--make :name "testpkg" :version "1.0")))
+    (should (eq (arch--ensure-pkg pkg) pkg))))
+
+(ert-deftest arch-test-ensure-pkg-with-string ()
+  "arch--ensure-pkg converts a string package name into an arch-pkg struct."
+  (let ((pkg (arch--ensure-pkg "testpkg")))
+    (should (arch-pkg-p pkg))
+    (should (equal (arch-pkg-name pkg) "testpkg"))))
+
+(ert-deftest arch-test-sentinel-runs-after-install-hook ()
+  "arch--pkg-sentinel triggers arch-after-install-hook with an arch-pkg struct."
+  (let* ((called-pkg nil)
+         (arch-after-install-hook (list (lambda (pkg) (setq called-pkg pkg))))
+         (buf (get-buffer-create "*arch-test-sentinel*"))
+         (proc (start-process "arch-test-proc" buf "true")))
+    (unwind-protect
+        (progn
+          (process-put proc 'arch-op 'install)
+          (process-put proc 'arch-pkgs "foopkg")
+          (accept-process-output proc 1)
+          (arch--pkg-sentinel proc "finished\n")
+          (should (arch-pkg-p called-pkg))
+          (should (equal (arch-pkg-name called-pkg) "foopkg")))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-sentinel-runs-after-upgrade-hook ()
+  "arch--pkg-sentinel triggers arch-after-upgrade-hook with an arch-pkg struct."
+  (let* ((called-pkg nil)
+         (arch-after-upgrade-hook (list (lambda (pkg) (setq called-pkg pkg))))
+         (buf (get-buffer-create "*arch-test-sentinel-up*"))
+         (proc (start-process "arch-test-proc-up" buf "true")))
+    (unwind-protect
+        (progn
+          (process-put proc 'arch-op 'upgrade)
+          (process-put proc 'arch-pkgs (arch-pkg--make :name "up-pkg" :version "2.0"))
+          (accept-process-output proc 1)
+          (arch--pkg-sentinel proc "finished\n")
+          (should (arch-pkg-p called-pkg))
+          (should (equal (arch-pkg-name called-pkg) "up-pkg")))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-sentinel-runs-after-remove-hook ()
+  "arch--pkg-sentinel triggers arch-after-remove-hook with an arch-pkg struct."
+  (let* ((called-pkg nil)
+         (arch-after-remove-hook (list (lambda (pkg) (setq called-pkg pkg))))
+         (buf (get-buffer-create "*arch-test-sentinel-rm*"))
+         (proc (start-process "arch-test-proc-rm" buf "true")))
+    (unwind-protect
+        (progn
+          (process-put proc 'arch-op 'remove)
+          (process-put proc 'arch-pkgs "rm-pkg")
+          (accept-process-output proc 1)
+          (arch--pkg-sentinel proc "finished\n")
+          (should (arch-pkg-p called-pkg))
+          (should (equal (arch-pkg-name called-pkg) "rm-pkg")))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-sentinel-runs-after-upgrade-all-hook ()
+  "arch--pkg-sentinel triggers arch-after-upgrade-all-hook with no arguments."
+  (let* ((called nil)
+         (arch-after-upgrade-all-hook (list (lambda () (setq called t))))
+         (buf (get-buffer-create "*arch-test-sentinel-all*"))
+         (proc (start-process "arch-test-proc-all" buf "true")))
+    (unwind-protect
+        (progn
+          (process-put proc 'arch-op 'upgrade-all)
+          (accept-process-output proc 1)
+          (arch--pkg-sentinel proc "finished\n")
+          (should called))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-bury-progress-buffers ()
+  "When arch-bury-progress-buffers is t, progress buffer is buried rather than displayed."
+  (let ((arch-bury-progress-buffers t)
+        (buf (get-buffer-create "*arch:test-bury*")))
+    (unwind-protect
+        (let ((proc (arch--pkg-run "test-bury" '("true"))))
+          (accept-process-output proc 1)
+          (should-not (get-buffer-window buf)))
+      (kill-buffer buf))))
 
 (provide 'arch-test)
 ;;; arch-test.el ends here

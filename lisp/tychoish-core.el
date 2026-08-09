@@ -171,6 +171,23 @@
              arch-upgrade-system
              arch-abs-install
              arch-abs-rebuild)
+  :hook
+  ((arch-after-install-hook . (lambda (pkg)
+                                (require 'alert)
+                                (alert (format "Installed package %s" (arch-pkg-name pkg))
+                                       :title "Arch Package Manager")))
+   (arch-after-upgrade-hook . (lambda (pkg)
+                                (require 'alert)
+                                (alert (format "Upgraded package %s" (arch-pkg-name pkg))
+                                       :title "Arch Package Manager")))
+   (arch-after-remove-hook . (lambda (pkg)
+                               (require 'alert)
+                               (alert (format "Removed package %s" (arch-pkg-name pkg))
+                                      :title "Arch Package Manager")))
+   (arch-after-upgrade-all-hook . (lambda ()
+                                    (require 'alert)
+                                    (alert "System upgrade completed"
+                                           :title "Arch Package Manager"))))
   :config
   (run-with-idle-timer 2 nil #'arch--populate-cache))
 

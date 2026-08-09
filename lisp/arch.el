@@ -80,6 +80,35 @@ With a prefix argument, always prompt regardless of this setting."
                  (const :tag "Rebuild existing clone" rebuild))
   :group 'arch)
 
+(defcustom arch-bury-progress-buffers nil
+  "When non-nil, keep progress buffers buried upon creation rather than displaying them."
+  :type 'boolean
+  :group 'arch)
+
+(defcustom arch-after-install-hook nil
+  "Hook run after a package installation completes successfully.
+Each function is called with one argument, an `arch-pkg' struct instance."
+  :type 'hook
+  :group 'arch)
+
+(defcustom arch-after-upgrade-hook nil
+  "Hook run after a package upgrade completes successfully.
+Each function is called with one argument, an `arch-pkg' struct instance."
+  :type 'hook
+  :group 'arch)
+
+(defcustom arch-after-remove-hook nil
+  "Hook run after a package removal completes successfully.
+Each function is called with one argument, an `arch-pkg' struct instance."
+  :type 'hook
+  :group 'arch)
+
+(defcustom arch-after-upgrade-all-hook nil
+  "Hook run after a full system package upgrade completes successfully.
+Each function is called with no arguments."
+  :type 'hook
+  :group 'arch)
+
 ;;; Package struct
 
 (cl-defstruct (arch-pkg (:constructor arch-pkg--make) (:copier nil))
@@ -93,6 +122,22 @@ With a prefix argument, always prompt regardless of this setting."
   aur-p         ; boolean — foreign/AUR package (not in sync db)
   explicit-p    ; boolean — explicitly installed (not as a dependency)
   required-by-p) ; boolean — required by other installed packages
+
+(defun arch--ensure-pkg (pkg)
+  "Ensure PKG is an `arch-pkg' struct instance.
+If PKG is already an `arch-pkg', return it.  If PKG is a package name string,
+attempt to load cached info or construct an `arch-pkg' struct for it."
+  (cond
+   ((arch-pkg-p pkg) pkg)
+   ((stringp pkg)
+    (let ((info (arch--cached-info pkg)))
+      (arch-pkg--make
+       :name pkg
+       :version (plist-get info 'version)
+       :repo (plist-get info 'repository)
+       :description (plist-get info 'description)
+       :installed-p (not (null (plist-get info 'install-date))))))
+   (t pkg)))
 
 ;;; Faces
 
@@ -233,8 +278,10 @@ If REQUIRE-SUCCESS is non-nil, return nil when the command exits non-zero."
   "Return the dedicated operation buffer for PKG-NAME, creating it if needed."
   (get-buffer-create (format "*arch:%s*" pkg-name)))
 
-(defun arch--pkg-run (pkg-name args)
-  "Run ARGS in PKG-NAME's dedicated buffer, appending to existing content."
+(defun arch--pkg-run (pkg-name args &optional op pkg)
+  "Run ARGS in PKG-NAME's dedicated buffer, appending to existing content.
+OP is the operation type symbol ('install, 'upgrade, 'remove, 'upgrade-all).
+PKG is an optional `arch-pkg' struct or package name."
   (let ((buf (arch--pkg-buffer pkg-name)))
     (with-current-buffer buf
       (unless (derived-mode-p 'special-mode)
@@ -243,13 +290,19 @@ If REQUIRE-SUCCESS is non-nil, return nil when the command exits non-zero."
         (goto-char (point-max))
         (insert (propertize (format "\n$ %s\n" (mapconcat #'identity args " "))
                             'face 'bold))))
-    (make-process
-     :name (format "arch-%s" pkg-name)
-     :buffer buf
-     :command args
-     :filter #'arch--pkg-filter
-     :sentinel #'arch--pkg-sentinel)
-    (display-buffer buf)))
+    (let ((proc (make-process
+                 :name (format "arch-%s" pkg-name)
+                 :buffer buf
+                 :command args
+                 :filter #'arch--pkg-filter
+                 :sentinel #'arch--pkg-sentinel)))
+      (when op
+        (process-put proc 'arch-op op)
+        (process-put proc 'arch-pkgs (or pkg pkg-name)))
+      (if arch-bury-progress-buffers
+          (bury-buffer buf)
+        (display-buffer buf))
+      proc)))
 
 (defconst arch--worker-buffer-name "*arch-package-worker*"
   "Name of the shared buffer used for batch-install operations.")
@@ -258,7 +311,7 @@ If REQUIRE-SUCCESS is non-nil, return nil when the command exits non-zero."
   "Return the shared batch-install worker buffer, creating it if needed."
   (get-buffer-create arch--worker-buffer-name))
 
-(defun arch--worker-run (args)
+(defun arch--worker-run (args &optional op pkgs)
   "Run ARGS in the shared worker buffer, appending to existing content.
 Parallels `arch--pkg-run', but always targets the one constant worker
 buffer instead of a per-package buffer, so a batch install produces one
@@ -271,13 +324,19 @@ linear scrollback instead of one buffer per package."
         (goto-char (point-max))
         (insert (propertize (format "\n$ %s\n" (mapconcat #'identity args " "))
                             'face 'bold))))
-    (make-process
-     :name "arch-worker"
-     :buffer buf
-     :command args
-     :filter #'arch--pkg-filter
-     :sentinel #'arch--pkg-sentinel)
-    (display-buffer buf)))
+    (let ((proc (make-process
+                 :name "arch-worker"
+                 :buffer buf
+                 :command args
+                 :filter #'arch--pkg-filter
+                 :sentinel #'arch--pkg-sentinel)))
+      (when op
+        (process-put proc 'arch-op op)
+        (process-put proc 'arch-pkgs pkgs))
+      (if arch-bury-progress-buffers
+          (bury-buffer buf)
+        (display-buffer buf))
+      proc)))
 
 (defun arch--pkg-filter (proc output)
   "Insert OUTPUT into PROC's buffer, rendering ANSI escape sequences as faces."
@@ -291,13 +350,35 @@ linear scrollback instead of one buffer per package."
       (set-marker (process-mark proc) (point-max)))))
 
 (defun arch--pkg-sentinel (proc event)
-  "Append completion notice for PROC to its buffer."
+  "Append completion notice for PROC to its buffer and run post-operation hooks."
   (when (memq (process-status proc) '(exit signal))
     (with-current-buffer (process-buffer proc)
       (let ((inhibit-read-only t))
         (goto-char (point-max))
         (insert (propertize (format "[%s]\n" (string-trim event))
-                            'face 'font-lock-comment-face))))))
+                            'face 'font-lock-comment-face)))))
+  (when-let* ((_ (and (eq (process-status proc) 'exit)
+                      (zerop (process-exit-status proc))))
+              (op (process-get proc 'arch-op))
+              (pkgs (or (process-get proc 'arch-pkgs) '(nil))))
+    (pcase op
+      ('install
+       (let ((pkg-list (if (listp pkgs) pkgs (list pkgs))))
+         (dolist (pkg pkg-list)
+           (when pkg
+             (run-hook-with-args 'arch-after-install-hook (arch--ensure-pkg pkg))))))
+      ('upgrade
+       (let ((pkg-list (if (listp pkgs) pkgs (list pkgs))))
+         (dolist (pkg pkg-list)
+           (when pkg
+             (run-hook-with-args 'arch-after-upgrade-hook (arch--ensure-pkg pkg))))))
+      ('remove
+       (let ((pkg-list (if (listp pkgs) pkgs (list pkgs))))
+         (dolist (pkg pkg-list)
+           (when pkg
+             (run-hook-with-args 'arch-after-remove-hook (arch--ensure-pkg pkg))))))
+      ('upgrade-all
+       (run-hooks 'arch-after-upgrade-all-hook)))))
 
 ;;; Parsers
 
@@ -464,32 +545,48 @@ list display once info is fetched and cached via `arch-list-fetch-info'."
                           :installed-p nil)))))))
 
 
-(defun arch--pacman-install (pkg-name)
+(defun arch--pacman-install (pkg-name &optional pkg)
   "Install PKG-NAME via pacman."
-  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync" pkg-name)))
+  (arch--pkg-run pkg-name
+                 (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync" pkg-name)
+                 'install
+                 (or pkg pkg-name)))
 
 (defun arch--pacman-install-batch (pkg-names)
   "Install PKG-NAMES via one pacman --sync invocation into the worker buffer."
-  (arch--worker-run (append (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync") pkg-names)))
+  (arch--worker-run (append (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync") pkg-names)
+                    'install
+                    pkg-names))
 
-(defun arch--pacman-remove (pkg-name)
+(defun arch--pacman-remove (pkg-name &optional pkg)
   "Remove PKG-NAME via pacman."
-  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "--noprogressbar"
-                               "--remove" "--nosave" "--recursive" pkg-name)))
+  (arch--pkg-run pkg-name
+                 (list "sudo" "pacman" "--noconfirm" "--noprogressbar"
+                       "--remove" "--nosave" "--recursive" pkg-name)
+                 'remove
+                 (or pkg pkg-name)))
 
-(defun arch--pacman-upgrade (pkg-name)
+(defun arch--pacman-upgrade (pkg-name &optional pkg)
   "Upgrade PKG-NAME via pacman."
-  (arch--pkg-run pkg-name (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync" pkg-name)))
+  (arch--pkg-run pkg-name
+                 (list "sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync" pkg-name)
+                 'upgrade
+                 (or pkg pkg-name)))
 
 (defun arch--pacman-upgrade-all ()
   "Full system upgrade via pacman."
-  (arch--pkg-run "pacman" (list "sudo" "pacman" "--noconfirm" "--noprogressbar"
-                                "--sync" "--refresh" "--sysupgrade")))
+  (arch--pkg-run "pacman"
+                 (list "sudo" "pacman" "--noconfirm" "--noprogressbar"
+                       "--sync" "--refresh" "--sysupgrade")
+                 'upgrade-all))
 
-(defun arch--yay-remove (pkg-name)
+(defun arch--yay-remove (pkg-name &optional pkg)
   "Remove PKG-NAME via yay."
-  (arch--pkg-run pkg-name (list "yay" "--noconfirm" "--noprogressbar"
-                               "--remove" "--nosave" "--recursive" pkg-name)))
+  (arch--pkg-run pkg-name
+                 (list "yay" "--noconfirm" "--noprogressbar"
+                       "--remove" "--nosave" "--recursive" pkg-name)
+                 'remove
+                 (or pkg pkg-name)))
 
 (defun arch--pacman-upgrade-all-warn-aur ()
   "Full system upgrade via pacman only; logs a warning that AUR/foreign
@@ -519,8 +616,10 @@ versions, so upgrading those requires rebuilding individually via
   "Upgrade installed packages without syncing databases (`pacman --sync --sysupgrade')."
   (interactive)
   (when (yes-or-no-p "Upgrade system without syncing databases? ")
-    (arch--pkg-run "pacman" (list "sudo" "pacman" "--noconfirm" "--noprogressbar"
-                                  "--sync" "--sysupgrade"))))
+    (arch--pkg-run "pacman"
+                   (list "sudo" "pacman" "--noconfirm" "--noprogressbar"
+                         "--sync" "--sysupgrade")
+                   'upgrade-all)))
 
 ;;; AUR abs build
 
@@ -537,7 +636,10 @@ versions, so upgrading those requires rebuilding individually via
   "Return the AUR git URL for PKG-NAME."
   (format "https://aur.archlinux.org/%s.git" pkg-name))
 
-(defun arch--aur-abs-install (pkg-name)
+(defalias 'arch--abs-clone-url #'arch--aur-abs-clone-url)
+(defalias 'arch--abs-pkg-dir #'arch--aur-abs-pkg-dir)
+
+(defun arch--aur-abs-install (pkg-name &optional pkg)
   "Install PKG-NAME from AUR: clone to abs dir, then run makepkg -sfi.
 Registered as the AUR backend's `abs-install-fn'; called via `arch-abs-install'."
   (make-directory arch-abs-directory t)
@@ -551,9 +653,11 @@ Registered as the AUR backend's `abs-install-fn'; called via `arch-abs-install'.
                    (list "bash" "-c"
                          (format "%s && cd %s && makepkg --syncdeps --force --install --noconfirm --noprogressbar"
                                  fetch-cmd
-                                 (shell-quote-argument pkg-dir))))))
+                                 (shell-quote-argument pkg-dir)))
+                   'install
+                   (or pkg pkg-name))))
 
-(defun arch--aur-abs-rebuild (pkg-name)
+(defun arch--aur-abs-rebuild (pkg-name &optional pkg)
   "Rebuild PKG-NAME in its existing abs directory without pulling.
 Registered as the AUR backend's `abs-rebuild-fn'; called via `arch-abs-rebuild'."
   (let ((pkg-dir (arch--aur-abs-pkg-dir pkg-name)))
@@ -562,7 +666,9 @@ Registered as the AUR backend's `abs-rebuild-fn'; called via `arch-abs-rebuild'.
     (arch--pkg-run pkg-name
                    (list "bash" "-c"
                          (format "cd %s && makepkg --syncdeps --force --install --noconfirm --noprogressbar"
-                                 (shell-quote-argument pkg-dir))))))
+                                 (shell-quote-argument pkg-dir)))
+                   'upgrade
+                   (or pkg pkg-name))))
 
 ;;;###autoload
 (defun arch-abs-install (pkg-name)
