@@ -1627,6 +1627,7 @@ return until the minibuffer session ends."
 	     orgx-agenda-minor-mode-turn-on
 	     orgx--install-auxiliary-packages
 	     ad:org-agenda--open-files
+	     ad:org-agenda-redo
 	     bootstrap-set-notes-directory)
   :init
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
@@ -1651,6 +1652,7 @@ return until the minibuffer session ends."
    :operation #'orgx--install-auxiliary-packages)
   :config
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files))
+  (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo)
 
 (use-package orgx-capture
   :ensure nil
@@ -1822,7 +1824,7 @@ return until the minibuffer session ends."
 (use-package make-mode
   :ensure nil
   :defer t
-  :mode (("[Mm]akefile\\'" . makefile-mode)
+  :mode (("\\(?:^\\|/\\)[Mm]akefile\\'" . makefile-mode)
          ("\\.mk\\'" . makefile-mode))
   :config
   (setq makefile-electric-keys t))
@@ -3026,7 +3028,8 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   (setq agent-shell-file-completion-enabled t)
   (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
   (setq agent-shell-header-style 'text)
-  (setq agent-shell-thought-process-expand-by-default nil)
+  (setq agent-shell-activity-group-expand-by-default t)
+  (setq agent-shell-thought-process-expand-by-default t)
   (setq agent-shell-tool-use-expand-by-default nil)
   (setq agent-shell-user-message-expand-by-default nil)
   (setq agent-shell-buffer-name-format

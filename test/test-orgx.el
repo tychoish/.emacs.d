@@ -180,6 +180,60 @@
          (prefix-alist (eval prefix-form)))
     (should (assq 'todo prefix-alist))
     (should (assq 'tags prefix-alist))))
+(ert-deftest orgx/ad-org-agenda-redo-unpopulated-buffer ()
+  "ad:org-agenda-redo handles unpopulated agenda buffers gracefully."
+  (with-current-buffer (get-buffer-create "*Org Agenda(test-unpopulated)*")
+    (org-agenda-mode)
+    (should (zerop (buffer-size)))
+    (should-not (get-text-property (point-min) 'org-redo-cmd))
+    ;; In an unpopulated buffer, ad:org-agenda-redo should avoid args-out-of-range: 0, 0
+    ;; and attempt to prompt via orgx-agenda-view (or user-error if unbound).
+    (let ((prompted nil))
+      (cl-letf (((symbol-function 'orgx-agenda-view) (lambda () (setq prompted t))))
+        (ad:org-agenda-redo #'ignore)
+        (should prompted)))
+    (kill-buffer)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; org-agenda custom command "dq"
 
+(ert-deftest orgx/denote-agenda-dq-custom-command-structure ()
+  "The 'dq' custom agenda command uses tags type with open question skip function."
+  (require 'org-agenda)
+  (let ((dq-cmd (assoc "dq" org-agenda-custom-commands)))
+    (should dq-cmd)
+    (should (equal "Human Questions" (nth 1 dq-cmd)))
+    (should (eq 'tags (nth 2 dq-cmd)))
+    (should (equal "+question|TODO=\"QUESTION\"" (nth 3 dq-cmd)))))
+
+(ert-deftest orgx/skip-unless-open-question-filters-open-questions ()
+  "orgx-skip-unless-open-question retains open questions and skips answered, done, or inherited subheadings."
+  (with-temp-buffer
+    (setq-local org-todo-keywords '((sequence "TODO" "QUESTION" "INPROGRESS" "|" "ANSWERED" "DONE")))
+    (org-mode)
+    (org-set-regexps-and-options)
+    (insert "
+* Open Question A :question:
+* QUESTION Open Question B
+* QUESTION Open Question C :question:
+* INPROGRESS Open Question D :question:
+*** Context                                       :question:
+*** Response                                      :question:
+* ANSWERED Closed Question E :question:
+* DONE Closed Question F :question:
+* TODO Task G :agent:
+")
+    (let (results)
+      (goto-char (point-min))
+      (while (re-search-forward "^\\(\\*+\\)\\s-+" nil t)
+        (let ((skip (orgx-skip-unless-open-question)))
+          (if skip
+              (goto-char skip)
+            (push (org-get-heading t t t t) results))))
+      (setq results (mapcar #'substring-no-properties (nreverse results)))
+      (should (equal '("Open Question A" "Open Question B" "Open Question C" "Open Question D")
+                     results)))))
+(ert-deftest orgx/denote-questions-command-exists ()
+  "orgx-agenda-denote-questions is an interactive command targeting agenda key dq."
+  (should (commandp #'orgx-agenda-denote-questions)))
 (provide 'test-orgx)
 ;;; test-orgx.el ends here

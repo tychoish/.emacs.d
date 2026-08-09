@@ -14,7 +14,12 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (require 'org-macs)
+  (require 'org-element))
+
 (require 'subr-x)
+(require 'org)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -120,12 +125,13 @@
 
   ;; org-faces
   (setq org-todo-keyword-faces
-        '(("TODO" . org-warning)
-	  ("DONE" . "slate gray")
+        '(("TODO" . warning)
           ("INPROGRESS" . warning)
           ("INCOMPLETE" . warning)
           ("SCHEDULED" . identifier)
+	  ("QUESTION" . warning)
 	  ("BACKLOG" . (:foreground warning :weight bold))
+	  ("DONE" . (:foreground "slate gray"))
           ("PROJECT" . (:foreground "slate gray" :weight bold))
           ("ANSWERED" . (:foreground "slate gray" :weight bold))))
 
@@ -199,8 +205,9 @@ header text, or leaves the default when nil."
     (org-agenda-overriding-header ,header)
     (org-agenda-sorting-strategy '(user-defined-up))
     (org-agenda-cmp-user-defined #'orgx-agenda-cmp-denote-signature)
-    (org-agenda-prefix-format '((todo . " %i %-16(orgx-denote-agenda-category) ")
-                                 (tags . " %i %-16(orgx-denote-agenda-category) ")))))
+    (org-agenda-prefix-format '((todo . " %i %-8(orgx-denote-agenda-category) ")
+                                (tags . " %i %-8(orgx-denote-agenda-category) ")))))
+
 
 (with-eval-after-load 'org-agenda
   (setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
@@ -217,18 +224,28 @@ header text, or leaves the default when nil."
             (org-agenda-overriding-header "Headings with no local tags")))
 	  ("d" . "denote database files")
           ("da" "Denote Agenda" todo ""
-           ,(orgx--denote-agenda-settings "Denote Agenda: All"))
-          ("dt" "Denote Agenda Tasks" tags-todo "-question"
+	   ,(orgx--denote-agenda-settings "Denote Agenda: All"))
+          ("dt" "Denote Agenda Tasks (without agent or questions)"
+	   ((tags-todo "-agent-question"
+                       ((org-agenda-overriding-header "Denote Agenda"))))
            ,(orgx--denote-agenda-settings "Denote Agenda: Tasks"))
-          ("dn" "Denote Agenda (non-agent)" tags-todo "-agent-question"
+          ("dn" "Denote Agenda (without agent)"
+	   ((tags-todo "-agent"
+                       ((org-agenda-overriding-header "Denote (non) Agent Tasks"))))
            ,(orgx--denote-agenda-settings "Denote Agenda: Non-agent tasks"))
-          ("dg" "Denote Agenda (agent only)" tags-todo "agent"
+          ("dg" "Denote Agenda (agent only)"
+	   ((tags-todo "agent"
+                       ((org-agenda-overriding-header "Denote Agent Tasks"))))
            ,(orgx--denote-agenda-settings "Denote Agenda: Agent tasks"))
-          ("dq" "Human Questions" tags-todo "question"
-           ,(orgx--denote-agenda-settings "Human questions awaiting a response"))
+          ("dq" "Human Questions"
+           ((tags "+question|TODO=\"QUESTION\""
+                  ((org-agenda-skip-function #'orgx-skip-unless-open-question)
+                   (org-agenda-overriding-header "Human Questions"))))
+           ,(orgx--denote-agenda-settings nil))
           ("dc" "Denote Composite Agenda"
-           ((tags-todo "question"
-                       ((org-agenda-overriding-header "Human questions")))
+           ((tags "+question|TODO=\"QUESTION\""
+                  ((org-agenda-skip-function #'orgx-skip-unless-open-question)
+                   (org-agenda-overriding-header "Human questions")))
             (tags-todo "-agent-question"
                        ((org-agenda-overriding-header "Tasks")))
             (tags-todo "agent"
@@ -356,6 +373,17 @@ header text, or leaves the default when nil."
 (defun ad:org-agenda--open-files (&rest _)
   "Pre-load all agenda files before `org-agenda'."
   (orgx-agenda-files-open))
+;;;###autoload
+(defun ad:org-agenda-redo (orig-fun &rest args)
+  "Handle `org-agenda-redo' gracefully on unpopulated or empty agenda buffers."
+  (let ((p (or (and (looking-at "'") (1- (point))) (point))))
+    (if (and (zerop (buffer-size))
+             (null (get-text-property p 'org-redo-cmd))
+             (null (get-text-property p 'org-series-redo-cmd)))
+        (if (fboundp 'orgx-agenda-view)
+            (orgx-agenda-view)
+          (user-error "Agenda buffer is unpopulated; select an agenda view first"))
+      (apply orig-fun args))))
 
 ;; gist export (ox-gist integration)
 
@@ -525,6 +553,23 @@ tags are tested; when non-nil, inherited tags are included in the check."
                   (member orgx-agenda-required-tag tags)
                 tags))
       (or (outline-next-heading) (point-max)))))
+(defun orgx-skip-unless-open-question ()
+  "Skip headings in agenda views that are not open human questions.
+Returns point after subtree to skip when the heading is not an open question
+\(e.g. answered/done items, metadata subheadings like Context/Response, or child headings inheriting :question:)."
+  (let* ((hl (org-get-heading t t t t))
+         (todo (org-get-todo-state))
+         (local-tags (org-get-tags nil t))
+         (is-answered (or (equal todo "ANSWERED")
+                          (equal todo "DONE")
+                          (and hl (string-prefix-p "ANSWERED " hl))))
+         (is-metadata (member hl '("Context" "Response" "LOGBOOK" "PROPERTIES")))
+         (is-question (or (member "question" local-tags)
+                          (equal todo "QUESTION")
+                          (and hl (string-prefix-p "QUESTION " hl)))))
+    (if (or is-answered is-metadata (not is-question))
+        (or (outline-next-heading) (point-max))
+      nil)))
 
 (defun orgx-agenda-untagged-in-file (file &optional tag todo-only inherited)
   "Show an agenda for FILE restricted to items lacking TAG.
@@ -629,7 +674,7 @@ result."
     (denote-directories)
     (seq-mapcat (lambda (dir) (directory-files-recursively dir "\\.org\\'")))))
 
-(defconst orgx-denote-agenda-category-width 16
+(defconst orgx-denote-agenda-category-width 8
   "Max width, in characters, of `orgx-denote-agenda-category'.")
 
 (defun orgx-denote-agenda-category ()
@@ -666,6 +711,15 @@ ordered by denote signature. Items tagged :question: are implementation
 TODOs' human counterpart and surface in the \"dq\" agenda view instead."
   (interactive)
   (org-agenda nil "dt"))
+
+;;;###autoload
+(defun orgx-agenda-denote-questions ()
+  "Show all human questions across the denote tree.
+Convenience entry point for the \"dq\" custom agenda command, which scans
+`orgx-denote-files' for open items tagged :question: or with the
+QUESTION TODO keyword, ordered by denote signature."
+  (interactive)
+  (org-agenda nil "dq"))
 
 ;;;###autoload
 (defun orgx-insert-question (question &optional context)
