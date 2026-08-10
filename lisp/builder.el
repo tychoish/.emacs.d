@@ -1583,20 +1583,20 @@ PACKAGES to `package-selected-packages' and echoes the result."
   "Run CI tests for the current project in a Docker container.
 Detects whether a Cask file is present in the project root to
 select the appropriate silex/emacs image and test invocation.
-With Cask: uses the \"-ci\" image variant and runs
+With Cask: uses the \"-ci-cask\" image variant and runs
 \"cask install && cask exec ert-runner test/test-*.el\".
-Without Cask: uses the plain image and runs emacs in batch mode
-to load test files found under test/ and run ert."
+Without Cask: uses the \"-ci\" image variant matching .github/workflows/test.yml
+and runs emacs in --fg-daemon mode with builder-emacs-conf-run-ci-tests."
   (interactive)
   (let* ((root (file-name-as-directory (approximate-project-root)))
          (project-name (file-name-nondirectory (directory-file-name root)))
          (has-cask (file-regular-p (f-join root "Cask")))
          (image (if has-cask
                     "silex/emacs:30.2-ci-cask"
-                  "silex/emacs:30.2"))
+                  "silex/emacs:30.2-ci"))
          (test-command (if has-cask
                            "cask install && cask exec ert-runner test/test-*.el"
-                         "emacs --batch -L . $(find test -name '*.el' | sed 's/^/-l /') -f ert-run-tests-batch-and-exit"))
+                         "ln -sf /workspace ~/.emacs.d && find ~/.emacs.d -name '*.elc' -delete && emacs --fg-daemon --eval '(builder-emacs-conf-run-ci-tests)'"))
          (command (format "docker run --rm -v %s:/workspace -w /workspace %s bash -c %s"
                           (shell-quote-argument (directory-file-name root))
                           image
@@ -1624,7 +1624,7 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
     (run-with-timer (or timeout 240) nil (lambda () (kill-emacs 1)))
     (condition-case err
         (seq-do (lambda (file) (load file nil t))
-                (directory-files test-dir t "\\`test-.*\\.el\\'"))
+                (directory-files test-dir t "\\`\\(?:test-.*\\|.*-test\\)\\.el\\'"))
       (error
        (message "builder-emacs-conf-run-ci-tests: error loading test files: %S" err)
        (kill-emacs 1)))
@@ -1634,6 +1634,16 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
     (let ((stats (ert-run-tests-batch t)))
       (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
 
+;;;###autoload
+(defun builder-emacs-conf-clean-elc (&optional directory)
+  "Delete all compiled .elc files under DIRECTORY (defaults to `user-emacs-directory`).
+Matching the CI cleanup step in .github/workflows/test.yml."
+  (interactive)
+  (let* ((dir (expand-file-name (or directory user-emacs-directory)))
+         (files (directory-files-recursively dir "\\.elc\\'")))
+    (seq-do #'delete-file files)
+    (message "builder: deleted %d .elc file(s) in %s" (length files) dir)
+    (when noninteractive (kill-emacs 0))))
 ;; Isolated checks: byte-compile / load / run tests somewhere other than
 ;; the calling process, so its already-loaded packages, advice, or
 ;; interactively-defined state can't mask a real problem.  Two
@@ -1967,6 +1977,31 @@ responds."
         :command (format "emacsclient --eval '(builder-emacs-conf-elisp-package-test-isolated \"%s\")'" project-root-directory)
         :directory project-root-directory
         :annotation (format "run ert tests for elisp package <%s> in an isolated subprocess" display-name)))))
+(builder-register-candidates
+ :name "emacs-conf-ci-tasks"
+ :pipeline
+ (when-let* ((root (approximate-project-root))
+             (name (approximate-project-name))
+             (_ (or (string-equal name "dot-emacs")
+                    (string-equal root (expand-file-name user-emacs-directory)))))
+   (-l (make-builder-candidate
+        :name "ci-run-tests"
+        :command "emacsclient --eval '(builder-emacs-conf-run-ci-tests)'"
+        :directory root
+        :priority 0
+        :annotation "run full CI ERT test suite via builder-emacs-conf-run-ci-tests")
+       (make-builder-candidate
+        :name "ci-clean-elc"
+        :command (format "emacsclient --eval '(builder-emacs-conf-clean-elc %S)'" root)
+        :directory root
+        :priority 0
+        :annotation "delete all .elc files matching CI cleanup step")
+       (make-builder-candidate
+        :name "ci-docker-tests"
+        :command "emacsclient --eval '(tychoish-run-ci-tests-docker)'"
+        :directory root
+        :priority 0
+        :annotation "run CI test suite in silex/emacs:30.2-ci docker container"))))
 
 (defconst builder--native-compile-chunk-size 25
   "Number of files to check for staleness per idle tick during incremental native compilation.")

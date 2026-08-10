@@ -729,6 +729,30 @@ or a resolved-but-unsuccessful result alike."
             (builder-candidates-for-emacs-lisp-project-test temp-dir "demo" (list temp-dir) tbl))
           (should (cl-some (lambda (k) (string-match-p "test-project-ert-all" k)) (ht-keys tbl))))
       (delete-directory temp-dir t))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; emacs-conf CI tasks & elc cleanup
+
+(ert-deftest builder-test/emacs-conf-clean-elc-deletes-elc-files ()
+  "builder-emacs-conf-clean-elc deletes all .elc files under specified directory."
+  (let ((temp-dir (make-temp-file "builder-test-clean-" t)))
+    (unwind-protect
+        (let ((elc-file (expand-file-name "test.elc" temp-dir))
+              (el-file (expand-file-name "test.el" temp-dir)))
+          (with-temp-file elc-file (insert ";; compiled"))
+          (with-temp-file el-file (insert ";; source"))
+          (should (file-exists-p elc-file))
+          (builder-emacs-conf-clean-elc temp-dir)
+          (should-not (file-exists-p elc-file))
+          (should (file-exists-p el-file)))
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/emacs-conf-ci-tasks-candidate-generator ()
+  "Test candidate generator `builder-candidates-for-emacs-conf-ci-tasks` produces CI targets."
+  (let ((tbl (make-hash-table :test #'equal)))
+    (builder-candidates-for-emacs-conf-ci-tasks user-emacs-directory "dot-emacs" (list user-emacs-directory) tbl)
+    (should (ht-contains-p tbl "ci-run-tests"))
+    (should (ht-contains-p tbl "ci-clean-elc"))
+    (should (ht-contains-p tbl "ci-docker-tests"))))
 
 (provide 'test-builder)
 ;;; test-builder.el ends here
