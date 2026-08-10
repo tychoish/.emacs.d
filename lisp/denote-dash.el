@@ -202,6 +202,24 @@ Absent entries default to `subtree'.  States: `folded', `children', `subtree'.")
 (defvar-local denote-dash--column-widths nil
   "Alist of (COLUMN . WIDTH) overrides for this buffer.")
 
+(cl-defstruct denote-dash-view
+  name
+  filter
+  narrowed-sequences
+  active-directory
+  grep-filter
+  show-non-sequence
+  visible-columns
+  sort-column
+  sort-direction)
+
+(defvar denote-dash-saved-views nil
+  "List of `denote-dash-view' structures representing saved filter views.
+Persisted across sessions via `savehist-mode'.")
+
+(defvar-local denote-dash--last-bookmark-name nil
+  "Most recently saved or jumped view name in this buffer.")
+
 ;;; Module-level cache
 
 (defvar denote-dash--git-cache nil
@@ -500,6 +518,13 @@ content filter active, not on every keystroke."
 (keymap-set denote-dash-narrow-map "w" #'denote-dash-widen)
 (keymap-set denote-dash-narrow-map "k" #'denote-dash-toggle-keyword)
 
+(defvar-keymap denote-dash-bookmark-map
+  :doc "Keymap for bookmark/saved view commands in `denote-dash-mode'.")
+(keymap-set denote-dash-bookmark-map "s" #'denote-dash-bookmark-save)
+(keymap-set denote-dash-bookmark-map "j" #'denote-dash-bookmark-jump)
+(keymap-set denote-dash-bookmark-map "d" #'denote-dash-bookmark-delete)
+(keymap-set denote-dash-bookmark-map "r" #'denote-dash-bookmark-rename)
+
 (defvar-keymap denote-dash-mode-map
   :doc "Keymap for `denote-dash-mode'.")
 (keymap-set denote-dash-mode-map "RET" #'denote-dash-open-note)
@@ -536,6 +561,8 @@ content filter active, not on every keystroke."
 (keymap-set denote-dash-mode-map "N" #'denote)
 (keymap-set denote-dash-mode-map "w" denote-dash-narrow-map)
 (keymap-set denote-dash-mode-map "C-c C-r" #'denote-dash-repack-sequence-children)
+(keymap-set denote-dash-mode-map "b" (cons "bookmark" denote-dash-bookmark-map))
+
 
 (define-derived-mode denote-dash-mode tabulated-list-mode "ddash"
   "Major mode for browsing and filtering Denote notes.
@@ -1252,6 +1279,140 @@ this only adds a discoverable `/' in front of them."
   (message "Non-sequence notes: %s"
            (if denote-dash--show-non-sequence "shown" "hidden"))
   (denote-dash-refresh))
+;;; Saved views (Bookmarks)
+
+(defun denote-dash-bookmark-save (&optional name)
+  "Save the current buffer's filter, narrow, column, and sort state as a named view.
+Prompts for NAME (defaulting to the buffer's most recent view name, if any).
+If NAME matches an existing view, confirms before overwriting."
+  (interactive
+   (list
+    (let* ((names (seq-map #'denote-dash-view-name denote-dash-saved-views))
+           (default denote-dash--last-bookmark-name)
+           (prompt (if default
+                       (format "Save view name (default %s): " default)
+                     "Save view name: "))
+           (input (completing-read prompt names nil nil nil nil default)))
+      (if (string-blank-p input) default input))))
+  (unless (and name (not (string-blank-p name)))
+    (user-error "View name cannot be empty"))
+  (let ((existing (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                            denote-dash-saved-views)))
+    (when (and existing (not (yes-or-no-p (format "View '%s' already exists. Overwrite? " name))))
+      (user-error "Aborted"))
+    (let* ((sort-col (car tabulated-list-sort-key))
+           (sort-dir (cdr tabulated-list-sort-key))
+           (view (make-denote-dash-view
+                  :name name
+                  :filter denote-dash--current-filter
+                  :narrowed-sequences (copy-sequence denote-dash--narrowed-sequences)
+                  :active-directory denote-dash--active-directory
+                  :grep-filter denote-dash--grep-filter
+                  :show-non-sequence denote-dash--show-non-sequence
+                  :visible-columns (copy-sequence denote-dash--visible-columns)
+                  :sort-column sort-col
+                  :sort-direction sort-dir)))
+      (setq denote-dash-saved-views
+            (cons view (seq-remove (lambda (v) (equal (denote-dash-view-name v) name))
+                                    denote-dash-saved-views)))
+      (setq-local denote-dash--last-bookmark-name name)
+      (message "Saved view '%s'" name))))
+
+(defun denote-dash--bookmark-annotate (name)
+  "Annotation function for `denote-dash-bookmark-jump' minibuffer completion."
+  (when-let* ((view (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                              denote-dash-saved-views)))
+    (format "  [filter: %s, narrow: %s, dir: %s]"
+            (or (denote-dash-view-filter view) "all")
+            (or (mapconcat #'identity (denote-dash-view-narrowed-sequences view) ",") "all")
+            (or (denote-dash-view-active-directory view) "all"))))
+
+(defun denote-dash-bookmark-jump (&optional name)
+  "Restore a saved view by NAME."
+  (interactive
+   (list
+    (if (null denote-dash-saved-views)
+        (user-error "No saved views exist")
+      (let* ((names (seq-map #'denote-dash-view-name denote-dash-saved-views))
+             (completion-extra-size 40)
+             (completion-annotate-function #'denote-dash--bookmark-annotate))
+        (completing-read "Jump to view: " names nil t)))))
+  (unless name
+    (user-error "No view selected"))
+  (let ((view (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                        denote-dash-saved-views)))
+    (unless view
+      (user-error "No view named '%s'" name))
+    (setq-local denote-dash--current-filter (denote-dash-view-filter view))
+    (setq-local denote-dash--narrowed-sequences (copy-sequence (denote-dash-view-narrowed-sequences view)))
+    (setq-local denote-dash--active-directory (denote-dash-view-active-directory view))
+    (setq-local denote-dash--grep-filter (denote-dash-view-grep-filter view))
+    (setq-local denote-dash--show-non-sequence (denote-dash-view-show-non-sequence view))
+    (let ((cols (denote-dash-view-visible-columns view)))
+      (setq-local denote-dash--visible-columns
+                  (seq-filter (lambda (c) (member c denote-dash-column-order)) cols)))
+    (if (denote-dash-view-sort-column view)
+        (setq tabulated-list-sort-key
+              (cons (denote-dash-view-sort-column view)
+                    (denote-dash-view-sort-direction view)))
+      (setq tabulated-list-sort-key nil))
+    (setq-local denote-dash--keyword-toggles nil)
+    (setq-local denote-dash--last-bookmark-name name)
+    (denote-dash-refresh)
+    (message "Applied view '%s'" name)))
+
+(defun denote-dash-bookmark-delete (&optional name)
+  "Delete a saved view by NAME."
+  (interactive
+   (list
+    (if (null denote-dash-saved-views)
+        (user-error "No saved views exist")
+      (completing-read "Delete view: "
+                       (seq-map #'denote-dash-view-name denote-dash-saved-views)
+                       nil t))))
+  (unless name
+    (user-error "No view selected"))
+  (let ((existing (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                            denote-dash-saved-views)))
+    (unless existing
+      (user-error "No view named '%s'" name))
+    (setq denote-dash-saved-views
+          (seq-remove (lambda (v) (equal (denote-dash-view-name v) name))
+                      denote-dash-saved-views))
+    (message "Deleted view '%s'" name)))
+
+(defun denote-dash-bookmark-rename (&optional old-name new-name)
+  "Rename saved view OLD-NAME to NEW-NAME."
+  (interactive
+   (if (null denote-dash-saved-views)
+       (user-error "No saved views exist")
+     (let* ((old (completing-read "Rename view: "
+                                  (seq-map #'denote-dash-view-name denote-dash-saved-views)
+                                  nil t))
+            (new (read-string (format "New name for '%s': " old) old)))
+       (list old new))))
+  (unless (and old-name (not (string-blank-p old-name)))
+    (user-error "Original view name required"))
+  (unless (and new-name (not (string-blank-p new-name)))
+    (user-error "New view name cannot be empty"))
+  (let ((view (seq-find (lambda (v) (equal (denote-dash-view-name v) old-name))
+                        denote-dash-saved-views)))
+    (unless view
+      (user-error "No view named '%s'" old-name))
+    (unless (equal old-name new-name)
+      (let ((target (seq-find (lambda (v) (equal (denote-dash-view-name v) new-name))
+                              denote-dash-saved-views)))
+        (when (and target (not (yes-or-no-p (format "View '%s' already exists. Overwrite? " new-name))))
+          (user-error "Aborted"))
+        (when target
+          (setq denote-dash-saved-views
+                (seq-remove (lambda (v) (equal (denote-dash-view-name v) new-name))
+                            denote-dash-saved-views))))
+      (setf (denote-dash-view-name view) new-name)
+      (when (equal denote-dash--last-bookmark-name old-name)
+        (setq-local denote-dash--last-bookmark-name new-name)))
+    (message "Renamed view '%s' to '%s'" old-name new-name)))
+
 
 ;;; Column ordering and toggle
 
@@ -1409,7 +1570,8 @@ this only adds a discoverable `/' in front of them."
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'denote-dash--filter-history)
   (add-to-list 'savehist-additional-variables 'denote-dash--persisted-columns)
-  (add-to-list 'savehist-additional-variables 'denote-dash-hierarchy-fold-sequences))
+  (add-to-list 'savehist-additional-variables 'denote-dash-hierarchy-fold-sequences)
+  (add-to-list 'savehist-additional-variables 'denote-dash-saved-views))
 
 ;;; Org datetree import
 

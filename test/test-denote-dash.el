@@ -844,5 +844,103 @@ exclusive major modes and can never be simultaneously reachable."
     (should-not (transient-test/duplicate-keys keys))
     (should-not (transient-test/key-prefix-conflicts keys))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Saved views (Bookmarks)
+
+(ert-deftest denote-dash-test/bookmark-save-and-jump-roundtrip ()
+  "Save captures all slots and jump restores every slot."
+  (let ((denote-dash-saved-views nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (setq-local denote-dash--current-filter '("tag:project"))
+      (setq-local denote-dash--narrowed-sequences '("7a"))
+      (setq-local denote-dash--active-directory "/tmp/silo")
+      (setq-local denote-dash--grep-filter "TODO")
+      (setq-local denote-dash--show-non-sequence nil)
+      (setq-local denote-dash--visible-columns '(sequence title keywords))
+      (setq tabulated-list-sort-key '("Title" . nil))
+      (setq-local denote-dash--keyword-toggles '("project"))
+
+      (denote-dash-bookmark-save "my-view")
+      (should (= 1 (length denote-dash-saved-views)))
+
+      ;; Reset buffer local state
+      (setq-local denote-dash--current-filter nil)
+      (setq-local denote-dash--narrowed-sequences nil)
+      (setq-local denote-dash--active-directory nil)
+      (setq-local denote-dash--grep-filter nil)
+      (setq-local denote-dash--show-non-sequence t)
+      (setq-local denote-dash--visible-columns '(title))
+      (setq tabulated-list-sort-key nil)
+
+      (denote-dash-bookmark-jump "my-view")
+
+      (should (equal '("tag:project") denote-dash--current-filter))
+      (should (equal '("7a") denote-dash--narrowed-sequences))
+      (should (equal "/tmp/silo" denote-dash--active-directory))
+      (should (equal "TODO" denote-dash--grep-filter))
+      (should-not denote-dash--show-non-sequence)
+      (should (equal '(sequence title keywords) denote-dash--visible-columns))
+      (should (equal '("Title" . nil) tabulated-list-sort-key))
+      (should (null denote-dash--keyword-toggles)))))
+
+(ert-deftest denote-dash-test/bookmark-save-overwrite-confirmation ()
+  "Overwriting an existing bookmark prompts for confirmation."
+  (let ((denote-dash-saved-views nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (setq-local denote-dash--current-filter '("first"))
+      (denote-dash-bookmark-save "view1")
+
+      (setq-local denote-dash--current-filter '("second"))
+      ;; Confirm overwrite
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) t)))
+        (denote-dash-bookmark-save "view1"))
+      (should (= 1 (length denote-dash-saved-views)))
+      (should (equal '("second") (denote-dash-view-filter (car denote-dash-saved-views))))
+
+      ;; Reject overwrite
+      (setq-local denote-dash--current-filter '("third"))
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) nil)))
+        (should-error (denote-dash-bookmark-save "view1") :type 'user-error))
+      (should (equal '("second") (denote-dash-view-filter (car denote-dash-saved-views)))))))
+
+(ert-deftest denote-dash-test/bookmark-delete ()
+  "Delete removes only the named entry from `denote-dash-saved-views'."
+  (let ((denote-dash-saved-views nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (denote-dash-bookmark-save "v1")
+      (denote-dash-bookmark-save "v2")
+      (should (= 2 (length denote-dash-saved-views)))
+
+      (denote-dash-bookmark-delete "v1")
+      (should (= 1 (length denote-dash-saved-views)))
+      (should (equal "v2" (denote-dash-view-name (car denote-dash-saved-views)))))))
+
+(ert-deftest denote-dash-test/bookmark-rename ()
+  "Rename updates the name slot without touching other slots."
+  (let ((denote-dash-saved-views nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (setq-local denote-dash--current-filter '("test"))
+      (denote-dash-bookmark-save "v1")
+
+      (denote-dash-bookmark-rename "v1" "v1-renamed")
+      (should (equal "v1-renamed" (denote-dash-view-name (car denote-dash-saved-views))))
+      (should (equal '("test") (denote-dash-view-filter (car denote-dash-saved-views)))))))
+
+(ert-deftest denote-dash-test/bookmark-jump-degrades-removed-column ()
+  "Jump against a view referencing a since-removed column degrades gracefully."
+  (let ((denote-dash-saved-views nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (setq-local denote-dash--visible-columns '(sequence title non-existent-column keywords))
+      (denote-dash-bookmark-save "bad-col-view")
+
+      (denote-dash-bookmark-jump "bad-col-view")
+      (should-not (member 'non-existent-column denote-dash--visible-columns))
+      (should (equal '(sequence title keywords) denote-dash--visible-columns)))))
+
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here
