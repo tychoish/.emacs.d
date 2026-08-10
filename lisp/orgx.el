@@ -887,6 +887,10 @@ or Global (further split by command type) — via
         (org-time-string-to-time (match-string 0 heading))
       (error nil))))
 
+(defalias 'denote-org-refile-to-denote 'orgx-migrate-subtree-to-denote)
+(defalias 'orgx-refile-to-denote 'orgx-migrate-subtree-to-denote)
+(defalias 'org-refile-to-denote 'orgx-migrate-subtree-to-denote)
+
 ;;;###autoload
 (defun orgx-migrate-subtree-to-denote ()
   "Extract the current Org subtree to a new denote note, replacing the heading with a link.
