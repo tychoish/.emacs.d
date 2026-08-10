@@ -301,7 +301,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 (cl-defstruct (tychoish-mail-account
                (:constructor tychoish-mail-make-account
-                             (&key id maildir name address keybinding signature signature-kind fetchmail
+                             (&key id maildir name address keybinding signature signature-kind (fetchmail mu4e-get-mail-command)
 				   &aux (maildir (cond
 						  ((not (stringp maildir)) (user-error "maildir must be a string"))
 						  ;; we could do more validation here, but it's probably more trouble
@@ -500,17 +500,20 @@ Returns the symbol of the generated activation command."
 
     (when (or default
 	      (not (and (null systems) (null instances))))
-      (add-one-shot-hook
-       :name account-name
-       :form `(when (or ,default
-			(and
-			 (or (member (sprite-instance-name) ',instances)
-			     (null ',instances))
-			 (or (member (system-name) ',systems)
-			     (null ',systems))))
-			(,configure-account-symbol))
-       :hook 'after-init-hook
-       :idle-timer 0.5))
+      (let ((activate-form
+             `(when (or ,default
+                        (and
+                         (or (member (sprite-instance-name) ',instances)
+                             (null ',instances))
+                         (or (member (system-name) ',systems)
+                             (null ',systems))))
+                (,configure-account-symbol))))
+        (eval activate-form t)
+        (when (daemonp)
+          (add-one-shot-hook
+           :name (format "%s-frame-setup" account-name)
+           :form activate-form
+           :hook 'after-first-frame-created))))
 
     configure-account-symbol))
 

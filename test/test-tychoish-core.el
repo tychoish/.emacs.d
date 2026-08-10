@@ -113,6 +113,31 @@ correctly and reads from the minibuffer using the candidate's command."
                  (should (equal "make -j8" val))
                  val)))
       (should (equal "make -j8" (tychoish-compilation-read-command "make"))))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; tychoish-mail account definition and immediate activation
+
+(ert-deftest tychoish-core/mail-account-definition-activates-default ()
+  "Test that `tychoish-define-mail-account' activates a default account immediately upon definition."
+  (require 'tychoish-mail)
+  (let ((hud-mail-map (make-sparse-keymap))
+        (tychoish-mail-accounts-table (make-hash-table :test #'equal))
+        (tychoish-mail-account-current nil)
+        (user-mail-address nil)
+        (user-full-name nil))
+    (setq mu4e-get-mail-command nil)
+    (cl-letf (((symbol-function 'mu4e) (lambda (&rest _args) nil)))
+      (tychoish-define-mail-account
+       :name "Test User"
+       :id "test-acc"
+       :address "test@example.com"
+       :key "x"
+       :maildir "/tmp/test-mail"
+       :default t
+       :command "true")
+      (should (equal tychoish-mail-account-current "tychoish-mail-test-acc"))
+      (should (equal user-mail-address "test@example.com"))
+      (should (equal user-full-name "Test User"))
+      (should (equal mu4e-get-mail-command "true")))))
 
 (provide 'test-tychoish-core)
 ;;; test-tychoish-core.el ends here
