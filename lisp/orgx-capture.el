@@ -70,6 +70,54 @@
   "Read a title string interactively during `org-capture' template expansion."
   (read-string "title => "))
 
+(defun orgx--capture-prompt-link ()
+  "Interactively select or create an Org link.
+If `org-stored-links' is non-nil, offers candidates via ACR/completing-read.
+Otherwise prompts for a link target and optional description."
+  (let* ((candidates (seq-map (lambda (item)
+                                (let ((link (car item))
+                                      (desc (cadr item)))
+                                  (cons (if (and desc (not (string-empty-p desc)))
+                                            (format "%s (%s)" desc link)
+                                          link)
+                                        item)))
+                              (bound-and-true-p org-stored-links)))
+         (choice (if candidates
+                     (annotated-completing-read
+                      candidates
+                      :prompt "Select stored org-link (or type new): "
+                      :require-match nil)
+                   (read-string "org-link (URL/file/path) => "))))
+    (if-let* ((found (assoc choice candidates)))
+        (let ((link (cadr found))
+              (desc (caddr found)))
+          (if (and desc (not (string-empty-p desc)))
+              (format "[[%s][%s]]" link desc)
+            (format "[[%s]]" link)))
+      (if (string-empty-p choice)
+          ""
+        (let ((desc (read-string "link description (optional) => ")))
+          (if (not (string-empty-p desc))
+              (format "[[%s][%s]]" choice desc)
+            (format "[[%s]]" choice)))))))
+
+(defun orgx--capture-get-link ()
+  "Return an Org link string `[[link][description]]` for capture expansion.
+First checks if an annotation link was captured or stored in `org-stored-links'.
+If unavailable, interactively prompts the user to select or create a link."
+  (let ((annotation (when (boundp 'org-capture-plist)
+                      (plist-get org-capture-plist :annotation))))
+    (cond
+     ((and (stringp annotation) (not (string-empty-p annotation)))
+      annotation)
+     ((bound-and-true-p org-stored-links)
+      (let ((latest (car org-stored-links)))
+        (if (cadr latest)
+            (format "[[%s][%s]]" (car latest) (cadr latest))
+          (format "[[%s]]" (car latest)))))
+     (t
+      (orgx--capture-prompt-link)))))
+
 (cl-defun orgx--capture-add-flat-templates
     (&key kind char name path (key "") target body-fn first-sub default-subs
           (prepend t) (time-prompt-suffix nil))
@@ -100,8 +148,12 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                    (list (concat key char)
                          (format "%s %s <%s>" name kind (file-name-nondirectory path))))
       (push (list (concat char key) (car first-sub) (cdr first-sub)) specs)
-      (when-let* ((q-sub (assoc (concat char "q") default-subs)))
-        (push (cons (concat char key "q") (cdr q-sub)) specs)))
+      (dolist (sub default-subs)
+        (let ((suffix (car sub)))
+          (when (and (string-prefix-p char suffix)
+                     (string-suffix-p "q" suffix))
+            (let ((shortcut-key (concat (substring suffix 0 (length char)) key (substring suffix (length char)))))
+              (push (cons shortcut-key (cdr sub)) specs))))))
     (dolist (entry (append (nreverse specs)
                            (seq-map (lambda (it) (cons (concat key (car it)) (cdr it)))
                                     default-subs)))
@@ -134,7 +186,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :default-subs '(("jj" "" "<today>")
                    ("jp" "" "<date prompt>")
                    ("jx" "%x" "X11 buffer")
-                   ("jl" "%a" "org-link")
+                   ("jl" "%(orgx--capture-get-link)" "org-link")
                    ("jk" "%c" "emacs kill-ring"))
    :prepend nil
    :time-prompt-suffix "jp"))
@@ -148,7 +200,8 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :default-subs '(("tt" "%i" "selection")
                    ("tq" "" "quick task" :immediate-finish t)
                    ("tx" "%x" "X11 buffer")
-                   ("tl" "%a" "org-link")
+                   ("tl" "%(orgx--capture-get-link)" "org-link")
+                   ("tlq" "%(orgx--capture-prompt-link)" "quick org-link task" :immediate-finish t)
                    ("tk" "%c" "emacs kill-ring"))))
 
 (cl-defun orgx-capture-add-note-templates (&key name path (key ""))
@@ -159,7 +212,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :first-sub (cons "%i" "selection")
    :default-subs '(("nn" "%i" "selection")
                    ("nx" "%x" "X11 buffer")
-                   ("nl" "%a" "org-link")
+                   ("nl" "%(orgx--capture-get-link)" "org-link")
                    ("nk" "%c" "emacs kill-ring"))))
 
 ;; registration helpers
