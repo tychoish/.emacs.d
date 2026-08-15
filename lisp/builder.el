@@ -1218,6 +1218,19 @@ opens the *ert* selector."
     (if noninteractive
         (ert-run-tests-batch-and-exit)
       (ert t))))
+
+;;;###autoload
+(defun builder-elisp-package-run-checks ()
+  "Run the package checking suite (checkdoc, package-lint, compile, ERT)."
+  (interactive)
+  (let ((checks-file (expand-file-name "scripts/run-checks.el" user-emacs-directory)))
+    (if (file-exists-p checks-file)
+        (progn
+          (load checks-file)
+          (if (fboundp 'acr-run-all-checks)
+              (acr-run-all-checks)
+            (error "Function `acr-run-all-checks' not found in %s" checks-file)))
+      (error "Checks script not found at %s" checks-file))))
 (defun builder--ert-test-names ()
   "Return the sorted names (strings) of every currently defined ert test."
   (thread-last (ert-select-tests t t)
@@ -1507,7 +1520,8 @@ PACKAGES to `package-selected-packages' and echoes the result."
 	 :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" -f %s" lisp-dir fn)
 	 :directory project-root-directory
 	 :annotation (format "%s elisp package <%s>" desc display-name))))
-    '(("test-package"    "builder-elisp-package-test"    "run ert tests for")
+    '(("check-package"   "builder-elisp-package-run-checks" "run all checks (lint/test/compile) for")
+      ("test-package"    "builder-elisp-package-test"    "run ert tests for")
       ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
       ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
       ("clean-package"   "builder-elisp-package-clean"   "remove build artifacts of")))))

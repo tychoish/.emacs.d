@@ -128,7 +128,9 @@
   :defer t)
 
 (use-package annotated-completing-read
-  :defer t)
+  :defer t
+  :config
+  (annotated-completing-read-setup-history))
 
 (use-package sprite
   :init

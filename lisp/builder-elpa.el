@@ -533,5 +533,18 @@ If IDLE is non-nil, run rebuilds when Emacs is idle for INTERVAL."
   (builder-elpa-status-mode)
   (builder-elpa-status-refresh))
 
+;;;autoload
+(defun builder-elpa-run-checks ()
+  "Run the package checking suite from ~/.emacs.d/scripts/run-checks.el."
+  (interactive)
+  (let ((checks-file (expand-file-name "scripts/run-checks.el" user-emacs-directory)))
+    (if (file-exists-p checks-file)
+        (progn
+          (load checks-file)
+          (if (fboundp 'acr-run-all-checks)
+              (call-interactively #'acr-run-all-checks)
+            (error "Function `acr-run-all-checks' not found in %s" checks-file)))
+      (error "Checks script not found at %s" checks-file))))
+
 (provide 'builder-elpa)
 ;;; builder-elpa.el ends here
