@@ -985,8 +985,7 @@ new note's identifier reflects that date."
 
 (keymap-set orgx-minor-mode-archive-map "e" #'org-cycle-force-archived)
 (keymap-set orgx-minor-mode-archive-map "t" #'org-archive-set-tag)
-(keymap-set orgx-minor-mode-archive-map "s" #'org-archive-to-archive-sibling)
-
+(keymap-set orgx-minor-mode-archive-map "s" (cons "current→sibling"#'org-archive-to-archive-sibling))
 (keymap-set orgx-minor-mode-archive-map "d" (cons "done+archive" #'orgx-mark-done-and-archive))
 (keymap-set orgx-minor-mode-archive-map "a" (cons "done→sibling" #'orgx-archive-done-tasks-to-archive-sibling))
 (keymap-set orgx-minor-mode-archive-map "f" (cons "done→file" #'orgx-archive-done-tasks-to-archive-file))
@@ -1003,14 +1002,14 @@ new note's identifier reflects that date."
 (keymap-set orgx-minor-mode-commands-map "r" (cons "reload-agenda" #'orgx-agenda-files-reload))
 (keymap-set orgx-minor-mode-commands-map "/" (cons "agenda-for-file" #'orgx-agenda-for-file))
 (keymap-set orgx-minor-mode-commands-map "t" #'org-set-tags-command)
-(keymap-set orgx-minor-mode-commands-map "n" (cons "narrow-to-subtree" #'org-narrow-to-subtree))
+(keymap-set orgx-minor-mode-commands-map "n" (cons "narrow-to-subtree" #'org-narrow-to-subtgo-cache-tools-tycho/build-update-go-1.26-8254/merge-cce7d2cd041b677308a2ed1dddae356c3dc766d29dec9d4e46a8549089ec7b70ree))
 (keymap-set orgx-minor-mode-commands-map "p" (cons "insert-proprty-drawer" #'org-insert-property-drawer))
 (keymap-set orgx-minor-mode-commands-map "w" #'org-refile)
 (keymap-set orgx-minor-mode-commands-map "d" #'orgx-date-now)
 (keymap-set orgx-minor-mode-commands-map "s" #'org-save-all-org-buffers)
 
 (keymap-set orgx-minor-mode-commands-map "u" (cons "untaged-in-file" #'orgx-agenda-untagged-in-file))
-(keymap-set orgx-minor-mode-commands-map "c" (cons "capture" orgx-minor-mode-capture-map))
+(keymap-set orgx-minor-mode-commands-map "c" (cons "capture" orgx-minor-mode-capture-map))e
 (keymap-set orgx-minor-mode-commands-map "f" (cons "archive" orgx-minor-mode-archive-map))
 
 (defvar-keymap orgx-minor-mode-map

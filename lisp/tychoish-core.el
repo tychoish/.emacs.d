@@ -1648,9 +1648,9 @@ return until the minibuffer session ends."
 	     bootstrap-set-notes-directory)
   :init
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
-  (keymap-set orgx-global-map "c" #'orgx-capture)
   (keymap-set orgx-global-map "4" #'org-agenda)
   (keymap-set orgx-global-map "k" #'org-capture)
+  (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
   (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
   (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
