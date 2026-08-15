@@ -1650,7 +1650,6 @@ return until the minibuffer session ends."
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
   (keymap-set orgx-global-map "4" #'org-agenda)
   (keymap-set orgx-global-map "k" #'org-capture)
-  (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
   (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
   (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
@@ -1668,6 +1667,7 @@ return until the minibuffer session ends."
    :hook 'org-mode-hook
    :operation #'orgx--install-auxiliary-packages)
   :config
+  (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files))
   (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo)
 
