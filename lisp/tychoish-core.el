@@ -3296,6 +3296,7 @@ Falls back to the full list when filtering would leave no choices."
   (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-capture-corfu-setup)
   (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-capture-corfu-setup)
 
+  (setq agent-shell-activity-group-expand-by-default t)
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
   (setq agent-shell-queue-archive-enabled t)
