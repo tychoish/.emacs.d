@@ -1,3 +1,0 @@
-fun.Worker(func(ctx context.Context) error {
-         return nil
-})

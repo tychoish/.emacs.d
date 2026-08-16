@@ -1,5 +1,0 @@
-func ${1:name}(${2:arguments}) http.HandlerFunc {
-        return func(w http.ResponseWriter, r *http.Request) {
-                $0
-        }
-}

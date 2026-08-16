@@ -1,5 +1,0 @@
-#name: Command Directive
-#contributor: tychoish
-# --
-.. command:: $1
-   $0

@@ -577,7 +577,7 @@
   :defer t
   :init
   ;; "C-c ." this is mostly copy-pasta from cape-mode-map, with tweaks
-  (keymap-set hud-completion-map "t" #'complete-tag)
+
   (keymap-set hud-completion-map "d" #'cape-dabbrev)
   (keymap-set hud-completion-map "h" #'cape-history)
   (keymap-set hud-completion-map "f" #'cape-file)
@@ -589,8 +589,9 @@
   (keymap-set hud-completion-map "k" #'cape-keyword)
   (keymap-set hud-completion-map ":" #'cape-emoji)
   (keymap-set hud-completion-map "e" #'cape-emoji)
+  (keymap-set hud-completion-map "m" #'cape-sgml)
   (keymap-set hud-completion-map "\\" #'cape-tex)
-  (keymap-set hud-completion-map "/" #'cape-sgml)
+
   (keymap-set hud-completion-map "u" #'cape-rfc1345)
   (eval-and-compile
     (defmacro cape-capf-wrapper (wrapper inner)
@@ -614,7 +615,7 @@
     (setq-local completion-at-point-functions
 		(thread-last
 		  (list #'cape-dabbrev
-			#'yasnippet-capf
+			#'tempel-complete
 			#'cape-rfc1345
 			#'cape-emoji
 			#'cape-file
@@ -629,7 +630,7 @@
 			(cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
 			#'cape-dabbrev
 			(cape-capf-wrapper cape-capf-inside-code cape-keyword)
-			#'yasnippet-capf
+			#'tempel-complete
 			(thread-last (tychoish/get-available-word-capfs)
 				     (seq-map (lambda (in)
 						`(progn
@@ -654,7 +655,7 @@
 						   (list (cape-capf-wrapper cape-capf-inside-comment ,in)
 							 (cape-capf-wrapper cape-capf-inside-string ,in)))))
 				     (seq-map 'eval))
-			#'yasnippet-capf
+			#'tempel-complete
 			#'cape-emoji
 			#'cape-file)
 		  (flatten-tree)
@@ -675,32 +676,35 @@
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
   (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup))
 
-(use-package yasnippet
+(use-package tempel
   :ensure t
-  :commands (yas-insert-snippet yas-expand-snippet yas-lookup-snippet)
   :init
-  (add-hook 'text-mode-hook #'yas-minor-mode)
-  (add-hook 'prog-mode-hook #'yas-minor-mode)
+  (defun tempel-setup-capf ()
+    (setq-local completion-at-point-functions
+                (cons #'tempel-complete completion-at-point-functions)))
+  (add-hook 'conf-mode-hook #'tempel-setup-capf)
+  (add-hook 'prog-mode-hook #'tempel-setup-capf)
+  (add-hook 'text-mode-hook #'tempel-setup-capf)
+
+  (defun tempel-open-custom-file ()
+    (interactive)
+    (find-file (expand-file-name "templates" user-emacs-directory)))
+
+  (keymap-set hud-completion-map "s" #'tempel-complete)
+  (keymap-set hud-completion-map "x" #'tempel-expand)
+  (keymap-set hud-completion-map "v" #'tempel-open-custom-file)
   :config
-  (delight 'yas-minor-mode " ys")
-  (add-to-list 'load-path (file-name-concat user-emacs-directory "snippets"))
-  (keymap-set hud-yasnippet-map "C-s" #'yas-insert-snippet)
-  (keymap-set hud-yasnippet-map "C-n" #'yas-new-snippet)
-  (keymap-set hud-yasnippet-map "C-v" #'yas-visit-snippet-file)
-  (keymap-set yas-minor-mode-map "C-c &" '("yasnippet" . hud-yasnippet-map)))
+  (setq tempel-path (expand-file-name "templates" user-emacs-directory)))
 
-(use-package yasnippet-capf
+(use-package eglot-tempel
   :ensure t
-  :defer t
+  :after (eglot tempel)
   :init
-  (keymap-set hud-completion-map "s" #'yasnippet-capf)
-  (declare-function yasnippet-capf "yasnippet-capf")
-  (add-hook 'completion-at-point-functions #'yasnippet-capf))
+  (add-hook 'eglot-managed-mode-hook #'eglot-tempel-setup-eglot))
 
-(use-package yasnippet-snippets
+(use-package tempel-collection
   :ensure t
-  :after yasnippet
-  :defer t)
+  :after tempel)
 
 (use-package dabbrev
   :ensure nil
@@ -708,7 +712,8 @@
   :init
   (keymap-set global-map "M-/" #'dabbrev-completion)
   (keymap-set global-map "C-M-/" #'dabbrev-expand)
-  (keymap-set hud-completion-map "/" #'dabbrev-completion)
+  (keymap-set hud-completion-map "/" #'dabbrev-expand)
+  (keymap-set hud-completion-map "c" #'dabbrev-completion)
   :config
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
   (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
@@ -821,8 +826,7 @@
     (let ((completion-in-region-function #'corfu--in-region))
       (completion-at-point)))
 
-  (keymap-set hud-completion-map "m" #'corfu-at-point)
-  (keymap-set hud-completion-map "x" #'corfu-at-point)
+  (keymap-set hud-completion-map ";" #'corfu-at-point)
 
   (add-hook 'corfu-mode-hook 'corfu-history-mode)
   (add-hook 'corfu-mode-hook 'corfu-indexed-mode)
@@ -1084,12 +1088,8 @@ completion candidate outlives its buffer."
   :ensure t
   :defer t)
 
-(use-package consult-yasnippet
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-consult-mode-map "s" #'consult-yasnippet)
-  (keymap-set hud-completion-map "y" #'consult-yasnippet))
+  (keymap-set hud-consult-mode-map "s" #'tempel-insert)
+  (keymap-set hud-completion-map "i" #'tempel-insert)
 
 (use-package embark-consult
   :ensure t
@@ -1737,10 +1737,6 @@ return until the minibuffer session ends."
     (interactive)
     (seq-do #'tychoish/markdown-align-tables-in-file (dired-get-marked-files))))
 
-(use-package fountain-mode
-  :ensure t
-  :mode ("\\.script" "\\.sp"))
-
 (use-package flyspell
   :ensure t
   :defer t
@@ -1928,6 +1924,7 @@ return until the minibuffer session ends."
   (delight 'go-ts-mode "go.ts")
   (delight 'go-mod-ts-mode "go.mod.ts")
   (delight 'go-mode "go")
+
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
     (setq-local fill-column 100)
@@ -2234,18 +2231,9 @@ return until the minibuffer session ends."
   (setq flycheck-idle-buffer-switch-delay 1)
   (setq flycheck-checker-error-threshold nil)
   (setq flycheck-display-errors-delay 0.5)
-  (setq flycheck-flake8-maximum-line-length 100))
-
-(use-package flycheck-golangci-lint
-  :ensure t
-  :defer t
-  :defines (golangci-lint)
-  :after (flycheck go-ts-mode)
-  :config
   (setq flycheck-go-vet-shadow t)
   (setq flycheck-go-build-install-deps nil)
-  (setq flycheck-golangci-lint-fast t)
-  (setq flycheck-golangci-lint-tests t))
+  (setq flycheck-flake8-maximum-line-length 100))
 
 (use-package compile
   :defer t
@@ -2397,8 +2385,6 @@ return until the minibuffer session ends."
 
 (use-package eglot
   :ensure nil
-  ;; :defines (eglot-mode-map eglot-alternatives)
-  ;; :functions (eglot-format-buffer eglot-managed-p eglot-completion-at-point eglot-alternatives)
   :commands (eglot-code-action-rewrite
 	     eglot-code-action-extract
 	     eglot-code-actions
@@ -2472,17 +2458,6 @@ return until the minibuffer session ends."
   (add-to-list 'eglot-stay-out-of 'flymake)
   (add-to-list 'eglot-stay-out-of 'company)
   (set-face-attribute 'eglot-highlight-symbol-face nil :underline nil :weight 'bold)
-
-  ;; Advertising `workspace/didChangeWatchedFiles' makes most language
-  ;; servers send a `client/registerCapability' request as part of session
-  ;; startup. Its handler (`eglot-register-capability') calls `project-files'
-  ;; on the server's project, and when `projectile-mode' resolves that to
-  ;; Projectile's backend with a cold file cache, Projectile's async indexer
-  ;; waits on `accept-process-output' from *inside this very jsonrpc process
-  ;; filter* — a reentrant context that can stall for minutes until manually
-  ;; interrupted. Two complementary fixes below: warm the cache before eglot
-  ;; ever connects, and defer file-watch registration instead of blocking the
-  ;; process filter when the cache is still cold.
 
   (defconst tychoish/projectile-warm-cache-idle-delay 3
     "Idle seconds between warming successive queued projects' Projectile caches.")

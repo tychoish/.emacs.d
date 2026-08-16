@@ -1,7 +1,0 @@
-# -*- mode: snippet -*-
-# name: fn return
-# key: fnr
-# --
-fn ${1:name}() -> ${2:return} {
-   $0
-}

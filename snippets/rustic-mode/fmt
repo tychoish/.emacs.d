@@ -1,6 +1,0 @@
-# -*- mode: snippet -*-
-#name : fmt
-#key : fmt
-#contributor : Robert Krahn
-# --
-format!("$0")

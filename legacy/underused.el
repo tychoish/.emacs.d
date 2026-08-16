@@ -30,6 +30,10 @@
     (when gopath
       (expand-file-name (concat gopath "/src/" pkg)))))
 
+(use-package fountain-mode
+  :ensure t
+  :mode ("\\.script" "\\.sp"))
+
 (use-package cargo
   :ensure t
   :after (rustic)
@@ -41,13 +45,24 @@
   :ensure t
   :mode "\\.jinja\\'")
 
-
 (use-package just-mode
   :ensure t
   :after (builder)
   :mode (("justfile" . just-mode)
 	 ("Justfile" . just-mode)
 	 ("\\.just%" . just-mode)))
+
+(use-package flycheck-golangci-lint
+  :ensure t
+  :defer t
+  :defines (golangci-lint)
+  :after (flycheck go-ts-mode)
+  :config
+  (setq flycheck-go-vet-shadow t)
+  (setq flycheck-go-build-install-deps nil)
+  (setq flycheck-golangci-lint-fast t)
+  (setq flycheck-golangci-lint-tests t))
+
 
 (use-package graphviz-dot-mode
   :ensure t

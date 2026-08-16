@@ -1,6 +1,0 @@
-#name : Header 3 (~) (Doc Baker Specific)
-#contributor: Peng Deng <dengpeng@gmail.com>
-# --
-${1:Header 3}
-${1:$(make-string (string-width yas-text) ?\~)}
-$0

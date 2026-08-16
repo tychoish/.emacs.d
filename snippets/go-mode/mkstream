@@ -1,5 +1,0 @@
-fun.MakeStream(func(ctx conext.Context) ($1, error) {
-	$0
-
-        return $2, nil
-})

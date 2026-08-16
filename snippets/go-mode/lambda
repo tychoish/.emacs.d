@@ -1,6 +1,0 @@
-# -*- mode: snippet -*-
-# name: lambda
-# --
-func ($1) $2 {
-	$0
-}

@@ -1,9 +1,0 @@
-# -*- mode: snippet -*-
-# name: test
-# key: test
-# --
-#[test]
-fn it_works() {
-    assert_eq!(2 + 2, 4);
-}
-

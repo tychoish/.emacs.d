@@ -1,4 +1,0 @@
-#name : Strong Asterisk
-#contributor: Peng Deng <dengpeng@gmail.com>
-# --
-**${1:Text}** $0

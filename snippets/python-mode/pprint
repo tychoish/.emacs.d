@@ -1,8 +1,0 @@
-# -*- coding: utf-8 -*-
-# name: pprint
-# contributor: tychoish
-# --
-def pprint(doc):
-    import json
-
-    print(json.dumps(doc, indent=3))

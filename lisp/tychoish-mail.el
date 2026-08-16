@@ -225,7 +225,7 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
 	      `(,(cape-capf-prefix-length 'mu4e--compose-complete-contact-field 4)
 		cape-emoji
 		cape-dict
-		yasnippet-capf))
+		tempel-complete))
 
   (setq-local use-hard-newlines t)
   (setq-local make-backup-files nil))

@@ -1,5 +1,0 @@
-#name : Operator Directive
-#contributor: tychoish
-# --
-.. operator:: $1
-   $0

@@ -1,6 +1,0 @@
-# -*- mode: snippet -*-
-# name: forslice
-# --
-for idx, item := range ${1:slice} {
-    $0
-}

@@ -1,7 +1,0 @@
-# -*- mode: snippet -*-
-# name: formap
-# key: formp
-# --
-for key, value := range ${1:mp} {
-    $0
-}

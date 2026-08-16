@@ -1,5 +1,0 @@
-#name : default domain
-#contributor: tychoish
-# --
-.. default-domain:: $1
-   $0

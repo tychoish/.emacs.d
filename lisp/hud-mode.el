@@ -224,9 +224,6 @@
   :name "gptel-set-default-model"
   :doc "GPtel model selection under C-c r g m (hud-mode).")
 
-(defvar-keymap hud-yasnippet-map
-  :name "yasnippet"
-  :doc "YASnippet commands under C-c & (hud-mode).")
 
 ;; the mode's own container map -- populated below
 (defvar-keymap hud-mode-map

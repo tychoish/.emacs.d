@@ -1,6 +1,0 @@
-# -*- mode: snippet -*-
-#name : dbg
-#key : d
-#contributor : Robert Krahn
-# --
-dbg!($0)

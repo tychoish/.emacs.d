@@ -1,8 +1,0 @@
-# -*- mode: snippet -*-
-#name : macro
-#key : macro
-#contributor : Robert Krahn
-# --
-macro_rules! ${1:name} {
-    ( $arg:ident ) => { $0 }
-}

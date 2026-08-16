@@ -1,0 +1,80 @@
+;;; -*- mode: lisp-data -*-
+
+fundamental-mode
+
+org-mode
+  (>afn "[fn:: " (p "note") "] " q "\n" :doc "footnote (anonymous/inline)")
+  (>fn "[fn:" (p "note id" v1) "] " q "\n\n[fn" (s v1) "]" :doc "footnote")
+  (>im "#+caption: " (p "caption of the image") "\n[[file:" (p "image_path") "]]" q :doc "image")
+  (>i "#+include: " q :doc "include")
+  (>ke "#+keywords: " q :doc "keywords")
+  (>vi "[[" (p "link of the video") "][file:" (p "link of the image") "]" :doc "video")
+  (elisp "#+begin_src emacs-lisp :tangle yes\n" q "\n#+end_src")
+  (project "#+TITLE:prime.tychoish.projects
+#+CATEGORY: " (p "category") "
+* Inbox
+* Tasks
+* Notes
+* Loops
+** Daily
+** Weekly
+** Quarterly
+** Yearly
+* Journal" :doc "sasha chua inspired project tracking file")
+
+emacs-lisp-mode
+  (addc ";;; ### " p " ###\n;;; --- " p "\n" q)
+  (addcl ";; " (format-time-string "%Y/%m/%d") "\n;;  * " user-full-name
+       ":\n;;      * " q "\n;;\n")
+  (addcll ";; " (p "Date") "\n;;  * " (p "Name") ":\n;;      * " q "\n;;\n")
+  (addusk "(lazy-unset-key '(\"" (p "key-list") "\")" q ")\n")
+  (dlaa "(dolist (" (p "elt-cons" v1) " '(" (p "elt-cons-list") "))\n  (add-to-alist '" q " " (s v1) "))\n \n")
+  (dlhk "(dolist (hook (list\n               " (p "mode-list") "\n               ))\n  (add-hook hook '" q "))")
+  (dlhkd "(dolist (hooked (list\n               " (p "mode-list") "\n               ))\n  (add-hook '" q " hooked))\n")
+  (yonp "(yes-or-no-p \"PROMPT" q " \")" :doc "y-or-n-p")
+  (addrq "(require '" q ")")
+  (addse "(setq " (p "variable-name") " " q ")")
+  (addtl "(add-to-list " (p "list-var") " " q ")")
+  (addul "(unless " (p "conditional") "\n  " q ")")
+  (addif "(if " (p "conditional") "\n    " (p "then") ")")
+
+go-mode
+  (append (p v1) " = append(" (s v1) ", " q ")" :doc "for append")
+  (bson "\\" bson: "\n")
+  (db "\\" db:)
+  (ec "ec := &erc.Collector{}\n")
+  (itert "func(yield func(T) error) {\n	for " p " {\n		if !yield(" (p v2) ") {\n			return\n		}\n		" (s v2) "\n	}\n}\n" q "\n")
+  (json "\\" json:)
+  (printdebug "var count = &atomic.Int64{}\n\nfunc tychoish(args ...any) {\n	var calling string\n	var padding string\n	pc, _, _, _ := runtime.Caller(1)\n	fnname := runtime.FuncForPC(pc).Name()\n	parts := strings.Split(fnname, \".\")\n	idx := len(parts) - 1\n	if parts[idx] == \"func1\" {\n		idx--\n	}\n	calling = parts[idx]\n	padding = strings.Repeat(\" \", int(math.Max(0, float64(24-len(calling)))))\n\n	fmt.Println(time.Now().UnixMicro(), fmt.Sprintf(\" %03d \", count.Add(1)), calling, padding, args)\n}\n" :doc "tychoish print debugger")
+  (trun "t.Run(\"" p "\", func(t *testing.T) {\n	" q "\n})\n" :doc "subtest")
+  (suite "type " (p v1) "Suite struct {\n	suite.Suite\n}\n\nfunc Test" (s v1) "Suite(t *testing.T) {\n	suite.Run(t, new(" (s v1) "Suite))\n}\n\nfunc (s *" (s v1) "Suite) SetupSuite() {}\nfunc (s *" (s v1) "Suite) TearDownSuite() {}\nfunc (s *" (s v1) "Suite) SetupTest() {}\nfunc (s *" (s v1) "Suite) TearDownTest() {}\nfunc (s *" (s v1) "Suite) Test() {}\n" :doc "testify suite")
+  (tags "\\" bson:)
+  (tests "tests := []struct {\n	expected\n}{\n	{},\n}\n\nfor n, tt := range tests {\n	actual :=\n	if tt.expected != actual {\n		t.Errorf(\"#%d want %v, got %v\", n, tt.expected, actual)\n	}\n}\n")
+  (wfn "func(ctx context.Context) error {\n	" q "\n	return nil\n}\n")
+  (worker "fun.Worker(func(ctx context.Context) error {\n         return nil\n})\n")
+  (yaml "\\" yaml: "\n")
+
+python-mode
+  (init-logging "\nimport logging\nimport os.path\n\nlogger = logging.getLogger(os.path.basename(__file__))\n")
+  (itr "import ipdb; ipdb.set_trace()" :doc "ipdb trace")
+  (pprint "def pprint(doc):\n    import json\n\n    print(json.dumps(doc, indent=3))\n")
+  (timer "import time\nclass Timer():\n    def __init__(self, name=None):\n        if name is None:\n            self.name = 'task'\n        else:\n            self.name = name\n    def __enter__(self):\n        self.start = time.time()\n    def __exit__(self, *args):\n        print( '\''time elapsed for {0} was: {1}'\''.format(self.name, str(time.time() - self.start)) )\n" :doc "timer class")
+  (wtime "with Timer(" p "):\n    " q "\n")
+  (param ":param " p ": " q)
+  (propg "def _get_" (p "foo" v1) "(self):\n    return self._" (s v1) "\n\n" (s v1) " = property(_get_" (s v1) ")\n\n" q :doc "_get_foo ")
+  (propsg "def _set_" (p "foo" v1) "(self, value):\n    self._" (s v1) " = value\n\ndef _get_" (s v1) "(self):\n    return self._" (s v1) "\n\n" (s v1) " = property(_get_" (s v1) ", _set_" (s v1) ")\n\n" q :doc "_get_foo ")
+
+rustic-mode
+  (derive-debug-clone-copy "#[derive(Debug, Clone, Copy)]")
+  (impl-add "impl std::ops::Add for " (p "Type") " {\n    type Output = Self;\n\n    fn add(self, rhs: Self) -> Self::Output {\n        Self { " q " }\n    }\n}")
+  (impl-debug-for "impl std::fmt::Debug for " (p "NAme") " {\n    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {\n        write!(f, \"Foo\")" q "\n    }\n}")
+  (impl-display-for "impl std::fmt::Display for " (p "Name") " {\n    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {\n        write!(f, \"" q "\")\n    }\n}\n")
+  (impl-iter "impl Iterator for " (p "X") " {\n    type Item = " (p "Y" v2) ";\n\n    fn next(&mut self) -> Option<" (s v2) "> {\n        Some(" (p "next") ")\n    }\n}")
+  (impl_from "impl From<" (p "from" v1) "> for " (p "For" v2) " {\n    fn from(" (p "arg") ": " (s v1) ") -> Self {\n        " (s v2) " {" q "}\n    }\n}")
+  (let-match-option "let " (p v3) " = match " (p "what") " {\n    None => " (p "return") ",\n    Some(" (s v3) ") => " (s v3) ",\n};\n")
+  (let-match-result "let " (p v3) " = match " (p "what") " {\n    Err(_) => " (p "return") ",\n    Ok(" (s v3) ") => " (s v3) ",\n};\n")
+  (measure-time "use std::time::{Duration, Instant};\nlet start = Instant::now();\n// ...\nlet duration = start.elapsed();\nprintln!(\"Time elapsed: {:?}\", duration);")
+  (new-fn "pub fn new() -> Self {\n    " q "\n}\n")
+
+shell-script-mode
+  (here "<<-" q "]/" p "/}" :doc "Here Document")

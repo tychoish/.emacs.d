@@ -1,8 +1,0 @@
-# -*- mode: snippet -*-
-# name: forwhile
-# key: forw
-# contributor : @atotto
-# --
-for {
-        $0
-}
