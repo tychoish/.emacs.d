@@ -1,4 +1,4 @@
-;;; test-denote-dash-repack.el --- ERT tests for denote-dash-repack.el -*- lexical-binding: t -*-
+;;; test-denote-dash-repack.el --- ERT tests for denote-dash-repack.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Tests for sequence signature alignment, repacking/compacting, swapping,

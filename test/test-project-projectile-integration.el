@@ -1,4 +1,4 @@
-;;; project-projectile-integration-test.el --- ERT tests for project.el + projectile integration -*- lexical-binding: t -*-
+;;; project-projectile-integration-test.el --- ERT tests for project.el + projectile integration -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 

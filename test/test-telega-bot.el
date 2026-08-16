@@ -1,4 +1,4 @@
-;;; test-telega-bot.el --- ERT tests for telega-bot.el -*- lexical-binding: t -*-
+;;; test-telega-bot.el --- ERT tests for telega-bot.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 (require 'ert)
 (require 'cl-lib)

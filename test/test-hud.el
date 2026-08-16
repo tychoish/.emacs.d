@@ -1,4 +1,4 @@
-;;; test-hud.el --- ERT tests for hud.el -*- lexical-binding: t -*-
+;;; test-hud.el --- ERT tests for hud.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Tests for hud-command struct, hud-register-command, hud-reset-command-table,

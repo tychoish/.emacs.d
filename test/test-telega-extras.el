@@ -1,4 +1,4 @@
-;;; test-telega-extras.el --- ERT tests for telega-extras.el -*- lexical-binding: t -*-
+;;; test-telega-extras.el --- ERT tests for telega-extras.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Tests run without a live Telega/tdlib connection.  Telega functions that

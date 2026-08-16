@@ -1,4 +1,4 @@
-;;; test-bootstrap.el --- ERT tests for bootstrap.el -*- lexical-binding: t -*-
+;;; test-bootstrap.el --- ERT tests for bootstrap.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; Run inside a live Emacs session with full config loaded:
 ;;   M-x ert RET t RET

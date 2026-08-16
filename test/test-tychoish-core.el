@@ -1,4 +1,4 @@
-;;; test-tychoish-core.el --- ERT tests for tychoish-core.el -*- lexical-binding: t -*-
+;;; test-tychoish-core.el --- ERT tests for tychoish-core.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; Run inside a live Emacs session with full config loaded:
 ;;   M-x ert RET t RET

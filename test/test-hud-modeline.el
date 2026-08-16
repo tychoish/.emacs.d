@@ -1,4 +1,4 @@
-;;; test-hud-modeline.el --- ERT tests for hud-modeline.el -*- lexical-binding: t -*-
+;;; test-hud-modeline.el --- ERT tests for hud-modeline.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Tests for hud-modeline segment rendering, delight interaction, alignment,

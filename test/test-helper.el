@@ -1,4 +1,4 @@
-;;; test-helper.el --- ERT test infrastructure -*- lexical-binding: t; -*-
+;;; test-helper.el --- ERT test infrastructure -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Loaded by ert-runner before any test files.

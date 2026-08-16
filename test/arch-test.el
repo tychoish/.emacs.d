@@ -1,4 +1,4 @@
-;;; arch-test.el --- Tests for arch.el -*- lexical-binding: t; -*-
+;;; arch-test.el --- Tests for arch.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; ERT tests for the arch package management module.

@@ -1,4 +1,4 @@
-;;; test-denote-dash.el --- ERT tests for denote-dash.el -*- lexical-binding: t -*-
+;;; test-denote-dash.el --- ERT tests for denote-dash.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Tests for the pure functions in denote-dash.el: filter expression evaluator,

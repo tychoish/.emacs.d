@@ -1,4 +1,4 @@
-;;; test-builder.el --- ERT tests for builder.el -*- lexical-binding: t -*-
+;;; test-builder.el --- ERT tests for builder.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 

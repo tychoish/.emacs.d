@@ -1,4 +1,4 @@
-;;; test-orgx.el --- ERT tests for orgx.el -*- lexical-binding: t -*-
+;;; test-orgx.el --- ERT tests for orgx.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; Run inside a live Emacs session with full config loaded:
 ;;   M-x ert RET t RET

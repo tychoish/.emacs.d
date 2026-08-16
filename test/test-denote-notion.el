@@ -1,4 +1,4 @@
-;;; test-denote-notion.el --- ERT tests for denote-notion.el -*- lexical-binding: t -*-
+;;; test-denote-notion.el --- ERT tests for denote-notion.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Tests for the pure/stubbable parts of denote-notion.el: front-matter

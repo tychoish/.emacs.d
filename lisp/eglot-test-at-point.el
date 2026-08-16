@@ -1,4 +1,4 @@
-;;; eglot-test-at-point.el --- Test discovery for eglot -*- lexical-binding: t -*-
+;;; eglot-test-at-point.el --- Test discovery for eglot -*- lexical-binding: t; -*-
 
 ;; Author: sam kleinman
 ;; Maintainer: tychoish

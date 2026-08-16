@@ -1,4 +1,4 @@
-;;; builder-elpa-tests.el --- ERT Tests for builder-elpa -*- lexical-binding: t; -*-
+;;; builder-elpa-tests.el --- ERT Tests for builder-elpa -*- lexical-binding: t; no-byte-compile: t; -*-
 
 (require 'ert)
 (require 'builder-elpa)

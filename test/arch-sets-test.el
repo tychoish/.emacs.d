@@ -1,4 +1,4 @@
-;;; arch-sets-test.el --- Tests for arch-sets.el -*- lexical-binding: t; -*-
+;;; arch-sets-test.el --- Tests for arch-sets.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; ERT tests for the arch-sets package-set export/import module.

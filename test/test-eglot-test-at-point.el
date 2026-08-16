@@ -1,4 +1,4 @@
-;;; test-eglot-test-at-point.el --- ERT tests for eglot-test-at-point -*- lexical-binding: t -*-
+;;; test-eglot-test-at-point.el --- ERT tests for eglot-test-at-point -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; Run inside a live Emacs session with full config loaded:
 ;;   M-x ert RET t RET
