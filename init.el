@@ -157,37 +157,42 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
               (package-vc-install `(,package :url ,url))))))))
 
   (with-slow-op-timer "<init> package"
-    (require 'package)
-    (setq package-quickstart t)
-    (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
-    (when (bootstrap-package-quickstart-stale-p)
-      (message "[bootstrap] package-quickstart-file is stale relative to package-user-dir; refreshing")
-      (package-quickstart-refresh))
-    (package-activate-all)
+    (with-slow-op-timer "<init> package require"
+      (require 'package))
+
+    (with-slow-op-timer "<init> package quickstart"
+      (setq package-quickstart t)
+      (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
+      (when (bootstrap-package-quickstart-stale-p)
+	(message "[bootstrap] package-quickstart-file is stale relative to package-user-dir; refreshing")
+	(package-quickstart-refresh)))
+
+    (with-slow-op-timer "<init> package activation"
+      (package-activate-all))
 
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
             ("nongnu" . "https://elpa.nongnu.org/nongnu/")
             ("gnu" . "https://elpa.gnu.org/packages/")
-            ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/"))))
+            ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/")))
 
-  (with-slow-op-timer "<init> [external]"
-    (mapc (lambda (spec)
-	    (unless (package-installed-p (car spec))
-	      (apply #'bootstrap-package spec)))
-	  bootstrap-vendored-packages))
+    (with-slow-op-timer "<init> package bootstrap"
+      (mapc (lambda (spec)
+	      (unless (package-installed-p (car spec))
+		(apply #'bootstrap-package spec)))
+	    bootstrap-vendored-packages)))
 
-  (with-slow-op-timer "<init> [local]"
+  (with-slow-op-timer "<init> [local] require all"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
-    (with-slow-op-timer "<init> [local] bootstrap"
+    (with-slow-op-timer "<init> [local] require bootstrap.el"
       (require 'bootstrap))
 
     ;; remaining use-package declarations.
-    (with-slow-op-timer "<init> [local] tychoish-core"
+    (with-slow-op-timer "<init> [local] require tychoish-core.el"
       (require 'tychoish-core)))
 
   ;; load the user/*.el files
-  (with-slow-op-timer "<init> [user]"
+  (with-slow-op-timer "<init> [user] load-all"
     (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
     (bootstrap-set-up-user-local-config))))
 
