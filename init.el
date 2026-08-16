@@ -131,16 +131,16 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
          deps))))
 
   (defun bootstrap-package-quickstart-stale-p ()
-    "Return non-nil when `package-quickstart-file' is missing an installed package."
+    "Return non-nil when `package-quickstart-file' is older than an installed package."
     (and (file-exists-p package-quickstart-file)
          (file-directory-p package-user-dir)
-         (let ((quickstart-contents (with-temp-buffer
-                                      (insert-file-contents package-quickstart-file)
-                                      (buffer-string))))
+         (let ((quickstart-mtime (file-attribute-modification-time
+                                   (file-attributes package-quickstart-file))))
            (seq-some (lambda (pkg-dir)
                        (and (file-directory-p pkg-dir)
                             (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
-                            (not (string-search pkg-dir quickstart-contents))))
+                            (time-less-p quickstart-mtime
+                                         (file-attribute-modification-time (file-attributes pkg-dir)))))
                      (directory-files package-user-dir t "\\`[^.]" t)))))
 
   (defun bootstrap-package (package path url)
