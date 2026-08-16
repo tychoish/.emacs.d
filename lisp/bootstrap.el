@@ -468,28 +468,33 @@ directory, autoloading the package signals a stale
   (interactive (list (intern (completing-read "async-install-package =>" package-archive-contents))))
   (async-package-operation 'install pkgs))
 
-(cl-defmacro with-temporary-package-require (feature &key path &rest body)
+(cl-defmacro with-temporary-package-require (feature &rest body)
   "Install FEATURE to a temporary package directory, require it, then eval BODY.
-FEATURE is a symbol naming the package/feature.  PATH, if supplied, is the
-directory to use as `package-user-dir'; it defaults to a per-instance subdir
-of `temporary-file-directory'.  BODY forms are evaluated after the package is
-installed and required."
+FEATURE is a quoted symbol naming the package/feature (e.g. `'package-lint').
+BODY may start with a `:path PATH' pair naming the directory to use as
+`package-user-dir'; it defaults to a per-instance subdir of
+`temporary-file-directory'.  Remaining BODY forms are evaluated after the
+package is installed and required."
   (declare (indent 1))
-  `(let* ((package-user-dir (or ,path
-                                (file-name-concat temporary-file-directory
-                                                  (if (fboundp 'sprite-instance-name)
-                                                      (sprite-instance-name)
-                                                    "emacs"))))
-          (load-path load-path)
-          (package-activated-list package-activated-list))
-     (unless (file-exists-p package-user-dir)
-       (make-directory package-user-dir t))
-     (require 'package)
-     (package-initialize)
-     (unless (package-installed-p ',feature)
-       (package-install ',feature))
-     (require ',feature)
-     ,@body))
+  (let (path)
+    (when (eq (car body) :path)
+      (setq path (cadr body)
+            body (cddr body)))
+    `(let* ((package-user-dir (or ,path
+                                  (file-name-concat temporary-file-directory
+                                                    (if (fboundp 'sprite-instance-name)
+                                                        (sprite-instance-name)
+                                                      "emacs"))))
+            (load-path load-path)
+            (package-activated-list package-activated-list))
+       (unless (file-exists-p package-user-dir)
+         (make-directory package-user-dir t))
+       (require 'package)
+       (package-initialize)
+       (unless (package-installed-p ,feature)
+         (package-install ,feature))
+       (require ,feature)
+       ,@body)))
 
 (with-eval-after-load 'use-package-core
   (defun ad:use-package-statistics-convert--higher-precision-time (result)
