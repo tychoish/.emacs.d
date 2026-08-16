@@ -52,7 +52,8 @@
 
 (use-package delight
   :ensure t
-  :defer t
+  :defer (not (gui-p))
+  :demand (gui-p)
   :config
   (delight 'fundamental-mode "fun" 'simple)
 
