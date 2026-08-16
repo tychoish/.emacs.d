@@ -644,29 +644,33 @@
 (ert-deftest bootstrap/setup-font-adds-entry ()
   "Adds a font entry to `default-frame-alist' when absent."
   (let ((default-frame-alist nil))
-    (bootstrap-setup-font "Monospace" 12)
-    (should (assoc 'font default-frame-alist))))
+    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
+      (bootstrap-setup-font "Monospace" 12)
+      (should (assoc 'font default-frame-alist)))))
 
 (ert-deftest bootstrap/setup-font-name-size-format ()
   "Font value is \"NAME-SIZE\"."
   (let ((default-frame-alist nil))
-    (bootstrap-setup-font "Monospace" 12)
-    (should (equal "Monospace-12" (cdr (assoc 'font default-frame-alist))))))
+    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
+      (bootstrap-setup-font "Monospace" 12)
+      (should (equal "Monospace-12" (cdr (assoc 'font default-frame-alist)))))))
 
 (ert-deftest bootstrap/setup-font-updates-existing-in-place ()
   "Updates an existing font entry without creating a duplicate."
   (let ((default-frame-alist (list (cons 'font "OldFont-10"))))
-    (bootstrap-setup-font "NewFont" 14)
-    (should (= 1 (length (--filter (eq (car it) 'font) default-frame-alist))))
-    (should (equal "NewFont-14" (cdr (assoc 'font default-frame-alist))))))
+    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
+      (bootstrap-setup-font "NewFont" 14)
+      (should (= 1 (length (--filter (eq (car it) 'font) default-frame-alist))))
+      (should (equal "NewFont-14" (cdr (assoc 'font default-frame-alist)))))))
 
 (ert-deftest bootstrap/setup-font-returns-alist-entry ()
   "Returns a cons cell of the form (font . string)."
   (let ((default-frame-alist nil))
-    (let ((result (bootstrap-setup-font "Mono" 11)))
-      (should (consp result))
-      (should (eq 'font (car result)))
-      (should (stringp (cdr result))))))
+    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
+      (let ((result (bootstrap-setup-font "Mono" 11)))
+        (should (consp result))
+        (should (eq 'font (car result)))
+        (should (stringp (cdr result)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; bootstrap-ensure-font
@@ -674,14 +678,16 @@
 (ert-deftest bootstrap/ensure-font-sets-when-absent ()
   "Sets font when no font entry exists in `default-frame-alist'."
   (let ((default-frame-alist nil))
-    (bootstrap-ensure-font "Mono" 12)
-    (should (assoc 'font default-frame-alist))))
+    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
+      (bootstrap-ensure-font "Mono" 12)
+      (should (assoc 'font default-frame-alist)))))
 
 (ert-deftest bootstrap/ensure-font-noop-when-present ()
   "Does nothing when a font entry already exists."
   (let ((default-frame-alist (list (cons 'font "Existing-10"))))
-    (bootstrap-ensure-font "Other" 14)
-    (should (equal "Existing-10" (cdr (assoc 'font default-frame-alist))))))
+    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
+      (bootstrap-ensure-font "Other" 14)
+      (should (equal "Existing-10" (cdr (assoc 'font default-frame-alist)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; disable-all-themes / bootstrap-ensure-*-theme
@@ -1062,6 +1068,64 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (bootstrap-test/with-delight-applied
     (require 'eldoc)
     (should (null (cadr (assq 'eldoc-mode minor-mode-alist))))))
+
+(ert-deftest bootstrap/with-temporary-package-require-calls-install-when-missing ()
+  "Test that `with-temporary-package-require' installs the package if not present."
+  (let (installed-called require-called)
+    (cl-letf (((symbol-function 'package-installed-p) (lambda (_pkg) nil))
+              ((symbol-function 'package-install) (lambda (pkg) (setq installed-called pkg)))
+              ((symbol-function 'package-initialize) #'ignore)
+              ((symbol-function 'require) (lambda (feature &rest _) (setq require-called feature))))
+      (with-temporary-package-require 'package-lint
+        :path "/tmp/fake-lint-path"
+        (should (eq 'package-lint installed-called))
+        (should (eq 'package-lint require-called))))))
+
+(ert-deftest bootstrap/with-temporary-package-require-skips-install-when-present ()
+  "Test that `with-temporary-package-require' skips installation if already present."
+  (let (installed-called require-called)
+    (cl-letf (((symbol-function 'package-installed-p) (lambda (_pkg) t))
+              ((symbol-function 'package-install) (lambda (pkg) (setq installed-called pkg)))
+              ((symbol-function 'package-initialize) #'ignore)
+              ((symbol-function 'require) (lambda (feature &rest _) (setq require-called feature))))
+      (with-temporary-package-require 'package-lint
+        :path "/tmp/fake-lint-path2"
+        (should-not installed-called)
+        (should (eq 'package-lint require-called))))))
+
+(ert-deftest bootstrap/ensure-lazy-keyword-is-registered ()
+  "Test that :ensure-lazy is registered as a keyword in use-package."
+  (should (member :ensure-lazy use-package-keywords))
+  (should (fboundp 'use-package-handler/:ensure-lazy)))
+
+(ert-deftest bootstrap/ensure-lazy-handler-expansion-no-commands ()
+  "Test that `:ensure-lazy' handler expands to immediate require/install when no commands are given."
+  (let* ((expanded (use-package-handler/:ensure-lazy
+                    'my-test-package :ensure-lazy t nil nil)))
+    ;; Without commands, it should expand to installing/requiring immediately
+    (should (string-match-p "package-install" (format "%S" expanded)))
+    (should (string-match-p "require" (format "%S" expanded)))))
+
+(ert-deftest bootstrap/ensure-lazy-handler-expansion-with-commands ()
+  "Test that `:ensure-lazy' handler expands to autoload wrappers when commands are given."
+  (let* ((state (list :commands '(my-test-cmd-1 my-test-cmd-2)))
+         (expanded (use-package-handler/:ensure-lazy
+                    'my-test-package :ensure-lazy t nil state)))
+    ;; With commands, it should define wrapper functions for the commands
+    (should (string-match-p "defun my-test-cmd-1" (format "%S" expanded)))
+    (should (string-match-p "defun my-test-cmd-2" (format "%S" expanded)))
+    (should (string-match-p "package-install" (format "%S" expanded)))))
+
+(ert-deftest bootstrap/ensure-handler-skips-when-lazy-present ()
+  "Test that standard `:ensure' handler does nothing when `:ensure-lazy' is present."
+  (let (orig-called)
+    (cl-letf (((symbol-function 'use-package-process-keywords)
+               (lambda (_name rest _state) (list 'skipped rest))))
+      (let ((result (ad:use-package-handler/:ensure-skip-lazy
+                     (lambda (&rest _) (setq orig-called t))
+                     'my-test-package :ensure t '(:ensure-lazy t) '(:ensure-lazy t))))
+        (should-not orig-called)
+        (should (equal '(skipped (:ensure-lazy t)) result))))))
 
 (provide 'test-bootstrap)
 ;;; test-bootstrap.el ends here

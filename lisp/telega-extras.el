@@ -44,6 +44,67 @@ Possible values:
                  (const :tag "Disconnect from Telegram" disconnect))
   :group 'telega)
 
+(defun telega-extras--chatbuf-idle-timers-custom-set (symbol value)
+  "Set SYMBOL to VALUE and update the chatbuf idle timers if needed."
+  (set-default symbol value)
+  (when (and (fboundp 'telega-server-live-p)
+             (telega-server-live-p))
+    (telega-extras-start-chatbuf-idle-timers)))
+
+(defcustom telega-extras-enable-chatbuf-idle-timers nil
+  "When non-nil, enable idle timers for burying and/or killing telega chat buffers.
+These timers only run when the respective timeouts are specified in
+`telega-extras-chatbuf-bury-idle-time' and `telega-extras-chatbuf-kill-idle-time'."
+  :type 'boolean
+  :set #'telega-extras--chatbuf-idle-timers-custom-set
+  :group 'telega)
+
+(defcustom telega-extras-chatbuf-bury-idle-time nil
+  "Inactivity time in seconds after which a telega chat buffer is buried.
+Only has effect when `telega-extras-enable-chatbuf-idle-timers' is non-nil."
+  :type '(choice (const :tag "Never" nil)
+                 (integer :tag "Seconds"))
+  :set #'telega-extras--chatbuf-idle-timers-custom-set
+  :group 'telega)
+
+(defcustom telega-extras-chatbuf-kill-idle-time nil
+  "Inactivity time in seconds after which a telega chat buffer is killed.
+Only has effect when `telega-extras-enable-chatbuf-idle-timers' is non-nil."
+  :type '(choice (const :tag "Never" nil)
+                 (integer :tag "Seconds"))
+  :set #'telega-extras--chatbuf-idle-timers-custom-set
+  :group 'telega)
+
+(defvar telega-extras-chatbuf-bury-idle-timer nil
+  "Idle timer for burying telega chat buffers.")
+
+(defvar telega-extras-chatbuf-kill-idle-timer nil
+  "Idle timer for killing telega chat buffers.")
+
+(defun telega-extras-start-chatbuf-idle-timers ()
+  "Start the chat buffer idle timers if enabled and timeouts are specified."
+  (telega-extras-stop-chatbuf-idle-timers)
+  (when telega-extras-enable-chatbuf-idle-timers
+    (when (and (numberp telega-extras-chatbuf-bury-idle-time)
+               (> telega-extras-chatbuf-bury-idle-time 0))
+      (setq telega-extras-chatbuf-bury-idle-timer
+            (run-with-idle-timer telega-extras-chatbuf-bury-idle-time t
+                                 #'telega-extras-bury-chat-buffers)))
+    (when (and (numberp telega-extras-chatbuf-kill-idle-time)
+               (> telega-extras-chatbuf-kill-idle-time 0))
+      (setq telega-extras-chatbuf-kill-idle-timer
+            (run-with-idle-timer telega-extras-chatbuf-kill-idle-time t
+                                 #'telega-extras-kill-chat-buffers)))))
+
+(defun telega-extras-stop-chatbuf-idle-timers ()
+  "Stop and clear the chat buffer idle timers."
+  (when telega-extras-chatbuf-bury-idle-timer
+    (cancel-timer telega-extras-chatbuf-bury-idle-timer)
+    (setq telega-extras-chatbuf-bury-idle-timer nil))
+  (when telega-extras-chatbuf-kill-idle-timer
+    (cancel-timer telega-extras-chatbuf-kill-idle-timer)
+    (setq telega-extras-chatbuf-kill-idle-timer nil)))
+
 (defun telega-extras--on-idle ()
   "Perform `telega-extras-idle-action' when the session idle hook fires."
   (when (telega-server-live-p)
@@ -97,12 +158,14 @@ GOING-TO-SLEEP is t when entering sleep, nil on wake."
     (telega-extras-disconnect)))
 
 (defun telega-extras--on-before-sleep ()
-  "Disconnect telega before system sleep or suspend."
+  "Disconnect telega before system sleep or suspend, and bury chat buffers if enabled."
   (setq telega-extras--was-live-before-sleep (telega-server-live-p))
   (when telega-extras--was-live-before-sleep
     (message "telega-extras: disconnecting before sleep/suspend")
     (setq telega-extras--sleeping t)
-    (telega-extras-disconnect)))
+    (telega-extras-disconnect))
+  (when telega-extras-enable-chatbuf-idle-timers
+    (telega-extras-bury-chat-buffers)))
 
 (defun telega-extras--on-after-sleep ()
   "Reconnect telega after system wake if it was live before sleep."
@@ -148,17 +211,20 @@ non-interactive callers never see a prompt."
 (defun telega-extras-bury-chat-buffers ()
   "Replace all visible telega chat buffers with the root buffer."
   (interactive)
-  (when-let* ((root (get-buffer telega-root-buffer-name))
+  (when-let* ((root (or (get-buffer telega-root-buffer-name)
+                        (get-buffer bootstrap-fallback-buffer-name)
+                        (get-buffer-create bootstrap-fallback-buffer-name)))
               (chat-windows
                (thread-last (frame-list)
                  (seq-mapcat #'window-list)
                  (seq-filter (lambda (w)
                                (with-current-buffer (window-buffer w)
-                                 (derived-mode-p 'telega-chat-mode))))
-		 (mapc (lambda (w)
-			 (bury-buffer (window-buffer w))
-			 (set-window-buffer w root))))))
-
+                                 (derived-mode-p 'telega-chat-mode)))))))
+    (let ((bufs (seq-uniq (seq-map #'window-buffer chat-windows))))
+      (mapc (lambda (w)
+              (set-window-buffer w root))
+            chat-windows)
+      (mapc #'bury-buffer bufs))
     (alert (format "buried %d telega-chat-%s"
                    (length chat-windows)
 		   (resolve-plural-form (length chat-windows) "buffer" "buffers"))
@@ -272,6 +338,7 @@ Example: (telega-extras-root-default-for-instances \\='(\"telega\" \"primary\"))
   "Set up telega extras.  Called on `telega-ready-hook'."
   (telega-extras-start-idle-timer)
   (telega-extras-start-logind-watch)
+  (telega-extras-start-chatbuf-idle-timers)
   (advice-add 'telega-notifications-msg-notify-p
               :around #'telega-extras--notify-skip-own))
 
@@ -283,6 +350,7 @@ Prompts for confirmation when called interactively."
             (telega-extras--confirm "Tear down telega extras? "))
     (telega-extras-remove-root-default)
     (telega-extras-stop-idle-timer)
+    (telega-extras-stop-chatbuf-idle-timers)
     (unless telega-extras--sleeping
       (telega-extras-stop-logind-watch))
     (advice-remove 'telega-notifications-msg-notify-p

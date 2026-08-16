@@ -105,6 +105,26 @@
       (telega-extras--on-prepare-for-sleep t)
       (should-not kill-called))))
 
+(ert-deftest telega-extras/on-prepare-for-sleep-buries-when-timers-enabled ()
+  "`telega-extras--on-before-sleep' calls bury when chatbuf idle timers are enabled."
+  (let ((telega-extras-enable-chatbuf-idle-timers t)
+        bury-called)
+    (cl-letf (((symbol-function 'telega-server-live-p) (lambda () nil))
+              ((symbol-function 'telega-extras-bury-chat-buffers)
+               (lambda () (setq bury-called t))))
+      (telega-extras--on-before-sleep)
+      (should bury-called))))
+
+(ert-deftest telega-extras/on-prepare-for-sleep-no-bury-when-timers-disabled ()
+  "`telega-extras--on-before-sleep' skips bury when chatbuf idle timers are off."
+  (let ((telega-extras-enable-chatbuf-idle-timers nil)
+        bury-called)
+    (cl-letf (((symbol-function 'telega-server-live-p) (lambda () nil))
+              ((symbol-function 'telega-extras-bury-chat-buffers)
+               (lambda () (setq bury-called t))))
+      (telega-extras--on-before-sleep)
+      (should-not bury-called))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-chat-buffers
 
@@ -148,14 +168,98 @@
     (telega-extras-kill-chat-buffers)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; chatbuf idle timers
+
+(ert-deftest telega-extras/start-chatbuf-idle-timers-noop-when-disabled ()
+  "`telega-extras-start-chatbuf-idle-timers' starts nothing when feature is disabled."
+  (let ((telega-extras-enable-chatbuf-idle-timers nil)
+        (telega-extras-chatbuf-bury-idle-time 30)
+        (telega-extras-chatbuf-kill-idle-time 60)
+        (telega-extras-chatbuf-bury-idle-timer nil)
+        (telega-extras-chatbuf-kill-idle-timer nil))
+    (telega-extras-start-chatbuf-idle-timers)
+    (should-not telega-extras-chatbuf-bury-idle-timer)
+    (should-not telega-extras-chatbuf-kill-idle-timer)))
+
+(ert-deftest telega-extras/start-chatbuf-idle-timers-creates-timers-when-enabled ()
+  "`telega-extras-start-chatbuf-idle-timers' creates both timers when enabled."
+  (let ((telega-extras-enable-chatbuf-idle-timers t)
+        (telega-extras-chatbuf-bury-idle-time 30)
+        (telega-extras-chatbuf-kill-idle-time 60)
+        (telega-extras-chatbuf-bury-idle-timer nil)
+        (telega-extras-chatbuf-kill-idle-timer nil))
+    (unwind-protect
+        (progn
+          (telega-extras-start-chatbuf-idle-timers)
+          (should (timerp telega-extras-chatbuf-bury-idle-timer))
+          (should (timerp telega-extras-chatbuf-kill-idle-timer)))
+      (telega-extras-stop-chatbuf-idle-timers))))
+
+(ert-deftest telega-extras/start-chatbuf-idle-timers-skips-nil-timeout ()
+  "`telega-extras-start-chatbuf-idle-timers' skips a timer whose timeout is nil."
+  (let ((telega-extras-enable-chatbuf-idle-timers t)
+        (telega-extras-chatbuf-bury-idle-time nil)
+        (telega-extras-chatbuf-kill-idle-time 60)
+        (telega-extras-chatbuf-bury-idle-timer nil)
+        (telega-extras-chatbuf-kill-idle-timer nil))
+    (unwind-protect
+        (progn
+          (telega-extras-start-chatbuf-idle-timers)
+          (should-not telega-extras-chatbuf-bury-idle-timer)
+          (should (timerp telega-extras-chatbuf-kill-idle-timer)))
+      (telega-extras-stop-chatbuf-idle-timers))))
+
+(ert-deftest telega-extras/stop-chatbuf-idle-timers-cancels-and-nils ()
+  "`telega-extras-stop-chatbuf-idle-timers' cancels live timers and sets vars to nil."
+  (let ((telega-extras-enable-chatbuf-idle-timers t)
+        (telega-extras-chatbuf-bury-idle-time 30)
+        (telega-extras-chatbuf-kill-idle-time 60)
+        (telega-extras-chatbuf-bury-idle-timer nil)
+        (telega-extras-chatbuf-kill-idle-timer nil))
+    (telega-extras-start-chatbuf-idle-timers)
+    (should (timerp telega-extras-chatbuf-bury-idle-timer))
+    (telega-extras-stop-chatbuf-idle-timers)
+    (should-not telega-extras-chatbuf-bury-idle-timer)
+    (should-not telega-extras-chatbuf-kill-idle-timer)))
+
+(ert-deftest telega-extras/stop-chatbuf-idle-timers-idempotent ()
+  "`telega-extras-stop-chatbuf-idle-timers' is safe when timers are already nil."
+  (let ((telega-extras-chatbuf-bury-idle-timer nil)
+        (telega-extras-chatbuf-kill-idle-timer nil))
+    (telega-extras-stop-chatbuf-idle-timers)
+    (should-not telega-extras-chatbuf-bury-idle-timer)
+    (should-not telega-extras-chatbuf-kill-idle-timer)))
+
+(ert-deftest telega-extras/chatbuf-idle-timers-custom-set-sets-value ()
+  "`telega-extras--chatbuf-idle-timers-custom-set' sets the symbol default."
+  (cl-letf (((symbol-function 'telega-server-live-p) (lambda () nil)))
+    (telega-extras--chatbuf-idle-timers-custom-set
+     'telega-extras-chatbuf-bury-idle-time 42)
+    (should (eq 42 (default-value 'telega-extras-chatbuf-bury-idle-time)))))
+
+(ert-deftest telega-extras/chatbuf-idle-timers-custom-set-restarts-when-live ()
+  "`telega-extras--chatbuf-idle-timers-custom-set' restarts timers when server is live."
+  (let (restarted)
+    (cl-letf (((symbol-function 'telega-server-live-p) (lambda () t))
+              ((symbol-function 'telega-extras-start-chatbuf-idle-timers)
+               (lambda () (setq restarted t))))
+      (telega-extras--chatbuf-idle-timers-custom-set
+       'telega-extras-chatbuf-bury-idle-time 42)
+      (should restarted))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; bury-chat-buffers
 
 (ert-deftest telega-extras/bury-chat-buffers-noop-without-root ()
-  "`telega-extras-bury-chat-buffers' does nothing when root buffer is absent."
-  ;; Bind to a name that certainly doesn't exist.
-  (let ((telega-root-buffer-name "*telega-extras-test-nonexistent-root*"))
-    ;; Should not signal.
-    (telega-extras-bury-chat-buffers)))
+  "`telega-extras-bury-chat-buffers' does nothing when no root buffer exists."
+  ;; Bind both the telega root name and the fallback to nonexistent names,
+  ;; and prevent get-buffer-create from persisting anything by using unwind-protect.
+  (let ((telega-root-buffer-name "*telega-extras-test-nonexistent-root*")
+        (bootstrap-fallback-buffer-name "*telega-extras-test-nonexistent-fallback*"))
+    (cl-letf (((symbol-function 'get-buffer-create)
+               (lambda (name) (get-buffer name))))
+      ;; Should not signal.
+      (telega-extras-bury-chat-buffers))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; root-default hooks
@@ -281,6 +385,8 @@
         (initial-buffer-choice #'telega-extras-switch-to-root)
         (telega-extras--idle-timer nil)
         (telega-extras--logind-signal nil)
+        (telega-extras-chatbuf-bury-idle-timer nil)
+        (telega-extras-chatbuf-kill-idle-timer nil)
         prompt-called)
     (cl-letf (((symbol-function 'read-answer)
                (lambda (&rest _) (setq prompt-called t) "yes"))
