@@ -12,9 +12,6 @@
 
 ;;; Code:
 
-(declare-function approximate-project-root "xtd-project")
-(declare-function approximate-project-name "xtd-project")
-
 (use-package hud-mode
   :ensure nil
   :demand t
@@ -455,7 +452,7 @@
       (consult-ripgrep
        (or (when directory (string-trim directory))
 	   (annotated-completing-read-directory)
-	   (approximate-project-root))
+	   (projectile-project-root))
        (if (and (or context (not initial)) (not (eq context 'override)))
 	   (annotated-completing-read-context-from-point
 	    :prompt "rg(init):")
@@ -465,7 +462,7 @@
     "Start an iterative rg session in the project root, if possible, falling back as necessary."
     (interactive "P")
     (consult-rg
-     :directory (or (approximate-project-root)
+     :directory (or (projectile-project-root)
 		    (annotated-completing-read-directory))
      :initial initial
      :context (or context current-prefix-arg 'override)))
@@ -492,7 +489,7 @@
   ;; find-ripgrep -- compilation buffer wrappers
 
   (cl-defun ripgrep-compile (&key regexp directory buffer-name)
-    (let ((compilation-buffer-name-function (lambda (&optional _) (or buffer-name (format "*%s-rg*" (approximate-project-name))))))
+    (let ((compilation-buffer-name-function (lambda (&optional _) (or buffer-name (format "*%s-rg*" (projectile-project-name))))))
       (ripgrep-regexp regexp directory)))
 
   (cl-defun find-ripgrep--resolve-regexp (&key regexp directory)
@@ -524,14 +521,14 @@
     "Run `rg' from the system at the project root. Output is written to a compile buffer."
     (interactive)
     (ripgrep-compile
-     :directory (approximate-project-root)
+     :directory (projectile-project-root)
      :regexp (find-ripgrep--resolve-regexp
-	      :directory (approximate-project-root))))
+	      :directory (projectile-project-root))))
 
   (defun find-merge-conflicts ()
     "Use ripgrep to identify all merge conflict artifacts"
     (interactive)
-    (let ((root (approximate-project-root)))
+    (let ((root (projectile-project-root)))
       (ripgrep-compile
        :regexp "^(=======$|<<<<<<<|>>>>>>>)"
        :directory root
@@ -2285,7 +2282,7 @@ return until the minibuffer session ends."
 
   (defun tychoish-compile-project-super-lint ()
     (interactive)
-    (let* ((project-directory (approximate-project-root))
+    (let* ((project-directory (projectile-project-root))
 	   (options (list "VALIDATE_YAML=true"
 			  "VALIDATE_OPENAPI=true"
 			  "VALIDATE_MD=true"
@@ -2315,7 +2312,7 @@ return until the minibuffer session ends."
   (setq compilation-max-output-line-length nil)
   (setq compilation-scroll-output t)
 
-  (setq-default compilation-save-buffers-predicate #'approximate-project-root)
+  (setq-default compilation-save-buffers-predicate #'projectile-project-root)
   (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
 
   (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
@@ -2796,7 +2793,7 @@ mid-cleanup, which otherwise leaves the dead SERVER stuck in
   ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
   (setq dape-key-prefix (kbd "C-c C-d"))
   (setq dape-buffer-window-arrangement 'right)
-  (setq dape-cwd-function #'approximate-project-root))
+  (setq dape-cwd-function #'projectile-project-root))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
