@@ -202,8 +202,9 @@
   (let ((dq-cmd (assoc "dq" org-agenda-custom-commands)))
     (should dq-cmd)
     (should (equal "Human Questions" (nth 1 dq-cmd)))
-    (should (eq 'tags (nth 2 dq-cmd)))
-    (should (equal "+question|TODO=\"QUESTION\"" (nth 3 dq-cmd)))))
+    (let ((block (car (nth 2 dq-cmd))))
+      (should (eq 'tags (nth 0 block)))
+      (should (equal "+question|TODO=\"QUESTION\"" (nth 1 block))))))
 
 (ert-deftest orgx/skip-unless-open-question-filters-open-questions ()
   "orgx-skip-unless-open-question retains open questions and skips answered, done, or inherited subheadings."
@@ -245,7 +246,7 @@
     (let ((tq-entry (assoc "tq" org-capture-templates)))
       (should tq-entry)
       (should (member :immediate-finish tq-entry))
-      (should (plist-get (cdr (member :immediate-finish tq-entry)) t))
+      (should (eq t (cadr (member :immediate-finish tq-entry))))
       (should (string-match-p "%(~title~)" (nth 4 tq-entry))))))
 
 (ert-deftest orgx/quick-task-templates-with-key ()

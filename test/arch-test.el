@@ -397,14 +397,19 @@ nil and every installed package was misreported as AUR."
     (should (null (arch--progress-buffer-p (get-buffer arch--list-buffer-name) nil)))))
 
 (defmacro arch-test--with-frame (frame-var &rest body)
-  "Bind FRAME-VAR to an invisible test frame, run BODY, then delete it."
+  "Bind FRAME-VAR to the current frame, run BODY, then restore its window layout.
+Batch and daemon Emacs (no controlling terminal) can't `make-frame' a new one, so
+reuse the frame Emacs already created and restore its window configuration instead
+of creating and deleting a fresh frame."
   (declare (indent 1))
-  `(let ((,frame-var (make-frame '((visibility . nil)))))
-     (unwind-protect
-         (with-selected-frame ,frame-var
-           (delete-other-windows)
-           ,@body)
-       (delete-frame ,frame-var))))
+  (let ((config (make-symbol "window-config")))
+    `(let ((,frame-var (selected-frame))
+           (,config (current-window-configuration)))
+       (unwind-protect
+           (with-selected-frame ,frame-var
+             (delete-other-windows)
+             ,@body)
+         (set-window-configuration ,config)))))
 
 (ert-deftest arch-test-takeover-window-never-uses-package-list-window ()
   "arch--takeover-window never displaces the *arch-packages* window."

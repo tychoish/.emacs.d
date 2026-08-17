@@ -115,12 +115,17 @@
 
 (ert-deftest arch-sets-test-pacman-install-batch-command ()
   "arch--pacman-install-batch runs one sync invocation naming every package."
-  (let (captured-args)
+  (let (captured-args captured-op captured-pkgs)
     (cl-letf (((symbol-function 'arch--worker-run)
-               (lambda (args) (setq captured-args args))))
+               (lambda (args op pkgs)
+                 (setq captured-args args
+                       captured-op op
+                       captured-pkgs pkgs))))
       (arch--pacman-install-batch '("ripgrep" "bash")))
     (should (equal captured-args
-                   '("sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync" "ripgrep" "bash")))))
+                   '("sudo" "pacman" "--noconfirm" "--noprogressbar" "--sync" "ripgrep" "bash")))
+    (should (eq captured-op 'install))
+    (should (equal captured-pkgs '("ripgrep" "bash")))))
 
 ;;; Install status against a live-system snapshot
 
