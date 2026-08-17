@@ -112,17 +112,17 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
     "Non-nil once `package-refresh-contents' has run during this bootstrap.")
 
   (defun bootstrap-package-quickstart-stale-p ()
-    "Return non-nil when `package-quickstart-file' is older than an installed package."
-    (and (file-exists-p package-quickstart-file)
-         (file-directory-p package-user-dir)
-         (let ((quickstart-mtime (file-attribute-modification-time
-                                   (file-attributes package-quickstart-file))))
-           (seq-some (lambda (pkg-dir)
-                       (and (file-directory-p pkg-dir)
-                            (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
-                            (time-less-p quickstart-mtime
-                                         (file-attribute-modification-time (file-attributes pkg-dir)))))
-                     (directory-files package-user-dir t "\\`[^.]" t)))))
+    "Return non-nil when `package-quickstart-file' is missing or older than an installed package."
+    (or (not (file-exists-p package-quickstart-file))
+        (and (file-directory-p package-user-dir)
+             (let ((quickstart-mtime (file-attribute-modification-time
+                                       (file-attributes package-quickstart-file))))
+               (seq-some (lambda (pkg-dir)
+                           (and (file-directory-p pkg-dir)
+                                (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
+                                (time-less-p quickstart-mtime
+                                             (file-attribute-modification-time (file-attributes pkg-dir)))))
+                         (directory-files package-user-dir t "\\`[^.]" t))))))
 
   (defun bootstrap-ensure-melpa-dependencies (main-file)
     "Install any missing dependency declared in MAIN-FILE's `Package-Requires'."
