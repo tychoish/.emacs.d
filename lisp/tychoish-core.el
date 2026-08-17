@@ -3017,6 +3017,35 @@ with no user-visible failure."
   (advice-add 'agent-shell-experimental--on-session-push-end
               :around #'ad:agent-shell-recover-stuck-push-end)
 
+  (defun tychoish/agent-shell--force-clear-busy (shell-buffer request)
+    "Force SHELL-BUFFER back to ready if REQUEST never got a response.
+Some ACP agents accept `session/cancel' but never answer the
+in-flight `session/prompt' request it targets. `shell-maker-finish-output'
+is the only place that clears `shell-maker--busy', so without this the
+shell stays wedged until the connection is restarted."
+    (when (buffer-live-p shell-buffer)
+      (with-current-buffer shell-buffer
+        (when (and shell-maker--busy
+                   (member request (map-elt agent-shell--state :active-requests)))
+          (message "agent-shell: forcing recovery after interrupt got no response")
+          (map-put! agent-shell--state :active-requests
+                    (seq-remove (lambda (r) (equal r request))
+                                (map-elt agent-shell--state :active-requests)))
+          (setq shell-maker--busy nil)
+          (shell-maker-finish-output :config shell-maker--config :success nil)))))
+
+  (defun ad:agent-shell-interrupt-recover-if-unanswered (orig-fn &rest args)
+    "Call ORIG-FN with ARGS, then arm a fallback for an unanswered cancel.
+See `tychoish/agent-shell--force-clear-busy'."
+    (let ((shell-buffer (current-buffer))
+          (request (car (map-elt agent-shell--state :active-requests))))
+      (apply orig-fn args)
+      (when (and request (map-nested-elt agent-shell--state '(:session :id)))
+        (run-with-timer 5 nil #'tychoish/agent-shell--force-clear-busy
+                         shell-buffer request))))
+  (advice-add 'agent-shell-interrupt
+              :around #'ad:agent-shell-interrupt-recover-if-unanswered)
+
   (defun ad:acp-route-incoming-message-isolate-errors (orig-fn &rest args)
     "Call ORIG-FN with ARGS, isolating errors from response handling."
     (condition-case err
