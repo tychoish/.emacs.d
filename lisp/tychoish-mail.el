@@ -172,29 +172,29 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
 
 (setq mu4e-bookmarks
       '((:name "unread primary queues to file"
-	       :query "m:/inbox OR m:/prof"
-	       :key ?f)
+         :query "m:/inbox OR m:/prof"
+         :key ?f)
         (:name "to read/process queue"
-	       :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
-	       :key ?q)
+	 :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
+	 :key ?q)
         (:name "all unread message"
-	       :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
-	       :key ?a)
+	 :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
+	 :key ?a)
         (:name "all sorted email"
-	       :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
-	       :key ?s)
+	 :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
+	 :key ?s)
         (:name "inbox and prof (all)"
-	       :query "m:/inbox OR m:/prof"
-	       :key ?i)
+	 :query "m:/inbox OR m:/prof"
+	 :key ?i)
         (:name "messages with images"
-	       :query "mime:image/*"
-	       :key ?p)
+	 :query "mime:image/*"
+	 :key ?p)
         (:name "mesages from today"
-	       :query "date:today..now"
-	       :key ?t)
+	 :query "date:today..now"
+	 :key ?t)
         (:name "messages from the last week"
-	       :query "date:7d..now"
-	       :key ?w)))
+	 :query "date:7d..now"
+	 :key ?w)))
 
 (setq compose-mail-user-agent-warnings nil)
 (setq sendmail-program "msmtp")
@@ -214,12 +214,16 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
 (setq mu4e-compose-complete-only-after "2015-01-01")
 (setq mu4e-search-include-related nil)
 (setq mu4e-search-results-limit 1000)
-(setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
-(setq mu4e--header-separator mail-header-separator)
+
+(defun tychoish-mail--reset-header-separator ()
+  "Set `mail-header-separator' and mu4e's private mirror to the same value."
+  (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
+  (setq mu4e--header-separator mail-header-separator))
+
+(tychoish-mail--reset-header-separator)
 
 (defun tychoish-mail-set-up-message-mode-buffer ()
-  (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
-  (setq mu4e--header-separator mail-header-separator)
+  (tychoish-mail--reset-header-separator)
   ;; mu4e--compose-setup-completion
   (setq-local completion-at-point-functions
 	      `(,(cape-capf-prefix-length 'mu4e--compose-complete-contact-field 4)
@@ -294,83 +298,39 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 ;; account configuration
 
-(cl-deftype signature-source ()
-  '(signature-file
-    signature-directory
-    signature-text))
-
 (cl-defstruct (tychoish-mail-account
                (:constructor tychoish-mail-make-account
-                             (&key id maildir name address keybinding signature signature-kind (fetchmail mu4e-get-mail-command)
-				   &aux (maildir (cond
-						  ((not (stringp maildir)) (user-error "maildir must be a string"))
-						  ;; we could do more validation here, but it's probably more trouble
-						  ;; than it's worth.
-						  (t (expand-file-name maildir))))
-                                   (signature (setq signature (cond
-                                                                ((or (not (stringp signature)) (string-blank-p signature))
-                                                                 nil)
-                                                                ((eq signature-kind 'signature-directory)
-                                                                 signature)
-                                                                ((eq signature-kind 'signature-file)
-                                                                 signature)
-                                                                ((eq signature-kind 'signature-text)
-                                                                 (user-error "signature text is not defined"))
-                                                                ((null signature-kind)
-                                                                 (user-error "signature configuration is not supported"))
-                                                                (t signature))
-                                                    ;; now validate
-                                                    signature (cond
-                                                               ;; ((eq signature-kind 'signature-directory)
-							       ;; could attempt to validate that signatures exist, but probably only
-							       ;; breaks in cases that don't matter, and will error appropriately at
-							       ;; runtime, and aren't that hard to debug, same as maildir checks.
-							       ;;
-							       ;;  (if (or (null signature) (not (file-directory-p signature)))
-							       ;;      (user-error "signature directory does not exist")
-							       ;;    signature))
-							       ;; ((eq signature-kind 'signature-file)
-							       ;;  (if (not (file-regular-p signature))
-							       ;;      (user-error "signature file does not exist")
-							       ;;    signature))
-                                                               ((eq signature-kind 'signature-text)
-                                                                (or (when (not (string-search "\n" signature))
-                                                                      (warn "signature string does not contain newlines")
-                                                                      signature)
-                                                                    signature))
-                                                               (t signature))))
-                                   (signature-kind (cond
-                                                    ((eq (type-of signature) 'signature-source) signature)
-                                                    ((not (eq (type-of signature) 'string)) (user-error "invalid type for signature"))
-                                                    ((file-directory-p signature) 'signature-directory)
-                                                    ((file-exists-p signature) 'signature-file)
-                                                    (t 'signature-text))))))
-
-  "track mail account configurations. used internally by tychoish-define-mail-account"
-  (maildir (expand-file-name "~/mail")
-	   :documentation "path for maildirs"
-	   :type 'string)
-  (id ""
-      :documentation "symbol of function that activates this account"
-      :type 'symbol)
-  (address user-mail-address
-	   :documentation "email address"
-	   :type '(string t))
-  (name (user-full-name) ;; from /etc/password
-	:documentation "(given) name, used to populate `USER-FULL-NAME'"
-	:type 'string)
-  (keybinding "m"
-	      :documentation "keybinding in the hud-mail-map keymap"
-	      :type 'char)
-  (fetchmail mu4e-get-mail-command
-	     :documentation "external command to run to fetch mail."
-	     :type 'string)
-  (signature ""
-	     :documentation "content or filename of signature"
-	     :type 'string)
-  (signature-kind 'signature-directory
-		  :documentation "determines how signatures are configured"
-		  :type 'signature-source))
+                             (&key id maildir name address keybinding (fetchmail mu4e-get-mail-command)
+				   &aux (maildir (if (stringp maildir)
+						      (expand-file-name maildir)
+						    (user-error "maildir must be a string"))))))
+  "Track mail account configurations.
+Used internally by `tychoish-define-mail-account'.  Signatures always
+live in MAILDIR's tools/signatures directory."
+  (maildir
+   (expand-file-name "~/mail")
+   :documentation "path for maildirs"
+   :type 'string)
+  (id
+   ""
+   :documentation "symbol of function that activates this account"
+   :type 'symbol)
+  (address
+   user-mail-address
+   :documentation "email address"
+   :type 'string)
+  (name
+   (user-full-name) ;; from /etc/password
+   :documentation "(given) name, used to populate `USER-FULL-NAME'"
+   :type 'string)
+  (keybinding
+   "m"
+   :documentation "keybinding in the hud-mail-map keymap"
+   :type 'char)
+  (fetchmail
+   mu4e-get-mail-command
+   :documentation "external command to run to fetch mail."
+   :type 'string))
 
 (defun tychoish-mail-select-account (account-id)
   "Use consult to select an account/mail configuration."
@@ -422,27 +382,14 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
     (setq smtpmail-queue-dir (file-name-concat maildir "queue" "cur"))
     (setq mu4e-mu-home (file-name-concat maildir ".mu"))
     (setq message-auto-save-directory (file-name-concat maildir "drafts"))
-    (setq mail-header-separator (propertize "--------------------------" 'read-only t 'intangible t))
-    (setq mu4e--header-separator mail-header-separator)
+    (tychoish-mail--reset-header-separator)
 
-    (let ((signature-kind (tychoish-mail-account-signature-kind conf))
-          (signature (tychoish-mail-account-signature conf))
-          (address (tychoish-mail-account-address conf))
+    (let ((address (tychoish-mail-account-address conf))
           (given-name (tychoish-mail-account-name conf)))
 
-      (cond
-       ((eq signature-kind 'signature-directory)
-        (setq message-signature-directory (or signature (file-name-concat maildir "tools" "signatures")))
-        (setq message-signature-file (or address account-id account-name))
-        (setq message-signature t))
-       ((eq signature-kind 'signature-file)
-        (setq message-signature-directory nil)
-        (setq message-signature-file signature)
-        (setq message-signature t))
-       ((eq signature-kind 'signature-text)
-        (setq message-signature-directory nil)
-        (setq message-signature-file nil)
-        (setq message-signature signature)))
+      (setq message-signature-directory (file-name-concat maildir "tools" "signatures"))
+      (setq message-signature-file (or address account-id account-name))
+      (setq message-signature t)
 
       (setq user-mail-address address)
       (setq user-full-name given-name)
@@ -488,9 +435,7 @@ Returns the symbol of the generated activation command."
            :keybinding key
            :maildir maildir
            :fetchmail command
-           :id id
-           :signature-kind 'signature-directory
-           :signature (file-name-concat maildir "tools" "signatures")))
+           :id id))
 
     (defalias configure-account-symbol
       (lambda ()
