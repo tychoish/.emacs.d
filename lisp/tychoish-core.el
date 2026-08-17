@@ -108,6 +108,7 @@
   :defer t)
 
 (use-package annotated-completing-read
+  :ensure t
   :defer t
   :config
   (annotated-completing-read-setup-history))

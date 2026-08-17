@@ -6,10 +6,6 @@
 	path = external/xtdlib
 	url = https://github.com/tychoish/xtdlib.el
 	branch = main
-[submodule "annotated-completing-read"]
-	path = external/annotated-completing-read
-	url = https://github.com/tychoish/annotated-completing-read
-	branch = main
 [submodule "agent-shell-queue"]
 	path = external/agent-shell-queue
 	url = https://github.com/tychoish/agent-shell-queue
