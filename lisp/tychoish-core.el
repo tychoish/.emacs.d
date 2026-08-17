@@ -1309,8 +1309,8 @@ clipboard."
 	     telega-extras-force-kill
 	     telega-extras-disconnect)
   :init
-  (keymap-set hud-mode-map "C-c v" (cons "+telega-prefix" telega-prefix-map))
-  (keymap-set hud-mode-map "C-c n" (cons "+telega-prefix" telega-prefix-map))
+  (tychoish-bind-deferred-keymap hud-mode-map "C-c v" 'telega 'telega-prefix-map "telega")
+  (tychoish-bind-deferred-keymap hud-mode-map "C-c n" 'telega 'telega-prefix-map "telega")
   :config
   (add-hook 'telega-chat-mode-hook 'tychoish/corfu-text-mode-setup)
 

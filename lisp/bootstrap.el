@@ -485,6 +485,22 @@ package is installed and required."
        (require ,feature)
        ,@body)))
 
+(defun tychoish-bind-deferred-keymap (map key package keymap-symbol name)
+  "Bind KEY in MAP to load PACKAGE on first use, then dispatch through it.
+KEYMAP-SYMBOL is the variable PACKAGE defines to hold its real keymap; it
+isn't bound until PACKAGE loads, so this binds KEY to a stand-in command
+that requires PACKAGE, rebinds KEY to the now-defined keymap, then replays
+the keystroke so it falls through to that keymap.  NAME annotates the
+binding (see `keymap-set')."
+  (keymap-set map key
+    (cons name
+          (lambda ()
+            (interactive)
+            (require package)
+            (keymap-set map key (symbol-value keymap-symbol))
+            (setq unread-command-events
+                  (listify-key-sequence (this-command-keys-vector)))))))
+
 (with-eval-after-load 'use-package-core
   (defun ad:use-package-statistics-convert--higher-precision-time (result)
     "Reformat the duration column in RESULT with higher precision.
