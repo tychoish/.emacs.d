@@ -415,46 +415,44 @@
   (keymap-set hud-ecclectic-grep-project-map "p" #'find-ripgrep-project)
   (defvar ripgrep-regexp-history nil)
 
-  (cl-defun consult-rg (&key directory initial context)
-    "Start an iterative rg session. DIR and INITIAL integrate with the consult-grep API."
-    (interactive "P")
-    (let ((context (or context current-prefix-arg)))
-      (consult-ripgrep
-       (or (when directory (string-trim directory))
-	   (annotated-completing-read-directory)
-	   (projectile-project-root))
-       (if (and (or context (not initial)) (not (eq context 'override)))
-	   (annotated-completing-read-context-from-point
-	    :prompt "rg(init):")
-	 initial))))
+  (defun consult-rg (&optional directory initial context)
+    "Start an iterative rg session.
+If DIRECTORY is nil, prompt for it using `annotated-completing-read-directory',
+falling back to the project root.
+If CONTEXT is non-nil (or if called interactively with a prefix argument),
+prompt for the initial query using `annotated-completing-read-context-from-point'."
+    (interactive)
+    (let* ((dir (or directory
+		    (annotated-completing-read-directory)
+		    (projectile-project-root)))
+	   (query (if (or context (and (called-interactively-p 'any) current-prefix-arg))
+		      (annotated-completing-read-context-from-point :prompt "rg(init):")
+		    initial))
+	   (this-command 'consult-ripgrep))
+      (consult-ripgrep dir query)))
 
-  (cl-defun consult-rg-project (&optional initial &key context)
+  (defun consult-rg-project (&optional initial context)
     "Start an iterative rg session in the project root, if possible, falling back as necessary."
-    (interactive "P")
-    (consult-rg
-     :directory (or (projectile-project-root)
-		    (annotated-completing-read-directory))
-     :initial initial
-     :context (or context current-prefix-arg 'override)))
+    (interactive)
+    (let ((dir (or (projectile-project-root)
+		   (annotated-completing-read-directory))))
+      (consult-rg dir initial (or context current-prefix-arg))))
 
-  (cl-defun consult-rg-pwd (&optional initial &key context)
+  (defun consult-rg-pwd (&optional initial context)
     "Start an iterative rg session for the current directory."
-    (interactive "P")
-
-    (consult-rg
-     :directory (or default-directory (annotated-completing-read-directory))
-     :initial initial
-     :context (or context current-prefix-arg 'override)))
+    (interactive)
+    (let ((dir (or default-directory (annotated-completing-read-directory))))
+      (consult-rg dir initial (or context current-prefix-arg))))
 
   (defun consult-rg-pwd-wizard (&optional initial)
     "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
-    (interactive "P")
-    (consult-rg-pwd initial :context t))
+    (interactive)
+    (consult-rg-pwd initial t))
 
   (defun consult-rg-project-wizard (&optional initial)
     "Start an iterative rg session with context. Always run the search in the project root, falling back if there isn't a discernable root."
-    (interactive "P")
-    (consult-rg-project initial :context t))
+    (interactive)
+    (consult-rg-project initial t))
 
   ;; find-ripgrep -- compilation buffer wrappers
 
@@ -478,7 +476,7 @@
 	      :directory default-directory)))
 
   (defun find-ripgrep-compile (&optional initial)
-    (interactive "P")
+    (interactive)
     (let ((directory (annotated-completing-read-directory)))
       (ripgrep-compile
        :directory directory
