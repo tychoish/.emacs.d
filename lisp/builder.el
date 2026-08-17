@@ -1629,8 +1629,16 @@ and runs emacs in --fg-daemon mode with builder-emacs-conf-run-ci-tests."
 ;;;###autoload
 (defun builder-emacs-conf-run-ci-tests (&optional timeout)
   "Discover and run all ERT tests under test/, then exit.
-Intended for CI invocations via --fg-daemon --eval.
+Intended for CI invocations via --fg-daemon --eval, where `daemonp'
+returns t for the unnamed daemon.  Named persistent daemons (started via
+--daemon=NAME, e.g. the tychoish/work/hud sprites) and plain interactive
+sessions report other `daemonp' values, so this refuses to run --
+and, critically, refuses to call `kill-emacs' -- anywhere else. Never
+invoke this against a live daemon via emacsclient; use
+`builder-emacs-conf-run-ci-tests-isolated' instead.
 Installs a TIMEOUT-second kill guard (default 240) before running."
+  (unless (eq (daemonp) t)
+    (user-error "builder-emacs-conf-run-ci-tests: refusing to run outside an unnamed --fg-daemon CI process (daemonp = %S); this function calls `kill-emacs' unconditionally" (daemonp)))
   (let ((test-dir (expand-file-name "test" user-emacs-directory))
         (noninteractive t))
     (add-to-list 'load-path test-dir)
@@ -1649,6 +1657,24 @@ Installs a TIMEOUT-second kill guard (default 240) before running."
       (kill-emacs (if (zerop (ert-stats-completed-unexpected stats)) 0 1)))))
 
 ;;;###autoload
+(defun builder-emacs-conf-run-ci-tests-isolated ()
+  "Run the CI test suite in a throwaway `emacs --fg-daemon' subprocess.
+Mirrors the invocation in .github/workflows/test.yml.  Safe to call via
+emacsclient against a live daemon: this only spawns the subprocess and
+returns, so `builder-emacs-conf-run-ci-tests' -- which calls
+`kill-emacs' unconditionally -- runs in its own disposable process
+instead of the caller. For agent skills via emacsclient:
+  emacsclient --eval \\='(builder-emacs-conf-run-ci-tests-isolated)\\='"
+  (interactive)
+  (let* ((root (expand-file-name user-emacs-directory))
+         (default-directory root)
+         (command "find . -name '*.elc' -delete && emacs --fg-daemon --eval '(builder-emacs-conf-run-ci-tests)'"))
+    (compilation-start
+     command
+     'compilation-mode
+     (compile-buffer-name "*dot-emacs-ci-tests*"))))
+
+;;;###autoload
 (defun builder-emacs-conf-clean-elc (&optional directory)
   "Delete all compiled .elc files under DIRECTORY (defaults to `user-emacs-directory`).
 Matching the CI cleanup step in .github/workflows/test.yml."
@@ -1656,8 +1682,7 @@ Matching the CI cleanup step in .github/workflows/test.yml."
   (let* ((dir (expand-file-name (or directory user-emacs-directory)))
          (files (directory-files-recursively dir "\\.elc\\'")))
     (seq-do #'delete-file files)
-    (message "builder: deleted %d .elc file(s) in %s" (length files) dir)
-    (when noninteractive (kill-emacs 0))))
+    (message "builder: deleted %d .elc file(s) in %s" (length files) dir)))
 ;; Isolated checks: byte-compile / load / run tests somewhere other than
 ;; the calling process, so its already-loaded packages, advice, or
 ;; interactively-defined state can't mask a real problem.  Two
@@ -2000,10 +2025,10 @@ responds."
                     (string-equal root (expand-file-name user-emacs-directory)))))
    (-l (make-builder-candidate
         :name "ci-run-tests"
-        :command "emacsclient --eval '(builder-emacs-conf-run-ci-tests)'"
+        :command "emacsclient --eval '(builder-emacs-conf-run-ci-tests-isolated)'"
         :directory root
         :priority 0
-        :annotation "run full CI ERT test suite via builder-emacs-conf-run-ci-tests")
+        :annotation "run full CI ERT test suite in an isolated subprocess (never the live daemon)")
        (make-builder-candidate
         :name "ci-clean-elc"
         :command (format "emacsclient --eval '(builder-emacs-conf-clean-elc %S)'" root)

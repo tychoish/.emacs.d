@@ -1068,6 +1068,7 @@ completion candidate outlives its buffer."
 	     builder-compile-project
 	     builder-change-directory
 	     builder-emacs-conf-run-ci-tests
+	     builder-emacs-conf-run-ci-tests-isolated
 	     builder-emacs-conf-byte-compile-and-delete-artifact
 	     builder-emacs-conf-load-check
 	     builder-emacs-conf-elisp-package-test-isolated
@@ -1306,7 +1307,6 @@ clipboard."
   :commands (telega-chat-mode
 	     telega-extras-switch-to-root
 	     telega-extras-force-kill
-	     telega-prefix-map
 	     telega-extras-disconnect)
   :init
   (keymap-set hud-mode-map "C-c v" (cons "+telega-prefix" telega-prefix-map))
