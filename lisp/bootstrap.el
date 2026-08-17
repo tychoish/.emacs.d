@@ -36,9 +36,6 @@
 (require 'xtd-macro)
 (require 'cl-lib)
 
-(declare-function f-glob "f")
-(declare-function f-entries "f")
-
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
@@ -281,9 +278,7 @@ directory, autoloading the package signals a stale
     (setq bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
 
   (thread-last
-    (f-entries (file-name-concat user-emacs-directory "abbrev"))
-    (seq-filter (lambda (it) (string-equal (file-name-extension it) "el")))
-    (seq-filter #'file-exists-p)
+    (directory-files (file-name-concat user-emacs-directory "abbrev") t ".el*" :nosort)
     (seq-filter #'should-read-abbrev-file-p)
     (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
     (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
@@ -407,21 +402,15 @@ directory, autoloading the package signals a stale
  :delay 60
  :operation #'builder-emacs-conf-native-compile-all)
 
-(defun bootstrap--load-user-file (feat)
-  (with-slow-op-timer
-    (format "<init> [user] %s.el" feat)
-    (require feat)))
+(defun bootstrap--load-user-file (name)
+  (with-slow-op-timer (format "<init> [user] %s.el" name)
+    (require (intern name))))
 
-(defun bootstrap-set-up-user-local-config ()
+(defun bootstrap-set-up-user-local-config (path)
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
-  (thread-last
-    (file-name-concat user-emacs-directory "user")
-    (funcall (lambda (path) (when (file-directory-p path) (f-entries path))))
-    (seq-filter (lambda (it) (string-suffix-p ".el" it)))
-    (seq-map (lambda (file) (bootstrap--load-user-file
-                             (intern
-                              (file-name-sans-extension
-                               (file-name-nondirectory file))))))))
+  (dolist (file (directory-files path :full ".el$") nil)
+    (bootstrap--load-user-file
+     (file-name-sans-extension (file-name-nondirectory file)))))
 
 (defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))
@@ -581,7 +570,7 @@ this widens it to four for finer-grained startup profiling."
 
 (defun find-ssh-agent-socket-candidates ()
   (thread-last
-    (f-glob (file-name-concat temporary-file-directory "ssh-*/agent.*"))
+    (directory-files temporary-file-directory t ".*ssh-.*/agent.*" :nosort)
     (append (list (format "/run/user/%d/ssh-agent.socket" (user-uid))))
     (seq-sort #'string-lessp)
     (seq-uniq)

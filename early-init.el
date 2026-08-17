@@ -45,6 +45,7 @@ call in the main synchronous init path would go unmeasured.")
 	   (message "[op]: %s: %.06fs" ,name duration)))
        return-value)))
 
+(setq package-quickstart t)
 (setq package-enable-at-startup nil)
 (setq use-package-expand-minimally t)
 

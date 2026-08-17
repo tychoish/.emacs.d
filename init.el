@@ -112,24 +112,6 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
   (defvar bootstrap--package-contents-refreshed nil
     "Non-nil once `package-refresh-contents' has run during this bootstrap.")
 
-  (defun bootstrap-ensure-melpa-dependencies (main-file)
-    "Install any missing dependency declared in MAIN-FILE's `Package-Requires'."
-    (when (file-exists-p main-file)
-      (let* ((desc (with-temp-buffer
-                     (insert-file-contents main-file)
-                     (package-buffer-info)))
-             (deps (seq-map #'car (package-desc-reqs desc))))
-	(seq-do
-         (lambda (dep)
-           (unless (or (eq dep 'emacs)
-                       (package-installed-p dep)
-                       (assq dep bootstrap-vendored-packages))
-             (unless bootstrap--package-contents-refreshed
-               (package-refresh-contents)
-               (setq bootstrap--package-contents-refreshed t))
-             (package-install dep)))
-         deps))))
-
   (defun bootstrap-package-quickstart-stale-p ()
     "Return non-nil when `package-quickstart-file' is older than an installed package."
     (and (file-exists-p package-quickstart-file)
@@ -142,6 +124,22 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
                             (time-less-p quickstart-mtime
                                          (file-attribute-modification-time (file-attributes pkg-dir)))))
                      (directory-files package-user-dir t "\\`[^.]" t)))))
+
+  (defun bootstrap-ensure-melpa-dependencies (main-file)
+    "Install any missing dependency declared in MAIN-FILE's `Package-Requires'."
+    (when-let* ((file-exists-p main-file)
+		(desc (with-temp-buffer
+			(insert-file-contents main-file)
+			(package-buffer-info))))
+      (dolist (elem (package-desc-reqs desc))
+	(let ((dep (car elem)))
+          (unless (or (eq dep 'emacs)
+                      (package-installed-p dep)
+                      (assq dep bootstrap-vendored-packages))
+            (unless bootstrap--package-contents-refreshed
+              (package-refresh-contents)
+              (setq bootstrap--package-contents-refreshed t))
+            (package-install dep))))))
 
   (defun bootstrap-package (package path url)
     "Ensure PACKAGE is installed and activated."
@@ -156,19 +154,18 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
                   (package-vc-install-from-checkout checkout (symbol-name package)))
               (package-vc-install `(,package :url ,url))))))))
 
-  (with-slow-op-timer "<init> package"
+  (with-slow-op-timer "<init> package all"
     (with-slow-op-timer "<init> package require"
       (require 'package))
 
     (with-slow-op-timer "<init> package quickstart"
-      (setq package-quickstart t)
       (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
       (when (bootstrap-package-quickstart-stale-p)
 	(message "[bootstrap] package-quickstart-file is stale relative to package-user-dir; refreshing")
 	(package-quickstart-refresh)))
 
     (with-slow-op-timer "<init> package activation"
-      (package-activate-all))
+      (load package-quickstart-file t t t t))
 
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
@@ -192,8 +189,9 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
       (require 'tychoish-core)))
 
   ;; load the user/*.el files
-  (with-slow-op-timer "<init> [user] load-all"
-    (add-to-list 'load-path (expand-file-name "user" user-emacs-directory))
-    (bootstrap-set-up-user-local-config))))
+  (with-slow-op-timer "<init> [user] load all"
+    (let ((user-libs-dir (expand-file-name "user" user-emacs-directory)))
+      (add-to-list 'load-path user-libs-dir)
+      (bootstrap-set-up-user-local-config user-libs-dir)))))
 
 (provide 'init)

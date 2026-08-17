@@ -15,24 +15,6 @@
 (use-package hud-mode
   :ensure nil
   :demand t
-  :commands (hud-mode
-	     buffer-line-count
-	     buffer-directory
-	     save-all-buffers
-	     kill-eldoc-and-help-buffers
-	     kill-buffers-in-directory
-	     kill-buffers-matching-name
-	     force-kill-buffers-matching-path
-	     kill-buffers-matching-path
-	     kill-all-reference-and-source-buffers
-	     kill-buffers-matching-mode
-	     kill-buffers-visiting-missing-files
-	     kill-buffer-and-delete-file
-	     pin-buffer-to-window-toggle
-	     clean-kill-ring-clean
-	     hud-opacity-increase
-	     hud-opacity-decrease
-	     hud-opacity-reset)
   :config
   (make-read-extended-command-for-prefix "clipboard"
     :bind-map hud-mode-map
@@ -44,7 +26,7 @@
 
 (use-package f
   :ensure t
-  :commands (f-glob f-collapse-homedir f-entries f-ancestor-of-p))
+  :defer t)
 
 (use-package cond-let
   :ensure t
@@ -144,7 +126,7 @@
 
 (use-package hud
   :ensure nil
-  :commands (hud-dispatch hud-select)
+  :defer t
   :init
   (keymap-set hud-mode-map "C-x ." #'hud-dispatch)
   (keymap-set hud-mode-map "C-x ," #'hud-select)
@@ -171,24 +153,19 @@
              arch-upgrade-system
              arch-abs-install
              arch-abs-rebuild)
-  :hook
-  ((arch-after-install-hook . (lambda (pkg)
-                                (require 'alert)
-                                (alert (format "Installed package %s" (arch-pkg-name pkg))
-                                       :title "Arch Package Manager")))
-   (arch-after-upgrade-hook . (lambda (pkg)
-                                (require 'alert)
-                                (alert (format "Upgraded package %s" (arch-pkg-name pkg))
-                                       :title "Arch Package Manager")))
-   (arch-after-remove-hook . (lambda (pkg)
-                               (require 'alert)
-                               (alert (format "Removed package %s" (arch-pkg-name pkg))
-                                      :title "Arch Package Manager")))
-   (arch-after-upgrade-all-hook . (lambda ()
-                                    (require 'alert)
-                                    (alert "System upgrade completed"
-                                           :title "Arch Package Manager"))))
   :config
+  (add-hook 'arch-after-install-hook (lambda (pkg)
+                                       (alert (format "Installed package %s" (arch-pkg-name pkg))
+					      :title "Arch Package Manager")))
+  (add-hook 'arch-after-upgrade-hook (lambda (pkg)
+				       (alert (format "Upgraded package %s" (arch-pkg-name pkg))
+					      :title "Arch Package Manager")))
+  (add-hook 'arch-after-remove-hook (lambda (pkg)
+				      (alert (format "Removed package %s" (arch-pkg-name pkg))
+					     :title "Arch Package Manager")))
+  (add-hook 'arch-after-upgrade-all-hook (lambda ()
+					   (alert "System upgrade completed"
+						  :title "Arch Package Manager")))
   (run-with-idle-timer 2 nil #'arch--populate-cache))
 
 (use-package arch-sets
@@ -417,15 +394,7 @@
 (use-package ripgrep
   :ensure t
   :defines (hud-ecclectic-rg-map)
-  :commands (consult-rg
-	     consult-rg-pwd
-	     consult-rg-pwd-wizard
-	     consult-rg-project
-	     consult-rg-project-wizard
-	     find-ripgrep
-	     find-ripgrep-compile
-	     find-ripgrep-project
-	     find-merge-conflicts)
+  :defer t
   :init
   (keymap-set global-map "M-g r" #'consult-rg)
   ;; "C-c C-;"
@@ -678,6 +647,7 @@
 
 (use-package tempel
   :ensure t
+  :defer t
   :init
   (defun tempel-setup-capf ()
     (setq-local completion-at-point-functions
@@ -704,6 +674,7 @@
 
 (use-package tempel-collection
   :ensure t
+  :defer t
   :after tempel)
 
 (use-package dabbrev
@@ -806,7 +777,6 @@
 (use-package corfu
   :ensure t
   :defer t
-  :commands (corfu--in-region)
   :init
   (defun tychoish/corfu-text-mode-setup ()
     (corfu-mode)
@@ -920,10 +890,8 @@ completion candidate outlives its buffer."
   :ensure t
   :functions (consult-xref consult--read consult-completion-in-region consult-register-window)
   :defines (consult-preview-key)
-  :commands (consult-at-point
-	     consult-preview-at-point-mode)
+  :defer t
   :init
-  (add-hook 'completion-list-mode-hook #'consult-preview-at-point-mode)
   (keymap-set global-map "C-c C-x C-m" #'consult-mode-command)
   (keymap-set global-map "C-c C-; m" #'consult-kmacro)
   (keymap-set global-map "C-c C-x r r" #'consult-register)
@@ -1010,9 +978,6 @@ completion candidate outlives its buffer."
 
   (advice-add #'register-preview :override #'consult-register-window)
 
-  ;; (setq completion-in-region-function #'consult-completion-in-region)
-  ;; (setq completion-in-region-function #'corfu--in-region)
-
   (defun consult-ripgrep--up-directory ()
     (interactive)
     (let ((parent-dir (file-name-directory (directory-file-name default-directory))))
@@ -1063,7 +1028,7 @@ completion candidate outlives its buffer."
 (use-package consult-flyspell
   :ensure t
   :defer t
-  :commands (flyspell-correct-consult)
+  :commands (flyspell-correct-consult consult-flyspell)
   :init
   (keymap-set hud-consult-mode-map "f" #'consult-flyspell)
   :config
@@ -1093,9 +1058,7 @@ completion candidate outlives its buffer."
 
 (use-package embark-consult
   :ensure t
-  :defer t
-  :init
-  (add-hook 'embark-collect-mode-hook #'consult-preview-at-point-mode))
+  :defer t)
 
 (use-package builder
   :commands (make-builder-candidate
@@ -1740,6 +1703,7 @@ return until the minibuffer session ends."
 (use-package flyspell
   :ensure t
   :defer t
+  :commands (flyspell-correct-next flyspell-correct-previous flyspell-correct-at-point)
   :init
   (defun tychoish--flyspell-run-in-text-buffer (buf)
     (when (buffer-live-p buf)
