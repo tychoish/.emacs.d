@@ -1668,7 +1668,7 @@ instead of the caller. For agent skills via emacsclient:
   (interactive)
   (let* ((root (expand-file-name user-emacs-directory))
          (default-directory root)
-         (command "find . -name '*.elc' -delete && emacs --fg-daemon --eval '(builder-emacs-conf-run-ci-tests)'"))
+         (command "emacs --fg-daemon --eval '(builder-emacs-conf-run-ci-tests)'"))
     (compilation-start
      command
      'compilation-mode
@@ -2019,8 +2019,8 @@ responds."
 (builder-register-candidates
  :name "emacs-conf-ci-tasks"
  :pipeline
- (when-let* ((root (approximate-project-root))
-             (name (approximate-project-name))
+ (when-let* ((root project-root-directory)
+             (name project-name)
              (_ (or (string-equal name "dot-emacs")
                     (string-equal root (expand-file-name user-emacs-directory)))))
    (-l (make-builder-candidate

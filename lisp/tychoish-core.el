@@ -413,8 +413,6 @@
   (keymap-set hud-ecclectic-rg-map "p" #'consult-rg-project-wizard)
   (keymap-set hud-ecclectic-grep-project-map "r" #'consult-rg-project)
   (keymap-set hud-ecclectic-grep-project-map "p" #'find-ripgrep-project)
-  :config
-  (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc"))
   (defvar ripgrep-regexp-history nil)
 
   (cl-defun consult-rg (&key directory initial context)
@@ -505,7 +503,9 @@
        :regexp "^(=======$|<<<<<<<|>>>>>>>)"
        :directory root
        :buffer-name (format "*%s-merge-conflicts*"
-                            (file-name-nondirectory (directory-file-name root)))))))
+                            (file-name-nondirectory (directory-file-name root))))))
+  :config
+  (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc")))
 
 (use-package deadgrep
   :ensure t
@@ -1512,6 +1512,7 @@ return until the minibuffer session ends."
 (use-package consult-denote
   :ensure t
   :defer t
+  :commands (consult-denote-mode consult-denote-find consult-denote-grep)
   :init
   (keymap-set hud-denote-map "f" #'consult-denote-find)
   (keymap-set hud-denote-map "g" #'consult-denote-grep))

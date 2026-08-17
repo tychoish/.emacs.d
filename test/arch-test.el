@@ -291,24 +291,33 @@
          (when-let* ((buf (get-buffer (arch--info-buffer-name ,pkg))))
            (kill-buffer buf))))))
 
+(defmacro arch-test--with-no-foreign-packages (&rest body)
+  "Run BODY with `arch--foreign-packages' mocked to report no foreign packages."
+  (declare (indent 0))
+  `(cl-letf (((symbol-function 'arch--foreign-packages) (lambda () (make-hash-table :test #'equal))))
+     ,@body))
+
 (ert-deftest arch-test-show-info-buffer-name ()
   "arch-show-info creates a buffer with the canonical *arch-info<PKG>* name."
-  (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
-    (should (get-buffer (arch--info-buffer-name "testpkg")))))
+  (arch-test--with-no-foreign-packages
+    (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
+      (should (get-buffer (arch--info-buffer-name "testpkg"))))))
 
 (ert-deftest arch-test-show-info-uses-help-mode ()
   "arch-show-info buffer is in help-mode."
-  (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
-    (when-let* ((buf (get-buffer (arch--info-buffer-name "testpkg"))))
-      (with-current-buffer buf
-        (should (derived-mode-p 'help-mode))))))
+  (arch-test--with-no-foreign-packages
+    (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
+      (when-let* ((buf (get-buffer (arch--info-buffer-name "testpkg"))))
+        (with-current-buffer buf
+          (should (derived-mode-p 'help-mode)))))))
 
 (ert-deftest arch-test-show-info-local-map-is-arch-info-map ()
   "arch-show-info sets the local keymap to arch-info-map."
-  (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
-    (when-let* ((buf (get-buffer (arch--info-buffer-name "testpkg"))))
-      (with-current-buffer buf
-        (should (eq (current-local-map) arch-info-map))))))
+  (arch-test--with-no-foreign-packages
+    (arch-test--with-info-buf "testpkg" '(name "testpkg" version "1.0")
+      (when-let* ((buf (get-buffer (arch--info-buffer-name "testpkg"))))
+        (with-current-buffer buf
+          (should (eq (current-local-map) arch-info-map)))))))
 
 (ert-deftest arch-test-info-map-inherits-help-mode-map ()
   "arch-info-map has help-mode-map as an ancestor."
@@ -455,25 +464,27 @@ of creating and deleting a fresh frame."
 
 (ert-deftest arch-test-ensure-pkg-with-string ()
   "arch--ensure-pkg converts a string package name into an arch-pkg struct."
-  (let ((pkg (arch--ensure-pkg "testpkg")))
-    (should (arch-pkg-p pkg))
-    (should (equal (arch-pkg-name pkg) "testpkg"))))
+  (cl-letf (((symbol-function 'arch--cached-info) (lambda (_) nil)))
+    (let ((pkg (arch--ensure-pkg "testpkg")))
+      (should (arch-pkg-p pkg))
+      (should (equal (arch-pkg-name pkg) "testpkg")))))
 
 (ert-deftest arch-test-sentinel-runs-after-install-hook ()
   "arch--pkg-sentinel triggers arch-after-install-hook with an arch-pkg struct."
-  (let* ((called-pkg nil)
-         (arch-after-install-hook (list (lambda (pkg) (setq called-pkg pkg))))
-         (buf (get-buffer-create "*arch-test-sentinel*"))
-         (proc (start-process "arch-test-proc" buf "true")))
-    (unwind-protect
-        (progn
-          (process-put proc 'arch-op 'install)
-          (process-put proc 'arch-pkgs "foopkg")
-          (accept-process-output proc 1)
-          (arch--pkg-sentinel proc "finished\n")
-          (should (arch-pkg-p called-pkg))
-          (should (equal (arch-pkg-name called-pkg) "foopkg")))
-      (kill-buffer buf))))
+  (cl-letf (((symbol-function 'arch--cached-info) (lambda (_) nil)))
+    (let* ((called-pkg nil)
+           (arch-after-install-hook (list (lambda (pkg) (setq called-pkg pkg))))
+           (buf (get-buffer-create "*arch-test-sentinel*"))
+           (proc (start-process "arch-test-proc" buf "true")))
+      (unwind-protect
+          (progn
+            (process-put proc 'arch-op 'install)
+            (process-put proc 'arch-pkgs "foopkg")
+            (accept-process-output proc 1)
+            (arch--pkg-sentinel proc "finished\n")
+            (should (arch-pkg-p called-pkg))
+            (should (equal (arch-pkg-name called-pkg) "foopkg")))
+        (kill-buffer buf)))))
 
 (ert-deftest arch-test-sentinel-runs-after-upgrade-hook ()
   "arch--pkg-sentinel triggers arch-after-upgrade-hook with an arch-pkg struct."
@@ -493,19 +504,20 @@ of creating and deleting a fresh frame."
 
 (ert-deftest arch-test-sentinel-runs-after-remove-hook ()
   "arch--pkg-sentinel triggers arch-after-remove-hook with an arch-pkg struct."
-  (let* ((called-pkg nil)
-         (arch-after-remove-hook (list (lambda (pkg) (setq called-pkg pkg))))
-         (buf (get-buffer-create "*arch-test-sentinel-rm*"))
-         (proc (start-process "arch-test-proc-rm" buf "true")))
-    (unwind-protect
-        (progn
-          (process-put proc 'arch-op 'remove)
-          (process-put proc 'arch-pkgs "rm-pkg")
-          (accept-process-output proc 1)
-          (arch--pkg-sentinel proc "finished\n")
-          (should (arch-pkg-p called-pkg))
-          (should (equal (arch-pkg-name called-pkg) "rm-pkg")))
-      (kill-buffer buf))))
+  (cl-letf (((symbol-function 'arch--cached-info) (lambda (_) nil)))
+    (let* ((called-pkg nil)
+           (arch-after-remove-hook (list (lambda (pkg) (setq called-pkg pkg))))
+           (buf (get-buffer-create "*arch-test-sentinel-rm*"))
+           (proc (start-process "arch-test-proc-rm" buf "true")))
+      (unwind-protect
+          (progn
+            (process-put proc 'arch-op 'remove)
+            (process-put proc 'arch-pkgs "rm-pkg")
+            (accept-process-output proc 1)
+            (arch--pkg-sentinel proc "finished\n")
+            (should (arch-pkg-p called-pkg))
+            (should (equal (arch-pkg-name called-pkg) "rm-pkg")))
+        (kill-buffer buf)))))
 
 (ert-deftest arch-test-sentinel-runs-after-upgrade-all-hook ()
   "arch--pkg-sentinel triggers arch-after-upgrade-all-hook with no arguments."
