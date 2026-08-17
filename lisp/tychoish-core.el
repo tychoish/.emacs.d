@@ -36,6 +36,7 @@
   :ensure t
   :defer (not (gui-p))
   :demand (gui-p)
+  :commands (delight)
   :config
   (delight 'fundamental-mode "fun" 'simple)
 
