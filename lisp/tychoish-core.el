@@ -1306,6 +1306,7 @@ clipboard."
   :commands (telega-chat-mode
 	     telega-extras-switch-to-root
 	     telega-extras-force-kill
+	     telega-prefix-map
 	     telega-extras-disconnect)
   :init
   (keymap-set hud-mode-map "C-c v" (cons "+telega-prefix" telega-prefix-map))
