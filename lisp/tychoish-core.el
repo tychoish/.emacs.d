@@ -530,15 +530,36 @@
   (defun tychoish/get-available-word-capfs ()
     (seq-filter #'symbolp (list (tychoish/maybe-capf-dict))))
 
+  (defun setup-capfs ()
+    "Configures local `completion-at-point-functions' for the current buffer."
+    (interactive)
+    (cond
+     ((derived-mode-p 'eglot--managed-mode) (tychoish/eglot-capf-setup))
+     ((derived-mode-p 'emacs-lisp-mode) (tychoish/elisp-capf-setup))
+     ((derived-mode-p 'prog-mode) (tychoish/prog-mode-capf-setup))
+     ((derived-mode-p 'text-mode 'telega-chat-mode) (tychoish/text-mode-capf-setup))
+     ((not (buffer-file-name)) (user-error "buffer '%s' is not file visiting" (buffer-name)))
+     (:else (message "no capf configuration for %s [%s]: %s" (buffer-name) major-mode completion-at-point-functions))))
+
+  (defun setup-all-capfs ()
+    "Sets local `completion-at-point-functions' for the current major mode for all open buffer visiting files."
+    (interactive)
+    (thread-last (buffer-list)
+		 (seq-filter #'buffer-file-name)
+		 (seq-map (lambda (buf) (with-current-buffer (setup-capfs))))))
+
+  (defun tychoish/prog-mode-capf-setup ()
+    (setq-local completion-at-point-functions
+		(append '(tempel-complete cape-file cape-rfc1345 cape-emoji cape-dabbrev) (tychoish/maybe-capf-dict))))
+
   (defun tychoish/text-mode-capf-setup ()
-    "so here is the"
     (setq-local completion-at-point-functions
 		(thread-last
-		  (list #'cape-dabbrev
-			#'tempel-complete
+		  (list #'tempel-complete
 			#'cape-rfc1345
 			#'cape-emoji
 			#'cape-file
+			#'cape-dabbrev
 			(tychoish/maybe-capf-dict))
 		  (flatten-tree)
 		  (seq-filter 'identity))))
@@ -548,9 +569,9 @@
 		(thread-last
 		  (list #'cape-elisp-symbol
 			(cape-capf-wrapper cape-capf-inside-code cape-elisp-block)
+			#'tempel-complete
 			#'cape-dabbrev
 			(cape-capf-wrapper cape-capf-inside-code cape-keyword)
-			#'tempel-complete
 			(thread-last (tychoish/get-available-word-capfs)
 				     (seq-map (lambda (in)
 						`(progn
@@ -563,12 +584,10 @@
 		  (seq-uniq))))
 
   (defun tychoish/eglot-capf-setup ()
-    (interactive) ;; todo remove
     (setq-local completion-category-defaults nil)
     (setq-local completion-at-point-functions
 		(thread-last
 		  (list #'eglot-completion-at-point
-			#'cape-dabbrev
 			(thread-last (tychoish/get-available-word-capfs)
 				     (seq-map (lambda (in)
 						`(progn
@@ -576,6 +595,7 @@
 							 (cape-capf-wrapper cape-capf-inside-string ,in)))))
 				     (seq-map 'eval))
 			#'tempel-complete
+			#'cape-dabbrev
 			#'cape-emoji
 			#'cape-file)
 		  (flatten-tree)
@@ -926,7 +946,7 @@ prompt for the initial query using `annotated-completing-read-context-from-point
 		    (annotated-completing-read-directory)
 		    (projectile-project-root)))
 	   (query (if (or context (and (called-interactively-p 'any) current-prefix-arg))
-		      (annotated-completing-read-context-from-point :prompt "rg(init):")
+		      (annotated-completing-read-context-from-point :prompt "rg:")
 		    initial))
 	   (this-command 'consult-ripgrep))
       (consult-ripgrep dir query)))
@@ -934,15 +954,12 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   (defun consult-rg-project (&optional initial context)
     "Start an iterative rg session in the project root, if possible, falling back as necessary."
     (interactive)
-    (let ((dir (or (projectile-project-root)
-		   (annotated-completing-read-directory))))
-      (consult-rg dir initial (or context current-prefix-arg))))
+    (consult-rg (or (projectile-project-root) (annotated-completing-read-directory)) initial (or context current-prefix-arg)))
 
   (defun consult-rg-pwd (&optional initial context)
     "Start an iterative rg session for the current directory."
     (interactive)
-    (let ((dir (or default-directory (annotated-completing-read-directory))))
-      (consult-rg dir initial (or context current-prefix-arg))))
+    (consult-rg (or default-directory (annotated-completing-read-directory)) initial (or context current-prefix-arg)))
 
   (defun consult-rg-pwd-wizard (&optional initial)
     "Start an iterative rg session with context, with prompting to start a query for a collection of likely candidates."
@@ -959,6 +976,7 @@ prompt for the initial query using `annotated-completing-read-context-from-point
     (interactive)
     (let ((completion-in-region-function #'consult-completion-in-region))
       (completion-at-point)))
+
   (setq register-preview-delay 0.05)
 
   ;; Use Consult to select xref locations with preview
@@ -992,25 +1010,27 @@ prompt for the initial query using `annotated-completing-read-context-from-point
     (minibuffer-quit-recursive-edit))
 
   (consult-customize
-   consult-yank-from-kill-ring consult-yank-pop consult-yank-replace
+   consult-yank-from-kill-ring
+   consult-yank-pop
+   consult-yank-replace
    :preview-key 'any
    :sort nil)
 
-  (consult-customize consult-find
-		     :require-match nil
-		     :initial (or (thing-at-point 'existing-filename)
-				  (thing-at-point 'filename)
-				  "./"))
-
-  (consult-customize consult-ripgrep
-		     :prompt "rg: "
-		     :async-input-debounce 0.025
-		     :async-input-throttle 0.05
-		     :async-refresh-delay 0.025
-		     :async-min-input 2)
+  (consult-customize
+   consult-find
+   :require-match nil
+   :initial (or (thing-at-point 'existing-filename)
+		(thing-at-point 'filename)
+		"./"))
 
   (consult-customize
-   consult-ripgrep consult-git-grep consult-grep
+   consult-ripgrep
+   :prompt "rg: ")
+
+  (consult-customize
+   consult-ripgrep
+   consult-git-grep
+   consult-grep
    :require-match nil
    :group nil
    :keymap
