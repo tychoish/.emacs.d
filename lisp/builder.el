@@ -2041,6 +2041,50 @@ responds."
         :directory root
         :priority 0
         :annotation "run CI test suite in silex/emacs:30.2-ci docker container"))))
+(builder-register-candidates
+ :name "elpaish-build-tasks"
+ :pipeline
+ (when-let* ((root project-root-directory))
+   (-l (make-builder-candidate
+        :name "build-elpa-all"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all))'"
+        :directory root
+        :annotation "build all ELPAish package tracks (elpaish, stable, staging)")
+       (make-builder-candidate
+        :name "build-elpa-snapshot"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all (quote elpaish)))'"
+        :directory root
+        :annotation "build elpaish development snapshot track (date versions)")
+       (make-builder-candidate
+        :name "build-elpa-stable"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all (quote elpaish-stable)))'"
+        :directory root
+        :annotation "build elpaish-stable release track (clean semver tags only)")
+       (make-builder-candidate
+        :name "build-elpa-staging"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all (quote elpaish-staging)))'"
+        :directory root
+        :annotation "build elpaish-staging pre-release & git describe track")
+       (make-builder-candidate
+        :name "elpa-preflight"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-status-preflight-all))'"
+        :directory root
+        :annotation "run preflight quality validation across all registered recipes")
+       (make-builder-candidate
+        :name "elpa-rotate-keys"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (call-interactively (function builder-elpa-rotate-keys)))'"
+        :directory root
+        :annotation "rotate GPG signing subkey and sync with GitHub secrets")
+       (make-builder-candidate
+        :name "elpa-serve-local"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-serve-local))'"
+        :directory root
+        :annotation "start local preview HTTP server for public/ repository")
+       (make-builder-candidate
+        :name "builder-elpa-status"
+        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-status))'"
+        :directory root
+        :annotation "open ELPAish status and package track management buffer"))))
 
 (defconst builder--native-compile-chunk-size 25
   "Number of files to check for staleness per idle tick during incremental native compilation.")

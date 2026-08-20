@@ -1,0 +1,92 @@
+#+title:      ELPAish Standalone Extraction and Architecture Guide
+#+date:       [2026-08-19 Wed]
+#+author:     tychoish
+#+keywords:   elpa, package, maintenance, devops, gpg
+
+* Overview
+
+=elpaish= is a multi-track, GPG-signed Emacs Lisp package archive infrastructure and CI automation engine. It publishes packages authored across the =tychoish= ecosystem under three distinct stability tiers:
+
+- *=elpaish=* (Development Snapshots): Continuously built from the tip of the default branch (=main=) with pure UTC date versioning (=YYYYMMDD.HHMMSS=).
+- *=elpaish-stable=* (Clean Releases): Built strictly from verified, clean semver Git tags (=vX.Y.Z= -> =X.Y.Z=). Repositories lacking clean tags are excluded.
+- *=elpaish-staging=* (Pre-Releases & Release Candidates): Builds from non-stable tags (=-rc=, =-pre=, =-beta=) and =git describe= versions (=X.Y.Z.N= or =0.0.0.N=) for integration testing.
+
+* Standalone Repository Layout (=tychoish/elpaish=)
+
+When extracted into a standalone repository (=https://github.com/tychoish/elpaish=), the layout is organized as follows:
+
+#+begin_example
+elpaish/
+├── .github/
+│   └── workflows/
+│       └── pages.yml              ; Automated GitHub Pages multi-track CI/CD
+├── lisp/
+│   ├── builder-elpa.el            ; Core ELPA archive builder and orchestrator
+│   ├── elpaish-recipes.el         ; Declarative recipe definitions for all packages
+│   └── elpaish-keyring.el         ; Consumer package for keyring and trust setup
+├── scripts/
+│   ├── run-checks.el              ; Preflight validation engine (lint, compile, ert)
+│   ├── bootstrap-elpaish.el       ; Headless CI dependency bootstrapper
+│   └── build-elpaish.el           ; Headless build runner entry point
+├── public/                        ; Output directory deployed to GitHub Pages
+│   ├── index.html                 ; Root landing page with configuration snippets
+│   ├── elpaish-keyring.gpg        ; Binary GPG keyring
+│   ├── elpaish.pub.asc            ; Armored ASCII public key
+│   ├── elpaish.rev.asc            ; Published emergency revocation certificates
+│   ├── elpaish/                   ; Snapshot archive track
+│   │   ├── archive-contents
+│   │   ├── archive-contents.sig
+│   │   ├── index.html
+│   │   └── <pkg>-<date>.el[.sig]
+│   ├── elpaish-stable/            ; Release archive track
+│   └── elpaish-staging/           ; Staging archive track
+├── test/
+│   └── test-builder-elpa.el       ; Full ERT test suite
+└── README.org                     ; Setup and usage guide
+#+end_example
+
+* Standalone Build & Bootstrap Execution
+
+To build the entire archive headlessly in a clean environment:
+
+#+begin_src sh
+# 1. Bootstrap dependencies (package-lint, magit)
+emacs --batch -l scripts/bootstrap-elpaish.el
+
+# 2. Run multi-track build and index generation
+emacs --batch -L lisp -L scripts -l scripts/build-elpaish.el
+#+end_src
+
+* Consumer Configuration
+
+Consumers configure standard Emacs =package.el= archives:
+
+#+begin_src elisp
+;; Snapshot track (bleeding-edge development)
+(add-to-list 'package-archives '("elpaish" . "https://tychoish.github.io/elpaish/elpaish/") t)
+
+;; Production stable release track
+(add-to-list 'package-archives '("elpaish-stable" . "https://tychoish.github.io/elpaish/elpaish-stable/") t)
+
+;; Staging & pre-release track
+(add-to-list 'package-archives '("elpaish-staging" . "https://tychoish.github.io/elpaish/elpaish-staging/") t)
+#+end_src
+
+* Cryptographic Security & GPG Key Management
+
+- *Master Key:* Primary certification key [C] kept offline on the developer workstation.
+- *Signing Subkeys:* Subkeys [S] with 1-year expiration exported to GitHub Actions secrets (=ELPAISH_SIGNING_KEY=).
+- *Automated Key Rotation:* Run =M-x builder-elpa-rotate-keys= to issue a new subkey, synchronize GitHub secrets via =gh secret set=, and export updated public keyrings to =public/=.
+- *Emergency Revocation:* Run =M-x builder-elpa-revoke-key= to publish =public/elpaish.rev.asc= and rotate active signing subkeys.
+
+* Integration with Builder.el
+
+Interactive targets registered in =builder.el=:
+- =build-elpa-all=: Builds all three tracks and publishes static HTML.
+- =build-elpa-snapshot=: Builds the =elpaish= date snapshot track.
+- =build-elpa-stable=: Builds the =elpaish-stable= release track.
+- =build-elpa-staging=: Builds the =elpaish-staging= staging track.
+- =elpa-preflight=: Runs preflight validation across all recipes.
+- =elpa-rotate-keys=: Interactively executes GPG subkey rotation.
+- =elpa-serve-local=: Spins up a local HTTP preview server on port 8080.
+- =builder-elpa-status=: Opens the =*builder-elpa-status*= management buffer.

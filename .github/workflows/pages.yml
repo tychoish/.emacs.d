@@ -1,0 +1,64 @@
+name: Deploy ELPAish to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Rebuild development snapshots and staging tracks every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: '30.2'
+
+      - name: Bootstrap Build Dependencies
+        run: |
+          emacs --batch -l scripts/bootstrap-elpaish.el
+
+      - name: Build Multi-Track Package Archives
+        env:
+          ELPAISH_SIGNING_KEY: ${{ secrets.ELPAISH_SIGNING_KEY }}
+          ELPAISH_GPG_PASSPHRASE: ${{ secrets.ELPAISH_GPG_PASSPHRASE }}
+          ELPAISH_OUTPUT_DIR: public/
+        run: |
+          emacs --batch -L lisp -L scripts -l scripts/build-elpaish.el
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
