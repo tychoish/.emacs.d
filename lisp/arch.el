@@ -15,6 +15,7 @@
 (require 'map)
 (require 'subr-x)
 (require 'ansi-color)
+(require 'compile)
 (require 'tabulated-list)
 (require 'transient)
 (require 'annotated-completing-read)
@@ -274,6 +275,83 @@ If REQUIRE-SUCCESS is non-nil, return nil when the command exits non-zero."
       (unless (and require-success (not (zerop exit)))
         (buffer-string)))))
 
+;;; Install & output buffer mode
+
+(defun arch-install-recompile-disabled ()
+  "Inform the user that recompile is disabled in arch install buffers."
+  (interactive)
+  (message "Recompile is disabled in arch install buffers; new commands are appended."))
+
+(defun arch-install-kill-process ()
+  "Send SIGKILL to the running arch process in the current buffer."
+  (interactive)
+  (if-let* ((proc (get-buffer-process (current-buffer))))
+      (if (process-live-p proc)
+          (progn
+            (kill-process proc)
+            (message "Sent SIGKILL to process %s" (process-name proc)))
+        (user-error "Process %s is not running" (process-name proc)))
+    (user-error "No process in current buffer")))
+
+(defun arch-install-interrupt-process ()
+  "Send SIGINT to the running arch process in the current buffer."
+  (interactive)
+  (if-let* ((proc (get-buffer-process (current-buffer))))
+      (if (process-live-p proc)
+          (progn
+            (interrupt-process proc)
+            (message "Sent SIGINT to process %s" (process-name proc)))
+        (user-error "Process %s is not running" (process-name proc)))
+    (user-error "No process in current buffer")))
+
+(defun arch-install-stop-process ()
+  "Send SIGTSTP (stop) to the running arch process in the current buffer."
+  (interactive)
+  (if-let* ((proc (get-buffer-process (current-buffer))))
+      (if (process-live-p proc)
+          (progn
+            (stop-process proc)
+            (message "Sent SIGTSTP to process %s" (process-name proc)))
+        (user-error "Process %s is not running" (process-name proc)))
+    (user-error "No process in current buffer")))
+
+(defvar-keymap arch-install-mode-map
+  :doc "Keymap for `arch-install-mode'."
+  :parent compilation-mode-map
+  "g"       #'arch-install-recompile-disabled
+  "C-c C-k" #'arch-install-kill-process
+  "C-c C-c" #'arch-install-interrupt-process
+  "C-c C-z" #'arch-install-stop-process
+  "k"       #'arch-install-kill-process
+  "q"       #'quit-window)
+
+(define-derived-mode arch-install-mode compilation-mode "Arch-Install"
+  "Major mode for Arch Linux package installation and build output buffers.
+Derived from `compilation-mode' with `recompile' disabled so that successive
+commands accumulate output in the buffer."
+  (setq-local compilation-scroll-output t)
+  (setq-local buffer-read-only t))
+
+(defun arch--signal-name (sig-num)
+  "Return human-readable signal name string for SIG-NUM."
+  (pcase sig-num
+    (1 "SIGHUP")
+    (2 "SIGINT")
+    (3 "SIGQUIT")
+    (6 "SIGABRT")
+    (9 "SIGKILL")
+    (11 "SIGSEGV")
+    (13 "SIGPIPE")
+    (14 "SIGALRM")
+    (15 "SIGTERM")
+    (_ (format "SIG#%d" sig-num))))
+
+(defun arch--init-install-buffer (buf)
+  "Initialize BUF with `arch-install-mode' if not already set."
+  (with-current-buffer buf
+    (unless (derived-mode-p 'arch-install-mode)
+      (arch-install-mode))))
+
 (defun arch--pkg-buffer (pkg-name)
   "Return the dedicated operation buffer for PKG-NAME, creating it if needed."
   (get-buffer-create (format "*arch:%s*" pkg-name)))
@@ -283,13 +361,17 @@ If REQUIRE-SUCCESS is non-nil, return nil when the command exits non-zero."
 OP is the operation type symbol ('install, 'upgrade, 'remove, 'upgrade-all).
 PKG is an optional `arch-pkg' struct or package name."
   (let ((buf (arch--pkg-buffer pkg-name)))
+    (arch--init-install-buffer buf)
     (with-current-buffer buf
-      (unless (derived-mode-p 'special-mode)
-        (special-mode))
-      (let ((inhibit-read-only t))
+      (let ((inhibit-read-only t)
+            (time-str (format-time-string "%Y-%m-%d %H:%M:%S")))
         (goto-char (point-max))
-        (insert (propertize (format "\n$ %s\n" (mapconcat #'identity args " "))
-                            'face 'bold))))
+        (insert (propertize (format "\n=== [%s] $ %s ===\n"
+                                    time-str
+                                    (mapconcat #'identity args " "))
+                            'face 'bold))
+        (dolist (win (get-buffer-window-list buf nil t))
+          (set-window-point win (point-max)))))
     (let ((proc (make-process
                  :name (format "arch-%s" pkg-name)
                  :buffer buf
@@ -317,13 +399,17 @@ Parallels `arch--pkg-run', but always targets the one constant worker
 buffer instead of a per-package buffer, so a batch install produces one
 linear scrollback instead of one buffer per package."
   (let ((buf (arch--worker-buffer)))
+    (arch--init-install-buffer buf)
     (with-current-buffer buf
-      (unless (derived-mode-p 'special-mode)
-        (special-mode))
-      (let ((inhibit-read-only t))
+      (let ((inhibit-read-only t)
+            (time-str (format-time-string "%Y-%m-%d %H:%M:%S")))
         (goto-char (point-max))
-        (insert (propertize (format "\n$ %s\n" (mapconcat #'identity args " "))
-                            'face 'bold))))
+        (insert (propertize (format "\n=== [%s] $ %s ===\n"
+                                    time-str
+                                    (mapconcat #'identity args " "))
+                            'face 'bold))
+        (dolist (win (get-buffer-window-list buf nil t))
+          (set-window-point win (point-max)))))
     (let ((proc (make-process
                  :name "arch-worker"
                  :buffer buf
@@ -339,24 +425,62 @@ linear scrollback instead of one buffer per package."
       proc)))
 
 (defun arch--pkg-filter (proc output)
-  "Insert OUTPUT into PROC's buffer, rendering ANSI escape sequences as faces."
-  (with-current-buffer (process-buffer proc)
-    (let ((inhibit-read-only t))
-      (save-excursion
-        (let ((start (marker-position (process-mark proc))))
-          (goto-char start)
-          (insert output)
-          (ansi-color-apply-on-region start (point-max))))
-      (set-marker (process-mark proc) (point-max)))))
+  "Insert OUTPUT into PROC's buffer, rendering ANSI escape sequences as faces,
+and auto-scrolling displaying windows."
+  (let ((buf (process-buffer proc)))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (let ((inhibit-read-only t)
+              (moving (= (point) (process-mark proc))))
+          (save-excursion
+            (let ((start (marker-position (process-mark proc))))
+              (goto-char start)
+              (insert output)
+              (ansi-color-apply-on-region start (point-max))))
+          (set-marker (process-mark proc) (point-max))
+          (when moving
+            (goto-char (point-max)))
+          (dolist (win (get-buffer-window-list buf nil t))
+            (when (or moving
+                      (= (window-point win) (marker-position (process-mark proc)))
+                      compilation-scroll-output)
+              (set-window-point win (point-max)))))))))
 
 (defun arch--pkg-sentinel (proc event)
   "Append completion notice for PROC to its buffer and run post-operation hooks."
-  (when (memq (process-status proc) '(exit signal))
-    (with-current-buffer (process-buffer proc)
-      (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        (insert (propertize (format "[%s]\n" (string-trim event))
-                            'face 'font-lock-comment-face)))))
+  (let ((status (process-status proc))
+        (exit-code (process-exit-status proc))
+        (buf (process-buffer proc)))
+    (when (and buf (buffer-live-p buf))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t)
+              (time-str (format-time-string "%Y-%m-%d %H:%M:%S")))
+          (goto-char (point-max))
+          (pcase status
+            ('exit
+             (if (zerop exit-code)
+                 (insert (propertize (format "\n[Process %s finished successfully at %s]\n"
+                                             (process-name proc) time-str)
+                                     'face 'compilation-info))
+               (insert (propertize (format "\n[Process %s exited abnormally with code %d at %s]\n"
+                                           (process-name proc) exit-code time-str)
+                                   'face 'compilation-error))))
+            ('signal
+             (let ((sig-name (arch--signal-name exit-code)))
+               (insert (propertize (format "\n[Process %s terminated by signal %s (%d: %s) at %s]\n"
+                                           (process-name proc)
+                                           sig-name
+                                           exit-code
+                                           (string-trim event)
+                                           time-str)
+                                   'face 'compilation-error))))
+            (_
+             (insert (propertize (format "\n[Process %s: %s at %s]\n"
+                                         (process-name proc) (string-trim event) time-str)
+                                 'face 'font-lock-comment-face))))
+          (set-marker (process-mark proc) (point-max))
+          (dolist (win (get-buffer-window-list buf nil t))
+            (set-window-point win (point-max)))))))
   (when-let* ((_ (and (eq (process-status proc) 'exit)
                       (zerop (process-exit-status proc))))
               (op (process-get proc 'arch-op))
@@ -379,7 +503,6 @@ linear scrollback instead of one buffer per package."
              (run-hook-with-args 'arch-after-remove-hook (arch--ensure-pkg pkg))))))
       ('upgrade-all
        (run-hooks 'arch-after-upgrade-all-hook)))))
-
 ;;; Parsers
 
 (defun arch--parse-search-output (output)

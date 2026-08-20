@@ -415,9 +415,10 @@ of creating and deleting a fresh frame."
     `(let ((,frame-var (selected-frame))
            (,config (current-window-configuration)))
        (unwind-protect
-           (with-selected-frame ,frame-var
-             (delete-other-windows)
-             ,@body)
+          (with-selected-frame ,frame-var
+            (select-window (frame-first-window ,frame-var))
+            (delete-other-windows)
+            ,@body)
          (set-window-configuration ,config)))))
 
 (ert-deftest arch-test-takeover-window-never-uses-package-list-window ()
@@ -543,5 +544,135 @@ of creating and deleting a fresh frame."
           (should-not (get-buffer-window buf)))
       (kill-buffer buf))))
 
+;;; arch-install-mode & compilation buffer integration
+
+(ert-deftest arch-test-install-mode-derived-from-compilation-mode ()
+  "arch-install-mode derives from compilation-mode and sets scroll output."
+  (let ((buf (get-buffer-create "*arch:test-mode*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (arch-install-mode)
+          (should (derived-mode-p 'compilation-mode))
+          (should (derived-mode-p 'arch-install-mode))
+          (should (eq compilation-scroll-output t))
+          (should buffer-read-only))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-install-mode-recompile-disabled ()
+  "Key `g' in arch-install-mode invokes arch-install-recompile-disabled."
+  (let ((buf (get-buffer-create "*arch:test-recompile*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (arch-install-mode)
+          (should (eq (lookup-key (current-local-map) (kbd "g"))
+                      #'arch-install-recompile-disabled)))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-pkg-run-initializes-arch-install-mode ()
+  "arch--pkg-run initializes buffer in arch-install-mode and appends command banner."
+  (let ((buf (get-buffer-create "*arch:test-init*")))
+    (unwind-protect
+        (let ((proc (arch--pkg-run "test-init" '("echo" "hello"))))
+          (accept-process-output proc 1)
+          (with-current-buffer buf
+            (should (derived-mode-p 'arch-install-mode))
+            (should (string-match-p "\\$ echo hello" (buffer-string)))))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-worker-run-initializes-arch-install-mode ()
+  "arch--worker-run initializes worker buffer in arch-install-mode."
+  (let ((buf (get-buffer-create arch--worker-buffer-name)))
+    (unwind-protect
+        (let ((proc (arch--worker-run '("echo" "worker-test"))))
+          (accept-process-output proc 1)
+          (with-current-buffer buf
+            (should (derived-mode-p 'arch-install-mode))
+            (should (string-match-p "\\$ echo worker-test" (buffer-string)))))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-pkg-run-appends-multiple-commands ()
+  "Successive arch--pkg-run calls accumulate output without clearing."
+  (let ((buf (get-buffer-create "*arch:test-append*")))
+    (unwind-protect
+        (progn
+          (let ((proc1 (arch--pkg-run "test-append" '("echo" "first"))))
+            (accept-process-output proc1 1))
+          (let ((proc2 (arch--pkg-run "test-append" '("echo" "second"))))
+            (accept-process-output proc2 1))
+          (with-current-buffer buf
+            (let ((content (buffer-string)))
+              (should (string-match-p "first" content))
+              (should (string-match-p "second" content)))))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-signal-name-mapping ()
+  "arch--signal-name returns standard signal names for common POSIX signals."
+  (should (equal (arch--signal-name 1) "SIGHUP"))
+  (should (equal (arch--signal-name 2) "SIGINT"))
+  (should (equal (arch--signal-name 3) "SIGQUIT"))
+  (should (equal (arch--signal-name 6) "SIGABRT"))
+  (should (equal (arch--signal-name 9) "SIGKILL"))
+  (should (equal (arch--signal-name 11) "SIGSEGV"))
+  (should (equal (arch--signal-name 15) "SIGTERM"))
+  (should (equal (arch--signal-name 99) "SIG#99")))
+
+(ert-deftest arch-test-sentinel-formats-exit-and-signals ()
+  "arch--pkg-sentinel formats successful exits, abnormal exits, and signals."
+  (let ((buf (get-buffer-create "*arch:test-sentinel-faces*")))
+    (unwind-protect
+        (let ((proc (start-process "test-proc" buf "true")))
+          (accept-process-output proc 1)
+          ;; 1. Clean exit
+          (arch--pkg-sentinel proc "finished\n")
+          (with-current-buffer buf
+            (should (string-match-p "finished successfully" (buffer-string))))
+          ;; 2. Abnormal exit
+          (cl-letf (((symbol-function 'process-status) (lambda (_) 'exit))
+                    ((symbol-function 'process-exit-status) (lambda (_) 1)))
+            (arch--pkg-sentinel proc "exited abnormally with code 1\n")
+            (with-current-buffer buf
+              (should (string-match-p "exited abnormally with code 1" (buffer-string)))))
+          ;; 3. Killed by signal
+          (cl-letf (((symbol-function 'process-status) (lambda (_) 'signal))
+                    ((symbol-function 'process-exit-status) (lambda (_) 2)))
+            (arch--pkg-sentinel proc "interrupt\n")
+            (with-current-buffer buf
+              (should (string-match-p "terminated by signal SIGINT" (buffer-string))))))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-interactive-signal-handlers ()
+  "Interactive signal handlers send signals to the running process in buffer."
+  (let* ((buf (get-buffer-create "*arch:test-sig-handlers*"))
+         (proc (start-process "test-sleep" buf "sleep" "10")))
+    (unwind-protect
+        (with-current-buffer buf
+          (arch-install-mode)
+          ;; Interrupt process
+          (arch-install-interrupt-process)
+          (accept-process-output proc 1)
+          (should (memq (process-status proc) '(signal exit))))
+      (when (process-live-p proc)
+        (kill-process proc))
+      (kill-buffer buf))))
+
+(ert-deftest arch-test-auto-scroll-in-filter-and-sentinel ()
+  "arch--pkg-filter and sentinel auto-scroll windows to point-max."
+  (arch-test--with-frame frame
+    (let ((buf (get-buffer-create "*arch:test-scroll*")))
+      (unwind-protect
+          (progn
+            (with-current-buffer buf
+              (arch-install-mode))
+            (let* ((win (selected-window))
+                   (proc (make-process :name "test-scroll-proc"
+                                       :buffer buf
+                                       :command '("sh" "-c" "echo line1; sleep 0.1; echo line2")
+                                       :filter #'arch--pkg-filter
+                                       :sentinel #'arch--pkg-sentinel)))
+              (set-window-buffer win buf)
+              (while (process-live-p proc)
+                (accept-process-output proc 0.2))
+              (should (= (window-point win) (with-current-buffer buf (point-max))))))
+        (kill-buffer buf)))))
 (provide 'arch-test)
 ;;; arch-test.el ends here
