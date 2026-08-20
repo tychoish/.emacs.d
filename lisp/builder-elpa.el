@@ -40,7 +40,7 @@
 (require 'subr-x)
 (require 'tabulated-list)
 (require 'timer)
-(require 'annotated-completing-read)
+(require 'annotated-completing-read nil t)
 
 (defgroup builder-elpa nil
   "Multi-track ELPA package repository builder."
@@ -144,7 +144,8 @@ or `elpaish-staging' (pre-release tags and git describe)."
   "Register package NAME with REPO local directory path or remote Git URL.
 BRANCH defaults to \"main\" and FILES defaults to \\='(\"*.el\").
 TEST-DIR, PREFLIGHT-SKIP, SUMMARY, URL, KEYWORDS, and REQUIRES provide metadata."
-  (let* ((name-str (if (symbolp name) (symbol-name name) (string-trim name)))
+  (let* ((raw-name (if (symbolp name) (symbol-name name) (string-trim name)))
+         (name-str (string-remove-suffix ".el" raw-name))
          (recipe (builder-elpa-recipe-create
                   :name name-str
                   :repo (if (and (stringp repo) (not (string-match-p "\\`https?://" repo)) (not (string-match-p "\\`git@" repo)))
@@ -199,11 +200,12 @@ TEST-DIR, PREFLIGHT-SKIP, SUMMARY, URL, KEYWORDS, and REQUIRES provide metadata.
     (_ (builder-elpa-recipe-built-version recipe))))
 
 ;;; Git & Path Resolution
-
 (defun builder-elpa--resolve-repo-path (recipe)
   "Return working directory for RECIPE, cloning or fetching if remote Git URL."
   (let ((repo-target (builder-elpa-recipe-repo recipe)))
     (if (and (stringp repo-target)
+             (not (string-match-p "\\`https?://" repo-target))
+             (not (string-match-p "\\`git@" repo-target))
              (file-directory-p (expand-file-name repo-target)))
         (expand-file-name repo-target)
       ;; Remote Git repository target
@@ -213,10 +215,10 @@ TEST-DIR, PREFLIGHT-SKIP, SUMMARY, URL, KEYWORDS, and REQUIRES provide metadata.
         (make-directory builder-elpa-work-dir t)
         (if (file-exists-p (expand-file-name ".git" pkg-dir))
             (let ((default-directory pkg-dir))
-              (magit-git-string "fetch" "origin")
-              (magit-git-string "checkout" branch)
-              (magit-git-string "reset" "--hard" (concat "origin/" branch)))
-          (magit-git-string "clone" "--branch" branch repo-target pkg-dir))
+              (call-process "git" nil nil nil "fetch" "origin")
+              (call-process "git" nil nil nil "checkout" branch)
+              (call-process "git" nil nil nil "reset" "--hard" (concat "origin/" branch)))
+          (call-process "git" nil nil nil "clone" "--branch" branch repo-target pkg-dir))
         pkg-dir))))
 
 (defun builder-elpa--current-hash (repo-dir)
@@ -468,9 +470,11 @@ KEY-ID is the signing key."
                   (seq-map (lambda (k)
                              (cons (epg-sub-key-id (car (epg-key-sub-key-list k)))
                                    (epg-user-id-string (car (epg-key-user-id-list k))))))))
-         (key-id (annotated-completing-read table
-                                            :prompt "Select GPG key for signing ELPA packages: "
-                                            :require-match t)))
+         (key-id (if (fboundp 'annotated-completing-read)
+                     (annotated-completing-read table
+                                                :prompt "Select GPG key for signing ELPA packages: "
+                                                :require-match t)
+                   (completing-read "Select GPG key for signing ELPA packages: " table nil t))))
     (setq builder-elpa-gpg-key key-id
           builder-elpa-sign-packages t)
     (message "GPG package signing enabled! Selected Key ID: %s." key-id)))
@@ -563,23 +567,25 @@ REPO-SLUG defaults to \"tychoish/elpaish\"."
 Returns t if checks pass, nil if quarantined."
   (if (not builder-elpa-run-preflight)
       t
-    (let* ((repo-dir (builder-elpa--resolve-repo-path recipe))
-           (checks-file (builder-elpa--resolve-checks-file)))
-      (when (and checks-file (file-exists-p checks-file))
-        (load checks-file nil t))
-      (if (fboundp 'run-checks-package)
-          (let* ((skip (builder-elpa-recipe-preflight-skip recipe))
-                 (tdir (builder-elpa-recipe-test-dir recipe))
-                 (res (run-checks-package repo-dir :test-dir tdir :skip-checks skip))
-                 (passed (plist-get res :passed))
-                 (errs (plist-get res :errors)))
-            (unless passed
-              (message "PREFLIGHT QUARANTINE for %s: %d error(s)"
-                       (builder-elpa-recipe-name recipe) (length errs))
-              (dolist (e errs)
-                (message "   - %s" e)))
-            passed)
-        t))))
+    (let ((skip (builder-elpa-recipe-preflight-skip recipe)))
+      (if (eq skip t)
+          t
+        (let* ((repo-dir (builder-elpa--resolve-repo-path recipe))
+               (checks-file (builder-elpa--resolve-checks-file)))
+          (when (and checks-file (file-exists-p checks-file))
+            (load checks-file nil t))
+          (if (fboundp 'run-checks-package)
+              (let* ((tdir (builder-elpa-recipe-test-dir recipe))
+                     (res (run-checks-package repo-dir :test-dir tdir :skip-checks skip))
+                     (passed (plist-get res :passed))
+                     (errs (plist-get res :errors)))
+                (unless passed
+                  (message "PREFLIGHT QUARANTINE for %s: %d error(s)"
+                           (builder-elpa-recipe-name recipe) (length errs))
+                  (dolist (e errs)
+                    (message "   - %s" e)))
+                passed)
+            t))))))
 
 ;;; Package Build Engine
 
@@ -606,10 +612,11 @@ OUTPUT-DIR defaults to track directory under `builder-elpa-output-dir'."
          (target-dir (or output-dir (builder-elpa-track-dir effective-track)))
          (repo-dir (builder-elpa--resolve-repo-path recipe))
          (name (builder-elpa-recipe-name recipe))
-         (main-file (expand-file-name (concat name ".el") repo-dir)))
+         (main-file-name (if (string-suffix-p ".el" name) name (concat name ".el")))
+         (main-file (expand-file-name main-file-name repo-dir)))
 
     (unless (file-exists-p main-file)
-      (error "Main file %s not found in %s" (concat name ".el") repo-dir))
+      (error "Main file %s not found in %s" main-file-name repo-dir))
 
     ;; 1. Preflight Validation Gate
     (unless (builder-elpa-preflight-package recipe)
@@ -904,12 +911,16 @@ Returns a cons cell (HEADERS . BODY-BYTES)."
   "Start scheduled background rebuilds of the ELPA repository.
 INTERVAL can be seconds or a time string (e.g. \"1 hour\").
 If IDLE is non-nil, run rebuilds when Emacs is idle for INTERVAL."
-  (interactive (list (annotated-completing-read
-                      (thread-last builder-elpa-auto-build-intervals
-                        (seq-map (lambda (i) (cons i (format "Rebuild every %s" i)))))
-                      :prompt "Auto-build interval: "
-                      :require-match nil
-                      :default "1 hour")
+  (interactive (list (if (fboundp 'annotated-completing-read)
+                         (annotated-completing-read
+                          (thread-last builder-elpa-auto-build-intervals
+                            (seq-map (lambda (i) (cons i (format "Rebuild every %s" i)))))
+                          :prompt "Auto-build interval: "
+                          :require-match nil
+                          :default "1 hour")
+                       (completing-read "Auto-build interval: "
+                                        builder-elpa-auto-build-intervals
+                                        nil nil nil nil "1 hour"))
                      current-prefix-arg))
   (builder-elpa-stop-auto-build)
   (let* ((secs (cond

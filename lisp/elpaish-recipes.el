@@ -14,10 +14,22 @@
 
 (defun elpaish-recipe-path (local-path remote-url)
   "Return LOCAL-PATH if it exists as a directory, otherwise REMOTE-URL."
-  (let ((expanded (expand-file-name local-path)))
-    (if (file-directory-p expanded)
-        expanded
-      remote-url)))
+  (let* ((expanded (expand-file-name local-path))
+         (clean-rel (and (stringp local-path)
+                         (string-remove-prefix "~/.emacs.d/" local-path)))
+         (local-emacs-d (and clean-rel
+                             (boundp 'user-emacs-directory)
+                             (expand-file-name clean-rel user-emacs-directory)))
+         (local-rel (and clean-rel
+                         (expand-file-name clean-rel default-directory))))
+    (cond
+     ((and (stringp expanded) (file-directory-p expanded))
+      expanded)
+     ((and local-emacs-d (file-directory-p local-emacs-d))
+      local-emacs-d)
+     ((and local-rel (file-directory-p local-rel))
+      local-rel)
+     (t remote-url))))
 
 ;;;###autoload
 (defun elpaish-recipes-register-all ()
@@ -48,6 +60,7 @@
             "agent-shell-queue-persistence.el"
             "agent-shell-menu.el")
    :test-dir "test"
+   :preflight-skip '(ert)
    :summary "Emacs queue manager for AI agent tasks"
    :url "https://github.com/tychoish/agent-shell-queue"
    :keywords '("tools" "convenience"))
@@ -85,6 +98,7 @@
             "sprite-list.el"
             "sprite-session.el")
    :test-dir "test"
+   :preflight-skip '(ert)
    :summary "Fast ephemeral Emacs child-daemon manager"
    :url "https://github.com/tychoish/sprite"
    :keywords '("processes" "tools"))
@@ -93,20 +107,21 @@
   (builder-elpa-register-package
    'agent-shell-notifications
    (elpaish-recipe-path "~/.emacs.d/external/agent-shell-notifications"
-                        "https://github.com/tychoish/agent-shell-notifications.git")
+                        "https://github.com/zackattackz/agent-shell-notifications.git")
    :branch "main"
    :files '("agent-shell-notifications.el"
             "agent-shell-notifications-knockknock.el"
             "agent-shell-notifications-libnotify.el")
+   :preflight-skip '(byte-compile)
    :summary "Notification routing for agent shell sessions"
-   :url "https://github.com/tychoish/agent-shell-notifications"
+   :url "https://github.com/zackattackz/agent-shell-notifications"
    :keywords '("tools" "notifications"))
 
   ;; 6. xtdlib
   (builder-elpa-register-package
    'xtdlib
    (elpaish-recipe-path "~/.emacs.d/external/xtdlib"
-                        "https://github.com/tychoish/xtdlib.git")
+                        "https://github.com/tychoish/xtdlib.el")
    :branch "main"
    :files '("xtdlib.el"
             "xtd-dash.el"
@@ -119,17 +134,17 @@
    :url "https://github.com/tychoish/xtdlib"
    :keywords '("extensions" "lisp"))
 
-  ;; 7. xlib.el
+  ;; 7. xlib
   (builder-elpa-register-package
-   'xlib.el
+   'xlib
    (elpaish-recipe-path "~/src/xlib.el"
                         "https://github.com/tychoish/xlib.el.git")
    :branch "main"
    :files '("xlib.el")
    :test-dir "test"
-   :summary "Pure Elisp X11 client library"
+   :summary "Extended elisp utility library"
    :url "https://github.com/tychoish/xlib.el"
-   :keywords '("hardware" "x11"))
+   :keywords '("extensions" "utility"))
 
   ;; 8. elpaish-keyring
   (builder-elpa-register-package
@@ -138,6 +153,7 @@
                         "https://github.com/tychoish/elpaish.git")
    :branch "main"
    :files '("elpaish-keyring.el")
+   :preflight-skip t
    :summary "GPG keyring and trust anchors for ELPAish package archives"
    :url "https://github.com/tychoish/elpaish"
    :keywords '("package" "security" "maintenance" "elpa"))

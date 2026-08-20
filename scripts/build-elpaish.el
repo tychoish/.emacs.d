@@ -15,6 +15,20 @@
   (add-to-list 'load-path (expand-file-name "lisp" default-directory))
   (add-to-list 'load-path (expand-file-name "scripts" default-directory)))
 
+;; Initialize package infrastructure so dependencies installed by bootstrap-elpaish.el
+;; or present in elpa/ are activated.
+(require 'package)
+(let ((ci-elpa (expand-file-name "elpa-ci" default-directory))
+      (local-elpa (expand-file-name "elpa" default-directory)))
+  (cond
+   ((file-directory-p ci-elpa)
+    (setq package-user-dir ci-elpa)
+    (package-initialize))
+   ((file-directory-p local-elpa)
+    (setq package-user-dir local-elpa)
+    (package-initialize))
+   (t
+    (package-initialize))))
 (require 'builder-elpa)
 (require 'elpaish-recipes)
 
@@ -23,6 +37,9 @@
       (or (getenv "ELPAISH_OUTPUT_DIR")
           (expand-file-name "public/" default-directory)))
 
+;; Preflight quality gates can be toggled via ELPAISH_RUN_PREFLIGHT
+(when (equal (getenv "ELPAISH_RUN_PREFLIGHT") "0")
+  (setq builder-elpa-run-preflight nil))
 ;; If secret key is provided in environment, import it into temporary GPG keyring
 (let ((key-armor (getenv "ELPAISH_SIGNING_KEY"))
       (passphrase (getenv "ELPAISH_GPG_PASSPHRASE")))
