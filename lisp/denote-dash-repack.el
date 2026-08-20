@@ -265,6 +265,13 @@ PLAN is a list of (FILE . NEW-SEQ) pairs, as returned by
       (special-mode))
     buf))
 
+(defun denote-dash--dismiss-repack-preview (buf)
+  "Dismiss the repack preview buffer BUF by quitting its window and killing it."
+  (when (and buf (buffer-live-p buf))
+    (when-let* ((win (get-buffer-window buf)))
+      (quit-window t win))
+    (when (buffer-live-p buf)
+      (kill-buffer buf))))
 (defun denote-dash-repack-sequence-children (prefix)
   "Compact direct children of PREFIX so their last segment has no gaps.
 Renames each child's entire subtree (child and all descendants) so that
@@ -299,12 +306,14 @@ untouched.  Works from `denote-dash-mode' or interactively."
        ((null to-rename)
         (message "Sequences for %s already compact." (or prefix "(root)")))
        (t
-        (let ((plan (denote-dash--repack-plan to-rename)))
-          (pop-to-buffer (denote-dash--repack-preview-buffer plan))
+        (let* ((plan (denote-dash--repack-plan to-rename))
+               (prev-buf (denote-dash--repack-preview-buffer plan)))
+          (pop-to-buffer prev-buf)
           (if (yes-or-no-p (format "Rename %d file%s of %s as previewed? "
                                    (length plan) (if (= (length plan) 1) "" "s")
                                    (or prefix "(root)")))
               (progn
+                (denote-dash--dismiss-repack-preview prev-buf)
                 (seq-do (lambda (pair)
                           (denote-dash--hierarchy-remap-fold-sequence-prefix
                            (denote-retrieve-filename-signature (car pair)) (cdr pair)))
@@ -314,6 +323,7 @@ untouched.  Works from `denote-dash-mode' or interactively."
                   (message "Repacked %d/%d children of %s; fixed %d frontmatter %s."
                            (length to-rename) (length sorted) (or prefix "(root)")
                            n (if (= n 1) "note" "notes"))))
+            (denote-dash--dismiss-repack-preview prev-buf)
             (message "Repack cancelled; no files were changed."))))))
     (when (derived-mode-p 'denote-dash-mode)
       (denote-dash-refresh))))
@@ -596,13 +606,18 @@ cancellation message (e.g. \"Reparent\", \"Renumber\").
 Returns non-nil if PLAN was applied, nil if the user declined."
   (if (<= (length plan) 1)
       (progn (denote-dash--apply-reseq-plan plan) t)
-    (pop-to-buffer (denote-dash--repack-preview-buffer plan))
-    (if (yes-or-no-p (format "%s %d files (this note + %d descendant%s) as previewed? "
-                             operation-verb (length plan) (1- (length plan))
-                             (if (= (length plan) 2) "" "s")))
-        (progn (denote-dash--apply-reseq-plan plan) t)
-      (message "%s cancelled; no files were changed." operation-verb)
-      nil)))
+    (let ((prev-buf (denote-dash--repack-preview-buffer plan)))
+      (pop-to-buffer prev-buf)
+      (if (yes-or-no-p (format "%s %d files (this note + %d descendant%s) as previewed? "
+                               operation-verb (length plan) (1- (length plan))
+                               (if (= (length plan) 2) "" "s")))
+          (progn
+            (denote-dash--dismiss-repack-preview prev-buf)
+            (denote-dash--apply-reseq-plan plan)
+            t)
+        (denote-dash--dismiss-repack-preview prev-buf)
+        (message "%s cancelled; no files were changed." operation-verb)
+        nil))))
 
 (defun denote-dash--reparent-recursive-apply (current-file new-seq)
   "Re-parent CURRENT-FILE and all descendants onto NEW-SEQ.
