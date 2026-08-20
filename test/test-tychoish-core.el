@@ -139,5 +139,15 @@ correctly and reads from the minibuffer using the candidate's command."
       (should (equal user-full-name "Test User"))
       (should (equal mu4e-get-mail-command "true")))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; eglot hooks & eglot-tempel integration
+
+(ert-deftest tychoish-core/eglot-managed-mode-hook-functions-bound ()
+  (dolist (fn eglot-managed-mode-hook)
+    (should (fboundp fn))))
+
+(ert-deftest tychoish-core/eglot-tempel-mode-on-hook ()
+  (should (memq 'eglot-tempel-mode eglot-managed-mode-hook)))
+
 (provide 'test-tychoish-core)
 ;;; test-tychoish-core.el ends here

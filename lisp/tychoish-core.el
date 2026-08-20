@@ -686,7 +686,7 @@
   :ensure t
   :after (eglot tempel)
   :init
-  (add-hook 'eglot-managed-mode-hook #'eglot-tempel-setup-eglot))
+  (add-hook 'eglot-managed-mode-hook #'eglot-tempel-mode))
 
 (use-package tempel-collection
   :ensure t
