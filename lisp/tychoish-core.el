@@ -353,6 +353,51 @@
   (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
   (setq projectile-frecency-file (sprite-state-path "projectile-frecency.el"))
 
+  (defvar projectile-cache-fallback-directory
+    (sprite-state-path "projectile-cache")
+    "Directory used for persistent projectile caches when a project root is not writable.")
+
+  (defun tychoish/projectile-project-cache-file-fallback (orig-fn &optional project-root)
+    "Return cache file for PROJECT-ROOT, using a fallback state dir when non-writable."
+    (let* ((root (or project-root (projectile-project-root)))
+           (in-tree (and root (funcall orig-fn root))))
+      (if (or (null root) (null in-tree))
+          in-tree
+        (let* ((norm-root (directory-file-name (expand-file-name root)))
+               (in-tree-writable (if (file-exists-p in-tree)
+                                     (file-writable-p in-tree)
+                                   (file-writable-p norm-root))))
+          (if in-tree-writable
+              in-tree
+            (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
+                   (slug (concat (file-name-nondirectory norm-root)
+                                 "-"
+                                 (md5 norm-root)
+                                 ".eld")))
+              (unless (file-directory-p cache-dir)
+                (ignore-errors (make-directory cache-dir t)))
+              (expand-file-name slug cache-dir)))))))
+
+  (advice-add 'projectile-project-cache-file :around #'tychoish/projectile-project-cache-file-fallback)
+
+  (defun tychoish/projectile-serialize-silent-fallback (orig-fn data filename)
+    "Avoid noisy warning when FILENAME is not writable by silently writing to fallback if possible."
+    (if (file-writable-p filename)
+        (funcall orig-fn data filename)
+      (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
+             (slug (concat (file-name-nondirectory (directory-file-name filename))
+                           "-"
+                           (md5 filename)
+                           ".eld"))
+             (fallback-file (expand-file-name slug cache-dir)))
+        (unless (file-directory-p cache-dir)
+          (ignore-errors (make-directory cache-dir t)))
+        (when (file-writable-p fallback-file)
+          (with-temp-file fallback-file
+            (insert (let (print-length) (prin1-to-string data))))))))
+
+  (advice-add 'projectile-serialize :around #'tychoish/projectile-serialize-silent-fallback)
+
   (defun projectile-mode-enable-for-buffer (buf)
     (with-current-buffer buf
       (projectile-mode 1)))

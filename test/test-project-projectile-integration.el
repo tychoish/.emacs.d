@@ -135,5 +135,43 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
         (should proj)
         (should (listp (project-buffers proj)))))))
 
+;; ---------------------------------------------------------------------------
+;; projectile cache fallback for non-writable locations
+
+(ert-deftest project-projectile/cache-file-in-tree-when-writable ()
+  "projectile-project-cache-file returns in-tree path when project root is writable."
+  (project-test--with-project-dir ".projectile"
+    (let ((cache-file (projectile-project-cache-file dir)))
+      (should (equal cache-file (expand-file-name ".projectile-cache.eld" dir))))))
+
+(ert-deftest project-projectile/cache-file-fallback-when-non-writable ()
+  "projectile-project-cache-file returns fallback state path when project root is not writable."
+  (let* ((non-writable-root "/usr/lib/go/src")
+         (cache-file (projectile-project-cache-file non-writable-root)))
+    (should (string-prefix-p (expand-file-name projectile-cache-fallback-directory) cache-file))
+    (should (string-match-p "src-" cache-file))
+    (should (string-suffix-p ".eld" cache-file))))
+
+(ert-deftest project-projectile/cache-project-and-load-on-non-writable-root ()
+  "Caching and loading on a non-writable root uses the fallback cache without warnings."
+  (let* ((non-writable-root "/usr/lib/go/src")
+         (dummy-files '("pkg/a.go" "pkg/b.go"))
+         (cache-file (projectile-project-cache-file non-writable-root)))
+    (unwind-protect
+        (progn
+          (projectile-cache-project non-writable-root dummy-files)
+          (should (file-exists-p cache-file))
+          (should (equal (projectile-load-project-cache non-writable-root) dummy-files)))
+      (when (file-exists-p cache-file)
+        (delete-file cache-file)))))
+
+(ert-deftest project-projectile/serialize-silent-on-non-writable ()
+  "projectile-serialize silently writes to fallback if passed a non-writable path directly."
+  (let* ((bad-file "/usr/lib/go/src/.unwritable-test-cache.eld")
+         (warned nil))
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (&rest _) (setq warned t))))
+      (projectile-serialize '("test") bad-file)
+      (should-not warned))))
 (provide 'project-projectile-integration-test)
 ;;; project-projectile-integration-test.el ends here
