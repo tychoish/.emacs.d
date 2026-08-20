@@ -296,5 +296,51 @@
   (let ((org-capture-plist '(:annotation ""))
         (org-stored-links '(("http://example.com" "Example"))))
     (should (equal "[[http://example.com][Example]]" (orgx--capture-get-link)))))
-(provide 'test-orgx)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Blank lines reduction in capture templates and settings
+
+(ert-deftest orgx/blank-before-new-entry-disabled ()
+  "org-blank-before-new-entry disables blank lines before headings and list items."
+  (should (equal '((heading . nil) (plain-list-item . nil)) org-blank-before-new-entry)))
+
+(ert-deftest orgx/capture-templates-use-empty-lines-zero ()
+  "orgx capture templates specify :empty-lines 0."
+  (let ((org-capture-templates nil))
+    (orgx-capture-add-task-templates :name "test" :path "/tmp/test.org")
+    (let ((tt-entry (assoc "tt" org-capture-templates))
+          (tq-entry (assoc "tq" org-capture-templates)))
+      (should (member :empty-lines tt-entry))
+      (should (eq 0 (cadr (member :empty-lines tt-entry))))
+      (should (member :empty-lines tq-entry))
+      (should (eq 0 (cadr (member :empty-lines tq-entry)))))))
+
+(ert-deftest orgx/quick-task-template-body-has-no-stray-blank-line ()
+  "tq template body does not contain an extra newline between title and cursor."
+  (let ((org-capture-templates nil))
+    (orgx-capture-add-task-templates :name "test" :path "/tmp/test.org")
+    (let ((tq-entry (assoc "tq" org-capture-templates)))
+      (should (equal "* TODO %(~title~)%?" (nth 4 tq-entry))))))
+
+(ert-deftest orgx/sequential-captures-no-blank-lines ()
+  "Sequential task captures place entries consecutively without blank lines."
+  (let* ((temp-file (make-temp-file "orgx-capture-test-" nil ".org"))
+         (org-capture-templates nil))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file (insert "* Tasks\n"))
+          (orgx-capture-add-task-templates :name "test" :path temp-file)
+          (cl-letf (((symbol-function 'read-string)
+                     (let ((count 0))
+                       (lambda (&rest _)
+                         (setq count (1+ count))
+                         (format "Task %d" count)))))
+            (org-capture nil "tq")
+            (org-capture nil "tq")
+            (org-capture nil "tq"))
+          (let ((content (with-temp-buffer
+                           (insert-file-contents temp-file)
+                           (buffer-string))))
+            (should (equal "* Tasks\n** TODO Task 3\n** TODO Task 2\n** TODO Task 1\n" content))))
+      (when (file-exists-p temp-file)
+        (delete-file temp-file)))))
 ;;; test-orgx.el ends here

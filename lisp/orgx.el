@@ -154,6 +154,7 @@
           ("question" . ?q)))
 
   (setq org-tags-column -70)
+  (setq org-blank-before-new-entry '((heading . nil) (plain-list-item . nil)))
   (setq org-enforce-todo-checkbox-dependencies t)
   (setq org-enforce-todo-dependencies t)
   (setq org-fast-tag-selection-include-todo t)

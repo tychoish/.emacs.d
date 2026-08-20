@@ -167,7 +167,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                                      (funcall body-fn template-anchor)
                                      :prepend prepend
                                      :kill-buffer t
-                                     :empty-lines-after 1)
+                                     :empty-lines 0)
                                extra-props)))
         (when (and time-prompt-suffix
                    (string-suffix-p time-prompt-suffix key-sequence))
@@ -181,7 +181,9 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                (list 'file+olp+datetree path)
              (list 'file+olp+datetree path "Journal"))
    :body-fn (lambda (anchor)
-              (concat "* %(~title~) <%<%Y-%m-%d %H:%M>>" anchor "\n%?"))
+              (if (string-empty-p anchor)
+                  "* %(~title~) <%<%Y-%m-%d %H:%M>>%?"
+                (concat "* %(~title~) <%<%Y-%m-%d %H:%M>>\n" anchor "%?")))
    :first-sub (cons "" "<today>")
    :default-subs '(("jj" "" "<today>")
                    ("jp" "" "<date prompt>")
@@ -195,7 +197,10 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (orgx--capture-add-flat-templates
    :kind "tasks" :char "t" :name name :path path :key key
    :target (list 'file+headline path "Tasks")
-   :body-fn (lambda (anchor) (concat "* TODO %(~title~)\n" anchor "\n%?"))
+   :body-fn (lambda (anchor)
+              (if (string-empty-p anchor)
+                  "* TODO %(~title~)%?"
+                (concat "* TODO %(~title~)\n" anchor "%?")))
    :first-sub (cons "%i" "selection")
    :default-subs '(("tt" "%i" "selection")
                    ("tq" "" "quick task" :immediate-finish t)
@@ -208,7 +213,10 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (orgx--capture-add-flat-templates
    :kind "notes" :char "n" :name name :path path :key key
    :target (list 'file+headline path "Inbox")
-   :body-fn (lambda (anchor) (concat "* %(~title~)\n" anchor "\n%?"))
+   :body-fn (lambda (anchor)
+              (if (string-empty-p anchor)
+                  "* %(~title~)%?"
+                (concat "* %(~title~)\n" anchor "%?")))
    :first-sub (cons "%i" "selection")
    :default-subs '(("nn" "%i" "selection")
                    ("nx" "%x" "X11 buffer")
