@@ -573,10 +573,13 @@ of creating and deleting a fresh frame."
   (let ((buf (get-buffer-create "*arch:test-init*")))
     (unwind-protect
         (let ((proc (arch--pkg-run "test-init" '("echo" "hello"))))
-          (accept-process-output proc 1)
+          (while (process-live-p proc)
+            (accept-process-output proc 0.1))
           (with-current-buffer buf
             (should (derived-mode-p 'arch-install-mode))
             (should (string-match-p "\\$ echo hello" (buffer-string)))))
+      (when (get-buffer-process buf)
+        (delete-process (get-buffer-process buf)))
       (kill-buffer buf))))
 
 (ert-deftest arch-test-worker-run-initializes-arch-install-mode ()
@@ -584,10 +587,13 @@ of creating and deleting a fresh frame."
   (let ((buf (get-buffer-create arch--worker-buffer-name)))
     (unwind-protect
         (let ((proc (arch--worker-run '("echo" "worker-test"))))
-          (accept-process-output proc 1)
+          (while (process-live-p proc)
+            (accept-process-output proc 0.1))
           (with-current-buffer buf
             (should (derived-mode-p 'arch-install-mode))
             (should (string-match-p "\\$ echo worker-test" (buffer-string)))))
+      (when (get-buffer-process buf)
+        (delete-process (get-buffer-process buf)))
       (kill-buffer buf))))
 
 (ert-deftest arch-test-pkg-run-appends-multiple-commands ()
@@ -596,13 +602,17 @@ of creating and deleting a fresh frame."
     (unwind-protect
         (progn
           (let ((proc1 (arch--pkg-run "test-append" '("echo" "first"))))
-            (accept-process-output proc1 1))
+            (while (process-live-p proc1)
+              (accept-process-output proc1 0.1)))
           (let ((proc2 (arch--pkg-run "test-append" '("echo" "second"))))
-            (accept-process-output proc2 1))
+            (while (process-live-p proc2)
+              (accept-process-output proc2 0.1)))
           (with-current-buffer buf
             (let ((content (buffer-string)))
               (should (string-match-p "first" content))
               (should (string-match-p "second" content)))))
+      (when (get-buffer-process buf)
+        (delete-process (get-buffer-process buf)))
       (kill-buffer buf))))
 
 (ert-deftest arch-test-signal-name-mapping ()

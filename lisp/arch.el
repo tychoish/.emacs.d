@@ -378,6 +378,7 @@ PKG is an optional `arch-pkg' struct or package name."
                  :command args
                  :filter #'arch--pkg-filter
                  :sentinel #'arch--pkg-sentinel)))
+      (set-process-query-on-exit-flag proc nil)
       (when op
         (process-put proc 'arch-op op)
         (process-put proc 'arch-pkgs (or pkg pkg-name)))
@@ -416,6 +417,7 @@ linear scrollback instead of one buffer per package."
                  :command args
                  :filter #'arch--pkg-filter
                  :sentinel #'arch--pkg-sentinel)))
+      (set-process-query-on-exit-flag proc nil)
       (when op
         (process-put proc 'arch-op op)
         (process-put proc 'arch-pkgs pkgs))
