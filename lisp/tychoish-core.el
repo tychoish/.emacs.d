@@ -684,7 +684,7 @@
 
 (use-package eglot-tempel
   :ensure t
-  :after (eglot tempel)
+  :defer t
   :init
   (add-hook 'eglot-managed-mode-hook #'eglot-tempel-mode))
 
