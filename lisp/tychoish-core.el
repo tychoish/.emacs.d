@@ -686,7 +686,15 @@
   :ensure t
   :defer t
   :init
-  (add-hook 'eglot-managed-mode-hook #'eglot-tempel-mode))
+  (defun tychoish/eglot-tempel-enable ()
+    "Turn on `eglot-tempel-mode', without toggling it.
+`eglot-tempel-mode' is global and its body calls `eglot-reconnect'
+on every state change; since `eglot-managed-mode-hook' runs with no
+arguments on both buffer connect and disconnect, calling the mode
+function directly would toggle it (and reconnect) on every managed
+buffer transition."
+    (eglot-tempel-mode 1))
+  (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-tempel-enable))
 
 (use-package tempel-collection
   :ensure t
@@ -2644,9 +2652,14 @@ eldoc/xref request until manually reconnected."
     "Run stale-connection cleanup even if ORIG-FN's teardown aborts partway.
 `eglot--on-shutdown' can hit a `track-changes' assertion failure
 mid-cleanup, which otherwise leaves the dead SERVER stuck in
-`eglot--servers-by-project' and orphans its buffers."
-    (ignore-errors (funcall orig-fn server))
-    (tychoish/eglot-cleanup-stale-connections))
+`eglot--servers-by-project' and orphans its buffers.  Only reconnect
+when SERVER died unexpectedly: if shutdown was requested (e.g. via
+`eglot-autoshutdown'), resurrecting it here would fight the
+deliberate teardown."
+    (let ((crashed (not (eglot--shutdown-requested server))))
+      (ignore-errors (funcall orig-fn server))
+      (when crashed
+        (tychoish/eglot-cleanup-stale-connections))))
 
   (advice-add 'eglot--on-shutdown :around #'ad:eglot--on-shutdown-cleanup-stale)
 
