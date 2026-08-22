@@ -3272,6 +3272,38 @@ Falls back to the full list when filtering would leave no choices."
   (advice-add 'agent-shell-select-config :around
               #'ad:agent-shell-select-config--filter-installed)
 
+  (require 'agent-shell-antigravity)
+
+  (defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
+    "Download and install the latest Antigravity ACP server binary."
+    (interactive "P")
+    (let* ((arch (pcase (car (split-string system-configuration "-"))
+                   ((or "x86_64" "amd64") "x86_64")
+                   ((or "aarch64" "arm64") "aarch64")
+                   (a a)))
+           (os (pcase system-type ('darwin "darwin") ('windows-nt "windows") (_ "linux")))
+           (platform (format "%s-%s" os arch))
+           (install-dir (agent-shell-cache-dir "antigravity" platform))
+           (bin-name (file-name-nondirectory (car agent-shell-antigravity-acp-command)))
+           (bin-path (expand-file-name bin-name install-dir)))
+      (unless (and (not force) (file-executable-p bin-path))
+        (message "Antigravity: bootstrapping server for %s..." platform)
+        (make-directory install-dir t)
+        (let* ((reg-url "https://raw.githubusercontent.com/agentclientprotocol/registry/main/antigravity-acp/agent.json")
+               (reg (with-temp-buffer
+                      (url-insert-file-contents reg-url)
+                      (json-parse-buffer :object-type 'alist)))
+               (archive-url (map-nested-elt reg `(distribution binary ,(intern platform) archive)))
+               (zip (expand-file-name "server.zip" install-dir)))
+          (url-copy-file archive-url zip t)
+          (call-process "unzip" nil nil nil "-o" "-q" zip "-d" install-dir)
+          (delete-file zip)
+          (set-file-modes bin-path #o755)))
+      (setq agent-shell-antigravity-acp-command
+            (cons bin-path (cdr agent-shell-antigravity-acp-command)))
+      (message "Antigravity: using ACP server at %s" bin-path)
+      bin-path))
+
   (tychoish/agent-shell--apply-environment))
 
 (use-package agent-shell-queue
@@ -3293,6 +3325,7 @@ Falls back to the full list when filtering would leave no choices."
 
   (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key "p" agent-shell-menu-resolve-permission)
+  (agent-shell-menu-mode-key "/" agent-shell-prompt-queue)
   (agent-shell-menu-mode-key "a" agent-shell-menu-select-action)
   (agent-shell-menu-mode-key "b" agent-shell-switch-buffer)
   (agent-shell-menu-mode-key "x" execute-extended-agent-shell-command)
