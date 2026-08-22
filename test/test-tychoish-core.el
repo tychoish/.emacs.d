@@ -146,14 +146,13 @@ correctly and reads from the minibuffer using the candidate's command."
   (dolist (fn eglot-managed-mode-hook)
     (should (fboundp fn))))
 
-(ert-deftest tychoish-core/eglot-tempel-mode-on-hook ()
-  "The hook must call a fixed-arg enable wrapper, not the bare mode
-function: `eglot-managed-mode-hook' runs with no arguments on both
-connect and disconnect, so calling `eglot-tempel-mode' directly would
-toggle it (and reconnect the server) on every managed buffer
-transition."
-  (should (memq 'tychoish/eglot-tempel-enable eglot-managed-mode-hook))
-  (should-not (memq 'eglot-tempel-mode eglot-managed-mode-hook)))
+(ert-deftest tychoish-core/eglot-tempel-mode-not-on-hook ()
+  "Ensure `eglot-tempel-mode' is not on `eglot-managed-mode-hook'.
+`eglot-tempel-mode' is a global mode enabled in its `:config' block;
+putting it on `eglot-managed-mode-hook' causes a reconnect loop on
+buffer transitions."
+  (should-not (memq 'eglot-tempel-mode eglot-managed-mode-hook))
+  (should-not (memq 'tychoish/eglot-tempel-enable eglot-managed-mode-hook)))
 
 (provide 'test-tychoish-core)
 ;;; test-tychoish-core.el ends here
