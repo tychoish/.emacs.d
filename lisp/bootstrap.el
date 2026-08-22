@@ -340,6 +340,8 @@ directory, autoloading the package signals a stale
     (electric-pair-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] hud-mode"
     (hud-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] `pixel-scroll-precision-mode'"
+    (pixel-scroll-precision-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] sprite-mode"
     (sprite-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] which-key"
