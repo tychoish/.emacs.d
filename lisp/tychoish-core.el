@@ -1438,6 +1438,9 @@ clipboard."
 
   (require 'telega-alert)
   (require 'telega-extras)
+  (setq telega-extras-enable-chatbuf-idle-timers t
+        telega-extras-chatbuf-bury-idle-time 1200
+        telega-extras-chatbuf-kill-idle-time 14400)
   (setq telega-chat-auto-fill-mode-lighter "")
   (telega-mode-line-mode 1)
   (telega-alert-mode 1))
@@ -3275,6 +3278,9 @@ Falls back to the full list when filtering would leave no choices."
   (defvar-keymap hud-robot-agent-shell-map)
   (setq agent-shell-queue-write-log-enabled t)
   (require 'agent-shell-menu)
+  (require 'agent-shell-queue-org)
+  (setq agent-shell-queue-serialization-format 'org)
+  (setq agent-shell-queue-default-pause-delay 30.0)
   (keymap-set agent-shell-queue-mode-map "C-c j" '(hud-robot-agent-shell-map . "robot-agent-shell"))
   (keymap-set hud-robot-agent-shell-map "q" #'agent-shell-queue-buffer-open)
   (keymap-set hud-robot-agent-shell-map "/" #'agent-shell-queue-capture)
@@ -3331,6 +3337,7 @@ Falls back to the full list when filtering would leave no choices."
     (let ((ext (cond
                 ((eq agent-shell-queue-serialization-format 'json) "json")
                 ((eq agent-shell-queue-serialization-format 'yaml) "yaml")
+                ((eq agent-shell-queue-serialization-format 'org) "org")
                 (t "el"))))
       (expand-file-name (concat "queue." ext)
                         (sprite-state-path "agent-shell"))))

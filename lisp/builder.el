@@ -43,7 +43,7 @@
 (eval-when-compile
   (require 'xtd-f)
   (require 'xtd-macro))
-
+(require 'xtd-dash)
 (require 'xtd-project)
 (require 'xtd-s)
 (require 'annotated-completing-read)

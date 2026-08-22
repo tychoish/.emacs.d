@@ -51,7 +51,7 @@ Possible values:
              (telega-server-live-p))
     (telega-extras-start-chatbuf-idle-timers)))
 
-(defcustom telega-extras-enable-chatbuf-idle-timers nil
+(defcustom telega-extras-enable-chatbuf-idle-timers t
   "When non-nil, enable idle timers for burying and/or killing telega chat buffers.
 These timers only run when the respective timeouts are specified in
 `telega-extras-chatbuf-bury-idle-time' and `telega-extras-chatbuf-kill-idle-time'."
@@ -59,7 +59,7 @@ These timers only run when the respective timeouts are specified in
   :set #'telega-extras--chatbuf-idle-timers-custom-set
   :group 'telega)
 
-(defcustom telega-extras-chatbuf-bury-idle-time nil
+(defcustom telega-extras-chatbuf-bury-idle-time 1200
   "Inactivity time in seconds after which a telega chat buffer is buried.
 Only has effect when `telega-extras-enable-chatbuf-idle-timers' is non-nil."
   :type '(choice (const :tag "Never" nil)
@@ -67,7 +67,7 @@ Only has effect when `telega-extras-enable-chatbuf-idle-timers' is non-nil."
   :set #'telega-extras--chatbuf-idle-timers-custom-set
   :group 'telega)
 
-(defcustom telega-extras-chatbuf-kill-idle-time nil
+(defcustom telega-extras-chatbuf-kill-idle-time 14400
   "Inactivity time in seconds after which a telega chat buffer is killed.
 Only has effect when `telega-extras-enable-chatbuf-idle-timers' is non-nil."
   :type '(choice (const :tag "Never" nil)
@@ -209,27 +209,31 @@ non-interactive callers never see a prompt."
 ;; Buffer management
 
 (defun telega-extras-bury-chat-buffers ()
-  "Replace all visible telega chat buffers with the root buffer."
+  "Bury all live telega chat buffers and replace visible ones with the root buffer."
   (interactive)
-  (when-let* ((root (or (get-buffer telega-root-buffer-name)
-                        (get-buffer bootstrap-fallback-buffer-name)
-                        (get-buffer-create bootstrap-fallback-buffer-name)))
-              (chat-windows
-               (thread-last (frame-list)
-                 (seq-mapcat #'window-list)
-                 (seq-filter (lambda (w)
-                               (with-current-buffer (window-buffer w)
-                                 (derived-mode-p 'telega-chat-mode)))))))
-    (let ((bufs (seq-uniq (seq-map #'window-buffer chat-windows))))
+  (let* ((root (or (get-buffer telega-root-buffer-name)
+                   (get-buffer bootstrap-fallback-buffer-name)
+                   (get-buffer-create bootstrap-fallback-buffer-name)))
+         (chat-bufs (seq-filter (lambda (b)
+                                  (with-current-buffer b
+                                    (derived-mode-p 'telega-chat-mode)))
+                                (buffer-list)))
+         (chat-windows
+          (thread-last (frame-list)
+            (seq-mapcat #'window-list)
+            (seq-filter (lambda (w)
+                          (with-current-buffer (window-buffer w)
+                            (derived-mode-p 'telega-chat-mode)))))))
+    (when (or chat-windows chat-bufs)
       (mapc (lambda (w)
               (set-window-buffer w root))
             chat-windows)
-      (mapc #'bury-buffer bufs))
-    (alert (format "buried %d telega-chat-%s"
-                   (length chat-windows)
-		   (resolve-plural-form (length chat-windows) "buffer" "buffers"))
-           :title (format "emacs.%s.telega" (sprite-instance-name))
-           :persistent t)))
+      (mapc #'bury-buffer chat-bufs)
+      (alert (format "buried %d telega-chat-%s"
+                     (length chat-bufs)
+                     (resolve-plural-form (length chat-bufs) "buffer" "buffers"))
+             :title (format "emacs.%s.telega" (sprite-instance-name))
+             :persistent t))))
 
 (defun telega-extras-kill-chat-buffers ()
   "Kill all live telega-chat-mode buffers, prompting when interactive."
