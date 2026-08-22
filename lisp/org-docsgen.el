@@ -208,6 +208,58 @@ Returns an alist of (SECTION-NAME-OR-NIL . SYMS) in source order."
      el-files)
     (nreverse sections)))
 
+(defun org-docsgen--partition-by-groups (files group-spec)
+  "Partition FILES into an alist of (GROUP-NAME . GROUP-FILES) based on GROUP-SPEC.
+GROUP-SPEC can be:
+  `file'  -- group by each file's base name
+  a list  -- list of group specs. Each element can be:
+             - a string prefix (e.g. \"agent-shell-menu\")
+             - a list/cons (GROUP-NAME . MATCH-PREFIXES-OR-FILES)
+               e.g. (\"agent-shell-queue-persistence\" \"agent-shell-queue-persistence\" \"agent-shell-queue-db\")
+             files are matched against the longest/most specific pattern first,
+             and emitted in the order of GROUP-SPEC."
+  (cond
+   ((eq group-spec 'file)
+    (seq-map (lambda (f) (cons (file-name-base f) (list f))) files))
+   ((listp group-spec)
+    (let* ((patterns nil)
+           (group-names nil))
+      (seq-do
+       (lambda (entry)
+         (if (consp entry)
+             (let ((grp (car entry))
+                   (prefixes (if (listp (cdr entry)) (cdr entry) (list (cdr entry)))))
+               (push grp group-names)
+               (seq-do (lambda (p) (push (cons p grp) patterns)) prefixes))
+           (push entry group-names)
+           (push (cons entry entry) patterns)))
+       group-spec)
+      (setq group-names (nreverse (seq-uniq group-names)))
+      (setq patterns (sort patterns (lambda (a b) (> (length (car a)) (length (car b))))))
+      (let ((buckets (make-hash-table :test #'equal))
+            (unmatched nil))
+        (seq-do
+         (lambda (f)
+           (let* ((base (file-name-base f))
+                  (matched-pair (seq-find (lambda (p) (string-prefix-p (car p) base)) patterns)))
+             (if matched-pair
+                 (puthash (cdr matched-pair)
+                          (append (gethash (cdr matched-pair) buckets nil) (list f))
+                          buckets)
+               (push f unmatched))))
+         files)
+        (append
+         (delq nil
+               (seq-map
+                (lambda (g)
+                  (when-let* ((g-files (gethash g buckets)))
+                    (cons g g-files)))
+                group-names))
+         (when unmatched
+           (list (cons "Other" (nreverse unmatched))))))))
+   (t
+    (list (cons nil files)))))
+
 (defun org-docsgen--emit (sections scope level)
   "Emit SECTIONS as org output via `princ' at heading depth relative to LEVEL.
 Section headings are emitted at LEVEL+1; symbol headings at LEVEL+2.
@@ -237,7 +289,8 @@ and symbols are emitted at LEVEL+1 instead."
                             (scope 'exported)
                             (include-kinds '(variables customs))
                             namespace
-                            (section-style 'ruler))
+                            (section-style 'ruler)
+                            group-by)
   "Generate org-mode API documentation and princ it to stdout.
 
 EL-FILES is a list of .el paths to document; defaults to all non-test .el
@@ -278,11 +331,24 @@ SECTION-STYLE is `ruler' (default: long ;;;;... lines) or `triple-semi'
                          (princ (org-docsgen--format-sym name 'function
                                                          (org-docsgen--heading (1+ level)))))
                        scope)
-             (let ((sections (if (eq section-style 'triple-semi)
-                                 (org-docsgen--collect-triple-semi files scope include-kinds namespace)
-                               (org-docsgen--collect-ruler files scope include-kinds namespace))))
-               (org-docsgen--emit sections scope level)))))
-        "\n")))))
+             (if group-by
+                 (let ((groups (org-docsgen--partition-by-groups files group-by)))
+                   (seq-do
+                    (lambda (grp)
+                      (let* ((grp-name (car grp))
+                             (grp-files (cdr grp))
+                             (sections (if (eq section-style 'triple-semi)
+                                           (org-docsgen--collect-triple-semi grp-files scope include-kinds namespace)
+                                         (org-docsgen--collect-ruler grp-files scope include-kinds namespace))))
+                        (when sections
+                          (when grp-name
+                            (princ (format "%s%s\n\n" (org-docsgen--heading (1+ level)) grp-name)))
+                          (org-docsgen--emit sections scope (if grp-name (1+ level) level)))))
+                    groups))
+               (let ((sections (if (eq section-style 'triple-semi)
+                                   (org-docsgen--collect-triple-semi files scope include-kinds namespace)
+                                 (org-docsgen--collect-ruler files scope include-kinds namespace))))
+                 (org-docsgen--emit sections scope level)))))))))))
 
 (defun org-docsgen--buffer-has-run-p ()
   "Return non-nil when the current buffer has an `org-docsgen-run' src block."
