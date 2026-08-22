@@ -227,7 +227,7 @@ header text, or leaves the default when nil."
           ("da" "Denote Agenda" todo ""
 	   ,(orgx--denote-agenda-settings "Denote Agenda: All"))
           ("dt" "Denote Agenda Tasks (without agent or questions)"
-	   ((tags-todo "-agent-question"
+	   ((tags-todo "-agent-question-TODO=\"QUESTION\""
                        ((org-agenda-overriding-header "Denote Agenda"))))
            ,(orgx--denote-agenda-settings "Denote Agenda: Tasks"))
           ("dn" "Denote Agenda (without agent)"
@@ -235,7 +235,7 @@ header text, or leaves the default when nil."
                        ((org-agenda-overriding-header "Denote (non) Agent Tasks"))))
            ,(orgx--denote-agenda-settings "Denote Agenda: Non-agent tasks"))
           ("dg" "Denote Agenda (agent only)"
-	   ((tags-todo "agent"
+	   ((tags-todo "+agent-question-TODO=\"QUESTION\""
                        ((org-agenda-overriding-header "Denote Agent Tasks"))))
            ,(orgx--denote-agenda-settings "Denote Agenda: Agent tasks"))
           ("dq" "Human Questions"
@@ -247,9 +247,9 @@ header text, or leaves the default when nil."
            ((tags "+question|TODO=\"QUESTION\""
                   ((org-agenda-skip-function #'orgx-skip-unless-open-question)
                    (org-agenda-overriding-header "Human questions")))
-            (tags-todo "-agent-question"
+            (tags-todo "-agent-question-TODO=\"QUESTION\""
                        ((org-agenda-overriding-header "Tasks")))
-            (tags-todo "agent"
+            (tags-todo "+agent-question-TODO=\"QUESTION\""
                        ((org-agenda-overriding-header "Agent tasks"))))
            ,(orgx--denote-agenda-settings nil))
 	  ("i" . "including inherited")
