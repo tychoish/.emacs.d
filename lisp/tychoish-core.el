@@ -12,6 +12,11 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (require 'xtd-macro))
+(require 'xtd-macro)
+(require 'sprite)
+
 (use-package hud-mode
   :ensure nil
   :demand t
@@ -591,7 +596,7 @@
     (interactive)
     (thread-last (buffer-list)
 		 (seq-filter #'buffer-file-name)
-		 (seq-map (lambda (buf) (with-current-buffer (setup-capfs))))))
+		 (seq-map (lambda (buf) (with-current-buffer buf (setup-capfs))))))
 
   (defun tychoish/prog-mode-capf-setup ()
     (setq-local completion-at-point-functions
@@ -1679,8 +1684,7 @@ return until the minibuffer session ends."
 	     orgx-agenda-minor-mode-turn-on
 	     orgx--install-auxiliary-packages
 	     ad:org-agenda--open-files
-	     ad:org-agenda-redo
-	     bootstrap-set-notes-directory)
+	     ad:org-agenda-redo)
   :init
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
   (keymap-set orgx-global-map "4" #'org-agenda)

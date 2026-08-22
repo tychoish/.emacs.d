@@ -453,12 +453,16 @@ Returns the symbol of the generated activation command."
                          (or (member (system-name) ',systems)
                              (null ',systems))))
                 (,configure-account-symbol))))
-        (eval activate-form t)
-        (when (daemonp)
+        (if (daemonp)
+            (add-one-shot-hook
+             :name (format "%s-frame-setup" account-name)
+             :form activate-form
+             :hook 'after-first-frame-created)
           (add-one-shot-hook
-           :name (format "%s-frame-setup" account-name)
+           :name account-name
            :form activate-form
-           :hook 'after-first-frame-created))))
+           :hook 'after-init-hook
+           :idle-timer 0.5))))
 
     configure-account-symbol))
 

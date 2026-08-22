@@ -35,6 +35,7 @@
 
 (require 'xtd-macro)
 (require 'cl-lib)
+(require 'sprite)
 
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
@@ -412,6 +413,28 @@ directory, autoloading the package signals a stale
     (bootstrap--load-user-file
      (file-name-sans-extension (file-name-nondirectory file)))))
 
+(defun bootstrap-set-notes-directory (&optional path)
+  (when path
+    (setq local-notes-directory (expand-file-name path)))
+
+  (unless local-notes-directory
+    (error "must have defined the `local-notes-directory'"))
+
+  (setq org-directory (file-name-concat local-notes-directory "org"))
+  (setq org-agenda-files (thread-last (list org-directory user-org-directories)
+                                      (flatten-tree)
+                                      (seq-map #'expand-file-name)
+			              (seq-filter 'identity)
+			              (seq-map #'string-trim)
+			              (seq-remove #'string-empty-p)
+                                      (seq-uniq)))
+  (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
+  (setq org-default-notes-file (file-name-concat org-directory "records.org"))
+  (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
+  (setq deft-directory (file-name-concat local-notes-directory "deft"))
+  (setq denote-directory (file-name-concat local-notes-directory "denote"))
+  local-notes-directory)
+
 (defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))
     (setq auto-save-file-name-transforms `((".*" ,path t)))
@@ -528,7 +551,7 @@ this widens it to four for finer-grained startup profiling."
 
   (advice-add 'use-package-handler/:ensure :around #'ad:use-package-handler/:ensure-skip-lazy)
 
-  (defun use-package-handler/:ensure-lazy (name-symbol _keyword args rest state)
+  (defun use-package-handler/:ensure-lazy (name-symbol _keyword _args rest state)
     (let* ((body (use-package-process-keywords name-symbol rest state))
            (commands (plist-get state :commands)))
       (if (null commands)
