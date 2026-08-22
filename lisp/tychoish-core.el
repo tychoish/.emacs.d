@@ -685,16 +685,9 @@
 (use-package eglot-tempel
   :ensure t
   :defer t
-  :init
-  (defun tychoish/eglot-tempel-enable ()
-    "Turn on `eglot-tempel-mode', without toggling it.
-`eglot-tempel-mode' is global and its body calls `eglot-reconnect'
-on every state change; since `eglot-managed-mode-hook' runs with no
-arguments on both buffer connect and disconnect, calling the mode
-function directly would toggle it (and reconnect) on every managed
-buffer transition."
-    (eglot-tempel-mode 1))
-  (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-tempel-enable))
+  :after (eglot tempel)
+  :config
+  (eglot-tempel-mode 1))
 
 (use-package tempel-collection
   :ensure t
@@ -2466,6 +2459,13 @@ return until the minibuffer session ends."
     (flycheck-eglot-mode 1))
 
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
+
+  (defun tychoish/eglot-guard-track-changes-fetch (orig-fn id &rest args)
+    "Only fetch changes if ID is a valid tracker in the current buffer."
+    (when (and id (memq id (bound-and-true-p track-changes--trackers)))
+      (apply orig-fn id args)))
+
+  (advice-add 'eglot--track-changes-fetch :around #'tychoish/eglot-guard-track-changes-fetch)
 
   (autoload 'eglot-test-at-point "eglot-test-at-point")
 
