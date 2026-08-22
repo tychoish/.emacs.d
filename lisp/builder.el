@@ -489,6 +489,43 @@ call `builder-add-candidates'."
   (seq-do #'builder--clear-candidate-cache
 	   (seq-filter #'builder--candidate-cache-p (buffer-list))))
 
+(defun builder--after-load-alist-options ()
+  "Return (NAME KEY ANNOTATION) tuples for `after-load-alist' entries.
+NAME is a display string for KEY (usually a feature symbol, sometimes
+a load-history regexp cons); ANNOTATION shows how many forms are
+queued for it."
+  (seq-map (lambda (entry)
+             (let* ((key (car entry))
+                    (count (length (cdr entry))))
+               (list (format "%S" key)
+                     key
+                     (format "%d pending form%s" count (if (= count 1) "" "s")))))
+          after-load-alist))
+
+;;;###autoload
+(defun builder-remove-eval-after-load ()
+  "Remove all `with-eval-after-load' forms queued for a feature or file.
+
+Picks the target via `annotated-completing-read' from the entries
+currently registered in `after-load-alist', annotated with how many
+forms are pending for each, then drops every form queued for it via
+
+  (setq after-load-alist (assoc-delete-all KEY after-load-alist))
+
+Useful for clearing stale after-load forms -- for example ones
+referencing a function that was renamed or removed -- without
+restarting Emacs."
+  (interactive)
+  (let* ((options (builder--after-load-alist-options))
+         (table (seq-map (lambda (e) (cons (car e) (nth 2 e))) options))
+         (choice (annotated-completing-read
+                  table
+                  :prompt "remove eval-after-load for => "
+                  :require-match t))
+         (key (nth 1 (assoc choice options))))
+    (setq after-load-alist (assoc-delete-all key after-load-alist))
+    (message "Removed `with-eval-after-load' entries for %S" key)))
+
 (cl-defun builder-clear-cache (&optional (buffer (current-buffer)))
   (interactive)
   (if current-prefix-arg
