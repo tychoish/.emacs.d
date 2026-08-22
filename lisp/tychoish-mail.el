@@ -406,7 +406,8 @@ live in MAILDIR's tools/signatures directory."
 
       (setq mu4e-get-mail-command (tychoish-mail-account-fetchmail conf))
 
-      (mu4e 'background)
+      (when (featurep 'mu4e)
+        (mu4e 'background))
 
       (message "mail: configured address [%s]" address))))
 
@@ -453,16 +454,12 @@ Returns the symbol of the generated activation command."
                          (or (member (system-name) ',systems)
                              (null ',systems))))
                 (,configure-account-symbol))))
-        (if (daemonp)
-            (add-one-shot-hook
-             :name (format "%s-frame-setup" account-name)
-             :form activate-form
-             :hook 'after-first-frame-created)
+        (eval activate-form t)
+        (when (daemonp)
           (add-one-shot-hook
-           :name account-name
+           :name (format "%s-frame-setup" account-name)
            :form activate-form
-           :hook 'after-init-hook
-           :idle-timer 0.5))))
+           :hook 'after-first-frame-created))))
 
     configure-account-symbol))
 

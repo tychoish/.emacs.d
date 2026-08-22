@@ -257,7 +257,7 @@
   (let ((telega-root-buffer-name "*telega-extras-test-nonexistent-root*")
         (bootstrap-fallback-buffer-name "*telega-extras-test-nonexistent-fallback*"))
     (cl-letf (((symbol-function 'get-buffer-create)
-               (lambda (name) (get-buffer name))))
+               (lambda (name &rest _args) (get-buffer name))))
       ;; Should not signal.
       (telega-extras-bury-chat-buffers))))
 
