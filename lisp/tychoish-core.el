@@ -322,9 +322,11 @@
   :init
   (defun turn-on-projectile-mode ()
     (interactive)
+    (require 'project)
     (projectile-mode 1))
   (add-hook 'prog-mode-hook #'turn-on-projectile-mode)
   (add-hook 'text-mode-hook #'turn-on-projectile-mode)
+  (add-hook 'dired-mode-hook #'turn-on-projectile-mode)
   :config
   (keymap-set hud-mode-map "C-c p" (cons "projectile" projectile-command-map))
   (keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag)
@@ -1243,6 +1245,7 @@ prompt for the initial query using `annotated-completing-read-context-from-point
        ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
 
 (use-package magit-dash
+  :ensure t
   :defer t
   :init
   (keymap-set hud-magit-map "d" #'magit-dash-open)
@@ -1937,7 +1940,6 @@ return until the minibuffer session ends."
                           (locate-dominating-file dir "go.mod"))))
       (cons 'go-module root)))
 
-  (add-hook 'project-find-functions #'project-find-go-module)
 
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
@@ -1960,6 +1962,9 @@ return until the minibuffer session ends."
 						:rangeVariableTypes :json-false
 						:functionTypeParameters :json-false)))
   :config
+  (require 'project)
+  (add-hook 'project-find-functions #'project-find-go-module)
+
   (delight 'go-ts-mode "go.ts")
   (delight 'go-mod-ts-mode "go.mod.ts")
   (delight 'go-mode "go")
