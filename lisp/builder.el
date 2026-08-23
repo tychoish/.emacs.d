@@ -2082,7 +2082,12 @@ responds."
         :name "build-elpa-all"
         :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all))'"
         :directory root
-        :annotation "build all ELPAish package tracks (snapshot, stable, staging)")
+        :annotation "build all ELPAish package release streams (snapshot, stable, staging)")
+       (make-builder-candidate
+        :name "build-elpa-website"
+        :command "emacsclient --eval '(progn (require (quote elpaish-website)) (elpaish-build-website))'"
+        :directory root
+        :annotation "rebuild ELPAish static website only (catalogs and landing page)")
        (make-builder-candidate
         :name "build-elpa-single"
         :command "emacsclient --eval '(progn (require (quote elpaish)) (call-interactively (function elpaish-build-single)))'"
