@@ -2223,6 +2223,21 @@ return until the minibuffer session ends."
     :bind-map hud-docker-map)
   (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
+(use-package elpaish
+  :ensure t
+  :commands (elpaish-menu
+             elpaish-dispatch
+             elpaish-status
+             elpaish-build-all
+             elpaish-build-single)
+  :init
+  (make-read-extended-command-for-prefix "elpaish"
+    :bind-key "e"
+    :bind-map hud-core-map
+    :key-alias "elpaish-commands")
+  :config
+  (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; build/compilation support

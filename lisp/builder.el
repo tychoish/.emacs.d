@@ -2082,22 +2082,27 @@ responds."
         :name "build-elpa-all"
         :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all))'"
         :directory root
-        :annotation "build all ELPAish package tracks (elpaish, stable, staging)")
+        :annotation "build all ELPAish package tracks (snapshot, stable, staging)")
+       (make-builder-candidate
+        :name "build-elpa-single"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (call-interactively (function elpaish-build-single)))'"
+        :directory root
+        :annotation "interactively build a single ELPAish package")
        (make-builder-candidate
         :name "build-elpa-snapshot"
-        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote elpaish)))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote snapshot)))'"
         :directory root
         :annotation "build elpaish development snapshot track (date versions)")
        (make-builder-candidate
         :name "build-elpa-stable"
-        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote elpaish-stable)))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote stable)))'"
         :directory root
-        :annotation "build elpaish-stable release track (clean semver tags only)")
+        :annotation "build elpaish stable release track (clean semver tags only)")
        (make-builder-candidate
         :name "build-elpa-staging"
-        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote elpaish-staging)))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote staging)))'"
         :directory root
-        :annotation "build elpaish-staging pre-release & git describe track")
+        :annotation "build elpaish staging pre-release & git describe track")
        (make-builder-candidate
         :name "elpa-preflight"
         :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-status-preflight-all))'"
@@ -2113,6 +2118,11 @@ responds."
         :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-serve-local))'"
         :directory root
         :annotation "start local preview HTTP server for public/ repository")
+       (make-builder-candidate
+        :name "elpaish-menu"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-menu))'"
+        :directory root
+        :annotation "open ELPAish transient dispatch menu")
        (make-builder-candidate
         :name "elpaish-status"
         :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-status))'"
