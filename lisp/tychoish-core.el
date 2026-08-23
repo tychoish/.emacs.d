@@ -3409,8 +3409,7 @@ Falls back to the full list when filtering would leave no choices."
               (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment_discussion" :face nerd-icons-purple)))))
 
 (use-package agent-shell-notifications
-  :load-path "external/agent-shell-notifications"
-  :ensure nil
+  :ensure t
   :defer t
   :after (agent-shell alert)
   :commands (agent-shell-notifications-mode)
