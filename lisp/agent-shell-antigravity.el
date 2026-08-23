@@ -222,8 +222,8 @@ Uses `agent-shell-antigravity-authentication' for authentication configuration."
   "Antigravity ASCII art."
   (let* ((is-dark (eq (frame-parameter nil 'background-mode) 'dark))
          (text (string-trim "
- █████╗  ████╗   ██╗ ████████╗ ██╗
-██╔══██╗ ████╗  ██║ ╚══██╔══╝ ██║
+ █████╗  ████╗  ██╗ ████████╗ ██╗
+██╔══██╗ ████║  ██║ ╚══██╔══╝ ██║
 ███████║ ██╔██╗ ██║    ██║    ██║
 ██╔══██║ ██║╚██╗██║    ██║    ██║
 ██║  ██║ ██║ ╚████║    ██║    ██║
