@@ -98,19 +98,6 @@ Runs from `after-init-hook', after the full config has loaded."
   (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 99)
   (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
 
-  (defvar bootstrap-vendored-packages
-    '((xtdlib                    "external/xtdlib"                    "https://github.com/tychoish/xtdlib.el")
-      (sprite                    "external/sprite"                    "https://github.com/tychoish/sprite")
-      (magit-dash                "external/magit-dash"                "https://github.com/tychoish/magit-dash.git")
-      ;; (agent-shell-notifications "external/agent-shell-notifications" "") ;; disabled: upstream dependency bug
-      (agent-shell-queue         "external/agent-shell-queue"         "https://github.com/tychoish/agent-shell-queue"))
-    "(PACKAGE PATH URL) entries bootstrapped via `bootstrap-package'.
-PATH is relative to `user-emacs-directory'. Each is a git checkout under
-`external/'; URL is a fallback for machines where the checkout is missing.")
-
-  (defvar bootstrap--package-contents-refreshed nil
-    "Non-nil once `package-refresh-contents' has run during this bootstrap.")
-
   (defun bootstrap-package-quickstart-stale-p ()
     "Return non-nil when `package-quickstart-file' is missing or older than an installed package."
     (or (not (file-exists-p package-quickstart-file))
@@ -123,35 +110,6 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
                                 (time-less-p quickstart-mtime
                                              (file-attribute-modification-time (file-attributes pkg-dir)))))
                          (directory-files package-user-dir t "\\`[^.]" t))))))
-
-  (defun bootstrap-ensure-melpa-dependencies (main-file)
-    "Install any missing dependency declared in MAIN-FILE's `Package-Requires'."
-    (when-let* ((file-exists-p main-file)
-		(desc (with-temp-buffer
-			(insert-file-contents main-file)
-			(package-buffer-info))))
-      (dolist (elem (package-desc-reqs desc))
-	(let ((dep (car elem)))
-          (unless (or (eq dep 'emacs)
-                      (package-installed-p dep)
-                      (assq dep bootstrap-vendored-packages))
-            (unless bootstrap--package-contents-refreshed
-              (package-refresh-contents)
-              (setq bootstrap--package-contents-refreshed t))
-            (package-install dep))))))
-
-  (defun bootstrap-package (package path url)
-    "Ensure PACKAGE is installed and activated."
-    (with-slow-op-timer (format "<init> [external] %s" package)
-      (let ((pkg-dir (expand-file-name (symbol-name package) package-user-dir)))
-	(unless (or (package-installed-p package) (file-exists-p pkg-dir))
-	  (let ((checkout (expand-file-name path user-emacs-directory)))
-            (if (file-directory-p checkout)
-		(progn
-                  (bootstrap-ensure-melpa-dependencies
-                   (expand-file-name (format "%s.el" package) checkout))
-                  (package-vc-install-from-checkout checkout (symbol-name package)))
-              (package-vc-install `(,package :url ,url))))))))
 
   (with-slow-op-timer "<init> package all"
     (with-slow-op-timer "<init> package require"
@@ -168,29 +126,28 @@ PATH is relative to `user-emacs-directory'. Each is a git checkout under
 
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
+	    ("elpaish" . "https://tychoish.github.io/elpaish/elpaish/")
             ("nongnu" . "https://elpa.nongnu.org/nongnu/")
             ("gnu" . "https://elpa.gnu.org/packages/")
             ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/")))
 
-    (with-slow-op-timer "<init> package bootstrap"
-      (mapc (lambda (spec)
-	      (unless (package-installed-p (car spec))
-		(apply #'bootstrap-package spec)))
-	    bootstrap-vendored-packages)))
+    (with-slow-op-timer "<init> [local] require all"
+      (with-slow-op-timer "<init> [local] core dependencies"
+	(use-package sprite :ensure t :demand t)
+	(use-package xtdlib :ensure t :demand t))
 
-  (with-slow-op-timer "<init> [local] require all"
-    (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
-    (with-slow-op-timer "<init> [local] require bootstrap.el"
-      (require 'bootstrap))
+      (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+      (with-slow-op-timer "<init> [local] require bootstrap.el"
+	(require 'bootstrap))
 
-    ;; remaining use-package declarations.
-    (with-slow-op-timer "<init> [local] require tychoish-core.el"
-      (require 'tychoish-core)))
+      ;; remaining use-package declarations.
+      (with-slow-op-timer "<init> [local] require tychoish-core.el"
+	(require 'tychoish-core)))
 
-  ;; load the user/*.el files
-  (with-slow-op-timer "<init> [user] load all"
-    (let ((user-libs-dir (expand-file-name "user" user-emacs-directory)))
-      (add-to-list 'load-path user-libs-dir)
-      (bootstrap-set-up-user-local-config user-libs-dir)))))
+    ;; load the user/*.el files
+    (with-slow-op-timer "<init> [user] load all"
+      (let ((user-libs-dir (expand-file-name "user" user-emacs-directory)))
+	(add-to-list 'load-path user-libs-dir)
+	(bootstrap-set-up-user-local-config user-libs-dir))))))
 
 (provide 'init)

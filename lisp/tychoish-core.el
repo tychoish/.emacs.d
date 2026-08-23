@@ -15,7 +15,6 @@
 (eval-when-compile
   (require 'xtd-macro))
 (require 'xtd-macro)
-(require 'sprite)
 
 (use-package hud-mode
   :ensure nil
@@ -3274,6 +3273,8 @@ Falls back to the full list when filtering would leave no choices."
 
   (require 'agent-shell-antigravity)
 
+  (add-to-list 'agent-shell-agent-configs #'agent-shell-antigravity-make-agent-config)
+
   (defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
     "Download and install the latest Antigravity ACP server binary."
     (interactive "P")
@@ -3307,6 +3308,7 @@ Falls back to the full list when filtering would leave no choices."
   (tychoish/agent-shell--apply-environment))
 
 (use-package agent-shell-queue
+  :ensure t
   :after agent-shell
   :defer t
   :commands (agent-shell-queue-item-menu)

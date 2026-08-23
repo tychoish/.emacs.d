@@ -1260,14 +1260,10 @@ opens the *ert* selector."
 (defun builder-elisp-package-run-checks ()
   "Run the package checking suite (checkdoc, package-lint, compile, ERT)."
   (interactive)
-  (let ((checks-file (expand-file-name "scripts/run-checks.el" user-emacs-directory)))
-    (if (file-exists-p checks-file)
-        (progn
-          (load checks-file)
-          (if (fboundp 'acr-run-all-checks)
-              (acr-run-all-checks)
-            (error "Function `acr-run-all-checks' not found in %s" checks-file)))
-      (error "Checks script not found at %s" checks-file))))
+  (require 'elpaish-check)
+  ;; TODO just call the below at callers (this is a shim to be removed)
+  (elpaish-check-all))
+
 (defun builder--ert-test-names ()
   "Return the sorted names (strings) of every currently defined ert test."
   (thread-last (ert-select-tests t t)
@@ -2084,42 +2080,42 @@ responds."
  (when-let* ((root project-root-directory))
    (-l (make-builder-candidate
         :name "build-elpa-all"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all))'"
         :directory root
         :annotation "build all ELPAish package tracks (elpaish, stable, staging)")
        (make-builder-candidate
         :name "build-elpa-snapshot"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all (quote elpaish)))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote elpaish)))'"
         :directory root
         :annotation "build elpaish development snapshot track (date versions)")
        (make-builder-candidate
         :name "build-elpa-stable"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all (quote elpaish-stable)))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote elpaish-stable)))'"
         :directory root
         :annotation "build elpaish-stable release track (clean semver tags only)")
        (make-builder-candidate
         :name "build-elpa-staging"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-build-all (quote elpaish-staging)))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all (quote elpaish-staging)))'"
         :directory root
         :annotation "build elpaish-staging pre-release & git describe track")
        (make-builder-candidate
         :name "elpa-preflight"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-status-preflight-all))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-status-preflight-all))'"
         :directory root
         :annotation "run preflight quality validation across all registered recipes")
        (make-builder-candidate
         :name "elpa-rotate-keys"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (call-interactively (function builder-elpa-rotate-keys)))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (call-interactively (function elpaish-rotate-keys)))'"
         :directory root
         :annotation "rotate GPG signing subkey and sync with GitHub secrets")
        (make-builder-candidate
         :name "elpa-serve-local"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-serve-local))'"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-serve-local))'"
         :directory root
         :annotation "start local preview HTTP server for public/ repository")
        (make-builder-candidate
-        :name "builder-elpa-status"
-        :command "emacsclient --eval '(progn (require (quote builder-elpa)) (builder-elpa-status))'"
+        :name "elpaish-status"
+        :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-status))'"
         :directory root
         :annotation "open ELPAish status and package track management buffer"))))
 
