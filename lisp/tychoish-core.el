@@ -1235,12 +1235,13 @@ prompt for the initial query using `annotated-completing-read-context-from-point
 
 (use-package magit-gh
   :ensure t
-  :defer t
+  :after magit
+  :demand t
   :config
   (unless (condition-case nil
               (transient-get-suffix 'magit-gh "g")
             (error nil))
-    (transient-append-suffix 'magit-gh [2]
+    (transient-append-suffix 'magit-gh '(-1)
       ["magit-dash"
        ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
 

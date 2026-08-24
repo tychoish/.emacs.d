@@ -2074,10 +2074,12 @@ responds."
         :directory root
         :priority 0
         :annotation "run CI test suite in silex/emacs:30.2-ci docker container"))))
+
 (builder-register-candidates
  :name "elpaish-build-tasks"
  :pipeline
- (when-let* ((root project-root-directory))
+ (when-let* ((root project-root-directory)
+	     (_ (string-equal "elpaish" (file-name-nondirectory root))))
    (-l (make-builder-candidate
         :name "build-elpa-all"
         :command "emacsclient --eval '(progn (require (quote elpaish)) (elpaish-build-all))'"

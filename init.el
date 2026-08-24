@@ -126,7 +126,7 @@ Runs from `after-init-hook', after the full config has loaded."
 
     (setq package-archives
 	  '(("melpa" . "https://melpa.org/packages/")
-	    ("elpaish" . "https://tychoish.github.io/elpaish/elpaish/")
+	    ("elpaish" . "https://tychoish.github.io/elpaish/snapshot/")
             ("nongnu" . "https://elpa.nongnu.org/nongnu/")
             ("gnu" . "https://elpa.gnu.org/packages/")
             ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/")))
