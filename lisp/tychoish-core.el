@@ -3237,65 +3237,6 @@ See `tychoish/agent-shell--force-clear-busy'."
   (advice-add 'agent-shell--refresh-session-title :around
               #'ad:agent-shell--refresh-session-title)
 
-  (defvar tychoish/agent-shell-filter-uninstalled-agents t
-    "When non-nil, `agent-shell-select-config' only lists agents whose
-backing executable is found on `exec-path'.  Installed-status is cached
-in `tychoish/agent-shell--installed-cache'; call
-`tychoish/agent-shell-clear-installed-cache' after installing or
-removing an agent CLI.")
-
-  (defvar tychoish/agent-shell--installed-cache (make-hash-table :test #'eq)
-    "Cache of installed-status keyed by agent config `:identifier'.")
-
-  (defun tychoish/agent-shell-clear-installed-cache ()
-    "Forget cached installed-status for agent-shell configs."
-    (interactive)
-    (clrhash tychoish/agent-shell--installed-cache))
-
-  (defun tychoish/agent-shell--config-command (config)
-    "Return the executable CONFIG's `:client-maker' resolves to, or nil.
-Errors from incomplete authentication setup are swallowed since they
-are unrelated to whether the backing executable is installed."
-    (ignore-errors
-      (and-let* ((maker (map-elt config :client-maker))
-                 (client (funcall maker (current-buffer))))
-        (map-elt client :command))))
-
-  (defun tychoish/agent-shell--config-installed-p (config)
-    "Return non-nil if CONFIG's backing executable exists, using the cache.
-Configs whose command cannot be determined are treated as installed
-so filtering never hides an agent it cannot evaluate."
-    (let ((identifier (map-elt config :identifier)))
-      (if (map-contains-key tychoish/agent-shell--installed-cache identifier)
-          (map-elt tychoish/agent-shell--installed-cache identifier)
-        (let* ((command (tychoish/agent-shell--config-command config))
-               (installed (if command (and (executable-find command) t) t)))
-          (setf (map-elt tychoish/agent-shell--installed-cache identifier) installed)
-          installed))))
-
-  (defun tychoish/agent-shell--installed-agent-configs ()
-    "Subset of `agent-shell-agent-configs' whose executable is installed."
-    (seq-filter (lambda (entry)
-                  (tychoish/agent-shell--config-installed-p
-                   (if (functionp entry) (funcall entry) entry)))
-                agent-shell-agent-configs))
-
-  (defun ad:agent-shell-select-config--filter-installed (orig-fn &rest args)
-    "Restrict the agent picker to installed agents when the option is enabled.
-Falls back to the full list when filtering would leave no choices."
-    (if-let* ((tychoish/agent-shell-filter-uninstalled-agents)
-              (filtered (tychoish/agent-shell--installed-agent-configs)))
-        (let ((agent-shell-agent-configs filtered))
-          (apply orig-fn args))
-      (apply orig-fn args)))
-
-  (advice-add 'agent-shell-select-config :around
-              #'ad:agent-shell-select-config--filter-installed)
-
-  (require 'agent-shell-antigravity)
-
-  (add-to-list 'agent-shell-agent-configs #'agent-shell-antigravity-make-agent-config)
-
   (defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
     "Download and install the latest Antigravity ACP server binary."
     (interactive "P")
@@ -3336,7 +3277,6 @@ Falls back to the full list when filtering would leave no choices."
   :config
   (defvar-keymap hud-robot-agent-shell-map)
   (setq agent-shell-queue-write-log-enabled t)
-  (require 'agent-shell-menu)
   (require 'agent-shell-queue-org)
   (setq agent-shell-queue-serialization-format 'org)
   (setq agent-shell-queue-default-pause-delay 30.0)
@@ -3346,7 +3286,9 @@ Falls back to the full list when filtering would leave no choices."
   (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-menu-dispatch)
   (keymap-unset agent-shell-mode-map "<spc>")
 
-  (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
+  (with-eval-after-load 'agent-shell-menu
+    (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch))
+
   (agent-shell-menu-mode-key "p" agent-shell-menu-resolve-permission)
   (agent-shell-menu-mode-key "/" agent-shell-prompt-queue)
   (agent-shell-menu-mode-key "a" agent-shell-menu-select-action)
