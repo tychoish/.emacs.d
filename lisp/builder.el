@@ -1546,7 +1546,7 @@ PACKAGES to `package-selected-packages' and echoes the result."
 	 :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" -f %s" lisp-dir fn)
 	 :directory project-root-directory
 	 :annotation (format "%s elisp package <%s>" desc display-name))))
-      ("check-package"   "elpaish-run-checks" "run all checks (lint/test/compile) for")
+    '(("check-package"   "elpaish-run-checks" "run all checks (lint/test/compile) for")
       ("test-package"    "builder-elisp-package-test"    "run ert tests for")
       ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
       ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
