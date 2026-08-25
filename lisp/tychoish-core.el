@@ -3237,35 +3237,66 @@ See `tychoish/agent-shell--force-clear-busy'."
   (advice-add 'agent-shell--refresh-session-title :around
               #'ad:agent-shell--refresh-session-title)
 
-  (defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
-    "Download and install the latest Antigravity ACP server binary."
+  (defun tychoish/agent-shell-antigravity--do-bootstrap (install-dir platform-sym bin-path)
+    "Download and install the Antigravity ACP server binary to INSTALL-DIR."
+    (require 'url)
+    (require 'json)
+    (require 'map)
+    (make-directory install-dir t)
+    (let* ((reg-url "https://raw.githubusercontent.com/agentclientprotocol/registry/main/antigravity-acp/agent.json")
+           (reg (with-temp-buffer
+                  (url-insert-file-contents reg-url)
+                  (json-parse-buffer :object-type 'alist)))
+           (archive-url (map-nested-elt reg (list 'distribution 'binary platform-sym 'archive)))
+           (zip (expand-file-name "server.zip" install-dir)))
+      (url-copy-file archive-url zip t)
+      (call-process "unzip" nil nil nil "-o" "-q" zip "-d" install-dir)
+      (delete-file zip)
+      (set-file-modes bin-path #o755)
+      bin-path))
+
+  (sprite-async-defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
+    "Download and install the latest Antigravity ACP server binary via sprite."
     (interactive "P")
+    (require 'sprite-future)
     (let* ((arch (pcase (car (split-string system-configuration "-"))
                    ((or "x86_64" "amd64") "x86_64")
                    ((or "aarch64" "arm64") "aarch64")
                    (a a)))
            (os (pcase system-type ('darwin "darwin") ('windows-nt "windows") (_ "linux")))
            (platform (format "%s-%s" os arch))
+           (platform-sym (intern platform))
            (install-dir (agent-shell-cache-dir "antigravity" platform))
            (bin-name (file-name-nondirectory (car agent-shell-antigravity-acp-command)))
            (bin-path (expand-file-name bin-name install-dir)))
-      (unless (and (not force) (file-executable-p bin-path))
-        (message "Antigravity: bootstrapping server for %s..." platform)
-        (make-directory install-dir t)
-        (let* ((reg-url "https://raw.githubusercontent.com/agentclientprotocol/registry/main/antigravity-acp/agent.json")
-               (reg (with-temp-buffer
-                      (url-insert-file-contents reg-url)
-                      (json-parse-buffer :object-type 'alist)))
-               (archive-url (map-nested-elt reg `(distribution binary ,(intern platform) archive)))
-               (zip (expand-file-name "server.zip" install-dir)))
-          (url-copy-file archive-url zip t)
-          (call-process "unzip" nil nil nil "-o" "-q" zip "-d" install-dir)
-          (delete-file zip)
-          (set-file-modes bin-path #o755)))
-      (setq agent-shell-antigravity-acp-command
-            (cons bin-path (cdr agent-shell-antigravity-acp-command)))
-      (message "Antigravity: using ACP server at %s" bin-path)
-      bin-path))
+      (if (and (not force) (file-executable-p bin-path))
+          (progn
+            (setq agent-shell-antigravity-acp-command
+                  (cons bin-path (cdr agent-shell-antigravity-acp-command)))
+            (message "Antigravity: using ACP server at %s" bin-path)
+            (when (fboundp 'alert)
+              (alert (format "ACP server ready at %s" bin-path)
+                     :title "Antigravity Bootstrap"))
+            bin-path)
+        (message "Antigravity: bootstrapping server for %s via sprite..." platform)
+        (condition-case err
+            (let ((path (sprite-await
+                         (sprite-future-eval
+                          (sprite-name (sprite-get-or-create-next :timeout 60))
+                          `(tychoish/agent-shell-antigravity--do-bootstrap ,install-dir ',platform-sym ,bin-path)))))
+              (setq agent-shell-antigravity-acp-command
+                    (cons path (cdr agent-shell-antigravity-acp-command)))
+              (message "Antigravity: using ACP server at %s" path)
+              (when (fboundp 'alert)
+                (alert (format "ACP server ready at %s" path)
+                       :title "Antigravity Bootstrap"))
+              path)
+          (error
+           (message "Antigravity: bootstrap failed: %S" err)
+           (when (fboundp 'alert)
+             (alert (format "Bootstrap failed: %S" err)
+                    :title "Antigravity Bootstrap"))
+           nil)))))
 
   (tychoish/agent-shell--apply-environment))
 
