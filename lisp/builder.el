@@ -1256,13 +1256,6 @@ opens the *ert* selector."
         (ert-run-tests-batch-and-exit)
       (ert t))))
 
-;;;###autoload
-(defun builder-elisp-package-run-checks ()
-  "Run the package checking suite (checkdoc, package-lint, compile, ERT)."
-  (interactive)
-  (require 'elpaish-check)
-  ;; TODO just call the below at callers (this is a shim to be removed)
-  (elpaish-check-all))
 
 (defun builder--ert-test-names ()
   "Return the sorted names (strings) of every currently defined ert test."
@@ -1553,7 +1546,7 @@ PACKAGES to `package-selected-packages' and echoes the result."
 	 :command (format "emacs --batch -L %s -f package-initialize --eval \"(require 'builder)\" -f %s" lisp-dir fn)
 	 :directory project-root-directory
 	 :annotation (format "%s elisp package <%s>" desc display-name))))
-    '(("check-package"   "builder-elisp-package-run-checks" "run all checks (lint/test/compile) for")
+      ("check-package"   "elpaish-run-checks" "run all checks (lint/test/compile) for")
       ("test-package"    "builder-elisp-package-test"    "run ert tests for")
       ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
       ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
