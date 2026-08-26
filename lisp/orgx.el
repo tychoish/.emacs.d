@@ -129,17 +129,21 @@
           ("INPROGRESS" . warning)
           ("INCOMPLETE" . warning)
           ("SCHEDULED" . identifier)
+          ("REJECTED" . identifier)
 	  ("QUESTION" . warning)
+          ("IGNORED" . (:foreground "slate gray" :weight bold))
 	  ("BACKLOG" . (:foreground warning :weight bold))
 	  ("DONE" . (:foreground "slate gray"))
           ("PROJECT" . (:foreground "slate gray" :weight bold))
-          ("ANSWERED" . (:foreground "slate gray" :weight bold))))
+          ("ANSWERED" . (:foreground "slate gray" :weight bold)
+          ("ACKNOWLEDGED" . (:foreground "slate gray" :weight bold))))
 
   ;; ;; org.el
   (setq org-todo-keywords
         '((sequence "TODO(t)" "|" "DONE(d!)")
           (sequence "QUESTION(q)" "|" "ANSWERED(a@)")
-          (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
+          (sequence "CONSIDER(c)" "|" "ACKNOWLEDGED(k@)" "IGNORED(i)" "REJECTED(r)")
+          (sequence "BLOCKED(s)" "BACKLOG(b)" "INPROGRESS(p)" "SCHEDULED(h)" "|" "SKIPPED" "GONEAWAY(g@)" "INCOMPLETE(i@)")))
 
   (setq org-tag-alist
         '((:startgroup . nil)
