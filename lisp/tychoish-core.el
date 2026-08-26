@@ -1700,8 +1700,9 @@ return until the minibuffer session ends."
   (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
 
   (keymap-set orgx-link-map "s" #'org-store-link)
+  (keymap-set orgx-link-map "a" #'org-id-store-link)
   (keymap-set orgx-link-map "i" #'org-insert-link)
-  (keymap-set orgx-link-map "a" #'org-annotate-file)
+  (keymap-set orgx-link-map "n" #'org-annotate-file)
   (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
   (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
   (add-one-shot-hook
