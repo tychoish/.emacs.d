@@ -178,7 +178,7 @@
   "Send TEXT with inline keyboard button ROWS."
   (telega-bot-send-response text
                             :bot bot
-                            :keyboard (telega-bot--make-inline-keyboard rows)
+                            :keyboard (telega-bot-make-inline-keyboard rows)
                             :thread-id thread-id
                             :chat-id chat-id))
 
@@ -404,7 +404,7 @@
   "Send TEXT to CHAT-ID with optional forum THREAD-ID and inline KEYBOARD."
   (telega-bot-send-response text :chat-id chat-id :thread-id thread-id :keyboard keyboard))
 
-(defun telega-bot--make-inline-keyboard (rows)
+(defun telega-bot-make-inline-keyboard (rows)
   "Build inline keyboard payload from button ROWS: (((\"Text\" . \"data\")))."
   `(:@type "replyMarkupInlineKeyboard"
     :rows ,(mapcar
@@ -418,9 +418,6 @@
                                   (encode-coding-string (cdr btn) 'utf-8) t))))
                row))
             rows)))
-
-(defalias 'telega-bot-make-inline-keyboard 'telega-bot--make-inline-keyboard)
-
 
 (cl-defun telega-bot-login (bot &key token)
   "Authenticate active TDLib session using BOT token."
