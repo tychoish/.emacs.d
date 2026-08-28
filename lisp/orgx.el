@@ -135,7 +135,7 @@
 	  ("BACKLOG" . (:foreground warning :weight bold))
 	  ("DONE" . (:foreground "slate gray"))
           ("PROJECT" . (:foreground "slate gray" :weight bold))
-          ("ANSWERED" . (:foreground "slate gray" :weight bold)
+          ("ANSWERED" . (:foreground "slate gray" :weight bold))
           ("ACKNOWLEDGED" . (:foreground "slate gray" :weight bold))))
 
   ;; ;; org.el
