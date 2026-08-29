@@ -1559,7 +1559,9 @@ clipboard."
 (use-package org-docsgen
   :ensure nil
   :commands (org-docsgen-run
-	     org-docsgen-regenerate-readme))
+	     org-docsgen-regenerate-file
+	     org-docsgen-regenerate-directory
+	     org-docsgen-regenerate-dwim))
 
 (use-package consult-notes
   :ensure t

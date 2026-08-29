@@ -1,9 +1,12 @@
 ;;; org-docsgen.el --- Generate org API documentation from Emacs Lisp -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Shared documentation generator for README.org org-babel blocks.
+;; Shared documentation generator for org-babel blocks in any `.org' file.
 ;; Call `org-docsgen-run' from a #+BEGIN_SRC emacs-lisp block to generate
-;; org-mode API reference from the .el files in the same directory.
+;; org-mode API reference from the .el files in the same directory (or from
+;; an explicit `:el-files' list).  Regenerate with `org-docsgen-regenerate-
+;; file', `org-docsgen-regenerate-directory', or `org-docsgen-regenerate-
+;; dwim'.
 
 ;;; Code:
 
@@ -55,17 +58,79 @@ like `:kind vc' that error if actually evaluated via `load')."
     (mapconcat (lambda (s) (if (string-match-p "\\." s) s (capitalize s)))
                (split-string name "[ \t]+" t) " ")))
 
-(defun org-docsgen--format-doc (doc)
+(defun org-docsgen--fn-arg-names (fn-para)
+  "Return the formal argument names in FN-PARA, a \"(fn ARG...)\" string.
+Drops `&optional'/`&rest' markers.  Returns nil when FN-PARA is nil or
+does not look like a signature paragraph."
+  (when (and fn-para (string-match "\\`(fn \\(.*\\))\\'" (string-trim fn-para)))
+    (seq-remove (lambda (s) (member s '("&optional" "&rest")))
+                (split-string (match-string 1 (string-trim fn-para)) "[ \t]+" t))))
+
+(defun org-docsgen--quote-symbol-refs (text)
+  "Re-render curly-quoted symbol references in TEXT as org code spans.
+`substitute-command-keys' has already turned the docstring's \\=' quote
+convention into curly ‘...’ pairs; when the quoted name resolves to a
+bound function, variable, or face, render it as a `~...~' org code span
+instead so it reads as code rather than as scare-quoted prose.
+Reads the name out of the whole match (stripping the curly quotes)
+rather than a subexpression, since `match-data' is not reliably valid
+inside a `replace-regexp-in-string' function REP once it calls back out
+to other regexp-using code (e.g. `intern-soft')."
+  (replace-regexp-in-string
+   "‘[^’]+’"
+   (lambda (whole)
+     (let* ((name (substring whole 1 -1))
+            (sym (intern-soft name)))
+       (if (and sym (or (fboundp sym) (boundp sym) (facep sym)))
+           (format "~%s~" name)
+         whole)))
+   text t t))
+
+(defun org-docsgen--emphasize-args (text arg-names)
+  "Wrap whole-word occurrences of ARG-NAMES in TEXT with org italic markup.
+ARG-NAMES are the formal parameter names (as written in upper case in
+the docstring prose, per Emacs Lisp docstring convention) collected by
+`org-docsgen--fn-arg-names'."
+  (if (null arg-names)
+      text
+    (let ((case-fold-search nil))
+      (replace-regexp-in-string
+       (regexp-opt arg-names 'words)
+       (lambda (whole) (format "/%s/" whole))
+       text t t))))
+
+(defun org-docsgen--default-doc-filter (text arg-names)
+  "Default `org-docsgen-doc-filter-function': annotate TEXT for org.
+Renders known-symbol quoted references as code spans and italicizes
+occurrences of ARG-NAMES (see `org-docsgen--quote-symbol-refs' and
+`org-docsgen--emphasize-args')."
+  (org-docsgen--emphasize-args (org-docsgen--quote-symbol-refs text) arg-names))
+
+(defcustom org-docsgen-doc-filter-function #'org-docsgen--default-doc-filter
+  "Function used to annotate docstring prose for org rendering.
+Called with two arguments, TEXT (a paragraph of already-flowed
+docstring prose, excluding the \"(fn ...)\" signature paragraph) and
+ARG-NAMES (the symbol's formal parameter names, or nil), and must
+return the annotated string.  Set to nil to disable annotation and emit
+docstring prose verbatim.  Override with `org-docsgen-run''s
+`:doc-filter' to use a different filter for one generation run."
+  :type '(choice (const :tag "None" nil) function)
+  :group 'org-docsgen)
+
+(defun org-docsgen--format-doc (doc &optional doc-filter)
   "Format DOC string for org output, separating the arglist (fn ...) para.
 DOC is expected to already have docstring escapes (e.g. `\\=' for a literal
 quote) resolved by `substitute-command-keys' via `documentation'/
 `documentation-property'; any that survive are stripped defensively so
 the source-level escaping convention never leaks into the generated org
-text."
+text.  DOC-FILTER defaults to `org-docsgen-doc-filter-function' and is
+applied to the prose paragraphs (not the \"(fn ...)\" signature)."
   (let* ((doc (replace-regexp-in-string "\\\\=\\(.\\)" "\\1" doc))
          (paras (split-string doc "\n\n" t))
          (fn-para (seq-find (lambda (p) (string-match "\\`(fn " (string-trim p))) paras))
-         (rest-paras (seq-remove (lambda (p) (string-match "\\`(fn " (string-trim p))) paras)))
+         (rest-paras (seq-remove (lambda (p) (string-match "\\`(fn " (string-trim p))) paras))
+         (filter (if (eq doc-filter :default) org-docsgen-doc-filter-function doc-filter))
+         (arg-names (org-docsgen--fn-arg-names fn-para)))
     (mapconcat #'identity
                (delq nil
                      (list
@@ -73,9 +138,10 @@ text."
                       (when rest-paras
                         (mapconcat
                          (lambda (para)
-                           (if (string-match "\\`[ \t]" para)
-                               para
-                             (mapconcat #'string-trim (split-string para "\n" t) " ")))
+                           (let ((flowed (if (string-match "\\`[ \t]" para)
+                                              para
+                                            (mapconcat #'string-trim (split-string para "\n" t) " "))))
+                             (if filter (funcall filter flowed arg-names) flowed)))
                          rest-paras "\n\n"))))
                "\n\n")))
 
@@ -93,8 +159,9 @@ text."
    ((eq kind 'custom) ":option:")
    ((eq kind 'variable) ":variable:")))
 
-(defun org-docsgen--format-sym (name kind heading)
-  "Format a single symbol NAME of KIND under HEADING."
+(defun org-docsgen--format-sym (name kind heading &optional doc-filter)
+  "Format a single symbol NAME of KIND under HEADING.
+DOC-FILTER is passed through to `org-docsgen--format-doc'."
   (let* ((sym (intern name))
          (fn-p (fboundp sym))
          (var-p (and (not fn-p) (boundp sym)))
@@ -105,7 +172,7 @@ text."
             (concat heading (if doc "" "TODO "))
             name
             (if tag (concat " " tag) "")
-            (if doc (org-docsgen--format-doc doc) "*no docstring*"))))
+            (if doc (org-docsgen--format-doc doc doc-filter) "*no docstring*"))))
 
 (defun org-docsgen--include-p (name kind autoload-p nil-init-p scope include-kinds namespace)
   "Return non-nil when NAME/KIND should be included in the output.
@@ -260,11 +327,12 @@ GROUP-SPEC can be:
    (t
     (list (cons nil files)))))
 
-(defun org-docsgen--emit (sections scope level)
+(defun org-docsgen--emit (sections scope level &optional doc-filter)
   "Emit SECTIONS as org output via `princ' at heading depth relative to LEVEL.
 Section headings are emitted at LEVEL+1; symbol headings at LEVEL+2.
 When there are zero or one named sections the section heading is suppressed
-and symbols are emitted at LEVEL+1 instead."
+and symbols are emitted at LEVEL+1 instead.  DOC-FILTER is passed through
+to `org-docsgen--format-sym'."
   (let* ((named-sections (seq-filter #'car sections))
          (flat-p (<= (length named-sections) 1))
          (section-h (org-docsgen--heading (1+ level)))
@@ -279,7 +347,7 @@ and symbols are emitted at LEVEL+1 instead."
            (when (and heading (not flat-p))
              (princ (format "%s%s\n\n" section-h heading)))
            (seq-do (lambda (entry)
-                     (princ (org-docsgen--format-sym (car entry) (cadr entry) sym-h)))
+                     (princ (org-docsgen--format-sym (car entry) (cadr entry) sym-h doc-filter)))
                    syms))))
      sections)))
 
@@ -290,7 +358,8 @@ and symbols are emitted at LEVEL+1 instead."
                             (include-kinds '(variables customs))
                             namespace
                             (section-style 'ruler)
-                            group-by)
+                            group-by
+                            (doc-filter :default))
   "Generate org-mode API documentation and princ it to stdout.
 
 EL-FILES is a list of .el paths to document; defaults to all non-test .el
@@ -311,8 +380,12 @@ form whose NAME does not start with NAMESPACE is treated as a foreign
 forward declaration and excluded.
 
 SECTION-STYLE is `ruler' (default: long ;;;;... lines) or `triple-semi'
-\(;;; Section Name headers used by agent-shell-queue)."
-  (let ((level (org-docsgen--current-level)))
+\(;;; Section Name headers used by agent-shell-queue).
+
+DOC-FILTER overrides `org-docsgen-doc-filter-function' for this run;
+pass nil to emit docstring prose verbatim, unannotated."
+  (let ((level (org-docsgen--current-level))
+        (doc-filter (if (eq doc-filter :default) org-docsgen-doc-filter-function doc-filter)))
     (org-docsgen--clear-subtree)
     (let ((files (or el-files (org-docsgen--find-el-files))))
       (seq-do (lambda (f)
@@ -329,7 +402,8 @@ SECTION-STYLE is `ruler' (default: long ;;;;... lines) or `triple-semi'
            (if (listp scope)
                (seq-do (lambda (name)
                          (princ (org-docsgen--format-sym name 'function
-                                                         (org-docsgen--heading (1+ level)))))
+                                                         (org-docsgen--heading (1+ level))
+                                                         doc-filter)))
                        scope)
              (if group-by
                  (let ((groups (org-docsgen--partition-by-groups files group-by)))
@@ -343,70 +417,112 @@ SECTION-STYLE is `ruler' (default: long ;;;;... lines) or `triple-semi'
                         (when sections
                           (when grp-name
                             (princ (format "%s%s\n\n" (org-docsgen--heading (1+ level)) grp-name)))
-                          (org-docsgen--emit sections scope (if grp-name (1+ level) level)))))
+                          (org-docsgen--emit sections scope (if grp-name (1+ level) level) doc-filter))))
                     groups))
                (let ((sections (if (eq section-style 'triple-semi)
                                    (org-docsgen--collect-triple-semi files scope include-kinds namespace)
                                  (org-docsgen--collect-ruler files scope include-kinds namespace))))
-                 (org-docsgen--emit sections scope level)))))))))))
+                 (org-docsgen--emit sections scope level doc-filter)))))))))))
 
-(defun org-docsgen--buffer-has-run-p ()
-  "Return non-nil when the current buffer has an `org-docsgen-run' src block."
-  (save-excursion
-    (goto-char (point-min))
-    (and (re-search-forward "^#\\+BEGIN_SRC emacs-lisp" nil t)
-         (re-search-forward "org-docsgen-run" nil t))))
+(defun org-docsgen--buffer-has-run-p (&optional buffer)
+  "Return non-nil when BUFFER (default the current buffer) has an
+`org-docsgen-run' src block."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (and (re-search-forward "^#\\+BEGIN_SRC emacs-lisp" nil t)
+           (re-search-forward "org-docsgen-run" nil t)))))
+
+(defun org-docsgen--file-has-run-p (file)
+  "Return non-nil when FILE contains an `org-docsgen-run' src block."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (org-docsgen--buffer-has-run-p)))
+
+(defun org-docsgen--org-files-in-directory (dir)
+  "Return `.org' files directly in DIR (non-recursive) with a docsgen block."
+  (seq-filter #'org-docsgen--file-has-run-p
+              (directory-files dir t "\\.org\\'")))
+
+(defun org-docsgen--org-files-in-tree (dir)
+  "Return `.org' files under DIR (recursively) with a docsgen block."
+  (seq-filter #'org-docsgen--file-has-run-p
+              (directory-files-recursively dir "\\.org\\'")))
+
+(defun org-docsgen--execute-run-block (file)
+  "Execute the `org-docsgen-run' block in FILE and save the buffer."
+  (with-current-buffer (find-file-noselect file)
+    (save-excursion
+      (goto-char (point-min))
+      (unless (re-search-forward "^#\\+BEGIN_SRC emacs-lisp" nil t)
+        (user-error "org-docsgen: no emacs-lisp source block in %s" file))
+      (unless (re-search-forward "org-docsgen-run" nil t)
+        (user-error "org-docsgen: no `org-docsgen-run' call in %s" file))
+      (let ((org-confirm-babel-evaluate nil))
+        (org-babel-execute-src-block)))
+    (save-buffer))
+  (message "org-docsgen: regenerated %s" file))
+
+(defun org-docsgen--read-target-file ()
+  "Prompt for a docsgen target file, preferring the current buffer's file.
+Completion candidates are `.org' files with a docsgen block found
+anywhere under `default-directory'."
+  (or (and buffer-file-name (org-docsgen--buffer-has-run-p) buffer-file-name)
+      (let ((candidates (org-docsgen--org-files-in-tree default-directory)))
+        (if candidates
+            (completing-read "Regenerate docsgen file: " candidates nil t)
+          (read-file-name "Regenerate docsgen file: " nil nil t)))))
 
 ;;;###autoload
-(defun org-docsgen-dwim ()
-  "Regenerate API docs for the current context.
-When the current buffer visits an org file with an `org-docsgen-run' src
-block, regenerate that buffer in place.  Otherwise regenerate the
-README.org in `default-directory', falling back to the one at
-`approximate-project-root'."
+(defun org-docsgen-regenerate-file (file)
+  "Regenerate the `org-docsgen-run' block in FILE and save it.
+FILE may be any org file containing such a block -- a README, a file
+under a docs/ directory, or anything else; there is nothing
+README-specific about this command.
+Interactively, defaults to the current buffer's file when it already
+has a docsgen block, otherwise prompts with completion over `.org'
+files found anywhere under `default-directory'.  Intended for use by
+agent skills via emacsclient:
+  emacsclient --eval \\='(org-docsgen-regenerate-file \"docs/api.org\")\\='"
+  (interactive (list (org-docsgen--read-target-file)))
+  (let ((expanded (expand-file-name file)))
+    (unless (file-exists-p expanded)
+      (user-error "org-docsgen-regenerate-file: no such file %s" expanded))
+    (org-docsgen--execute-run-block expanded)))
+
+;;;###autoload
+(defun org-docsgen-regenerate-directory (&optional dir)
+  "Regenerate every docsgen block among the `.org' files directly in DIR.
+DIR defaults to `default-directory'.  Only files directly in DIR are
+considered, not subdirectories -- use `org-docsgen-regenerate-file' with
+its recursive completion, or call this once per directory, to cover a
+whole tree.  Signals a `user-error' when DIR has no `.org' file with an
+`org-docsgen-run' block."
+  (interactive (list (read-directory-name "Regenerate docsgen directory: " default-directory)))
+  (let* ((dir (or dir default-directory))
+         (files (org-docsgen--org-files-in-directory dir)))
+    (unless files
+      (user-error "org-docsgen-regenerate-directory: no docsgen block found in %s" dir))
+    (dolist (file files)
+      (org-docsgen--execute-run-block file))))
+
+;;;###autoload
+(defun org-docsgen-regenerate-dwim ()
+  "Regenerate docsgen docs for the current context.
+When the current buffer visits a file with an `org-docsgen-run' block,
+regenerate that buffer in place.  Otherwise regenerate every docsgen
+block among the `.org' files directly in `default-directory', falling
+back to `approximate-project-root'."
   (interactive)
   (cond
-   ((and (derived-mode-p 'org-mode) buffer-file-name (org-docsgen--buffer-has-run-p))
-    (org-docsgen-regenerate-readme buffer-file-name))
-   ((file-exists-p (expand-file-name "README.org" default-directory))
-    (org-docsgen-regenerate-readme default-directory))
-   ((file-exists-p (expand-file-name "README.org" (approximate-project-root)))
-    (org-docsgen-regenerate-readme (approximate-project-root)))
+   ((and buffer-file-name (org-docsgen--buffer-has-run-p))
+    (org-docsgen-regenerate-file buffer-file-name))
+   ((org-docsgen--org-files-in-directory default-directory)
+    (org-docsgen-regenerate-directory default-directory))
+   ((org-docsgen--org-files-in-directory (approximate-project-root))
+    (org-docsgen-regenerate-directory (approximate-project-root)))
    (t
-    (user-error "org-docsgen-dwim: no README.org in `default-directory' or project root"))))
-
-;;;###autoload
-(defun org-docsgen-regenerate-readme (readme-file-or-dir)
-  "Regenerate the API reference in README-FILE-OR-DIR by re-running its
-`org-docsgen-run' block.
-README-FILE-OR-DIR is either a README.org path or a package directory
-containing one (e.g. \"external/foo\" resolves to
-\"external/foo/README.org\").
-Locates the first `#+BEGIN_SRC emacs-lisp' block calling `org-docsgen-run',
-executes it, and saves the buffer.  Binds `org-confirm-babel-evaluate' to
-nil for the duration of the call so this can run non-interactively (e.g.
-via emacsclient) without blocking on a confirmation prompt -- the block is
-config-authored source, not untrusted content, so skipping the prompt here
-is safe.  Intended for use by agent skills via emacsclient:
-  emacsclient --eval \\='(org-docsgen-regenerate-readme \"external/foo\")\\='"
-  (interactive "fREADME.org file or package directory: ")
-  (let* ((path (expand-file-name readme-file-or-dir))
-         (expanded (if (file-directory-p path)
-                       (expand-file-name "README.org" path)
-                     path)))
-    (unless (file-exists-p expanded)
-      (user-error "org-docsgen-regenerate-readme: no such file %s" expanded))
-    (with-current-buffer (find-file-noselect expanded)
-      (save-excursion
-        (goto-char (point-min))
-        (unless (re-search-forward "^#\\+BEGIN_SRC emacs-lisp" nil t)
-          (user-error "org-docsgen-regenerate-readme: no emacs-lisp source block in %s" expanded))
-        (unless (re-search-forward "org-docsgen-run" nil t)
-          (user-error "org-docsgen-regenerate-readme: no `org-docsgen-run' call in %s" expanded))
-        (let ((org-confirm-babel-evaluate nil))
-          (org-babel-execute-src-block)))
-      (save-buffer))
-    (message "org-docsgen: regenerated %s" expanded)))
+    (user-error "org-docsgen-regenerate-dwim: no docsgen block found in `default-directory' or project root"))))
 
 (provide 'org-docsgen)
 ;;; org-docsgen.el ends here
