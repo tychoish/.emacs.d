@@ -2409,6 +2409,24 @@ return until the minibuffer session ends."
     (flycheck-remove-next-checker 'org-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
 
+(use-package cov
+  :ensure t
+  :defer t
+  :commands (cov-mode cov-turn-on cov-turn-off)
+  :init
+  (add-hook 'go-ts-mode-hook #'cov-mode)
+  (add-hook 'python-mode-hook #'cov-mode)
+  (add-hook 'emacs-lisp-mode-hook #'cov-mode)
+  :config
+  (setq cov-coverage-mode 'both)
+  (setq cov-lcov-file-name "coverage/lcov.info")
+  (setq cov-coverage-file-paths '("cover" "coverage" ".")))
+
+(use-package undercover
+  :ensure t
+  :defer t
+  :commands (undercover))
+
 (use-package warnings
   :ensure nil
   :defer t

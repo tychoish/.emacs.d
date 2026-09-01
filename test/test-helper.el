@@ -6,13 +6,30 @@
 
 ;;; Code:
 
+(defvar test-helper-root nil
+  "Repository root directory, set once `test-helper' loads.")
+
 (let* ((test-file (or load-file-name buffer-file-name))
        (test-dir (file-name-directory test-file))
        (root (file-name-directory (directory-file-name test-dir))))
+  (setq test-helper-root root)
   (add-to-list 'load-path (expand-file-name "lisp" root))
   (dolist (dir (directory-files (expand-file-name "elpa" root) t "\\`[^.]"))
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
+
+;;; Code coverage (undercover.el)
+;;
+;; Set EMACS_COVERAGE=1 (or UNDERCOVER_FORCE, which undercover.el also
+;; honors) before running the batch test runner to instrument lisp/*.el
+;; and write an lcov report that `cov-mode' can render as overlays.
+
+(when (or (getenv "EMACS_COVERAGE") (getenv "UNDERCOVER_FORCE"))
+  (require 'undercover)
+  (undercover "lisp/*.el"
+              (:report-format 'lcov)
+              (:report-file (expand-file-name "coverage/lcov.info" test-helper-root))
+              (:send-report nil)))
 
 ;;; Transient key introspection helpers
 
