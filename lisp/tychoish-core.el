@@ -133,12 +133,12 @@
 (use-package hud
   :ensure nil
   :defer t
+  :commands (hud-dispatch hud-select)
   :init
   (keymap-set hud-mode-map "C-x ." #'hud-dispatch)
   (keymap-set hud-mode-map "C-x ," #'hud-select)
   (keymap-set hud-core-map "m" #'hud-dispatch)
   (keymap-set hud-core-map "," #'hud-select))
-
 (use-package arch
   :ensure nil
   :commands (arch-cache-drop
@@ -1252,6 +1252,7 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   (keymap-set hud-magit-map "d" #'magit-dash-open)
   (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
   (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
+  (keymap-set hud-core-map "g" #'magit-dash-open)
   :config
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
   (setq magit-dash-gh-prune-pr-limit 50)
@@ -3276,7 +3277,8 @@ See `tychoish/agent-shell--force-clear-busy'."
       (set-file-modes bin-path #o755)
       bin-path))
 
-  (sprite-async-defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
+  ;; sprite-async-
+  (defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
     "Download and install the latest Antigravity ACP server binary via sprite."
     (interactive "P")
     (require 'sprite-future)
