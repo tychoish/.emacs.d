@@ -174,11 +174,50 @@
      :reply-markup keyboard)))
 
 
+(defun telega-bot--generate-callback-id ()
+  "Generate a unique callback data string."
+  (format "kb_%d_%d" (time-convert nil 'integer) (random 1000000)))
+
+(defun telega-bot--register-inline-callback (bot fn)
+  "Register FN as a one-off callback handler on BOT, returning its callback data."
+  (unless bot
+    (error "telega-bot-keyboard-rows: inline function buttons require :bot"))
+  (let ((data (telega-bot--generate-callback-id)))
+    (setf (map-elt (telega-bot-callbacks bot) data) (telega-bot--wrap-handler fn))
+    data))
+
+(cl-defun telega-bot-keyboard-rows (rows &key bot)
+  "Build inline keyboard ROWS, auto-registering function responses on BOT.
+
+ROWS is a list of button rows; each row is a list of (TEXT . RESPONSE)
+buttons. RESPONSE is either a callback data string already registered via
+`telega-bot-register-handler', or a function to invoke inline when the
+button is pressed — a fresh callback id is generated and registered on
+BOT for it.
+
+Returns keyboard rows in the ((\"Text\" . \"data\")) shape consumed by
+`telega-bot-make-inline-keyboard'."
+  (let ((resolved-bot (telega-bot-get bot)))
+    (seq-map
+     (lambda (row)
+       (seq-map
+        (lambda (spec)
+          (let ((text (car spec))
+                (response (cdr spec)))
+            (cons text
+                  (if (functionp response)
+                      (telega-bot--register-inline-callback resolved-bot response)
+                    response))))
+        row))
+     rows)))
+
 (cl-defun telega-bot-send-keyboard (text rows &key bot thread-id chat-id)
-  "Send TEXT with inline keyboard button ROWS."
+  "Send TEXT with inline keyboard button ROWS.
+
+ROWS supports inline function responses; see `telega-bot-keyboard-rows'."
   (telega-bot-send-response text
                             :bot bot
-                            :keyboard (telega-bot-make-inline-keyboard rows)
+                            :keyboard (telega-bot-make-inline-keyboard (telega-bot-keyboard-rows rows :bot bot))
                             :thread-id thread-id
                             :chat-id chat-id))
 
@@ -212,21 +251,12 @@
                                              chat-id
                                              thread-id)
   "Send a Yes/No question with interactive buttons that auto-delete on click."
-  (let* ((uniq (format "%d_%d" (time-convert nil 'integer) (random 100000)))
-         (yes-data (concat "yon_y_" uniq))
-         (no-data (concat "yon_n_" uniq)))
-    (when bot
-      (setf (map-elt (telega-bot-callbacks bot) yes-data)
-            (lambda (&rest _args)
-              (when on-yes (funcall on-yes))))
-      (setf (map-elt (telega-bot-callbacks bot) no-data)
-            (lambda (&rest _args)
-              (when on-no (funcall on-no)))))
-    (telega-bot-send-keyboard question
-                              `(((,yes-label . ,yes-data) (,no-label . ,no-data)))
-                              :bot bot
-                              :chat-id chat-id
-                              :thread-id thread-id)))
+  (telega-bot-send-keyboard question
+                            `((,(cons yes-label (lambda (&rest _args) (when on-yes (funcall on-yes))))
+                               ,(cons no-label (lambda (&rest _args) (when on-no (funcall on-no))))))
+                            :bot bot
+                            :chat-id chat-id
+                            :thread-id thread-id))
 
 ;;; Functional Handler Registration
 

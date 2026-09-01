@@ -336,5 +336,41 @@
       (should (equal received-user 777))
       (should (equal received-text "Lexical: /lex")))))
 
+(ert-deftest telega-bot/inline-function-keyboard-buttons ()
+  "Test that `telega-bot-send-keyboard' auto-registers function responses."
+  (let ((bot (make-telega-bot :name "KbBot" :active t))
+        (yes-triggered nil)
+        (sent-kb-rows nil))
+    (cl-letf (((symbol-function 'telega-chat-get) (lambda (id) id))
+              ((symbol-function 'telega-chat-send-message)
+               (lambda (_chat _text &rest args)
+                 (setq sent-kb-rows (map-elt (map-elt args :reply-markup) :rows))
+                 nil))
+              ((symbol-function 'telega-server-send) (lambda (&rest _args) nil)))
+      (telega-bot-send-keyboard "Proceed?"
+        `((("Yes" . ,(lambda (&rest _args) (setq yes-triggered t)))
+           ("No" . "kb_static_no")))
+        :bot bot
+        :chat-id 42)
+
+      (let* ((btn-row (car sent-kb-rows))
+             (yes-btn (car btn-row))
+             (no-btn (cadr btn-row))
+             (yes-data (decode-coding-string (base64-decode-string (map-elt (map-elt yes-btn :type) :data)) 'utf-8))
+             (no-data (decode-coding-string (base64-decode-string (map-elt (map-elt no-btn :type) :data)) 'utf-8)))
+        ;; Static string responses pass through unchanged
+        (should (equal no-data "kb_static_no"))
+        ;; Function responses are auto-registered under a generated callback id
+        (should (map-elt (telega-bot-callbacks bot) yes-data))
+
+        (telega-bot-dispatch bot `(:@type "updateNewCallbackQuery"
+                                   :id "q1"
+                                   :chat_id 42
+                                   :message_id 11
+                                   :sender_user_id 1
+                                   :payload (:@type "callbackQueryPayloadData"
+                                             :data ,(base64-encode-string yes-data t))))
+        (should yes-triggered)))))
+
 (provide 'test-telega-bot)
 ;;; test-telega-bot.el ends here
