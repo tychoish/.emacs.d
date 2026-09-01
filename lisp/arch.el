@@ -1013,8 +1013,9 @@ Annotation mirrors the package list columns: [repo]  Stat  (version)  descriptio
   "Fields shown in arch-info: (yaml-key plist-symbol multi-value-p).")
 
 (defun arch--yaml-split (value)
-  "Split a pacman space-separated multi-value string into a list."
-  (seq-filter #'identity (split-string value "[[:space:]]+" t)))
+  "Split a pacman multi-value string into a list."
+  (seq-remove #'string-empty-p
+              (mapcar #'string-trim (split-string value "[[:space:]]\\{2,\\}" t))))
 
 (defun arch--yaml-key-str (key)
   "Return KEY as a propertized YAML key string."
