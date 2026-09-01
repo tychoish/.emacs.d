@@ -1252,6 +1252,7 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   (keymap-set hud-magit-map "d" #'magit-dash-open)
   (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
   (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
+  (keymap-set hud-core-map "d" #'magit-dash-open)
   (keymap-set hud-core-map "g" #'magit-dash-open)
   :config
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
@@ -2241,6 +2242,13 @@ return until the minibuffer session ends."
     :bind-map hud-core-map
     :key-alias "elpaish-commands")
   :config
+  (elpaish-install-add-bootstrap-packages
+   '(acp shell-maker agent-shell gptel gptel-agent)
+   '(vertico consult corfu cape marginalia tempel orderless)
+   '(magit flycheck modus-themes)
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash))
+
+  (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
