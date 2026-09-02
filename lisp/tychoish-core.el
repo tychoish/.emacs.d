@@ -2419,7 +2419,7 @@ return until the minibuffer session ends."
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
 
 (use-package cov
-  :ensure t
+  :ensure nil
   :defer t
   :commands (cov-mode cov-turn-on cov-turn-off)
   :init
@@ -2997,6 +2997,36 @@ deliberate teardown."
   :after (gptel)
   :init
   (keymap-set hud-robot-gptel-map "a" #'gptel-agent))
+
+(use-package ollama
+  :ensure t
+  :defer t
+  :commands (ollama-status
+             ollama-list-models
+             ollama-pull-model
+             ollama-delete-model
+             ollama-copy-model
+             ollama-show-model
+             ollama-check-server
+             ollama-transient-menu
+             ollama-transient-setup)
+  :init
+  (keymap-set hud-robot-ollama-map "o" #'ollama-transient-menu)
+  (keymap-set hud-robot-ollama-map "s" #'ollama-status)
+  (keymap-set hud-robot-ollama-map "l" #'ollama-list-models)
+  (keymap-set hud-robot-ollama-map "p" #'ollama-pull-model)
+  (keymap-set hud-robot-ollama-map "d" #'ollama-delete-model)
+  (keymap-set hud-robot-ollama-map "c" #'ollama-copy-model)
+  (keymap-set hud-robot-ollama-map "i" #'ollama-show-model)
+  (keymap-set hud-robot-ollama-map "k" #'ollama-check-server)
+  (keymap-set hud-robot-ollama-map "r" #'ollama-status-refresh)
+
+  (make-read-extended-command-for-prefix "ollama"
+    :bind-key "x"
+    :bind-map hud-robot-ollama-map)
+  :config
+  (with-eval-after-load 'transient
+    (transient-insert-suffix 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command))))
 
 (use-package eat
   :ensure t

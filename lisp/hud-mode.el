@@ -224,6 +224,10 @@
   :name "gptel-set-default-model"
   :doc "GPtel model selection under C-c r g m (hud-mode).")
 
+(defvar-keymap hud-robot-ollama-map
+  :name "ollama"
+  :doc "Ollama commands under C-c r o (hud-mode).")
+
 
 ;; the mode's own container map -- populated below
 (defvar-keymap hud-mode-map
@@ -262,6 +266,7 @@
 (keymap-set hud-robot-map "s" (cons "agent-shell" hud-robot-agent-shell-map))
 (keymap-set hud-robot-map "g" (cons "gptel" hud-robot-gptel-map))
 (keymap-set hud-robot-gptel-map "m" (cons "gptel-set-default-model" hud-robot-gptel-set-default-model-map))
+(keymap-set hud-robot-map "o" (cons "ollama" hud-robot-ollama-map))
 
 (keymap-set hud-denote-map "o" (cons "denote-org" hud-denote-org-map))
 (keymap-set hud-denote-map "s" (cons "denote-sequence" hud-denote-sequence-map))
