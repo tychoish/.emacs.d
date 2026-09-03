@@ -2422,18 +2422,6 @@ return until the minibuffer session ends."
   :ensure nil
   :defer t
   :commands (cov-mode cov-turn-on cov-turn-off)
-  :init
-  (defun tychoish-cov-mode-maybe-enable ()
-    "Enable `cov-mode' unless the buffer's file lives under the sprite state directory."
-    (unless (and buffer-file-name
-		 (file-in-directory-p buffer-file-name
-                                      (file-name-directory (sprite-state-path "x"))))
-      (cov-mode 1)))
-
-
-  (add-hook 'go-ts-mode-hook #'tychoish-cov-mode-maybe-enable)
-  (add-hook 'python-mode-hook #'tychoish-cov-mode-maybe-enable)
-  (add-hook 'emacs-lisp-mode-hook #'tychoish-cov-mode-maybe-enable)
   :config
   (setq cov-coverage-mode 'both)
   (setq cov-lcov-file-name "coverage/lcov.info")
