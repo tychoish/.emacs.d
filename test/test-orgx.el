@@ -343,4 +343,11 @@
             (should (equal "* Tasks\n** TODO Task 3\n** TODO Task 2\n** TODO Task 1\n" content))))
       (when (file-exists-p temp-file)
         (delete-file temp-file)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; auxiliary packages configuration
+
+(ert-deftest orgx/auxiliary-packages-includes-ob-mermaid ()
+  "orgx--auxiliary-packages includes ob-mermaid."
+  (should (memq 'ob-mermaid orgx--auxiliary-packages)))
 ;;; test-orgx.el ends here

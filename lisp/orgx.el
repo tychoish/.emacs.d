@@ -104,6 +104,10 @@
   :config
   (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
 
+(use-package ob-mermaid
+  :ensure t
+  :defer t)
+
 ;; org-mode configuration, hooks, and keybindings.
 
 (with-eval-after-load 'org
@@ -832,7 +836,7 @@ or Global (further split by command type) — via
 ;; auxiliary package installation
 
 (defvar orgx--auxiliary-packages
-  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub)
+  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub ob-mermaid)
   "Supporting org packages that should be installed when org-mode loads the first time.")
 
 (defun orgx--install-auxiliary-packages ()
