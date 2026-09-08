@@ -684,6 +684,7 @@ or `describe-symbol' as fallback."
 
 ;;;###autoload
 (defun save-all-buffers ()
+  "Save all unsaved buffers without prompting."
   (interactive)
   (save-some-buffers t t))
 
