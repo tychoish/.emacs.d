@@ -1,0 +1,16 @@
+[Unit]
+Description=Ollama Service (Tailnet LLM Daemon)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/ollama serve
+EnvironmentFile=-%h/.config/ollama/env
+Restart=always
+RestartSec=3s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

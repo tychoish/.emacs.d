@@ -1,0 +1,18 @@
+[Unit]
+Description=Emacs daemon (GNU Emacs User Service)
+Documentation=info:emacs man:emacs(1) https://gnu.org/software/emacs/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/emacs --fg-daemon
+ExecStop=/usr/bin/emacsclient --eval "(kill-emacs)"
+Restart=always
+RestartSec=3s
+Environment=SSH_AUTH_SOCK=%t/keyring/ssh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

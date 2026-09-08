@@ -2212,6 +2212,14 @@ return until the minibuffer session ends."
   :init
   (keymap-set hud-core-map "j" #'journalctl))
 
+(use-package daemons-dash
+  :ensure nil
+  :commands (daemons-dash daemons-dash-dispatch)
+  :init
+  (keymap-set hud-core-map "D" #'daemons-dash)
+  :config
+  (require 'daemons-dash-config nil t))
+
 (use-package docker
   :ensure t
   :defer t
