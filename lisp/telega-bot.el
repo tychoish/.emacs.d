@@ -628,5 +628,30 @@ ROWS supports inline function responses; see `telega-bot-keyboard-rows'."
         (remove-hook 'telega-server-handler-functions #'telega-bot--global-handler)
         (remove-hook 'telega-ready-hook #'telega-bot--ready-handler)))))
 
+;;; Agent Shell Ask Telega Integration
+
+(defun telega-bot-ask-question (bot chat-id q)
+  "Send question Q to Telegram CHAT-ID using BOT.
+For 'single-choice and 'boolean, renders inline keyboard buttons.
+For 'text, registers a step state to capture response text."
+  (when (and bot (featurep 'telega-bot) (fboundp 'agent-shell-ask-question-p))
+    (let* ((prompt (agent-shell-ask-question-prompt q))
+           (qid (agent-shell-ask-question-id q))
+           (kind (agent-shell-ask-question-kind q))
+           (options (agent-shell-ask-question-options q)))
+      (pcase kind
+        ((or 'single-choice 'boolean)
+         (let ((buttons (if (eq kind 'boolean)
+                            '((("Yes" . "ask:yes") ("No" . "ask:no")))
+                          (list (mapcar (lambda (opt)
+                                          (let ((label (if (consp opt) (car opt) opt))
+                                                (val (if (consp opt) (cdr opt) opt)))
+                                            (cons label (format "ask:%s:%s" qid val))))
+                                        options)))))
+           (ignore-errors
+             (telega-bot-send-message bot chat-id (format "❓ %s" prompt) :reply-markup `(:inline_keyboard ,buttons)))))
+        (_
+         (ignore-errors
+           (telega-bot-send-message bot chat-id (format "❓ %s\n(Reply with text)" prompt))))))))
 (provide 'telega-bot)
 ;;; telega-bot.el ends here
