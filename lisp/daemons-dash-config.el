@@ -172,7 +172,7 @@ Populates `daemons-dash-config-registry' with parsed declarations."
                        (buffer-string))
                    source)))
     (if (fboundp 'yaml-parse-string)
-        (let* ((parsed (yaml-parse-string content :object-type 'plist :array-type 'list))
+        (let* ((parsed (yaml-parse-string content :object-type 'plist :sequence-type 'list))
                (daemons (plist-get parsed :daemons))
                (services (plist-get daemons :services)))
           (dolist (s services)
