@@ -341,26 +341,28 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
 ;; 3. sprite
 (defun daemons-dash-sprite-list ()
   "Fetch subordinate Emacs daemons from `sprite.el'."
-  (if (featurep 'sprite)
-      (let ((sprites (ignore-errors (sprite--registry-all)))
-            (items nil))
-        (dolist (s sprites)
-          (let* ((name (sprite-name s))
-                 (raw-status (sprite-status s))
-                 (pid (sprite-pid s))
-                 (status (if (eq raw-status 'running) 'active 'inactive))
-                 (details (format "PID %s status %s" (or pid "none") raw-status)))
-            (push (daemons-dash-item--make
-                   :id (format "sprite:%s" name)
-                   :name name
-                   :provider 'sprite
-                   :status status
-                   :details details
-                   :config-status 'untracked
-                   :raw-data s)
-                  items)))
-        (nreverse items))
-    nil))
+  (when (require 'sprite nil t)
+    (let ((sprites (ignore-errors (sprite-resolve-list)))
+          (items nil))
+      (dolist (s sprites)
+        (let* ((name (sprite-name s))
+               (running (ignore-errors (sprite--running-p name)))
+               (status (if running 'active 'inactive))
+               (start-time (sprite-start-time s))
+               (uptime (if (and start-time (fboundp 'sprite--format-uptime))
+                           (sprite--format-uptime (float-time (time-since start-time)))
+                         "unknown"))
+               (details (format "running %s, uptime %s" (if running "yes" "no") uptime)))
+          (push (daemons-dash-item--make
+                 :id (format "sprite:%s" name)
+                 :name name
+                 :provider 'sprite
+                 :status status
+                 :details details
+                 :config-status 'untracked
+                 :raw-data s)
+                items)))
+      (nreverse items))))
 
 (defun daemons-dash-sprite-stop (id)
   (let ((name (cadr (split-string id ":"))))
@@ -395,74 +397,6 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
   :logs-fn #'daemons-dash-sprite-logs
   :inspect-fn #'daemons-dash-sprite-logs))
 
-;; 4. ollama
-(defun daemons-dash-ollama-list ()
-  "Fetch active Ollama models via local HTTP API (`/api/ps`)."
-  (condition-case nil
-      (let ((output (when (executable-find "curl")
-                      (daemons-dash--run-command
-                       (list "curl" "-s" "-m" (number-to-string daemons-dash-ollama-timeout)
-                             (concat daemons-dash-ollama-host "/api/ps"))))))
-        (if (and output (not (string-empty-p output)) (string-prefix-p "{" (string-trim output)))
-            (let* ((json-object-type 'plist)
-                   (json-array-type 'list)
-                   (data (json-read-from-string output))
-                   (models (plist-get data :models))
-                   (items nil))
-              (dolist (m models)
-                (let* ((name (or (plist-get m :name) (plist-get m :model)))
-                       (size (or (plist-get m :size) 0))
-                       (vram (or (plist-get m :size_vram) 0))
-                       (vram-mb (/ vram (* 1024 1024)))
-                       (details (format "VRAM %dMB size %dMB" vram-mb (/ size (* 1024 1024)))))
-                  (push (daemons-dash-item--make
-                         :id (format "ollama:%s" name)
-                         :name name
-                         :provider 'ollama
-                         :status 'active
-                         :details details
-                         :config-status 'untracked
-                         :raw-data m)
-                        items)))
-              (or (nreverse items)
-                  (list (daemons-dash-item--make
-                         :id "ollama:idle"
-                         :name "ollama"
-                         :provider 'ollama
-                         :status 'inactive
-                         :details "Ollama server running (no models loaded in VRAM)"
-                         :config-status 'untracked))))
-          (list (daemons-dash-item--make
-                 :id "ollama:inactive"
-                 :name "ollama"
-                 :provider 'ollama
-                 :status 'inactive
-                 :details "Ollama server inactive"
-                 :config-status 'untracked))))
-    (error
-     (list (daemons-dash-item--make
-            :id "ollama:inactive"
-            :name "ollama"
-            :provider 'ollama
-            :status 'inactive
-            :details "Ollama server inactive"
-            :config-status 'untracked)))))
-
-(defun daemons-dash-ollama-logs (id)
-  (daemons-dash-systemd-user-logs "systemd-user:ollama.service"))
-
-(daemons-dash-register-provider
- (daemons-dash-provider--make
-  :name 'ollama
-  :label "ollama"
-  :list-fn #'daemons-dash-ollama-list
-  :start-fn #'ignore
-  :stop-fn #'ignore
-  :restart-fn #'ignore
-  :enable-fn #'ignore
-  :disable-fn #'ignore
-  :logs-fn #'daemons-dash-ollama-logs
-  :inspect-fn #'daemons-dash-ollama-logs))
 ;; 4. docker
 (defun daemons-dash-docker-list ()
   "Fetch Docker containers via CLI or docker.el."

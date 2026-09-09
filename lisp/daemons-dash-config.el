@@ -32,7 +32,6 @@
 (defun daemons-dash-config-clear ()
   "Clear all registered daemon declarations from `daemons-dash-config-registry'."
   (clrhash daemons-dash-config-registry))
-
 ;;; Service Registration Functions & Macros
 
 (defun daemons-dash-register-service (name &rest props)
