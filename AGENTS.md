@@ -143,6 +143,11 @@ before committing.
 ---
 
 ## Agent development workflow
+### Package and Repository Checkout Rule
+
+- **NEVER update files in `~/.emacs.d/elpa/`**. The files under `~/.emacs.d/elpa/` are installed package artifacts; direct edits cause stale `.elc` bytecode conflicts and get lost when packages are re-installed.
+- **Always use a separate repository checkout** (e.g., under `~/src/` like `~/src/magit-dash`) for implementation work, bug fixes, and development updates.
+
 
 ### Always use emacsclient
 

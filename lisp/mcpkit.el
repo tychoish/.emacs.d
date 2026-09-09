@@ -142,7 +142,7 @@ BODY is the tool implementation, with ARGS (and DONE if ASYNC) bound."
         ,service-or-name
         ',tool-sym
         ,description
-        ,input-schema
+        ',input-schema
         ,decode
         ,encode
         ,async

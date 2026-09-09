@@ -227,6 +227,9 @@
 (defvar-keymap hud-robot-ollama-map
   :name "ollama"
   :doc "Ollama commands under C-c r o (hud-mode).")
+(defvar-keymap hud-robot-ollama-tailnet-map
+  :name "ollama-tailnet"
+  :doc "Ollama tailnet orchestration under C-c r o t (hud-mode).")
 
 
 ;; the mode's own container map -- populated below
@@ -267,6 +270,8 @@
 (keymap-set hud-robot-map "g" (cons "gptel" hud-robot-gptel-map))
 (keymap-set hud-robot-gptel-map "m" (cons "gptel-set-default-model" hud-robot-gptel-set-default-model-map))
 (keymap-set hud-robot-map "o" (cons "ollama" hud-robot-ollama-map))
+(keymap-set hud-robot-ollama-map "t" (cons "tailnet" hud-robot-ollama-tailnet-map))
+(keymap-set hud-robot-map "p" (cons "prompt-library" #'agent-shell-prompt-menu))
 
 (keymap-set hud-denote-map "o" (cons "denote-org" hud-denote-org-map))
 (keymap-set hud-denote-map "s" (cons "denote-sequence" hud-denote-sequence-map))

@@ -111,11 +111,13 @@
 
 (ert-deftest ollama-tailnet-test-hud-binding ()
   "Test HUD keymap binding function."
-  (let ((hud-robot-ollama-map (make-sparse-keymap)))
+  (let ((hud-robot-ollama-tailnet-map (make-sparse-keymap)))
     (ollama-tailnet-bind-hud-keys)
-    (should (keymap-lookup hud-robot-ollama-map "s"))
-    (should (keymap-lookup hud-robot-ollama-map "p"))
-    (should (keymap-lookup hud-robot-ollama-map "r"))))
+    (should (keymap-lookup hud-robot-ollama-tailnet-map "s"))
+    (should (keymap-lookup hud-robot-ollama-tailnet-map "p"))
+    (should (keymap-lookup hud-robot-ollama-tailnet-map "r"))
+    (should (keymap-lookup hud-robot-ollama-tailnet-map "t"))
+    (should (keymap-lookup hud-robot-ollama-tailnet-map "b"))))
 
 (provide 'ollama-tailnet-test)
 ;;; ollama-tailnet-test.el ends here

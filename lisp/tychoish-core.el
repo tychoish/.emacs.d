@@ -1252,6 +1252,7 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   (keymap-set hud-magit-map "d" #'magit-dash-open)
   (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
   (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
+  (keymap-set hud-magit-map "w" #'magit-dash-worktree-dispatch)
   (keymap-set hud-core-map "d" #'magit-dash-open)
   (keymap-set hud-core-map "g" #'magit-dash-open)
   :config
@@ -3023,6 +3024,22 @@ deliberate teardown."
   :config
   (with-eval-after-load 'transient
     (transient-insert-suffix 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command))))
+(use-package ollama-tailnet
+  :defer t
+  :commands (ollama-tailnet-status
+             ollama-tailnet-pull-model
+             ollama-tailnet-service-restart
+             ollama-tailnet-service-status
+             ollama-tailnet-set-gptel-backend
+             ollama-tailnet-setup-laptop-presets)
+  :init
+  (keymap-set hud-robot-ollama-tailnet-map "s" #'ollama-tailnet-status)
+  (keymap-set hud-robot-ollama-tailnet-map "p" #'ollama-tailnet-pull-model)
+  (keymap-set hud-robot-ollama-tailnet-map "r" #'ollama-tailnet-service-restart)
+  (keymap-set hud-robot-ollama-tailnet-map "t" #'ollama-tailnet-service-status)
+  (keymap-set hud-robot-ollama-tailnet-map "b" #'ollama-tailnet-set-gptel-backend)
+  :config
+  (ollama-tailnet-setup-laptop-presets))
 
 (use-package eat
   :ensure t
@@ -3089,6 +3106,8 @@ deliberate teardown."
   (keymap-set hud-robot-agent-shell-map "e" #'agent-shell-new-temp-shell)
   (keymap-set hud-robot-agent-shell-map "w" #'agent-shell-new-worktree-shell)
   (keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
+  (keymap-set hud-robot-agent-shell-map "p" #'agent-shell-prompt-select)
+  (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-prompt-menu)
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map hud-robot-agent-shell-map
     :bind-key "x")
@@ -3223,8 +3242,38 @@ See `tychoish/agent-shell--force-clear-busy'."
       (error
        (message "acp: error routing incoming message, isolated to avoid wedging the drain loop: %S" err)
        nil)))
-  (advice-add 'acp--route-incoming-message
-              :around #'ad:acp-route-incoming-message-isolate-errors)
+
+  (advice-add 'acp--route-incoming-message :around #'ad:acp-route-incoming-message-isolate-errors)
+
+  (defun tychoish/agent-shell--config-installed-p (config)
+    "Return non-nil if CONFIG's agent executable is installed on the local system."
+    (when-let* ((cm (map-elt config :client-maker))
+                (client (ignore-errors (funcall cm (current-buffer))))
+                (cmd-spec (map-elt client :command))
+                (cmd (if (consp cmd-spec) (car cmd-spec) cmd-spec))
+                ((stringp cmd))
+                ((not (string-empty-p cmd))))
+      (executable-find cmd t)))
+
+  (defun tychoish/agent-shell-installed-configs ()
+    "Return default agent configs whose CLI executable exists on `exec-path'."
+    (seq-filter #'tychoish/agent-shell--config-installed-p
+                (mapcar (lambda (e) (if (functionp e) (funcall e) e))
+                        (agent-shell-default-agent-config-makers))))
+
+  (setq agent-shell-agent-configs #'tychoish/agent-shell-installed-configs)
+
+  (defun ad:agent-shell-insert-to-shell-buffer-advance-point (orig-fn &rest args)
+    "Call ORIG-FN with ARGS, ensuring point and window-point advance to `point-max'."
+    (prog1 (apply orig-fn args)
+      (when-let* ((shell-buffer (plist-get args :shell-buffer))
+                  ((buffer-live-p shell-buffer)))
+        (with-current-buffer shell-buffer
+          (goto-char (point-max))
+          (when-let* ((win (get-buffer-window shell-buffer t)))
+            (set-window-point win (point-max)))))))
+
+  (advice-add 'agent-shell--insert-to-shell-buffer :around #'ad:agent-shell-insert-to-shell-buffer-advance-point)
 
   (declare-function agent-shell-ui--group-header-range "agent-shell-ui")
   (declare-function agent-shell-ui--block-range "agent-shell-ui")

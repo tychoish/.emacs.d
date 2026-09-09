@@ -283,6 +283,12 @@ Entries whose :if predicate returns nil are excluded."
  :transient-key "aq")
 
 (hud-register-command
+ :category 'agent-shell
+ :command #'agent-shell-prompt-select
+ :description "prompt library"
+ :transient-key "ap")
+
+(hud-register-command
  :category 'mu4e
  :command #'mu4e-compose-mail
  :description "compose new email"

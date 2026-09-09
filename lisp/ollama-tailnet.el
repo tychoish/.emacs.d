@@ -47,13 +47,13 @@
 (require 'ollama-tailnet-control)
 
 (defun ollama-tailnet-bind-hud-keys ()
-  "Bind `ollama-tailnet' commands to `hud-robot-ollama-map' if available."
-  (when (boundp 'hud-robot-ollama-map)
-    (keymap-set hud-robot-ollama-map "s" #'ollama-tailnet-status)
-    (keymap-set hud-robot-ollama-map "p" #'ollama-tailnet-pull-model)
-    (keymap-set hud-robot-ollama-map "r" #'ollama-tailnet-service-restart)
-    (keymap-set hud-robot-ollama-map "t" #'ollama-tailnet-service-status)
-    (keymap-set hud-robot-ollama-map "b" #'ollama-tailnet-set-gptel-backend)))
+  "Bind `ollama-tailnet' commands to `hud-robot-ollama-tailnet-map' if available."
+  (when (boundp 'hud-robot-ollama-tailnet-map)
+    (keymap-set hud-robot-ollama-tailnet-map "s" #'ollama-tailnet-status)
+    (keymap-set hud-robot-ollama-tailnet-map "p" #'ollama-tailnet-pull-model)
+    (keymap-set hud-robot-ollama-tailnet-map "r" #'ollama-tailnet-service-restart)
+    (keymap-set hud-robot-ollama-tailnet-map "t" #'ollama-tailnet-service-status)
+    (keymap-set hud-robot-ollama-tailnet-map "b" #'ollama-tailnet-set-gptel-backend)))
 
 ;; Bind HUD keys at load time if map exists
 (ollama-tailnet-bind-hud-keys)
