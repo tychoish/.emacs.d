@@ -3418,8 +3418,15 @@ See `tychoish/agent-shell--force-clear-busy'."
   :ensure t
   :after agent-shell
   :defer t
-  :commands (agent-shell-queue-item-menu)
+  :commands (agent-shell-queue-item-menu
+             agent-shell-prompt-menu
+             agent-shell-prompt-select
+             agent-shell-prompt-dispatch
+             agent-shell-prompt-exec)
   :config
+  (require 'agent-shell-prompt)
+  (require 'agent-shell-prompt-menu)
+  (require 'agent-shell-prompt-library)
   (defvar-keymap hud-robot-agent-shell-map)
   (setq agent-shell-queue-write-log-enabled t)
   (require 'agent-shell-queue-org)
