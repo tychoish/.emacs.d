@@ -50,6 +50,7 @@
   "Bind `ollama-tailnet' commands to `hud-robot-ollama-tailnet-map' if available."
   (when (boundp 'hud-robot-ollama-tailnet-map)
     (keymap-set hud-robot-ollama-tailnet-map "s" #'ollama-tailnet-status)
+    (keymap-set hud-robot-ollama-tailnet-map "d" #'ollama-tailnet-discover-hosts)
     (keymap-set hud-robot-ollama-tailnet-map "p" #'ollama-tailnet-pull-model)
     (keymap-set hud-robot-ollama-tailnet-map "r" #'ollama-tailnet-service-restart)
     (keymap-set hud-robot-ollama-tailnet-map "t" #'ollama-tailnet-service-status)

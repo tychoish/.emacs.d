@@ -287,6 +287,23 @@ Entries whose :if predicate returns nil are excluded."
  :command #'agent-shell-prompt-select
  :description "prompt library"
  :transient-key "ap")
+(hud-register-command
+ :category 'network
+ :command #'tailscale-status
+ :description "tailscale status"
+ :transient-key "ns")
+
+(hud-register-command
+ :category 'network
+ :command #'tailscale-copy-ip
+ :description "copy node IP"
+ :transient-key "ny")
+
+(hud-register-command
+ :category 'network
+ :command #'tailscale-file-send
+ :description "send file via Taildrop"
+ :transient-key "nf")
 
 (hud-register-command
  :category 'mu4e

@@ -2884,6 +2884,14 @@ deliberate teardown."
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(use-package tailscale
+  :ensure nil
+  :defer t
+  :commands (tailscale-status tailscale-connect tailscale-disconnect tailscale-copy-ip tailscale-file-send)
+  :init
+  (make-read-extended-command-for-prefix "tailscale"
+    :bind-map hud-robot-network-map
+    :bind-key "x"))
 (use-package gptel
   :defer t
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)

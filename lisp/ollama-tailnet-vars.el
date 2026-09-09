@@ -26,6 +26,63 @@ Options:
                  (const :tag "Auto fallback to local" :auto-local)
                  (const :tag "Raise error" :error))
   :group 'ollama-tailnet)
+(defcustom ollama-tailnet-autodiscover-enabled t
+  "Whether to automatically discover Tailnet nodes via `tailscale status --json'."
+  :type 'boolean
+  :group 'ollama-tailnet)
+
+(defun ollama-tailnet-discover-tailnet-suffix ()
+  "Query `tailscale status --json' for the MagicDNS suffix."
+  (when (executable-find "tailscale" t)
+    (when-let* ((json-str (ignore-errors
+                            (with-output-to-string
+                              (with-current-buffer standard-output
+                                (call-process "tailscale" nil '(t nil) nil "status" "--json")))))
+                (data (ignore-errors (json-parse-string json-str :object-type 'alist :array-type 'list)))
+                (suffix (map-elt data 'MagicDNSSuffix)))
+      (string-trim suffix))))
+
+(defun ollama-tailnet-discover-hosts ()
+  "Dynamically discover and register all online Tailnet peer nodes running Ollama."
+  (interactive)
+  (let ((discovered nil))
+    (when (executable-find "tailscale" t)
+      (when-let* ((json-str (ignore-errors
+                              (with-output-to-string
+                                (with-current-buffer standard-output
+                                  (call-process "tailscale" nil '(t nil) nil "status" "--json")))))
+                  (data (ignore-errors (json-parse-string json-str :object-type 'alist :array-type 'list)))
+                  (peers (map-elt data 'Peer))
+                  (self (map-elt data 'Self)))
+        (when self
+          (let ((host-name (intern (map-elt self 'HostName)))
+                (ips (map-elt self 'TailscaleIPs)))
+            (ollama-tailnet-register-host host-name
+              :host (format "%s:11434" (or (car ips) "127.0.0.1"))
+              :default-model "default"
+              :local-p t)
+            (push host-name discovered)))
+        (when (listp peers)
+          (dolist (pair peers)
+            (let* ((peer (cdr pair))
+                   (online (eq (map-elt peer 'Online) t))
+                   (host-name (intern (map-elt peer 'HostName)))
+                   (dns-name (string-trim-right (or (map-elt peer 'DNSName) "") "\\."))
+                   (ips (map-elt peer 'TailscaleIPs)))
+              (when (and online (or (not (string-empty-p dns-name)) ips))
+                (let ((target-addr (if (not (string-empty-p dns-name))
+                                       (format "%s:11434" dns-name)
+                                     (format "%s:11434" (car ips)))))
+                  (ollama-tailnet-register-host host-name
+                    :host target-addr
+                    :default-model "default"
+                    :local-p nil)
+                  (push host-name discovered))))))))
+    (when (called-interactively-p 'interactive)
+      (message "[ollama-tailnet] Discovered %d hosts on tailnet: %s"
+               (length discovered)
+               (string-join (mapcar #'symbol-name (nreverse discovered)) ", ")))
+    discovered))
 
 (defcustom ollama-tailnet-preset-profiles
   '((:derrida-server
@@ -89,6 +146,9 @@ Recognized PROPS:
 
 (defun ollama-tailnet-list-hosts ()
   "Return a list of all registered `ollama-tailnet-host' structures."
+  (when (and (= (hash-table-count ollama-tailnet-hosts) 0)
+             ollama-tailnet-autodiscover-enabled)
+    (ollama-tailnet-discover-hosts))
   (let (hosts)
     (maphash (lambda (_v host) (push host hosts)) ollama-tailnet-hosts)
     (nreverse hosts)))

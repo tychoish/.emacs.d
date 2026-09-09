@@ -231,6 +231,9 @@
   :name "ollama-tailnet"
   :doc "Ollama tailnet orchestration under C-c r o t (hud-mode).")
 
+(defvar-keymap hud-robot-network-map
+  :name "network"
+  :doc "Tailscale network control under C-c r n (hud-mode).")
 
 ;; the mode's own container map -- populated below
 (defvar-keymap hud-mode-map
@@ -272,6 +275,12 @@
 (keymap-set hud-robot-map "o" (cons "ollama" hud-robot-ollama-map))
 (keymap-set hud-robot-ollama-map "t" (cons "tailnet" hud-robot-ollama-tailnet-map))
 (keymap-set hud-robot-map "p" (cons "prompt-library" #'agent-shell-prompt-menu))
+(keymap-set hud-robot-map "n" (cons "network" hud-robot-network-map))
+(keymap-set hud-robot-network-map "s" #'tailscale-status)
+(keymap-set hud-robot-network-map "c" #'tailscale-connect)
+(keymap-set hud-robot-network-map "d" #'tailscale-disconnect)
+(keymap-set hud-robot-network-map "y" #'tailscale-copy-ip)
+(keymap-set hud-robot-network-map "f" #'tailscale-file-send)
 
 (keymap-set hud-denote-map "o" (cons "denote-org" hud-denote-org-map))
 (keymap-set hud-denote-map "s" (cons "denote-sequence" hud-denote-sequence-map))
