@@ -45,8 +45,13 @@
          (result nil))
     (when self
       (push self result))
-    (when (hash-table-p peers)
+    (cond
+     ((hash-table-p peers)
       (maphash (lambda (_k peer) (push peer result)) peers))
+     ((listp peers)
+      (dolist (pair peers)
+        (when (consp pair)
+          (push (cdr pair) result)))))
     (nreverse result)))
 
 (defun tailscale-status ()
@@ -73,24 +78,25 @@
                           (map-elt self 'HostName)
                           (string-join (map-elt self 'TailscaleIPs) ", "))))
         (insert "\n-- Peers --\n\n")
-        (if (hash-table-p peers)
-            (maphash
-             (lambda (_k peer)
-               (let ((name (map-elt peer 'HostName))
-                     (ips (string-join (map-elt peer 'TailscaleIPs) ", "))
-                     (online (map-elt peer 'Online))
-                     (os (map-elt peer 'OS))
-                     (dns (map-elt peer 'DNSName)))
-                 (insert (format "%-20s  %-10s  %-8s  %s\n"
-                                 name
-                                 (if online "online" "offline")
-                                 (or os "")
-                                 ips))))
-             peers)
-          (insert "No peers found.\n")))
+        (let ((peer-list (cond
+                          ((hash-table-p peers)
+                           (let (acc) (maphash (lambda (_k v) (push v acc)) peers) (nreverse acc)))
+                          ((listp peers)
+                           (mapcar #'cdr peers)))))
+          (if peer-list
+              (dolist (peer peer-list)
+                (let ((name (map-elt peer 'HostName))
+                      (ips (string-join (map-elt peer 'TailscaleIPs) ", "))
+                      (online (map-elt peer 'Online))
+                      (os (map-elt peer 'OS)))
+                  (insert (format "%-20s  %-10s  %-8s  %s\n"
+                                  name
+                                  (if (eq online t) "online" "offline")
+                                  (or os "")
+                                  ips))))
+            (insert "No peers found.\n"))))
       (tailscale-mode))
     (display-buffer buf)))
-
 (defun tailscale-connect ()
   "Connect Tailscale daemon (`tailscale up')."
   (interactive)
