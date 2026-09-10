@@ -148,6 +148,7 @@
           ("PAUSED" . (:foreground ,(modus-themes-get-color-value 'magenta) :weight bold))
           ("SKIPPED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
           ("CANCELED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
+          ("DISMISSED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
           ("ABANDONED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
           ("PROJECT" . (:foreground ,(modus-themes-get-color-value 'blue-warmer) :weight bold))))
 
@@ -155,9 +156,10 @@
   (setq org-todo-keywords
         '((sequence "TODO(t)" "|" "DONE(d!)")
           (sequence "QUESTION(q)" "|" "ANSWERED(a@)")
-          (sequence "CONSIDER(c)" "MUST(m)" "|" "ACKNOWLEDGED(k@)" "IGNORED(i)" "REJECTED(r)")
-          (sequence "BACKLOG(b)" "INPROGRESS(p)" "SCHEDULED(h)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")
-          (sequence "BLOCKED(s)" "PAUSED(h)" "|" "SKIPPED(k@)" "CANCELED(c@)" "INCOMPLETE(i@)" "ABANDONED(n@)")))
+	  (sequence "INPROGRESS" "|" "COMPLETE")
+          (sequence "CONSIDER(c)" "MUST(m)" "|" "ACKNOWLEDGED(k@)" "IGNORED(u)" "REJECTED(r)" "DISMISSED(p)")
+          (sequence "BACKLOG(b)" "SCHEDULED(h)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")
+          (sequence "BLOCKED(f)" "PAUSED(h)" "|" "SKIPPED(k@)" "CANCELED(c@)" "INCOMPLETE(i@)" "ABANDONED(@l)")))
 
   (setq org-tag-alist
         '((:startgroup . nil)
