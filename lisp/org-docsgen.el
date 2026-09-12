@@ -14,6 +14,8 @@
 (require 'subr-x)
 (require 'cl-lib)
 (require 'xtd-project)
+(require 'ob)
+(defvar org-confirm-babel-evaluate)
 
 (declare-function org-babel-execute-src-block "ob-core")
 
@@ -146,32 +148,119 @@ applied to the prose paragraphs (not the \"(fn ...)\" signature)."
                "\n\n")))
 
 (defun org-docsgen--defkind (def-keyword)
-  "Return a kind symbol for the DEF-KEYWORD string."
-  (cond
-   ((member def-keyword '("defvar" "defconst" "defvar-local")) 'variable)
-   ((equal def-keyword "defcustom") 'custom)
-   (t 'function)))
+  "Return a kind symbol for the DEF-KEYWORD string, or nil if not a definition."
+  (let ((kw (replace-regexp-in-string "\\`\\(?:cl-\\|transient-\\)" "" def-keyword)))
+    (cond
+     ((member kw '("defvar" "defconst" "defvar-local")) 'variable)
+     ((equal kw "defcustom") 'custom)
+     ((equal kw "defface") 'face)
+     ((equal kw "defgroup") 'group)
+     ((member kw '("defun" "defmacro" "defsubst" "defalias"
+                   "defgeneric" "defmethod" "defstruct"
+                   "define-derived-mode" "define-minor-mode"
+                   "define-generic-mode" "define-globalized-minor-mode"
+                   "define-inline" "define-error"
+                   "define-prefix" "define-suffix" "define-infix"))
+      'function)
+     (t nil))))
 
 (defun org-docsgen--kind-tag (sym kind)
   "Return an org tag string for SYM with KIND, or nil when none applies."
   (cond
    ((commandp sym) ":command:")
    ((eq kind 'custom) ":option:")
-   ((eq kind 'variable) ":variable:")))
+   ((eq kind 'variable) ":variable:")
+   ((eq kind 'face) ":face:")))
 
-(defun org-docsgen--format-sym (name kind heading &optional doc-filter)
+(defcustom org-docsgen-link-style 'org
+  "Style to use for implementation links in generated org documentation.
+Can be `org' (`file:path::<line>', standard Org-mode, jumps to line in Emacs),
+`github' (`file:path#L<line>', GitHub URI anchor format), or
+`file' (`file:path', file only without line numbers)."
+  :type '(choice (const :tag "Standard Org (file:path::<line>)" org)
+                 (const :tag "GitHub anchor (file:path#L<line>)" github)
+                 (const :tag "File only (file:path)" file))
+  :group 'org-docsgen)
+
+(defcustom org-docsgen-link-implementation t
+  "Whether and how to link symbol implementations in generated org documentation.
+If `heading' or t, the heading itself links to the source location.
+If `below', emits an \"- Implementation: ...\" link below the properties drawer.
+If nil, do not include implementation links."
+  :type '(choice (const :tag "In heading" t)
+                 (const :tag "Below heading" below)
+                 (const :tag "None" nil))
+  :group 'org-docsgen)
+
+(defun org-docsgen--symbol-location (sym)
+  "Return (FILE . LINE) for SYM if known, else nil."
+  (when-let* ((loc (condition-case nil (find-definition-noselect sym nil) (error nil))))
+    (let ((buf (car loc))
+          (pos (cdr loc)))
+      (when (and buf (buffer-file-name buf))
+        (with-current-buffer buf
+          (save-excursion
+            (goto-char (or pos (point-min)))
+            (cons (buffer-file-name buf) (line-number-at-pos))))))))
+
+(defun org-docsgen--file-link-github-line-support (orig-fn path in-emacs)
+  "Allow `org-link-open-as-file' to recognize GitHub line fragments (#L123)."
+  (if (string-match "\\`\\(.*?\\)#L\\([0-9]+\\)\\(?:-L[0-9]+\\)?\\(?:\\(::.*\\)\\)?\\'" path)
+      (let* ((real-path (match-string 1 path))
+             (line (string-to-number (match-string 2 path)))
+             (extra-opt (match-string 3 path))
+             (new-path (if extra-opt (concat real-path extra-opt)
+                         (format "%s::%d" real-path line))))
+        (funcall orig-fn new-path in-emacs))
+    (funcall orig-fn path in-emacs)))
+
+(advice-add 'org-link-open-as-file :around #'org-docsgen--file-link-github-line-support)
+
+(defun org-docsgen--format-sym (name kind heading &optional doc-filter file line link-impl link-style)
   "Format a single symbol NAME of KIND under HEADING.
-DOC-FILTER is passed through to `org-docsgen--format-doc'."
+DOC-FILTER is passed through to `org-docsgen--format-doc'.
+FILE and LINE, if non-nil, provide the source implementation location.
+LINK-IMPL controls whether to emit an implementation link (defaults to `org-docsgen-link-implementation').
+LINK-STYLE controls the link format (defaults to `org-docsgen-link-style')."
   (let* ((sym (intern name))
          (fn-p (fboundp sym))
          (var-p (and (not fn-p) (boundp sym)))
+         (face-p (and (not fn-p) (not var-p) (facep sym)))
          (doc (or (when fn-p (documentation sym))
-                  (when var-p (documentation-property sym 'variable-documentation))))
-         (tag (org-docsgen--kind-tag sym kind)))
-    (format "%s%s%s\n\n%s\n\n"
+                  (when var-p (documentation-property sym 'variable-documentation))
+                  (when face-p (face-documentation sym))))
+         (tag (org-docsgen--kind-tag sym kind))
+         (link-mode (if (null link-impl) nil
+                      (if (eq link-impl t) org-docsgen-link-implementation link-impl)))
+         (style (or link-style org-docsgen-link-style 'org))
+         (doc-dir (file-name-directory (or (buffer-file-name) default-directory)))
+         (loc (when link-mode
+                (or (and file line (cons file line))
+                    (org-docsgen--symbol-location sym))))
+         (rel-path (when loc (file-relative-name (car loc) doc-dir)))
+         (src-line (when loc (cdr loc)))
+         (link-uri
+          (when loc
+            (pcase style
+              ('github (format "file:%s#L%d" rel-path src-line))
+              ('file (format "file:%s" rel-path))
+              (_ (format "file:%s::%d" rel-path src-line)))))
+         (heading-label
+          (if (and loc (memq link-mode '(t heading)))
+              (format "[[%s][%s]]" link-uri name)
+            name))
+         (impl-line
+          (when (and loc (eq link-mode 'below))
+            (let ((label (if (eq style 'file)
+                             (file-name-nondirectory (car loc))
+                           (format "%s:%d" (file-name-nondirectory (car loc)) src-line))))
+              (format "- Implementation: [[%s][%s]]\n\n" link-uri label)))))
+    (format "%s%s%s\n:PROPERTIES:\n:CUSTOM_ID: %s\n:END:\n\n%s%s\n\n"
             (concat heading (if doc "" "TODO "))
-            name
+            heading-label
             (if tag (concat " " tag) "")
+            name
+            (or impl-line "")
             (if doc (org-docsgen--format-doc doc doc-filter) "*no docstring*"))))
 
 (defun org-docsgen--include-p (name kind autoload-p nil-init-p scope include-kinds namespace)
@@ -179,7 +268,9 @@ DOC-FILTER is passed through to `org-docsgen--format-doc'."
 AUTOLOAD-P is t when preceded by ;;;###autoload.
 NIL-INIT-P is t when the form is a bare `(defvar NAME nil ...)' forward declaration.
 SCOPE, INCLUDE-KINDS, NAMESPACE come from `org-docsgen-run'."
-  (and (not (string-match-p "[a-z]--" name))
+  (and kind
+       (string-match-p "\\`[a-zA-Z]" name)
+       (not (string-match-p "[a-z]--" name))
        ;; Exclude foreign forward declarations: (defvar NAME nil) outside namespace.
        (not (and (eq kind 'variable)
                  nil-init-p
@@ -190,6 +281,8 @@ SCOPE, INCLUDE-KINDS, NAMESPACE come from `org-docsgen-run'."
         ((eq kind 'custom)
          (or (memq 'customs include-kinds)
              (and (memq scope '(exported autoloaded)) autoload-p)))
+        ((eq kind 'face) (memq 'faces include-kinds))
+        ((eq kind 'group) (memq 'groups include-kinds))
         (t
          (or (eq scope 'exported)
              (and (eq scope 'autoloaded) autoload-p)
@@ -198,13 +291,15 @@ SCOPE, INCLUDE-KINDS, NAMESPACE come from `org-docsgen-run'."
 (defun org-docsgen--collect-ruler (el-files scope include-kinds namespace)
   "Collect sections from EL-FILES using long ;;;;... ruler + ;; Name delimiters.
 Returns an alist of (SECTION-NAME-OR-NIL . SYMS) in source order."
-  (let (sections current-section current-syms after-ruler autoload-next)
+  (let (sections current-section current-syms after-ruler autoload-next (line-num 0))
     (seq-do
      (lambda (el-file)
+       (setq line-num 0)
        (with-temp-buffer
          (insert-file-contents el-file)
          (goto-char (point-min))
          (while (not (eobp))
+           (setq line-num (1+ line-num))
            (let ((line (buffer-substring-no-properties
                         (line-beginning-position) (line-end-position))))
              (cond
@@ -217,14 +312,15 @@ Returns an alist of (SECTION-NAME-OR-NIL . SYMS) in source order."
                      after-ruler nil))
               ((string-match "^;;;###autoload" line)
                (setq autoload-next t))
-              ((string-match "^(\\(?:cl-\\)?\\(def[^ ]+\\) +'?\\([^ ()]+\\)\\( nil\\b\\)?" line)
+              ((string-match "^[ \t]*(\\(?:cl-\\|transient-\\)?\\(def[a-z-]+\\|define-[a-z-]+\\|transient-define-[a-z-]+\\) +'?\\([^ ()]+\\)\\( nil\\b\\)?" line)
                (let* ((def-kw (match-string 1 line))
                       (sym-name (match-string 2 line))
                       (nil-init (not (null (match-string 3 line))))
                       (kind (org-docsgen--defkind def-kw)))
-                 (when (org-docsgen--include-p sym-name kind autoload-next nil-init
-                                               scope include-kinds namespace)
-                   (push (list sym-name kind) current-syms))
+                 (when (and kind
+                            (org-docsgen--include-p sym-name kind autoload-next nil-init
+                                                    scope include-kinds namespace))
+                   (push (list sym-name kind el-file line-num) current-syms))
                  (setq autoload-next nil)))
               ((not (string-empty-p (string-trim line)))
                (setq autoload-next nil))))
@@ -238,33 +334,36 @@ Returns an alist of (SECTION-NAME-OR-NIL . SYMS) in source order."
 (defun org-docsgen--collect-triple-semi (el-files scope include-kinds namespace)
   "Collect sections from EL-FILES using ;;; Section Name delimiters.
 Returns an alist of (SECTION-NAME-OR-NIL . SYMS) in source order."
-  (let (sections current-section current-syms autoload-next)
+  (let (sections current-section current-syms autoload-next (line-num 0))
     (seq-do
      (lambda (el-file)
+       (setq line-num 0)
        (with-temp-buffer
          (insert-file-contents el-file)
          (goto-char (point-min))
          (while (not (eobp))
+           (setq line-num (1+ line-num))
            (let ((line (buffer-substring-no-properties
                         (line-beginning-position) (line-end-position))))
              (cond
-              ((and (string-match "^;;; \\([A-Z][^:\n]+\\)$" line)
+              ((and (string-match "^;\\{3,4\\} +\\([A-Za-z][^:\\n]+\\)$" line)
                     (not (member (match-string 1 line) '("Commentary" "Code"))))
                (when current-syms
                  (push (cons current-section (nreverse current-syms)) sections))
-               (setq current-section (match-string 1 line)
+               (setq current-section (capitalize (string-trim (match-string 1 line)))
                      current-syms nil
                      autoload-next nil))
               ((string-match "^;;;###autoload" line)
                (setq autoload-next t))
-              ((string-match "^(\\(?:cl-\\)?\\(def[^ ]+\\) +'?\\([^ ()]+\\)\\( nil\\b\\)?" line)
+              ((string-match "^[ \t]*(\\(?:cl-\\|transient-\\)?\\(def[a-z-]+\\|define-[a-z-]+\\|transient-define-[a-z-]+\\) +'?\\([^ ()]+\\)\\( nil\\b\\)?" line)
                (let* ((def-kw (match-string 1 line))
                       (sym-name (match-string 2 line))
                       (nil-init (not (null (match-string 3 line))))
                       (kind (org-docsgen--defkind def-kw)))
-                 (when (org-docsgen--include-p sym-name kind autoload-next nil-init
-                                               scope include-kinds namespace)
-                   (push (list sym-name kind) current-syms))
+                 (when (and kind
+                            (org-docsgen--include-p sym-name kind autoload-next nil-init
+                                                    scope include-kinds namespace))
+                   (push (list sym-name kind el-file line-num) current-syms))
                  (setq autoload-next nil)))
               ((not (string-empty-p (string-trim line)))
                (setq autoload-next nil))))
@@ -294,8 +393,9 @@ GROUP-SPEC can be:
       (seq-do
        (lambda (entry)
          (if (consp entry)
-             (let ((grp (car entry))
-                   (prefixes (if (listp (cdr entry)) (cdr entry) (list (cdr entry)))))
+             (let* ((grp (car entry))
+                    (raw-prefixes (if (listp (cdr entry)) (cdr entry) (list (cdr entry))))
+                    (prefixes (if (member grp raw-prefixes) raw-prefixes (cons grp raw-prefixes))))
                (push grp group-names)
                (seq-do (lambda (p) (push (cons p grp) patterns)) prefixes))
            (push entry group-names)
@@ -327,12 +427,13 @@ GROUP-SPEC can be:
    (t
     (list (cons nil files)))))
 
-(defun org-docsgen--emit (sections scope level &optional doc-filter)
+(defun org-docsgen--emit (sections scope level &optional doc-filter link-impl link-style)
   "Emit SECTIONS as org output via `princ' at heading depth relative to LEVEL.
 Section headings are emitted at LEVEL+1; symbol headings at LEVEL+2.
 When there are zero or one named sections the section heading is suppressed
 and symbols are emitted at LEVEL+1 instead.  DOC-FILTER is passed through
-to `org-docsgen--format-sym'."
+to `org-docsgen--format-sym'.  LINK-IMPL controls whether to emit implementation links.
+LINK-STYLE controls the link URI format."
   (let* ((named-sections (seq-filter #'car sections))
          (flat-p (<= (length named-sections) 1))
          (section-h (org-docsgen--heading (1+ level)))
@@ -347,7 +448,8 @@ to `org-docsgen--format-sym'."
            (when (and heading (not flat-p))
              (princ (format "%s%s\n\n" section-h heading)))
            (seq-do (lambda (entry)
-                     (princ (org-docsgen--format-sym (car entry) (cadr entry) sym-h doc-filter)))
+                     (princ (org-docsgen--format-sym (nth 0 entry) (nth 1 entry) sym-h doc-filter
+                                                     (nth 2 entry) (nth 3 entry) link-impl link-style)))
                    syms))))
      sections)))
 
@@ -359,7 +461,9 @@ to `org-docsgen--format-sym'."
                             namespace
                             (section-style 'ruler)
                             group-by
-                            (doc-filter :default))
+                            (doc-filter :default)
+                            (link-impl t)
+                            (link-style 'org))
   "Generate org-mode API documentation and princ it to stdout.
 
 EL-FILES is a list of .el paths to document; defaults to all non-test .el
@@ -403,7 +507,7 @@ pass nil to emit docstring prose verbatim, unannotated."
                (seq-do (lambda (name)
                          (princ (org-docsgen--format-sym name 'function
                                                          (org-docsgen--heading (1+ level))
-                                                         doc-filter)))
+                                                         doc-filter nil nil link-impl link-style)))
                        scope)
              (if group-by
                  (let ((groups (org-docsgen--partition-by-groups files group-by)))
@@ -417,12 +521,12 @@ pass nil to emit docstring prose verbatim, unannotated."
                         (when sections
                           (when grp-name
                             (princ (format "%s%s\n\n" (org-docsgen--heading (1+ level)) grp-name)))
-                          (org-docsgen--emit sections scope (if grp-name (1+ level) level) doc-filter))))
+                          (org-docsgen--emit sections scope (if grp-name (1+ level) level) doc-filter link-impl link-style))))
                     groups))
                (let ((sections (if (eq section-style 'triple-semi)
                                    (org-docsgen--collect-triple-semi files scope include-kinds namespace)
                                  (org-docsgen--collect-ruler files scope include-kinds namespace))))
-                 (org-docsgen--emit sections scope level doc-filter)))))))))))
+                 (org-docsgen--emit sections scope level doc-filter link-impl link-style)))))))))))
 
 (defun org-docsgen--buffer-has-run-p (&optional buffer)
   "Return non-nil when BUFFER (default the current buffer) has an
@@ -446,7 +550,9 @@ pass nil to emit docstring prose verbatim, unannotated."
 
 (defun org-docsgen--org-files-in-tree (dir)
   "Return `.org' files under DIR (recursively) with a docsgen block."
-  (seq-filter #'org-docsgen--file-has-run-p
+  (seq-filter (lambda (f)
+                (and (not (string-match-p "/\\(?:\\.[^/]+\\|_build\\|vendor\\|dist\\)/" f))
+                     (org-docsgen--file-has-run-p f)))
               (directory-files-recursively dir "\\.org\\'")))
 
 (defun org-docsgen--execute-run-block (file)
@@ -510,8 +616,9 @@ whole tree.  Signals a `user-error' when DIR has no `.org' file with an
 (defun org-docsgen-regenerate-dwim ()
   "Regenerate docsgen docs for the current context.
 When the current buffer visits a file with an `org-docsgen-run' block,
-regenerate that buffer in place.  Otherwise regenerate every docsgen
-block among the `.org' files directly in `default-directory', falling
+regenerate that buffer in place.  Otherwise find and regenerate every
+docsgen block among the `.org' files directly in `default-directory',
+recursively under `default-directory' (e.g. docs/api.org), or falling
 back to `approximate-project-root'."
   (interactive)
   (cond
@@ -519,10 +626,26 @@ back to `approximate-project-root'."
     (org-docsgen-regenerate-file buffer-file-name))
    ((org-docsgen--org-files-in-directory default-directory)
     (org-docsgen-regenerate-directory default-directory))
-   ((org-docsgen--org-files-in-directory (approximate-project-root))
-    (org-docsgen-regenerate-directory (approximate-project-root)))
+   ((let ((files (org-docsgen--org-files-in-tree default-directory)))
+      (when files
+        (dolist (file files)
+          (org-docsgen--execute-run-block file))
+        t)))
+   ((let ((root (ignore-errors (approximate-project-root))))
+      (when root
+        (cond
+         ((org-docsgen--org-files-in-directory root)
+          (org-docsgen-regenerate-directory root))
+         ((let ((files (org-docsgen--org-files-in-tree root)))
+            (when files
+              (dolist (file files)
+                (org-docsgen--execute-run-block file))
+              t)))))))
    (t
     (user-error "org-docsgen-regenerate-dwim: no docsgen block found in `default-directory' or project root"))))
+
+;;;###autoload
+(defalias 'org-docsgen-dwim #'org-docsgen-regenerate-dwim)
 
 (provide 'org-docsgen)
 ;;; org-docsgen.el ends here
