@@ -13,6 +13,8 @@
 (require 'ollama-tailnet-control)
 (require 'ollama-tailnet)
 
+(defvar hud-robot-ollama-tailnet-map)
+
 (ert-deftest ollama-tailnet-test-host-registration ()
   "Test registering and retrieving tailnet hosts."
   (ollama-tailnet-clear-hosts)

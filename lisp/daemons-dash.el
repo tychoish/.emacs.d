@@ -9,8 +9,8 @@
 ;; Aggregates multiple service providers (systemd system/user, sprite daemons,
 ;; docker containers, ollama LLM models) into a single tabulated-list view
 ;; (`*daemons-dash*`). Provides one-key status operations, context-aware log
-;; viewing, and integration with `daemons-dash-config.el` for declarative state
-;; verification.
+;; viewing, interactive filtering/narrowing by provider and status, and
+;; integration with `daemons-dash-config.el` for declarative state verification.
 
 ;;; Code:
 
@@ -24,13 +24,17 @@
 (require 'json)
 
 ;; Soft dependencies / forward declarations
-(declare-function journalctl "journalctl-mode" (&rest args))
+(declare-function journalctl--run "journalctl-mode" (transient-opts &optional chunk))
 (declare-function docker-container-logs-action "docker-container" (action args))
 (declare-function docker-container-read-name "docker-container" ())
 (declare-function sprite--registry-all "sprite" ())
 (declare-function sprite-name "sprite" (sprite))
 (declare-function sprite-status "sprite" (sprite))
 (declare-function sprite-pid "sprite" (sprite))
+(declare-function sprite-resolve-list "sprite" ())
+(declare-function sprite--running-p "sprite" (name))
+(declare-function sprite-start-time "sprite" (sprite))
+(declare-function sprite--format-uptime "sprite" (seconds))
 (declare-function sprite-stop "sprite" (name))
 (declare-function sprite-restart "sprite" (name))
 (declare-function sprite-open-log "sprite" (name))
@@ -88,6 +92,16 @@
 
 (defcustom daemons-dash-enabled-providers '(systemd-user systemd-system sprite docker ollama)
   "List of provider symbols enabled in the dashboard."
+  :type '(repeat symbol)
+  :group 'daemons-dash)
+
+(defcustom daemons-dash-hidden-providers nil
+  "List of provider symbols currently hidden from the dashboard view."
+  :type '(repeat symbol)
+  :group 'daemons-dash)
+
+(defcustom daemons-dash-hidden-states nil
+  "List of state symbols (e.g. 'active, 'inactive, 'failed) hidden from the dashboard view."
   :type '(repeat symbol)
   :group 'daemons-dash)
 
@@ -184,6 +198,18 @@ UNIT-INFO can be a unit name string or a plist with :name and :unit-file-state."
           (buffer-string)
         (buffer-string)))))
 
+(defun daemons-dash--show-journalctl (&rest args)
+  "Display journalctl output for ARGS.
+Uses `journalctl--run' if available, otherwise executes journalctl directly."
+  (if (fboundp 'journalctl--run)
+      (journalctl--run args)
+    (let ((buf (get-buffer-create (format "*journalctl:%s*" (string-join args " ")))))
+      (pop-to-buffer buf)
+      (compilation-mode)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (apply #'call-process "journalctl" nil t nil (append args '("-n" "100" "--no-pager")))))))
+
 (defun daemons-dash--parse-systemd-units (output provider-sym)
   "Parse systemctl list-units OUTPUT lines into `daemons-dash-item' structs.
 PROVIDER-SYM is 'systemd-user or 'systemd-system."
@@ -254,14 +280,10 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
     (daemons-dash--run-command (list "systemctl" "--user" "disable" unit))))
 
 (defun daemons-dash-systemd-user-logs (id)
+  "View logs for user systemd unit ID."
   (let ((unit (cadr (split-string id ":"))))
-    (if (fboundp 'journalctl)
-        (journalctl (format "--user-unit=%s" unit))
-      (pop-to-buffer (get-buffer-create (format "*journalctl:%s*" unit)))
-      (compilation-mode)
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (call-process "journalctl" nil t nil "--user-unit" unit "-n" "100" "--no-pager")))))
+    (require 'journalctl-mode nil t)
+    (daemons-dash--show-journalctl (format "--user-unit=%s" unit))))
 
 (daemons-dash-register-provider
  (daemons-dash-provider--make
@@ -317,27 +339,24 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
     (daemons-dash--run-command (list "sudo" "systemctl" "disable" unit))))
 
 (defun daemons-dash-systemd-system-logs (id)
+  "View logs for system systemd unit ID."
   (let ((unit (cadr (split-string id ":"))))
-    (if (fboundp 'journalctl)
-        (journalctl (format "--unit=%s" unit))
-      (pop-to-buffer (get-buffer-create (format "*journalctl:%s*" unit)))
-      (compilation-mode)
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (call-process "journalctl" nil t nil "--unit" unit "-n" "100" "--no-pager")))))
+    (require 'journalctl-mode nil t)
+    (daemons-dash--show-journalctl (format "--unit=%s" unit))))
 
 (daemons-dash-register-provider
  (daemons-dash-provider--make
   :name 'systemd-system
   :label "systemd-system"
   :list-fn #'daemons-dash-systemd-system-list
-  :start-fn #'daemons-dash-system-start
-  :stop-fn #'daemons-dash-system-stop
-  :restart-fn #'daemons-dash-system-restart
-  :enable-fn #'daemons-dash-system-enable
-  :disable-fn #'daemons-dash-system-disable
-  :logs-fn #'daemons-dash-system-logs
-  :inspect-fn #'daemons-dash-system-logs))
+  :start-fn #'daemons-dash-systemd-system-start
+  :stop-fn #'daemons-dash-systemd-system-stop
+  :restart-fn #'daemons-dash-systemd-system-restart
+  :enable-fn #'daemons-dash-systemd-system-enable
+  :disable-fn #'daemons-dash-systemd-system-disable
+  :logs-fn #'daemons-dash-systemd-system-logs
+  :inspect-fn #'daemons-dash-systemd-system-logs))
+
 ;; 3. sprite
 (defun daemons-dash-sprite-list ()
   "Fetch subordinate Emacs daemons from `sprite.el'."
@@ -530,8 +549,8 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
               :details "Ollama server inactive"
               :config-status 'untracked))))))
 
-(defun daemons-dash-ollama-logs (id)
-  (daemons-dash-systemd-user-logs "systemd-user:ollama.service"))
+(defun daemons-dash-ollama-logs (_id)
+  (daemons-dash-systemd-system-logs "systemd-system:ollama.service"))
 
 (daemons-dash-register-provider
  (daemons-dash-provider--make
@@ -561,6 +580,92 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
     (if (fboundp 'daemons-dash-config-annotate-entries)
         (daemons-dash-config-annotate-entries all-items)
       all-items)))
+
+;;; Filtering & Narrowing
+
+(defun daemons-dash--item-visible-p (item)
+  "Return non-nil if ITEM should be visible under current filters."
+  (let ((provider (daemons-dash-item-provider item))
+        (status (daemons-dash-item-status item)))
+    (not (or (memq provider daemons-dash-hidden-providers)
+             (memq status daemons-dash-hidden-states)
+             (and (memq status '(active running))
+                  (memq 'active daemons-dash-hidden-states))
+             (and (memq status '(inactive stopped))
+                  (memq 'inactive daemons-dash-hidden-states))))))
+
+(defun daemons-dash-toggle-provider-filter (provider)
+  "Toggle visibility of daemons from PROVIDER."
+  (interactive
+   (let ((providers (delete-dups
+                     (append daemons-dash-enabled-providers
+                             (hash-table-keys daemons-dash-providers)))))
+     (list (intern (completing-read "Toggle provider: "
+                                    (mapcar #'symbol-name providers)
+                                    nil t)))))
+  (if (memq provider daemons-dash-hidden-providers)
+      (setq daemons-dash-hidden-providers (delq provider daemons-dash-hidden-providers))
+    (push provider daemons-dash-hidden-providers))
+  (daemons-dash-refresh))
+
+(defun daemons-dash-toggle-state-filter (state)
+  "Toggle visibility of daemons with STATE ('active, 'inactive, 'failed)."
+  (interactive
+   (list (intern (completing-read "Toggle state: "
+                                  '("active" "inactive" "failed")
+                                  nil t))))
+  (if (memq state daemons-dash-hidden-states)
+      (setq daemons-dash-hidden-states (delq state daemons-dash-hidden-states))
+    (push state daemons-dash-hidden-states))
+  (daemons-dash-refresh))
+
+(defun daemons-dash-filter-reset ()
+  "Reset all filters and display all daemons."
+  (interactive)
+  (setq daemons-dash-hidden-providers nil
+        daemons-dash-hidden-states nil)
+  (daemons-dash-refresh)
+  (message "daemons-dash: all filters cleared"))
+
+(defun daemons-dash-filter-toggle-systemd-user ()
+  "Toggle visibility of systemd-user daemons."
+  (interactive)
+  (daemons-dash-toggle-provider-filter 'systemd-user))
+
+(defun daemons-dash-filter-toggle-systemd-system ()
+  "Toggle visibility of systemd-system daemons."
+  (interactive)
+  (daemons-dash-toggle-provider-filter 'systemd-system))
+
+(defun daemons-dash-filter-toggle-sprite ()
+  "Toggle visibility of sprite daemons."
+  (interactive)
+  (daemons-dash-toggle-provider-filter 'sprite))
+
+(defun daemons-dash-filter-toggle-docker ()
+  "Toggle visibility of docker daemons."
+  (interactive)
+  (daemons-dash-toggle-provider-filter 'docker))
+
+(defun daemons-dash-filter-toggle-ollama ()
+  "Toggle visibility of ollama daemons."
+  (interactive)
+  (daemons-dash-toggle-provider-filter 'ollama))
+
+(defun daemons-dash-filter-toggle-active ()
+  "Toggle visibility of active/running daemons."
+  (interactive)
+  (daemons-dash-toggle-state-filter 'active))
+
+(defun daemons-dash-filter-toggle-inactive ()
+  "Toggle visibility of inactive/stopped daemons."
+  (interactive)
+  (daemons-dash-toggle-state-filter 'inactive))
+
+(defun daemons-dash-filter-toggle-failed ()
+  "Toggle visibility of failed daemons."
+  (interactive)
+  (daemons-dash-toggle-state-filter 'failed))
 
 ;;; Tabulated List Rendering
 
@@ -605,7 +710,8 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
     (define-key map (kbd "r")   #'daemons-dash-restart)
     (define-key map (kbd "e")   #'daemons-dash-enable)
     (define-key map (kbd "d")   #'daemons-dash-disable)
-    (define-key map (kbd "v")   #'daemons-dash-verify-config)
+    (define-key map (kbd "f")   #'daemons-dash-filter-menu)
+        (define-key map (kbd "v")   #'daemons-dash-verify-config)
     (define-key map (kbd "g")   #'daemons-dash-refresh)
     (define-key map (kbd "q")   #'quit-window)
     (define-key map (kbd "?")   #'daemons-dash-dispatch)
@@ -617,6 +723,8 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
   "Major mode for displaying system services and background daemons.
 
 \\{daemons-dash-mode-map}"
+  (make-local-variable 'daemons-dash-hidden-providers)
+  (make-local-variable 'daemons-dash-hidden-states)
   (setq tabulated-list-format
         [("Name" 30 t)
          ("Provider" 15 t)
@@ -637,9 +745,25 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
 (defun daemons-dash-refresh ()
   "Refresh the daemons dashboard buffer."
   (interactive)
-  (let ((items (daemons-dash-fetch-all)))
-    (setq tabulated-list-entries (mapcar #'daemons-dash--build-entry items))
-    (tabulated-list-print t)))
+  (let* ((items (daemons-dash-fetch-all))
+         (filtered (seq-filter #'daemons-dash--item-visible-p items)))
+    (setq tabulated-list-entries (mapcar #'daemons-dash--build-entry filtered))
+    (tabulated-list-print t)
+    (let ((hidden-info nil))
+      (when daemons-dash-hidden-providers
+        (push (format "providers hidden: %s"
+                      (mapconcat #'symbol-name daemons-dash-hidden-providers ","))
+              hidden-info))
+      (when daemons-dash-hidden-states
+        (push (format "states hidden: %s"
+                      (mapconcat #'symbol-name daemons-dash-hidden-states ","))
+              hidden-info))
+      (if hidden-info
+          (message "daemons-dash: %d items shown (%d hidden: %s)"
+                   (length filtered)
+                   (- (length items) (length filtered))
+                   (string-join (nreverse hidden-info) "; "))
+        (message "daemons-dash: %d items" (length items))))))
 
 (defun daemons-dash-start ()
   "Start the daemon at point."
@@ -716,7 +840,51 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
   (daemons-dash-refresh)
   (message "daemons-dash: declarative config verification updated"))
 
-;;; Transient Menu
+;;; Transient Menus
+
+(transient-define-prefix daemons-dash-filter-menu ()
+  "Transient menu for filtering and narrowing the daemons dashboard."
+  :info-manual "(daemons-dash) Filtering"
+  ["Filter by Provider"
+   ("pu" daemons-dash-filter-toggle-systemd-user
+    :description (lambda () (format "systemd-user     [%s]"
+                                    (if (memq 'systemd-user daemons-dash-hidden-providers) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("ps" daemons-dash-filter-toggle-systemd-system
+    :description (lambda () (format "systemd-system   [%s]"
+                                    (if (memq 'systemd-system daemons-dash-hidden-providers) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("pe" daemons-dash-filter-toggle-sprite
+    :description (lambda () (format "sprite           [%s]"
+                                    (if (memq 'sprite daemons-dash-hidden-providers) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("pd" daemons-dash-filter-toggle-docker
+    :description (lambda () (format "docker           [%s]"
+                                    (if (memq 'docker daemons-dash-hidden-providers) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("po" daemons-dash-filter-toggle-ollama
+    :description (lambda () (format "ollama           [%s]"
+                                    (if (memq 'ollama daemons-dash-hidden-providers) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("pp" "Choose provider..." daemons-dash-toggle-provider-filter :transient t)]
+  ["Filter by State"
+   ("sa" daemons-dash-filter-toggle-active
+    :description (lambda () (format "active / running [%s]"
+                                    (if (memq 'active daemons-dash-hidden-states) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("si" daemons-dash-filter-toggle-inactive
+    :description (lambda () (format "inactive / stop  [%s]"
+                                    (if (memq 'inactive daemons-dash-hidden-states) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("sf" daemons-dash-filter-toggle-failed
+    :description (lambda () (format "failed           [%s]"
+                                    (if (memq 'failed daemons-dash-hidden-states) "HIDDEN" "SHOWN")))
+    :transient t)
+   ("ss" "Choose state..." daemons-dash-toggle-state-filter :transient t)]
+  ["Filter Controls"
+   ("ra" "Reset all filters (show all)" daemons-dash-filter-reset :transient t)
+   ("g"  "Refresh view"                 daemons-dash-refresh :transient t)
+   ("q"  "Quit filter menu"             transient-quit-one)])
 
 (transient-define-prefix daemons-dash-dispatch ()
   "Transient menu for daemons-dash operations."
@@ -728,9 +896,16 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
     ("d" "Disable daemon"    daemons-dash-disable)]
    ["Inspection & Config"
     ("l" "View logs"         daemons-dash-view-logs)
-    ("RET" "Inspect details" daemons-dash-inspect)
+    ("in" "Inspect details" daemons-dash-inspect)
     ("v" "Verify config"     daemons-dash-verify-config)
-    ("g" "Refresh"           daemons-dash-refresh)
+    ("g" "Refresh"           daemons-dash-refresh)]
+   ["Filters & Narrowing"
+    ("f"  "Filter menu..."   daemons-dash-filter-menu)
+    ("fa" "Toggle active"    daemons-dash-filter-toggle-active :transient t)
+    ("fi" "Toggle inactive"  daemons-dash-filter-toggle-inactive :transient t)
+    ("ff" "Toggle failed"    daemons-dash-filter-toggle-failed :transient t)
+    ("fr" "Reset filters"    daemons-dash-filter-reset :transient t)]
+   ["Other"
     ("q" "Quit"              quit-window)]])
 
 ;;; Autoloaded Main Entrypoint

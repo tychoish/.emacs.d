@@ -23,6 +23,7 @@
 (require 'map)
 (require 'subr-x)
 (require 'daemons-dash)
+(require 'yaml nil t)
 
 ;;; Registry Storage
 

@@ -106,6 +106,7 @@
     (should (eq (daemons-dash-item-config-status item) 'untracked))
     (should (null (daemons-dash-item-expected-status item)))))
 
+
 ;;; YAML Translation Layer Tests
 
 (ert-deftest daemons-dash-test-yaml-export-import ()
@@ -134,6 +135,71 @@
         (should (eq (daemons-dash-item-provider item) 'ollama))
         (should (eq (daemons-dash-item-status item) 'inactive))
         (should (string-match-p "inactive" (daemons-dash-item-details item)))))))
+
+;;; Filtering & Narrowing Tests
+
+(ert-deftest daemons-dash-test-filtering-providers ()
+  "Disabling/hiding a provider filters its items out of the visible list."
+  (let ((item-user (daemons-dash-item--make :id "systemd-user:a" :name "a" :provider 'systemd-user :status 'active))
+        (item-sys (daemons-dash-item--make :id "systemd-system:b" :name "b" :provider 'systemd-system :status 'active))
+        (item-docker (daemons-dash-item--make :id "docker:c" :name "c" :provider 'docker :status 'active))
+        (daemons-dash-hidden-providers nil)
+        (daemons-dash-hidden-states nil))
+    (should (daemons-dash--item-visible-p item-user))
+    (should (daemons-dash--item-visible-p item-sys))
+    (should (daemons-dash--item-visible-p item-docker))
+
+    (setq daemons-dash-hidden-providers '(systemd-user docker))
+    (should-not (daemons-dash--item-visible-p item-user))
+    (should (daemons-dash--item-visible-p item-sys))
+    (should-not (daemons-dash--item-visible-p item-docker))))
+
+(ert-deftest daemons-dash-test-filtering-states ()
+  "Disabling/hiding a state filters items in that state out of the visible list."
+  (let ((item-active (daemons-dash-item--make :id "systemd-user:a" :name "a" :provider 'systemd-user :status 'active))
+        (item-running (daemons-dash-item--make :id "docker:b" :name "b" :provider 'docker :status 'running))
+        (item-inactive (daemons-dash-item--make :id "systemd-user:c" :name "c" :provider 'systemd-user :status 'inactive))
+        (item-failed (daemons-dash-item--make :id "systemd-user:d" :name "d" :provider 'systemd-user :status 'failed))
+        (daemons-dash-hidden-providers nil)
+        (daemons-dash-hidden-states nil))
+    ;; Hide inactive
+    (setq daemons-dash-hidden-states '(inactive))
+    (should (daemons-dash--item-visible-p item-active))
+    (should (daemons-dash--item-visible-p item-running))
+    (should-not (daemons-dash--item-visible-p item-inactive))
+    (should (daemons-dash--item-visible-p item-failed))
+
+    ;; Hide active (also matches running)
+    (setq daemons-dash-hidden-states '(active))
+    (should-not (daemons-dash--item-visible-p item-active))
+    (should-not (daemons-dash--item-visible-p item-running))
+    (should (daemons-dash--item-visible-p item-inactive))
+    (should (daemons-dash--item-visible-p item-failed))
+
+    ;; Hide failed
+    (setq daemons-dash-hidden-states '(failed))
+    (should (daemons-dash--item-visible-p item-active))
+    (should-not (daemons-dash--item-visible-p item-failed))))
+
+(ert-deftest daemons-dash-test-inspect-safe-invocation ()
+  "Selecting an item to inspect or view logs does not signal wrong-number-of-arguments."
+  (require 'journalctl-mode nil t)
+  (let ((item (daemons-dash-item--make
+               :id "systemd-user:odem.service"
+               :name "odem.service"
+               :provider 'systemd-user
+               :status 'active))
+        (journalctl-called nil))
+    (cl-letf (((symbol-function 'journalctl--run)
+               (lambda (opts &optional _chunk)
+                 (setq journalctl-called opts))))
+      (with-temp-buffer
+        (daemons-dash-mode)
+        (setq tabulated-list-entries (list (daemons-dash--build-entry item)))
+        (tabulated-list-print t)
+        (goto-char (point-min))
+        (daemons-dash-inspect)
+        (should (equal journalctl-called '("--user-unit=odem.service")))))))
 
 (provide 'test-daemons-dash)
 ;;; test-daemons-dash.el ends here
