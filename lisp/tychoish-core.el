@@ -1699,8 +1699,12 @@ return until the minibuffer session ends."
 	     orgx-agenda-minor-mode-turn-on
 	     orgx--install-auxiliary-packages
 	     ad:org-agenda--open-files
-	     ad:org-agenda-redo)
+	     ad:org-agenda-redo
+	     orgx-link-github-line-support
+	     orgx-open-custom-id-slug-fallback)
   :init
+  (with-eval-after-load 'ol
+    (require 'orgx))
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
   (keymap-set orgx-global-map "4" #'org-agenda)
   (keymap-set orgx-global-map "k" #'org-capture)

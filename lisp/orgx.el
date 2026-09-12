@@ -930,6 +930,45 @@ new note's identifier reflects that date."
           (org-toggle-tag "denoted" 'on)))
       (set-marker insert-marker nil))))
 
+;; link handling
+
+(defun orgx-link-github-line-support (orig-fn path in-emacs)
+  "Support GitHub-style line fragments (#L123 or #L123-L145) in file links."
+  (if (string-match "\\`\\(.*?\\)#L\\([0-9]+\\)\\(?:-L[0-9]+\\)?\\(?:\\(::.*\\)\\)?\\'" path)
+      (let* ((real-path (match-string 1 path))
+             (line (string-to-number (match-string 2 path)))
+             (extra-opt (match-string 3 path))
+             (new-path (if extra-opt (concat real-path extra-opt)
+                         (format "%s::%d" real-path line))))
+        (funcall orig-fn new-path in-emacs))
+    (funcall orig-fn path in-emacs)))
+
+(defun orgx-open-custom-id-slug-fallback (path)
+  "Resolve GitHub-style TOC anchors (#heading-slug) when no CUSTOM_ID exists."
+  (when (and (derived-mode-p 'org-mode)
+             (not (org-find-property "CUSTOM_ID" path)))
+    (let* ((slug-words (split-string path "-"))
+           (slug-re (mapconcat #'regexp-quote slug-words "[ -]+"))
+           (case-fold-search t)
+           (found nil))
+      (save-excursion
+        (goto-char (point-min))
+        (while (and (not found)
+                    (re-search-forward (concat "^\\*+\\s-+" slug-re) nil t))
+          (setq found (line-beginning-position))))
+      (when found
+        (org-mark-ring-push)
+        (goto-char found)
+        (org-show-context)
+        t))))
+
+(defalias 'tychoish/org-link-github-line-support #'orgx-link-github-line-support)
+(defalias 'tychoish/org-open-custom-id-slug-fallback #'orgx-open-custom-id-slug-fallback)
+
+(with-eval-after-load 'ol
+  (advice-add 'org-link-open-as-file :around #'orgx-link-github-line-support)
+  (add-hook 'org-open-link-functions #'orgx-open-custom-id-slug-fallback))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Section 3: Minor modes

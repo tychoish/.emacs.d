@@ -350,4 +350,46 @@
 (ert-deftest orgx/auxiliary-packages-includes-ob-mermaid ()
   "orgx--auxiliary-packages includes ob-mermaid."
   (should (memq 'ob-mermaid orgx--auxiliary-packages)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; link handling
+
+(ert-deftest orgx/link-github-line-support-rewrites-line ()
+  "GitHub-style #L123 fragments are rewritten to ::123."
+  (let ((captured nil))
+    (orgx-link-github-line-support (lambda (path _in-emacs) (setq captured path))
+                                  "path/to/foo.el#L42"
+                                  nil)
+    (should (equal "path/to/foo.el::42" captured))))
+
+(ert-deftest orgx/link-github-line-support-rewrites-range ()
+  "GitHub-style #L123-L145 fragments are rewritten to the first line ::123."
+  (let ((captured nil))
+    (orgx-link-github-line-support (lambda (path _in-emacs) (setq captured path))
+                                  "path/to/foo.el#L123-L145"
+                                  nil)
+    (should (equal "path/to/foo.el::123" captured))))
+
+(ert-deftest orgx/link-github-line-support-preserves-plain-path ()
+  "Paths without GitHub line fragments are passed through unchanged."
+  (let ((captured nil))
+    (orgx-link-github-line-support (lambda (path _in-emacs) (setq captured path))
+                                  "path/to/foo.el"
+                                  nil)
+    (should (equal "path/to/foo.el" captured))))
+
+(ert-deftest orgx/open-custom-id-slug-fallback-finds-heading ()
+  "Slug fallback jumps to headline matching hyphenated slug."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* First Heading\n\nSome text.\n\n* Second Heading Slug Test\n\nMore text.\n")
+    (should (orgx-open-custom-id-slug-fallback "second-heading-slug-test"))
+    (should (looking-at "\\* Second Heading Slug Test"))))
+
+(ert-deftest orgx/open-custom-id-slug-fallback-skips-when-custom-id-exists ()
+  "Slug fallback does nothing if a matching CUSTOM_ID exists."
+  (with-temp-buffer
+    (org-mode)
+    (insert "* Target Heading\n:PROPERTIES:\n:CUSTOM_ID: target-id\n:END:\n")
+    (should-not (orgx-open-custom-id-slug-fallback "target-id"))))
+
 ;;; test-orgx.el ends here
