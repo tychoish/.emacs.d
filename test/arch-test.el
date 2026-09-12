@@ -456,6 +456,48 @@ of creating and deleting a fresh frame."
                (chosen (arch--takeover-window new-buf nil)))
           (should (eq chosen win3))
           (should (eq (window-buffer win3) new-buf)))))))
+
+(ert-deftest arch-test-takeover-window-prefers-same-kind-info-window ()
+  "arch--takeover-window prefers an existing info window for a new info buffer
+over a window showing a progress buffer, even though both are eligible."
+  (arch-test--with-buffers
+      (arch--list-buffer-name "*arch-info<existing>*" "*arch:progress*" "*arch-info<new>*")
+    (arch-test--with-frame frame
+      (let* ((list-buf (get-buffer arch--list-buffer-name))
+             (info-buf (get-buffer "*arch-info<existing>*"))
+             (progress-buf (get-buffer "*arch:progress*"))
+             (win1 (selected-window))
+             (win2 (split-window win1))
+             (win3 (split-window win2)))
+        (set-window-buffer win1 list-buf)
+        (set-window-buffer win2 progress-buf)
+        (set-window-buffer win3 info-buf)
+        (select-window win2)
+        (let* ((new-buf (get-buffer "*arch-info<new>*"))
+               (chosen (arch--takeover-window new-buf nil)))
+          (should (eq chosen win3))
+          (should (eq (window-buffer win3) new-buf)))))))
+
+(ert-deftest arch-test-transient-buffer-p-matches-info-and-progress ()
+  "arch--transient-buffer-p matches both info and progress buffers, but not the list."
+  (arch-test--with-buffers (arch--list-buffer-name "*arch-info<x>*" "*arch:x*")
+    (should (arch--transient-buffer-p (get-buffer "*arch-info<x>*") nil))
+    (should (arch--transient-buffer-p (get-buffer "*arch:x*") nil))
+    (should-not (arch--transient-buffer-p (get-buffer arch--list-buffer-name) nil))))
+
+(ert-deftest arch-test-buffer-kind-groups-arch-buffers ()
+  "arch--buffer-kind labels list/info/compile buffers and ignores unrelated ones."
+  (arch-test--with-buffers
+      (arch--list-buffer-name "*arch-info<x>*" "*arch:x*" "*scratch*")
+    (should (equal (arch--buffer-kind (get-buffer arch--list-buffer-name)) "list"))
+    (should (equal (arch--buffer-kind (get-buffer "*arch-info<x>*")) "info"))
+    (should (equal (arch--buffer-kind (get-buffer "*arch:x*")) "compile"))
+    (should (null (arch--buffer-kind (get-buffer "*scratch*"))))))
+
+(ert-deftest arch-test-switch-to-buffer-errors-when-no-arch-buffers ()
+  "arch-switch-to-buffer signals a user-error when no arch buffers are open."
+  (should-error (arch-switch-to-buffer) :type 'user-error))
+
 ;;; Post-operation hooks & bury flag
 
 (ert-deftest arch-test-ensure-pkg-with-struct ()
@@ -684,5 +726,26 @@ of creating and deleting a fresh frame."
                 (accept-process-output proc 0.2))
               (should (= (window-point win) (with-current-buffer buf (point-max))))))
         (kill-buffer buf)))))
+(ert-deftest arch-test-pkg-filter-collapses-carriage-returns ()
+  "arch--pkg-filter collapses \\r-overwritten progress lines instead of
+concatenating them onto one giant line, as `git clone'/`makepkg' progress
+output does."
+  (let ((buf (get-buffer-create "*arch:test-cr*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (arch-install-mode))
+          (let ((proc (make-process :name "test-cr-proc"
+                                    :buffer buf
+                                    :command '("printf" "a: 1%%\ra: 50%%\ra: 100%%\ndone\n")
+                                    :filter #'arch--pkg-filter
+                                    :sentinel #'arch--pkg-sentinel)))
+            (while (process-live-p proc)
+              (accept-process-output proc 0.2))
+            (with-current-buffer buf
+              (should (string-match-p "a: 100%" (buffer-string)))
+              (should-not (string-match-p "a: 1%a: 50%" (buffer-string))))))
+      (kill-buffer buf))))
+
 (provide 'arch-test)
 ;;; arch-test.el ends here

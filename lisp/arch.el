@@ -16,6 +16,7 @@
 (require 'subr-x)
 (require 'ansi-color)
 (require 'compile)
+(require 'comint)
 (require 'tabulated-list)
 (require 'transient)
 (require 'annotated-completing-read)
@@ -323,6 +324,7 @@ If REQUIRE-SUCCESS is non-nil, return nil when the command exits non-zero."
   "C-c C-c" #'arch-install-interrupt-process
   "C-c C-z" #'arch-install-stop-process
   "k"       #'arch-install-kill-process
+  "b"       #'arch-switch-to-buffer
   "q"       #'quit-window)
 
 (define-derived-mode arch-install-mode compilation-mode "Arch-Install"
@@ -428,7 +430,8 @@ linear scrollback instead of one buffer per package."
 
 (defun arch--pkg-filter (proc output)
   "Insert OUTPUT into PROC's buffer, rendering ANSI escape sequences as faces,
-and auto-scrolling displaying windows."
+collapsing carriage-return-overwritten progress lines (git/makepkg download
+and build-percentage output), and auto-scrolling displaying windows."
   (let ((buf (process-buffer proc)))
     (when (buffer-live-p buf)
       (with-current-buffer buf
@@ -438,6 +441,7 @@ and auto-scrolling displaying windows."
             (let ((start (marker-position (process-mark proc))))
               (goto-char start)
               (insert output)
+              (comint-carriage-motion start (point-max))
               (ansi-color-apply-on-region start (point-max))))
           (set-marker (process-mark proc) (point-max))
           (when moving
@@ -1128,6 +1132,7 @@ lookup used by the package list view."
 (define-key arch-info-map (kbd "l") #'arch-list)
 (define-key arch-info-map (kbd "p") #'arch-find-package)
 (define-key arch-info-map (kbd "K") #'arch-kill-buffers)
+(define-key arch-info-map (kbd "b") #'arch-switch-to-buffer)
 (define-key arch-info-map (kbd "?") #'arch-info-menu)
 
 (transient-define-prefix arch-info-menu ()
@@ -1147,6 +1152,7 @@ lookup used by the package list view."
     ("S"  "Search AUR"           arch-search-aur)
     ("p"  "Find package"         arch-find-package)
     ("l"  "Package list"         arch-list)
+    ("b"  "Switch buffer"        arch-switch-to-buffer)
     ("ki" "Kill buffers"         arch-kill-buffers)
     ("q"  "Quit"                 quit-window)]])
 
@@ -1236,26 +1242,80 @@ condition-function contract."
     (or (string-match-p "^\\*arch:" name)
         (equal name arch--worker-buffer-name))))
 
+(defun arch--info-buffer-p (buf)
+  "Return non-nil if BUF is an *arch-info<...>* package info buffer.
+BUF may be a buffer or a buffer name."
+  (string-match-p "^\\*arch-info<" (if (bufferp buf) (buffer-name buf) buf)))
+
+(defun arch--transient-buffer-p (buf _action)
+  "Return non-nil if BUF is an arch progress or info buffer.
+Covers the same buffers as `arch--progress-buffer-p' plus
+`arch--info-buffer-p'; these reuse each other's window instead of splitting.
+BUF may be a buffer or a buffer name, per the `display-buffer-alist'
+condition-function contract."
+  (or (arch--progress-buffer-p buf nil)
+      (arch--info-buffer-p buf)))
+
 (defun arch--takeover-window (buffer _alist)
-  "Action: display BUFFER by taking over another arch progress window.
-Prefers a window already showing a different *arch:<pkg>* buffer, then any
-other non-dedicated window.  Never takes over the window showing
+  "Action: display BUFFER by taking over another arch progress/info window.
+Prefers a window already showing a buffer of the same kind (progress vs.
+info) as BUFFER, then any other arch progress/info window, then any other
+non-dedicated window.  Never takes over the window showing
 `arch--list-buffer-name'."
-  (let ((candidates (seq-remove
+  (let* ((same-kind-p (if (arch--info-buffer-p buffer)
+                          #'arch--info-buffer-p
+                        (lambda (b) (arch--progress-buffer-p b nil))))
+         (candidates (seq-remove
                      (lambda (w)
                        (or (window-dedicated-p w)
                            (equal (buffer-name (window-buffer w)) arch--list-buffer-name)))
                      (window-list nil 'nomini))))
-    (when-let* ((win (or (seq-find (lambda (w) (arch--progress-buffer-p (window-buffer w) nil)) candidates)
+    (when-let* ((win (or (seq-find (lambda (w) (funcall same-kind-p (window-buffer w))) candidates)
+                         (seq-find (lambda (w) (arch--transient-buffer-p (window-buffer w) nil)) candidates)
                          (seq-find (lambda (w) (not (eq w (selected-window)))) candidates)
                          (car candidates))))
       (set-window-buffer win buffer)
       win)))
 
 (add-to-list 'display-buffer-alist
-             '(arch--progress-buffer-p
+             '(arch--transient-buffer-p
                (arch--takeover-window
                 display-buffer-pop-up-window)))
+
+;;; Buffer switching
+
+(defun arch--buffer-kind (buf)
+  "Return a label string categorizing arch-related buffer BUF, or nil.
+Used to group candidates in `arch-switch-to-buffer'."
+  (let ((name (buffer-name buf)))
+    (cond
+     ((equal name arch--list-buffer-name) "list")
+     ((arch--info-buffer-p name) "info")
+     ((arch--progress-buffer-p name nil) "compile")
+     (t nil))))
+
+(defun arch--buffer-annotation (buf)
+  "Return an annotation string for arch buffer BUF in `arch-switch-to-buffer'."
+  (pcase (arch--buffer-kind buf)
+    ("compile" (if (get-buffer-process buf) "running" "idle"))
+    ("info" (or (buffer-local-value 'arch--info-package buf) ""))
+    (_ "")))
+
+;;;###autoload
+(defun arch-switch-to-buffer ()
+  "ACR-select and switch to an open arch buffer, grouped by list/info/compile."
+  (interactive)
+  (let ((buffers (seq-filter #'arch--buffer-kind (buffer-list))))
+    (unless buffers
+      (user-error "No arch buffers open"))
+    (switch-to-buffer
+     (annotated-completing-read
+      (seq-map (lambda (buf) (cons (buffer-name buf) (arch--buffer-annotation buf)))
+               buffers)
+      :prompt "Switch to arch buffer: "
+      :require-match t
+      :category 'arch-buffer
+      :group-name (lambda (name) (arch--buffer-kind (get-buffer name)))))))
 
 (defvar-local arch--list-backend nil
   "Backend used by the current arch-list buffer.")
@@ -1366,6 +1426,7 @@ MARKED is a hash table of marked package names."
 (define-key arch-list-mode-map (kbd "g")   #'arch-list-refresh)
 (define-key arch-list-mode-map (kbd "C")   #'arch-cache-reload)
 (define-key arch-list-mode-map (kbd "RET") #'arch-list-show-info)
+(define-key arch-list-mode-map (kbd "b")   #'arch-switch-to-buffer)
 (define-key arch-list-mode-map (kbd "?")   #'arch-list-menu)
 
 (define-derived-mode arch-list-mode tabulated-list-mode "arch"
@@ -1738,7 +1799,8 @@ Rebuilds without pulling; use `arch-list-abs-install' to update the source first
     ("xc"  "Clear filter"    arch-list-filter-clear)
     ("s"   "Search"          arch-search)
     ("S"   "Search AUR"      arch-search-aur)
-    ("g"   "Refresh"         arch-list-refresh)]
+    ("g"   "Refresh"         arch-list-refresh)
+    ("b"   "Switch buffer"   arch-switch-to-buffer)]
    ["System"
     ("y"  "Sync databases"       arch-sync)
     ("xf" "Force sync databases" arch-sync-force)
@@ -1755,6 +1817,7 @@ Rebuilds without pulling; use `arch-list-abs-install' to update the source first
     ("l"  "List installed"    arch-list)
     ("fp" "Find package"      arch-find-package)
     ("i"  "Package info"      arch-show-info)
+    ("b"  "Switch buffer"     arch-switch-to-buffer)
     ("ki" "Kill buffers"      arch-kill-buffers)]
    ["Install"
     ("xp" "Install"  arch-install)]
