@@ -45,6 +45,8 @@ Use `map-into` to build a hash table from a list of cons cells without an explic
 | `elpa/agent-shell-menu/`            | ACR-based menus, transient prefixes, buffer/permission/command/collapse UI (own git repo)     |
 | `lisp/eglot-test-at-point.el`       | Eglot test runner helper.                                                                     |
 | `lisp/arch-sets.el`                 | Package-set export/import + `arch-set-mode` viewer for `arch.el`.                             |
+| `lisp/arch-elpa.el`                 | `package.el`-backed Emacs Lisp package manager UI, mirroring `arch.el`'s UX.                  |
+| `lisp/ollama-tailnet-models.el`      | Model management dashboard across tailnet Ollama hosts (list/pull/delete/upgrade/search).     |
 | `user/*.el`                         | Per-machine overrides. Loaded last; not committed.                                            |
 
 ### Every `.el` file must have

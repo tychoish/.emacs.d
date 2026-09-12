@@ -180,6 +180,13 @@
              arch-sets-import-file
              arch-sets-open-file))
 
+(use-package arch-elpa
+  :ensure nil
+  :commands (arch-elpa-list
+             arch-elpa-search
+             arch-elpa-install
+             arch-elpa-list-upgrade-all))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; UI, Display, Rendering, Window Management
@@ -2217,7 +2224,7 @@ return until the minibuffer session ends."
   :ensure nil
   :commands (daemons-dash daemons-dash-dispatch)
   :init
-  (keymap-set hud-core-map "D" #'daemons-dash)
+  (keymap-set hud-core-map "s" #'daemons-dash)
   :config
   (require 'daemons-dash-config nil t))
 
@@ -3048,6 +3055,15 @@ deliberate teardown."
   (keymap-set hud-robot-ollama-tailnet-map "b" #'ollama-tailnet-set-gptel-backend)
   :config
   (ollama-tailnet-setup-laptop-presets))
+
+(use-package ollama-tailnet-models
+  :ensure nil
+  :defer t
+  :commands (ollama-tailnet-models
+             ollama-tailnet-search-model)
+  :init
+  (keymap-set hud-robot-ollama-tailnet-map "l" #'ollama-tailnet-models)
+  (keymap-set hud-robot-ollama-tailnet-map "S" #'ollama-tailnet-search-model))
 
 (use-package eat
   :ensure t
