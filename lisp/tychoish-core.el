@@ -2236,7 +2236,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale gen))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
