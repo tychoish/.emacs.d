@@ -2236,7 +2236,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale gen))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale gen eglot-test-at-point))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
@@ -2459,6 +2459,9 @@ return until the minibuffer session ends."
 ;;
 ;; language server protocol (lsp) [eglot] + treesitter
 
+(use-package eglot-test-at-point
+  :ensure t
+  :defer t)
 (use-package eglot
   :ensure nil
   :commands (eglot-code-action-rewrite
@@ -2509,8 +2512,6 @@ return until the minibuffer session ends."
       (apply orig-fn id args)))
 
   (advice-add 'eglot--track-changes-fetch :around #'tychoish/eglot-guard-track-changes-fetch)
-
-  (autoload 'eglot-test-at-point "eglot-test-at-point")
 
   (defvar-keymap tychoish/eglot-map) ;; "C-c l"
   (keymap-set eglot-mode-map "C-c l" (cons "eglot" tychoish/eglot-map))
