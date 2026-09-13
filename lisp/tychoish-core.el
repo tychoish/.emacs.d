@@ -2236,7 +2236,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
@@ -2866,9 +2866,8 @@ deliberate teardown."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (use-package tailscale
-  :ensure nil
+  :ensure t
   :defer t
-  :commands (tailscale-status tailscale-connect tailscale-disconnect tailscale-copy-ip tailscale-file-send)
   :init
   (make-read-extended-command-for-prefix "tailscale"
     :bind-map hud-robot-network-map
