@@ -1535,9 +1535,8 @@ clipboard."
 	     denote-dash-retag-sequence))
 
 (use-package denote-notion
-  :ensure nil
-  :commands (denote-notion-push
-	     denote-notion-pull))
+  :ensure t
+  :defer t)
 
 (use-package org-docsgen
   :ensure t
@@ -2236,7 +2235,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale gen eglot-test-at-point))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale gen eglot-test-at-point denote-notion))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
