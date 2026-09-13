@@ -2269,7 +2269,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
@@ -3053,24 +3053,19 @@ deliberate teardown."
              ollama-tailnet-service-restart
              ollama-tailnet-service-status
              ollama-tailnet-set-gptel-backend
-             ollama-tailnet-setup-laptop-presets)
+             ollama-tailnet-setup-laptop-presets
+             ollama-tailnet-models
+             ollama-tailnet-search-model)
   :init
   (keymap-set hud-robot-ollama-tailnet-map "s" #'ollama-tailnet-status)
   (keymap-set hud-robot-ollama-tailnet-map "p" #'ollama-tailnet-pull-model)
   (keymap-set hud-robot-ollama-tailnet-map "r" #'ollama-tailnet-service-restart)
   (keymap-set hud-robot-ollama-tailnet-map "t" #'ollama-tailnet-service-status)
   (keymap-set hud-robot-ollama-tailnet-map "b" #'ollama-tailnet-set-gptel-backend)
+  (keymap-set hud-robot-ollama-tailnet-map "l" #'ollama-tailnet-models)
+  (keymap-set hud-robot-ollama-tailnet-map "S" #'ollama-tailnet-search-model)
   :config
   (ollama-tailnet-setup-laptop-presets))
-
-(use-package ollama-tailnet-models
-  :ensure nil
-  :defer t
-  :commands (ollama-tailnet-models
-             ollama-tailnet-search-model)
-  :init
-  (keymap-set hud-robot-ollama-tailnet-map "l" #'ollama-tailnet-models)
-  (keymap-set hud-robot-ollama-tailnet-map "S" #'ollama-tailnet-search-model))
 
 (use-package eat
   :ensure t
