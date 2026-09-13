@@ -119,6 +119,7 @@
   (annotated-completing-read-setup-history))
 
 (use-package sprite
+  :ensure t
   :init
   (add-one-shot-hook
    :name "set-custom-file"
@@ -139,6 +140,7 @@
   (keymap-set hud-mode-map "C-x ," #'hud-select)
   (keymap-set hud-core-map "m" #'hud-dispatch)
   (keymap-set hud-core-map "," #'hud-select))
+
 (use-package arch
   :ensure t
   :defer t
