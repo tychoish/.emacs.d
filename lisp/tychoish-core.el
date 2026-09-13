@@ -140,25 +140,8 @@
   (keymap-set hud-core-map "m" #'hud-dispatch)
   (keymap-set hud-core-map "," #'hud-select))
 (use-package arch
-  :ensure nil
-  :commands (arch-cache-drop
-             arch-cache-reload
-             arch-dispatch
-             arch-find-package
-             arch-install
-             arch-kill-info-buffers
-             arch-list
-             arch-remove
-             arch-search
-             arch-show-info
-             arch-sync
-             arch-sync-force
-             arch-upgrade
-             arch-upgrade-all
-             arch-upgrade-all-yay
-             arch-upgrade-system
-             arch-abs-install
-             arch-abs-rebuild)
+  :ensure t
+  :defer t
   :config
   (add-hook 'arch-after-install-hook (lambda (pkg)
                                        (alert (format "Installed package %s" (arch-pkg-name pkg))
@@ -173,19 +156,6 @@
 					   (alert "System upgrade completed"
 						  :title "Arch Package Manager")))
   (run-with-idle-timer 2 nil #'arch--populate-cache))
-
-(use-package arch-sets
-  :ensure nil
-  :commands (arch-sets-export-file
-             arch-sets-import-file
-             arch-sets-open-file))
-
-(use-package arch-elpa
-  :ensure nil
-  :commands (arch-elpa-list
-             arch-elpa-search
-             arch-elpa-install
-             arch-elpa-list-upgrade-all))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2269,7 +2239,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
