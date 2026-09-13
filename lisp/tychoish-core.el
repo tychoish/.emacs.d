@@ -1540,11 +1540,8 @@ clipboard."
 	     denote-notion-pull))
 
 (use-package org-docsgen
-  :ensure nil
-  :commands (org-docsgen-run
-	     org-docsgen-regenerate-file
-	     org-docsgen-regenerate-directory
-	     org-docsgen-regenerate-dwim))
+  :ensure t
+  :defer t)
 
 (use-package consult-notes
   :ensure t
@@ -2239,7 +2236,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
