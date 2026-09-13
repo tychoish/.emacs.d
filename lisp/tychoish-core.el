@@ -2239,7 +2239,7 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch))
+   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit))
 
   (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
@@ -3564,6 +3564,10 @@ See `tychoish/agent-shell--force-clear-busy'."
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
+
+(use-package mcpkit
+  :ensure t
+  :defer t)
 
 (use-package tychoish-mail
   :ensure nil
