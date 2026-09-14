@@ -382,10 +382,19 @@ PROVIDER-SYM is `systemd-user' or `systemd-system'."
 ;; 3. sprite
 (defun daemons-dash-sprite--make-item (sprite)
   "Construct a `daemons-dash-item' from SPRITE record."
-  (let* ((name (sprite-name sprite))
+  (let* ((name (cond
+                ((and (fboundp 'sprite-p) (sprite-p sprite))
+                 (sprite-name sprite))
+                ((listp sprite)
+                 (plist-get sprite :name))
+                ((fboundp 'sprite-name)
+                 (sprite-name sprite))
+                (t (format "%s" sprite))))
          (running (ignore-errors (sprite--running-p name)))
          (status (if running 'active 'inactive))
-         (start-time (sprite-start-time sprite))
+         (start-time (when (and (fboundp 'sprite-start-time)
+                                (or (not (fboundp 'sprite-p)) (sprite-p sprite)))
+                       (sprite-start-time sprite)))
          (uptime (if (and start-time (fboundp 'sprite--format-uptime))
                      (sprite--format-uptime (float-time (time-since start-time)))
                    "unknown"))
