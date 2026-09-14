@@ -8,7 +8,7 @@
 ;; Unified system service and daemon management dashboard for Emacs.
 ;; Aggregates multiple service providers (systemd system/user, sprite daemons,
 ;; docker containers, ollama LLM models) into a single tabulated-list view
-;; (`*daemons-dash*`). Provides one-key status operations, context-aware log
+;; (`*daemons-dash*').  Provides one-key status operations, context-aware log
 ;; viewing, interactive filtering/narrowing by provider and status, and
 ;; integration with `daemons-dash-config.el` for declarative state verification.
 
@@ -101,7 +101,7 @@
   :group 'daemons-dash)
 
 (defcustom daemons-dash-hidden-states nil
-  "List of state symbols (e.g. 'active, 'inactive, 'failed) hidden from the dashboard view."
+  "List of state symbols hidden from view (e.g. \\='active, \\='inactive)."
   :type '(repeat symbol)
   :group 'daemons-dash)
 
@@ -177,8 +177,9 @@ Called with unit name string or plist; returns non-nil to include."
 ;;; Systemd Filtering Predicates
 
 (defun daemons-dash-user-enabled-service-p (unit-info)
-  "Return non-nil if UNIT-INFO represents a user-enabled or user-relevant system service.
-UNIT-INFO can be a unit name string or a plist with :name and :unit-file-state."
+  "Return non-nil if UNIT-INFO is a user-enabled or user-relevant service.
+UNIT-INFO can be a unit name string or a plist with :name
+and :unit-file-state."
   (let ((unit-name (if (plistp unit-info) (plist-get unit-info :name) unit-info))
         (state (when (plistp unit-info) (plist-get unit-info :unit-file-state))))
     (and (stringp unit-name)
@@ -193,10 +194,14 @@ UNIT-INFO can be a unit name string or a plist with :name and :unit-file-state."
 (defun daemons-dash--run-command (args)
   "Execute ARGS command list synchronously and return standard output string."
   (with-temp-buffer
-    (let ((exit-code (apply #'call-process (car args) nil t nil (cdr args))))
-      (if (zerop exit-code)
-          (buffer-string)
-        (buffer-string)))))
+    (apply #'call-process (car args) nil t nil (cdr args))
+    (buffer-string)))
+
+(defun daemons-dash--id-target (id)
+  "Extract service or target name from daemon ID (e.g. `provider:target')."
+  (if-let* ((pos (string-search ":" id)))
+      (substring id (1+ pos))
+    id))
 
 (defun daemons-dash--show-journalctl (&rest args)
   "Display journalctl output for ARGS.
@@ -204,84 +209,95 @@ Uses `journalctl--run' if available, otherwise executes journalctl directly."
   (if (fboundp 'journalctl--run)
       (journalctl--run args)
     (let ((buf (get-buffer-create (format "*journalctl:%s*" (string-join args " ")))))
+      (with-current-buffer buf
+        (compilation-mode)
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (apply #'call-process "journalctl" nil t nil (append args '("-n" "100" "--no-pager")))))
       (pop-to-buffer buf)
-      (compilation-mode)
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (apply #'call-process "journalctl" nil t nil (append args '("-n" "100" "--no-pager")))))))
+      buf)))
+
+(defun daemons-dash--parse-systemd-line (line provider-sym)
+  "Parse a single systemctl list-units LINE into a `daemons-dash-item', or nil.
+PROVIDER-SYM is `systemd-user' or `systemd-system'."
+  (let ((trimmed (string-trim line)))
+    (when (string-prefix-p "●" trimmed)
+      (setq trimmed (string-trim (substring trimmed 1))))
+    (let ((parts (split-string trimmed "[ \t]+" t)))
+      (when (>= (length parts) 4)
+        (let* ((unit (nth 0 parts))
+               (load (nth 1 parts))
+               (active (nth 2 parts))
+               (sub (nth 3 parts))
+               (desc (string-join (nthcdr 4 parts) " "))
+               (status (cond
+                        ((string-equal active "active") 'active)
+                        ((string-equal active "failed") 'failed)
+                        (t 'inactive)))
+               (details (format "%s (%s/%s) %s" sub load active desc)))
+          (daemons-dash-item--make
+           :id (format "%s:%s" provider-sym unit)
+           :name unit
+           :provider provider-sym
+           :status status
+           :details details
+           :config-status 'untracked
+           :raw-data (list :name unit :load load :active active :sub sub :desc desc)))))))
 
 (defun daemons-dash--parse-systemd-units (output provider-sym)
   "Parse systemctl list-units OUTPUT lines into `daemons-dash-item' structs.
-PROVIDER-SYM is 'systemd-user or 'systemd-system."
-  (let ((items nil))
-    (dolist (line (split-string output "\n" t))
-      (let ((trimmed (string-trim line)))
-        ;; Remove bullet indicator if present
-        (when (string-prefix-p "●" trimmed)
-          (setq trimmed (string-trim (substring trimmed 1))))
-        (let ((parts (split-string trimmed "[ \t]+" t)))
-          (when (>= (length parts) 4)
-            (let* ((unit (nth 0 parts))
-                   (load (nth 1 parts))
-                   (active (nth 2 parts))
-                   (sub (nth 3 parts))
-                   (desc (string-join (nthcdr 4 parts) " "))
-                   (status (cond
-                            ((string-equal active "active") 'active)
-                            ((string-equal active "failed") 'failed)
-                            (t 'inactive)))
-                   (details (format "%s (%s/%s) %s" sub load active desc)))
-              (push (daemons-dash-item--make
-                     :id (format "%s:%s" provider-sym unit)
-                     :name unit
-                     :provider provider-sym
-                     :status status
-                     :details details
-                     :config-status 'untracked
-                     :raw-data (list :name unit :load load :active active :sub sub :desc desc))
-                    items))))))
-    (nreverse items)))
+PROVIDER-SYM is `systemd-user' or `systemd-system'."
+  (delq nil
+        (mapcar (lambda (line)
+                  (daemons-dash--parse-systemd-line line provider-sym))
+                (split-string output "\n" t))))
 
 ;;; Provider Implementations
 
 ;; 1. systemd-user
 (defun daemons-dash-systemd-user-list ()
   "Fetch user systemd services, timers, and sockets."
-  (if (executable-find "systemctl")
-      (let ((output (daemons-dash--run-command
-                     '("systemctl" "--user" "list-units" "--type=service,timer,socket" "--all" "--no-legend" "--no-pager"))))
-        (daemons-dash--parse-systemd-units output 'systemd-user))
-    (list (daemons-dash-item--make
-           :id "systemd-user:unavailable"
-           :name "systemd-user"
-           :provider 'systemd-user
-           :status 'inactive
-           :details "systemctl executable not found"
-           :config-status 'untracked))))
+  (if (not (executable-find "systemctl"))
+      (list (daemons-dash-item--make
+             :id "systemd-user:unavailable"
+             :name "systemd-user"
+             :provider 'systemd-user
+             :status 'inactive
+             :details "systemctl executable not found"
+             :config-status 'untracked))
+    (let ((output (daemons-dash--run-command
+                   '("systemctl" "--user" "list-units"
+                     "--type=service,timer,socket" "--all" "--no-legend" "--no-pager"))))
+      (daemons-dash--parse-systemd-units output 'systemd-user))))
 
 (defun daemons-dash-systemd-user-start (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Start user systemd unit ID."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "systemctl" "--user" "start" unit))))
 
 (defun daemons-dash-systemd-user-stop (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Stop user systemd unit ID."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "systemctl" "--user" "stop" unit))))
 
 (defun daemons-dash-systemd-user-restart (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Restart user systemd unit ID."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "systemctl" "--user" "restart" unit))))
 
 (defun daemons-dash-systemd-user-enable (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Enable user systemd unit ID."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "systemctl" "--user" "enable" unit))))
 
 (defun daemons-dash-systemd-user-disable (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Disable user systemd unit ID."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "systemctl" "--user" "disable" unit))))
 
 (defun daemons-dash-systemd-user-logs (id)
   "View logs for user systemd unit ID."
-  (let ((unit (cadr (split-string id ":"))))
+  (let ((unit (daemons-dash--id-target id)))
     (require 'journalctl-mode nil t)
     (daemons-dash--show-journalctl (format "--user-unit=%s" unit))))
 
@@ -301,46 +317,52 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
 ;; 2. systemd-system
 (defun daemons-dash-systemd-system-list ()
   "Fetch system systemd services filtered by inclusion predicate."
-  (if (executable-find "systemctl")
-      (let* ((output (daemons-dash--run-command
-                      '("systemctl" "list-units" "--type=service,timer,socket" "--all" "--no-legend" "--no-pager")))
-             (all-items (daemons-dash--parse-systemd-units output 'systemd-system)))
-        (if daemons-dash-systemd-show-matching-fn
-            (seq-filter (lambda (item)
-                          (funcall daemons-dash-systemd-show-matching-fn (daemons-dash-item-name item)))
-                        all-items)
-          all-items))
-    (list (daemons-dash-item--make
-           :id "systemd-system:unavailable"
-           :name "systemd-system"
-           :provider 'systemd-system
-           :status 'inactive
-           :details "systemctl executable not found"
-           :config-status 'untracked))))
+  (if (not (executable-find "systemctl"))
+      (list (daemons-dash-item--make
+             :id "systemd-system:unavailable"
+             :name "systemd-system"
+             :provider 'systemd-system
+             :status 'inactive
+             :details "systemctl executable not found"
+             :config-status 'untracked))
+    (let* ((output (daemons-dash--run-command
+                    '("systemctl" "list-units"
+                      "--type=service,timer,socket" "--all" "--no-legend" "--no-pager")))
+           (all-items (daemons-dash--parse-systemd-units output 'systemd-system)))
+      (if (functionp daemons-dash-systemd-show-matching-fn)
+          (seq-filter (lambda (item)
+                        (funcall daemons-dash-systemd-show-matching-fn (daemons-dash-item-name item)))
+                      all-items)
+        all-items))))
 
 (defun daemons-dash-systemd-system-start (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Start system systemd unit ID with sudo."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "sudo" "systemctl" "start" unit))))
 
 (defun daemons-dash-systemd-system-stop (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Stop system systemd unit ID with sudo."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "sudo" "systemctl" "stop" unit))))
 
 (defun daemons-dash-systemd-system-restart (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Restart system systemd unit ID with sudo."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "sudo" "systemctl" "restart" unit))))
 
 (defun daemons-dash-systemd-system-enable (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Enable system systemd unit ID with sudo."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "sudo" "systemctl" "enable" unit))))
 
 (defun daemons-dash-systemd-system-disable (id)
-  (let ((unit (cadr (split-string id ":"))))
+  "Disable system systemd unit ID with sudo."
+  (let ((unit (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "sudo" "systemctl" "disable" unit))))
 
 (defun daemons-dash-systemd-system-logs (id)
   "View logs for system systemd unit ID."
-  (let ((unit (cadr (split-string id ":"))))
+  (let ((unit (daemons-dash--id-target id)))
     (require 'journalctl-mode nil t)
     (daemons-dash--show-journalctl (format "--unit=%s" unit))))
 
@@ -358,43 +380,46 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
   :inspect-fn #'daemons-dash-systemd-system-logs))
 
 ;; 3. sprite
+(defun daemons-dash-sprite--make-item (sprite)
+  "Construct a `daemons-dash-item' from SPRITE record."
+  (let* ((name (sprite-name sprite))
+         (running (ignore-errors (sprite--running-p name)))
+         (status (if running 'active 'inactive))
+         (start-time (sprite-start-time sprite))
+         (uptime (if (and start-time (fboundp 'sprite--format-uptime))
+                     (sprite--format-uptime (float-time (time-since start-time)))
+                   "unknown"))
+         (details (format "running %s, uptime %s" (if running "yes" "no") uptime)))
+    (daemons-dash-item--make
+     :id (format "sprite:%s" name)
+     :name name
+     :provider 'sprite
+     :status status
+     :details details
+     :config-status 'untracked
+     :raw-data sprite)))
+
 (defun daemons-dash-sprite-list ()
   "Fetch subordinate Emacs daemons from `sprite.el'."
   (when (require 'sprite nil t)
-    (let ((sprites (ignore-errors (sprite-resolve-list)))
-          (items nil))
-      (dolist (s sprites)
-        (let* ((name (sprite-name s))
-               (running (ignore-errors (sprite--running-p name)))
-               (status (if running 'active 'inactive))
-               (start-time (sprite-start-time s))
-               (uptime (if (and start-time (fboundp 'sprite--format-uptime))
-                           (sprite--format-uptime (float-time (time-since start-time)))
-                         "unknown"))
-               (details (format "running %s, uptime %s" (if running "yes" "no") uptime)))
-          (push (daemons-dash-item--make
-                 :id (format "sprite:%s" name)
-                 :name name
-                 :provider 'sprite
-                 :status status
-                 :details details
-                 :config-status 'untracked
-                 :raw-data s)
-                items)))
-      (nreverse items))))
+    (let ((sprites (ignore-errors (sprite-resolve-list))))
+      (mapcar #'daemons-dash-sprite--make-item sprites))))
 
 (defun daemons-dash-sprite-stop (id)
-  (let ((name (cadr (split-string id ":"))))
+  "Stop sprite daemon ID."
+  (let ((name (daemons-dash--id-target id)))
     (when (fboundp 'sprite-stop)
       (sprite-stop name))))
 
 (defun daemons-dash-sprite-restart (id)
-  (let ((name (cadr (split-string id ":"))))
+  "Restart sprite daemon ID."
+  (let ((name (daemons-dash--id-target id)))
     (when (fboundp 'sprite-restart)
       (sprite-restart name))))
 
 (defun daemons-dash-sprite-logs (id)
-  (let ((name (cadr (split-string id ":"))))
+  "View logs for sprite daemon ID."
+  (let ((name (daemons-dash--id-target id)))
     (cond
      ((fboundp 'sprite-open-log)
       (sprite-open-log name))
@@ -417,68 +442,78 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
   :inspect-fn #'daemons-dash-sprite-logs))
 
 ;; 4. docker
+(defun daemons-dash-docker--parse-line (line)
+  "Parse a single tab-separated docker output LINE into a `daemons-dash-item'."
+  (let ((parts (split-string line "\t" t)))
+    (when (>= (length parts) 3)
+      (let* ((cid (nth 0 parts))
+             (cname (nth 1 parts))
+             (cstatus (nth 2 parts))
+             (cports (or (nth 3 parts) ""))
+             (status (if (string-prefix-p "Up" cstatus) 'active 'inactive))
+             (details (format "%s %s" cstatus (if (string-empty-p cports) "" (concat "ports " cports)))))
+        (daemons-dash-item--make
+         :id (format "docker:%s" cname)
+         :name cname
+         :provider 'docker
+         :status status
+         :details details
+         :config-status 'untracked
+         :raw-data (list :id cid :name cname :status cstatus :ports cports))))))
+
 (defun daemons-dash-docker-list ()
   "Fetch Docker containers via CLI or docker.el."
-  (if (executable-find "docker")
-      (condition-case err
-          (let ((output (daemons-dash--run-command
-                         '("docker" "container" "ls" "-a" "--format" "{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}")))
-                (items nil))
-            (dolist (line (split-string output "\n" t))
-              (let ((parts (split-string line "\t" t)))
-                (when (>= (length parts) 3)
-                  (let* ((cid (nth 0 parts))
-                         (cname (nth 1 parts))
-                         (cstatus (nth 2 parts))
-                         (cports (or (nth 3 parts) ""))
-                         (status (if (string-prefix-p "Up" cstatus) 'active 'inactive))
-                         (details (format "%s %s" cstatus (if (string-empty-p cports) "" (concat "ports " cports)))))
-                    (push (daemons-dash-item--make
-                           :id (format "docker:%s" cname)
-                           :name cname
-                           :provider 'docker
-                           :status status
-                           :details details
-                           :config-status 'untracked
-                           :raw-data (list :id cid :name cname :status cstatus :ports cports))
-                          items)))))
-            (nreverse items))
-        (error
-         (list (daemons-dash-item--make
-                :id "docker:inactive"
-                :name "docker"
-                :provider 'docker
-                :status 'inactive
-                :details (format "Docker daemon inactive (%s)" (error-message-string err))
-                :config-status 'untracked))))
+  (cond
+   ((not (executable-find "docker"))
     (list (daemons-dash-item--make
            :id "docker:unavailable"
            :name "docker"
            :provider 'docker
            :status 'inactive
            :details "docker executable not found"
-           :config-status 'untracked))))
+           :config-status 'untracked)))
+   (t
+    (condition-case err
+        (let* ((cmd '("docker" "container" "ls" "-a"
+                      "--format" "{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"))
+               (output (daemons-dash--run-command cmd)))
+          (delq nil (mapcar #'daemons-dash-docker--parse-line
+                            (split-string output "\n" t))))
+      (error
+       (list (daemons-dash-item--make
+              :id "docker:inactive"
+              :name "docker"
+              :provider 'docker
+              :status 'inactive
+              :details (format "Docker daemon inactive (%s)" (error-message-string err))
+              :config-status 'untracked)))))))
 
 (defun daemons-dash-docker-start (id)
-  (let ((cname (cadr (split-string id ":"))))
+  "Start docker container ID."
+  (let ((cname (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "docker" "start" cname))))
 
 (defun daemons-dash-docker-stop (id)
-  (let ((cname (cadr (split-string id ":"))))
+  "Stop docker container ID."
+  (let ((cname (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "docker" "stop" cname))))
 
 (defun daemons-dash-docker-restart (id)
-  (let ((cname (cadr (split-string id ":"))))
+  "Restart docker container ID."
+  (let ((cname (daemons-dash--id-target id)))
     (daemons-dash--run-command (list "docker" "restart" cname))))
 
 (defun daemons-dash-docker-logs (id)
-  (let ((cname (cadr (split-string id ":"))))
-    (let ((buf (get-buffer-create (format "*docker-logs:%s*" cname))))
-      (pop-to-buffer buf)
+  "View logs for docker container ID."
+  (let* ((cname (daemons-dash--id-target id))
+         (buf (get-buffer-create (format "*docker-logs:%s*" cname))))
+    (with-current-buffer buf
       (compilation-mode)
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (call-process "docker" nil t nil "logs" "--tail" "200" cname)))))
+        (call-process "docker" nil t nil "logs" "--tail" "200" cname)))
+    (pop-to-buffer buf)
+    buf))
 
 (daemons-dash-register-provider
  (daemons-dash-provider--make
@@ -494,62 +529,66 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
   :inspect-fn #'daemons-dash-docker-logs))
 
 ;; 5. ollama
+(defun daemons-dash-ollama--model-to-item (m)
+  "Convert an Ollama model plist M to a `daemons-dash-item'."
+  (let* ((name (or (plist-get m :name) (plist-get m :model)))
+         (size (or (plist-get m :size) 0))
+         (vram (or (plist-get m :size_vram) 0))
+         (vram-mb (/ vram (* 1024 1024)))
+         (details (format "VRAM %dMB size %dMB" vram-mb (/ size (* 1024 1024)))))
+    (daemons-dash-item--make
+     :id (format "ollama:%s" name)
+     :name name
+     :provider 'ollama
+     :status 'active
+     :details details
+     :config-status 'untracked
+     :raw-data m)))
+
+(defun daemons-dash-ollama--fallback-item (id details)
+  "Create a fallback `daemons-dash-item' for Ollama with ID and DETAILS."
+  (list (daemons-dash-item--make
+         :id id
+         :name "ollama"
+         :provider 'ollama
+         :status 'inactive
+         :details details
+         :config-status 'untracked)))
+
 (defun daemons-dash-ollama-list ()
-  "Fetch active Ollama models via local HTTP API (`/api/ps`)."
+  "Fetch active Ollama models via local HTTP API (`/api/ps')."
   (let ((url (concat daemons-dash-ollama-host "/api/ps"))
         (url-request-method "GET")
-        (url-show-status nil))
+        (url-show-status nil)
+        (buf nil))
     (condition-case nil
-        (with-current-buffer (url-retrieve-synchronously url t t daemons-dash-ollama-timeout)
-          (goto-char (point-min))
-          (if (re-search-forward "\n\n" nil t)
-              (let* ((json-object-type 'plist)
-                     (json-array-type 'list)
-                     (data (json-read))
-                     (models (plist-get data :models))
-                     (items nil))
-                (kill-buffer)
-                (dolist (m models)
-                  (let* ((name (or (plist-get m :name) (plist-get m :model)))
-                         (size (or (plist-get m :size) 0))
-                         (vram (or (plist-get m :size_vram) 0))
-                         (vram-mb (/ vram (* 1024 1024)))
-                         (details (format "VRAM %dMB size %dMB" vram-mb (/ size (* 1024 1024)))))
-                    (push (daemons-dash-item--make
-                           :id (format "ollama:%s" name)
-                           :name name
-                           :provider 'ollama
-                           :status 'active
-                           :details details
-                           :config-status 'untracked
-                           :raw-data m)
-                          items)))
-                (or (nreverse items)
-                    (list (daemons-dash-item--make
-                           :id "ollama:idle"
-                           :name "ollama"
-                           :provider 'ollama
-                           :status 'inactive
-                           :details "Ollama server running (no models loaded in VRAM)"
-                           :config-status 'untracked))))
-            (kill-buffer)
-            (list (daemons-dash-item--make
-                   :id "ollama:inactive"
-                   :name "ollama"
-                   :provider 'ollama
-                   :status 'inactive
-                   :details "Ollama server inactive"
-                   :config-status 'untracked))))
+        (unwind-protect
+            (progn
+              (setq buf (url-retrieve-synchronously url t t daemons-dash-ollama-timeout))
+              (unless buf
+                (error "Failed to retrieve Ollama URL"))
+              (with-current-buffer buf
+                (goto-char (point-min))
+                (unless (re-search-forward "\n\n" nil t)
+                  (error "No HTTP response body found"))
+                (let* ((json-object-type 'plist)
+                       (json-array-type 'list)
+                       (data (json-read))
+                       (models (plist-get data :models)))
+                  (if models
+                      (mapcar #'daemons-dash-ollama--model-to-item models)
+                    (daemons-dash-ollama--fallback-item
+                     "ollama:idle"
+                     "Ollama server running (no models loaded in VRAM)")))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))
       (error
-       (list (daemons-dash-item--make
-              :id "ollama:inactive"
-              :name "ollama"
-              :provider 'ollama
-              :status 'inactive
-              :details "Ollama server inactive"
-              :config-status 'untracked))))))
+       (daemons-dash-ollama--fallback-item
+        "ollama:inactive"
+        "Ollama server inactive")))))
 
 (defun daemons-dash-ollama-logs (_id)
+  "View logs for Ollama daemon."
   (daemons-dash-systemd-system-logs "systemd-system:ollama.service"))
 
 (daemons-dash-register-provider
@@ -572,14 +611,19 @@ PROVIDER-SYM is 'systemd-user or 'systemd-system."
 (defun daemons-dash-fetch-all ()
   "Gather `daemons-dash-item' structs from all `daemons-dash-enabled-providers'.
 Annotates entries with configuration status if `daemons-dash-config' is loaded."
-  (let ((all-items nil))
+  (let ((item-groups nil))
     (dolist (provider-sym daemons-dash-enabled-providers)
       (when-let* ((provider (daemons-dash-get-provider provider-sym))
                   (fn (daemons-dash-provider-list-fn provider)))
-        (setq all-items (append all-items (funcall fn)))))
-    (if (fboundp 'daemons-dash-config-annotate-entries)
-        (daemons-dash-config-annotate-entries all-items)
-      all-items)))
+        (condition-case err
+            (push (funcall fn) item-groups)
+          (error
+           (message "daemons-dash: error fetching %s: %s"
+                    provider-sym (error-message-string err))))))
+    (let ((all-items (apply #'append (nreverse item-groups))))
+      (if (fboundp 'daemons-dash-config-annotate-entries)
+          (daemons-dash-config-annotate-entries all-items)
+        all-items))))
 
 ;;; Filtering & Narrowing
 
@@ -603,20 +647,22 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
      (list (intern (completing-read "Toggle provider: "
                                     (mapcar #'symbol-name providers)
                                     nil t)))))
-  (if (memq provider daemons-dash-hidden-providers)
-      (setq daemons-dash-hidden-providers (delq provider daemons-dash-hidden-providers))
-    (push provider daemons-dash-hidden-providers))
+  (setq daemons-dash-hidden-providers
+        (if (memq provider daemons-dash-hidden-providers)
+            (delq provider daemons-dash-hidden-providers)
+          (cons provider daemons-dash-hidden-providers)))
   (daemons-dash-refresh))
 
 (defun daemons-dash-toggle-state-filter (state)
-  "Toggle visibility of daemons with STATE ('active, 'inactive, 'failed)."
+  "Toggle visibility of daemons with STATE (e.g. `active', `inactive', `failed')."
   (interactive
    (list (intern (completing-read "Toggle state: "
                                   '("active" "inactive" "failed")
                                   nil t))))
-  (if (memq state daemons-dash-hidden-states)
-      (setq daemons-dash-hidden-states (delq state daemons-dash-hidden-states))
-    (push state daemons-dash-hidden-states))
+  (setq daemons-dash-hidden-states
+        (if (memq state daemons-dash-hidden-states)
+            (delq state daemons-dash-hidden-states)
+          (cons state daemons-dash-hidden-states)))
   (daemons-dash-refresh))
 
 (defun daemons-dash-filter-reset ()
@@ -671,12 +717,10 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
 
 (defun daemons-dash--format-status (status)
   "Format STATUS symbol/string into propertized text."
-  (let ((str (symbol-name status)))
+  (let ((str (if (symbolp status) (symbol-name status) (format "%s" status))))
     (pcase status
-      ('active (propertize str 'face 'daemons-dash-face-active))
-      ('running (propertize str 'face 'daemons-dash-face-active))
+      ((or 'active 'running) (propertize str 'face 'daemons-dash-face-active))
       ('failed (propertize str 'face 'daemons-dash-face-failed))
-      ('inactive (propertize str 'face 'daemons-dash-face-inactive))
       (_ (propertize str 'face 'daemons-dash-face-inactive)))))
 
 (defun daemons-dash--format-config-status (item)
@@ -711,7 +755,7 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
     (define-key map (kbd "e")   #'daemons-dash-enable)
     (define-key map (kbd "d")   #'daemons-dash-disable)
     (define-key map (kbd "f")   #'daemons-dash-filter-menu)
-        (define-key map (kbd "v")   #'daemons-dash-verify-config)
+    (define-key map (kbd "v")   #'daemons-dash-verify-config)
     (define-key map (kbd "g")   #'daemons-dash-refresh)
     (define-key map (kbd "q")   #'quit-window)
     (define-key map (kbd "?")   #'daemons-dash-dispatch)
@@ -723,8 +767,8 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
   "Major mode for displaying system services and background daemons.
 
 \\{daemons-dash-mode-map}"
-  (make-local-variable 'daemons-dash-hidden-providers)
-  (make-local-variable 'daemons-dash-hidden-states)
+  (setq-local daemons-dash-hidden-providers (copy-sequence daemons-dash-hidden-providers))
+  (setq-local daemons-dash-hidden-states (copy-sequence daemons-dash-hidden-states))
   (setq tabulated-list-format
         [("Name" 30 t)
          ("Provider" 15 t)
@@ -738,7 +782,7 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
 ;;; Interactive Actions
 
 (defun daemons-dash--item-at-point ()
-  "Return `daemons-dash-item' at point or signal user-error."
+  "Return `daemons-dash-item' at point or signal `user-error'."
   (or (tabulated-list-get-id)
       (user-error "No daemon item at point")))
 
@@ -765,62 +809,51 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
                    (string-join (nreverse hidden-info) "; "))
         (message "daemons-dash: %d items" (length items))))))
 
+(defun daemons-dash--execute-action (action-name accessor-fn message-fmt)
+  "Execute ACTION-NAME on daemon item at point.
+ACCESSOR-FN retrieves the provider action function.
+MESSAGE-FMT is the format string for the success message."
+  (let* ((item (daemons-dash--item-at-point))
+         (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
+    (if-let* ((fn (and provider (funcall accessor-fn provider))))
+        (progn
+          (funcall fn (daemons-dash-item-id item))
+          (message message-fmt (daemons-dash-item-name item) (daemons-dash-item-provider item))
+          (daemons-dash-refresh))
+      (message "Action '%s' not supported for provider %s"
+               action-name (daemons-dash-item-provider item)))))
+
 (defun daemons-dash-start ()
   "Start the daemon at point."
   (interactive)
-  (let* ((item (daemons-dash--item-at-point))
-         (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
-    (when-let* ((fn (daemons-dash-provider-start-fn provider)))
-      (funcall fn (daemons-dash-item-id item))
-      (message "Started %s (%s)" (daemons-dash-item-name item) (daemons-dash-item-provider item))
-      (daemons-dash-refresh))))
+  (daemons-dash--execute-action "start" #'daemons-dash-provider-start-fn "Started %s (%s)"))
 
 (defun daemons-dash-stop ()
   "Stop the daemon at point."
   (interactive)
-  (let* ((item (daemons-dash--item-at-point))
-         (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
-    (when-let* ((fn (daemons-dash-provider-stop-fn provider)))
-      (funcall fn (daemons-dash-item-id item))
-      (message "Stopped %s (%s)" (daemons-dash-item-name item) (daemons-dash-item-provider item))
-      (daemons-dash-refresh))))
+  (daemons-dash--execute-action "stop" #'daemons-dash-provider-stop-fn "Stopped %s (%s)"))
 
 (defun daemons-dash-restart ()
   "Restart the daemon at point."
   (interactive)
-  (let* ((item (daemons-dash--item-at-point))
-         (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
-    (when-let* ((fn (daemons-dash-provider-restart-fn provider)))
-      (funcall fn (daemons-dash-item-id item))
-      (message "Restarted %s (%s)" (daemons-dash-item-name item) (daemons-dash-item-provider item))
-      (daemons-dash-refresh))))
+  (daemons-dash--execute-action "restart" #'daemons-dash-provider-restart-fn "Restarted %s (%s)"))
 
 (defun daemons-dash-enable ()
   "Enable the daemon at point."
   (interactive)
-  (let* ((item (daemons-dash--item-at-point))
-         (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
-    (when-let* ((fn (daemons-dash-provider-enable-fn provider)))
-      (funcall fn (daemons-dash-item-id item))
-      (message "Enabled %s (%s)" (daemons-dash-item-name item) (daemons-dash-item-provider item))
-      (daemons-dash-refresh))))
+  (daemons-dash--execute-action "enable" #'daemons-dash-provider-enable-fn "Enabled %s (%s)"))
 
 (defun daemons-dash-disable ()
   "Disable the daemon at point."
   (interactive)
-  (let* ((item (daemons-dash--item-at-point))
-         (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
-    (when-let* ((fn (daemons-dash-provider-disable-fn provider)))
-      (funcall fn (daemons-dash-item-id item))
-      (message "Disabled %s (%s)" (daemons-dash-item-name item) (daemons-dash-item-provider item))
-      (daemons-dash-refresh))))
+  (daemons-dash--execute-action "disable" #'daemons-dash-provider-disable-fn "Disabled %s (%s)"))
 
 (defun daemons-dash-view-logs ()
   "View logs for the daemon at point."
   (interactive)
   (let* ((item (daemons-dash--item-at-point))
          (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
-    (if-let* ((fn (daemons-dash-provider-logs-fn provider)))
+    (if-let* ((fn (and provider (daemons-dash-provider-logs-fn provider))))
         (funcall fn (daemons-dash-item-id item))
       (message "No log handler available for provider %s" (daemons-dash-item-provider item)))))
 
@@ -829,7 +862,7 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
   (interactive)
   (let* ((item (daemons-dash--item-at-point))
          (provider (daemons-dash-get-provider (daemons-dash-item-provider item))))
-    (if-let* ((fn (daemons-dash-provider-inspect-fn provider)))
+    (if-let* ((fn (and provider (daemons-dash-provider-inspect-fn provider))))
         (funcall fn (daemons-dash-item-id item))
       (daemons-dash-view-logs))))
 
@@ -900,7 +933,7 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
     ("v" "Verify config"     daemons-dash-verify-config)
     ("g" "Refresh"           daemons-dash-refresh)]
    ["Filters & Narrowing"
-    ("f"  "Filter menu..."   daemons-dash-filter-menu)
+    ("F"  "Filter menu..."   daemons-dash-filter-menu)
     ("fa" "Toggle active"    daemons-dash-filter-toggle-active :transient t)
     ("fi" "Toggle inactive"  daemons-dash-filter-toggle-inactive :transient t)
     ("ff" "Toggle failed"    daemons-dash-filter-toggle-failed :transient t)
@@ -918,7 +951,8 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
     (with-current-buffer buf
       (daemons-dash-mode)
       (daemons-dash-refresh))
-    (pop-to-buffer buf)))
+    (pop-to-buffer buf)
+    buf))
 
 (provide 'daemons-dash)
 ;;; daemons-dash.el ends here
