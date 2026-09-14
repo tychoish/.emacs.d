@@ -159,7 +159,7 @@
 	  (sequence "INPROGRESS" "|" "COMPLETE")
           (sequence "CONSIDER(c)" "MUST(m)" "|" "ACKNOWLEDGED(k@)" "IGNORED(u)" "REJECTED(r)" "DISMISSED(p)")
           (sequence "BACKLOG(b)" "SCHEDULED(h)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")
-          (sequence "BLOCKED(f)" "PAUSED(h)" "|" "SKIPPED(k@)" "CANCELED(c@)" "INCOMPLETE(i@)" "ABANDONED(@l)")))
+          (sequence "BLOCKED(o)" "PAUSED(h)" "|" "SKIPPED(k@)" "CANCELED(x@)" "INCOMPLETE(i@)" "ABANDONED(@l)")))
 
   (setq org-tag-alist
         '((:startgroup . nil)
