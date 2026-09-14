@@ -54,6 +54,7 @@
 (declare-function org-map-entries "org")
 (declare-function org-read-date "org")
 (declare-function org-up-heading-safe "org")
+(defvar org-heading-regexp)
 (declare-function denote-dash-lint-sequences "denote-dash-repack")
 (declare-function denote-dash-fix-sequence-frontmatter "denote-dash-repack")
 (declare-function denote-dash-fix-all-sequence-frontmatter "denote-dash-repack")
@@ -85,7 +86,8 @@ filter language: strings, (or ...), (and ...), (not ...)."
 
 (defcustom denote-dash-initial-columns '(sequence title keywords id)
   "Columns shown when the *denote-dash* buffer is first created.
-Valid symbols: fold, sequence, title, keywords, modified, id, directory, git, review, reviewdate."
+Valid symbols: fold, sequence, title, keywords, modified, id, directory,
+git, review, reviewdate."
   :type '(repeat (choice (const fold) (const sequence) (const title)
                          (const keywords) (const modified) (const id)
                          (const directory) (const git) (const review) (const reviewdate)))
@@ -94,7 +96,8 @@ Valid symbols: fold, sequence, title, keywords, modified, id, directory, git, re
 (defcustom denote-dash-title-source 'front-matter
   "How to retrieve the title for the title column.
 `filename' uses the title encoded in the filename (fast).
-`front-matter' reads the title from the file's front matter (accurate but slower)."
+`front-matter' reads the title from the file's front matter
+\(accurate but slower)."
   :type '(choice (const filename) (const front-matter))
   :group 'denote-dash)
 
@@ -186,6 +189,13 @@ Independent of `denote-dash--current-filter' (keywords/expression) and
 with AND in `denote-dash--file-visible-p'. nil shows all notes regardless
 of content.")
 
+(defvar denote-dash-column-order
+  '(sequence fold title keywords id directory modified git review reviewdate)
+  "Canonical display order for columns; determines left-to-right position.")
+
+(defvar denote-dash--persisted-columns nil
+  "Column list saved across sessions for `*denote-dash*'.")
+
 (defvar-local denote-dash--visible-columns nil
   "Ordered list of column symbols currently displayed.")
 
@@ -249,17 +259,16 @@ hierarchy levels alternate between digit and letter characters."
       0
     (let ((depth 0)
           (prev nil))
-      (seq-do (lambda (c)
-                (when (and prev
-                           (not (eq (denote-dash--char-digit-p prev)
-                                    (denote-dash--char-digit-p c))))
-                  (setq depth (1+ depth)))
-                (setq prev c))
-              seq-id)
-      depth)))
+      (dolist (c (string-to-list seq-id) depth)
+        (when (and prev
+                   (not (eq (denote-dash--char-digit-p prev)
+                            (denote-dash--char-digit-p c))))
+          (setq depth (1+ depth)))
+        (setq prev c)))))
 
 (defun denote-dash--direct-child-p (parent child)
-  "Return non-nil if CHILD is an immediate child of PARENT in the sequence hierarchy."
+  "Return non-nil if CHILD is an immediate child of PARENT.
+Both are sequence ID strings in the sequence hierarchy."
   (and (denote-dash--sequence-descendant-p parent child)
        (= (denote-dash--sequence-depth child)
           (1+ (denote-dash--sequence-depth parent)))))
@@ -274,11 +283,12 @@ hierarchy levels alternate between digit and letter characters."
 
 (defun denote-dash--matches-tags-p (keywords specs)
   "Evaluate left-to-right tag specs SPECS against KEYWORDS.
-SPECS is a list of strings, each formatted as \"+tag\" (or bare \"tag\") or \"-tag\".
-If the first spec starts with \"-\", evaluation starts with t (all included)
-and \"-tag\" excludes matching notes, while \"+tag\" re-includes them.
-If the first spec starts with \"+\" or is bare, evaluation starts with nil
-(none included) and \"+tag\" includes matching notes, while \"-tag\" excludes them."
+SPECS is a list of strings, each formatted as \"+tag\" (or bare
+\"tag\") or \"-tag\".  If the first spec starts with \"-\", evaluation
+starts with t (all included) and \"-tag\" excludes matching notes,
+while \"+tag\" re-includes them.  If the first spec starts with \"+\" or
+is bare, evaluation starts with nil (none included) and \"+tag\"
+includes matching notes, while \"-tag\" excludes them."
   (when specs
     (let* ((first (car specs))
            (start-with-minus (string-prefix-p "-" first))
@@ -289,13 +299,8 @@ If the first spec starts with \"+\" or is bare, evaluation starts with nil
                         (substring spec 1)
                       spec))
                (has-tag (member tag keywords)))
-          (cond
-           (is-minus
-            (when has-tag
-              (setq matched nil)))
-           (t
-            (when has-tag
-              (setq matched t)))))))))
+          (when has-tag
+            (setq matched (not is-minus))))))))
 
 (defun denote-dash--matches-p (keywords expr)
   "Return non-nil if KEYWORDS (list of strings) satisfies filter EXPR.
@@ -416,7 +421,9 @@ content filter active, not on every keystroke."
     (re-search-forward regexp nil t)))
 
 (defun denote-dash--file-visible-p (file all-seq-ids)
-  "Return non-nil if FILE should appear given current filter, directory, and fold state."
+  "Return non-nil if FILE should appear given current filter and fold state.
+Evaluates current filter, directory, grep filter, and fold state against
+FILE and ALL-SEQ-IDS."
   (let ((seq-id (denote-retrieve-filename-signature file)))
     (and (denote-dash--matches-p (denote-extract-keywords-from-path file)
                                  denote-dash--current-filter)
@@ -429,37 +436,45 @@ content filter active, not on every keystroke."
          (or denote-dash--show-non-sequence seq-id)
          (denote-dash--fold-visible-p seq-id all-seq-ids))))
 
+(defun denote-dash--entry-title (file)
+  "Return the title for FILE based on `denote-dash-title-source'."
+  (if (eq denote-dash-title-source 'front-matter)
+      (denote-retrieve-title-or-filename file (denote-filetype-heuristics file))
+    (or (denote-retrieve-filename-title file) (file-name-base file))))
+
+(defun denote-dash--entry-column-value (file col seq-id)
+  "Return the formatted string value for column COL on FILE with SEQ-ID."
+  (pcase col
+    ('fold        (denote-dash--fold-indicator seq-id))
+    ('sequence    (or seq-id ""))
+    ('title       (denote-dash--entry-title file))
+    ('keywords    (string-join (denote-extract-keywords-from-path file) " "))
+    ('modified    (format-time-string "%Y-%m-%d"
+                                      (file-attribute-modification-time (file-attributes file))))
+    ('id          (denote-dash--format-id (denote-retrieve-filename-identifier file)))
+    ('directory   (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
+    ('git         (or (denote-dash--git-status-char file) " "))
+    ('review      (funcall denote-dash-review-indicator-function
+                           (denote-dash--review-pending-p file)))
+    ('reviewdate  (or (denote-review-check-date-of-file
+                       file (denote-review-search-regexp-for-filetype))
+                      ""))
+    (_            "")))
+
+(defun denote-dash--file-entry (file)
+  "Return the `tabulated-list-mode' entry for FILE."
+  (let* ((seq-id (denote-retrieve-filename-signature file))
+         (cols (mapcar (lambda (col) (denote-dash--entry-column-value file col seq-id))
+                       denote-dash--visible-columns)))
+    (list file (apply #'vector cols))))
+
 (defun denote-dash--compute-entries ()
   "Return the full list of `tabulated-list-mode' entries for the current state."
   (let* ((files (denote-directory-files))
-         (all-seq-ids (thread-last
-			files
-                        (seq-map #'denote-retrieve-filename-signature)
-                        (seq-filter #'identity))))
-    (thread-last
-      files
-      (seq-filter (lambda (f) (denote-dash--file-visible-p f all-seq-ids)))
-      (seq-map (lambda (file)
-                 (let ((seq-id (denote-retrieve-filename-signature file)))
-                   (list file
-                         (apply #'vector
-                                (seq-map
-                                 (lambda (col)
-                                   (pcase col
-                                     ('fold      (denote-dash--fold-indicator seq-id))
-                                     ('sequence  (or seq-id ""))
-                                     ('title     (if (eq denote-dash-title-source 'front-matter)
-                                                     (denote-retrieve-title-or-filename file (denote-filetype-heuristics file))
-                                                   (or (denote-retrieve-filename-title file) (file-name-base file))))
-                                     ('keywords  (string-join (denote-extract-keywords-from-path file) " "))
-                                     ('modified  (format-time-string "%Y-%m-%d" (file-attribute-modification-time (file-attributes file))))
-                                     ('id        (denote-dash--format-id (denote-retrieve-filename-identifier file)))
-                                     ('directory (file-relative-name (file-name-directory file) (denote-dash--denote-root)))
-                                     ('git       (or (denote-dash--git-status-char file) " "))
-                                     ('review    (funcall denote-dash-review-indicator-function
-                                                          (denote-dash--review-pending-p file)))
-                                     ('reviewdate (or (denote-review-check-date-of-file file (denote-review-search-regexp-for-filetype)) ""))))
-                                 denote-dash--visible-columns)))))))))
+         (all-seq-ids (seq-keep #'denote-retrieve-filename-signature files)))
+    (seq-map #'denote-dash--file-entry
+             (seq-filter (lambda (f) (denote-dash--file-visible-p f all-seq-ids))
+                         files))))
 
 ;;; Column format
 
@@ -480,7 +495,7 @@ content filter active, not on every keystroke."
         (_          10))))
 
 (defun denote-dash--setup-columns ()
-  "Configure `tabulated-list-format' from current visible columns and reinit header."
+  "Configure `tabulated-list-format' from visible columns and reinit header."
   (setq tabulated-list-format
         (apply #'vector
                (seq-map (lambda (col)
@@ -597,6 +612,29 @@ content filter active, not on every keystroke."
    (buffer-list)))
 
 ;;;###autoload
+(defun denote-dash--close-note-buffer (buf)
+  "Close Denote note buffer BUF, prompting to save if modified.
+Returns a cons cell (SAVED-P . STALE-NAME)."
+  (with-current-buffer buf
+    (let ((saved nil)
+          (stale-name nil)
+          (fname (buffer-file-name)))
+      (when (buffer-modified-p)
+        (cond
+         ((not (and fname (file-exists-p fname)))
+          (setq stale-name (buffer-name))
+          (if (yes-or-no-p
+               (format "%s: file no longer exists on disk; save anyway (recreates it)? "
+                       (buffer-name)))
+              (progn (save-buffer) (setq saved t))
+            (set-buffer-modified-p nil)))
+         ((y-or-n-p (format "Save %s? " (buffer-name)))
+          (save-buffer)
+          (setq saved t))
+         (t (set-buffer-modified-p nil))))
+      (kill-buffer buf)
+      (cons saved stale-name))))
+
 (defun denote-dash-close-all-notes ()
   "Close every open Denote note buffer, prompting to save modified ones.
 For a modified buffer whose file no longer exists on disk — for example
@@ -604,37 +642,23 @@ because a sequence operation renamed it out from under the buffer — the
 user is informed and asked whether to save (which recreates the file) or
 discard the changes."
   (interactive)
-  (let ((buffers (denote-dash--note-buffers))
-        (closed 0)
-        (saved 0)
-        (stale nil))
+  (let ((buffers (denote-dash--note-buffers)))
     (if (null buffers)
         (message "No open Denote note buffers")
-      (seq-do
-       (lambda (buf)
-         (with-current-buffer buf
-           (when (buffer-modified-p)
-             (cond
-              ((not (and (buffer-file-name) (file-exists-p (buffer-file-name))))
-               (push (buffer-name) stale)
-               (if (yes-or-no-p
-                    (format "%s: file no longer exists on disk; save anyway (recreates it)? "
-                            (buffer-name)))
-                   (progn (save-buffer) (setq saved (1+ saved)))
-                 (set-buffer-modified-p nil)))
-              ((y-or-n-p (format "Save %s? " (buffer-name)))
-               (save-buffer)
-               (setq saved (1+ saved)))
-              (t (set-buffer-modified-p nil)))))
-         (kill-buffer buf)
-         (setq closed (1+ closed)))
-       buffers)
-      (message "Closed %d Denote buffer%s (%d saved)%s"
-               closed (if (= closed 1) "" "s") saved
-               (if stale
-                   (format "; %d had missing files: %s"
-                           (length stale) (string-join (nreverse stale) ", "))
-                 "")))))
+      (let ((closed 0)
+            (saved 0)
+            (stale nil))
+        (dolist (buf buffers)
+          (pcase-let ((`(,buf-saved . ,buf-stale) (denote-dash--close-note-buffer buf)))
+            (when buf-saved (setq saved (1+ saved)))
+            (when buf-stale (push buf-stale stale))
+            (setq closed (1+ closed))))
+        (message "Closed %d Denote buffer%s (%d saved)%s"
+                 closed (if (= closed 1) "" "s") saved
+                 (if stale
+                     (format "; %d had missing files: %s"
+                             (length stale) (string-join (nreverse stale) ", "))
+                   ""))))))
 
 ;;;###autoload
 (defun denote-dash-save-and-kill-all-notes ()
@@ -778,11 +802,20 @@ shallower."
       (setq headings (cdr headings)))
     (nreverse sizes)))
 
+(defun denote-dash--hierarchy-should-fold-p (seq size)
+  "Return non-nil if top-level section SEQ of size SIZE should be folded."
+  (or (member seq denote-dash-hierarchy-fold-sequences)
+      (and denote-dash-hierarchy-auto-fold-min-size
+           (<= size denote-dash-hierarchy-auto-fold-min-size))
+      (and denote-dash-hierarchy-auto-fold-max-size
+           (> size denote-dash-hierarchy-auto-fold-max-size))))
+
 (defun denote-dash--hierarchy-apply-initial-fold ()
   "Fold sections of a freshly populated hierarchy buffer per user options.
 Composes `denote-dash-hierarchy-initial-fold-depth',
-`denote-dash-hierarchy-fold-sequences', `denote-dash-hierarchy-auto-fold-min-size',
-and `denote-dash-hierarchy-auto-fold-max-size' — a section folds if any
+`denote-dash-hierarchy-fold-sequences',
+`denote-dash-hierarchy-auto-fold-min-size', and
+`denote-dash-hierarchy-auto-fold-max-size' — a section folds if any
 enabled rule applies to it."
   (when denote-dash-hierarchy-initial-fold-depth
     (outline-hide-sublevels denote-dash-hierarchy-initial-fold-depth))
@@ -794,13 +827,10 @@ enabled rule applies to it."
       (dolist (entry headings)
         (pcase-let ((`(,pos ,level ,seq) entry))
           (when (= level 1)
-            (let ((size (cdr (assq pos sizes))))
-              (when (or (member seq denote-dash-hierarchy-fold-sequences)
-                        (and denote-dash-hierarchy-auto-fold-min-size
-                             (<= size denote-dash-hierarchy-auto-fold-min-size))
-                        (and denote-dash-hierarchy-auto-fold-max-size
-                             (> size denote-dash-hierarchy-auto-fold-max-size)))
-                (save-excursion (goto-char pos) (outline-hide-subtree))))))))))
+            (when (denote-dash--hierarchy-should-fold-p seq (cdr (assq pos sizes)))
+              (save-excursion
+                (goto-char pos)
+                (outline-hide-subtree)))))))))
 
 (add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-apply-initial-fold t)
 
@@ -929,7 +959,8 @@ Use this when a rename swaps two whole subtrees, e.g.
 ;;; Review list functionality
 
 (defun denote-dash--review-timeframe-status (reviewdate)
-  "Return timeframe symbol (`past', `today', `week', or `later') for REVIEWDATE string."
+  "Return timeframe symbol for REVIEWDATE string.
+Possible values are `past', `today', `week', or `later'."
   (if-let* ((date-time (ignore-errors (date-to-time reviewdate))))
       (let* ((review-day (time-to-days date-time))
              (today-day (time-to-days (current-time)))
@@ -943,7 +974,8 @@ Use this when a rename swaps two whole subtrees, e.g.
 
 (defun denote-dash--review-file-matches-filter-p (filename reviewdate filter)
   "Return non-nil if FILENAME and REVIEWDATE match FILTER.
-FILTER can be a keyword string or a timeframe symbol (`due', `past', `today', `week', `all')."
+FILTER can be a keyword string or a timeframe symbol (`due', `past',
+`today', `week', `all')."
   (let ((status (denote-dash--review-timeframe-status reviewdate)))
     (pcase filter
       ('due   (memq status '(past today week)))
@@ -957,6 +989,18 @@ FILTER can be a keyword string or a timeframe symbol (`due', `past', `today', `w
            (string-match (rx "_" (literal filter)) filename)))
       (_ t))))
 
+(defun denote-dash--review-file-entry (filename search-regexp filter)
+  "Return a review list entry for FILENAME if it matches FILTER, or nil."
+  (and-let* ((reviewdate (denote-review-check-date-of-file filename search-regexp)))
+    (when (denote-dash--review-file-matches-filter-p filename reviewdate filter)
+      (let ((status-str (pcase (denote-dash--review-timeframe-status reviewdate)
+                          ('past "past")
+                          ('today "today")
+                          ('week "< 1 week")
+                          (_ "later"))))
+        (list filename
+              (vector status-str reviewdate (file-name-nondirectory filename)))))))
+
 (defun denote-dash--review-collect-files (denotepath-and-filter)
   "Fetch reviewdate from the files in DENOTEPATH-AND-FILTER.
 Filter filenames according to DENOTEPATH-AND-FILTER (cons of path and filter)."
@@ -964,21 +1008,9 @@ Filter filenames according to DENOTEPATH-AND-FILTER (cons of path and filter)."
          (filter (if (consp denotepath-and-filter) (cdr denotepath-and-filter) denotepath-and-filter))
          (search-regexp (denote-review-search-regexp-for-filetype))
          (denote-directory path)
-         (entries
-          (mapcan (lambda (filename)
-                    (and-let* ((reviewdate (denote-review-check-date-of-file
-                                            filename search-regexp)))
-                      (when (denote-dash--review-file-matches-filter-p filename reviewdate filter)
-                        (let ((status-str (pcase (denote-dash--review-timeframe-status reviewdate)
-                                            ('past "past")
-                                            ('today "today")
-                                            ('week "< 1 week")
-                                            (_ "later"))))
-                          `((,filename
-                             [,status-str
-                              ,reviewdate
-                              ,(file-name-nondirectory filename)]))))))
-                  (denote-directory-files nil t nil))))
+         (entries (seq-keep (lambda (f)
+                              (denote-dash--review-file-entry f search-regexp filter))
+                            (denote-directory-files nil t nil))))
     (or entries
         (user-error "No files with a reviewdate found (filter: %s)" filter))))
 
@@ -1036,7 +1068,7 @@ With a prefix argument C-u when called interactively, prompts for a filter."
                      (t "due"))))
       (force-mode-line-update))))
 
-(defun ad:denote-dash--review-display-list (orig-fn &optional filter)
+(defun ad:denote-dash--review-display-list (_orig-fn &optional filter)
   "Make `denote-review-display-list' use `denote-dash-review-display-list'."
   (if (or filter current-prefix-arg (not (called-interactively-p 'any)))
       (denote-dash-review-display-list filter)
@@ -1100,10 +1132,12 @@ With prefix ARG, prompt for raw expression."
 (defun denote-dash-filter-shortcut ()
   "Apply a named filter shortcut from `denote-dash-filter-shortcuts'."
   (interactive)
-  (let* ((shortcuts (or denote-dash-filter-shortcuts
-                        (user-error "No shortcuts configured; customize `denote-dash-filter-shortcuts'")))
-         (chosen (completing-read "Shortcut: " (seq-map #'car shortcuts) nil t))
-         (expr (cdr (assoc chosen shortcuts))))
+  (unless denote-dash-filter-shortcuts
+    (user-error "No shortcuts configured; customize `denote-dash-filter-shortcuts'"))
+  (let* ((chosen (completing-read "Shortcut: "
+                                  (seq-map #'car denote-dash-filter-shortcuts)
+                                  nil t))
+         (expr (cdr (assoc chosen denote-dash-filter-shortcuts))))
     (setq denote-dash--current-filter expr)
     (denote-dash-refresh)))
 
@@ -1223,7 +1257,7 @@ this only adds a discoverable `/' in front of them."
 ;;; Sequence fold commands
 
 (defun denote-dash-cycle-fold ()
-  "Cycle fold state on the sequence note at point: subtree → folded → children → subtree."
+  "Cycle fold state on sequence note at point: subtree -> folded -> children."
   (interactive)
   (when-let* ((file (tabulated-list-get-id))
               (seq-id (denote-retrieve-filename-signature file)))
@@ -1254,16 +1288,15 @@ this only adds a discoverable `/' in front of them."
   (clrhash denote-dash--fold-state)
   (denote-dash-refresh))
 
+(defun denote-dash--max-sequence-depth ()
+  "Return the maximum sequence depth across all Denote files."
+  (let ((seqs (seq-keep #'denote-retrieve-filename-signature (denote-directory-files))))
+    (seq-reduce #'max (mapcar #'denote-dash--sequence-depth seqs) 0)))
+
 (defun denote-dash-global-cycle ()
-  "Step through global fold depths: 0 (roots only) → 1 → … → nil (all expanded)."
+  "Step through global fold depths: 0 -> 1 -> ... -> nil (all expanded)."
   (interactive)
-  (let* ((max-depth (seq-reduce #'max
-				(thread-last
-				  (denote-directory-files)
-                                  (seq-map #'denote-retrieve-filename-signature)
-                                  (seq-filter #'identity)
-                                  (seq-map #'denote-dash--sequence-depth))
-				0))
+  (let* ((max-depth (denote-dash--max-sequence-depth))
          (next (cond
                 ((null denote-dash--global-cycle-depth) 0)
                 ((>= denote-dash--global-cycle-depth max-depth) nil)
@@ -1282,7 +1315,7 @@ this only adds a discoverable `/' in front of them."
 ;;; Saved views (Bookmarks)
 
 (defun denote-dash-bookmark-save (&optional name)
-  "Save the current buffer's filter, narrow, column, and sort state as a named view.
+  "Save current filter, narrow, column, and sort state as a named view.
 Prompts for NAME (defaulting to the buffer's most recent view name, if any).
 If NAME matches an existing view, confirms before overwriting."
   (interactive
@@ -1294,29 +1327,29 @@ If NAME matches an existing view, confirms before overwriting."
                      "Save view name: "))
            (input (completing-read prompt names nil nil nil nil default)))
       (if (string-blank-p input) default input))))
-  (unless (and name (not (string-blank-p name)))
+  (when (or (null name) (string-blank-p name))
     (user-error "View name cannot be empty"))
-  (let ((existing (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
-                            denote-dash-saved-views)))
-    (when (and existing (not (yes-or-no-p (format "View '%s' already exists. Overwrite? " name))))
-      (user-error "Aborted"))
-    (let* ((sort-col (car tabulated-list-sort-key))
-           (sort-dir (cdr tabulated-list-sort-key))
-           (view (make-denote-dash-view
-                  :name name
-                  :filter denote-dash--current-filter
-                  :narrowed-sequences (copy-sequence denote-dash--narrowed-sequences)
-                  :active-directory denote-dash--active-directory
-                  :grep-filter denote-dash--grep-filter
-                  :show-non-sequence denote-dash--show-non-sequence
-                  :visible-columns (copy-sequence denote-dash--visible-columns)
-                  :sort-column sort-col
-                  :sort-direction sort-dir)))
-      (setq denote-dash-saved-views
-            (cons view (seq-remove (lambda (v) (equal (denote-dash-view-name v) name))
-                                    denote-dash-saved-views)))
-      (setq-local denote-dash--last-bookmark-name name)
-      (message "Saved view '%s'" name))))
+  (when-let* ((existing (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                                  denote-dash-saved-views)))
+    (unless (yes-or-no-p (format "View '%s' already exists. Overwrite? " name))
+      (user-error "Aborted")))
+  (let* ((sort-col (car tabulated-list-sort-key))
+         (sort-dir (cdr tabulated-list-sort-key))
+         (view (make-denote-dash-view
+                :name name
+                :filter denote-dash--current-filter
+                :narrowed-sequences (copy-sequence denote-dash--narrowed-sequences)
+                :active-directory denote-dash--active-directory
+                :grep-filter denote-dash--grep-filter
+                :show-non-sequence denote-dash--show-non-sequence
+                :visible-columns (copy-sequence denote-dash--visible-columns)
+                :sort-column sort-col
+                :sort-direction sort-dir)))
+    (setq denote-dash-saved-views
+          (cons view (seq-remove (lambda (v) (equal (denote-dash-view-name v) name))
+                                  denote-dash-saved-views)))
+    (setq-local denote-dash--last-bookmark-name name)
+    (message "Saved view '%s'" name)))
 
 (defun denote-dash--bookmark-annotate (name)
   "Annotation function for `denote-dash-bookmark-jump' minibuffer completion."
@@ -1333,16 +1366,16 @@ If NAME matches an existing view, confirms before overwriting."
    (list
     (if (null denote-dash-saved-views)
         (user-error "No saved views exist")
-      (let* ((names (seq-map #'denote-dash-view-name denote-dash-saved-views))
-             (completion-extra-size 40)
-             (completion-annotate-function #'denote-dash--bookmark-annotate))
-        (completing-read "Jump to view: " names nil t)))))
+      (let ((completion-extra-properties
+             '(:annotation-function denote-dash--bookmark-annotate)))
+        (completing-read "Jump to view: "
+                         (seq-map #'denote-dash-view-name denote-dash-saved-views)
+                         nil t)))))
   (unless name
     (user-error "No view selected"))
-  (let ((view (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
-                        denote-dash-saved-views)))
-    (unless view
-      (user-error "No view named '%s'" name))
+  (let ((view (or (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                            denote-dash-saved-views)
+                  (user-error "No view named '%s'" name))))
     (setq-local denote-dash--current-filter (denote-dash-view-filter view))
     (setq-local denote-dash--narrowed-sequences (copy-sequence (denote-dash-view-narrowed-sequences view)))
     (setq-local denote-dash--active-directory (denote-dash-view-active-directory view))
@@ -1372,14 +1405,13 @@ If NAME matches an existing view, confirms before overwriting."
                        nil t))))
   (unless name
     (user-error "No view selected"))
-  (let ((existing (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
-                            denote-dash-saved-views)))
-    (unless existing
-      (user-error "No view named '%s'" name))
-    (setq denote-dash-saved-views
-          (seq-remove (lambda (v) (equal (denote-dash-view-name v) name))
-                      denote-dash-saved-views))
-    (message "Deleted view '%s'" name)))
+  (unless (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                    denote-dash-saved-views)
+    (user-error "No view named '%s'" name))
+  (setq denote-dash-saved-views
+        (seq-remove (lambda (v) (equal (denote-dash-view-name v) name))
+                    denote-dash-saved-views))
+  (message "Deleted view '%s'" name))
 
 (defun denote-dash-bookmark-rename (&optional old-name new-name)
   "Rename saved view OLD-NAME to NEW-NAME."
@@ -1391,23 +1423,21 @@ If NAME matches an existing view, confirms before overwriting."
                                   nil t))
             (new (read-string (format "New name for '%s': " old) old)))
        (list old new))))
-  (unless (and old-name (not (string-blank-p old-name)))
+  (when (or (null old-name) (string-blank-p old-name))
     (user-error "Original view name required"))
-  (unless (and new-name (not (string-blank-p new-name)))
+  (when (or (null new-name) (string-blank-p new-name))
     (user-error "New view name cannot be empty"))
-  (let ((view (seq-find (lambda (v) (equal (denote-dash-view-name v) old-name))
-                        denote-dash-saved-views)))
-    (unless view
-      (user-error "No view named '%s'" old-name))
+  (let ((view (or (seq-find (lambda (v) (equal (denote-dash-view-name v) old-name))
+                            denote-dash-saved-views)
+                  (user-error "No view named '%s'" old-name))))
     (unless (equal old-name new-name)
-      (let ((target (seq-find (lambda (v) (equal (denote-dash-view-name v) new-name))
-                              denote-dash-saved-views)))
-        (when (and target (not (yes-or-no-p (format "View '%s' already exists. Overwrite? " new-name))))
+      (when-let* ((target (seq-find (lambda (v) (equal (denote-dash-view-name v) new-name))
+                                    denote-dash-saved-views)))
+        (unless (yes-or-no-p (format "View '%s' already exists. Overwrite? " new-name))
           (user-error "Aborted"))
-        (when target
-          (setq denote-dash-saved-views
-                (seq-remove (lambda (v) (equal (denote-dash-view-name v) new-name))
-                            denote-dash-saved-views))))
+        (setq denote-dash-saved-views
+              (seq-remove (lambda (v) (equal (denote-dash-view-name v) new-name))
+                          denote-dash-saved-views)))
       (setf (denote-dash-view-name view) new-name)
       (when (equal denote-dash--last-bookmark-name old-name)
         (setq-local denote-dash--last-bookmark-name new-name)))
@@ -1416,13 +1446,7 @@ If NAME matches an existing view, confirms before overwriting."
 
 ;;; Column ordering and toggle
 
-(defvar denote-dash-column-order
-  '(sequence fold title keywords id directory modified git review reviewdate)
-  "Canonical display order for columns; determines left-to-right position.")
-(setq denote-dash-column-order '(sequence fold title keywords id directory modified git review reviewdate))
 
-(defvar denote-dash--persisted-columns nil
-  "Column list saved across sessions for `*denote-dash*'.")
 
 (defun denote-dash--toggle-column (col)
   "Toggle visibility of column COL and refresh the buffer."
@@ -1567,6 +1591,7 @@ If NAME matches an existing view, confirms before overwriting."
 
 ;;; Savehist
 
+(defvar savehist-additional-variables)
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'denote-dash--filter-history)
   (add-to-list 'savehist-additional-variables 'denote-dash--persisted-columns)
@@ -1580,12 +1605,12 @@ If NAME matches an existing view, confirms before overwriting."
   "Regexp matching a YYYY-MM-DD date prefix in an org datetree day heading.")
 
 (defun denote-dash--datetree-day-date (heading)
-  "Return the YYYY-MM-DD prefix of HEADING if it is a datetree day heading, else nil."
+  "Return YYYY-MM-DD prefix if HEADING is a datetree day heading, else nil."
   (when (string-match denote-dash--datetree-day-re heading)
     (match-string 0 heading)))
 
 (defun denote-dash--datetree-parent-date ()
-  "Return the date string if the immediate parent is a datetree day heading, else nil."
+  "Return date string if immediate parent is a datetree day heading, else nil."
   (save-excursion
     (when (org-up-heading-safe)
       (denote-dash--datetree-day-date (org-get-heading t t t t)))))
@@ -1599,38 +1624,44 @@ If NAME matches an existing view, confirms before overwriting."
     (string-trim
      (buffer-substring-no-properties
       (point)
-      (save-excursion (org-end-of-subtree t) (point))))))
+      (if (re-search-forward org-heading-regexp nil t)
+          (match-beginning 0)
+        (point-max))))))
 
 (defun denote-dash--collect-datetree-entries ()
-  "Return a list of plists for all entries in the current buffer's org datetree.
-Each plist has :title, :date, :tags, :body.  Only direct children of
-day-level headings (YYYY-MM-DD ...) are collected."
+  "Scan current buffer for leaf org entries under a datetree day heading."
   (let (entries)
     (org-map-entries
      (lambda ()
-       (when-let* ((date (denote-dash--datetree-parent-date))
-                   (title (string-trim (org-get-heading t t t t)))
-                   (_ (not (string-empty-p title))))
-         (push (list :title title
-                     :date  date
-                     :tags  (org-get-tags nil t)
-                     :body  (denote-dash--entry-body))
-               entries))))
+       (when-let* ((date (denote-dash--datetree-parent-date)))
+         (let* ((title (org-get-heading t t t t))
+                (tags  (org-get-tags))
+                (body  (denote-dash--entry-body)))
+           (push (list :date date :title title :tags tags :body body) entries))))
+     nil 'file)
     (nreverse entries)))
 
 (defun denote-dash--import-entry (entry)
-  "Create a Denote note from datetree ENTRY plist (:title :date :tags :body)."
-  (let* ((title (plist-get entry :title))
+  "Create a Denote note from ENTRY plist."
+  (let* ((date  (plist-get entry :date))
+         (title (plist-get entry :title))
          (tags  (plist-get entry :tags))
          (body  (plist-get entry :body))
-         (time  (org-read-date nil t (plist-get entry :date))))
-    (save-window-excursion
-      (denote title tags 'org nil time)
-      (when (and body (not (string-empty-p body)))
+         (note-path (denote title tags denote-file-type nil date)))
+    (with-current-buffer (find-file-noselect note-path)
+      (save-excursion
         (goto-char (point-max))
-        (unless (bolp) (insert "\n"))
-        (insert "\n" body)
+        (unless (bolp) (insert "
+"))
+        (insert "
+" body)
         (save-buffer)))))
+
+(defun denote-dash--entry-in-range-p (entry from-date to-date)
+  "Return non-nil if ENTRY date falls between FROM-DATE and TO-DATE (inclusive)."
+  (let ((d (plist-get entry :date)))
+    (and (or (null from-date) (not (string< d from-date)))
+         (or (null to-date)   (not (string< to-date d))))))
 
 (defun denote-dash-import-from-datetree (file &optional from-date to-date)
   "Import org datetree entries from FILE as individual Denote notes.
@@ -1640,19 +1671,17 @@ file and whether to apply a date restriction."
   (interactive
    (let* ((f (read-file-name "Import from datetree: " nil nil t nil
                              (lambda (n)
-                               (or (file-directory-p n)
-                                   (string-suffix-p ".org" n)))))
+                                (or (file-directory-p n)
+                                    (string-suffix-p ".org" n)))))
           (restrict (yes-or-no-p "Restrict to a date range? "))
           (from (when restrict (org-read-date nil nil nil "From (inclusive): ")))
           (to   (when restrict (org-read-date nil nil nil "To (inclusive): "))))
      (list f from to)))
-  (let* ((filtered (seq-filter
-                    (lambda (e)
-                      (let ((d (plist-get e :date)))
-                        (and (or (null from-date) (not (string< d from-date)))
-                             (or (null to-date)   (not (string< to-date d))))))
-                    (with-current-buffer (find-file-noselect file)
-                      (denote-dash--collect-datetree-entries))))
+  (let* ((entries (with-current-buffer (find-file-noselect file)
+                    (denote-dash--collect-datetree-entries)))
+         (filtered (seq-filter (lambda (e)
+                                 (denote-dash--entry-in-range-p e from-date to-date))
+                               entries))
          (n (length filtered)))
     (when (zerop n)
       (user-error "No datetree entries found%s"
@@ -1664,15 +1693,14 @@ file and whether to apply a date restriction."
                                  (file-name-nondirectory file)))
       (user-error "Import cancelled"))
     (let ((ok 0) (fail 0))
-      (seq-do (lambda (entry)
-                (condition-case err
-                    (progn (denote-dash--import-entry entry) (setq ok (1+ ok)))
-                  (error
-                   (setq fail (1+ fail))
-                   (message "Skipped %S: %s"
-                            (plist-get entry :title)
-                            (error-message-string err)))))
-              filtered)
+      (dolist (entry filtered)
+        (condition-case err
+            (progn (denote-dash--import-entry entry) (setq ok (1+ ok)))
+          (error
+           (setq fail (1+ fail))
+           (message "Skipped %S: %s"
+                    (plist-get entry :title)
+                    (error-message-string err)))))
       (message "Imported %d/%d note%s%s."
                ok n (if (= ok 1) "" "s")
                (if (> fail 0) (format " (%d failed)" fail) "")))))
@@ -1692,16 +1720,15 @@ for every note, via `denote-rename-file-using-front-matter'."
       (user-error "Cancelled"))
     (let ((renamed 0) (errors 0)
           (denote-rename-confirmations nil))
-      (seq-do (lambda (file)
-                (condition-case err
-                    (progn (denote-rename-file-using-front-matter file)
-                           (setq renamed (1+ renamed)))
-                  (error
-                   (setq errors (1+ errors))
-                   (message "Skipped %s: %s"
-                            (file-name-nondirectory file)
-                            (error-message-string err)))))
-              files)
+      (dolist (file files)
+        (condition-case err
+            (progn (denote-rename-file-using-front-matter file)
+                   (setq renamed (1+ renamed)))
+          (error
+           (setq errors (1+ errors))
+           (message "Skipped %s: %s"
+                    (file-name-nondirectory file)
+                    (error-message-string err)))))
       (message "Renamed %d/%d note%s%s."
                renamed n (if (= renamed 1) "" "s")
                (if (> errors 0) (format " (%d errors)" errors) "")))
@@ -1740,33 +1767,35 @@ syntax) is left to the author."
   (interactive
    (list (denote-dash--target-file)
          (denote--valid-file-type (or (denote-file-type-prompt) denote-file-type))))
-  (let* ((old-file-type (denote-filetype-heuristics file))
-         (_ (when (eq old-file-type new-file-type)
-              (user-error "File is already of type %s" new-file-type)))
-         (id (or (denote-retrieve-filename-identifier file) ""))
-         (date (denote-retrieve-front-matter-date-value file old-file-type))
-         (title (or (denote-retrieve-title-or-filename file old-file-type) ""))
-         (keywords (denote-retrieve-front-matter-keywords-value file old-file-type))
-         (signature (or (denote-retrieve-filename-signature file) ""))
-         (new-front-matter (denote--format-front-matter title date keywords id signature new-file-type))
-         (new-name (denote-format-file-name (file-name-directory file) id keywords title
-                                            (denote--file-extension new-file-type) signature))
-         (_ (unless (yes-or-no-p (format "Convert %s from %s to %s (front matter + extension only)? "
-                                         (file-name-nondirectory file) old-file-type new-file-type))
-              (user-error "Cancelled")))
-         (buf (find-file-noselect file)))
-    (with-current-buffer buf
-      (save-excursion
-        (goto-char (point-min))
-        (delete-region (point-min) (denote-dash--front-matter-end old-file-type))
-        (goto-char (point-min))
-        (insert new-front-matter))
-      (save-buffer))
-    (kill-buffer buf)
-    (unless (string= (expand-file-name file) (expand-file-name new-name))
-      (rename-file file new-name))
-    (message "Converted %s -> %s" (file-name-nondirectory file) (file-name-nondirectory new-name))
-    (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh))))
+  (let ((old-file-type (denote-filetype-heuristics file)))
+    (when (eq old-file-type new-file-type)
+      (user-error "File is already of type %s" new-file-type))
+    (unless (yes-or-no-p (format "Convert %s from %s to %s (front matter + extension only)? "
+                                 (file-name-nondirectory file) old-file-type new-file-type))
+      (user-error "Cancelled"))
+    (let* ((id (or (denote-retrieve-filename-identifier file) ""))
+           (date (denote-retrieve-front-matter-date-value file old-file-type))
+           (title (or (denote-retrieve-title-or-filename file old-file-type) ""))
+           (keywords (denote-retrieve-front-matter-keywords-value file old-file-type))
+           (signature (or (denote-retrieve-filename-signature file) ""))
+           (new-front-matter (denote--format-front-matter
+                              title date keywords id signature new-file-type))
+           (new-name (denote-format-file-name (file-name-directory file) id keywords title
+                                              (denote--file-extension new-file-type) signature))
+           (buf (find-file-noselect file)))
+      (with-current-buffer buf
+        (save-excursion
+          (goto-char (point-min))
+          (delete-region (point-min) (denote-dash--front-matter-end old-file-type))
+          (goto-char (point-min))
+          (insert new-front-matter))
+        (save-buffer))
+      (kill-buffer buf)
+      (unless (string= (expand-file-name file) (expand-file-name new-name))
+        (rename-file file new-name))
+      (message "Converted %s -> %s" (file-name-nondirectory file) (file-name-nondirectory new-name))
+      (when (derived-mode-p 'denote-dash-mode)
+        (denote-dash-refresh)))))
 
 ;;; Target file resolution
 

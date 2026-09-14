@@ -35,6 +35,22 @@ added for Markdown types (YAML/TOML) and omitted for Org/text."
       ('markdown-toml  (format "signature = %s" formatted))
       (_               (format "#+signature: %s" sig)))))
 
+(defun denote-dash--kill-visiting-buffers (files)
+  "Kill buffers visiting any file in FILES."
+  (dolist (f files)
+    (when-let* ((b (find-buffer-visiting f)))
+      (kill-buffer b))))
+
+(defun denote-dash--format-lint-entry (file)
+  "Format a lint report line for FILE."
+  (let* ((file-type (denote-filetype-heuristics file))
+         (fs (denote-retrieve-filename-signature file))
+         (fms (denote-retrieve-front-matter-signature-value file file-type)))
+    (format "  %-40s  filename=%-10s  frontmatter=%s\n"
+            (file-name-nondirectory file)
+            (or fs "—")
+            (or fms "—"))))
+
 (defun denote-dash--sequence-aligned-p (file)
   "Return non-nil if FILE's filename and frontmatter signatures agree."
   (let* ((file-type (denote-filetype-heuristics file))
@@ -79,7 +95,7 @@ Returns t if a change was made, nil if already aligned.
       t)))
 
 (defun denote-dash--collect-sequence-mismatches ()
-  "Return list of all Denote files whose filename and frontmatter signatures disagree."
+  "Return Denote files whose filename and frontmatter signatures disagree."
   (seq-filter (lambda (f) (not (denote-dash--sequence-aligned-p f)))
               (denote-directory-files)))
 
@@ -96,16 +112,8 @@ Returns t if a change was made, nil if already aligned.
           (insert (format "%d mismatch%s:\n\n"
                           (length mismatches)
                           (if (= (length mismatches) 1) "" "es")))
-          (seq-do (lambda (file)
-                    (let* ((file-type (denote-filetype-heuristics file))
-                           (fs (denote-retrieve-filename-signature file))
-                           (fms (denote-retrieve-front-matter-signature-value
-                                 file file-type)))
-                      (insert (format "  %-40s  filename=%-10s  frontmatter=%s\n"
-                                      (file-name-nondirectory file)
-                                      (or fs "—")
-                                      (or fms "—")))))
-                  mismatches)
+          (dolist (file mismatches)
+            (insert (denote-dash--format-lint-entry file)))
           (insert "\nRun `denote-dash-fix-all-sequence-frontmatter' to fix "
                   "(filename authoritative).\n"
                   "Run `denote-rename-file-using-front-matter' per-file to go "
@@ -114,8 +122,8 @@ Returns t if a change was made, nil if already aligned.
     (pop-to-buffer buf)))
 
 (defun denote-dash-fix-sequence-frontmatter ()
-  "Fix frontmatter signature to match filename for the note at point or current file.
-Resolves the target file via `denote-dash--file-at-point', so it works from
+  "Fix frontmatter signature to match filename for note at point or file.
+Resolves target file via `denote-dash--file-at-point', so it works from
 `denote-dash-mode', `denote-sequence-hierarchy-mode', Dired, or a visited
 Denote buffer."
   (interactive)
@@ -129,7 +137,7 @@ Denote buffer."
       (message "Already aligned: %s" (file-name-nondirectory file)))))
 
 (defun denote-dash-fix-all-sequence-frontmatter ()
-  "Fix frontmatter signatures for all mismatched Denote notes, using filename as truth."
+  "Fix frontmatter for mismatched Denote notes, filename as truth."
   (interactive)
   (let* ((mismatches (denote-dash--collect-sequence-mismatches))
          (n (length mismatches)))
@@ -197,6 +205,16 @@ Digit-ending PREFIX uses letters (a, b, c…)."
             (denote-dash--collect-sequence-mismatches))
     fixed))
 
+(defun denote-dash--repack-subtree-plan (child-file new-child-seq)
+  "Build plan pairs for CHILD-FILE and its subtree under NEW-CHILD-SEQ."
+  (let ((old-child-seq (denote-retrieve-filename-signature child-file)))
+    (mapcar (lambda (f)
+              (cons f (concat new-child-seq
+                              (string-remove-prefix
+                               old-child-seq
+                               (denote-retrieve-filename-signature f)))))
+            (denote-dash--subtree-files old-child-seq))))
+
 (defun denote-dash--repack-plan (to-rename)
   "Expand TO-RENAME child pairs into a flat file rename plan.
 TO-RENAME is a list of (CHILD-FILE . NEW-CHILD-SEQ) pairs.  Each child is
@@ -204,17 +222,9 @@ expanded to its full subtree — captured from the current on-disk state,
 before any renames happen — so descendants stay consistent with their
 parent's new sequence.  Return a list of (FILE . NEW-SEQ) pairs, one per
 file that must be renamed: the child itself and all of its descendants."
-  (seq-mapcat
-   (lambda (pair)
-     (let* ((child-file (car pair))
-            (new-child-seq (cdr pair))
-            (old-child-seq (denote-retrieve-filename-signature child-file)))
-       (seq-map (lambda (f)
-                  (cons f (concat new-child-seq
-                                  (string-remove-prefix
-                                   old-child-seq (denote-retrieve-filename-signature f)))))
-                (denote-dash--subtree-files old-child-seq))))
-   to-rename))
+  (mapcan (lambda (pair)
+            (denote-dash--repack-subtree-plan (car pair) (cdr pair)))
+          to-rename))
 
 (defun denote-dash--apply-repack-plan (plan)
   "Rename every (FILE . NEW-SEQ) pair in PLAN, returning the count renamed.
@@ -224,6 +234,7 @@ can leave an old-but-not-yet-renamed sibling and a freshly-renamed file
 briefly sharing the same signature, which a later subtree's prefix lookup
 would then sweep up and merge into the wrong destination.  Staging the
 whole batch first means no real signature is ever a temporary duplicate."
+  (denote-dash--kill-visiting-buffers (mapcar #'car plan))
   (let ((staged (seq-map-indexed
                  (lambda (pair i)
                    (let* ((file (car pair))
@@ -231,8 +242,6 @@ whole batch first means no real signature is ever a temporary duplicate."
                           (sig (denote-retrieve-filename-signature file))
                           (tmp-sig (format "rpacktmp%d" i))
                           (tmp-path (denote-dash--rename-signature-component file sig tmp-sig)))
-                     (when-let* ((buf (find-buffer-visiting file)))
-                       (kill-buffer buf))
                      (rename-file file tmp-path t)
                      (list tmp-path tmp-sig new-seq)))
                  plan)))
@@ -360,38 +369,29 @@ rename (child→tmp, parent→child-seq, tmp→parent-seq) to avoid collision,
 then fixes frontmatter signatures on both files."
   (interactive)
   (let* ((file (denote-dash--target-file))
-         (seq (denote-retrieve-filename-signature file)))
-    (unless seq
-      (user-error "File has no sequence: %s" (file-name-nondirectory file)))
-    (let ((parent-seq (denote-dash--sequence-parent seq)))
-      (unless parent-seq
-        (user-error "%s is a root sequence — nothing to swap with" seq))
-      (let ((parent-file
-             (seq-find (lambda (f)
-                         (equal (denote-retrieve-filename-signature f) parent-seq))
-                       (denote-directory-files))))
-        (unless parent-file
-          (user-error "No file found for parent sequence %s" parent-seq))
-        (unless (yes-or-no-p (format "Swap %s ↔ %s? " seq parent-seq))
-          (user-error "Cancelled"))
-        (let* ((new-path (denote-dash--rename-signature-component file seq parent-seq))
-               (new-par-path (denote-dash--rename-signature-component parent-file parent-seq seq))
-               (tmp-path (denote-dash--rename-signature-component file seq "__swaptmp__")))
-          ;; Kill any buffers visiting files we are about to rename so they
-          ;; do not become stale (pointing to a path that no longer exists).
-          (seq-do (lambda (f)
-                    (when-let* ((buf (find-buffer-visiting f)))
-                      (kill-buffer buf)))
-                  (list file parent-file))
-          (rename-file file tmp-path t)
-          (rename-file parent-file new-par-path t)
-          (rename-file tmp-path new-path t)
-          (denote-dash--fix-frontmatter-from-filename new-path)
-          (denote-dash--fix-frontmatter-from-filename new-par-path)
-          (denote-dash--hierarchy-swap-fold-sequence seq parent-seq)
-          (message "Swapped %s ↔ %s" seq parent-seq)
-          (when (derived-mode-p 'denote-dash-mode)
-            (denote-dash-refresh)))))))
+         (seq (or (denote-retrieve-filename-signature file)
+                  (user-error "File has no sequence: %s" (file-name-nondirectory file))))
+         (parent-seq (or (denote-dash--sequence-parent seq)
+                         (user-error "%s is a root sequence — nothing to swap with" seq)))
+         (parent-file (or (seq-find (lambda (f)
+                                      (equal (denote-retrieve-filename-signature f) parent-seq))
+                                    (denote-directory-files))
+                          (user-error "No file found for parent sequence %s" parent-seq))))
+    (unless (yes-or-no-p (format "Swap %s ↔ %s? " seq parent-seq))
+      (user-error "Cancelled"))
+    (let ((new-path (denote-dash--rename-signature-component file seq parent-seq))
+          (new-par-path (denote-dash--rename-signature-component parent-file parent-seq seq))
+          (tmp-path (denote-dash--rename-signature-component file seq "__swaptmp__")))
+      (denote-dash--kill-visiting-buffers (list file parent-file))
+      (rename-file file tmp-path t)
+      (rename-file parent-file new-par-path t)
+      (rename-file tmp-path new-path t)
+      (denote-dash--fix-frontmatter-from-filename new-path)
+      (denote-dash--fix-frontmatter-from-filename new-par-path)
+      (denote-dash--hierarchy-swap-fold-sequence seq parent-seq)
+      (message "Swapped %s ↔ %s" seq parent-seq)
+      (when (derived-mode-p 'denote-dash-mode)
+        (denote-dash-refresh)))))
 
 ;;; Sequence sibling swap
 
@@ -415,10 +415,7 @@ every renamed file.  SEQ-A and SEQ-B must be direct siblings."
     (unless files-a (user-error "No files found for sequence %s" seq-a))
     (unless files-b (user-error "No files found for sequence %s" seq-b))
     (denote-dash--hierarchy-swap-fold-sequence-prefix seq-a seq-b)
-    (seq-do (lambda (f)
-              (when-let* ((buf (find-buffer-visiting f)))
-                (kill-buffer buf)))
-            (append files-a files-b))
+    (denote-dash--kill-visiting-buffers (append files-a files-b))
     ;; Stage 1: move SEQ-A's subtree aside under unique temp signatures,
     ;; remembering each file's original signature to recover it later.
     (let ((staged
@@ -498,6 +495,41 @@ subtrees exchange positions.  See also `denote-dash-swap-with-parent'."
       :digit
     :letter))
 
+(defun denote-dash--segment-to-number (str type)
+  "Convert segment STR of TYPE (:digit or :letter) to an integer."
+  (if (eq type :digit)
+      (string-to-number str)
+    (string-to-number (denote-sequence--alpha-to-number str))))
+
+(defun denote-dash--number-to-segment (num type)
+  "Convert NUM to a segment string of TYPE (:digit or :letter)."
+  (if (eq type :digit)
+      (number-to-string num)
+    (denote-sequence--number-to-alpha (number-to-string num))))
+
+(defun denote-dash--seq-split-segments (suffix first-type)
+  "Parse SUFFIX into list of integer segment values starting with FIRST-TYPE."
+  (let ((pos 0)
+        (current-type first-type)
+        (positions nil))
+    (while (< pos (length suffix))
+      (let ((start pos))
+        (if (eq current-type :digit)
+            (progn
+              (while (and (< pos (length suffix))
+                          (denote-dash--char-digit-p (aref suffix pos)))
+                (setq pos (1+ pos)))
+              (push (denote-dash--segment-to-number (substring suffix start pos) :digit)
+                    positions)
+              (setq current-type :letter))
+          (while (and (< pos (length suffix))
+                      (not (denote-dash--char-digit-p (aref suffix pos))))
+            (setq pos (1+ pos)))
+          (push (denote-dash--segment-to-number (substring suffix start pos) :letter)
+                positions)
+          (setq current-type :digit))))
+    (nreverse positions)))
+
 (defun denote-dash--alphanumeric-suffix-rewrite (suffix old-root-last-type new-root-last-type)
   "Rewrite SUFFIX so it is valid under a root ending with NEW-ROOT-LAST-TYPE.
 OLD-ROOT-LAST-TYPE is the type of the last character of the old root (:digit
@@ -506,36 +538,12 @@ or :letter).  Returns the suffix unchanged when both types agree."
       suffix
     (let* ((old-first (if (eq old-root-last-type :digit) :letter :digit))
            (new-first (if (eq new-root-last-type :digit) :letter :digit))
-           (pos 0)
-           (current-type old-first)
-           (positions nil))
-      (while (< pos (length suffix))
-        (if (eq current-type :digit)
-            (let ((start pos))
-              (while (and (< pos (length suffix))
-                          (denote-dash--char-digit-p (aref suffix pos)))
-                (setq pos (1+ pos)))
-              (push (string-to-number (substring suffix start pos)) positions)
-              (setq current-type :letter))
-          (let ((start pos))
-            (while (and (< pos (length suffix))
-                        (not (denote-dash--char-digit-p (aref suffix pos))))
-              (setq pos (1+ pos)))
-            (push (string-to-number
-                   (denote-sequence--alpha-to-number (substring suffix start pos)))
-                  positions)
-            (setq current-type :digit))))
-      (let ((rebuild-type new-first)
-            (result ""))
-        (seq-do (lambda (p)
-                  (setq result
-                        (concat result
-                                (if (eq rebuild-type :digit)
-                                    (number-to-string p)
-                                  (denote-sequence--number-to-alpha (number-to-string p)))))
-                  (setq rebuild-type (if (eq rebuild-type :digit) :letter :digit)))
-                (nreverse positions))
-        result))))
+           (positions (denote-dash--seq-split-segments suffix old-first))
+           (rebuild-type new-first)
+           (result ""))
+      (dolist (p positions result)
+        (setq result (concat result (denote-dash--number-to-segment p rebuild-type)))
+        (setq rebuild-type (if (eq rebuild-type :digit) :letter :digit))))))
 
 (defun denote-dash--reparent-target-sequence (file-with-sequence)
   "Return the destination sequence for a reparent operation.
@@ -554,12 +562,12 @@ the same way here as there."
     (denote-sequence--get-new-parent)))
 
 (defun denote-dash--recursive-reseq-plan (current-file new-seq)
-  "Return the (FILE . NEW-SEQ) rename plan for moving CURRENT-FILE's subtree to NEW-SEQ.
-Includes CURRENT-FILE itself plus every descendant, each rewritten under
-NEW-SEQ with its relative suffix preserved, correcting the type alternation
-(letter/digit) of descendant sequences when the old and new roots end in
-different character types — a bug in the upstream
-`denote-sequence-reparent-recursive'.  Shared by
+  "Return the rename plan for moving CURRENT-FILE's subtree to NEW-SEQ.
+Plan is a list of (FILE . NEW-SEQ) pairs.  Includes CURRENT-FILE itself
+plus every descendant, each rewritten under NEW-SEQ with its relative
+suffix preserved, correcting the type alternation (letter/digit) of
+descendant sequences when the old and new roots end in different character
+types — a bug in upstream `denote-sequence-reparent-recursive'.  Shared by
 `denote-dash--reparent-recursive-apply' and `denote-dash-renumber-recursive'."
   (let* ((root-seq (denote-retrieve-filename-signature current-file))
          (descendants (when root-seq
@@ -619,18 +627,22 @@ Returns non-nil if PLAN was applied, nil if the user declined."
         (message "%s cancelled; no files were changed." operation-verb)
         nil))))
 
+(defun denote-dash--execute-reseq (current-file new-seq operation-verb)
+  "Execute recursive resequence of CURRENT-FILE to NEW-SEQ with OPERATION-VERB."
+  (let* ((plan (denote-dash--recursive-reseq-plan current-file new-seq))
+         (seq-pairs (seq-map (lambda (pair)
+                               (cons (denote-retrieve-filename-signature (car pair)) (cdr pair)))
+                             plan)))
+    (when (denote-dash--recursive-reseq-confirm-and-apply plan operation-verb)
+      (denote-dash--hierarchy-remap-fold-sequence-many seq-pairs))))
+
 (defun denote-dash--reparent-recursive-apply (current-file new-seq)
   "Re-parent CURRENT-FILE and all descendants onto NEW-SEQ.
 Builds the plan via `denote-dash--recursive-reseq-plan' and applies it via
 `denote-dash--recursive-reseq-confirm-and-apply', which previews and
 confirms whenever CURRENT-FILE has descendants and applies directly,
 without prompting, when it does not."
-  (let* ((plan (denote-dash--recursive-reseq-plan current-file new-seq))
-         (seq-pairs (seq-map (lambda (pair)
-                                (cons (denote-retrieve-filename-signature (car pair)) (cdr pair)))
-                              plan)))
-    (when (denote-dash--recursive-reseq-confirm-and-apply plan "Reparent")
-      (denote-dash--hierarchy-remap-fold-sequence-many seq-pairs))))
+  (denote-dash--execute-reseq current-file new-seq "Reparent"))
 
 ;;;###autoload
 (defun denote-dash-reparent (current-file file-with-sequence &optional recursive)
@@ -737,12 +749,7 @@ without a prompt when it does not."
                 (propertize current-file 'face 'denote-faces-prompt-current-name)))))))
   (unless (denote-retrieve-filename-signature current-file)
     (user-error "File has no sequence: %s" (file-name-nondirectory current-file)))
-  (let* ((plan (denote-dash--recursive-reseq-plan current-file new-seq))
-         (seq-pairs (seq-map (lambda (pair)
-                                (cons (denote-retrieve-filename-signature (car pair)) (cdr pair)))
-                              plan)))
-    (when (denote-dash--recursive-reseq-confirm-and-apply plan "Renumber")
-      (denote-dash--hierarchy-remap-fold-sequence-many seq-pairs))))
+  (denote-dash--execute-reseq current-file new-seq "Renumber"))
 
 ;;; Sequence insertion
 
@@ -760,6 +767,32 @@ without a prompt when it does not."
        (length (denote-sequence-split seq-id)))))
 
 ;;;###autoload
+(defun denote-dash--following-siblings (seq-id)
+  "Return direct siblings of SEQ-ID at or after SEQ-ID, in descending order."
+  (let* ((parent-prefix (denote-sequence--get-prefix-for-siblings seq-id))
+         (candidates (if (or (null parent-prefix) (string-empty-p (or parent-prefix "")))
+                         (denote-sequence-get-all-files)
+                       (denote-sequence-get-all-files-with-prefix parent-prefix)))
+         (siblings (seq-filter (lambda (f) (denote-dash--sequence-direct-sibling-p seq-id f))
+                               candidates)))
+    (thread-last siblings
+      (seq-filter (lambda (f)
+                    (not (string< (denote-retrieve-filename-signature f) seq-id))))
+      (seq-sort (lambda (a b)
+                  (string> (denote-retrieve-filename-signature a)
+                           (denote-retrieve-filename-signature b)))))))
+
+(defun denote-dash--shift-sequences (files)
+  "Shift sequence signatures forward for FILES."
+  (let ((denote-rename-confirmations nil))
+    (dolist (f files)
+      (let* ((old-sig (denote-retrieve-filename-signature f))
+             (new-sig (denote-dash--increment-sequence old-sig)))
+        (denote-rename-file f 'keep-current 'keep-current
+                            new-sig 'keep-current 'keep-current)
+        (denote-dash--hierarchy-remap-fold-sequence-prefix old-sig new-sig)))))
+
+;;;###autoload
 (defun denote-dash-insert-sequence-note ()
   "Insert a new note at the current note's sequence position.
 All following siblings are shifted forward by one to make room.
@@ -767,41 +800,20 @@ Works from `denote-dash-mode' (note at point), a Denote note buffer,
 or prompts for a file."
   (interactive)
   (let* ((file (denote-dash--target-file))
-         (seq-id (denote-retrieve-filename-signature file)))
-    (unless seq-id
-      (user-error "File has no sequence ID: %s" (file-name-nondirectory file)))
-    (let* ((parent-prefix (denote-sequence--get-prefix-for-siblings seq-id))
-           (candidates (if (or (null parent-prefix) (string-empty-p (or parent-prefix "")))
-                           (denote-sequence-get-all-files)
-                         (denote-sequence-get-all-files-with-prefix parent-prefix)))
-           (siblings (seq-filter (lambda (f) (denote-dash--sequence-direct-sibling-p seq-id f))
-                                 candidates))
-           (to-rename (thread-last siblings
-                                   (seq-filter (lambda (f)
-                                                 (not (string< (denote-retrieve-filename-signature f) seq-id))))
-                                   (seq-sort (lambda (a b)
-                                               (string> (denote-retrieve-filename-signature a)
-                                                        (denote-retrieve-filename-signature b)))))))
-      (unless (yes-or-no-p (format "Insert before %s, shifting %d sibling%s? "
-                                   seq-id (length to-rename)
-                                   (if (= (length to-rename) 1) "" "s")))
-        (user-error "Cancelled"))
-      ;; Suppress per-file confirmations: the shift above is one logical
-      ;; operation already confirmed once; `denote-rename-file' would
-      ;; otherwise prompt again for each shifted sibling.
-      (let ((denote-rename-confirmations nil))
-        (seq-do (lambda (f)
-                  (let* ((old-sig (denote-retrieve-filename-signature f))
-                         (new-sig (denote-dash--increment-sequence old-sig)))
-                    (denote-rename-file f 'keep-current 'keep-current
-                                        new-sig 'keep-current 'keep-current)
-                    (denote-dash--hierarchy-remap-fold-sequence-prefix old-sig new-sig)))
-                to-rename))
-      (denote (read-string "Title: ")
-              (denote-keywords-prompt)
-              nil nil nil nil seq-id)
-      (when (derived-mode-p 'denote-dash-mode)
-        (denote-dash-refresh)))))
+         (seq-id (or (denote-retrieve-filename-signature file)
+                     (user-error "File has no sequence ID: %s"
+                                 (file-name-nondirectory file))))
+         (to-rename (denote-dash--following-siblings seq-id)))
+    (unless (yes-or-no-p (format "Insert before %s, shifting %d sibling%s? "
+                                 seq-id (length to-rename)
+                                 (if (= (length to-rename) 1) "" "s")))
+      (user-error "Cancelled"))
+    (denote-dash--shift-sequences to-rename)
+    (denote (read-string "Title: ")
+            (denote-keywords-prompt)
+            nil nil nil nil seq-id)
+    (when (derived-mode-p 'denote-dash-mode)
+      (denote-dash-refresh))))
 
 ;;; Bulk retag across a sequence subtree
 
@@ -841,6 +853,27 @@ are lists of keyword strings; their meaning depends on OPERATION:
          (seq-uniq (append (seq-difference keywords remove-kws) add-kws))
        :unchanged))))
 
+(defun denote-dash--retag-prompt-keywords (operation existing-keywords seq-id)
+  "Prompt for keyword parameters under OPERATION on SEQ-ID.
+EXISTING-KEYWORDS is the list of keywords currently present in the subtree.
+Returns a cons (ADD-KWS . REMOVE-KWS)."
+  (pcase operation
+    ('add
+     (cons (completing-read-multiple "Add keyword(s): " nil) nil))
+    ('remove
+     (unless existing-keywords
+       (user-error "No keywords found under sequence %s" seq-id))
+     (cons nil (completing-read-multiple "Remove keyword(s): " existing-keywords nil t)))
+    ('replace
+     (unless existing-keywords
+       (user-error "No keywords found under sequence %s" seq-id))
+     (let* ((old-kw (annotated-completing-read
+                     (seq-map (lambda (k) (cons k nil)) existing-keywords)
+                     :prompt "Replace keyword:"
+                     :require-match t))
+            (new-kw (read-string (format "Replace `%s' with: " old-kw))))
+       (cons (list new-kw) (list old-kw))))))
+
 ;;;###autoload
 (defun denote-dash-retag-sequence ()
   "Add, remove, or replace a keyword across a sequence and all its descendants.
@@ -855,46 +888,26 @@ already carry the old one."
   (let* ((file (denote-dash--target-file))
          (seq-id (or (denote-retrieve-filename-signature file)
                      (annotated-completing-read
-                      (seq-map
-		       (lambda (s) (cons s nil))
-		       (denote-sequence-get-all-sequences))
+                      (seq-map (lambda (s) (cons s nil))
+                               (denote-sequence-get-all-sequences))
                       :prompt "Sequence:"
-		      :require-match t)))
-         (files (denote-dash--subtree-files seq-id))
-         (existing-keywords (seq-uniq (seq-mapcat #'denote-extract-keywords-from-path files))))
-    (unless files
-      (user-error "No files found for sequence %s" seq-id))
-    (let* ((op-choice (annotated-completing-read
-		       (seq-map
-			(lambda (e) (cons (nth 0 e) (nth 2 e)))
-			denote-dash--retag-operations)
-		       :prompt "Operation:"
-		       :require-match t))
-           (operation (nth 1 (assoc op-choice denote-dash--retag-operations)))
-	   add-kws remove-kws)
-      (pcase operation
-        ('add
-         (setq add-kws (completing-read-multiple "Add keyword(s): " nil)))
-        ('remove
-         (unless existing-keywords
-           (user-error "No keywords found under sequence %s" seq-id))
-         (setq remove-kws (completing-read-multiple "Remove keyword(s): " existing-keywords nil t)))
-        ('replace
-         (unless existing-keywords
-           (user-error "No keywords found under sequence %s" seq-id))
-         (let ((old-kw (annotated-completing-read
-                        (seq-map
-			 (lambda (k) (cons k nil))
-			 existing-keywords)
-                        :prompt "Replace keyword:"
-			:require-match t)))
-           (setq remove-kws (list old-kw))
-           (setq add-kws (list (read-string (format "Replace `%s' with: " old-kw)))))))
-      (let* ((planned (seq-map (lambda (f)
-                                 (cons f (denote-dash--retag-apply
-                                          (denote-extract-keywords-from-path f)
-                                          operation add-kws remove-kws)))
-                               files))
+                      :require-match t)))
+         (files (or (denote-dash--subtree-files seq-id)
+                    (user-error "No files found for sequence %s" seq-id)))
+         (existing-keywords (seq-uniq (seq-mapcat #'denote-extract-keywords-from-path files)))
+         (op-choice (annotated-completing-read
+                     (seq-map (lambda (e) (cons (nth 0 e) (nth 2 e)))
+                              denote-dash--retag-operations)
+                     :prompt "Operation:"
+                     :require-match t))
+         (operation (nth 1 (assoc op-choice denote-dash--retag-operations))))
+    (pcase-let ((`(,add-kws . ,remove-kws)
+                 (denote-dash--retag-prompt-keywords operation existing-keywords seq-id)))
+      (let* ((planned (mapcar (lambda (f)
+                                (cons f (denote-dash--retag-apply
+                                         (denote-extract-keywords-from-path f)
+                                         operation add-kws remove-kws)))
+                              files))
              (affected (seq-remove (lambda (pair) (eq (cdr pair) :unchanged)) planned)))
         (unless affected
           (user-error "No files in sequence %s are affected by this operation" seq-id))
@@ -902,14 +915,11 @@ already carry the old one."
                                      op-choice seq-id (length affected) (length files)
                                      (if (= (length files) 1) "" "s")))
           (user-error "Cancelled"))
-        ;; Suppress per-file confirmations: the single confirmation above
-        ;; already covers the whole bulk operation.
         (let ((denote-rename-confirmations nil))
-          (seq-do (lambda (pair)
-                    (denote-rename-file
-                     (car pair) 'keep-current (cdr pair)
-                     'keep-current 'keep-current 'keep-current))
-                  affected)))
+          (dolist (pair affected)
+            (denote-rename-file
+             (car pair) 'keep-current (cdr pair)
+             'keep-current 'keep-current 'keep-current))))
       (cond
        ((derived-mode-p 'denote-dash-mode) (denote-dash-refresh))
        ((derived-mode-p 'denote-sequence-hierarchy-mode) (revert-buffer))))))

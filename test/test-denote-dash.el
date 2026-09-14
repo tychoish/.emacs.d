@@ -942,5 +942,159 @@ exclusive major modes and can never be simultaneously reachable."
       (should-not (member 'non-existent-column denote-dash--visible-columns))
       (should (equal '(sequence title keywords) denote-dash--visible-columns)))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Grep and non-sequence visibility tests
+
+(ert-deftest denote-dash-test/file-grep-matches-p ()
+  "File grep helper matches text content in file ignoring case."
+  (let ((tmp (make-temp-file "denote-test-grep" nil ".org" "Intro to denote-dash\nDashboard logic\n")))
+    (unwind-protect
+        (progn
+          (should (denote-dash--file-grep-matches-p tmp "Intro"))
+          (should (denote-dash--file-grep-matches-p tmp "dashboard"))
+          (should-not (denote-dash--file-grep-matches-p tmp "non-existent-keyword")))
+      (delete-file tmp))))
+
+(ert-deftest denote-dash-test/file-visible-p-grep-filter ()
+  "File visibility honors `denote-dash--grep-filter'."
+  (let ((tmp-match (make-temp-file "denote-grep-match" nil ".org" "Target string here"))
+        (tmp-miss  (make-temp-file "denote-grep-miss" nil ".org" "Different content here")))
+    (unwind-protect
+        (let ((denote-dash--current-filter nil)
+              (denote-dash--narrowed-sequences nil)
+              (denote-dash--active-directory nil)
+              (denote-dash--show-non-sequence t)
+              (denote-dash--fold-state (make-hash-table :test 'equal)))
+          (let ((denote-dash--grep-filter "Target"))
+            (should (denote-dash--file-visible-p tmp-match nil))
+            (should-not (denote-dash--file-visible-p tmp-miss nil))))
+      (delete-file tmp-match)
+      (delete-file tmp-miss))))
+
+(ert-deftest denote-dash-test/file-visible-p-show-non-sequence ()
+  "Show-non-sequence toggle controls visibility of files without sequence ID."
+  (let ((seq-file "/tmp/20240101T120000==1--test__tag.org")
+        (non-seq-file "/tmp/20240101T120000--test__tag.org")
+        (denote-dash--current-filter nil)
+        (denote-dash--narrowed-sequences nil)
+        (denote-dash--active-directory nil)
+        (denote-dash--grep-filter nil)
+        (denote-dash--fold-state (make-hash-table :test 'equal)))
+    (let ((denote-dash--show-non-sequence nil))
+      (should (denote-dash--file-visible-p seq-file '("1")))
+      (should-not (denote-dash--file-visible-p non-seq-file '("1"))))
+    (let ((denote-dash--show-non-sequence t))
+      (should (denote-dash--file-visible-p seq-file '("1")))
+      (should (denote-dash--file-visible-p non-seq-file '("1"))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Format ID and datetree helper tests
+
+(ert-deftest denote-dash-test/format-id ()
+  "Formatting timestamp IDs inserts hyphen and colon delimiters."
+  (should (equal "2024-03-15 12:30:00" (denote-dash--format-id "20240315T123000")))
+  (should (equal "" (denote-dash--format-id nil)))
+  (should (equal "short" (denote-dash--format-id "short"))))
+
+(ert-deftest denote-dash-test/datetree-day-date ()
+  "Extracts YYYY-MM-DD from org datetree day headings (without stars)."
+  (should (equal "2024-03-15" (denote-dash--datetree-day-date "2024-03-15 Friday")))
+  (should (equal "2024-12-01" (denote-dash--datetree-day-date "2024-12-01")))
+  (should-not (denote-dash--datetree-day-date "No date here"))
+  (should-not (denote-dash--datetree-day-date "2024-03 March")))
+
+(ert-deftest denote-dash-test/entry-in-range-p ()
+  "Tests whether a datetree entry date falls within optional date bounds."
+  (let ((entry '(:date "2024-06-15" :title "Entry")))
+    ;; Unbounded
+    (should (denote-dash--entry-in-range-p entry nil nil))
+    ;; Exact hit
+    (should (denote-dash--entry-in-range-p entry "2024-06-01" "2024-06-30"))
+    ;; Exact bounds
+    (should (denote-dash--entry-in-range-p entry "2024-06-15" "2024-06-15"))
+    ;; Out of range
+    (should-not (denote-dash--entry-in-range-p entry "2024-06-16" "2024-06-30"))
+    (should-not (denote-dash--entry-in-range-p entry "2024-05-01" "2024-06-14"))
+    ;; Half-bounded
+    (should (denote-dash--entry-in-range-p entry "2024-06-01" nil))
+    (should-not (denote-dash--entry-in-range-p entry "2024-07-01" nil))
+    (should (denote-dash--entry-in-range-p entry nil "2024-06-30"))
+    (should-not (denote-dash--entry-in-range-p entry nil "2024-06-01"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Column widths and toggles
+
+(ert-deftest denote-dash-test/column-width-and-overrides ()
+  "Column width defaults can be overridden per buffer."
+  (let ((denote-dash--column-widths nil))
+    (should (= 44 (denote-dash--column-width 'title)))
+    (should (= 1 (denote-dash--column-width 'fold)))
+    (should (= 19 (denote-dash--column-width 'id))))
+  (let ((denote-dash--column-widths '((title . 60) (id . 25))))
+    (should (= 60 (denote-dash--column-width 'title)))
+    (should (= 25 (denote-dash--column-width 'id)))
+    (should (= 1 (denote-dash--column-width 'fold)))))
+
+(ert-deftest denote-dash-test/toggle-column ()
+  "Toggling a column adds it in sorted order or removes it."
+  (with-temp-buffer
+    (denote-dash-mode)
+    (setq-local denote-dash--visible-columns '(sequence title keywords id))
+    (cl-letf (((symbol-function 'denote-dash-refresh) #'ignore))
+      (denote-dash--toggle-column 'git)
+      (should (member 'git denote-dash--visible-columns))
+      (denote-dash--toggle-column 'git)
+      (should-not (member 'git denote-dash--visible-columns)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Sort controls
+
+(ert-deftest denote-dash-test/sort-controls ()
+  "Sort direction toggling and clearing update `tabulated-list-sort-key'."
+  (with-temp-buffer
+    (denote-dash-mode)
+    (cl-letf (((symbol-function 'denote-dash-refresh) #'ignore))
+      (should (equal "sort: (none)" (denote-dash--sort-description)))
+      ;; Cannot toggle when no sort key set
+      (should-error (denote-dash-toggle-sort-direction) :type 'user-error)
+
+      (setq tabulated-list-sort-key (cons "Title" nil))
+      (should (string-prefix-p "sort: Title" (denote-dash--sort-description)))
+
+      (denote-dash-toggle-sort-direction)
+      (should (equal '("Title" . t) tabulated-list-sort-key))
+
+      (denote-dash-clear-sort)
+      (should-not tabulated-list-sort-key))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Bookmark error validation
+
+(ert-deftest denote-dash-test/bookmark-error-conditions ()
+  "Bookmark commands validate inputs and reject invalid operations."
+  (let ((denote-dash-saved-views nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      ;; Empty view name rejected
+      (should-error (denote-dash-bookmark-save "") :type 'user-error)
+      (should-error (denote-dash-bookmark-save "   ") :type 'user-error)
+
+      ;; Non-existent views rejected
+      (should-error (denote-dash-bookmark-jump "ghost") :type 'user-error)
+      (should-error (denote-dash-bookmark-delete "ghost") :type 'user-error)
+
+      ;; Rename validation
+      (should-error (denote-dash-bookmark-rename "" "new") :type 'user-error)
+      (should-error (denote-dash-bookmark-rename "old" "") :type 'user-error)
+      (should-error (denote-dash-bookmark-rename "old" "new") :type 'user-error)
+
+      ;; Save one view
+      (denote-dash-bookmark-save "view1")
+      (denote-dash-bookmark-save "view2")
+      ;; Overwrite confirmation declined during rename aborts
+      (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+        (should-error (denote-dash-bookmark-rename "view1" "view2") :type 'user-error)))))
+
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here

@@ -1105,5 +1105,152 @@ of silently doing nothing (or, worse, touching files it shouldn't)."
       (denote-dash-test--kill-dir-buffers dir)
       (delete-directory dir t))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Helper, buffer cleanup, and parsing tests
+
+(ert-deftest denote-dash-test/kill-visiting-buffers ()
+  "Kill visiting buffers cleans up buffers visiting the specified files."
+  (let* ((f1 (make-temp-file "denote-test-k1"))
+         (f2 (make-temp-file "denote-test-k2"))
+         (b1 (find-file-noselect f1))
+         (b2 (find-file-noselect f2)))
+    (unwind-protect
+        (progn
+          (should (buffer-live-p b1))
+          (should (buffer-live-p b2))
+          (denote-dash--kill-visiting-buffers (list f1 f2))
+          (should-not (buffer-live-p b1))
+          (should-not (buffer-live-p b2)))
+      (when (buffer-live-p b1) (kill-buffer b1))
+      (when (buffer-live-p b2) (kill-buffer b2))
+      (delete-file f1)
+      (delete-file f2))))
+
+(ert-deftest denote-dash-test/seq-split-segments ()
+  "Segment splitting parses alternating letter and digit sequences into numbers."
+  (should (equal '(1 1 2 2) (denote-dash--seq-split-segments "a1b2" :letter)))
+  (should (equal '(1 1 2 2) (denote-dash--seq-split-segments "1a2b" :digit)))
+  (should (equal '(10 3) (denote-dash--seq-split-segments "10c" :digit))))
+
+(ert-deftest denote-dash-test/segment-conversions ()
+  "Converts segment strings to numbers and back according to type."
+  (should (= 5 (denote-dash--segment-to-number "5" :digit)))
+  (should (= 2 (denote-dash--segment-to-number "b" :letter)))
+  (should (equal "5" (denote-dash--number-to-segment 5 :digit)))
+  (should (equal "b" (denote-dash--number-to-segment 2 :letter))))
+
+(ert-deftest denote-dash-test/increment-sequence-various-depths ()
+  "Increment sequence advances the last component across depths."
+  (should (equal "2" (denote-dash--increment-sequence "1")))
+  (should (equal "1b" (denote-dash--increment-sequence "1a")))
+  (should (equal "1a2" (denote-dash--increment-sequence "1a1")))
+  (should (equal "1a1c" (denote-dash--increment-sequence "1a1b"))))
+
+(ert-deftest denote-dash-test/format-lint-entry ()
+  "Formats lint entries with filename and signature comparisons."
+  (let* ((dir (make-temp-file "denote-lint-test-" t))
+         (denote-directory (list dir)))
+    (unwind-protect
+        (let* ((aligned (denote-dash-test--make-org-note dir "20240101T100000" "1" "Aligned"))
+               (entry (denote-dash--format-lint-entry aligned)))
+          (should (string-match-p "filename=1" entry))
+          (should (string-match-p "frontmatter=1" entry)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/lint-sequences-buffer ()
+  "Lint sequences command populates the report buffer."
+  (let ((buf (get-buffer-create "*Denote Sequence Lint*")))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'denote-dash--collect-sequence-mismatches)
+                     (lambda () nil)))
+            (denote-dash-lint-sequences)
+            (with-current-buffer "*Denote Sequence Lint*"
+              (should (string-match-p "All sequence notes are aligned" (buffer-string))))))
+      (when (get-buffer "*Denote Sequence Lint*")
+        (kill-buffer "*Denote Sequence Lint*")))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Swap and insert error conditions
+
+(ert-deftest denote-dash-test/swap-with-parent-no-sequence-error ()
+  "Swapping with parent errors when target note has no sequence."
+  (let* ((dir (make-temp-file "denote-swap-err-" t))
+         (denote-directory (list dir)))
+    (unwind-protect
+        (let ((note (denote-dash-test--make-org-note dir "20240101T100000" nil "NoSeq")))
+          (cl-letf (((symbol-function 'denote-dash--target-file) (lambda () note)))
+            (should-error (denote-dash-swap-with-parent) :type 'user-error)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-parent-root-sequence-error ()
+  "Swapping with parent errors when target note is a root sequence."
+  (let* ((dir (make-temp-file "denote-swap-root-" t))
+         (denote-directory (list dir)))
+    (unwind-protect
+        (let ((root (denote-dash-test--make-org-note dir "20240101T100000" "1" "Root")))
+          (cl-letf (((symbol-function 'denote-dash--target-file) (lambda () root)))
+            (should-error (denote-dash-swap-with-parent) :type 'user-error)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/swap-with-parent-cancelled ()
+  "Declining confirmation in swap-with-parent cancels without modifying files."
+  (let* ((dir (make-temp-file "denote-swap-canc-" t))
+         (denote-directory (list dir)))
+    (unwind-protect
+        (let* ((p (denote-dash-test--make-org-note dir "20240101T100000" "1" "Parent"))
+               (c (denote-dash-test--make-org-note dir "20240101T100100" "1a" "Child")))
+          (cl-letf (((symbol-function 'denote-dash--target-file) (lambda () c))
+                    ((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+            (should-error (denote-dash-swap-with-parent) :type 'user-error))
+          (should (file-exists-p p))
+          (should (file-exists-p c)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/insert-sequence-note-no-sequence-error ()
+  "Inserting sequence note errors when target note has no sequence ID."
+  (let* ((dir (make-temp-file "denote-ins-err-" t))
+         (denote-directory (list dir)))
+    (unwind-protect
+        (let ((note (denote-dash-test--make-org-note dir "20240101T100000" nil "NoSeq")))
+          (cl-letf (((symbol-function 'denote-dash--target-file) (lambda () note)))
+            (should-error (denote-dash-insert-sequence-note) :type 'user-error)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/insert-sequence-note-cancelled ()
+  "Declining confirmation cancels insert without modifying files."
+  (let* ((dir (make-temp-file "denote-ins-canc-" t))
+         (denote-directory (list dir)))
+    (unwind-protect
+        (let ((note (denote-dash-test--make-org-note dir "20240101T100000" "1" "Root")))
+          (cl-letf (((symbol-function 'denote-dash--target-file) (lambda () note))
+                    ((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
+            (should-error (denote-dash-insert-sequence-note) :type 'user-error))
+          (should (file-exists-p note)))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
+(ert-deftest denote-dash-test/following-siblings-descending-order ()
+  "Following siblings returns matching siblings in descending sequence order."
+  (let* ((dir (make-temp-file "denote-sibs-" t))
+         (denote-directory (list dir))
+         (denote-sequence-scheme 'alphanumeric))
+    (unwind-protect
+        (let* ((f1 (denote-dash-test--make-org-note dir "20240101T100000" "1" "One"))
+               (f2 (denote-dash-test--make-org-note dir "20240101T100100" "2" "Two"))
+               (f3 (denote-dash-test--make-org-note dir "20240101T100200" "3" "Three"))
+               (sibs (denote-dash--following-siblings "2")))
+          (should (= 2 (length sibs)))
+          (should (equal f3 (car sibs)))
+          (should (equal f2 (cadr sibs))))
+      (denote-dash-test--kill-dir-buffers dir)
+      (delete-directory dir t))))
+
 (provide 'test-denote-dash-repack)
 ;;; test-denote-dash-repack.el ends here
