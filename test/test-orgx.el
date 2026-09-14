@@ -194,7 +194,7 @@
         (should prompted)))
     (kill-buffer)))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; org-agenda custom command "dq"
+;;; org-agenda custom command "dq" and "dc"
 
 (ert-deftest orgx/denote-agenda-dq-custom-command-structure ()
   "The 'dq' custom agenda command uses tags type with open question skip function."
@@ -205,6 +205,23 @@
     (let ((block (car (nth 2 dq-cmd))))
       (should (eq 'tags (nth 0 block)))
       (should (equal "+question|TODO=\"QUESTION\"" (nth 1 block))))))
+
+(ert-deftest orgx/denote-agenda-dc-custom-command-structure ()
+  "The 'dc' composite agenda command contains the expected blocks including Pending Considerations and Active Tasks."
+  (require 'org-agenda)
+  (let ((dc-cmd (assoc "dc" org-agenda-custom-commands)))
+    (should dc-cmd)
+    (should (equal "Denote Composite Agenda" (nth 1 dc-cmd)))
+    (let ((blocks (nth 2 dc-cmd)))
+      (should (= 5 (length blocks)))
+      (should (equal "Human questions" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 0 blocks))))))
+      (should (equal "Pending Considerations" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 1 blocks))))))
+      (should (equal "TODO=\"CONSIDER\"|TODO=\"MUST\"" (nth 1 (nth 1 blocks))))
+      (should (equal "Active Tasks" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 2 blocks))))))
+      (should (equal "TODO=\"INPROGRESS\"|TODO=\"PAUSED\"|TODO=\"SCHEDULED\"|TODO=\"BLOCKED\"" (nth 1 (nth 2 blocks))))
+      (should (equal "Tasks" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 3 blocks))))))
+      (should (equal "Agent tasks" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 4 blocks))))))
+      (should (equal "+agent-question-TODO=\"QUESTION\"-TODO=\"CONSIDER\"-TODO=\"MUST\"-TODO=\"INPROGRESS\"-TODO=\"PAUSED\"-TODO=\"SCHEDULED\"-TODO=\"BLOCKED\"" (nth 1 (nth 4 blocks)))))))
 
 (ert-deftest orgx/skip-unless-open-question-filters-open-questions ()
   "orgx-skip-unless-open-question retains open questions and skips answered, done, or inherited subheadings."
@@ -307,12 +324,9 @@
   "orgx capture templates specify :empty-lines 0."
   (let ((org-capture-templates nil))
     (orgx-capture-add-task-templates :name "test" :path "/tmp/test.org")
-    (let ((tt-entry (assoc "tt" org-capture-templates))
-          (tq-entry (assoc "tq" org-capture-templates)))
+    (let ((tt-entry (assoc "tt" org-capture-templates)))
       (should (member :empty-lines tt-entry))
-      (should (eq 0 (cadr (member :empty-lines tt-entry))))
-      (should (member :empty-lines tq-entry))
-      (should (eq 0 (cadr (member :empty-lines tq-entry)))))))
+      (should (eq 0 (cadr (member :empty-lines tt-entry)))))))
 
 (ert-deftest orgx/quick-task-template-body-has-no-stray-blank-line ()
   "tq template body does not contain an extra newline between title and cursor."

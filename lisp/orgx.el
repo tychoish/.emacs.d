@@ -267,9 +267,13 @@ header text, or leaves the default when nil."
            ((tags "+question|TODO=\"QUESTION\""
                   ((org-agenda-skip-function #'orgx-skip-unless-open-question)
                    (org-agenda-overriding-header "Human questions")))
+            (tags-todo "TODO=\"CONSIDER\"|TODO=\"MUST\""
+                       ((org-agenda-overriding-header "Pending Considerations")))
+            (tags-todo "TODO=\"INPROGRESS\"|TODO=\"PAUSED\"|TODO=\"SCHEDULED\"|TODO=\"BLOCKED\""
+                       ((org-agenda-overriding-header "Active Tasks")))
             (tags-todo "-agent-question-TODO=\"QUESTION\""
                        ((org-agenda-overriding-header "Tasks")))
-            (tags-todo "+agent-question-TODO=\"QUESTION\""
+            (tags-todo "+agent-question-TODO=\"QUESTION\"-TODO=\"CONSIDER\"-TODO=\"MUST\"-TODO=\"INPROGRESS\"-TODO=\"PAUSED\"-TODO=\"SCHEDULED\"-TODO=\"BLOCKED\""
                        ((org-agenda-overriding-header "Agent tasks"))))
            ,(orgx--denote-agenda-settings nil))
 	  ("i" . "including inherited")
