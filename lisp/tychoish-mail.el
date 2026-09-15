@@ -86,6 +86,7 @@
 (defvar tychoish-mail--refile-rules nil
   "Functions of one argument MSG, tried in order by `tychoish-mail-refile-folder'.")
 
+;;;###autoload
 (defun tychoish-mail-add-refile-rule (rule)
   "Register RULE, a function of one argument MSG, as a refile rule.
 RULE should return a maildir folder string, or nil to fall through to the
@@ -332,6 +333,7 @@ live in MAILDIR's tools/signatures directory."
    :documentation "external command to run to fetch mail."
    :type 'string))
 
+;;;###autoload
 (defun tychoish-mail-select-account (account-id)
   "Use consult to select an account/mail configuration."
 
@@ -411,6 +413,7 @@ live in MAILDIR's tools/signatures directory."
 
       (message "mail: configured address [%s]" address))))
 
+;;;###autoload
 (cl-defun tychoish-define-mail-account
     (&key name address key id
 	  (command mu4e-get-mail-command)

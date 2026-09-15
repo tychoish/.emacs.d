@@ -23,113 +23,58 @@
   (make-read-extended-command-for-prefix "clipboard"
     :bind-map hud-mode-map
     :bind-key "C-x x c")
+  (make-read-extended-command-for-prefix "tailscale"
+    :bind-map hud-robot-network-map
+    :bind-key "x")
+  (make-read-extended-command-for-prefix "smerge"
+    :bind-map hud-smerge-map
+    :bind-key "x")
+  (make-read-extended-command-for-prefix "docker"
+    :bind-key "x"
+    :bind-map hud-docker-map)
 
   (create-toggle-functions slow-op-reporting)
   (create-toggle-functions electric-pair-inhibition)
   (create-toggle-functions electric-pair-eagerness))
 
-(use-package f
-  :ensure t
-  :defer t)
+(elpaish-install-packages
+ '(f
+   cond-let
+   uuidgen
+   popon
+   package-build
+   journalctl-mode
+   gist
+   mcpkit
+   consult-gh
+   consult-flycheck
+   consult-flyspell
+   consult-eglot
+   marginalia
+   magit-gh
+   eglot-tempel
+   tempel-collection
+   embark-consult
+   gptel-aibo
+   gptel-agent
+   telega-bot
+   denote-notion
+   sprite
+   tailscale
+   docker
+   sqlite-mode-extras
+   nerd-icons
+   nerd-icons-dired
+   nerd-icons-corfu
+   nerd-icons-xref
+   deadgrep
+   annotated-completing-read
+   org-docsgen
+   undercover))
 
-(use-package cond-let
-  :ensure t
-  :defer t)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(use-package delight
-  :ensure t
-  :defer (not (gui-p))
-  :demand (gui-p)
-  :commands (delight)
-  :config
-  (delight 'fundamental-mode "fun" 'simple)
-
-  (delight 'abbrev-mode "abb")
-
-  (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
-  (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
-  (delight 'sh-mode "sh" 'sh-script)
-  (delight 'org-mode "org" 'org-mode)
-  (delight 'org-agenda-mode "agenda" 'org-agenda)
-  (delight 'rst-mode "rst" 'rst-mode)
-  (delight 'nerd-icons-dired-mode nil 'nerd-icons-dired)
-  (delight 'nerd-icons-xref-mode nil 'nerd-icons-xref)
-  (delight 'nerd-icons-completion-mode nil 'nerd-icons-completion)
-
-  (delight 'projectile-mode nil 'projectile)
-  (delight 'eglot--managed-mode nil 'eglot)
-  (delight 'eldoc-mode nil 'eldoc)
-  (delight 'telega-chat-auto-fill-mode nil)
-
-  (delight 'anzu-mode " az" 'anzu)
-  (delight 'flyspell-mode " fs" 'flyspell)
-  (delight 'flycheck-mode " fc" 'flycheck)
-  (delight 'visual-line-mode " wr" 'simple)
-  (delight 'auto-fill-function " afm" 'simple)
-  (delight 'overwrite-mode " om" 'simple)
-  (delight 'refill-mode " rf" 'refill)
-  (delight 'auto-revert-mode nil 'autorevert)
-
-  (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
-  (delight 'outline-minor-mode nil 'outline)
-  (delight 'cursor-sensor-mode nil 'cursor-sensor)
-  (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications))
-
-(use-package uuidgen
-  :ensure t
-  :defer t)
-
-(use-package async
-  :ensure t
-  :defer t
-  :init
-  (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
-  (add-hook 'dired-mode-hook 'dired-async-mode)
-  :config
-  (delight 'async-bytecomp-package-mode "" 'async-bytecomp)
-  (delight 'dired-async-mode "" 'dired-async)
-  (declare-function package-desc-p "package")
-  (autoload 'async-package-do-action "async-package")
-
-  (defun async-package-operation (op pkgs)
-    (let* ((ops '(install upgrade 'reinstall))
-           (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it)) pkgs))
-           (filename (concat (file-name-concat temporary-file-directory
-                                                (string-join (list
-                                                               "emacs" sprite-instance-id
-                                                               "async-package"
-                                                               (symbol-name op))
-                                                              "-")) ".log")))
-      (unless (member op ops)
-        (user-error "%s is not a valid operation %S" op ops))
-
-      (unless valid-packages
-        (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
-
-      (async-package-do-action op valid-packages filename))))
-
-(use-package package-build
-  :ensure t
-  :defer t)
-
-(use-package annotated-completing-read
-  :ensure t
-  :defer t
-  :config
-  (annotated-completing-read-setup-history))
-
-(use-package sprite
-  :ensure t
-  :init
-  (add-one-shot-hook
-   :name "set-custom-file"
-   :hook 'after-init-hook
-   :form (setq custom-file (sprite-state-path "custom.el"))
-   ;; Depth below 0: must run before `package--save-selected-packages'.
-   :depth -90)
-  :config
-  (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
-  (setq sprite-mode-map-prefix (cons "s" 'hud-core-map)))
+;; INTERNAL
 
 (use-package hud
   :ensure nil
@@ -141,40 +86,74 @@
   (keymap-set hud-core-map "m" #'hud-dispatch)
   (keymap-set hud-core-map "," #'hud-select))
 
-(use-package arch
-  :ensure t
-  :defer t
-  :config
-  (add-hook 'arch-after-install-hook (lambda (pkg)
-                                       (alert (format "Installed package %s" (arch-pkg-name pkg))
-					      :title "Arch Package Manager")))
-  (add-hook 'arch-after-upgrade-hook (lambda (pkg)
-				       (alert (format "Upgraded package %s" (arch-pkg-name pkg))
-					      :title "Arch Package Manager")))
-  (add-hook 'arch-after-remove-hook (lambda (pkg)
-				      (alert (format "Removed package %s" (arch-pkg-name pkg))
-					     :title "Arch Package Manager")))
-  (add-hook 'arch-after-upgrade-all-hook (lambda ()
-					   (alert "System upgrade completed"
-						  :title "Arch Package Manager")))
-  (run-with-idle-timer 2 nil #'arch--populate-cache))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; UI, Display, Rendering, Window Management
-
-(use-package windmove
+(use-package hud-modeline
   :ensure nil
   :defer t
+  :commands (hud-modeline-mode)
   :init
-  (keymap-set hud-mode-map "M-h" #'windmove-left)
-  (keymap-set hud-mode-map "M-j" #'windmove-down)
-  (keymap-set hud-mode-map "M-k" #'windmove-up)
-  (keymap-set hud-mode-map "M-l" #'windmove-right)
-  (keymap-set hud-mode-map "S-<left>" #'windmove-left)
-  (keymap-set hud-mode-map "S-<down>" #'windmove-down)
-  (keymap-set hud-mode-map "S-<up>" #'windmove-up)
-  (keymap-set hud-mode-map "S-<right>" #'windmove-right))
+  (add-one-shot-hook
+   :name "hud-modeline"
+   :form (run-with-idle-timer 0.1 nil #'hud-modeline-mode 1)
+   :hook (if (daemonp)
+	     'server-after-make-frame-hook
+	   'window-setup-hook))
+  :config
+  (create-toggle-functions
+   hud-modeline-icons
+   :keymap hud-theme-map
+   :key "i")
+  (create-toggle-functions
+   hud-modeline-show-buffer-size
+   :keymap hud-theme-map
+   :key "s"))
+
+(use-package orgx
+  :ensure nil
+  :commands (orgx-capture
+	     orgx-agenda-view
+	     orgx-agenda-files-open
+	     orgx-agenda-files-reload
+	     orgx-agenda-untagged-in-file
+	     orgx-agenda-for-file
+	     orgx-minor-mode-turn-on
+	     orgx-agenda-minor-mode-turn-on
+	     orgx--install-auxiliary-packages
+	     ad:org-agenda--open-files
+	     ad:org-agenda-redo
+	     orgx-link-github-line-support
+	     orgx-open-custom-id-slug-fallback)
+  :init
+  (with-eval-after-load 'ol
+    (require 'orgx))
+  (keymap-set orgx-global-map "a" #'orgx-agenda-view)
+  (keymap-set orgx-global-map "4" #'org-agenda)
+  (keymap-set orgx-global-map "k" #'org-capture)
+  (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
+  (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
+  (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
+  (keymap-set orgx-global-map "j" #'orgx-capture)
+  (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
+  (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
+
+  (keymap-set orgx-link-map "s" #'org-store-link)
+  (keymap-set orgx-link-map "a" #'org-id-store-link)
+  (keymap-set orgx-link-map "i" #'org-insert-link)
+  (keymap-set orgx-link-map "n" #'org-annotate-file)
+  (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
+  (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+  (add-one-shot-hook
+   :name "org-install-aux-packages"
+   :hook 'org-mode-hook
+   :operation #'orgx--install-auxiliary-packages)
+  :config
+  (orgx--setup-standard-capture-templates)
+  (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
+  (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
+  (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; STDLIB
 
 (use-package modus-themes
   :ensure t
@@ -239,56 +218,106 @@
 	  (border-mode-line-inactive bg-mode-line-inactive)
 	  (message-separator bg-main))))
 
-(use-package nerd-icons
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; CORE PACKAGES
+
+(use-package delight
+  :ensure t
+  :defer (not (gui-p))
+  :demand (gui-p)
+  :commands (delight)
+  :config
+  (delight 'fundamental-mode "fun" 'simple)
+
+  (delight 'abbrev-mode "abb")
+  (delight 'flyspell-mode " fs")
+  (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
+  (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
+  (delight 'sh-mode "sh" 'sh-script)
+  (delight 'org-mode "org" 'org-mode)
+  (delight 'org-agenda-mode "agenda" 'org-agenda)
+  (delight 'rst-mode "rst" 'rst-mode)
+  (delight 'emojify-mode)
+  (delight 'nerd-icons-dired-mode nil 'nerd-icons-dired)
+  (delight 'nerd-icons-xref-mode nil 'nerd-icons-xref)
+  (delight 'nerd-icons-completion-mode nil 'nerd-icons-completion)
+  (delight 'nerd-icons-dired-mode "")
+  (delight 'projectile-mode nil 'projectile)
+  (delight 'eglot--managed-mode nil 'eglot)
+  (delight 'eldoc-mode nil 'eldoc)
+  (delight 'telega-chat-auto-fill-mode nil)
+  (delight 'anzu-mode " az" 'anzu)
+  (delight 'flyspell-mode " fs" 'flyspell)
+  (delight 'flycheck-mode " fc" 'flycheck)
+  (delight 'visual-line-mode " wr" 'simple)
+  (delight 'auto-fill-function " afm" 'simple)
+  (delight 'overwrite-mode " om" 'simple)
+  (delight 'refill-mode " rf" 'refill)
+  (delight 'auto-revert-mode nil 'autorevert)
+
+  (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
+  (delight 'outline-minor-mode nil 'outline)
+  (delight 'cursor-sensor-mode nil 'cursor-sensor)
+  (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications))
+
+(use-package async
   :ensure t
   :defer t
   :init
-  (defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
-    "Return empty string instead of signaling for an unresolvable buffer icon."
-    (condition-case nil
-	(apply orig args)
-      (error "")))
+  (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
+  (add-hook 'dired-mode-hook 'dired-async-mode)
   :config
-  (add-to-list 'nerd-icons-mode-icon-alist
-               '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))
-  (advice-add 'nerd-icons-icon-for-buffer :around #'ad:nerd-icons-icon-for-buffer-safe))
+  (delight 'async-bytecomp-package-mode "" 'async-bytecomp)
+  (delight 'dired-async-mode "" 'dired-async)
+  (declare-function package-desc-p "package")
+  (autoload 'async-package-do-action "async-package")
 
-(use-package nerd-icons-dired
+  (defun async-package-operation (op pkgs)
+    (let* ((ops '(install upgrade 'reinstall))
+           (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it)) pkgs))
+           (filename (concat (file-name-concat temporary-file-directory
+                                                (string-join (list
+                                                               "emacs" sprite-instance-id
+                                                               "async-package"
+                                                               (symbol-name op))
+                                                              "-")) ".log")))
+      (unless (member op ops)
+        (user-error "%s is not a valid operation %S" op ops))
+
+      (unless valid-packages
+        (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
+
+      (async-package-do-action op valid-packages filename))))
+
+(use-package arch
+  :ensure t
+  :defer t
+  :config
+  (add-hook 'arch-after-install-hook (lambda (pkg)
+                                       (alert (format "Installed package %s" (arch-pkg-name pkg))
+					      :title "Arch Package Manager")))
+  (add-hook 'arch-after-upgrade-hook (lambda (pkg)
+				       (alert (format "Upgraded package %s" (arch-pkg-name pkg))
+					      :title "Arch Package Manager")))
+  (add-hook 'arch-after-remove-hook (lambda (pkg)
+				      (alert (format "Removed package %s" (arch-pkg-name pkg))
+					     :title "Arch Package Manager")))
+  (add-hook 'arch-after-upgrade-all-hook (lambda ()
+					   (alert "System upgrade completed"
+						  :title "Arch Package Manager")))
+  (run-with-idle-timer 2 nil #'arch--populate-cache))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; UI, Display, Rendering, Window Management
+
+(use-package nerd-icons-completion
   :ensure t
   :defer t
   :init
-  (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
-  :config
-  (delight 'nerd-icons-dired-mode ""))
 
-(use-package hud-modeline
-  :ensure nil
-  :defer t
-  :commands (hud-modeline-mode)
-  :init
-  (add-one-shot-hook
-   :name "hud-modeline"
-   :form (run-with-idle-timer 0.1 nil #'hud-modeline-mode 1)
-   :hook (if (daemonp)
-	     'server-after-make-frame-hook
-	   'window-setup-hook))
-  :config
-  (create-toggle-functions hud-modeline-icons
-			   :keymap hud-theme-map
-			   :key "i")
-  (create-toggle-functions hud-modeline-show-buffer-size
-			   :keymap hud-theme-map
-			   :key "s"))
-
-(use-package which-key
-  :ensure nil
-  :defer t
-  :init
-  (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
-  :config
-  (setq which-key-idle-delay .25)
-  (setq which-key-idle-secondary-delay 0.125)
-  (setq which-key-lighter ""))
+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -401,24 +430,6 @@
     (interactive)
     (seq-do #'projectile-mode-disable-for-buffer (buffer-list))))
 
-(use-package dired
-  :ensure nil
-  :defer t
-  :config
-  (put 'dired-find-alternate-file 'disabled nil)
-  (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
-
-(use-package recentf
-  :ensure nil
-  :defer t
-  :init
-  (keymap-set global-map "C-x C-r" #'recentf)
-  (setq recentf-auto-cleanup 'never)
-  (setq recentf-keep '(file-remote-p file-readable-p))
-  (setq recentf-max-menu-items 100)
-  :config
-  (setq recentf-save-file (sprite-state-path "recentf.el")))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; grep/search
@@ -429,6 +440,7 @@
   :defer t
   :init
   ;; "C-c g r"
+  (keymap-set hud-ecclectic-rg-map "x" #'deadgrep)
   (keymap-set hud-ecclectic-rg-map "d" #'find-ripgrep)
   (keymap-set hud-ecclectic-rg-map "c" #'find-ripgrep-compile)
   (keymap-set hud-ecclectic-rg-map "m" #'find-merge-conflicts)
@@ -486,12 +498,6 @@
   :config
   (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc")))
 
-(use-package deadgrep
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-ecclectic-rg-map "x" #'deadgrep))
-
 (use-package wgrep
   :ensure t
   :defer t
@@ -512,7 +518,6 @@
   (add-hook 'isearch-mode-hook #'anzu-mode)
   (setq anzu-cons-mode-line-p nil)
   :config
-  (delight 'anzu-mode)
   (seq-do #'make-variable-buffer-local
           '(anzu--total-matched anzu--current-position anzu--state
             anzu--cached-count anzu--cached-positions anzu--last-command
@@ -661,38 +666,13 @@
     (interactive)
     (find-file (expand-file-name "templates" user-emacs-directory)))
 
+  (keymap-set hud-consult-mode-map "s" #'tempel-insert)
+  (keymap-set hud-completion-map "i" #'tempel-insert)
   (keymap-set hud-completion-map "s" #'tempel-complete)
   (keymap-set hud-completion-map "x" #'tempel-expand)
   (keymap-set hud-completion-map "v" #'tempel-open-custom-file)
   :config
   (setq tempel-path (expand-file-name "templates" user-emacs-directory)))
-
-(use-package eglot-tempel
-  :ensure t
-  :defer t
-  :after (eglot tempel)
-  :config
-  (eglot-tempel-mode 1))
-
-(use-package tempel-collection
-  :ensure t
-  :defer t
-  :after tempel)
-
-(use-package dabbrev
-  :ensure nil
-  :defer t
-  :init
-  (keymap-set global-map "M-/" #'dabbrev-completion)
-  (keymap-set global-map "C-M-/" #'dabbrev-expand)
-  (keymap-set hud-completion-map "/" #'dabbrev-expand)
-  (keymap-set hud-completion-map "c" #'dabbrev-completion)
-  :config
-  (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
-  (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
 (use-package vertico
   :ensure t
@@ -746,18 +726,6 @@
   (setq orderless-matching-styles
 	'(orderless-literal orderless-prefixes orderless-initialism orderless-regexp)))
 
-(use-package marginalia
-  :ensure t
-  :defer t
-  :init
-  (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
-  (add-one-shot-hook
-   :name "marginalia"
-   :function marginalia-mode
-   :hook 'minibuffer-setup-hook)
-  :config
-  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu)))
-
 (use-package embark
   :ensure t
   :defer t
@@ -792,6 +760,7 @@
   (add-hook 'prog-mode-hook #'tychoish/corfu-prog-mode-setup)
   :config
   (add-hook 'corfu-mode-hook #'tychoish--corfu-maybe-terminal)
+  (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter)
   (defun corfu-at-point ()
     "Run `completion-at-point', but force using corfu, which may be useful in gui terminals"
     (interactive)
@@ -828,65 +797,6 @@
   (setq read-file-name-completion-ignore-case t)
   (setq read-buffer-completion-ignore-case t)
   (setq completion-ignore-case t))
-
-(use-package corfu-terminal
-  :ensure t
-  :defer t
-  :init
-  (defun tychoish--corfu-maybe-terminal ()
-    (unless (or (bound-and-true-p corfu-terminal-mode)
-		(display-graphic-p))
-      (corfu-terminal-mode +1)))
-  :config
-  (setq corfu-terminal-disable-on-gui t)
-  (setq corfu-terminal-enable-on-minibuffer nil))
-
-(use-package popon
-  :ensure t
-  :defer t)
-
-(use-package nerd-icons-corfu
-  :ensure t
-  :defer t
-  :config
-  (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
-
-(use-package nerd-icons-xref
-  :ensure t
-  :defer t
-  :init
-  (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode))
-
-(use-package nerd-icons-completion
-  :ensure t
-  :defer t
-  :init
-  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
-  (add-lazy-init
-   :name "<core> nerd icons"
-   :delay 0.8
-   :operation 'nerd-icons-completion-mode)
-  :config
-  (cl-defmethod nerd-icons-completion-get-icon :around (cand (_cat (eql buffer)))
-    "Skip icon lookup when CAND names a killed buffer.
-`get-buffer' returns the buffer object even when dead, and the primary
-method has no liveness check, so it errors in `set-buffer' once a
-completion candidate outlives its buffer."
-    (if (buffer-live-p (get-buffer cand))
-        (cl-call-next-method)
-      "")))
-
-(use-package xref
-  :ensure nil
-  :defer t
-  :init
-  (keymap-set global-map "M-." #'xref-find-definitions)
-  ;; "C-c l"
-  (keymap-set hud-ide-map "c" #'xref-find-references)
-  (keymap-set hud-ide-map "d" #'xref-find-definitions)
-  (keymap-set hud-ide-map "p" #'xref-go-back)
-  (keymap-set hud-ide-map "n" #'xref-go-forward)
-  (keymap-set hud-ide-map "o" #'xref-find-definitions-other-window))
 
 (use-package consult
   :ensure t
@@ -937,6 +847,7 @@ completion candidate outlives its buffer."
   (keymap-set hud-completion-map "c" #'consult-at-point)
   (keymap-set hud-docs-map "i" #'consult-info)
   (keymap-set hud-docs-map "m" #'consult-man)
+  (keymap-set hud-docs-map "a" #'consult-eglot-symbols)
   (keymap-set hud-consult-mode-map "h" #'consult-history)
   ;; "C-c g"
   (keymap-set hud-ecclectic-grep-map "f" #'consult-grep)
@@ -1066,51 +977,13 @@ prompt for the initial query using `annotated-completing-read-context-from-point
    :group nil
    :keymap
    (with-temp-keymap map
-     (define-key map (kbd "C-l") #'consult-ripgrep--up-directory))))
+     (define-key map (kbd "C-l") #'consult-ripgrep--up-directory)))
 
-(use-package consult-flycheck
-  :ensure t
-  :defer t
-  :init
-  (keymap-set global-map "M-g f" #'flycheck-mode)
-  (keymap-set hud-consult-mode-map "c" #'consult-flycheck)
-  (with-eval-after-load 'flycheck
-    (keymap-set flycheck-command-map ";" #'consult-flycheck)))
-
-(use-package consult-flyspell
-  :ensure t
-  :defer t
-  :commands (flyspell-correct-consult consult-flyspell)
-  :init
-  (keymap-set hud-consult-mode-map "f" #'consult-flyspell)
-  :config
-  (defun consult-flyspell--round-trip ()
-    (flyspell-correct-at-point)
-    (consult-flyspell))
-  (setq consult-flyspell-select-function 'consult-flyspell--round-trip))
-
-(use-package consult-eglot
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-docs-map "a" #'consult-eglot-symbols)
-  :config
   (consult-customize
    consult-eglot-symbols
    :initial (or (thing-at-point 'symbol)
 		(thing-at-point 'defun)
 		(thing-at-point 'sexp))))
-
-(use-package consult-gh
-  :ensure t
-  :defer t)
-
-  (keymap-set hud-consult-mode-map "s" #'tempel-insert)
-  (keymap-set hud-completion-map "i" #'tempel-insert)
-
-(use-package embark-consult
-  :ensure t
-  :defer t)
 
 (use-package builder
   :commands (make-builder-candidate
@@ -1210,13 +1083,8 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   (keymap-set magit-status-mode-map "C-p" #'previous-line)
 
   (when (fboundp 'hud-modeline-set-segment-action)
-    (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
+    (hud-modeline-set-segment-action 'vc #'magit-dispatch))
 
-(use-package magit-gh
-  :ensure t
-  :after magit
-  :demand t
-  :config
   (unless (condition-case nil
               (transient-get-suffix 'magit-gh "g")
             (error nil))
@@ -1257,36 +1125,6 @@ prompt for the initial query using `annotated-completing-read-context-from-point
             '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
               (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
               (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
-
-(use-package smerge-mode
-  :defer t
-  :commands (smerge-kill-and-vc-next-conflict)
-  :init
-  (keymap-set hud-smerge-map "n" #'smerge-vc-next-conflict)
-  (keymap-set hud-smerge-map "k" #'smerge-kill-current)
-  (keymap-set hud-smerge-map "s" #'smerge-start-session)
-  (keymap-set hud-smerge-map "r" #'smerge-kill-and-vc-next-conflict)
-  (keymap-set hud-smerge-map "t" #'smerge-keep-current)
-  (make-read-extended-command-for-prefix "smerge"
-    :bind-map hud-smerge-map
-    :bind-key "x")
-  :config
-  (defun smerge-kill-and-vc-next-conflict ()
-    "Kill the current conflict option and move to the next conflict."
-    (interactive)
-    (smerge-kill-current)
-    (smerge-vc-next-conflict)))
-
-(use-package sqlite-mode-extras
-  :ensure t
-  :defer t
-  :commands (sqlite-extras-minor-mode)
-  :init
-  (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode))
-
-(use-package gist
-  :ensure t
-  :defer t)
 
 (use-package git-link
   :ensure t
@@ -1345,7 +1183,6 @@ clipboard."
   :ensure t
   :defer t
   :config
-  (delight 'emojify-mode)
   (setq emojify-emoji-styles '(ascii unicode github))
   (setq emojify-display-style 'unicode)
   (setq emojify-point-entered-behaviour 'echo))
@@ -1434,9 +1271,6 @@ clipboard."
   (setq telega-chat-auto-fill-mode-lighter "")
   (telega-mode-line-mode 1)
   (telega-alert-mode 1))
-
-(use-package telega-bot
-  :after telega)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1535,14 +1369,6 @@ clipboard."
 	     denote-dash-renumber-recursive
 	     denote-dash-insert-sequence-note
 	     denote-dash-retag-sequence))
-
-(use-package denote-notion
-  :ensure t
-  :defer t)
-
-(use-package org-docsgen
-  :ensure t
-  :defer t)
 
 (use-package consult-notes
   :ensure t
@@ -1658,61 +1484,6 @@ return until the minibuffer session ends."
   :commands (denote-journal-capture-mode)
   :defer t)
 
-(use-package orgx
-  :ensure nil
-  :commands (orgx-capture
-	     orgx-agenda-view
-	     orgx-agenda-files-open
-	     orgx-agenda-files-reload
-	     orgx-agenda-untagged-in-file
-	     orgx-agenda-for-file
-	     orgx-minor-mode-turn-on
-	     orgx-agenda-minor-mode-turn-on
-	     orgx--install-auxiliary-packages
-	     ad:org-agenda--open-files
-	     ad:org-agenda-redo
-	     orgx-link-github-line-support
-	     orgx-open-custom-id-slug-fallback)
-  :init
-  (with-eval-after-load 'ol
-    (require 'orgx))
-  (keymap-set orgx-global-map "a" #'orgx-agenda-view)
-  (keymap-set orgx-global-map "4" #'org-agenda)
-  (keymap-set orgx-global-map "k" #'org-capture)
-  (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
-  (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
-  (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
-  (keymap-set orgx-global-map "j" #'orgx-capture)
-  (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
-  (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
-
-  (keymap-set orgx-link-map "s" #'org-store-link)
-  (keymap-set orgx-link-map "a" #'org-id-store-link)
-  (keymap-set orgx-link-map "i" #'org-insert-link)
-  (keymap-set orgx-link-map "n" #'org-annotate-file)
-  (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
-  (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
-  (add-one-shot-hook
-   :name "org-install-aux-packages"
-   :hook 'org-mode-hook
-   :operation #'orgx--install-auxiliary-packages)
-  :config
-  (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
-  (advice-add 'org-agenda :before #'ad:org-agenda--open-files))
-  (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo)
-
-(use-package orgx-capture
-  :ensure nil
-  :commands (orgx-capture-add-note-templates
-	     orgx-add-project-file-capture-templates
-	     orgx-capture-add-journal-templates
-	     orgx-capture-add-task-templates)
-  :init
-  (with-eval-after-load 'org
-    (require 'orgx-capture))
-  :config
-  (orgx--setup-standard-capture-templates))
-
 (use-package markdown-mode
   :ensure t
   :mode ("\\.mdwn" "\\.md" "\\.markdown" "\\.txt")
@@ -1790,17 +1561,25 @@ return until the minibuffer session ends."
     "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
     (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-prog-buffer (current-buffer)))
 
-  (keymap-set global-map "C-c [" #'flyspell-correct-next)
-  (keymap-set global-map "C-c ]" #'flyspell-correct-previous)
-  (keymap-set global-map "M-$" #'flyspell-correct-at-point)
-  (keymap-set global-map "C-;" #'flyspell-correct-previous)
+  (keymap-set hud-mode-map "C-c [" #'flyspell-correct-next)
+  (keymap-set hud-mode-map "C-c ]" #'flyspell-correct-previous)
+  (keymap-set hud-mode-map "M-$" #'flyspell-correct-at-point)
+  (keymap-set hud-mode-map "C-;" #'flyspell-correct-previous)
+
+  (keymap-set hud-consult-mode-map "f" #'consult-flyspell)
 
   (add-hook 'prog-mode-hook #'tychoish--flyspell-prog-mode-idle)
   (add-hook 'text-mode-hook #'tychoish--flyspell-mode-idle)
   (add-hook 'telega-chat-mode-hook #'tychoish--flyspell-mode-idle)
   :config
-  (delight 'flyspell-mode " fs")
+  (require 'consult-flyspell)
+
+  (defun consult-flyspell--round-trip ()
+    (flyspell-correct-at-point)
+    (consult-flyspell))
+
   (setq ispell-list-command "list")
+  (setq consult-flyspell-select-function 'consult-flyspell--round-trip)
   (setq flyspell-issue-message-flag nil)
   (setq ispell-program-name "aspell")
   (setq ispell-extra-args '("--sug-mode=ultra" "--run-together"))
@@ -1831,7 +1610,7 @@ return until the minibuffer session ends."
   (defun bootstrap-set-up-show-whitespace ()
     (setq-local show-trailing-whitespace t))
 
-  (keymap-set global-map "C-c C-w" #'whitespace-cleanup)
+  (keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
   (keymap-set hud-whitespace-map "c" #'whitespace-cleanup)
   (keymap-set hud-whitespace-map "t" #'toggle-local-whitespace-cleanup)
 
@@ -2112,28 +1891,6 @@ return until the minibuffer session ends."
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
 
-(use-package nxml-mode
-  :mode (("\\.xml$'". nxml-mode)))
-
-(use-package rst
-  :mode ("\\.rst\\'" . rst-mode)
-  :config
-  (keymap-set rst-mode-map "C-c C-t h" #'rst-adjust)
-  (defalias 'rst-indent-code (kmacro "SPC SPC SPC C-a C-n"))
-
-  (defun tychoish/set-up-rst-mode ()
-    (turn-on-auto-fill)
-    (setq-local fill-column 78)
-    (setq-local rst-level-face-max 0)
-    (set-face-background 'rst-level-1 nil)
-    (set-face-background 'rst-level-2 nil)
-    (set-face-background 'rst-level-3 nil)
-    (set-face-background 'rst-level-4 nil)
-    (set-face-background 'rst-level-5 nil)
-    (set-face-background 'rst-level-6 nil)
-    (local-unset-key (kbd "C-c C-s")))
-
-  (add-hook 'rst-mode-hook 'tychoish/set-up-rst-mode))
 
 (use-package tex-mode
   :mode ("\\.tex\\'" . LaTeX-mode)
@@ -2189,12 +1946,6 @@ return until the minibuffer session ends."
 ;;
 ;; programming adjacent tools
 
-(use-package journalctl-mode
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-core-map "j" #'journalctl))
-
 (use-package daemons-dash
   :ensure nil
   :commands (daemons-dash daemons-dash-dispatch)
@@ -2203,30 +1954,9 @@ return until the minibuffer session ends."
   :config
   (require 'daemons-dash-config nil t))
 
-(use-package docker
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-docker-map "d" #'docker)
-  (keymap-set hud-docker-map "c" #'docker-containers)
-  (keymap-set hud-docker-map "i" #'docker-images)
-  (keymap-set hud-docker-map "v" #'docker-volumes)
-  (keymap-set hud-docker-map "m" #'docker-contexts)
-  (keymap-set hud-docker-map "p" #'docker-compose)
-  :config
-  (setq docker-terminal-backend 'eat)
-  (make-read-extended-command-for-prefix "docker"
-    :bind-key "x"
-    :bind-map hud-docker-map)
-  (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
-
 (use-package elpaish
   :ensure t
-  :commands (elpaish-menu
-             elpaish-dispatch
-             elpaish-status
-             elpaish-build-all
-             elpaish-build-single)
+  :defer t
   :init
   (make-read-extended-command-for-prefix "elpaish"
     :bind-key "e"
@@ -2237,9 +1967,9 @@ return until the minibuffer session ends."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
-   '(sprite xtdlib elpaish elpaish-keyring agent-shell-queue annotated-completing-read magit-dash telega-bot ollama-tailnet arch mcpkit org-docsgen tailscale gen eglot-test-at-point denote-notion))
+   '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
+   '(agent-shell-queue magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion))
 
-  (elpaish-upgrade-packages)
   (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2252,7 +1982,9 @@ return until the minibuffer session ends."
   :defines (flycheck-checkers)
   :commands (flycheck-disable-checker)
   :init
-  (keymap-set global-map "C-c f f" #'flycheck-mode)
+  (keymap-set hud-mode-map "M-g f" #'flycheck-mode)
+  (keymap-set hud-consult-mode-map "c" #'consult-flycheck)
+  (keymap-set hud-mode-map "C-c f f" #'flycheck-mode)
   :config
   (delight 'flycheck-mode " fc")
   (defun tychoish/flycheck-prefer-eldoc ()
@@ -2267,6 +1999,8 @@ return until the minibuffer session ends."
   ;; the order of the following 3 operations is important.
   (define-key flycheck-mode-map flycheck-keymap-prefix nil)
   (define-key flycheck-mode-map flycheck-keymap-prefix flycheck-command-map)
+
+  (keymap-set flycheck-command-map ";" #'consult-flycheck)
 
   (bind-key "m" #'consult-flycheck flycheck-command-map)
 
@@ -2418,44 +2152,6 @@ return until the minibuffer session ends."
   (setq cov-lcov-file-name "coverage/lcov.info")
   (setq cov-coverage-file-paths '("cover" "coverage" ".")))
 
-(use-package undercover
-  :ensure t
-  :defer t
-  :commands (undercover))
-
-(use-package warnings
-  :ensure nil
-  :defer t
-  :init
-  (put 'downcase-region 'disabled nil)
-  (put 'narrow-to-region 'disabled nil)
-  (put 'upcase-region 'disabled nil)
-  (put 'list-timers 'disabled nil)
-  (put 'list-threads 'disabled nil)
-
-  (setq byte-compile-warnings
-        ;; OMIT: free-vars docstrings-wide
-        '(callargs
-          constants
-          docstrings
-          docstrings-non-ascii-quotes
-          docstrings-control-chars
-          empty-body
-          ignored-return-value
-          interactive-only
-          lexical
-          lexical-dynamic
-          make-local
-          mutate-constant
-          noruntime
-          not-unused
-          obsolete
-          redefine
-          suspicious
-          unresolved))
-  :config
-  (add-to-list 'warning-suppress-log-types '(frameset)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; language server protocol (lsp) [eglot] + treesitter
@@ -2502,6 +2198,7 @@ return until the minibuffer session ends."
   :config
   (defun tychoish/eglot-ensure-hook ()
     ;; toggle it on and off so that the left-fringe isn't weird.
+    (eglot-tempel-mode 1)
     (flycheck-eglot-mode -1)
     (flycheck-eglot-mode 1))
 
@@ -2867,20 +2564,16 @@ deliberate teardown."
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(use-package tailscale
-  :ensure t
-  :defer t
-  :init
-  (make-read-extended-command-for-prefix "tailscale"
-    :bind-map hud-robot-network-map
-    :bind-key "x"))
 (use-package gptel
+  :ensure t
   :defer t
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :init
   (keymap-set hud-robot-gptel-map "g" #'gptel)
   (keymap-set hud-robot-gptel-map "r" #'gptel-rewrite)
   (keymap-set hud-robot-gptel-map "m" #'gptel-menu)
+  (keymap-set hud-robot-gptel-map "a" #'gptel-agent)
+  (keymap-set hud-robot-gptel-map "w" #'gptel-aibo-summon)
 
   (make-read-extended-command-for-prefix "gptel"
     :bind-map hud-robot-gptel-map
@@ -2973,17 +2666,6 @@ deliberate teardown."
 
   (gptel-set-backend-default-gemini-flash-preview)
   (require 'gptel-integrations))
-
-(use-package gptel-aibo
-  :defer t
-  :init
-  (keymap-set hud-robot-gptel-map "w" #'gptel-aibo-summon))
-
-(use-package gptel-agent
-  :defer t
-  :after (gptel)
-  :init
-  (keymap-set hud-robot-gptel-map "a" #'gptel-agent))
 
 (use-package ollama
   :ensure t
@@ -3388,10 +3070,14 @@ See `tychoish/agent-shell--force-clear-busy'."
             bin-path)
         (message "Antigravity: bootstrapping server for %s via sprite..." platform)
         (condition-case err
-            (let ((path (sprite-await
-                         (sprite-future-eval
-                          (sprite-name (sprite-get-or-create-next :timeout 60))
-                          `(tychoish/agent-shell-antigravity--do-bootstrap ,install-dir ',platform-sym ,bin-path)))))
+            (let* ((future (sprite-future-eval
+                            (sprite-name (sprite-get-or-create-next :timeout 60))
+                            `(progn
+                               (require 'agent-shell)
+                               (tychoish/agent-shell-antigravity--do-bootstrap ,install-dir ',platform-sym ,bin-path))))
+                   (path (sprite-future-wait future :timeout 60)))
+              (when (or (not path) (sprite-future-rejected-p future))
+                (error "sprite bootstrap failed or timed out"))
               (setq agent-shell-antigravity-acp-command
                     (cons path (cdr agent-shell-antigravity-acp-command)))
               (message "Antigravity: using ACP server at %s" path)
@@ -3562,10 +3248,6 @@ See `tychoish/agent-shell--force-clear-busy'."
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
-
-(use-package mcpkit
-  :ensure t
-  :defer t)
 
 (use-package tychoish-mail
   :ensure nil

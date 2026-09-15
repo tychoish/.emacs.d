@@ -40,6 +40,7 @@
 (keymap-set hud-core-map "k" #'execute-extended-clipboard-command)
 (keymap-set hud-core-map "p" #'toggle-electric-pair-inhibition)
 (keymap-set hud-core-map "e" #'toggle-electric-pair-eagerness)
+(keymap-set hud-core-map "j" #'journalctl)
 
 (defvar-keymap hud-display-map
   :name "display"
@@ -94,6 +95,11 @@
   :doc "IDE/language commands under C-c l (hud-mode).")
 
 (keymap-set hud-ide-map "m" #'imenu)
+(keymap-set hud-ide-map "c" #'xref-find-references)
+(keymap-set hud-ide-map "d" #'xref-find-definitions)
+(keymap-set hud-ide-map "p" #'xref-go-back)
+(keymap-set hud-ide-map "n" #'xref-go-forward)
+(keymap-set hud-ide-map "o" #'xref-find-definitions-other-window)
 
 (defvar-keymap hud-completion-map
   :name "completion"
@@ -102,6 +108,8 @@
 (keymap-set hud-completion-map "TAB" #'completion-at-point)
 (keymap-set hud-completion-map "." #'completion-at-point)
 (keymap-set hud-completion-map "p" #'completion-at-point)
+(keymap-set hud-completion-map "/" #'dabbrev-expand)
+(keymap-set hud-completion-map "c" #'dabbrev-completion)
 
 (defvar-keymap hud-shell-map
   :name "shell"
@@ -130,6 +138,13 @@
 (defvar-keymap hud-docker-map
   :name "docker"
   :doc "Docker commands under C-x d (hud-mode).")
+
+(keymap-set hud-docker-map "d" #'docker)
+(keymap-set hud-docker-map "c" #'docker-containers)
+(keymap-set hud-docker-map "i" #'docker-images)
+(keymap-set hud-docker-map "v" #'docker-volumes)
+(keymap-set hud-docker-map "m" #'docker-contexts)
+(keymap-set hud-docker-map "p" #'docker-compose)
 
 (defvar-keymap orgx-global-map
   :name "org"
@@ -246,6 +261,7 @@
 
 (keymap-set minibuffer-local-map "C-g" #'hud-super-abort-minibuffers)
 (keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
+(keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
 
 (keymap-set orgx-global-map "l" (cons "org-link" orgx-link-map))
 
@@ -288,6 +304,11 @@
 (keymap-set hud-denote-map "c" (cons "denote-review" hud-denote-review-map))
 (keymap-set hud-denote-map "h" (cons "denote-hierarchy" hud-denote-hierarchy-map))
 
+(keymap-set hud-smerge-map "n" #'smerge-vc-next-conflict)
+(keymap-set hud-smerge-map "k" #'smerge-kill-current)
+(keymap-set hud-smerge-map "s" #'smerge-start-session)
+(keymap-set hud-smerge-map "t" #'smerge-keep-current)
+
 (keymap-set hud-mode-map "C-c t" (cons "core" hud-core-map))
 (keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))
 (keymap-set hud-mode-map "C-c k" (cons "kill" hud-kill-map))
@@ -307,6 +328,19 @@
 (keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
 (keymap-set hud-mode-map "C-c C-;" (cons "consult" hud-consult-mode-map))
 
+(keymap-set hud-mode-map "M-." #'xref-find-definitions)
+(keymap-set hud-mode-map "M-/" #'dabbrev-completion)
+(keymap-set hud-mode-map "C-M-/" #'dabbrev-expand)
+
+(keymap-set hud-mode-map "M-h" #'windmove-left)
+(keymap-set hud-mode-map "M-j" #'windmove-down)
+(keymap-set hud-mode-map "M-k" #'windmove-up)
+(keymap-set hud-mode-map "M-l" #'windmove-right)
+(keymap-set hud-mode-map "S-<left>" #'windmove-left)
+(keymap-set hud-mode-map "S-<down>" #'windmove-down)
+(keymap-set hud-mode-map "S-<up>" #'windmove-up)
+(keymap-set hud-mode-map "S-<right>" #'windmove-right)
+
 ;; general bindings that used to go straight into global-map
 (keymap-set hud-mode-map "C-x l" #'goto-line)
 (keymap-set hud-mode-map "C-x f" #'find-file)
@@ -315,6 +349,7 @@
 (keymap-set hud-mode-map "C-x C-m" #'execute-extended-command)
 (keymap-set hud-mode-map "C-x C-f" #'find-file)
 (keymap-set hud-mode-map "C-x C-x" #'exchange-point-and-mark)
+(keymap-set hud-mode-map "C-x C-r" #'recentf)
 (keymap-set hud-mode-map "C-x C-n" #'count-words)
 (keymap-set hud-mode-map "C-c i" #'indent-region)
 (keymap-set hud-mode-map "C-c c" #'comment-region)

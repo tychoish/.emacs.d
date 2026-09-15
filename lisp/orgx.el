@@ -21,6 +21,8 @@
 (require 'subr-x)
 (require 'org)
 
+(require 'orgx-capture)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Section 1: Configuration and keybindings

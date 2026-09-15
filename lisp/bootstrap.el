@@ -52,6 +52,17 @@
 (setq auto-revert-avoid-polling t)
 (setq auto-revert-interval 60)
 
+(setq recentf-auto-cleanup 'never)
+(setq recentf-keep '(file-remote-p file-readable-p))
+(setq recentf-max-menu-items 100)
+
+(setq which-key-idle-delay .25)
+(setq which-key-idle-secondary-delay 0.125)
+(setq which-key-lighter "")
+
+(setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
+(setq sprite-mode-map-prefix (cons "s" 'hud-core-map))
+
 ;; `ask-user-about-lock'/`ask-user-about-supersession-threat' only skip
 ;; their blocking minibuffer prompt under `noninteractive' (`--batch'),
 ;; not in a live daemon handling `emacsclient --eval' or firing a timer.
@@ -122,6 +133,34 @@ triggered directly by a keypress, still prompts normally.")
 
 (setq show-paren-delay 0.25)
 
+(put 'downcase-region 'disabled nil)
+(put 'narrow-to-region 'disabled nil)
+(put 'upcase-region 'disabled nil)
+(put 'list-timers 'disabled nil)
+(put 'list-threads 'disabled nil)
+(put 'dired-find-alternate-file 'disabled nil)
+
+(setq byte-compile-warnings
+      ;; OMIT: free-vars docstrings-wide
+      '(callargs
+        constants
+        docstrings
+        docstrings-non-ascii-quotes
+        docstrings-control-chars
+        empty-body
+        ignored-return-value
+        interactive-only
+        lexical
+        lexical-dynamic
+        make-local
+        mutate-constant
+        noruntime
+        not-unused
+        obsolete
+        redefine
+        suspicious
+        unresolved))
+
 (defvar bootstrap-fallback-buffer-name "*scratch*"
   "Buffer name used as a last-resort fallback when no other buffer is available.
 Override in user/*.el to customize per machine or instance.")
@@ -145,8 +184,54 @@ Override in user/*.el to customize per machine or instance.")
 (with-eval-after-load 'transient
   (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
 
+(with-eval-after-load 'dired
+  (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
+  (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
+
+(with-eval-after-load 'recentf
+  (setq recentf-save-file (sprite-state-path "recentf.el")))
+
+(with-eval-after-load 'warnings
+  (add-to-list 'warning-suppress-log-types '(frameset)))
+
+(with-eval-after-load 'dabbrev
+  (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
+  (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
+  (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
+
 (add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
+(add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
+
+(with-eval-after-load 'nerd-icons
+  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
+
+  (add-to-list 'nerd-icons-mode-icon-alist
+               '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))
+
+  (defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
+    "Return empty string instead of signaling for an unresolvable buffer icon."
+    (condition-case nil
+	(apply orig args)
+      (error "")))
+
+  (advice-add 'nerd-icons-icon-for-buffer :around #'ad:nerd-icons-icon-for-buffer-safe))
+
+(with-eval-after-load 'nerd-icons-completion
+  (cl-defmethod nerd-icons-completion-get-icon :around (cand (_cat (eql buffer)))
+    "Skip icon lookup when CAND names a killed buffer.
+`get-buffer' returns the buffer object even when dead, and the primary
+method has no liveness check, so it errors in `set-buffer' once a
+completion candidate outlives its buffer."
+    (if (buffer-live-p (get-buffer cand))
+        (cl-call-next-method)
+      "")))
+
+(with-eval-after-load 'marginalia
+  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu)))
+
 
 (defun ad:refresh-package-quickstart (&rest _)
   "Regenerate `package-quickstart-file' after packages change on disk.
@@ -159,6 +244,13 @@ directory, autoloading the package signals a stale
 
 (seq-do (lambda (fn) (advice-add fn :after #'ad:refresh-package-quickstart))
         '(package-install package-delete package-upgrade package-upgrade-all package-vc-install))
+
+(add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
+
+(add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
+
+(add-to-list 'auto-mode-alist '("\\.xml$'" . nxml-mode))
+(add-to-list 'auto-mode-alist '("\\.rst\\'" . rst-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -196,6 +288,8 @@ directory, autoloading the package signals a stale
   (if (equal "solo" sprite-instance-id)
       (bootstrap-set-up-ephemeral-instance-file-locks)
     (bootstrap-set-up-named-instance-file-locks))
+
+  (annotated-completing-read-setup-history)
 
   (with-silence
     (recentf-mode 1)
@@ -340,7 +434,7 @@ directory, autoloading the package signals a stale
     (electric-pair-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] hud-mode"
     (hud-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] `pixel-scroll-precision-mode'"
+  (with-slow-op-timer "<bootstrap> [modes] pixel-scroll-precision-mode"
     (pixel-scroll-precision-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] sprite-mode"
     (sprite-mode 1))
@@ -348,12 +442,26 @@ directory, autoloading the package signals a stale
     (which-key-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] repeat"
     (with-silence
-      (repeat-mode 1))))
+      (repeat-mode 1)))
+  (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"
+    (nerd-icons-completion-mode 1)))
 
 (add-lazy-init
  :name "<bootstrap> [modes] late batch"
  :operation 'bootstrap-init-late-enable-modes
  :delay 0.1275)
+
+(add-one-shot-hook
+ :name "set-custom-file"
+ :hook 'after-init-hook
+ :form (setq custom-file (sprite-state-path "custom.el"))
+ ;; Depth below 0: must run before `package--save-selected-packages'.
+ :depth -90)
+
+(add-one-shot-hook
+ :name "<bootstrap> marginalia"
+ :function marginalia-mode
+ :hook 'minibuffer-setup-hook)
 
 (add-one-shot-hook
  :name "<bootstrap> alias mouse mode"
@@ -404,6 +512,23 @@ directory, autoloading the package signals a stale
  :name "native-compile-async"
  :delay 60
  :operation #'builder-emacs-conf-native-compile-all)
+
+(with-eval-after-load 'smerge-mode
+  (keymap-set hud-smerge-map "r" #'smerge-kill-and-vc-next-conflict)
+
+  (defun smerge-kill-and-vc-next-conflict ()
+    "Kill the current conflict option and move to the next conflict."
+    (interactive)
+    (smerge-kill-current)
+    (smerge-vc-next-conflict)))
+
+(with-eval-after-load 'docker
+  (setq docker-terminal-backend 'eat)
+  (transient-insert-suffix 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; bootstrap load user files
 
 (defun bootstrap--load-user-file (name)
   (with-slow-op-timer (format "<init> [user] %s.el" name)

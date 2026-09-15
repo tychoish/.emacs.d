@@ -174,6 +174,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
           (setq template (append template (list :time-prompt t))))
         (add-to-list 'org-capture-templates template append-item)))))
 
+;;;###autoload
 (cl-defun orgx-capture-add-journal-templates (&key name path (key ""))
   (orgx--capture-add-flat-templates
    :kind "journal" :char "j" :name name :path path :key key
@@ -193,6 +194,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :prepend nil
    :time-prompt-suffix "jp"))
 
+;;;###autoload
 (cl-defun orgx-capture-add-task-templates (&key name path (key ""))
   (orgx--capture-add-flat-templates
    :kind "tasks" :char "t" :name name :path path :key key
@@ -209,6 +211,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                    ("tlq" "%(orgx--capture-prompt-link)" "quick org-link task" :immediate-finish t)
                    ("tk" "%c" "emacs kill-ring"))))
 
+;;;###autoload
 (cl-defun orgx-capture-add-note-templates (&key name path (key ""))
   (orgx--capture-add-flat-templates
    :kind "notes" :char "n" :name name :path path :key key
