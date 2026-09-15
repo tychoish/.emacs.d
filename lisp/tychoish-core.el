@@ -1027,12 +1027,13 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   (when (fboundp 'hud-modeline-set-segment-action)
     (hud-modeline-set-segment-action 'vc #'magit-dispatch))
 
-  (unless (condition-case nil
-              (transient-get-suffix 'magit-gh "g")
-            (error nil))
-    (transient-append-suffix 'magit-gh '(-1)
-      ["magit-dash"
-       ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
+  (with-eval-after-load 'magit-gh
+    (unless (condition-case nil
+                (transient-get-suffix 'magit-gh "g")
+              (error nil))
+      (transient-append-suffix 'magit-gh '(-1)
+        ["magit-dash"
+         ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))))
 
 (use-package magit-dash
   :ensure t
@@ -2178,12 +2179,18 @@ otherwise keep replaying stale detection results."
 
   (add-hook 'eglot-managed-mode-hook 'tychoish/eglot-ensure-hook)
 
-  (defun tychoish/eglot-guard-track-changes-fetch (orig-fn id &rest args)
-    "Only fetch changes if ID is a valid tracker in the current buffer."
-    (when (and id (memq id (bound-and-true-p track-changes--trackers)))
-      (apply orig-fn id args)))
+  (defun ad:eglot-completion-at-point-guard-no-server (orig-fn)
+    "Return nil instead of signaling when no Eglot server is connected.
+`eglot-completion-at-point' assumes it only runs while genuinely
+managed and connected, and signals a `jsonrpc-error' otherwise.
+`corfu-auto' polls capfs on an idle timer independent of managed-mode
+state, so if `eglot--managed-mode' teardown ever aborts partway and
+leaves this capf registered on a dead buffer, that error repeats on
+every timer tick instead of failing once."
+    (when (eglot-current-server)
+      (funcall orig-fn)))
 
-  (advice-add 'eglot--track-changes-fetch :around #'tychoish/eglot-guard-track-changes-fetch)
+  (advice-add 'eglot-completion-at-point :around #'ad:eglot-completion-at-point-guard-no-server)
 
   (defvar-keymap tychoish/eglot-map) ;; "C-c l"
   (keymap-set eglot-mode-map "C-c l" (cons "eglot" tychoish/eglot-map))
@@ -2326,7 +2333,7 @@ process filter it might end up pumping."
 
   (defun tychoish/eglot-before-save-hook ()
     (add-hook 'before-save-hook #'eglot-format-for-hook nil t)
-    (add-hook 'before-save-hook #'eglot-code-action-organize-imports nil t))
+    (add-hook 'before-save-hook #'eglot-organize-imports-for-hook nil t))
 
   (add-hook 'eglot-managed-mode-hook #'tychoish/eglot-before-save-hook)
 
@@ -2419,7 +2426,17 @@ deliberate teardown."
   (defun eglot-format-for-hook ()
     (interactive)
     (when (eglot-managed-p)
-      (eglot-format-buffer))))
+      (eglot-format-buffer)))
+
+  (defun eglot-organize-imports-for-hook ()
+    "Organize imports for the whole buffer, tolerating no-op/unsupported cases.
+`eglot-code-action-organize-imports' requires an explicit BEG (and
+optional END), unlike the zero-argument functions `before-save-hook'
+calls, so it can't be added to that hook directly."
+    (interactive)
+    (when (eglot-managed-p)
+      (with-demoted-errors "WARN (`eglot-organize-imports-for-hook'): %S"
+        (eglot-code-action-organize-imports (point-min) (point-max))))))
 
 (use-package flycheck-eglot
   :ensure t
