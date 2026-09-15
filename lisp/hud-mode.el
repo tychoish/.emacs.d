@@ -29,6 +29,7 @@
 
 ;;; Code:
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; keymap definitions -- top level C-c <> maps
@@ -41,6 +42,8 @@
 (keymap-set hud-core-map "p" #'toggle-electric-pair-inhibition)
 (keymap-set hud-core-map "e" #'toggle-electric-pair-eagerness)
 (keymap-set hud-core-map "j" #'journalctl)
+(keymap-set hud-core-map "m" #'hud-dispatch)
+(keymap-set hud-core-map "," #'hud-select)
 
 (defvar-keymap hud-display-map
   :name "display"
@@ -159,11 +162,9 @@
   :name "buffer-control"
   :doc "Buffer control commands under C-x C-b (hud-mode).")
 
-
 (defvar-keymap hud-blogging-map
   :name "blogging"
   :doc "Blogging commands under C-c t b (hud-mode).")
-
 
 (defvar-keymap hud-theme-map
   :name "theme"
@@ -340,6 +341,9 @@
 (keymap-set hud-mode-map "S-<down>" #'windmove-down)
 (keymap-set hud-mode-map "S-<up>" #'windmove-up)
 (keymap-set hud-mode-map "S-<right>" #'windmove-right)
+
+(keymap-set hud-mode-map "C-x ." #'hud-dispatch)
+(keymap-set hud-mode-map "C-x ," #'hud-select)
 
 ;; general bindings that used to go straight into global-map
 (keymap-set hud-mode-map "C-x l" #'goto-line)

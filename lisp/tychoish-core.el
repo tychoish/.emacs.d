@@ -14,12 +14,16 @@
 
 (eval-when-compile
   (require 'xtd-macro))
-(require 'xtd-macro)
 
-(use-package hud-mode
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; INTERNAL
+
+(use-package hud
   :ensure nil
-  :demand t
-  :config
+  :defer t
+  :commands (hud-dispatch hud-select)
+  :init
   (make-read-extended-command-for-prefix "clipboard"
     :bind-map hud-mode-map
     :bind-key "C-x x c")
@@ -33,71 +37,6 @@
     :bind-key "x"
     :bind-map hud-docker-map)
 
-  (create-toggle-functions slow-op-reporting)
-  (create-toggle-functions electric-pair-inhibition)
-  (create-toggle-functions electric-pair-eagerness))
-
-(elpaish-install-packages
- '(f
-   cond-let
-   uuidgen
-   popon
-   package-build
-   journalctl-mode
-   gist
-   mcpkit
-   consult-gh
-   consult-flycheck
-   consult-flyspell
-   consult-eglot
-   marginalia
-   magit-gh
-   eglot-tempel
-   tempel-collection
-   embark-consult
-   gptel-aibo
-   gptel-agent
-   telega-bot
-   denote-notion
-   sprite
-   tailscale
-   docker
-   sqlite-mode-extras
-   nerd-icons
-   nerd-icons-dired
-   nerd-icons-corfu
-   nerd-icons-xref
-   deadgrep
-   annotated-completing-read
-   org-docsgen
-   undercover))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; INTERNAL
-
-(use-package hud
-  :ensure nil
-  :defer t
-  :commands (hud-dispatch hud-select)
-  :init
-  (keymap-set hud-mode-map "C-x ." #'hud-dispatch)
-  (keymap-set hud-mode-map "C-x ," #'hud-select)
-  (keymap-set hud-core-map "m" #'hud-dispatch)
-  (keymap-set hud-core-map "," #'hud-select))
-
-(use-package hud-modeline
-  :ensure nil
-  :defer t
-  :commands (hud-modeline-mode)
-  :init
-  (add-one-shot-hook
-   :name "hud-modeline"
-   :form (run-with-idle-timer 0.1 nil #'hud-modeline-mode 1)
-   :hook (if (daemonp)
-	     'server-after-make-frame-hook
-	   'window-setup-hook))
-  :config
   (create-toggle-functions
    hud-modeline-icons
    :keymap hud-theme-map
@@ -105,7 +44,11 @@
   (create-toggle-functions
    hud-modeline-show-buffer-size
    :keymap hud-theme-map
-   :key "s"))
+   :key "s")
+
+  (create-toggle-functions slow-op-reporting)
+  (create-toggle-functions electric-pair-inhibition)
+  (create-toggle-functions electric-pair-eagerness))
 
 (use-package orgx
   :ensure nil
@@ -759,7 +702,6 @@
   (add-hook 'text-mode-hook #'tychoish/corfu-text-mode-setup)
   (add-hook 'prog-mode-hook #'tychoish/corfu-prog-mode-setup)
   :config
-  (add-hook 'corfu-mode-hook #'tychoish--corfu-maybe-terminal)
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter)
   (defun corfu-at-point ()
     "Run `completion-at-point', but force using corfu, which may be useful in gui terminals"
@@ -1541,7 +1483,6 @@ return until the minibuffer session ends."
 (use-package flyspell
   :ensure t
   :defer t
-  :commands (flyspell-correct-next flyspell-correct-previous flyspell-correct-at-point)
   :init
   (defun tychoish--flyspell-run-in-text-buffer (buf)
     (when (buffer-live-p buf)
@@ -1572,11 +1513,49 @@ return until the minibuffer session ends."
   (add-hook 'text-mode-hook #'tychoish--flyspell-mode-idle)
   (add-hook 'telega-chat-mode-hook #'tychoish--flyspell-mode-idle)
   :config
-  (require 'consult-flyspell)
-
   (defun consult-flyspell--round-trip ()
     (flyspell-correct-at-point)
     (consult-flyspell))
+
+  (defvar tychoish--ispell-cache-file (sprite-state-path "ispell-aspell-cache.el")
+    "Cached results of aspell's dictionary auto-detection probe.")
+
+  (defvar tychoish--ispell-cache-vars
+    '(ispell-last-program-name ispell-library-directory ispell-really-aspell
+      ispell-really-hunspell ispell-really-enchant ispell-encoding8-command
+      ispell-dictionary-alist ispell-aspell-dictionary-alist
+      ispell--aspell-found-dictionaries ispell-aspell-dict-dir ispell-aspell-data-dir)
+    "Ispell/aspell state variables to persist across sessions.")
+
+  (defun tychoish--ispell-cache-params-around (orig-fn &rest args)
+    "Skip aspell's dictionary-detection subprocess calls using a cached result.
+`ispell-set-spellchecker-params' shells out to `aspell' several times (a
+version check, `dicts', and `config dict-dir'/`data-dir') the first time
+flyspell activates in a session; since flyspell is hooked to
+`prog-mode-hook'/`text-mode-hook', that happens within 0.2s of the first
+buffer. Aspell's installed dictionaries don't change between restarts on
+the same machine, so load a cached result when present, and write one out
+after the first real (uncached) probe."
+    (when (file-exists-p tychoish--ispell-cache-file)
+      (load tychoish--ispell-cache-file nil t))
+    (let ((already-cached (equal ispell-last-program-name ispell-program-name)))
+      (apply orig-fn args)
+      (unless already-cached
+        (with-temp-file tychoish--ispell-cache-file
+          (insert ";; -*- lexical-binding: t; -*-\n")
+          (seq-do (lambda (var) (insert (format "(setq %s '%S)\n" var (symbol-value var))))
+                  tychoish--ispell-cache-vars)))))
+
+  (advice-add 'ispell-set-spellchecker-params :around #'tychoish--ispell-cache-params-around)
+
+  (defun tychoish/ispell-clear-aspell-cache ()
+    "Delete the cached aspell dictionary-detection result.
+Use after upgrading aspell or its dictionaries, since the cache would
+otherwise keep replaying stale detection results."
+    (interactive)
+    (when (file-exists-p tychoish--ispell-cache-file)
+      (delete-file tychoish--ispell-cache-file))
+    (setq ispell-last-program-name nil))
 
   (setq ispell-list-command "list")
   (setq consult-flyspell-select-function 'consult-flyspell--round-trip)
@@ -1594,13 +1573,8 @@ return until the minibuffer session ends."
   (setq flyspell-indicator-format "[%s]--")
   (setq flyspell-timer nil)
   (setq flyspell-timer-aux nil)
-  (setq flyspell-guess-indicator nil)
-  (setq flyspell-min-buffer-size (* flyspell-guess-size flyspell-guess-slots)))
-
-(use-package flyspell-correct
-  :ensure t
-  :defer t
-  :after flyspell)
+  (setq flyspell-min-buffer-size (* flyspell-guess-size flyspell-guess-slots))
+  (setq flyspell-guess-indicator nil))
 
 (use-package whitespace
   :ensure nil

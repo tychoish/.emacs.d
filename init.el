@@ -32,6 +32,7 @@
   (setq initial-major-mode 'fundamental-mode)
   (setq initial-scratch-message nil)
   (setq inhibit-startup-message t)
+  ;; (setq use-package-compute-statistics t)
   (setq user-emacs-directory (expand-file-name user-emacs-directory))
   (setq server-use-tcp t)
   ;; (setq server-host "127.0.0.1")
@@ -139,6 +140,9 @@ Runs from `after-init-hook', after the full config has loaded."
       (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
       (with-slow-op-timer "<init> [local] require bootstrap.el"
 	(require 'bootstrap))
+
+      (with-slow-op-timer "<init> [local] require hud-mode.el"
+	(require 'hud-mode))
 
       ;; remaining use-package declarations.
       (with-slow-op-timer "<init> [local] require tychoish-core.el"

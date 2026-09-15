@@ -37,6 +37,42 @@
 (require 'cl-lib)
 (require 'sprite)
 
+(elpaish-install-packages
+ '(f
+   cond-let
+   uuidgen
+   popon
+   package-build
+   journalctl-mode
+   gist
+   mcpkit
+   consult-gh
+   consult-flycheck
+   consult-flyspell
+   consult-eglot
+   flyspell-correct
+   marginalia
+   magit-gh
+   eglot-tempel
+   tempel-collection
+   embark-consult
+   gptel-aibo
+   gptel-agent
+   telega-bot
+   denote-notion
+   sprite
+   tailscale
+   docker
+   sqlite-mode-extras
+   nerd-icons
+   nerd-icons-dired
+   nerd-icons-corfu
+   nerd-icons-xref
+   deadgrep
+   annotated-completing-read
+   org-docsgen
+   undercover))
+
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
@@ -417,6 +453,8 @@ directory, autoloading the package signals a stale
 
 (advice-add 'native--compile-async-skip-p :around 'fixed-native--compile-async-skip-p)
 
+(autoload 'hud-modeline-mode "hud-modeline.el")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
@@ -452,7 +490,12 @@ directory, autoloading the package signals a stale
  :delay 0.1275)
 
 (add-one-shot-hook
- :name "set-custom-file"
+ :name "<bootstrap> hud-modeline"
+ :form (run-with-idle-timer 0.1 nil #'hud-modeline-mode 1)
+ :hook 'after-first-frame-created)
+
+(add-one-shot-hook
+ :name "<bootstrap> set-custom-file"
  :hook 'after-init-hook
  :form (setq custom-file (sprite-state-path "custom.el"))
  ;; Depth below 0: must run before `package--save-selected-packages'.

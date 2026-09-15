@@ -34,7 +34,7 @@
 (require 'subr-x)
 (require 'transient)
 
-(require 'annotated-completing-read)
+(declare-function annotated-completing-read "annotated-completing-read")
 
 ;;;; Registry
 
