@@ -1,4 +1,4 @@
-;;; tychoish-package-defaults.el --- Package manager defaults and settings -*- lexical-binding: t; -*-
+;;; setup-package-defaults.el --- Package manager defaults and settings -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Default configuration for package.el, archives, priorities, and
@@ -63,5 +63,5 @@
 (add-hook 'async-pkg-install-after-hook #'ad:refresh-package-quickstart)
 (add-hook 'kill-emacs-hook #'bootstrap-flush-package-quickstart)
 
-(provide 'tychoish-package-defaults)
-;;; tychoish-package-defaults.el ends here
+(provide 'setup-package-defaults)
+;;; setup-package-defaults.el ends here

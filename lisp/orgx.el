@@ -308,7 +308,7 @@ header text, or leaves the default when nil."
 (setq org-archive-default-command #'org-archive-to-archive-sibling)
 
 ;; Startup hooks and advice are registered in the `use-package orgx' :init
-;; block in `tychoish-core.el' so they can trigger this file's deferred load.
+;; block in `setup-core.el' so they can trigger this file's deferred load.
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -1088,7 +1088,7 @@ the toc-org write hook."
   (orgx-minor-mode 1))
 
 ;; Hooked onto `org-mode-hook' from the `use-package orgx' :init block in
-;; `tychoish-core.el' so the hook is live before this file loads.
+;; `setup-core.el' so the hook is live before this file loads.
 
 ;;; orgx-agenda-minor-mode
 
@@ -1114,7 +1114,7 @@ the toc-org write hook."
   (orgx-agenda-minor-mode 1))
 
 ;; Hooked onto `org-agenda-mode-hook' from the `use-package orgx' :init
-;; block in `tychoish-core.el' so the hook is live before this file loads.
+;; block in `setup-core.el' so the hook is live before this file loads.
 
 (provide 'orgx)
 ;;; orgx.el ends here

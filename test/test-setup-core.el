@@ -1,4 +1,4 @@
-;;; test-tychoish-core.el --- ERT tests for tychoish-core.el -*- lexical-binding: t; no-byte-compile: t; -*-
+;;; test-setup-core.el --- ERT tests for setup-core.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; Run inside a live Emacs session with full config loaded:
 ;;   M-x ert RET t RET
@@ -8,7 +8,7 @@
 (require 'ert)
 (require 'test-helper)
 (require 'cl-lib)
-(require 'tychoish-core)
+(require 'setup-core)
 (require 'builder)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -118,7 +118,7 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/mail-account-definition-activates-default ()
   "Test that `tychoish-define-mail-account' activates a default account immediately upon definition."
-  (require 'tychoish-mail)
+  (require 'setup-mail)
   (let ((hud-mail-map (make-sparse-keymap))
         (tychoish-mail-accounts-table (make-hash-table :test #'equal))
         (tychoish-mail-account-current nil)
@@ -154,5 +154,5 @@ buffer transitions."
   (should-not (memq 'eglot-tempel-mode eglot-managed-mode-hook))
   (should-not (memq 'tychoish/eglot-tempel-enable eglot-managed-mode-hook)))
 
-(provide 'test-tychoish-core)
-;;; test-tychoish-core.el ends here
+(provide 'test-setup-core)
+;;; test-setup-core.el ends here

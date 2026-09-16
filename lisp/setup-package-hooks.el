@@ -1,4 +1,4 @@
-;;; tychoish-package-hooks.el --- Non-use-package package glue -*- lexical-binding: t; -*-
+;;; setup-package-hooks.el --- Non-use-package package glue -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Package hooks, with-eval-after-load forms, and package/use-package
@@ -228,5 +228,5 @@ this widens it to four for finer-grained startup profiling."
 (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
 (add-hook 'dired-mode-hook 'dired-async-mode)
 
-(provide 'tychoish-package-hooks)
-;;; tychoish-package-hooks.el ends here
+(provide 'setup-package-hooks)
+;;; setup-package-hooks.el ends here

@@ -8,11 +8,11 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'bootstrap)
-(require 'tychoish-defaults)
-(require 'tychoish-package-defaults)
-(require 'tychoish-package-hooks)
+(require 'setup-defaults)
+(require 'setup-package-defaults)
+(require 'setup-package-hooks)
 
-(require 'tychoish-core)
+(require 'setup-core)
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 

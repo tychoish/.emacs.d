@@ -1,4 +1,4 @@
-;;; tychoish-core.el -- contains all major use-package forms -*- lexical-binding: t -*-
+;;; setup-core.el -- contains all major use-package forms -*- lexical-binding: t -*-
 
 ;; Package-Requires: ((emacs "30.1"))
 
@@ -2126,8 +2126,8 @@ genuinely cold projects get a background indexing process launched."
           (unless (tychoish/projectile-cache-warm-p root)
             (projectile-index-project-async root))))))
 
-  (declare-function tychoish/projectile-warm-cache-process-queue "tychoish-core")
-  (declare-function tychoish/projectile-cache-warm-p "tychoish-core")
+  (declare-function tychoish/projectile-warm-cache-process-queue "setup-core")
+  (declare-function tychoish/projectile-cache-warm-p "setup-core")
 
   (defun tychoish/projectile-warm-cache-enqueue (root)
     "Queue ROOT for background Projectile indexing on the next idle window."
@@ -2153,7 +2153,7 @@ cached projects doesn't index all of them at once."
   (defun tychoish/projectile-warm-cache-on-project-change (_new-root _previous-root)
     (tychoish/projectile-warm-cache-for-buffer))
 
-  (declare-function tychoish/projectile-warm-cache-on-project-change "tychoish-core")
+  (declare-function tychoish/projectile-warm-cache-on-project-change "setup-core")
   (add-hook 'projectile-project-changed-functions
             #'tychoish/projectile-warm-cache-on-project-change)
 
@@ -2197,9 +2197,9 @@ process filter it might end up pumping."
   ;; `cl-defmethod' forms defeat the byte-compiler's forward-reference
   ;; tracking for sibling `defun's in this same `eval-after-load' block, so
   ;; declare them explicitly even though they're defined a few lines above.
-  (declare-function tychoish/projectile-warm-cache-for-buffer "tychoish-core")
-  (declare-function tychoish/projectile-cache-warm-p "tychoish-core")
-  (declare-function tychoish/eglot-defer-file-watch-registration "tychoish-core")
+  (declare-function tychoish/projectile-warm-cache-for-buffer "setup-core")
+  (declare-function tychoish/projectile-cache-warm-p "setup-core")
+  (declare-function tychoish/eglot-defer-file-watch-registration "setup-core")
 
   (cl-defmethod eglot-register-capability :around
     (server (_method (eql workspace/didChangeWatchedFiles)) id &key watchers)
@@ -3140,7 +3140,7 @@ See `tychoish/agent-shell--force-clear-busy'."
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
 
-(use-package tychoish-mail
+(use-package setup-mail
   :ensure nil
   :defer t
   :commands (tychoish-mail-select-account
@@ -3153,5 +3153,5 @@ See `tychoish/agent-shell--force-clear-busy'."
   (keymap-set hud-mail-map "b" #'mu4e-search-bookmark)
   (keymap-set hud-mail-map "c" #'mu4e-compose-new))
 
-(provide 'tychoish-core)
-;;; tychoish-core.el ends here
+(provide 'setup-core)
+;;; setup-core.el ends here

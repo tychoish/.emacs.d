@@ -10,7 +10,7 @@
 (require 'orgx)
 ;; `orgx-minor-mode-turn-on' is hooked onto `org-mode-hook' in tychoish-core's
 ;; `use-package orgx' `:init' block, not in orgx.el itself.
-(require 'tychoish-core)
+(require 'setup-core)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; orgx--parse-heading-date

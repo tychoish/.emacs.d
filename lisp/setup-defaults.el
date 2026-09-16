@@ -1,4 +1,4 @@
-;;; tychoish-defaults.el --- Standard library and built-in defaults -*- lexical-binding: t; -*-
+;;; setup-defaults.el --- Standard library and built-in defaults -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Global settings and configuration for built-in Emacs subsystems with no
@@ -162,5 +162,5 @@ Override in user/*.el to customize per machine or instance.")
 
 (setq system-uses-terminfo t)
 
-(provide 'tychoish-defaults)
-;;; tychoish-defaults.el ends here
+(provide 'setup-defaults)
+;;; setup-defaults.el ends here

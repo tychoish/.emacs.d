@@ -35,9 +35,9 @@ Use `map-into` to build a hash table from a list of cons cells without an explic
 | `early-init.el`                     | GC suppression, native-comp settings only. No `require` calls.                                |
 | `init.el`                           | Entry point. Sets global variables, loads modules sequentially.                               |
 | `lisp/tychoish-common.el`           | Instance ID, display utils, buffer/file helpers. No UI config.                                |
-| `lisp/bootstrap.el`                 | Keybindings, global `setq` settings, hooks, startup functions. Loaded before `tychoish-core`. |
-| `lisp/tychoish-core.el`             | All `use-package` forms. Organized by functional area with section headers.                   |
-| `lisp/tychoish-mail.el`             | Mu4e and mail account configuration.                                                          |
+| `lisp/bootstrap.el`                 | Keybindings, global `setq` settings, hooks, startup functions. Loaded before `setup-core`. |
+| `lisp/setup-core.el`             | All `use-package` forms. Organized by functional area with section headers.                   |
+| `lisp/setup-mail.el`             | Mu4e and mail account configuration.                                                          |
 | `lisp/orgx.el`                      | Org-mode, org-roam, capture templates.                                                        |
 | `lisp/xtdlib.el`                    | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
 | `lisp/builder.el`                   | Compilation buffer system.                                                                    |
@@ -76,7 +76,7 @@ Lexical binding is mandatory on every file.
   needs a package loaded but shouldn't trigger loading it. `declare-function` for deferred
   packages' functions.
 - Load order: `early-init.el` → `init.el` (`with-gc-suppressed`) → `xtdlib` → `bootstrap` →
-  `tychoish-core` → `tychoish-mail` → `orgx` → `user/*.el`. Don't add top-level `require`
+  `setup-core` → `setup-mail` → `orgx` → `user/*.el`. Don't add top-level `require`
   calls to `init.el` outside this sequence without a strong reason.
 - Prefer `add-hook`/`add-one-shot-hook` over calling init functions directly at load time.
 - `add-one-shot-hook`: `:function #'sym` (no parens) or `:form (progn ...)` for an
@@ -187,7 +187,7 @@ Check the log even when this returns `t` — a missing `require` is a warning
 
 After verifying a file compiles cleanly, reload with
 `emacsclient --eval '(load-file "/path/to/file.el")'` — changes don't take effect until
-reloaded. Reloading `lisp/bootstrap.el` ALWAYS requires reloading `lisp/tychoish-core.el` too.
+reloaded. Reloading `lisp/bootstrap.el` ALWAYS requires reloading `lisp/setup-core.el` too.
 
 ### Testing
 

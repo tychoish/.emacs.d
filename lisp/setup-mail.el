@@ -1,4 +1,10 @@
-;; -*- lexical-binding: t -*-
+;;; setup-mail.el --- Mail configuration and account management -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Mu4e email contexts, account switching, and refile rules.
+
+;;; Code:
+
 
 (eval-when-compile
   (require 'xtd-macro))
@@ -466,4 +472,5 @@ Returns the symbol of the generated activation command."
 
     configure-account-symbol))
 
-(provide 'tychoish-mail)
+(provide 'setup-mail)
+;;; setup-mail.el ends here

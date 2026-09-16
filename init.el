@@ -128,8 +128,8 @@ Runs from `after-init-hook', after the full config has loaded."
     (with-slow-op-timer "<init> [local] require all"
       (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
-      (with-slow-op-timer "<init> [local] require tychoish-package-defaults.el"
-	(require 'tychoish-package-defaults))
+      (with-slow-op-timer "<init> [local] require setup-package-defaults.el"
+	(require 'setup-package-defaults))
 
       (with-slow-op-timer "<init> [local] require elpaish"
 	(unless (package-installed-p 'elpaish) (package-install 'elpaish)))
@@ -140,18 +140,18 @@ Runs from `after-init-hook', after the full config has loaded."
       (with-slow-op-timer "<init> [local] require bootstrap.el"
 	(require 'bootstrap))
 
-      (with-slow-op-timer "<init> [local] require tychoish-defaults.el"
-	(require 'tychoish-defaults))
+      (with-slow-op-timer "<init> [local] require setup-defaults.el"
+	(require 'setup-defaults))
 
-      (with-slow-op-timer "<init> [local] require tychoish-package-hooks.el"
-	(require 'tychoish-package-hooks))
+      (with-slow-op-timer "<init> [local] require setup-package-hooks.el"
+	(require 'setup-package-hooks))
 
       (with-slow-op-timer "<init> [local] require hud-mode.el"
 	(require 'hud-mode))
 
       ;; remaining use-package declarations.
-      (with-slow-op-timer "<init> [local] require tychoish-core.el"
-	(require 'tychoish-core)))
+      (with-slow-op-timer "<init> [local] require setup-core.el"
+	(require 'setup-core)))
 
     ;; load the user/*.el files
     (with-slow-op-timer "<init> [user] load all"
