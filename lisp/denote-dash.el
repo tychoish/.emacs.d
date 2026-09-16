@@ -1,4 +1,4 @@
-;;; denote-dash.el --- Unified Denote dashboard: list view and dispatch -*- lexical-binding: t; -*-
+;;; denote-dash.el --- Unified Denote dashboard: list view and dispatch -*- lexical-binding: t; -*- no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Provides a tabulated-list browser for Denote notes (denote-dash-mode)

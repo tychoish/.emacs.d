@@ -1,4 +1,4 @@
-;;; setup-core.el -- contains all major use-package forms -*- lexical-binding: t -*-
+;;; setup-core.el -- contains all major use-package forms -*- lexical-binding: t; -*- no-byte-compile: t; -*-
 
 ;; Package-Requires: ((emacs "30.1"))
 

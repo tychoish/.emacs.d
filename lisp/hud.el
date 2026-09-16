@@ -1,4 +1,4 @@
-;;; hud.el --- Session wide command interface -*- lexical-binding: t; -*-
+;;; hud.el --- Session wide command interface -*- lexical-binding: t; -*- no-byte-compile: t; -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish

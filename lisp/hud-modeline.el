@@ -1,4 +1,4 @@
-;;; hud-modeline.el --- Lightweight modeline -*- lexical-binding: t; -*-
+;;; hud-modeline.el --- Lightweight modeline -*- lexical-binding: t; -*- no-byte-compile: t; -*-
 
 ;;; Commentary:
 ;; Lightweight modeline replacing doom-modeline.

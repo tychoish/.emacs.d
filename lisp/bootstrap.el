@@ -1,4 +1,4 @@
-;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t -*-
+;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*- no-byte-compile: t;  -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish

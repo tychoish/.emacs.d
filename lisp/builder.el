@@ -1,4 +1,4 @@
-;;; builder.el --- compilation buffer and command runner -*- lexical-binding: t -*-
+;;; builder.el --- compilation buffer and command runner -*- lexical-binding: t; -*- no-byte-compile: t;  -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
