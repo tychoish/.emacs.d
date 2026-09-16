@@ -1363,6 +1363,52 @@ In batch mode exits with status 1 if any file fails to compile."
       (zerop failed))))
 
 ;;;###autoload
+(defun builder-elisp-package-lint ()
+  "Run linters (byte-compile, checkdoc, package-lint) for the package at point.
+In batch mode exits with status 1 if any file fails linting or compilation."
+  (interactive)
+  (let* ((root      (file-name-as-directory (approximate-project-root)))
+         (main-file (builder-elisp-package--main-file root))
+         (sources   (builder-elisp-package--source-files root))
+         (failed 0))
+    (unless main-file
+      (user-error "no <%s>.el at %s" (builder-elisp-package--name root) root))
+    (builder-elisp-package--require-deps (builder-elisp-package--read-deps root))
+    (let* ((load-path (cons root load-path))
+           (byte-compile-error-on-warn t))
+      ;; 1. Byte-compilation
+      (dolist (it sources)
+        (message "[builder-lint] byte-compiling %s..." (file-name-nondirectory it))
+        (unless (byte-compile-file it)
+          (cl-incf failed))
+        (let ((elc (concat (file-name-sans-extension it) ".elc")))
+          (when (file-exists-p elc)
+            (delete-file elc))))
+      ;; 2. Checkdoc
+      (require 'checkdoc)
+      (dolist (it sources)
+        (message "[builder-lint] checkdoc %s..." (file-name-nondirectory it))
+        (with-current-buffer (find-file-noselect it)
+          (let ((checkdoc-diagnostic-buffer "*checkdoc-diagnostics*"))
+            (checkdoc-current-buffer t))))
+      ;; 3. Package-lint (when available)
+      (when (require 'package-lint nil t)
+        (dolist (it sources)
+          (message "[builder-lint] package-lint %s..." (file-name-nondirectory it))
+          (with-current-buffer (find-file-noselect it)
+            (let ((errs (package-lint-buffer)))
+              (when errs
+                (dolist (e errs)
+                  (message "[builder-lint] %s:%s:%s [%s]: %s"
+                           (file-name-nondirectory it)
+                           (nth 0 e) (nth 1 e) (nth 2 e) (nth 3 e)))
+                (cl-incf failed (length (seq-filter (lambda (e) (eq (nth 2 e) 'error)) errs))))))))
+      (message "[builder-lint] completed with %d error(s)" failed)
+      (when noninteractive
+        (kill-emacs (if (zerop failed) 0 1)))
+      (zerop failed))))
+
+;;;###autoload
 (defun builder-elisp-package-build ()
   "Build an installable .tar via `package-build' for the elisp package at point.
 The recipe is generated at build time and uses a file:// URL pointing at the
@@ -1549,6 +1595,7 @@ PACKAGES to `package-selected-packages' and echoes the result."
     '(("check-package"   "elpaish-run-checks" "run all checks (lint/test/compile) for")
       ("test-package"    "builder-elisp-package-test"    "run ert tests for")
       ("compile-package" "builder-elisp-package-compile" "byte-compile sources of")
+      ("lint-package"    "builder-elisp-package-lint"    "run linters (byte-compile/checkdoc/package-lint) for")
       ("build-package"   "builder-elisp-package-build"   "build installable .tar via package-build for")
       ("clean-package"   "builder-elisp-package-clean"   "remove build artifacts of")))))
 
