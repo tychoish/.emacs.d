@@ -96,73 +96,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; STDLIB
-
-(use-package modus-themes
-  :ensure t
-  :defer t
-  :defines (modus-themes-deuteranopia modus-themes-common-palette-overrides)
-  :init
-  (keymap-set hud-theme-map "r" #'disable-all-themes) ;; "C-c t t"
-  (keymap-set hud-theme-map "d" #'bootstrap-load-dark-theme) ;; "C-c t t"
-  (keymap-set hud-theme-map "l" #'bootstrap-load-light-theme) ;; "C-c t t"
-
-  (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
-  (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
-
-  (defun bootstrap-load-light-theme ()
-    (interactive)
-
-    (unless (member 'modus-operandi custom-enabled-themes)
-      (when custom-enabled-themes
-	(disable-all-themes))
-
-      (if (custom-theme-p 'modus-operandi)
-	  (enable-theme 'modus-operandi)
-	(load-theme 'modus-operandi t nil)))
-
-    (unless (map-elt default-frame-alist 'alpha)
-      (add-to-list 'default-frame-alist '(alpha . 97))))
-
-  (defun bootstrap-ensure-light-theme ()
-    (unless custom-enabled-themes
-      (bootstrap-load-light-theme)))
-
-  (add-one-shot-hook
-   :name "<modus-themes> ensure light theme"
-   :hook after-first-frame-created
-   :form (bootstrap-ensure-light-theme)
-   :idle-timer 0.01)
-
-  (defun disable-all-themes ()
-    (interactive)
-    (mapc #'disable-theme custom-enabled-themes))
-
-  (defun bootstrap-load-dark-theme ()
-    (interactive)
-    (disable-all-themes)
-    (when (load-theme 'modus-vivendi t t)
-      (enable-theme 'modus-vivendi))
-    (add-to-list 'default-frame-alist '(alpha . 95)))
-
-  (defun bootstrap-ensure-dark-theme ()
-    (unless custom-enabled-themes
-      (bootstrap-load-dark-theme)))
-
-  :config
-  (let ((theme-directory (concat (expand-file-name user-emacs-directory) "theme")))
-    (setq-default custom-theme-directory theme-directory)
-    (add-to-list 'custom-theme-load-path theme-directory)
-    (add-to-list 'load-path theme-directory))
-
-  (setq modus-themes-deuteranopia t)
-  (setq modus-themes-common-palette-overrides
-	'((border-mode-line-active bg-mode-line-active)
-	  (border-mode-line-inactive bg-mode-line-inactive)
-	  (message-separator bg-main))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; CORE PACKAGES
 
 (use-package delight
@@ -174,7 +107,6 @@
   (delight 'fundamental-mode "fun" 'simple)
 
   (delight 'abbrev-mode "abb")
-  (delight 'flyspell-mode " fs")
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
   (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
   (delight 'sh-mode "sh" 'sh-script)
@@ -202,7 +134,8 @@
   (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
   (delight 'outline-minor-mode nil 'outline)
   (delight 'cursor-sensor-mode nil 'cursor-sensor)
-  (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications))
+  (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications)
+  (delight 'terraform-mode "tf" 'terraform-mode))
 
 (use-package async
   :ensure t
@@ -237,30 +170,24 @@
   :ensure t
   :defer t
   :config
-  (add-hook 'arch-after-install-hook (lambda (pkg)
-                                       (alert (format "Installed package %s" (arch-pkg-name pkg))
-					      :title "Arch Package Manager")))
-  (add-hook 'arch-after-upgrade-hook (lambda (pkg)
-				       (alert (format "Upgraded package %s" (arch-pkg-name pkg))
-					      :title "Arch Package Manager")))
-  (add-hook 'arch-after-remove-hook (lambda (pkg)
-				      (alert (format "Removed package %s" (arch-pkg-name pkg))
-					     :title "Arch Package Manager")))
-  (add-hook 'arch-after-upgrade-all-hook (lambda ()
-					   (alert "System upgrade completed"
-						  :title "Arch Package Manager")))
+  (defun arch-alert-after-install (pkg)
+    (alert (format "Installed package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+  (defun arch-alert-after-upgrade (pkg)
+    (alert (format "Upgraded package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+  (defun arch-alert-after-remove (pkg)
+    (alert (format "Removed package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+  (defun arch-alert-after-upgrade-all ()
+    (alert "System upgrade completed"
+           :title "Arch Package Manager"))
+
+  (add-hook 'arch-after-install-hook #'arch-alert-after-install)
+  (add-hook 'arch-after-upgrade-hook #'arch-alert-after-upgrade)
+  (add-hook 'arch-after-remove-hook #'arch-alert-after-remove)
+  (add-hook 'arch-after-upgrade-all-hook #'arch-alert-after-upgrade-all)
   (run-with-idle-timer 2 nil #'arch--populate-cache))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; UI, Display, Rendering, Window Management
-
-(use-package nerd-icons-completion
-  :ensure t
-  :defer t
-  :init
-
-)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -303,7 +230,6 @@
       :prompt "directories =>"
       :category 'file)))
 
-  (setq projectile-enable-caching t)
   (setq projectile-use-git-grep t)
   (setq projectile-enable-caching 'persistent)
   (setq projectile-require-project-root nil)
@@ -313,6 +239,18 @@
   (defvar projectile-cache-fallback-directory
     (sprite-state-path "projectile-cache")
     "Directory used for persistent projectile caches when a project root is not writable.")
+
+  (defun tychoish/projectile--fallback-file (name-source)
+    "Return the fallback cache file path for NAME-SOURCE, ensuring dir exists."
+    (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
+           (norm (directory-file-name (expand-file-name name-source)))
+           (slug (concat (file-name-nondirectory norm)
+                         "-"
+                         (md5 norm)
+                         ".eld")))
+      (unless (file-directory-p cache-dir)
+        (ignore-errors (make-directory cache-dir t)))
+      (expand-file-name slug cache-dir)))
 
   (defun tychoish/projectile-project-cache-file-fallback (orig-fn &optional project-root)
     "Return cache file for PROJECT-ROOT, using a fallback state dir when non-writable."
@@ -326,14 +264,7 @@
                                    (file-writable-p norm-root))))
           (if in-tree-writable
               in-tree
-            (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
-                   (slug (concat (file-name-nondirectory norm-root)
-                                 "-"
-                                 (md5 norm-root)
-                                 ".eld")))
-              (unless (file-directory-p cache-dir)
-                (ignore-errors (make-directory cache-dir t)))
-              (expand-file-name slug cache-dir)))))))
+            (tychoish/projectile--fallback-file norm-root))))))
 
   (advice-add 'projectile-project-cache-file :around #'tychoish/projectile-project-cache-file-fallback)
 
@@ -341,19 +272,13 @@
     "Avoid noisy warning when FILENAME is not writable by silently writing to fallback if possible."
     (if (file-writable-p filename)
         (funcall orig-fn data filename)
-      (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
-             (slug (concat (file-name-nondirectory (directory-file-name filename))
-                           "-"
-                           (md5 filename)
-                           ".eld"))
-             (fallback-file (expand-file-name slug cache-dir)))
-        (unless (file-directory-p cache-dir)
-          (ignore-errors (make-directory cache-dir t)))
+      (let ((fallback-file (tychoish/projectile--fallback-file filename)))
         (when (file-writable-p fallback-file)
           (with-temp-file fallback-file
             (insert (let (print-length) (prin1-to-string data))))))))
 
   (advice-add 'projectile-serialize :around #'tychoish/projectile-serialize-silent-fallback)
+
 
   (defun projectile-mode-enable-for-buffer (buf)
     (with-current-buffer buf
@@ -594,29 +519,6 @@
   (add-hook 'telega-chat-mode-hook #'tychoish/text-mode-capf-setup)
   (add-hook 'text-mode-hook #'tychoish/text-mode-capf-setup))
 
-(use-package tempel
-  :ensure t
-  :defer t
-  :init
-  (defun tempel-setup-capf ()
-    (setq-local completion-at-point-functions
-                (cons #'tempel-complete completion-at-point-functions)))
-  (add-hook 'conf-mode-hook #'tempel-setup-capf)
-  (add-hook 'prog-mode-hook #'tempel-setup-capf)
-  (add-hook 'text-mode-hook #'tempel-setup-capf)
-
-  (defun tempel-open-custom-file ()
-    (interactive)
-    (find-file (expand-file-name "templates" user-emacs-directory)))
-
-  (keymap-set hud-consult-mode-map "s" #'tempel-insert)
-  (keymap-set hud-completion-map "i" #'tempel-insert)
-  (keymap-set hud-completion-map "s" #'tempel-complete)
-  (keymap-set hud-completion-map "x" #'tempel-expand)
-  (keymap-set hud-completion-map "v" #'tempel-open-custom-file)
-  :config
-  (setq tempel-path (expand-file-name "templates" user-emacs-directory)))
-
 (use-package vertico
   :ensure t
   :defer t
@@ -735,10 +637,7 @@
   (setq corfu-auto-delay 0.15)
   (setq corfu-popupinfo-delay .125)
   (setq corfu-indexed-start 1)
-  (setq global-corfu-minibuffer nil)
-  (setq read-file-name-completion-ignore-case t)
-  (setq read-buffer-completion-ignore-case t)
-  (setq completion-ignore-case t))
+  (setq global-corfu-minibuffer nil))
 
 (use-package consult
   :ensure t
@@ -1226,7 +1125,6 @@ clipboard."
   :init
   (keymap-set hud-denote-map "n" #'denote)
   (keymap-set hud-denote-map "m" #'denote-open-or-create)
-  (keymap-set hud-denote-map "f" #'consult-denote-find)
   (keymap-set hud-denote-map "l" #'denote-link)
   (keymap-set hud-denote-map "b" #'denote-backlinks)
   (keymap-set hud-denote-map "r" #'denote-dash-rename-file)
@@ -1485,23 +1383,24 @@ return until the minibuffer session ends."
   :ensure t
   :defer t
   :init
-  (defun tychoish--flyspell-run-in-text-buffer (buf)
+  (defun tychoish--flyspell-run-in-buffer (buf fn)
     (when (buffer-live-p buf)
       (with-current-buffer buf
-	(flyspell-mode 1))))
+        (if (eq fn #'flyspell-prog-mode)
+            (funcall fn)
+          (funcall fn 1)))))
 
-  (defun tychoish--flyspell-run-in-prog-buffer (buf)
-    (when (buffer-live-p buf)
-      (with-current-buffer buf
-	(flyspell-prog-mode))))
+  (defun tychoish--flyspell-enable-idle (fn)
+    "Enable FN in the current buffer once Emacs is idle."
+    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-buffer (current-buffer) fn))
 
   (defun tychoish--flyspell-mode-idle ()
     "Enable `flyspell-mode' in the current buffer once Emacs is idle."
-    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-text-buffer (current-buffer)))
+    (tychoish--flyspell-enable-idle #'flyspell-mode))
 
   (defun tychoish--flyspell-prog-mode-idle ()
     "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
-    (run-with-idle-timer 0.2 nil #'tychoish--flyspell-run-in-prog-buffer (current-buffer)))
+    (tychoish--flyspell-enable-idle #'flyspell-prog-mode))
 
   (keymap-set hud-mode-map "C-c [" #'flyspell-correct-next)
   (keymap-set hud-mode-map "C-c ]" #'flyspell-correct-previous)
@@ -1626,19 +1525,6 @@ otherwise keep replaying stale detection results."
          ("\\.mk\\'" . makefile-mode))
   :config
   (setq makefile-electric-keys t))
-
-(use-package conf-mode
-  :ensure nil
-  :defer t
-  :mode (("\\.service\\'" . conf-unix-mode)
-         ("\\.timer\\'" . conf-unix-mode)
-         ("\\.target\\'" . conf-unix-mode)
-         ("\\.mount\\'" . conf-unix-mode)
-         ("\\.automount\\'" . conf-unix-mode)
-         ("\\.slice\\'" . conf-unix-mode)
-         ("\\.socket\\'" . conf-unix-mode)
-         ("\\.path\\'" . conf-unix-mode)
-         ("\\.conf\\'" . conf-unix-mode)))
 
 (use-package yaml-mode
   :ensure t
@@ -1850,19 +1736,10 @@ otherwise keep replaying stale detection results."
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
-(use-package pkgbuild-mode
-  :ensure t
-  :mode ("PKGBUILD$"))
-
-(use-package protobuf-mode
-  :ensure t
-  :mode "\\.proto$'")
-
 (use-package terraform-mode
   :ensure t
   :mode ("\\.tf" "\\.tfvars" "\\.tfvars.example")
   :config
-  (delight 'terraform-mode "tf")
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
 
@@ -1896,10 +1773,6 @@ otherwise keep replaying stale detection results."
   (setq web-mode-enable-auto-pairing t)
   (setq web-mode-enable-auto-expanding t)
   (setq web-mode-enable-css-colorization t))
-
-(use-package ninja-mode
-  :ensure t
-  :mode "\\.ninja\\'")
 
 (use-package slime
   :defer t
@@ -1945,7 +1818,7 @@ otherwise keep replaying stale detection results."
    '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
    '(agent-shell-queue magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion))
 
-  (transient-insert-suffix 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
+  (tychoish-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1961,7 +1834,6 @@ otherwise keep replaying stale detection results."
   (keymap-set hud-consult-mode-map "c" #'consult-flycheck)
   (keymap-set hud-mode-map "C-c f f" #'flycheck-mode)
   :config
-  (delight 'flycheck-mode " fc")
   (defun tychoish/flycheck-prefer-eldoc ()
     (add-hook 'eldoc-documentation-functions #'flycheck-eldoc nil t) ;; local
     (setq-local eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
@@ -2474,8 +2346,6 @@ calls, so it can't be added to that hook directly."
 (use-package flycheck-eglot
   :ensure t
   :defer t
-  :init
-  (add-hook 'eglot-managed-mode-hook #'flycheck-eglot-mode)
   :config
   (setq-default flycheck-eglot-exclusive nil)
   (add-to-list 'flycheck-checkers 'eglot-check)
@@ -2718,8 +2588,9 @@ calls, so it can't be added to that hook directly."
     :bind-key "x"
     :bind-map hud-robot-ollama-map)
   :config
-  (with-eval-after-load 'transient
-    (transient-insert-suffix 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command))))
+  (with-eval-after-load 'ollama-transient
+    (with-eval-after-load 'transient
+      (tychoish-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))))
 (use-package ollama-tailnet
   :defer t
   :commands (ollama-tailnet-status
@@ -3205,10 +3076,6 @@ See `tychoish/agent-shell--force-clear-busy'."
     (expand-file-name "queue-archive.jsonl"
                       (sprite-state-path "agent-shell")))
 
-  (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-capture-corfu-setup)
-  (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-capture-corfu-setup)
-
-  (setq agent-shell-activity-group-expand-by-default t)
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
   (setq agent-shell-queue-archive-enabled t)

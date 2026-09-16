@@ -8,9 +8,10 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'bootstrap)
+(require 'tychoish-defaults)
+(require 'tychoish-package-defaults)
+(require 'tychoish-package-hooks)
 
-;; `disable-all-themes' / `bootstrap-ensure-*-theme' live in tychoish-core's
-;; modus-themes `:init' block (moved out of bootstrap.el), not in bootstrap.el.
 (require 'tychoish-core)
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
@@ -660,7 +661,7 @@
   (let ((default-frame-alist (list (cons 'font "OldFont-10"))))
     (cl-letf (((symbol-function 'set-frame-font) #'ignore))
       (bootstrap-setup-font "NewFont" 14)
-      (should (= 1 (length (--filter (eq (car it) 'font) default-frame-alist))))
+      (should (= 1 (length (seq-filter (lambda (it) (eq (car it) 'font)) default-frame-alist))))
       (should (equal "NewFont-14" (cdr (assoc 'font default-frame-alist)))))))
 
 (ert-deftest bootstrap/setup-font-returns-alist-entry ()
@@ -839,7 +840,7 @@
   (let ((tmp (make-temp-file "ert-abbrev-")))
     (unwind-protect
         (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
-          (ht-set bootstrap-abbrev-files-cache tmp
+          (setf (map-elt bootstrap-abbrev-files-cache tmp)
                   (time-add (current-time) (seconds-to-time 3600)))
           (should-not (should-read-abbrev-file-p tmp)))
       (delete-file tmp))))
@@ -849,7 +850,7 @@
   (let ((tmp (make-temp-file "ert-abbrev-stale-")))
     (unwind-protect
         (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
-          (ht-set bootstrap-abbrev-files-cache tmp
+          (setf (map-elt bootstrap-abbrev-files-cache tmp)
                   (time-subtract (current-time) (seconds-to-time 3600)))
           (should (should-read-abbrev-file-p tmp)))
       (delete-file tmp))))
@@ -1129,3 +1130,31 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 (provide 'test-bootstrap)
 ;;; test-bootstrap.el ends here
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; tychoish-transient-insert-suffix-once
+
+(ert-deftest bootstrap/transient-insert-suffix-once-idempotent ()
+  "tychoish-transient-insert-suffix-once inserts only once and handles missing layouts."
+  (require 'transient)
+  ;; 1. No-op without error when prefix has no layout
+  (should (null (tychoish-transient-insert-suffix-once
+                 'bootstrap--test-nonexistent-menu
+                 '(-1 0)
+                 '("x" "test command" ignore))))
+  ;; 2. Inserts suffix into a defined prefix
+  (transient-define-prefix bootstrap--test-ert-menu ()
+    ["Test"
+     ("a" "Action A" ignore)])
+  (should (tychoish-transient-insert-suffix-once
+           'bootstrap--test-ert-menu
+           '(-1 0)
+           '("x" "test command" ignore)))
+  (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x")))
+  ;; 3. Second call is idempotent (no-ops and does not duplicate or error)
+  (should (null (tychoish-transient-insert-suffix-once
+                 'bootstrap--test-ert-menu
+                 '(-1 0)
+                 '("x" "test command" ignore))))
+  (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x"))))

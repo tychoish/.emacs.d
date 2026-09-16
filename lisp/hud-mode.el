@@ -113,6 +113,10 @@
 (keymap-set hud-completion-map "p" #'completion-at-point)
 (keymap-set hud-completion-map "/" #'dabbrev-expand)
 (keymap-set hud-completion-map "c" #'dabbrev-completion)
+(keymap-set hud-completion-map "i" #'tempel-insert)
+(keymap-set hud-completion-map "s" #'tempel-complete)
+(keymap-set hud-completion-map "x" #'tempel-expand)
+(keymap-set hud-completion-map "v" #'tempel-open-custom-file)
 
 (defvar-keymap hud-shell-map
   :name "shell"
@@ -170,6 +174,10 @@
   :name "theme"
   :doc "Theme commands under C-c t t (hud-mode).")
 
+(keymap-set hud-theme-map "r" #'disable-all-themes)
+(keymap-set hud-theme-map "d" #'bootstrap-load-dark-theme)
+(keymap-set hud-theme-map "l" #'bootstrap-load-light-theme)
+
 (defvar-keymap hud-whitespace-map
   :name "whitespace"
   :doc "Whitespace commands under C-c t w (hud-mode).")
@@ -223,6 +231,8 @@
 (defvar-keymap hud-consult-mode-map
   :name "consult"
   :doc "Consult commands under C-c C-; (hud-mode).")
+
+(keymap-set hud-consult-mode-map "s" #'tempel-insert)
 
 (defvar-keymap hud-smerge-map
   :name "smerge"
@@ -600,7 +610,7 @@ at point rather than just the current line."
 
 (defmacro hud-set-tab-width (num)
   (unless (integerp num)
-    (signal 'wrong-type-argument num))
+    (signal 'wrong-type-argument (list 'integerp num)))
   (unless (< num 32)
     (warn "INVALID cannot create tab width hook function to >= 32 (%s)" num))
 

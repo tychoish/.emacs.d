@@ -125,21 +125,26 @@ Runs from `after-init-hook', after the full config has loaded."
     (with-slow-op-timer "<init> package activation"
       (load package-quickstart-file t t t t))
 
-    (setq package-archives
-	  '(("melpa" . "https://melpa.org/packages/")
-	    ("elpaish" . "https://tychoish.github.io/elpaish/snapshot/")
-            ("nongnu" . "https://elpa.nongnu.org/nongnu/")
-            ("gnu" . "https://elpa.gnu.org/packages/")
-            ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/")))
-
     (with-slow-op-timer "<init> [local] require all"
-      (with-slow-op-timer "<init> [local] core dependencies"
-	(use-package sprite :ensure t :demand t)
-	(use-package xtdlib :ensure t :demand t))
-
       (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+
+      (with-slow-op-timer "<init> [local] require tychoish-package-defaults.el"
+	(require 'tychoish-package-defaults))
+
+      (with-slow-op-timer "<init> [local] require elpaish"
+	(unless (package-installed-p 'elpaish) (package-install 'elpaish)))
+
+      (with-slow-op-timer "<init> [local] require sprite xtdlib"
+	(elpaish-install-packages '(sprite xtdlib)))
+
       (with-slow-op-timer "<init> [local] require bootstrap.el"
 	(require 'bootstrap))
+
+      (with-slow-op-timer "<init> [local] require tychoish-defaults.el"
+	(require 'tychoish-defaults))
+
+      (with-slow-op-timer "<init> [local] require tychoish-package-hooks.el"
+	(require 'tychoish-package-hooks))
 
       (with-slow-op-timer "<init> [local] require hud-mode.el"
 	(require 'hud-mode))
@@ -155,3 +160,4 @@ Runs from `after-init-hook', after the full config has loaded."
 	(bootstrap-set-up-user-local-config user-libs-dir))))))
 
 (provide 'init)
+;;; init.el ends here
