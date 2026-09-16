@@ -2313,8 +2313,14 @@ process filter it might end up pumping."
                          (>= tries 120))
                  (cancel-timer timer)
                  (when (process-live-p (jsonrpc--process server))
-                   (eglot-register-capability
-                    server 'workspace/didChangeWatchedFiles id :watchers watchers))))))))
+                   ;; SERVER can still die between the `process-live-p' check
+                   ;; above and the reply `eglot-register-capability' sends
+                   ;; back over it; a failed registration here is harmless
+                   ;; (the server's going away anyway) but an uncaught error
+                   ;; would otherwise surface as a bare "Error running timer".
+                   (ignore-errors
+                     (eglot-register-capability
+                      server 'workspace/didChangeWatchedFiles id :watchers watchers)))))))))
 
   ;; `cl-defmethod' forms defeat the byte-compiler's forward-reference
   ;; tracking for sibling `defun's in this same `eval-after-load' block, so
@@ -2339,14 +2345,38 @@ process filter it might end up pumping."
 
   (defun tychoish/eglot-prune-dead-servers ()
     "Remove non-live server structs from `eglot--servers-by-project'.
-`eglot--on-shutdown' can abort partway through its cleanup (for
-instance on a `track-changes' assertion failure), leaving a dead
-`eglot-lsp-server' stuck in `eglot--servers-by-project' forever."
+`eglot--on-shutdown' (which normally `delq's a dead server out of
+`eglot--servers-by-project') runs as jsonrpc's `:on-shutdown' callback,
+tied to the process sentinel actually firing.  `jsonrpc-shutdown's
+sentinel-timeout path can force-`delete-process' a connection whose
+sentinel never ran, in which case `eglot--on-shutdown' never runs
+either, leaving a dead `eglot-lsp-server' stuck here forever."
     (map-do
      (lambda (project servers)
        (let ((live (seq-filter (lambda (s) (process-live-p (jsonrpc--process s))) servers)))
 	 (unless (eq (length live) (length servers))
 	   (setf (map-elt eglot--servers-by-project project) live))))
+     eglot--servers-by-project))
+
+  (defun tychoish/eglot-prune-duplicate-servers (&optional _server)
+    "Keep at most one server per project in `eglot--servers-by-project'.
+Takes an optional _SERVER argument, ignored, so this can be used
+directly on `eglot-connect-hook' (which calls its functions with the
+newly connected server) as well as called with no arguments elsewhere.
+`eglot--connect' always pushes a new server onto its project's list
+and never checks for or replaces an existing entry; only a (possibly
+skipped, see `tychoish/eglot-prune-dead-servers') `eglot--on-shutdown'
+call ever removes one.  If a project's connection keeps dying and
+reconnecting faster than shutdown cleanup runs, its list grows
+without bound, each surviving entry still `process-live-p' locally
+even after its LSP session has already died server-side.  `eglot-current-server'
+always picks the first (most recently pushed) entry, so the rest are
+pure deadweight: shut them down and drop them."
+    (map-do
+     (lambda (project servers)
+       (when (cdr servers)
+	 (setf (map-elt eglot--servers-by-project project) (list (car servers)))
+	 (seq-do (lambda (s) (ignore-errors (jsonrpc-shutdown s t))) (cdr servers))))
      eglot--servers-by-project))
 
   (defun tychoish/eglot-reconnect-orphaned-buffers ()
@@ -2366,19 +2396,22 @@ eldoc/xref request until manually reconnected."
      (buffer-list)))
 
   (defun tychoish/eglot-cleanup-stale-connections ()
-    "Prune dead Eglot servers and reconnect any buffers orphaned by them."
+    "Prune dead/duplicate Eglot servers and reconnect buffers orphaned by them."
     (interactive)
     (tychoish/eglot-prune-dead-servers)
+    (tychoish/eglot-prune-duplicate-servers)
     (tychoish/eglot-reconnect-orphaned-buffers))
+
+  (add-hook 'eglot-connect-hook #'tychoish/eglot-prune-duplicate-servers)
 
   (defun ad:eglot--on-shutdown-cleanup-stale (orig-fn server)
     "Run stale-connection cleanup even if ORIG-FN's teardown aborts partway.
-`eglot--on-shutdown' can hit a `track-changes' assertion failure
-mid-cleanup, which otherwise leaves the dead SERVER stuck in
-`eglot--servers-by-project' and orphans its buffers.  Only reconnect
-when SERVER died unexpectedly: if shutdown was requested (e.g. via
-`eglot-autoshutdown'), resurrecting it here would fight the
-deliberate teardown."
+`eglot--on-shutdown' can abort before removing the dead SERVER from
+`eglot--servers-by-project' (for instance if jsonrpc's sentinel-timeout
+path force-deleted the process before its sentinel ever ran), orphaning
+SERVER's buffers.  Only reconnect when SERVER died unexpectedly: if
+shutdown was requested (e.g. via `eglot-autoshutdown'), resurrecting it
+here would fight the deliberate teardown."
     (let ((crashed (not (eglot--shutdown-requested server))))
       (ignore-errors (funcall orig-fn server))
       (when crashed
