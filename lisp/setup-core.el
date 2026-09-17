@@ -1538,15 +1538,15 @@ otherwise keep replaying stale detection results."
   ;; `auto-mode-alist' match time, so `yaml-mode' wins unconditionally.
   (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
   (add-to-list 'tychoish/eglot-default-server-configuration
-	       '((:yaml (:format
-			 :enable t
-			 :singleQuote :json-false
-			 :bracketSpacing t
-			 :proseWrap "preserve" ;; preserve/always/never
-			 :printWidth 80
-			 :validate t
-			 :hover t
-			 :completion t))))
+	       '(:yaml :format
+		       (:enable t
+				:singleQuote :json-false
+				:bracketSpacing t
+				:proseWrap "preserve" ;; preserve/always/never
+				:printWidth 80)
+		       :validate t
+		       :hover t
+		       :completion t))
   :config
   (add-hook 'yaml-mode-hook (hud-set-tab-width 2)))
 
@@ -1661,12 +1661,12 @@ otherwise keep replaying stale detection results."
       (setq rustic-rustfmt-args "+nightly"))
 
     (add-to-list 'tychoish/eglot-default-server-configuration
-		 `((:rust-analyzer :initializationOptions
-				   (:server (:extraEnv (:RUSTUP_TOOLCHAIN ,rustup-toolchain))
-					    :rust (:analyzerTargetDir t)
-					    :cargo (:buildScripts (:enable t :features "all"))
-					    :procMacro (:enable :json-false :attributes (:enable t))
-					    :check (:workspace t))))))
+		 `(:rust-analyzer :initializationOptions
+				  (:server (:extraEnv (:RUSTUP_TOOLCHAIN ,rustup-toolchain))
+					   :rust (:analyzerTargetDir t)
+					   :cargo (:buildScripts (:enable t :features "all"))
+					   :procMacro (:enable :json-false :attributes (:enable t))
+					   :check (:workspace t)))))
 
   (add-to-list 'flycheck-checkers 'rustic-clippy))
 
@@ -1676,23 +1676,23 @@ otherwise keep replaying stale detection results."
   :init
   (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
   (add-to-list 'tychoish/eglot-default-server-configuration
-	       '((:pylsp (:plugins
-			  :black (:enabled t)
-			  :jedi_completion (:enabled t
-						     :fuzzy t
-						     :include_params t)
-			  :ruff (:enabled t
-					  :formatEnabled t
-					  :lineLength 100
-					  :format ["I"]
-					  :extendSelect ["I"])
-			  :rope (:enabled t)
-			  :flake8 (:enabled :json-false)
-			  :pycodestyle (:enabled :json-false)
-			  :mccabe (:enabled :json-false)
-			  :autopep8 (:enabled :json-false)
-			  :pyflakes (:enabled :json-false)
-			  :pycodestyle (:enabled :json-false)))))
+	       '(:pylsp :plugins
+			(:black (:enabled t)
+				:jedi_completion (:enabled t
+							   :fuzzy t
+							   :include_params t)
+				:ruff (:enabled t
+					       :formatEnabled t
+					       :lineLength 100
+					       :format ["I"]
+					       :extendSelect ["I"])
+				:rope (:enabled t)
+				:flake8 (:enabled :json-false)
+				:pycodestyle (:enabled :json-false)
+				:mccabe (:enabled :json-false)
+				:autopep8 (:enabled :json-false)
+				:pyflakes (:enabled :json-false)
+				:pycodestyle (:enabled :json-false))))
 
   :config
   (delight 'python-ts-mode "py.ts")
@@ -2168,46 +2168,20 @@ background just because this is a fresh Emacs instance."
              (and (eq projectile-enable-caching 'persistent)
                   (projectile-load-project-cache root)))))
 
-  (defun tychoish/eglot-defer-file-watch-registration (server id watchers root)
-    "Register SERVER's file watches for ID/WATCHERS once ROOT's cache is warm.
-Polls at most two minutes before giving up and registering anyway from
-inside the timer callback — still safer than the original jsonrpc
-process-filter context, since a timer callback isn't nested inside the
-process filter it might end up pumping."
-    (projectile-index-project-async root)
-    (let ((tries 0) timer)
-      (setq timer
-            (run-with-timer
-             1 1
-             (lambda ()
-               (cl-incf tries)
-               (when (or (tychoish/projectile-cache-warm-p root)
-                         (>= tries 120))
-                 (cancel-timer timer)
-                 (when (process-live-p (jsonrpc--process server))
-                   ;; SERVER can still die between the `process-live-p' check
-                   ;; above and the reply `eglot-register-capability' sends
-                   ;; back over it; a failed registration here is harmless
-                   ;; (the server's going away anyway) but an uncaught error
-                   ;; would otherwise surface as a bare "Error running timer".
-                   (ignore-errors
-                     (eglot-register-capability
-                      server 'workspace/didChangeWatchedFiles id :watchers watchers)))))))))
-
-  ;; `cl-defmethod' forms defeat the byte-compiler's forward-reference
-  ;; tracking for sibling `defun's in this same `eval-after-load' block, so
-  ;; declare them explicitly even though they're defined a few lines above.
-  (declare-function tychoish/projectile-warm-cache-for-buffer "setup-core")
-  (declare-function tychoish/projectile-cache-warm-p "setup-core")
-  (declare-function tychoish/eglot-defer-file-watch-registration "setup-core")
-
-  (cl-defmethod eglot-register-capability :around
-    (server (_method (eql workspace/didChangeWatchedFiles)) id &key watchers)
-    (let* ((project (eglot--project server))
-           (root (and (eq (car-safe project) 'projectile) (cdr project))))
-      (if (and root (not (tychoish/projectile-cache-warm-p root)))
-          (tychoish/eglot-defer-file-watch-registration server id watchers root)
-        (cl-call-next-method))))
+  ;; Declining the `workspace/didChangeWatchedFiles' dynamic-registration
+  ;; capability means servers never send `client/registerCapability' for it
+  ;; in the first place. A prior version of this config instead advertised
+  ;; the capability and deferred the reply to that request until Projectile's
+  ;; cache was warm (up to 2 minutes) — but a server's `client/registerCapability'
+  ;; request left unanswered for that long reads as a broken connection to
+  ;; many servers, not just gopls, causing exactly this kind of crash/reconnect
+  ;; cycle. Declining up front avoids the whole class of problem.
+  (cl-defmethod eglot-client-capabilities :around (_server)
+    (let* ((caps (cl-call-next-method))
+           (workspace (plist-get caps :workspace)))
+      (plist-put workspace :didChangeWatchedFiles
+                 (list :dynamicRegistration :json-false))
+      caps))
 
   (defun tychoish/eglot-before-save-hook ()
     (add-hook 'before-save-hook #'eglot-format-for-hook nil t)
@@ -2248,7 +2222,10 @@ pure deadweight: shut them down and drop them."
      (lambda (project servers)
        (when (cdr servers)
 	 (setf (map-elt eglot--servers-by-project project) (list (car servers)))
-	 (seq-do (lambda (s) (ignore-errors (jsonrpc-shutdown s t))) (cdr servers))))
+	 (seq-do (lambda (s)
+		   (setf (eglot--shutdown-requested s) t)
+		   (ignore-errors (jsonrpc-shutdown s t)))
+		 (cdr servers))))
      eglot--servers-by-project))
 
   (defun tychoish/eglot-reconnect-orphaned-buffers ()
@@ -2300,13 +2277,81 @@ here would fight the deliberate teardown."
   (setq tychoish/eglot-cleanup-stale-connections-timer
 	(run-with-idle-timer 300 t #'tychoish/eglot-cleanup-stale-connections))
 
+  (defconst tychoish/eglot-activate-burst-limit 3
+    "Max buffers `eglot--maybe-activate-editing-mode' may activate within
+`tychoish/eglot-activate-burst-window' seconds before the rest queue up.")
+
+  (defconst tychoish/eglot-activate-burst-window 2
+    "Seconds over which `tychoish/eglot-activate-burst-limit' applies.")
+
+  (defconst tychoish/eglot-activate-batch-delay 3
+    "Seconds between drains of `tychoish/eglot-activate-queue' once queuing starts.")
+
+  (defvar tychoish/eglot-activate-queue nil
+    "Buffers waiting for a throttled `eglot--maybe-activate-editing-mode' call.")
+
+  (defvar tychoish/eglot-activate-recent nil
+    "Timestamps of the most recent unthrottled activations, newest first.")
+
+  (defvar tychoish/eglot-activate-timer nil
+    "Timer draining `tychoish/eglot-activate-queue', or nil when idle.")
+
+  (defun tychoish/eglot-activate-process-queue ()
+    "Drain up to `tychoish/eglot-activate-burst-limit' queued buffers per firing.
+Runs at `tychoish/eglot-activate-batch-delay' cadence so a large batch of
+newly-managed buffers (e.g. a server's initial connect against a session
+with dozens of matching buffers already open) trickles in instead of
+sending `textDocument/didOpen' plus diagnostics for all of them at once."
+    (if (null tychoish/eglot-activate-queue)
+	(when tychoish/eglot-activate-timer
+	  (cancel-timer tychoish/eglot-activate-timer)
+	  (setq tychoish/eglot-activate-timer nil))
+      (dotimes (_ tychoish/eglot-activate-burst-limit)
+	(when-let* ((buf (pop tychoish/eglot-activate-queue)))
+	  (eglot--when-live-buffer buf
+	    (with-current-buffer buf
+	      (eglot--maybe-activate-editing-mode)))))))
+
+  (defun ad:eglot--maybe-activate-editing-mode-throttle (orig-fn)
+    "Rate-limit how many buffers become eglot-managed at once.
+See `tychoish/eglot-activate-process-queue' for why."
+    (setq tychoish/eglot-activate-recent
+	  (seq-filter (lambda (ts) (< (float-time (time-since ts))
+				      tychoish/eglot-activate-burst-window))
+		      tychoish/eglot-activate-recent))
+    (if (< (length tychoish/eglot-activate-recent) tychoish/eglot-activate-burst-limit)
+	(progn
+	  (push (current-time) tychoish/eglot-activate-recent)
+	  (funcall orig-fn))
+      (unless (memq (current-buffer) tychoish/eglot-activate-queue)
+	(setq tychoish/eglot-activate-queue
+	      (append tychoish/eglot-activate-queue (list (current-buffer)))))
+      (unless tychoish/eglot-activate-timer
+	(setq tychoish/eglot-activate-timer
+	      (run-with-timer tychoish/eglot-activate-batch-delay
+			       tychoish/eglot-activate-batch-delay
+			       #'tychoish/eglot-activate-process-queue)))))
+
+  (advice-add 'eglot--maybe-activate-editing-mode :around #'ad:eglot--maybe-activate-editing-mode-throttle)
+
+  (defun tychoish/eglot-activate-prioritize-visible (window)
+    "Immediately activate WINDOW's buffer if it's waiting in the throttle
+queue, instead of leaving it for the trickle timer. Otherwise a buffer the
+user is actively looking at could sit unmanaged for the full drain cycle
+just because it lost the initial connect's activation burst."
+    (when-let* ((buf (window-buffer window))
+		((memq buf tychoish/eglot-activate-queue)))
+      (setq tychoish/eglot-activate-queue (delq buf tychoish/eglot-activate-queue))
+      (with-current-buffer buf
+	(eglot--maybe-activate-editing-mode))))
+
+  (add-hook 'window-selection-change-functions #'tychoish/eglot-activate-prioritize-visible)
+
+  (setenv "GOTOOLCHAIN" "local")
+
   (add-to-list 'eglot-server-programs
 	       `((go-mode go-dot-mod-mode go-dot-work-mode go-ts-mode go-mod-ts-mode)
-		 . ,(eglot-alternatives
-		     `(("gopls" ,(format "-remote=unix;/run/user/%d/gopls.socket" (user-uid)))
-		       ("gopls" "-remote=unix;/tmp/gopls.socket")
-		       ("gopls" "-remote=auto")
-		       ("gopls")))))
+		 . ("gopls")))
 
   (add-to-list 'eglot-server-programs
 	       `((c-mode c++-mode c-ts-mode c++-ts-mode c-or-c++-ts-mode c-or-c++-mode)
