@@ -2636,6 +2636,7 @@ calls, so it can't be added to that hook directly."
   (with-eval-after-load 'ollama-transient
     (with-eval-after-load 'transient
       (tychoish-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))))
+
 (use-package ollama-tailnet
   :defer t
   :commands (ollama-tailnet-status
