@@ -10,6 +10,7 @@
 (require 'cl-lib)
 (require 'setup-core)
 (require 'builder)
+(require 'eglot)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-buffer-name-format lambda
@@ -234,8 +235,13 @@ few buffers, but a burst can overwhelm a heavily-loaded server."
          (tychoish/eglot-activate-timer nil)
          (call-count 0)
          (total (* 2 tychoish/eglot-activate-burst-limit))
-         (buffers (mapcar (lambda (n) (generate-new-buffer (format "eglot-throttle-test-%d" n)))
-                           (number-sequence 1 total))))
+         (buffers (mapcar (lambda (n)
+                            (let ((buf (generate-new-buffer (format "eglot-throttle-test-%d" n))))
+                              (with-current-buffer buf
+                                (setq buffer-file-name (format "/tmp/eglot-throttle-test-%d.py" n))
+                                (setq major-mode 'python-mode))
+                              buf))
+                          (number-sequence 1 total))))
     (unwind-protect
         (progn
           (seq-do (lambda (buf)
@@ -249,6 +255,28 @@ few buffers, but a burst can overwhelm a heavily-loaded server."
           (should tychoish/eglot-activate-timer))
       (when (timerp tychoish/eglot-activate-timer)
         (cancel-timer tychoish/eglot-activate-timer))
+      (seq-do #'kill-buffer buffers))))
+
+(ert-deftest tychoish-core/eglot-activate-editing-mode-unmanaged-bypasses-throttle ()
+  "Regression test: buffers without a file or without an Eglot server configured
+must bypass the burst budget and queue immediately."
+  (let* ((tychoish/eglot-activate-recent nil)
+         (tychoish/eglot-activate-queue nil)
+         (tychoish/eglot-activate-timer nil)
+         (call-count 0)
+         (total (* 2 tychoish/eglot-activate-burst-limit))
+         (buffers (mapcar (lambda (n) (generate-new-buffer (format "eglot-unmanaged-test-%d" n)))
+                          (number-sequence 1 total))))
+    (unwind-protect
+        (progn
+          (seq-do (lambda (buf)
+                    (with-current-buffer buf
+                      (ad:eglot--maybe-activate-editing-mode-throttle
+                       (lambda () (cl-incf call-count)))))
+                  buffers)
+          (should (= call-count total))
+          (should (null tychoish/eglot-activate-queue))
+          (should-not tychoish/eglot-activate-timer))
       (seq-do #'kill-buffer buffers))))
 
 (ert-deftest tychoish-core/eglot-activate-queue-drains-in-batches ()
