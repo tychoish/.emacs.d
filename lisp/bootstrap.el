@@ -234,6 +234,8 @@ triggered directly by a keypress, still prompts normally.")
 (defun display-startup-echo-area-message ()
   "Called during setup, intentially a noop, which omit the message."  nil)
 
+(add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
+
 ;; TODO remove these after emacs 31
 (defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
   "Hacky fix to resolve issue with native comp."
@@ -274,7 +276,9 @@ triggered directly by a keypress, still prompts normally.")
     (with-silence
       (repeat-mode 1)))
   (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"
-    (nerd-icons-completion-mode 1)))
+    (nerd-icons-completion-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] delight"
+    (require 'delight)))
 
 (add-lazy-init
  :name "<bootstrap> [modes] late batch"

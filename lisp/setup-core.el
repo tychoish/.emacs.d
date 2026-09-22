@@ -113,6 +113,7 @@
   (delight 'org-mode "org" 'org-mode)
   (delight 'org-agenda-mode "agenda" 'org-agenda)
   (delight 'rst-mode "rst" 'rst-mode)
+  (delight 'markdown-mode "mdwn")
   (delight 'emojify-mode)
   (delight 'nerd-icons-dired-mode nil 'nerd-icons-dired)
   (delight 'nerd-icons-xref-mode nil 'nerd-icons-xref)
@@ -131,6 +132,23 @@
   (delight 'refill-mode " rf" 'refill)
   (delight 'auto-revert-mode nil 'autorevert)
 
+  (delight 'async-bytecomp-package-mode "" 'async-bytecomp)
+  (delight 'dired-async-mode "" 'dired-async)
+
+  (delight 'agent-shell-completion-mode nil 'agent-shell-completion)
+  (delight 'agent-shell-ui-mode nil 'agent-shell-ui)
+
+  (delight 'go-ts-mode "go.ts")
+  (delight 'go-mod-ts-mode "go.mod.ts")
+  (delight 'go-mode "go")
+  (delight 'rust-mode "rs")
+  (delight 'rustic-mode "rs(x)")
+  (delight 'python-ts-mode "py.ts")
+  (delight 'python-mode "py")
+  (delight 'lisp-mode "lisp")
+  (delight 'slime-mode "sl")
+  (delight 'slime-autodoc-mode "")
+
   (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
   (delight 'outline-minor-mode nil 'outline)
   (delight 'cursor-sensor-mode nil 'cursor-sensor)
@@ -144,8 +162,6 @@
   (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
   (add-hook 'dired-mode-hook 'dired-async-mode)
   :config
-  (delight 'async-bytecomp-package-mode "" 'async-bytecomp)
-  (delight 'dired-async-mode "" 'dired-async)
   (declare-function package-desc-p "package")
   (autoload 'async-package-do-action "async-package")
 
@@ -1332,7 +1348,6 @@ return until the minibuffer session ends."
              tychoish/markdown-align-tables-in-file
              tychoish/markdown-align-tables-dired)
   :config
-  (delight 'markdown-mode "mdwn")
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (defun tychoish/markdown-setup-imenu ()
@@ -1594,10 +1609,6 @@ otherwise keep replaying stale detection results."
   (require 'project)
   (add-hook 'project-find-functions #'project-find-go-module)
 
-  (delight 'go-ts-mode "go.ts")
-  (delight 'go-mod-ts-mode "go.mod.ts")
-  (delight 'go-mode "go")
-
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
     (setq-local fill-column 100)
@@ -1639,8 +1650,6 @@ otherwise keep replaying stale detection results."
 	 ("Cargo.lock" . toml-ts-mode))
   :commands (rust-resolve-fmt-path)
   :config
-  (delight 'rust-mode "rs")
-  (delight 'rustic-mode "rs(x)")
   (defun rustic-mode-auto-save-hook ()
     "Enable auto-saving in rustic-mode buffers."
     (when buffer-file-name
@@ -1695,8 +1704,6 @@ otherwise keep replaying stale detection results."
 				:pycodestyle (:enabled :json-false))))
 
   :config
-  (delight 'python-ts-mode "py.ts")
-  (delight 'python-mode "py")
   (defun tychoish/python-setup ()
     (setq-local python-indent-offset 4)
     (setq-local tab-width 4)
@@ -1780,9 +1787,6 @@ otherwise keep replaying stale detection results."
   :init
   (keymap-set hud-docs-map "c" #'hyperspec-lookup)
   :config
-  (delight 'lisp-mode "lisp")
-  (delight 'slime-mode "sl")
-  (delight 'slime-autodoc-mode "")
   (make-read-extended-command-for-prefix "slime"
     :key-alias "slime-commands"
     :bind-map hud-ide-map
@@ -2045,7 +2049,15 @@ otherwise keep replaying stale detection results."
   :config
   (defun tychoish/eglot-ensure-hook ()
     ;; toggle it on and off so that the left-fringe isn't weird.
-    (eglot-tempel-mode 1)
+    ;; `eglot-tempel-mode' is global and its enable body unconditionally
+    ;; calls `eglot-reconnect' on the current server (to force gopls to
+    ;; re-negotiate capabilities after installing its snippet-expansion
+    ;; advice) -- re-enabling it here on every single connect, including
+    ;; the reconnect it just caused, is a self-sustaining infinite loop:
+    ;; connect -> this hook -> reconnect -> connect -> this hook -> ...
+    ;; Only call it while genuinely off.
+    (unless eglot-tempel-mode
+      (eglot-tempel-mode 1))
     (flycheck-eglot-mode -1)
     (flycheck-eglot-mode 1))
 
@@ -2253,6 +2265,61 @@ eldoc/xref request until manually reconnected."
 
   (add-hook 'eglot-connect-hook #'tychoish/eglot-prune-duplicate-servers)
 
+  (defvar tychoish/eglot-connecting-projects nil
+    "Projects with an Eglot connection handshake currently in flight.
+`eglot--connect' only registers a server into `eglot--servers-by-project'
+once its `:initialize' request succeeds, so a second buffer in the same
+project whose activation runs before that response arrives sees no
+existing server and starts a redundant `eglot--connect' of its own --
+the loser then gets shut down moments later by
+`tychoish/eglot-prune-duplicate-servers', producing an endless
+connect/prune cycle for large projects whose first handshake takes a
+while. Tracking in-flight projects here lets the activation throttle
+hold off that second buffer instead of racing it.")
+
+  (defun tychoish/eglot-mark-connecting (server)
+    "Record SERVER's project as having a handshake in flight."
+    (let ((project (eglot--project server)))
+      (unless (member project tychoish/eglot-connecting-projects)
+        (push project tychoish/eglot-connecting-projects))))
+
+  (add-hook 'eglot-server-initialized-hook #'tychoish/eglot-mark-connecting)
+
+  (defun tychoish/eglot-unmark-connecting (server)
+    "Clear SERVER's project from `tychoish/eglot-connecting-projects'."
+    (setq tychoish/eglot-connecting-projects
+          (delete (eglot--project server) tychoish/eglot-connecting-projects)))
+
+  (add-hook 'eglot-connect-hook #'tychoish/eglot-unmark-connecting)
+
+  (defun ad:eglot--connect-dedupe (orig-fn managed-modes project class contact language-ids)
+    "Skip a redundant `eglot--connect' for PROJECT.
+`eglot-ensure' (hung directly off major-mode hooks) and
+`eglot--maybe-activate-editing-mode' (called from
+`after-change-major-mode-hook', and from a successful connect's own
+buffer rescan) both funnel into `eglot--connect' independently, with
+no check for one another. Two buffers in the same PROJECT reaching
+this function before the first's handshake completes would otherwise
+each start their own gopls process, with the loser shut down moments
+later by `tychoish/eglot-prune-duplicate-servers' -- see
+`tychoish/eglot-connecting-projects'. Skip ORIG-FN entirely, returning
+the existing live server if there is one, whenever PROJECT already has
+a live server or a handshake in flight. The existing entry's process
+must actually be checked with `process-live-p', not just presence in
+`eglot--servers-by-project': `eglot-reconnect' shuts its dead SERVER
+down and immediately calls `eglot--connect' again for the same
+PROJECT, and if that dead entry hasn't been pruned out yet, treating
+its mere presence as \"already connected\" would block the real
+reconnect forever, looping between `eglot-reconnect' and the dead
+process's sentinel."
+    (cond
+     ((let ((existing (car (gethash project eglot--servers-by-project))))
+        (and existing (process-live-p (jsonrpc--process existing)) existing)))
+     ((member project tychoish/eglot-connecting-projects) nil)
+     (t (funcall orig-fn managed-modes project class contact language-ids))))
+
+  (advice-add 'eglot--connect :around #'ad:eglot--connect-dedupe)
+
   (defun ad:eglot--on-shutdown-cleanup-stale (orig-fn server)
     "Run stale-connection cleanup even if ORIG-FN's teardown aborts partway.
 `eglot--on-shutdown' can abort before removing the dead SERVER from
@@ -2262,6 +2329,7 @@ SERVER's buffers.  Only reconnect when SERVER died unexpectedly: if
 shutdown was requested (e.g. via `eglot-autoshutdown'), resurrecting it
 here would fight the deliberate teardown."
     (let ((crashed (not (eglot--shutdown-requested server))))
+      (tychoish/eglot-unmark-connecting server)
       (ignore-errors (funcall orig-fn server))
       (when crashed
         (tychoish/eglot-cleanup-stale-connections))))
@@ -2301,36 +2369,65 @@ here would fight the deliberate teardown."
 Runs at `tychoish/eglot-activate-batch-delay' cadence so a large batch of
 newly-managed buffers (e.g. a server's initial connect against a session
 with dozens of matching buffers already open) trickles in instead of
-sending `textDocument/didOpen' plus diagnostics for all of them at once."
+sending `textDocument/didOpen' plus diagnostics for all of them at once.
+Each buffer is activated under `ignore-errors': a repeating timer whose
+function signals an error can get stuck reporting \"Error running timer\"
+on every subsequent firing without ever actually re-running, so one
+buffer erroring here (a killed buffer slipping past `eglot--when-live-buffer',
+a mid-teardown server, etc.) must not be allowed to wedge the whole
+drain for every other queued buffer."
     (if (null tychoish/eglot-activate-queue)
 	(when tychoish/eglot-activate-timer
 	  (cancel-timer tychoish/eglot-activate-timer)
 	  (setq tychoish/eglot-activate-timer nil))
       (dotimes (_ tychoish/eglot-activate-burst-limit)
 	(when-let* ((buf (pop tychoish/eglot-activate-queue)))
-	  (eglot--when-live-buffer buf
-	    (with-current-buffer buf
-	      (eglot--maybe-activate-editing-mode)))))))
+	  (ignore-errors
+	    (eglot--when-live-buffer buf
+	      (with-current-buffer buf
+		(eglot--maybe-activate-editing-mode))))))))
+
+  (defun tychoish/eglot-activate-enqueue (buffer)
+    "Queue BUFFER for a later throttled `eglot--maybe-activate-editing-mode' call."
+    (unless (memq buffer tychoish/eglot-activate-queue)
+      (setq tychoish/eglot-activate-queue
+	    (append tychoish/eglot-activate-queue (list buffer))))
+    (unless tychoish/eglot-activate-timer
+      (setq tychoish/eglot-activate-timer
+	    (run-with-timer tychoish/eglot-activate-batch-delay
+			     tychoish/eglot-activate-batch-delay
+			     #'tychoish/eglot-activate-process-queue))))
 
   (defun ad:eglot--maybe-activate-editing-mode-throttle (orig-fn)
     "Rate-limit how many buffers become eglot-managed at once.
-See `tychoish/eglot-activate-process-queue' for why."
+`eglot--maybe-activate-editing-mode' sits on `after-change-major-mode-hook',
+which fires for every buffer, not just source buffers, so a buffer with
+no file (most minibuffers, popups, and Eglot's own log buffers) or whose
+major mode has no Eglot server configured for it is let through
+immediately without spending any of the burst budget or the queue --
+calling ORIG-FN on it is a cheap no-op (it mirrors ORIG-FN's own
+`buffer-file-name' check, and `eglot--lookup-mode' always returns a
+non-nil cons even for an unconfigured mode, so the configured contact --
+its cdr -- is what actually has to be checked), but queuing it just
+starves real candidates behind an ever-refilling backlog. Duplicate-
+connect races are handled separately by `ad:eglot--connect-dedupe', not
+here: a successful connect's own buffer-list rescan (see
+`eglot--connect') runs while `tychoish/eglot-connecting-projects' still
+names its project, so gating on that flag here would queue every buffer
+that rescan is trying to activate.
+See `tychoish/eglot-activate-process-queue' for the burst-limit rationale."
     (setq tychoish/eglot-activate-recent
 	  (seq-filter (lambda (ts) (< (float-time (time-since ts))
 				      tychoish/eglot-activate-burst-window))
 		      tychoish/eglot-activate-recent))
-    (if (< (length tychoish/eglot-activate-recent) tychoish/eglot-activate-burst-limit)
-	(progn
-	  (push (current-time) tychoish/eglot-activate-recent)
-	  (funcall orig-fn))
-      (unless (memq (current-buffer) tychoish/eglot-activate-queue)
-	(setq tychoish/eglot-activate-queue
-	      (append tychoish/eglot-activate-queue (list (current-buffer)))))
-      (unless tychoish/eglot-activate-timer
-	(setq tychoish/eglot-activate-timer
-	      (run-with-timer tychoish/eglot-activate-batch-delay
-			       tychoish/eglot-activate-batch-delay
-			       #'tychoish/eglot-activate-process-queue)))))
+    (cond
+     ((not (and buffer-file-name (cdr (eglot--lookup-mode major-mode))))
+      (funcall orig-fn))
+     ((< (length tychoish/eglot-activate-recent) tychoish/eglot-activate-burst-limit)
+      (push (current-time) tychoish/eglot-activate-recent)
+      (funcall orig-fn))
+     (t
+      (tychoish/eglot-activate-enqueue (current-buffer)))))
 
   (advice-add 'eglot--maybe-activate-editing-mode :around #'ad:eglot--maybe-activate-editing-mode-throttle)
 
@@ -2731,8 +2828,6 @@ calls, so it can't be added to that hook directly."
   (with-eval-after-load 'which-key
     (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
   :config
-  (delight 'agent-shell-completion-mode nil 'agent-shell-completion)
-  (delight 'agent-shell-ui-mode nil 'agent-shell-ui)
   (defconst tychoish/agent-shell-terse-persona
     "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
     "CLAUDE_PERSONA value that requests terse output from the agent.")
