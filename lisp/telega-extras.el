@@ -5,7 +5,7 @@
 ;; management, and notification filtering for the telega Telegram client.
 ;;
 ;; Trigger mechanisms (idle timer, logind PrepareForSleep) are handled by
-;; `sprite-session'; this file registers telega-specific responses on those
+;; `sprite-system'; this file registers telega-specific responses on those
 ;; hooks and provides per-instance configuration helpers for personal.el.
 ;;
 ;; Load order: required from use-package telega :config block, after telega
@@ -15,7 +15,7 @@
 ;;; Code:
 
 (require 'sprite)
-(require 'sprite-session)
+(require 'sprite-system)
 (require 'alert)
 (require 'bootstrap)
 
@@ -32,7 +32,7 @@
 ;; Configurable idle action
 
 (defcustom telega-extras-idle-action 'switch-to-root
-  "Action taken when `sprite-session-idle-hook' fires while telega is live.
+  "Action taken when `sprite-system-idle-hook' fires while telega is live.
 Possible values:
   `switch-to-root'     — switch the current frame to the telega root buffer
   `bury-chat-buffers'  — bury visible chat windows and replace with root
@@ -117,11 +117,11 @@ Only has effect when `telega-extras-enable-chatbuf-idle-timers' is non-nil."
 
 (defun telega-extras-start-idle-timer ()
   "Register `telega-extras--on-idle' on the session idle hook and start the timer if needed."
-  (sprite-session-add-on-idle #'telega-extras--on-idle))
+  (sprite-system-add-on-idle #'telega-extras--on-idle))
 
 (defun telega-extras-stop-idle-timer ()
   "Remove `telega-extras--on-idle' from the session idle hook and stop the timer if empty."
-  (sprite-session-remove-on-idle #'telega-extras--on-idle))
+  (sprite-system-remove-on-idle #'telega-extras--on-idle))
 
 (defun telega-extras-disconnect ()
   "Disconnect from Telegram.  No-op when the server is not live."
@@ -177,15 +177,15 @@ GOING-TO-SLEEP is t when entering sleep, nil on wake."
 
 (defun telega-extras-start-logind-watch ()
   "Register sleep/wake handlers on session hooks and start watch."
-  (add-hook 'sprite-session-before-sleep-hook #'telega-extras--on-before-sleep)
-  (add-hook 'sprite-session-after-sleep-hook #'telega-extras--on-after-sleep)
-  (sprite-session-start-logind-watch))
+  (add-hook 'sprite-system-before-sleep-hook #'telega-extras--on-before-sleep)
+  (add-hook 'sprite-system-after-sleep-hook #'telega-extras--on-after-sleep)
+  (sprite-system-start-logind-watch))
 
 (defun telega-extras-stop-logind-watch ()
   "Remove sleep/wake handlers from session hooks and stop watch."
-  (remove-hook 'sprite-session-before-sleep-hook #'telega-extras--on-before-sleep)
-  (remove-hook 'sprite-session-after-sleep-hook #'telega-extras--on-after-sleep)
-  (sprite-session-stop-logind-watch))
+  (remove-hook 'sprite-system-before-sleep-hook #'telega-extras--on-before-sleep)
+  (remove-hook 'sprite-system-after-sleep-hook #'telega-extras--on-after-sleep)
+  (sprite-system-stop-logind-watch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
