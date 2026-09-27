@@ -26,6 +26,26 @@
 (with-eval-after-load 'warnings
   (add-to-list 'warning-suppress-log-types '(frameset)))
 
+(with-eval-after-load 'emojify
+  (setq emojify-emoji-styles '(ascii unicode github))
+  (setq emojify-display-style 'unicode)
+  (setq emojify-point-entered-behaviour 'echo))
+
+(with-eval-after-load 'comint
+  (defun colorize-shell ()
+    "Apply ANSI colors to the agent-shell buffer."
+    (interactive)
+    (let ((inhibit-read-only t))
+      (ansi-color-apply-on-region (point-min) (point-max))))
+
+  (add-hook 'comint-mode-hook 'ansi-color-for-comint-mode-on)
+  (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
+  (add-hook 'shell-mode-hook 'tychoish/corfu-prog-mode-setup)
+  (keymap-set comint-mode-map "M-n" #'comint-next-input)
+  (keymap-set comint-mode-map "M-p" #'comint-previous-input)
+  (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
+  (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
+
 (with-eval-after-load 'dabbrev
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
   (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)

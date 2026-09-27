@@ -54,15 +54,19 @@
    flyspell-correct
    marginalia
    magit-gh
+   yaml-pro
    tempel
    eglot-tempel
+   eglot-test-at-point
    tempel-collection
    embark-consult
    gptel-aibo
    gptel-agent
+   agent-shell-workflow
    telega-bot
    denote-notion
    denote-mcp
+   denote-journal-capture
    sprite
    tailscale
    docker
@@ -71,6 +75,7 @@
    nerd-icons-dired
    nerd-icons-corfu
    nerd-icons-xref
+   emojify
    deadgrep
    annotated-completing-read
    org-docsgen

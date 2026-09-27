@@ -1037,14 +1037,6 @@ clipboard."
       (remove-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server)
       (unintern 'tychoish/darwin-alert-config-for-server obarray))))
 
-(use-package emojify
-  :ensure t
-  :defer t
-  :config
-  (setq emojify-emoji-styles '(ascii unicode github))
-  (setq emojify-display-style 'unicode)
-  (setq emojify-point-entered-behaviour 'echo))
-
 (use-package tracking
   :ensure t
   :after (:any telega erc)
@@ -1336,16 +1328,6 @@ return until the minibuffer session ends."
   :config
   (setq denote-review-insert-after "date"))
 
-(use-package denote-journal-capture
-  :ensure t
-  :commands (denote-journal-capture-mode)
-  :defer t)
-
-(use-package denote-mcp
-  :ensure t
-  :defer t
-  :after (denote mcpkit))
-
 (use-package markdown-mode
   :ensure t
   :mode ("\\.mdwn" "\\.md" "\\.markdown" "\\.txt")
@@ -1568,13 +1550,8 @@ otherwise keep replaying stale detection results."
 		       :hover t
 		       :completion t))
   :config
+  (add-hook 'yaml-mode-hook #'yaml-pro-mode)
   (add-hook 'yaml-mode-hook (hud-set-tab-width 2)))
-
-(use-package yaml-pro
-  :ensure t
-  :defer t
-  :init
-  (add-hook 'yaml-mode-hook #'yaml-pro-mode))
 
 (use-package go-ts-mode
   :ensure nil
@@ -1754,7 +1731,6 @@ otherwise keep replaying stale detection results."
   :config
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
-
 
 (use-package tex-mode
   :mode ("\\.tex\\'" . LaTeX-mode)
@@ -2012,9 +1988,6 @@ otherwise keep replaying stale detection results."
 ;;
 ;; language server protocol (lsp) [eglot] + treesitter
 
-(use-package eglot-test-at-point
-  :ensure t
-  :defer t)
 (use-package eglot
   :ensure nil
   :commands (eglot-code-action-rewrite
@@ -2788,24 +2761,6 @@ calls, so it can't be added to that hook directly."
   (with-eval-after-load "em-cmpl"
     (add-hook 'eshell-mode 'eshell-cmpl-initialize)))
 
-(use-package comint
-  :ensure nil
-  :defer t
-  :config
-  (defun colorize-shell ()
-    "Apply ANSI colors to the agent-shell buffer."
-    (interactive)
-    (let ((inhibit-read-only t))
-      (ansi-color-apply-on-region (point-min) (point-max))))
-
-  (add-hook 'comint-mode-hook 'ansi-color-for-comint-mode-on)
-  (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
-  (add-hook 'shell-mode-hook 'tychoish/corfu-prog-mode-setup)
-  (keymap-set comint-mode-map "M-n" #'comint-next-input)
-  (keymap-set comint-mode-map "M-p" #'comint-previous-input)
-  (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
-  (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
-
 (use-package shell-maker
   :ensure t
   :defer t
@@ -3362,18 +3317,6 @@ asynchronously via `sprite-future-then'."
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
 
-(use-package agent-shell-workflow
-  :ensure t
-  :after agent-shell
-  :defer t
-  :commands (agent-shell-workflow-select
-             agent-shell-workflow-dispatch-menu
-             agent-shell-workflow-dispatch
-             agent-shell-workflow-exec)
-  :config
-  (require 'agent-shell-workflow-menu)
-  (require 'agent-shell-workflow-library))
-
 (use-package mcpkit
   :ensure t
   :defer t
@@ -3382,11 +3325,11 @@ asynchronously via `sprite-future-then'."
   (defun tychoish/mcpkit-start-default-services ()
     "Start default MCP services (denote, emacs) on port 8765."
     (interactive)
-    (require 'denote-mcp)
-    (require 'mcpkit-emacs)
-    (mcpkit-start-service 'denote)
-    (mcpkit-start-service 'emacs))
-  (when (daemonp)
+    (when (require 'denote-mcp nil t)
+      (mcpkit-start-service 'denote))
+    (when (require 'mcpkit-emacs nil t)
+      (mcpkit-start-service 'emacs)))
+  (when (and (daemonp) (not (eq (daemonp) t)))
     (add-hook 'after-init-hook #'tychoish/mcpkit-start-default-services)))
 
 (use-package setup-mail
