@@ -2415,16 +2415,20 @@ See `tychoish/eglot-activate-process-queue' for the burst-limit rationale."
 
   (advice-add 'eglot--maybe-activate-editing-mode :around #'ad:eglot--maybe-activate-editing-mode-throttle)
 
-  (defun tychoish/eglot-activate-prioritize-visible (window)
-    "Immediately activate WINDOW's buffer if it's waiting in the throttle
+  (defun tychoish/eglot-activate-prioritize-visible (&optional window-or-frame)
+    "Immediately activate WINDOW-OR-FRAME's buffer if it's waiting in the throttle
 queue, instead of leaving it for the trickle timer. Otherwise a buffer the
 user is actively looking at could sit unmanaged for the full drain cycle
 just because it lost the initial connect's activation burst."
-    (when-let* ((buf (window-buffer window))
-		((memq buf tychoish/eglot-activate-queue)))
-      (setq tychoish/eglot-activate-queue (delq buf tychoish/eglot-activate-queue))
-      (with-current-buffer buf
-	(eglot--maybe-activate-editing-mode))))
+    (let* ((win (cond
+                 ((windowp window-or-frame) window-or-frame)
+                 ((framep window-or-frame) (frame-selected-window window-or-frame))
+                 (t (selected-window))))
+           (buf (and (window-live-p win) (window-buffer win))))
+      (when (and buf (memq buf tychoish/eglot-activate-queue))
+        (setq tychoish/eglot-activate-queue (delq buf tychoish/eglot-activate-queue))
+        (with-current-buffer buf
+          (eglot--maybe-activate-editing-mode)))))
 
   (add-hook 'window-selection-change-functions #'tychoish/eglot-activate-prioritize-visible)
 
