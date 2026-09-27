@@ -17,33 +17,33 @@
 
 (ert-deftest telega-extras/start-idle-timer-creates-timer ()
   "`telega-extras-start-idle-timer' registers the handler on the session idle hook."
-  (let ((sprite-session-idle-hook nil)
-        (sprite-session--idle-timer nil))
+  (let ((sprite-system-idle-hook nil)
+        (sprite-system--idle-timer nil))
     (unwind-protect
         (progn
           (telega-extras-start-idle-timer)
-          (should (memq #'telega-extras--on-idle sprite-session-idle-hook)))
+          (should (memq #'telega-extras--on-idle sprite-system-idle-hook)))
       (telega-extras-stop-idle-timer))))
 
 (ert-deftest telega-extras/stop-idle-timer-cancels-and-nils ()
   "`telega-extras-stop-idle-timer' removes the handler from the session idle hook."
-  (let ((sprite-session-idle-hook nil)
-        (sprite-session--idle-timer nil))
+  (let ((sprite-system-idle-hook nil)
+        (sprite-system--idle-timer nil))
     (telega-extras-start-idle-timer)
     (telega-extras-stop-idle-timer)
-    (should-not (memq #'telega-extras--on-idle sprite-session-idle-hook))))
+    (should-not (memq #'telega-extras--on-idle sprite-system-idle-hook))))
 
 (ert-deftest telega-extras/start-idle-timer-idempotent ()
   "Calling start twice registers the handler exactly once."
-  (let ((sprite-session-idle-hook nil)
-        (sprite-session--idle-timer nil))
+  (let ((sprite-system-idle-hook nil)
+        (sprite-system--idle-timer nil))
     (unwind-protect
         (progn
           (telega-extras-start-idle-timer)
           (telega-extras-start-idle-timer)
           (should (= 1 (length (seq-filter
                                 (lambda (f) (eq f #'telega-extras--on-idle))
-                                sprite-session-idle-hook)))))
+                                sprite-system-idle-hook)))))
       (telega-extras-stop-idle-timer))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
