@@ -1146,7 +1146,21 @@ clipboard."
     (when (derived-mode-p 'org-mode)
       (apply fn args)))
   (advice-add 'denote-link-ol-get-heading :around
-              #'ad:denote-link-ol-get-heading--org-only))
+              #'ad:denote-link-ol-get-heading--org-only)
+
+  (defun tychoish--denote-link-description-with-signature-and-title (file &optional file-type)
+    "Format denote link description for FILE with FILE-TYPE as `<title> [<signature>]`."
+    (let* ((type (or file-type (denote-filetype-heuristics file)))
+           (signature (denote-retrieve-filename-signature file))
+           (title (denote-retrieve-title-or-filename file type))
+           (region-text (denote--get-active-region-content)))
+      (cond
+       (region-text region-text)
+       ((and signature title) (format "%s [%s]" title signature))
+       (title (format "%s" title))
+       (signature (format "[%s]" signature))
+       (t ""))))
+  (setq denote-link-description-format #'tychoish--denote-link-description-with-signature-and-title))
 
 (use-package denote-dash
   :ensure nil
