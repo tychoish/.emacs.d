@@ -62,6 +62,7 @@
    gptel-agent
    telega-bot
    denote-notion
+   denote-mcp
    sprite
    tailscale
    docker

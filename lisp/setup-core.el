@@ -1341,6 +1341,11 @@ return until the minibuffer session ends."
   :commands (denote-journal-capture-mode)
   :defer t)
 
+(use-package denote-mcp
+  :ensure t
+  :defer t
+  :after (denote mcpkit))
+
 (use-package markdown-mode
   :ensure t
   :mode ("\\.mdwn" "\\.md" "\\.markdown" "\\.txt")
@@ -1820,7 +1825,7 @@ otherwise keep replaying stale detection results."
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
    '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
-   '(agent-shell-queue magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion))
+   '(agent-shell-queue magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion denote-mcp))
 
   (tychoish-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
@@ -2827,6 +2832,23 @@ calls, so it can't be added to that hook directly."
     :bind-key "x")
   (with-eval-after-load 'which-key
     (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
+
+  (declare-function tychoish/agent-shell-antigravity-bootstrap "setup-core")
+
+  (defun tychoish/agent-shell-antigravity-ensure-binary (&rest _)
+    "Ensure Antigravity ACP server binary is installed synchronously before agent starts."
+    (require 'agent-shell)
+    (tychoish/agent-shell-antigravity-bootstrap nil :sync))
+
+  (advice-add 'agent-shell-antigravity-start-agent :before
+              #'tychoish/agent-shell-antigravity-ensure-binary)
+
+  (add-lazy-init
+   :name "<bootstrap> agent-shell antigravity"
+   :delay 1.5
+   :operation (lambda ()
+                (require 'agent-shell)
+                (tychoish/agent-shell-antigravity-bootstrap)))
   :config
   (defconst tychoish/agent-shell-terse-persona
     "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
@@ -3080,11 +3102,22 @@ See `tychoish/agent-shell--force-clear-busy'."
       (set-file-modes bin-path #o755)
       bin-path))
 
-  ;; sprite-async-
-  (defun tychoish/agent-shell-antigravity-bootstrap (&optional force)
-    "Download and install the latest Antigravity ACP server binary via sprite."
+  (defcustom agent-shell-antigravity-bootstrap-timeout 300
+    "Timeout in seconds waiting for Antigravity ACP server bootstrap on a sprite."
+    :type 'integer
+    :group 'agent-shell)
+
+  (defvar tychoish/agent-shell-antigravity--future nil
+    "In-flight `sprite-future' for Antigravity ACP server bootstrap, or nil.")
+
+  (defun tychoish/agent-shell-antigravity-bootstrap (&optional force sync)
+    "Download and install the latest Antigravity ACP server binary via sprite.
+When FORCE is non-nil, re-download even if already present.
+When SYNC is non-nil, wait synchronously for completion; otherwise dispatch
+asynchronously via `sprite-future-then'."
     (interactive "P")
     (require 'sprite-future)
+    (require 'agent-shell)
     (let* ((arch (pcase (car (split-string system-configuration "-"))
                    ((or "x86_64" "amd64") "x86_64")
                    ((or "aarch64" "arm64") "aarch64")
@@ -3100,33 +3133,87 @@ See `tychoish/agent-shell--force-clear-busy'."
             (setq agent-shell-antigravity-acp-command
                   (cons bin-path (cdr agent-shell-antigravity-acp-command)))
             (message "Antigravity: using ACP server at %s" bin-path)
-            (when (fboundp 'alert)
-              (alert (format "ACP server ready at %s" bin-path)
-                     :title "Antigravity Bootstrap"))
-            bin-path)
-        (message "Antigravity: bootstrapping server for %s via sprite..." platform)
-        (condition-case err
-            (let* ((future (sprite-future-eval
-                            (sprite-name (sprite-get-or-create-next :timeout 60))
-                            `(progn
-                               (require 'agent-shell)
-                               (tychoish/agent-shell-antigravity--do-bootstrap ,install-dir ',platform-sym ,bin-path))))
-                   (path (sprite-future-wait future :timeout 60)))
-              (when (or (not path) (sprite-future-rejected-p future))
-                (error "sprite bootstrap failed or timed out"))
-              (setq agent-shell-antigravity-acp-command
-                    (cons path (cdr agent-shell-antigravity-acp-command)))
-              (message "Antigravity: using ACP server at %s" path)
+            (when (called-interactively-p 'interactive)
               (when (fboundp 'alert)
-                (alert (format "ACP server ready at %s" path)
-                       :title "Antigravity Bootstrap"))
-              path)
-          (error
-           (message "Antigravity: bootstrap failed: %S" err)
-           (when (fboundp 'alert)
-             (alert (format "Bootstrap failed: %S" err)
-                    :title "Antigravity Bootstrap"))
-           nil)))))
+                (alert (format "ACP server ready at %s" bin-path)
+                       :title "Antigravity Bootstrap")))
+            bin-path)
+        ;; Check if a bootstrap future is already pending
+        (if (and tychoish/agent-shell-antigravity--future
+                 (sprite-future-pending-p tychoish/agent-shell-antigravity--future))
+            (if sync
+                (progn
+                  (message "Antigravity: waiting for in-flight bootstrap...")
+                  (let ((path (sprite-future-wait tychoish/agent-shell-antigravity--future
+                                                  :timeout agent-shell-antigravity-bootstrap-timeout)))
+                    (setq tychoish/agent-shell-antigravity--future nil)
+                    (if (and path (file-executable-p path))
+                        (progn
+                          (setq agent-shell-antigravity-acp-command
+                                (cons path (cdr agent-shell-antigravity-acp-command)))
+                          path)
+                      (error "Antigravity: in-flight bootstrap failed or timed out"))))
+              (message "Antigravity: bootstrap already in flight...")
+              tychoish/agent-shell-antigravity--future)
+          (message "Antigravity: bootstrapping server for %s via sprite..." platform)
+          (let ((future (condition-case err
+                            (sprite-future-eval
+                             (sprite-name (sprite-get-or-create-next :timeout 60))
+                             `(progn
+                                (require 'agent-shell)
+                                (tychoish/agent-shell-antigravity--do-bootstrap ,install-dir ',platform-sym ,bin-path)))
+                          (error
+                           (message "Antigravity: failed to dispatch bootstrap to sprite: %S" err)
+                           (when (fboundp 'alert)
+                             (alert (format "Bootstrap dispatch failed: %S" err)
+                                    :title "Antigravity Bootstrap"))
+                           nil))))
+            (when future
+              (setq tychoish/agent-shell-antigravity--future future)
+              (if sync
+                  (condition-case err
+                      (let ((path (sprite-future-wait future :timeout agent-shell-antigravity-bootstrap-timeout)))
+                        (setq tychoish/agent-shell-antigravity--future nil)
+                        (when (or (not path) (sprite-future-rejected-p future))
+                          (error "sprite bootstrap failed or timed out"))
+                        (setq agent-shell-antigravity-acp-command
+                              (cons path (cdr agent-shell-antigravity-acp-command)))
+                        (message "Antigravity: using ACP server at %s" path)
+                        (when (fboundp 'alert)
+                          (alert (format "ACP server ready at %s" path)
+                                 :title "Antigravity Bootstrap"))
+                        path)
+                    (error
+                     (setq tychoish/agent-shell-antigravity--future nil)
+                     (message "Antigravity: bootstrap failed: %S" err)
+                     (when (fboundp 'alert)
+                       (alert (format "Bootstrap failed: %S" err)
+                              :title "Antigravity Bootstrap"))
+                     nil))
+                (sprite-future-then
+                 future
+                 (lambda (path)
+                   (setq tychoish/agent-shell-antigravity--future nil)
+                   (if (and path (file-exists-p path))
+                       (progn
+                         (set-file-modes path #o755)
+                         (setq agent-shell-antigravity-acp-command
+                               (cons path (cdr agent-shell-antigravity-acp-command)))
+                         (message "Antigravity: using ACP server at %s" path)
+                         (when (fboundp 'alert)
+                           (alert (format "ACP server ready at %s" path)
+                                  :title "Antigravity Bootstrap")))
+                     (message "Antigravity: bootstrap completed but binary missing: %S" path)
+                     (when (fboundp 'alert)
+                       (alert (format "Bootstrap failed: binary missing %S" path)
+                              :title "Antigravity Bootstrap"))))
+                 (lambda (err)
+                   (setq tychoish/agent-shell-antigravity--future nil)
+                   (message "Antigravity: bootstrap failed: %S" err)
+                   (when (fboundp 'alert)
+                     (alert (format "Bootstrap failed: %S" err)
+                            :title "Antigravity Bootstrap"))))
+                future)))))))
 
   (tychoish/agent-shell--apply-environment))
 
@@ -3280,6 +3367,21 @@ See `tychoish/agent-shell--force-clear-busy'."
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
+
+(use-package mcpkit
+  :ensure t
+  :defer t
+  :commands (mcpkit-start-service mcpkit-stop-service tychoish/mcpkit-start-default-services)
+  :init
+  (defun tychoish/mcpkit-start-default-services ()
+    "Start default MCP services (denote, emacs) on port 8765."
+    (interactive)
+    (require 'denote-mcp)
+    (require 'mcpkit-emacs)
+    (mcpkit-start-service 'denote)
+    (mcpkit-start-service 'emacs))
+  (when (daemonp)
+    (add-hook 'after-init-hook #'tychoish/mcpkit-start-default-services)))
 
 (use-package setup-mail
   :ensure nil
