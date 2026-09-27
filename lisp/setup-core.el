@@ -22,33 +22,7 @@
 (use-package hud
   :ensure nil
   :defer t
-  :commands (hud-dispatch hud-select)
-  :init
-  (make-read-extended-command-for-prefix "clipboard"
-    :bind-map hud-mode-map
-    :bind-key "C-x x c")
-  (make-read-extended-command-for-prefix "tailscale"
-    :bind-map hud-robot-network-map
-    :bind-key "x")
-  (make-read-extended-command-for-prefix "smerge"
-    :bind-map hud-smerge-map
-    :bind-key "x")
-  (make-read-extended-command-for-prefix "docker"
-    :bind-key "x"
-    :bind-map hud-docker-map)
-
-  (create-toggle-functions
-   hud-modeline-icons
-   :keymap hud-theme-map
-   :key "i")
-  (create-toggle-functions
-   hud-modeline-show-buffer-size
-   :keymap hud-theme-map
-   :key "s")
-
-  (create-toggle-functions slow-op-reporting)
-  (create-toggle-functions electric-pair-inhibition)
-  (create-toggle-functions electric-pair-eagerness))
+  :commands (hud-dispatch hud-select))
 
 (use-package orgx
   :ensure nil
@@ -69,19 +43,13 @@
   (with-eval-after-load 'ol
     (require 'orgx))
   (keymap-set orgx-global-map "a" #'orgx-agenda-view)
-  (keymap-set orgx-global-map "4" #'org-agenda)
-  (keymap-set orgx-global-map "k" #'org-capture)
-  (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
-  (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
   (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
+  (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
   (keymap-set orgx-global-map "j" #'orgx-capture)
   (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
   (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
+  (keymap-set hud-denote-org-map "r" #'orgx-migrate-subtree-to-denote)
 
-  (keymap-set orgx-link-map "s" #'org-store-link)
-  (keymap-set orgx-link-map "a" #'org-id-store-link)
-  (keymap-set orgx-link-map "i" #'org-insert-link)
-  (keymap-set orgx-link-map "n" #'org-annotate-file)
   (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
   (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
   (add-one-shot-hook
@@ -93,6 +61,15 @@
   (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
   (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
+
+(use-package setup-mail
+  :ensure nil
+  :defer t
+  :commands (tychoish-mail-select-account
+	     tychoish-define-mail-account
+	     tychoish-mail-add-refile-rule)
+  :init
+  (keymap-set hud-mail-map "a" #'tychoish-mail-select-account))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -396,8 +373,6 @@
   :ensure t
   :defer t
   :init
-  (keymap-set hud-anzu-map "r" #'anzu-query-replace)
-  (keymap-set hud-anzu-map "e" #'anzu-query-replace-regexp)
   (keymap-set isearch-mode-map "C-o" #'isearch-occur)
   (add-hook 'isearch-mode-hook #'anzu-mode)
   (setq anzu-cons-mode-line-p nil)
@@ -870,13 +845,6 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   :defer t
   :init
   (keymap-set global-map "C-x x a" #'revbufs)
-  (keymap-set hud-buffer-control-map "d" #'kill-buffers-in-directory)
-  (keymap-set hud-buffer-control-map "<SPC>" #'revert-buffer-quick)
-  (keymap-set hud-buffer-control-map "m" #'kill-buffers-matching-mode)
-  (keymap-set hud-buffer-control-map "h" #'bury-buffer)
-  (keymap-set hud-buffer-control-map "r" #'revbufs)
-  (keymap-set hud-buffer-control-map "b" #'switch-to-buffer)
-  (keymap-set hud-buffer-control-map "n" #'switch-to-buffer-other-window)
   :config
   (keymap-set revbufs-mode-map "C-k" #'revbufs-kill)
   (keymap-set revbufs-mode-map "q" #'bury-buffer)
@@ -916,13 +884,6 @@ prompt for the initial query using `annotated-completing-read-context-from-point
   :ensure t
   :defer t
   :commands (magit-toplevel)
-  :init
-  (keymap-set hud-magit-map "s" #'magit-status)
-  (keymap-set hud-magit-map "f" #'magit-branch)
-  (keymap-set hud-magit-map "b" #'magit-blame)
-  (make-read-extended-command-for-prefix "magit"
-    :bind-map hud-magit-map
-    :bind-key "x")
   :config
   (setq vc-follow-symlinks t)
   (setq version-control t)
@@ -1284,25 +1245,6 @@ return until the minibuffer session ends."
   (add-to-list 'display-buffer-alist
                '("\\`\\*denote-sequence-hierarchy "
                  (display-buffer-reuse-window display-buffer-pop-up-window))))
-
-(use-package denote-markdown
-  :ensure t
-  :after (denote markdown-mode)
-  :commands (denote-markdown-convert-links-to-markdown-format
-             denote-markdown-convert-links-to-denote-format))
-
-(use-package denote-org
-  :ensure t
-  :defer t
-  :commands (orgx-migrate-subtree-to-denote)
-  :init
-  (keymap-set hud-denote-org-map "l" #'denote-org-link-to-heading)
-  (keymap-set hud-denote-org-map "b" #'denote-org-backlinks-for-heading)
-  (keymap-set hud-denote-org-map "x" #'denote-org-extract-org-subtree)
-  (keymap-set hud-denote-org-map "r" #'orgx-migrate-subtree-to-denote)
-  (keymap-set hud-denote-org-map "d" #'denote-org-dblock-insert-links)
-  (keymap-set hud-denote-org-map "p" #'denote-org-dblock-insert-backlinks)
-  (keymap-set hud-denote-org-map "f" #'denote-org-dblock-insert-files))
 
 (use-package denote-explore
   :ensure t
@@ -2592,20 +2534,6 @@ calls, so it can't be added to that hook directly."
   :ensure t
   :defer t
   :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
-  :init
-  (keymap-set hud-robot-gptel-map "g" #'gptel)
-  (keymap-set hud-robot-gptel-map "r" #'gptel-rewrite)
-  (keymap-set hud-robot-gptel-map "m" #'gptel-menu)
-  (keymap-set hud-robot-gptel-map "a" #'gptel-agent)
-  (keymap-set hud-robot-gptel-map "w" #'gptel-aibo-summon)
-
-  (make-read-extended-command-for-prefix "gptel"
-    :bind-map hud-robot-gptel-map
-    :bind-key "x")
-
-  (make-read-extended-command-for-prefix "gptel-set-backend"
-    :bind-map hud-robot-gptel-map
-    :bind-key "b")
   :config
   (defvar gemini-api-key nil)
   (defvar anthropic-api-key nil)
@@ -2733,29 +2661,12 @@ calls, so it can't be added to that hook directly."
              ollama-tailnet-models
              ollama-tailnet-search-model)
   :init
-  (keymap-set hud-robot-ollama-tailnet-map "s" #'ollama-tailnet-status)
-  (keymap-set hud-robot-ollama-tailnet-map "p" #'ollama-tailnet-pull-model)
-  (keymap-set hud-robot-ollama-tailnet-map "r" #'ollama-tailnet-service-restart)
-  (keymap-set hud-robot-ollama-tailnet-map "t" #'ollama-tailnet-service-status)
-  (keymap-set hud-robot-ollama-tailnet-map "b" #'ollama-tailnet-set-gptel-backend)
-  (keymap-set hud-robot-ollama-tailnet-map "l" #'ollama-tailnet-models)
-  (keymap-set hud-robot-ollama-tailnet-map "S" #'ollama-tailnet-search-model)
   :config
   (ollama-tailnet-setup-laptop-presets))
 
 (use-package eat
   :ensure t
   :defer t
-  :init
-  ;; "C-c s e"
-  (keymap-set hud-shell-eat-map "e" #'eat)
-  (keymap-set hud-shell-eat-map "o" #'eat-other-window)
-  (keymap-set hud-shell-eat-map "p" #'eat-project)
-  (keymap-set hud-shell-eat-map "P" #'eat-project-other-window)
-
-  (make-read-extended-command-for-prefix "eat"
-    :bind-map hud-shell-eat-map
-    :bind-key "m")
   :config
   (add-hook 'eat-mode-hook 'tychoish/corfu-prog-mode-setup))
 
@@ -2763,7 +2674,6 @@ calls, so it can't be added to that hook directly."
   :ensure nil
   :defer t
   :init
-  (keymap-set hud-shell-map "m" #'eshell)
   :config
   (add-hook 'eshell-mode-hook 'tychoish/corfu-prog-mode-setup)
 
@@ -3341,19 +3251,6 @@ asynchronously via `sprite-future-then'."
       (mcpkit-start-service 'emacs)))
   (when (and (daemonp) (not (eq (daemonp) t)))
     (add-hook 'after-init-hook #'tychoish/mcpkit-start-default-services)))
-
-(use-package setup-mail
-  :ensure nil
-  :defer t
-  :commands (tychoish-mail-select-account
-	     tychoish-define-mail-account
-	     tychoish-mail-add-refile-rule)
-  :init
-  (keymap-set hud-mail-map "a" #'tychoish-mail-select-account)
-  (keymap-set hud-mail-map "m" #'mu4e)
-  (keymap-set hud-mail-map "d" #'mu4e-search-maildir)
-  (keymap-set hud-mail-map "b" #'mu4e-search-bookmark)
-  (keymap-set hud-mail-map "c" #'mu4e-compose-new))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here

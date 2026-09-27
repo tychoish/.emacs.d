@@ -66,7 +66,9 @@
    telega-bot
    denote-notion
    denote-mcp
+   denote-org
    denote-journal-capture
+   denote-markdown
    sprite
    tailscale
    docker

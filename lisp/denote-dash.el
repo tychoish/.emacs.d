@@ -2285,8 +2285,8 @@ retag, or renumber shows up immediately without leaving the buffer."
     ("ll" "insert link"        denote-link)
     ("lp" "link (sequence)"    denote-sequence-link)]
    ["Convert" :if-derived markdown-mode
-    ("cm" "links → markdown"   denote-markdown-convert-links-to-markdown-format)
-    ("cd" "links → denote"     denote-markdown-convert-links-to-denote-format)]]
+    ("cm" "links → markdown"   denote-markdown-convert-links-to-file-paths)
+    ("cd" "links → denote"     denote-markdown-convert-links-to-denote-type)]]
   [["View"
     ("vv" "note list (dash)"   denote-dash
      :inapt-if-derived denote-dash-mode)
