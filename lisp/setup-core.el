@@ -1195,13 +1195,19 @@ clipboard."
   :after transient
   :commands (denote-dash
 	     denote-dash-dispatch
+	     denote-dash-open-view
+	     denote-dash-clone-view
 	     denote-dash-close-all-notes
 	     denote-dash-save-and-kill-all-notes
 	     denote-dash-rename-file
 	     denote-dash-retag-file
 	     denote-dash-rename-file-using-front-matter
 	     denote-dash-hierarchy-switch-or-view
-	     denote-dash-hierarchy-view-by-note))
+	     denote-dash-hierarchy-view-by-note
+	     denote-dash-hierarchy-toggle-show-tags
+	     denote-dash-hierarchy-filter
+	     denote-dash-hierarchy-exclude-tag
+	     denote-dash-hierarchy-clear-filter))
 
 (use-package denote-dash-repack
   :ensure nil

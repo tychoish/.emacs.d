@@ -101,6 +101,24 @@ git, review, reviewdate."
   :type '(choice (const filename) (const front-matter))
   :group 'denote-dash)
 
+(defcustom denote-dash-default-filter nil
+  "Default filter expression applied when a `denote-dash' buffer is initialized.
+When non-nil, this is a filter expression in the denote-dash filter language:
+a string tag (e.g. \"project\"), or a compound form like `(not \"archive\")',
+`(and ...)', or `(or ...)'.
+Applied to initial `denote-dash--current-filter' on buffer creation."
+  :type 'sexp
+  :group 'denote-dash)
+
+(defcustom denote-dash-default-sort-key '("Seq" . nil)
+  "Default sort key for `denote-dash-mode'.
+A cons cell of (COLUMN-NAME . FLIP), where COLUMN-NAME is the column label
+in `tabulated-list-format' and FLIP is non-nil for descending order, or nil for
+no sort."
+  :type '(choice (const :tag "None" nil)
+                 (cons :tag "Column and direction" string boolean))
+  :group 'denote-dash)
+
 (defcustom denote-dash-sequence-column-width 6
   "Display width of the sequence ID column."
   :type 'natnum
@@ -162,6 +180,29 @@ nil disables the rule."
   :type '(choice (const :tag "Disabled" nil) natnum)
   :group 'denote-dash)
 
+(defcustom denote-dash-hierarchy-show-tags nil
+  "Whether to display tags (keywords) in `denote-sequence-view-hierarchy' buffers.
+When nil (the default), tags are omitted from hierarchy line display."
+  :type 'boolean
+  :group 'denote-dash)
+
+(defcustom denote-dash-hierarchy-excluded-tags nil
+  "List of tag strings to exclude from sequence hierarchy view by default."
+  :type '(repeat string)
+  :group 'denote-dash)
+
+(defvar-local denote-dash-hierarchy--show-tags :unset
+  "Buffer-local tag display toggle for `denote-sequence-hierarchy-mode'.")
+(put 'denote-dash-hierarchy--show-tags 'permanent-local t)
+
+(defvar-local denote-dash-hierarchy--tag-filter nil
+  "Buffer-local tag filter expression in `denote-sequence-hierarchy-mode'.")
+(put 'denote-dash-hierarchy--tag-filter 'permanent-local t)
+
+(defvar-local denote-dash-hierarchy--excluded-tags nil
+  "Buffer-local list of excluded tag strings in `denote-sequence-hierarchy-mode'.")
+(put 'denote-dash-hierarchy--excluded-tags 'permanent-local t)
+
 ;;; Buffer-local state
 
 (defvar-local denote-dash--current-filter nil
@@ -221,7 +262,8 @@ Absent entries default to `subtree'.  States: `folded', `children', `subtree'.")
   show-non-sequence
   visible-columns
   sort-column
-  sort-direction)
+  sort-direction
+  column-widths)
 
 (defvar denote-dash-saved-views nil
   "List of `denote-dash-view' structures representing saved filter views.
@@ -494,6 +536,32 @@ FILE and ALL-SEQ-IDS."
         ('reviewdate 10)
         (_          10))))
 
+(defun denote-dash--sequence-sort-predicate (entry1 entry2)
+  "Sort predicate for the Sequence column in `denote-dash'.
+Compares ENTRY1 and ENTRY2 by sequence signature using natural sequence
+ordering (`denote-sequence--pad'). Unsequenced notes are sorted to the end
+in both ascending and descending order."
+  (let* ((file1 (car entry1))
+         (file2 (car entry2))
+         (seq1 (and file1 (denote-retrieve-filename-signature file1)))
+         (seq2 (and file2 (denote-retrieve-filename-signature file2)))
+         (flip (cdr-safe tabulated-list-sort-key)))
+    (cond
+     ((and seq1 seq2)
+      (string< (denote-sequence--pad seq1 'all)
+               (denote-sequence--pad seq2 'all)))
+     (seq1 (not flip))
+     (seq2 flip)
+     (t (string< (or (and file1 (file-name-nondirectory file1)) "")
+                 (or (and file2 (file-name-nondirectory file2)) ""))))))
+
+(defun denote-dash--sort-key-valid-p (key)
+  "Return non-nil if KEY column exists in `tabulated-list-format'."
+  (and key
+       (vectorp tabulated-list-format)
+       (seq-some (lambda (col) (equal (car col) (car key)))
+                 tabulated-list-format)))
+
 (defun denote-dash--setup-columns ()
   "Configure `tabulated-list-format' from visible columns and reinit header."
   (setq tabulated-list-format
@@ -501,7 +569,7 @@ FILE and ALL-SEQ-IDS."
                (seq-map (lambda (col)
                           (pcase col
                             ('fold      (list "" (denote-dash--column-width 'fold) nil))
-                            ('sequence  (list "Seq" (denote-dash--column-width 'sequence) t))
+                            ('sequence  (list "Seq" (denote-dash--column-width 'sequence) #'denote-dash--sequence-sort-predicate))
                             ('title     (list "Title" (denote-dash--column-width 'title) t))
                             ('keywords  (list "Keywords" (denote-dash--column-width 'keywords) t))
                             ('modified  (list "Modified" (denote-dash--column-width 'modified) t))
@@ -511,7 +579,12 @@ FILE and ALL-SEQ-IDS."
                             ('review    (list "Rev" (denote-dash--column-width 'review) nil))
                             ('reviewdate (list "Reviewdate" (denote-dash--column-width 'reviewdate) t))))
                         denote-dash--visible-columns)))
-  (tabulated-list-init-header))
+  (tabulated-list-init-header)
+  (unless (denote-dash--sort-key-valid-p tabulated-list-sort-key)
+    (if (and denote-dash-default-sort-key
+             (denote-dash--sort-key-valid-p denote-dash-default-sort-key))
+        (setq tabulated-list-sort-key (copy-sequence denote-dash-default-sort-key))
+      (setq tabulated-list-sort-key nil))))
 
 ;;; Refresh
 
@@ -537,6 +610,8 @@ FILE and ALL-SEQ-IDS."
   :doc "Keymap for bookmark/saved view commands in `denote-dash-mode'.")
 (keymap-set denote-dash-bookmark-map "s" #'denote-dash-bookmark-save)
 (keymap-set denote-dash-bookmark-map "j" #'denote-dash-bookmark-jump)
+(keymap-set denote-dash-bookmark-map "o" #'denote-dash-open-view)
+(keymap-set denote-dash-bookmark-map "c" #'denote-dash-clone-view)
 (keymap-set denote-dash-bookmark-map "d" #'denote-dash-bookmark-delete)
 (keymap-set denote-dash-bookmark-map "r" #'denote-dash-bookmark-rename)
 
@@ -584,10 +659,13 @@ FILE and ALL-SEQ-IDS."
 
 \\{denote-dash-mode-map}"
   (setq-local denote-dash--fold-state (make-hash-table :test #'equal))
+  (unless (local-variable-p 'denote-dash--current-filter)
+    (setq-local denote-dash--current-filter denote-dash-default-filter))
   (let ((cols (or denote-dash--persisted-columns denote-dash-initial-columns)))
     (setq-local denote-dash--visible-columns
                 (seq-filter (lambda (c) (member c cols)) denote-dash-column-order)))
-  (setq-local tabulated-list-sort-key nil))
+  (denote-dash--setup-columns)
+  (setq-local revert-buffer-function (lambda (&rest _) (denote-dash-refresh))))
 
 ;;; Entry point
 
@@ -737,6 +815,93 @@ path in the `denote-sequence-hierarchy-file' text property."
   (setq-local denote-open-link-function #'find-file))
 
 (add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-use-same-window)
+
+(defun denote-dash--hierarchy-file-matches-filter-p (file)
+  "Return non-nil if FILE satisfies the active hierarchy tag filter."
+  (let* ((keywords (denote-retrieve-filename-keywords file))
+         (excluded (or denote-dash-hierarchy--excluded-tags denote-dash-hierarchy-excluded-tags))
+         (filter denote-dash-hierarchy--tag-filter))
+    (and (if excluded
+             (not (seq-some (lambda (tag) (member tag keywords)) excluded))
+           t)
+         (if filter
+             (denote-dash--matches-p keywords filter)
+           t))))
+
+(defun ad:denote-dash--hierarchy-format-entry (orig-fn indent sequence title keywords)
+  "Advice to optionally omit KEYWORDS in hierarchy format entry.
+Respects `denote-dash-hierarchy--show-tags'
+(or `denote-dash-hierarchy-show-tags')."
+  (let ((show (if (eq denote-dash-hierarchy--show-tags :unset)
+                  denote-dash-hierarchy-show-tags
+                denote-dash-hierarchy--show-tags)))
+    (funcall orig-fn indent sequence title (if show keywords nil))))
+
+(advice-add 'denote-sequence--format-hierarchy-entry :around #'ad:denote-dash--hierarchy-format-entry)
+
+(defun ad:denote-dash--hierarchy-insert (orig-fn file)
+  "Conditionally insert FILE in hierarchy if it matches tag filter."
+  (when (denote-dash--hierarchy-file-matches-filter-p file)
+    (funcall orig-fn file)))
+
+(advice-add 'denote-sequence--hierarchy-insert :around #'ad:denote-dash--hierarchy-insert)
+
+(defun denote-dash--hierarchy-setup-filters ()
+  "Initialize hierarchy buffer local variables for filtering and tag display."
+  (when (eq denote-dash-hierarchy--show-tags :unset)
+    (setq-local denote-dash-hierarchy--show-tags denote-dash-hierarchy-show-tags))
+  (unless (local-variable-p 'denote-dash-hierarchy--excluded-tags)
+    (setq-local denote-dash-hierarchy--excluded-tags (copy-sequence denote-dash-hierarchy-excluded-tags))))
+
+(add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-setup-filters)
+
+;;;###autoload
+(defun denote-dash-hierarchy-toggle-show-tags ()
+  "Toggle display of tags in the current sequence hierarchy buffer."
+  (interactive)
+  (let ((current (if (eq denote-dash-hierarchy--show-tags :unset)
+                     denote-dash-hierarchy-show-tags
+                   denote-dash-hierarchy--show-tags)))
+    (setq denote-dash-hierarchy--show-tags (not current)))
+  (revert-buffer)
+  (message "Hierarchy tags display: %s" (if denote-dash-hierarchy--show-tags "shown" "hidden")))
+
+;;;###autoload
+(defun denote-dash-hierarchy-filter (tag)
+  "Filter hierarchy view to notes matching TAG.
+TAG can be a tag string or a filter expression."
+  (interactive
+   (list
+    (let ((all-tags (denote-dash--all-keywords)))
+      (completing-read "Filter hierarchy by tag: " all-tags nil t))))
+  (setq denote-dash-hierarchy--tag-filter tag)
+  (revert-buffer)
+  (message "Filtered hierarchy by: %s" tag))
+
+;;;###autoload
+(defun denote-dash-hierarchy-exclude-tag (tag)
+  "Exclude notes with TAG from the hierarchy view."
+  (interactive
+   (list
+    (let ((all-tags (denote-dash--all-keywords)))
+      (completing-read "Exclude tag from hierarchy: " all-tags nil t))))
+  (let ((current (or denote-dash-hierarchy--excluded-tags denote-dash-hierarchy-excluded-tags)))
+    (setq denote-dash-hierarchy--excluded-tags (cons tag current)))
+  (revert-buffer)
+  (message "Excluded tag '%s' from hierarchy" tag))
+
+;;;###autoload
+(defun denote-dash-hierarchy-clear-filter ()
+  "Clear active tag filters in the current sequence hierarchy buffer."
+  (interactive)
+  (setq denote-dash-hierarchy--tag-filter nil)
+  (setq denote-dash-hierarchy--excluded-tags nil)
+  (revert-buffer)
+  (message "Cleared hierarchy tag filters"))
+
+(define-key denote-sequence-hierarchy-mode-map (kbd "/") #'denote-dash-hierarchy-filter)
+(define-key denote-sequence-hierarchy-mode-map (kbd "C-f") #'denote-dash-hierarchy-clear-filter)
+(define-key denote-sequence-hierarchy-mode-map (kbd "T") #'denote-dash-hierarchy-toggle-show-tags)
 
 ;;; Sequence hierarchy origin tracking
 
@@ -1314,6 +1479,34 @@ this only adds a discoverable `/' in front of them."
   (denote-dash-refresh))
 ;;; Saved views (Bookmarks)
 
+(defun denote-dash--view-buffer-name (name)
+  "Return standard buffer name for saved view NAME."
+  (if (or (null name) (string-blank-p name))
+      "*denote-dash*"
+    (format "*denote-dash: %s*" name)))
+
+(defun denote-dash--apply-view (view)
+  "Apply VIEW state to the current `denote-dash-mode' buffer."
+  (setq-local denote-dash--current-filter (denote-dash-view-filter view))
+  (setq-local denote-dash--narrowed-sequences (copy-sequence (denote-dash-view-narrowed-sequences view)))
+  (setq-local denote-dash--active-directory (denote-dash-view-active-directory view))
+  (setq-local denote-dash--grep-filter (denote-dash-view-grep-filter view))
+  (setq-local denote-dash--show-non-sequence (denote-dash-view-show-non-sequence view))
+  (let ((cols (denote-dash-view-visible-columns view)))
+    (setq-local denote-dash--visible-columns
+                (seq-filter (lambda (c) (member c denote-dash-column-order)) cols)))
+  (if (denote-dash-view-sort-column view)
+      (setq tabulated-list-sort-key
+            (cons (denote-dash-view-sort-column view)
+                  (denote-dash-view-sort-direction view)))
+    (setq tabulated-list-sort-key nil))
+  (when (and (fboundp 'denote-dash-view-column-widths)
+             (denote-dash-view-column-widths view))
+    (setq-local denote-dash--column-widths (copy-sequence (denote-dash-view-column-widths view))))
+  (setq-local denote-dash--keyword-toggles nil)
+  (setq-local denote-dash--last-bookmark-name (denote-dash-view-name view))
+  (denote-dash-refresh))
+
 (defun denote-dash-bookmark-save (&optional name)
   "Save current filter, narrow, column, and sort state as a named view.
 Prompts for NAME (defaulting to the buffer's most recent view name, if any).
@@ -1344,7 +1537,8 @@ If NAME matches an existing view, confirms before overwriting."
                 :show-non-sequence denote-dash--show-non-sequence
                 :visible-columns (copy-sequence denote-dash--visible-columns)
                 :sort-column sort-col
-                :sort-direction sort-dir)))
+                :sort-direction sort-dir
+                :column-widths (copy-sequence denote-dash--column-widths))))
     (setq denote-dash-saved-views
           (cons view (seq-remove (lambda (v) (equal (denote-dash-view-name v) name))
                                   denote-dash-saved-views)))
@@ -1360,8 +1554,54 @@ If NAME matches an existing view, confirms before overwriting."
             (or (mapconcat #'identity (denote-dash-view-narrowed-sequences view) ",") "all")
             (or (denote-dash-view-active-directory view) "all"))))
 
-(defun denote-dash-bookmark-jump (&optional name)
-  "Restore a saved view by NAME."
+;;;###autoload
+(defun denote-dash-open-view (&optional name)
+  "Open saved view NAME in a dedicated `*denote-dash: NAME*' buffer.
+When called interactively, prompts for an existing view from
+`denote-dash-saved-views'.  Refreshes and manages the view in its
+own buffer independently."
+  (interactive
+   (list
+    (if (null denote-dash-saved-views)
+        (user-error "No saved views exist; use `b s' to save a view first")
+      (let ((completion-extra-properties
+             '(:annotation-function denote-dash--bookmark-annotate)))
+        (completing-read "Open view buffer: "
+                         (seq-map #'denote-dash-view-name denote-dash-saved-views)
+                         nil t)))))
+  (unless name
+    (user-error "No view selected"))
+  (let* ((view (or (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                             denote-dash-saved-views)
+                   (user-error "No view named '%s'" name)))
+         (buf-name (denote-dash--view-buffer-name name))
+         (buf (get-buffer-create buf-name)))
+    (pop-to-buffer buf)
+    (unless (derived-mode-p 'denote-dash-mode)
+      (denote-dash-mode))
+    (denote-dash--apply-view view)
+    (message "Opened view buffer '%s'" buf-name)))
+
+;;;###autoload
+(defun denote-dash-clone-view (&optional name)
+  "Clone current view state into a new dedicated buffer `*denote-dash: NAME*'.
+Saves the view as NAME in `denote-dash-saved-views' and switches to the new buffer."
+  (interactive
+   (list
+    (let* ((names (seq-map #'denote-dash-view-name denote-dash-saved-views))
+           (default (or denote-dash--last-bookmark-name "subset"))
+           (prompt (format "Clone view to buffer name (default %s): " default))
+           (input (completing-read prompt names nil nil nil nil default)))
+      (if (string-blank-p input) default input))))
+  (when (or (null name) (string-blank-p name))
+    (user-error "View name cannot be empty"))
+  (denote-dash-bookmark-save name)
+  (denote-dash-open-view name))
+
+(defun denote-dash-bookmark-jump (&optional name in-new-buffer)
+  "Restore a saved view by NAME.
+With prefix argument IN-NEW-BUFFER (C-u), open in a dedicated buffer
+named `*denote-dash: NAME*'."
   (interactive
    (list
     (if (null denote-dash-saved-views)
@@ -1370,29 +1610,17 @@ If NAME matches an existing view, confirms before overwriting."
              '(:annotation-function denote-dash--bookmark-annotate)))
         (completing-read "Jump to view: "
                          (seq-map #'denote-dash-view-name denote-dash-saved-views)
-                         nil t)))))
-  (unless name
-    (user-error "No view selected"))
-  (let ((view (or (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
-                            denote-dash-saved-views)
-                  (user-error "No view named '%s'" name))))
-    (setq-local denote-dash--current-filter (denote-dash-view-filter view))
-    (setq-local denote-dash--narrowed-sequences (copy-sequence (denote-dash-view-narrowed-sequences view)))
-    (setq-local denote-dash--active-directory (denote-dash-view-active-directory view))
-    (setq-local denote-dash--grep-filter (denote-dash-view-grep-filter view))
-    (setq-local denote-dash--show-non-sequence (denote-dash-view-show-non-sequence view))
-    (let ((cols (denote-dash-view-visible-columns view)))
-      (setq-local denote-dash--visible-columns
-                  (seq-filter (lambda (c) (member c denote-dash-column-order)) cols)))
-    (if (denote-dash-view-sort-column view)
-        (setq tabulated-list-sort-key
-              (cons (denote-dash-view-sort-column view)
-                    (denote-dash-view-sort-direction view)))
-      (setq tabulated-list-sort-key nil))
-    (setq-local denote-dash--keyword-toggles nil)
-    (setq-local denote-dash--last-bookmark-name name)
-    (denote-dash-refresh)
-    (message "Applied view '%s'" name)))
+                         nil t)))
+    current-prefix-arg))
+  (if in-new-buffer
+      (denote-dash-open-view name)
+    (unless name
+      (user-error "No view selected"))
+    (let ((view (or (seq-find (lambda (v) (equal (denote-dash-view-name v) name))
+                              denote-dash-saved-views)
+                    (user-error "No view named '%s'" name))))
+      (denote-dash--apply-view view)
+      (message "Applied view '%s'" name))))
 
 (defun denote-dash-bookmark-delete (&optional name)
   "Delete a saved view by NAME."
@@ -1953,7 +2181,11 @@ fallback prompt even when the visited buffer unambiguously named FILE."
     ("renumber"           denote-dash-renumber-recursive             "move to a specific sequence, recursively")
     ("swap with parent"   denote-dash-swap-with-parent               "swap sequence position with parent")
     ("swap with previous" denote-dash-swap-with-previous             "swap with previous sibling (with descendants)")
-    ("swap with next"     denote-dash-swap-with-next                 "swap with next sibling (with descendants)"))
+    ("swap with next"     denote-dash-swap-with-next                 "swap with next sibling (with descendants)")
+    ("filter by tag"       denote-dash-hierarchy-filter               "show only notes with tag")
+    ("exclude tag"         denote-dash-hierarchy-exclude-tag          "hide notes with tag")
+    ("clear filter"        denote-dash-hierarchy-clear-filter        "remove active tag filter")
+    ("toggle tags display" denote-dash-hierarchy-toggle-show-tags    "toggle tags on/off"))
   "Actions for `denote-dash-hierarchy-actions-menu', as (NAME FN DESCRIPTION).
 Each FN already resolves its target file from `denote-dash--file-at-point'
 via its own interactive spec, so the menu itself never has to.")
@@ -2058,6 +2290,7 @@ retag, or renumber shows up immediately without leaving the buffer."
   [["View"
     ("vv" "note list (dash)"   denote-dash
      :inapt-if-derived denote-dash-mode)
+    ("vo" "open view buffer"   denote-dash-open-view)
     ("vh" "sequence hierarchy" denote-sequence-view-hierarchy
      :inapt-if-derived denote-sequence-hierarchy-mode)
     ("vf" "dired"              denote-dired)

@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'test-helper)
 (require 'denote-dash)
 (require 'denote-review)
 
@@ -1052,21 +1053,22 @@ exclusive major modes and can never be simultaneously reachable."
 
 (ert-deftest denote-dash-test/sort-controls ()
   "Sort direction toggling and clearing update `tabulated-list-sort-key'."
-  (with-temp-buffer
-    (denote-dash-mode)
-    (cl-letf (((symbol-function 'denote-dash-refresh) #'ignore))
-      (should (equal "sort: (none)" (denote-dash--sort-description)))
-      ;; Cannot toggle when no sort key set
-      (should-error (denote-dash-toggle-sort-direction) :type 'user-error)
+  (let ((denote-dash-default-sort-key nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (cl-letf (((symbol-function 'denote-dash-refresh) #'ignore))
+        (should (equal "sort: (none)" (denote-dash--sort-description)))
+        ;; Cannot toggle when no sort key set
+        (should-error (denote-dash-toggle-sort-direction) :type 'user-error)
 
-      (setq tabulated-list-sort-key (cons "Title" nil))
-      (should (string-prefix-p "sort: Title" (denote-dash--sort-description)))
+        (setq tabulated-list-sort-key (cons "Title" nil))
+        (should (string-prefix-p "sort: Title" (denote-dash--sort-description)))
 
-      (denote-dash-toggle-sort-direction)
-      (should (equal '("Title" . t) tabulated-list-sort-key))
+        (denote-dash-toggle-sort-direction)
+        (should (equal '("Title" . t) tabulated-list-sort-key))
 
-      (denote-dash-clear-sort)
-      (should-not tabulated-list-sort-key))))
+        (denote-dash-clear-sort)
+        (should-not tabulated-list-sort-key)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Bookmark error validation
@@ -1095,6 +1097,153 @@ exclusive major modes and can never be simultaneously reachable."
       ;; Overwrite confirmation declined during rename aborts
       (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
         (should-error (denote-dash-bookmark-rename "view1" "view2") :type 'user-error)))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Default filter configuration
+
+(ert-deftest denote-dash-test/default-filter ()
+  "Verify `denote-dash-default-filter' initializes buffer filter on mode entry."
+  (let ((denote-dash-default-filter "robot"))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (should (equal "robot" denote-dash--current-filter))))
+  (let ((denote-dash-default-filter '(and "robot" (not "archive"))))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (should (equal '(and "robot" (not "archive")) denote-dash--current-filter))))
+  (let ((denote-dash-default-filter nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (should-not denote-dash--current-filter))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Natural sequence sorting and default sort key
+
+(ert-deftest denote-dash-test/sequence-sort ()
+  "Natural sequence sorting orders hierarchical sequences with unsequenced notes at end."
+  ;; Test default sort key on mode initialization
+  (let ((denote-dash-default-sort-key '("Seq" . nil)))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (should (equal '("Seq" . nil) tabulated-list-sort-key))))
+
+  ;; Test sequence sort predicate with natural ordering
+  (let* ((file-1   "/notes/20260101T000000==1--note-one__tag.org")
+         (file-1a  "/notes/20260101T000001==1a--note-one-a__tag.org")
+         (file-2   "/notes/20260101T000002==2--note-two__tag.org")
+         (file-10  "/notes/20260101T000003==10--note-ten__tag.org")
+         (file-raw "/notes/20260101T000004--unsequenced-note__tag.org")
+         (entry-1   (list file-1   ["" "1" "Note One" "tag" ""]))
+         (entry-1a  (list file-1a  ["" "1a" "Note One A" "tag" ""]))
+         (entry-2   (list file-2   ["" "2" "Note Two" "tag" ""]))
+         (entry-10  (list file-10  ["" "10" "Note Ten" "tag" ""]))
+         (entry-raw (list file-raw ["" "" "Unsequenced" "tag" ""]))
+         (entries (list entry-raw entry-10 entry-2 entry-1a entry-1)))
+
+    ;; Ascending sort (tabulated-list-sort-key flip is nil)
+    (let ((tabulated-list-sort-key '("Seq" . nil)))
+      (let ((sorted (sort (copy-sequence entries) #'denote-dash--sequence-sort-predicate)))
+        (should (equal (mapcar #'car sorted)
+                       (list file-1 file-1a file-2 file-10 file-raw)))))
+
+    ;; Descending sort simulation (predicate sort followed by nreverse as tabulated-list does)
+    (let ((tabulated-list-sort-key '("Seq" . t)))
+      (let* ((presorted (sort (copy-sequence entries) #'denote-dash--sequence-sort-predicate))
+             (sorted (nreverse presorted)))
+        (should (equal (mapcar #'car sorted)
+                       (list file-10 file-2 file-1a file-1 file-raw)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Saved view buffers (dedicated buffer views)
+
+(ert-deftest denote-dash-test/saved-views-buffers ()
+  "Saved views can open and clone into dedicated buffers preserving view state."
+  (let ((denote-dash-saved-views nil))
+    (with-temp-buffer
+      (denote-dash-mode)
+      (setq denote-dash--current-filter "robot")
+      (setq denote-dash--visible-columns '(sequence title keywords))
+      (setq tabulated-list-sort-key '("Title" . nil))
+      (denote-dash-bookmark-save "robots-view")
+      (should (equal 1 (length denote-dash-saved-views))))
+
+    ;; Open view buffer
+    (unwind-protect
+        (let ((buf (get-buffer (denote-dash--view-buffer-name "robots-view"))))
+          (when buf (kill-buffer buf))
+          (denote-dash-open-view "robots-view")
+          (let ((view-buf (get-buffer "*denote-dash: robots-view*")))
+            (should (buffer-live-p view-buf))
+            (with-current-buffer view-buf
+              (should (derived-mode-p 'denote-dash-mode))
+              (should (equal "robot" denote-dash--current-filter))
+              (should (equal '(sequence title keywords) denote-dash--visible-columns))
+              (should (equal '("Title" . nil) tabulated-list-sort-key)))))
+      (when-let* ((b (get-buffer "*denote-dash: robots-view*")))
+        (kill-buffer b)))
+
+    ;; Clone view buffer
+    (unwind-protect
+        (with-temp-buffer
+          (denote-dash-mode)
+          (setq denote-dash--current-filter "project")
+          (denote-dash-clone-view "cloned-project")
+          (let ((clone-buf (get-buffer "*denote-dash: cloned-project*")))
+            (should (buffer-live-p clone-buf))
+            (with-current-buffer clone-buf
+              (should (derived-mode-p 'denote-dash-mode))
+              (should (equal "project" denote-dash--current-filter)))))
+      (when-let* ((b (get-buffer "*denote-dash: cloned-project*")))
+        (kill-buffer b)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Hierarchy tag display and filtering
+
+(ert-deftest denote-dash-test/hierarchy-tag-display-and-filter ()
+  "Hierarchy view omits tags by default and supports tag filtering."
+  ;; 1. Tag omission advice
+  (let ((denote-dash-hierarchy-show-tags nil)
+        (captured-keywords nil))
+    (cl-letf (((symbol-function 'denote-sequence--format-hierarchy-entry)
+               (lambda (_indent _seq _title keywords)
+                 (setq captured-keywords keywords)
+                 "formatted-entry")))
+      (ad:denote-dash--hierarchy-format-entry
+       #'denote-sequence--format-hierarchy-entry 0 "1" "Title" '("tag1" "tag2"))
+      (should-not captured-keywords)
+
+      ;; When show-tags is t, tags are passed
+      (let ((denote-dash-hierarchy--show-tags t))
+        (ad:denote-dash--hierarchy-format-entry
+         #'denote-sequence--format-hierarchy-entry 0 "1" "Title" '("tag1" "tag2"))
+        (should (equal '("tag1" "tag2") captured-keywords)))))
+
+  ;; 2. Tag filter predicate
+  (let ((file-with-tag "/path/to/20260101T000000==1--test__robot_active.org")
+        (file-other    "/path/to/20260101T000001==2--test__archive.org"))
+    (cl-letf (((symbol-function 'denote-retrieve-filename-keywords)
+               (lambda (file)
+                 (if (string-match-p "robot" file)
+                     '("robot" "active")
+                   '("archive")))))
+      ;; No filter: both match
+      (let ((denote-dash-hierarchy--tag-filter nil)
+            (denote-dash-hierarchy--excluded-tags nil))
+        (should (denote-dash--hierarchy-file-matches-filter-p file-with-tag))
+        (should (denote-dash--hierarchy-file-matches-filter-p file-other)))
+
+      ;; Include filter "robot"
+      (let ((denote-dash-hierarchy--tag-filter "robot")
+            (denote-dash-hierarchy--excluded-tags nil))
+        (should (denote-dash--hierarchy-file-matches-filter-p file-with-tag))
+        (should-not (denote-dash--hierarchy-file-matches-filter-p file-other)))
+
+      ;; Exclude tag "archive"
+      (let ((denote-dash-hierarchy--tag-filter nil)
+            (denote-dash-hierarchy--excluded-tags '("archive")))
+        (should (denote-dash--hierarchy-file-matches-filter-p file-with-tag))
+        (should-not (denote-dash--hierarchy-file-matches-filter-p file-other))))))
 
 (provide 'test-denote-dash)
 ;;; test-denote-dash.el ends here
