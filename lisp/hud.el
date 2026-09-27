@@ -284,8 +284,8 @@ Entries whose :if predicate returns nil are excluded."
 
 (hud-register-command
  :category 'agent-shell
- :command #'agent-shell-prompt-select
- :description "prompt library"
+ :command #'agent-shell-workflow-select
+ :description "workflows"
  :transient-key "ap")
 (hud-register-command
  :category 'network

@@ -1825,7 +1825,7 @@ otherwise keep replaying stale detection results."
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck modus-themes)
    '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
-   '(agent-shell-queue magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion denote-mcp))
+   '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion denote-mcp))
 
   (tychoish-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
@@ -2825,8 +2825,8 @@ calls, so it can't be added to that hook directly."
   (keymap-set hud-robot-agent-shell-map "e" #'agent-shell-new-temp-shell)
   (keymap-set hud-robot-agent-shell-map "w" #'agent-shell-new-worktree-shell)
   (keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
-  (keymap-set hud-robot-agent-shell-map "p" #'agent-shell-prompt-select)
-  (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-prompt-menu)
+  (keymap-set hud-robot-agent-shell-map "p" #'agent-shell-workflow-select)
+  (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-workflow-dispatch-menu)
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map hud-robot-agent-shell-map
     :bind-key "x")
@@ -3222,14 +3222,9 @@ asynchronously via `sprite-future-then'."
   :after agent-shell
   :defer t
   :commands (agent-shell-queue-item-menu
-             agent-shell-prompt-menu
-             agent-shell-prompt-select
-             agent-shell-prompt-dispatch
-             agent-shell-prompt-exec)
+             agent-shell-queue-buffer-open
+             agent-shell-queue-capture)
   :config
-  (require 'agent-shell-prompt)
-  (require 'agent-shell-prompt-menu)
-  (require 'agent-shell-prompt-library)
   (defvar-keymap hud-robot-agent-shell-map)
   (setq agent-shell-queue-write-log-enabled t)
   (require 'agent-shell-queue-org)
@@ -3238,7 +3233,6 @@ asynchronously via `sprite-future-then'."
   (keymap-set agent-shell-queue-mode-map "C-c j" '(hud-robot-agent-shell-map . "robot-agent-shell"))
   (keymap-set hud-robot-agent-shell-map "q" #'agent-shell-queue-buffer-open)
   (keymap-set hud-robot-agent-shell-map "/" #'agent-shell-queue-capture)
-  (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-menu-dispatch)
   (keymap-unset agent-shell-mode-map "<spc>")
 
   (with-eval-after-load 'agent-shell-menu
@@ -3367,6 +3361,18 @@ asynchronously via `sprite-future-then'."
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
+
+(use-package agent-shell-workflow
+  :ensure t
+  :after agent-shell
+  :defer t
+  :commands (agent-shell-workflow-select
+             agent-shell-workflow-dispatch-menu
+             agent-shell-workflow-dispatch
+             agent-shell-workflow-exec)
+  :config
+  (require 'agent-shell-workflow-menu)
+  (require 'agent-shell-workflow-library))
 
 (use-package mcpkit
   :ensure t
