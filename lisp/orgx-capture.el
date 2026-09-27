@@ -127,14 +127,16 @@ CHAR is the single-letter kind prefix (\"t\", \"j\", \"n\").  KEY is
 the project prefix; an empty string disables the hierarchical
 \"<key><suffix>\" and shortcut \"<char><key>\" entries.
 
-TARGET is the org-capture target form.  BODY-FN is called with the
-per-template anchor string and returns the template body.
+TARGET is the org-capture target form.  BODY-FN is called with
+two arguments: the per-template body anchor string and a boolean flag
+indicating whether the link is placed directly on the heading line.
+It returns the template body string.
 
 FIRST-SUB is (ANCHOR . DESCRIPTION) for the \"<char><key>\" shortcut,
 added only when KEY is non-empty.
 
-DEFAULT-SUBS is a list of (SUFFIX ANCHOR DESCRIPTION); each becomes a
-\"<key><suffix>\" template.
+DEFAULT-SUBS is a list of (SUFFIX ANCHOR DESCRIPTION &rest EXTRA-PROPS);
+each becomes a \"<key><suffix>\" template.
 
 PREPEND becomes the templates' :prepend value.  When a key sequence
 ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
@@ -151,7 +153,9 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
       (dolist (sub default-subs)
         (let ((suffix (car sub)))
           (when (and (string-prefix-p char suffix)
-                     (string-suffix-p "q" suffix))
+                     (or (string-suffix-p "q" suffix)
+                         (string-suffix-p "b" suffix)
+                         (string-suffix-p "h" suffix)))
             (let ((shortcut-key (concat (substring suffix 0 (length char)) key (substring suffix (length char)))))
               (push (cons shortcut-key (cdr sub)) specs))))))
     (dolist (entry (append (nreverse specs)
@@ -161,10 +165,11 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
              (template-anchor (nth 1 entry))
              (description (nth 2 entry))
              (extra-props (nthcdr 3 entry))
+             (heading-anchor-p (plist-get extra-props :heading-anchor))
              (template (append (list key-sequence
                                      (format "%s (%s; %s)" kind name description)
                                      'entry target
-                                     (funcall body-fn template-anchor)
+                                     (funcall body-fn template-anchor heading-anchor-p)
                                      :prepend prepend
                                      :kill-buffer t
                                      :empty-lines 0)
@@ -181,15 +186,21 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
    :target (if (string-equal "" key)
                (list 'file+olp+datetree path)
              (list 'file+olp+datetree path "Journal"))
-   :body-fn (lambda (anchor)
-              (if (string-empty-p anchor)
-                  "* %(~title~) <%<%Y-%m-%d %H:%M>>%?"
-                (concat "* %(~title~) <%<%Y-%m-%d %H:%M>>\n" anchor "%?")))
+   :body-fn (lambda (anchor &optional heading-p)
+              (cond
+               (heading-p
+                (concat "* " anchor " <%<%Y-%m-%d %H:%M>>%?"))
+               ((string-empty-p anchor)
+                "* %(~title~) <%<%Y-%m-%d %H:%M>>%?")
+               (t
+                (concat "* %(~title~) <%<%Y-%m-%d %H:%M>>\n" anchor "%?"))))
    :first-sub (cons "" "<today>")
    :default-subs '(("jj" "" "<today>")
                    ("jp" "" "<date prompt>")
                    ("jx" "%x" "X11 buffer")
-                   ("jl" "%(orgx--capture-get-link)" "org-link")
+                   ("jlb" "%(orgx--capture-get-link)" "org-link (body)")
+                   ("jlh" "%(orgx--capture-get-link)" "org-link (heading)" :heading-anchor t)
+                   ("jlq" "%(orgx--capture-prompt-link)" "quick org-link (heading)" :heading-anchor t :immediate-finish t)
                    ("jk" "%c" "emacs kill-ring"))
    :prepend nil
    :time-prompt-suffix "jp"))
@@ -199,16 +210,21 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (orgx--capture-add-flat-templates
    :kind "tasks" :char "t" :name name :path path :key key
    :target (list 'file+headline path "Tasks")
-   :body-fn (lambda (anchor)
-              (if (string-empty-p anchor)
-                  "* TODO %(~title~)%?"
-                (concat "* TODO %(~title~)\n" anchor "%?")))
+   :body-fn (lambda (anchor &optional heading-p)
+              (cond
+               (heading-p
+                (concat "* TODO " anchor "%?"))
+               ((string-empty-p anchor)
+                "* TODO %(~title~)%?")
+               (t
+                (concat "* TODO %(~title~)\n" anchor "%?"))))
    :first-sub (cons "%i" "selection")
    :default-subs '(("tt" "%i" "selection")
                    ("tq" "" "quick task" :immediate-finish t)
                    ("tx" "%x" "X11 buffer")
-                   ("tl" "%(orgx--capture-get-link)" "org-link")
-                   ("tlq" "%(orgx--capture-prompt-link)" "quick org-link task" :immediate-finish t)
+                   ("tlb" "%(orgx--capture-get-link)" "org-link (body)")
+                   ("tlh" "%(orgx--capture-get-link)" "org-link (heading)" :heading-anchor t)
+                   ("tlq" "%(orgx--capture-prompt-link)" "quick org-link task" :heading-anchor t :immediate-finish t)
                    ("tk" "%c" "emacs kill-ring"))))
 
 ;;;###autoload
@@ -216,14 +232,20 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (orgx--capture-add-flat-templates
    :kind "notes" :char "n" :name name :path path :key key
    :target (list 'file+headline path "Inbox")
-   :body-fn (lambda (anchor)
-              (if (string-empty-p anchor)
-                  "* %(~title~)%?"
-                (concat "* %(~title~)\n" anchor "%?")))
+   :body-fn (lambda (anchor &optional heading-p)
+              (cond
+               (heading-p
+                (concat "* " anchor "%?"))
+               ((string-empty-p anchor)
+                "* %(~title~)%?")
+               (t
+                (concat "* %(~title~)\n" anchor "%?"))))
    :first-sub (cons "%i" "selection")
    :default-subs '(("nn" "%i" "selection")
                    ("nx" "%x" "X11 buffer")
-                   ("nl" "%(orgx--capture-get-link)" "org-link")
+                   ("nlb" "%(orgx--capture-get-link)" "org-link (body)")
+                   ("nlh" "%(orgx--capture-get-link)" "org-link (heading)" :heading-anchor t)
+                   ("nlq" "%(orgx--capture-prompt-link)" "quick org-link (heading)" :heading-anchor t :immediate-finish t)
                    ("nk" "%c" "emacs kill-ring"))))
 
 ;; registration helpers
