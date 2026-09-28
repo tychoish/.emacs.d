@@ -60,8 +60,8 @@
 (defvar package-build-verbose)
 (defvar package-build-releases)
 
-(declare-function sprite-name "sprite")
-(declare-function sprite-get-or-create-next "sprite")
+(declare-function sprite-name "sprite-daemon")
+(declare-function sprite-get-or-create-next "sprite-daemon")
 (declare-function sprite-direct-open "sprite-direct")
 (declare-function sprite-direct-eval-non-blocking "sprite-direct")
 (declare-function sprite-direct-promise-then "sprite-direct")
@@ -1988,6 +1988,7 @@ via `sprite-direct-promise-then' and called with (STATE VALUE) once the
 sprite responds -- without one, poll the promise or call
 `sprite-direct-promise-wait'."
   (require 'sprite)
+  (require 'sprite-daemon)
   (require 'sprite-direct)
   (let* ((target (sprite-name (or sprite (sprite-get-or-create-next))))
          (conn (sprite-direct-open target))

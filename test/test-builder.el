@@ -13,6 +13,7 @@
 
 (require 'builder)
 (require 'sprite)
+(require 'sprite-daemon)
 (require 'sprite-direct)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

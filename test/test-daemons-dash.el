@@ -475,7 +475,7 @@
 
 (ert-deftest daemons-dash-test-sprite-provider ()
   "Sprite provider list and actions function correctly with mock sprite records."
-  (require 'sprite nil t)
+  (require 'sprite-daemon nil t)
   (let ((mock-sprite (if (fboundp 'sprite--make)
                          (sprite--make :name "test-sprite")
                        (record 'sprite "test-sprite"))))

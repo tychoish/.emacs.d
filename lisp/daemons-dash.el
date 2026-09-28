@@ -27,18 +27,19 @@
 (declare-function journalctl--run "journalctl-mode" (transient-opts &optional chunk))
 (declare-function docker-container-logs-action "docker-container" (action args))
 (declare-function docker-container-read-name "docker-container" ())
-(declare-function sprite--registry-all "sprite" ())
-(declare-function sprite-name "sprite" (sprite))
-(declare-function sprite-status "sprite" (sprite))
-(declare-function sprite-pid "sprite" (sprite))
-(declare-function sprite-resolve-list "sprite" ())
-(declare-function sprite--running-p "sprite" (name))
-(declare-function sprite-start-time "sprite" (sprite))
-(declare-function sprite--format-uptime "sprite" (seconds))
-(declare-function sprite-stop "sprite" (name))
-(declare-function sprite-restart "sprite" (name))
-(declare-function sprite-open-log "sprite" (name))
-(declare-function sprite--log-buffer-name "sprite" (name))
+(declare-function sprite--registry-all "sprite-daemon" ())
+(declare-function sprite-name "sprite-daemon" (sprite))
+(declare-function sprite-status "sprite-daemon" (sprite))
+(declare-function sprite-pid "sprite-daemon" (sprite))
+(declare-function sprite-p "sprite-daemon" (sprite))
+(declare-function sprite-resolve-list "sprite-daemon" ())
+(declare-function sprite--running-p "sprite-daemon" (name))
+(declare-function sprite-start-time "sprite-daemon" (sprite))
+(declare-function sprite--format-uptime "sprite-daemon" (seconds))
+(declare-function sprite-stop "sprite-daemon" (name))
+(declare-function sprite-restart "sprite-daemon" (name))
+(declare-function sprite-open-log "sprite-daemon" (name))
+(declare-function sprite--log-buffer-name "sprite-daemon" (name))
 
 ;;; Data Structures
 
@@ -410,7 +411,7 @@ PROVIDER-SYM is `systemd-user' or `systemd-system'."
 
 (defun daemons-dash-sprite-list ()
   "Fetch subordinate Emacs daemons from `sprite.el'."
-  (when (require 'sprite nil t)
+  (when (require 'sprite-daemon nil t)
     (let ((sprites (ignore-errors (sprite-resolve-list))))
       (mapcar #'daemons-dash-sprite--make-item sprites))))
 
