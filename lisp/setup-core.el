@@ -607,17 +607,23 @@
   (defvar vertico-multiform-categories nil)
   (defvar vertico-multiform-commands nil)
   :config
-  (add-to-list 'vertico-multiform-commands '(yank (vertico-sort-function . nil)
-						  (vertico-sort-override-function . nil)))
-  (add-to-list 'vertico-multiform-commands '(yank-from-kill-ring (vertico-sort-function . nil)
-								 (vertico-sort-override-function . nil)))
-  (add-to-list 'vertico-multiform-commands '(consult-yank-from-kill-ring (vertico-sort-function . nil)
-									 (vertico-sort-override-function . nil)))
-  (add-to-list 'vertico-multiform-commands '(consult-yank-pop (vertico-sort-function . nil)
-							      (vertico-sort-override-function . nil)))
-
-  (add-to-list 'vertico-multiform-commands '("\\`execute-extended-command" (vertico-flat-annotate . t)
-					     (marginalia-annotators (command marginalia-annotate-command marginalia-annotate-binding)))))
+  (add-to-list 'vertico-multiform-commands
+	       '(yank (vertico-sort-function . nil)
+		      (vertico-sort-override-function . nil)))
+  (add-to-list 'vertico-multiform-commands
+	       '(yank-from-kill-ring (vertico-sort-function . nil)
+				     (vertico-sort-override-function . nil)))
+  (add-to-list 'vertico-multiform-commands
+	       '(consult-yank-from-kill-ring (vertico-sort-function . nil)
+					     (vertico-sort-override-function . nil)))
+  (add-to-list 'vertico-multiform-commands
+	       '(consult-yank-pop (vertico-sort-function . nil)
+				  (vertico-sort-override-function . nil)))
+  (add-to-list 'vertico-multiform-commands
+	       '("\\`execute-extended-command" (vertico-flat-annotate . t)
+		 (marginalia-annotators (command
+					 marginalia-annotate-command
+					 marginalia-annotate-binding)))))
 
 (use-package orderless
   :ensure t
@@ -633,11 +639,11 @@
           (symbol (styles orderless basic))))
   (setq completion-preview-sort-function nil)
   :config
-  ;; Orderless's own behavior knobs only; cross-cutting `completion-styles' and
-  ;; `completion-category-overrides' are owned by the completion-flavor system.
-  (setq orderless-component-separator #'orderless-escapable-split)
   (setq orderless-matching-styles
-	'(orderless-literal orderless-prefixes orderless-initialism orderless-regexp)))
+	'(orderless-literal
+	  orderless-prefixes
+	  orderless-initialism
+	  orderless-regexp)))
 
 (use-package embark
   :ensure t
