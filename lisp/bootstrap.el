@@ -33,12 +33,11 @@
 
 ;;; Code:
 
-(require 'xtd-macro)
 (require 'cl-lib)
-(require 'sprite)
 
 (elpaish-install-packages
  '(f
+   eat
    async
    cond-let
    uuidgen
@@ -467,9 +466,7 @@ triggered directly by a keypress, still prompts normally.")
   (unless (member 'modus-operandi custom-enabled-themes)
     (when custom-enabled-themes
       (disable-all-themes))
-    (if (custom-theme-p 'modus-operandi)
-        (enable-theme 'modus-operandi)
-      (load-theme 'modus-operandi t nil)))
+    (load-theme 'modus-operandi t nil))
   (unless (map-elt default-frame-alist 'alpha)
     (add-to-list 'default-frame-alist '(alpha . 97))))
 
@@ -492,7 +489,7 @@ triggered directly by a keypress, still prompts normally.")
  :name "<modus-themes> ensure light theme"
  :hook after-first-frame-created
  :form (bootstrap-ensure-light-theme)
- :idle-timer 0.01)
+ :idle-timer 0.1)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

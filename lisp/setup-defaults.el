@@ -54,6 +54,7 @@
 (setq comment-auto-fill-only-comments t)
 (setq select-enable-clipboard nil) ;; select-enable-primary already defaults to nil.
 (setq lpr-add-switches "-T ''")
+(setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
 
 (setq save-abbrevs t)
 (setq text-mode-ispell-word-completion nil)
@@ -62,6 +63,7 @@
 (setq completion-ignore-case t)
 (setq read-file-name-completion-ignore-case t)
 (setq read-extended-command-predicate #'command-completion-default-include-p)
+(setq makefile-electric-keys t)
 
 (setq switch-to-prev-buffer-skip 'visible)
 (setq split-height-threshold 100)
@@ -117,12 +119,26 @@ Override in user/*.el to customize per machine or instance.")
         (electric-pair-default-inhibit char)
       (electric-pair-conservative-inhibit char))))
 
+(cl-defmethod project-root ((project (head cmake-root))) (cdr project))
+
+(defun project-find-cmake-project (dir)
+  (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
+    (cons 'cmake-root root)))
+
+(add-hook 'project-find-functions #'project-find-cmake-project)
+
 (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
 
 (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
+(add-hook 'LaTeX-mode-hook #'turn-on-reftex)
+(add-hook 'LaTeX-mode-hook #'visual-line-mode)
+(add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
 
 (add-to-list 'auto-mode-alist '("\\.xml$'" . nxml-mode))
 (add-to-list 'auto-mode-alist '("\\.rst\\'" . rst-mode))
+(add-to-list 'auto-mode-alist '("\\(?:^\\|/\\)[Mm]akefile\\'" . makefile-mode))
+(add-to-list 'auto-mode-alist '("\\.mk\\'" . makefile-mode))
+(add-to-list 'auto-mode-alist '("\\.tex\\'" . LaTeX-mode))
 
 (add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.timer\\'" . conf-unix-mode))
@@ -138,9 +154,38 @@ Override in user/*.el to customize per machine or instance.")
 (add-to-list 'auto-mode-alist '("\\.proto\\'" . protobuf-mode))
 (add-to-list 'auto-mode-alist '("\\.ninja\\'" . ninja-mode))
 
+(add-to-list 'auto-mode-alist '("\\.sh\\'" . bash-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.bashrc\\'" . bash-ts-mode))
+(add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
+;; -- js/web
+(add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.js\\'" . js-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.css\\'" . css-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.toml\\'" . toml-ts-mode))
+;; -- c/c++
+(add-to-list 'auto-mode-alist '("CMakeLists.txt" . cmake-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.h\\'" . c-or-c++-mode))
+(add-to-list 'auto-mode-alist '("\\.c\\'" . c-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.cpp\\'" . c++-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.cc\\'" . c++-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.hh\\'" . c++-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-ts-mode))
+;; -- jvm
+(add-to-list 'auto-mode-alist '("\\.java\\'" . java-ts-mode))
+(add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
+(add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
+(add-to-list 'major-mode-remap-alist '(java-mode . java-ts-mode))
+(add-to-list 'major-mode-remap-alist '(css-mode . css-ts-mode))
+(add-to-list 'major-mode-remap-alist '(js-json-mode . json-ts-mode))
+(add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
+(add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
+(add-to-list 'major-mode-remap-alist '(c-or-c++-mode . c-or-c++-ts-mode))
+
 (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
 (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -131,11 +131,20 @@ Runs from `after-init-hook', after the full config has loaded."
       (with-slow-op-timer "<init> [local] require setup-package-defaults.el"
 	(require 'setup-package-defaults))
 
-      (with-slow-op-timer "<init> [local] require elpaish"
+      (with-slow-op-timer "<init> [local] install elpaish"
 	(unless (package-installed-p 'elpaish) (package-install 'elpaish)))
 
-      (with-slow-op-timer "<init> [local] require sprite xtdlib"
+      (with-slow-op-timer "<init> [local] install sprite xtdlib"
 	(elpaish-install-packages '(sprite xtdlib)))
+
+      (with-slow-op-timer "<init> [local] require sprite"
+	(require 'sprite))
+
+      (with-slow-op-timer "<init> [local] require xtd-macro"
+	(require 'xtd-macro))
+
+      (with-slow-op-timer "<init> [local] require hud-mode.el"
+	(require 'hud-mode))
 
       (with-slow-op-timer "<init> [local] require bootstrap.el"
 	(require 'bootstrap))
@@ -145,9 +154,6 @@ Runs from `after-init-hook', after the full config has loaded."
 
       (with-slow-op-timer "<init> [local] require setup-package-hooks.el"
 	(require 'setup-package-hooks))
-
-      (with-slow-op-timer "<init> [local] require hud-mode.el"
-	(require 'hud-mode))
 
       ;; remaining use-package declarations.
       (with-slow-op-timer "<init> [local] require setup-core.el"

@@ -31,6 +31,14 @@
   (setq emojify-display-style 'unicode)
   (setq emojify-point-entered-behaviour 'echo))
 
+(with-eval-after-load 'eshell
+  (setq eshell-history-file-name (file-name-concat
+				  user-emacs-directory
+				  sprite--conf-state-directory
+				  (sprite-state-file-prefix "eshell")))
+  (with-eval-after-load "em-cmpl"
+    (add-hook 'eshell-mode 'eshell-cmpl-initialize)))
+
 (with-eval-after-load 'comint
   (defun colorize-shell ()
     "Apply ANSI colors to the agent-shell buffer."

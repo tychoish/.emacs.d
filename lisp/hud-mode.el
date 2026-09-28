@@ -75,19 +75,20 @@ HOOK may be a symbol, a list of symbols, or the sentinel
 	  (:else
 	   (user-error "must have a symbol, list of symbols, or `after-first-frame-created' for hook: %S" hook)))))
 
-(defun hud--build-symbol-name (&rest parts)
-  "Join PARTS into a single hyphen-separated string suitable for a symbol name."
-  (replace-regexp-in-string
-   "-\\{3,\\}" "-"
-   (mapconcat #'identity
-	      (thread-last
-		parts
-		(seq-filter #'stringp)
-		(seq-map (lambda (elem) (replace-regexp-in-string "[ \t\n\r]+" " " elem)))
-		(seq-map #'string-trim)
-		(seq-map (lambda (elem) (replace-regexp-in-string "[=+_'\"\\/ ]+" "-" elem)))
-		(seq-remove #'string-empty-p))
-	      "-")))
+(eval-and-compile
+  (defun hud--build-symbol-name (&rest parts)
+    "Join PARTS into a single hyphen-separated string suitable for a symbol name."
+    (replace-regexp-in-string
+     "-\\{3,\\}" "-"
+     (mapconcat #'identity
+		(thread-last
+		  parts
+		  (seq-filter #'stringp)
+		  (seq-map (lambda (elem) (replace-regexp-in-string "[ \t\n\r]+" " " elem)))
+		  (seq-map #'string-trim)
+		  (seq-map (lambda (elem) (replace-regexp-in-string "[=+_'\"\\/ ]+" "-" elem)))
+		  (seq-remove #'string-empty-p))
+		"-"))))
 
 (cl-defmacro add-lazy-init (&key name operation (delay 1))
   "Execute OPERATION in an idle timer DELAY seconds after Emacs becomes idle."

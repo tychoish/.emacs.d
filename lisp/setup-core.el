@@ -68,6 +68,106 @@
   :init
   (keymap-set hud-mail-map "a" #'tychoish-mail-select-account))
 
+(use-package denote-dash
+  :ensure nil
+  :after transient
+  :commands (denote-dash
+	     denote-dash-dispatch
+	     denote-dash-open-view
+	     denote-dash-clone-view
+	     denote-dash-close-all-notes
+	     denote-dash-save-and-kill-all-notes
+	     denote-dash-rename-file
+	     denote-dash-retag-file
+	     denote-dash-rename-file-using-front-matter
+	     denote-dash-hierarchy-switch-or-view
+	     denote-dash-hierarchy-view-by-note
+	     denote-dash-hierarchy-toggle-show-tags
+	     denote-dash-hierarchy-filter
+	     denote-dash-hierarchy-exclude-tag
+	     denote-dash-hierarchy-clear-filter))
+
+(use-package denote-dash-repack
+  :ensure nil
+  :after denote-dash
+  :commands (denote-dash-lint-sequences
+	     denote-dash-fix-sequence-frontmatter
+	     denote-dash-fix-all-sequence-frontmatter
+	     denote-dash-repack-sequence-children
+	     denote-dash-swap-with-parent
+	     denote-dash-swap-with-previous
+	     denote-dash-swap-with-next
+	     denote-dash-reparent
+	     denote-dash-reparent-recursive
+	     denote-dash-renumber-recursive
+	     denote-dash-insert-sequence-note
+	     denote-dash-retag-sequence))
+
+(use-package daemons-dash
+  :ensure nil
+  :commands (daemons-dash daemons-dash-dispatch)
+  :init
+  (keymap-set hud-core-map "s" #'daemons-dash)
+  :config
+  (require 'daemons-dash-config nil t))
+
+(use-package builder
+  :commands (make-builder-candidate
+	     builder-register-candidates
+	     builder--read-command
+	     builder-compile-project
+	     builder-change-directory
+	     builder-emacs-conf-run-ci-tests
+	     builder-emacs-conf-run-ci-tests-isolated
+	     builder-emacs-conf-byte-compile-and-delete-artifact
+	     builder-emacs-conf-load-check
+	     builder-emacs-conf-elisp-package-test-isolated
+	     builder-emacs-conf-async-byte-compile-check
+	     builder-emacs-conf-sprite-eval
+	     builder-emacs-conf-sprite-byte-compile-check
+	     builder-emacs-conf-sprite-load-check
+	     builder-emacs-conf-sprite-test-check
+	     builder-emacs-conf-native-compile-all
+	     builder-emacs-conf-byte-recompile-directory
+	     builder-emacs-conf-recompile-vendored-packages)
+  :init
+  (with-eval-after-load 'compile
+    (keymap-set compilation-mode-map "d" #'builder-change-directory)))
+
+(use-package magit-dash
+  :ensure t
+  :defer t
+  :init
+  (keymap-set hud-magit-map "d" #'magit-dash-open)
+  (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
+  (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
+  (keymap-set hud-magit-map "w" #'magit-dash-worktree-dispatch)
+  (keymap-set hud-core-map "d" #'magit-dash-open)
+  (keymap-set hud-core-map "g" #'magit-dash-open)
+  :config
+  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
+  (setq magit-dash-gh-prune-pr-limit 50)
+  (setq magit-dash-show-discovered-submodules nil)
+  (setq magit-dash-render-branch-name-as-basename t)
+  (add-hook 'magit-status-mode-hook
+	    (lambda ()
+	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
+
+  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
+
+  (with-eval-after-load 'nerd-icons
+    (setq nerd-icons-mode-icon-alist
+          (seq-remove (lambda (entry)
+                        (memq (car entry) '(magit-dash-mode
+                                            magit-dash-gh-pr-dashboard-mode
+                                            magit-dash-gh-actions-log-mode)))
+                      nerd-icons-mode-icon-alist))
+    (seq-do (lambda (entry)
+              (add-to-list 'nerd-icons-mode-icon-alist entry))
+            '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
+              (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
+              (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; CORE PACKAGES
@@ -178,6 +278,21 @@
   (add-hook 'arch-after-remove-hook #'arch-alert-after-remove)
   (add-hook 'arch-after-upgrade-all-hook #'arch-alert-after-upgrade-all)
   (run-with-idle-timer 2 nil #'arch--populate-cache))
+
+(use-package mcpkit
+  :ensure t
+  :defer t
+  :commands (mcpkit-start-service mcpkit-stop-service tychoish/mcpkit-start-default-services)
+  :init
+  (defun tychoish/mcpkit-start-default-services ()
+    "Start default MCP services (denote, emacs) on port 8765."
+    (interactive)
+    (when (require 'denote-mcp nil t)
+      (mcpkit-start-service 'denote))
+    (when (require 'mcpkit-emacs nil t)
+      (mcpkit-start-service 'emacs)))
+  (when (and (daemonp) (not (eq (daemonp) t)))
+    (add-hook 'after-init-hook #'tychoish/mcpkit-start-default-services)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -591,6 +706,9 @@
 
   (add-hook 'text-mode-hook #'tychoish/corfu-text-mode-setup)
   (add-hook 'prog-mode-hook #'tychoish/corfu-prog-mode-setup)
+  (with-eval-after-load 'eat (add-hook 'eat-mode-hook 'tychoish/corfu-prog-mode-setup))
+  (with-eval-after-load 'eshell (add-hook 'eshell-mode-hook 'tychoish/corfu-prog-mode-setup))
+
   :config
   (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter)
   (defun corfu-at-point ()
@@ -814,29 +932,6 @@ prompt for the initial query using `annotated-completing-read-context-from-point
 		(thing-at-point 'defun)
 		(thing-at-point 'sexp))))
 
-(use-package builder
-  :commands (make-builder-candidate
-	     builder-register-candidates
-	     builder--read-command
-	     builder-compile-project
-	     builder-change-directory
-	     builder-emacs-conf-run-ci-tests
-	     builder-emacs-conf-run-ci-tests-isolated
-	     builder-emacs-conf-byte-compile-and-delete-artifact
-	     builder-emacs-conf-load-check
-	     builder-emacs-conf-elisp-package-test-isolated
-	     builder-emacs-conf-async-byte-compile-check
-	     builder-emacs-conf-sprite-eval
-	     builder-emacs-conf-sprite-byte-compile-check
-	     builder-emacs-conf-sprite-load-check
-	     builder-emacs-conf-sprite-test-check
-	     builder-emacs-conf-native-compile-all
-	     builder-emacs-conf-byte-recompile-directory
-	     builder-emacs-conf-recompile-vendored-packages)
-  :init
-  (with-eval-after-load 'compile
-    (keymap-set compilation-mode-map "d" #'builder-change-directory)))
-
 (use-package revbufs
   :ensure t
   :defer t
@@ -907,40 +1002,6 @@ prompt for the initial query using `annotated-completing-read-context-from-point
       (transient-append-suffix 'magit-gh '(-1)
         ["magit-dash"
          ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))))
-
-(use-package magit-dash
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-magit-map "d" #'magit-dash-open)
-  (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
-  (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
-  (keymap-set hud-magit-map "w" #'magit-dash-worktree-dispatch)
-  (keymap-set hud-core-map "d" #'magit-dash-open)
-  (keymap-set hud-core-map "g" #'magit-dash-open)
-  :config
-  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
-  (setq magit-dash-gh-prune-pr-limit 50)
-  (setq magit-dash-show-discovered-submodules nil)
-  (setq magit-dash-render-branch-name-as-basename t)
-  (add-hook 'magit-status-mode-hook
-	    (lambda ()
-	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
-
-  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
-
-  (with-eval-after-load 'nerd-icons
-    (setq nerd-icons-mode-icon-alist
-          (seq-remove (lambda (entry)
-                        (memq (car entry) '(magit-dash-mode
-                                            magit-dash-gh-pr-dashboard-mode
-                                            magit-dash-gh-actions-log-mode)))
-                      nerd-icons-mode-icon-alist))
-    (seq-do (lambda (entry)
-              (add-to-list 'nerd-icons-mode-icon-alist entry))
-            '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
-              (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
-              (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
 
 (use-package git-link
   :ensure t
@@ -1161,41 +1222,6 @@ clipboard."
        (signature (format "[%s]" signature))
        (t ""))))
   (setq denote-link-description-format #'tychoish--denote-link-description-with-signature-and-title))
-
-(use-package denote-dash
-  :ensure nil
-  :after transient
-  :commands (denote-dash
-	     denote-dash-dispatch
-	     denote-dash-open-view
-	     denote-dash-clone-view
-	     denote-dash-close-all-notes
-	     denote-dash-save-and-kill-all-notes
-	     denote-dash-rename-file
-	     denote-dash-retag-file
-	     denote-dash-rename-file-using-front-matter
-	     denote-dash-hierarchy-switch-or-view
-	     denote-dash-hierarchy-view-by-note
-	     denote-dash-hierarchy-toggle-show-tags
-	     denote-dash-hierarchy-filter
-	     denote-dash-hierarchy-exclude-tag
-	     denote-dash-hierarchy-clear-filter))
-
-(use-package denote-dash-repack
-  :ensure nil
-  :after denote-dash
-  :commands (denote-dash-lint-sequences
-	     denote-dash-fix-sequence-frontmatter
-	     denote-dash-fix-all-sequence-frontmatter
-	     denote-dash-repack-sequence-children
-	     denote-dash-swap-with-parent
-	     denote-dash-swap-with-previous
-	     denote-dash-swap-with-next
-	     denote-dash-reparent
-	     denote-dash-reparent-recursive
-	     denote-dash-renumber-recursive
-	     denote-dash-insert-sequence-note
-	     denote-dash-retag-sequence))
 
 (use-package consult-notes
   :ensure t
@@ -1479,14 +1505,6 @@ otherwise keep replaying stale detection results."
 
 ;; programming major-modes
 
-(use-package make-mode
-  :ensure nil
-  :defer t
-  :mode (("\\(?:^\\|/\\)[Mm]akefile\\'" . makefile-mode)
-         ("\\.mk\\'" . makefile-mode))
-  :config
-  (setq makefile-electric-keys t))
-
 (use-package yaml-mode
   :ensure t
   :mode (("\\.yaml$" . yaml-mode)
@@ -1691,15 +1709,6 @@ otherwise keep replaying stale detection results."
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
 
-(use-package tex-mode
-  :mode ("\\.tex\\'" . LaTeX-mode)
-  :init
-  (add-hook 'LaTeX-mode-hook #'turn-on-reftex)
-  (add-hook 'LaTeX-mode-hook #'visual-line-mode)
-  (add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
-  :config
-  (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")"))
-
 (use-package web-mode
   :ensure t
   :mode (("\\.html$" . web-mode)
@@ -1738,14 +1747,6 @@ otherwise keep replaying stale detection results."
 ;;
 ;; programming adjacent tools
 
-(use-package daemons-dash
-  :ensure nil
-  :commands (daemons-dash daemons-dash-dispatch)
-  :init
-  (keymap-set hud-core-map "s" #'daemons-dash)
-  :config
-  (require 'daemons-dash-config nil t))
-
 (use-package elpaish
   :ensure t
   :defer t
@@ -1758,7 +1759,7 @@ otherwise keep replaying stale detection results."
   (elpaish-install-add-bootstrap-packages
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
-   '(magit flycheck modus-themes)
+   '(magit flycheck)
    '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
    '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion denote-mcp))
 
@@ -2435,49 +2436,8 @@ calls, so it can't be added to that hook directly."
   (setq flycheck-eglot-enable-diagnostic-tags nil)
   (flycheck-add-next-checker 'eglot-check 'go-gofmt))
 
-(use-package cmake-ts-mode
-  :defer t
-  :init
-  (cl-defmethod project-root ((project (head cmake-root))) (cdr project))
-
-  (defun project-find-cmake-project (dir)
-    (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
-      (cons 'cmake-root root)))
-
-  (add-hook 'project-find-functions #'project-find-cmake-project))
-
 (use-package treesit
   :defer t
-  :mode (("\\.sh\\'" . bash-ts-mode)
-	 ("\\.bash\\'" . bash-ts-mode)
-	 ("\\.bashrc\\'" . bash-ts-mode)
-	 ("Dockerfile" . dockerfile-ts-mode)
-	 ;; -- js/web
-	 ("\\.ts\\'" . typescript-ts-mode)
-	 ("\\.js\\'" . js-ts-mode)
-	 ("\\.tsx\\'" . tsx-ts-mode)
-	 ("\\.css\\'" . css-ts-mode)
-	 ("\\.json\\'" . json-ts-mode)
-	 ("\\.toml\\'" . toml-ts-mode)
-	 ;; -- c/c++
-	 ("CMakeLists.txt" . cmake-ts-mode)
-	 ("\\.h\\'" . c-or-c++-mode)
-	 ("\\.c\\'" . c-ts-mode)
-	 ("\\.cpp\\'" . c++-ts-mode)
-	 ("\\.cc\\'" . c++-ts-mode)
-	 ("\\.hh\\'" . c++-ts-mode)
-	 ("\\.cxx\\'" . c++-ts-mode)
-	 ;; -- jvm
-	 ("\\.java\\'" . java-ts-mode))
-  :init
-  (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(java-mode . java-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(css-mode . css-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(js-json-mode . json-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
-  (add-to-list 'major-mode-remap-alist '(c-or-c++-mode . c-or-c++-ts-mode))
   :config
   (add-hook 'js-ts-mode-hook (make-run-hooks-function-for js-mode))
   (add-hook 'c-ts-mode-hook (make-run-hooks-function-for c-mode))
@@ -2675,23 +2635,6 @@ calls, so it can't be added to that hook directly."
   :config
   (ollama-tailnet-setup-laptop-presets))
 
-(use-package eat
-  :ensure t
-  :defer t
-  :config
-  (add-hook 'eat-mode-hook 'tychoish/corfu-prog-mode-setup))
-
-(use-package eshell
-  :ensure nil
-  :defer t
-  :init
-  :config
-  (add-hook 'eshell-mode-hook 'tychoish/corfu-prog-mode-setup)
-
-  (setq eshell-history-file-name (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "eshell")))
-  (with-eval-after-load "em-cmpl"
-    (add-hook 'eshell-mode 'eshell-cmpl-initialize)))
-
 (use-package shell-maker
   :ensure t
   :defer t
@@ -2731,7 +2674,7 @@ calls, so it can't be added to that hook directly."
 
   (add-lazy-init
    :name "<bootstrap> agent-shell antigravity"
-   :delay 1.5
+   :delay 60
    :operation (lambda ()
                 (require 'agent-shell)
                 (tychoish/agent-shell-antigravity-bootstrap)))
@@ -3247,21 +3190,6 @@ asynchronously via `sprite-future-then'."
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
-
-(use-package mcpkit
-  :ensure t
-  :defer t
-  :commands (mcpkit-start-service mcpkit-stop-service tychoish/mcpkit-start-default-services)
-  :init
-  (defun tychoish/mcpkit-start-default-services ()
-    "Start default MCP services (denote, emacs) on port 8765."
-    (interactive)
-    (when (require 'denote-mcp nil t)
-      (mcpkit-start-service 'denote))
-    (when (require 'mcpkit-emacs nil t)
-      (mcpkit-start-service 'emacs)))
-  (when (and (daemonp) (not (eq (daemonp) t)))
-    (add-hook 'after-init-hook #'tychoish/mcpkit-start-default-services)))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
