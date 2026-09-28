@@ -68,6 +68,9 @@
    denote-org
    denote-journal-capture
    denote-markdown
+   denote-tree
+   denote-convert
+   denote-dash
    sprite
    tailscale
    docker

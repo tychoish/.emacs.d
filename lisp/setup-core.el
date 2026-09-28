@@ -68,47 +68,6 @@
   :init
   (keymap-set hud-mail-map "a" #'tychoish-mail-select-account))
 
-(use-package denote-dash
-  :ensure nil
-  :after transient
-  :commands (denote-dash
-	     denote-dash-dispatch
-	     denote-dash-open-view
-	     denote-dash-clone-view
-	     denote-dash-close-all-notes
-	     denote-dash-save-and-kill-all-notes
-	     denote-dash-rename-file
-	     denote-dash-retag-file
-	     denote-dash-rename-file-using-front-matter
-	     denote-dash-hierarchy-switch-or-view
-	     denote-dash-hierarchy-view-by-note
-	     denote-dash-hierarchy-toggle-show-tags
-	     denote-dash-hierarchy-filter
-	     denote-dash-hierarchy-exclude-tag
-	     denote-dash-hierarchy-clear-filter))
-
-(use-package denote-tree
-  :ensure nil
-  :after (denote denote-sequence)
-  :commands (denote-tree-lint-sequences
-	     denote-tree-fix-sequence-frontmatter
-	     denote-tree-fix-all-sequence-frontmatter
-	     denote-tree-repack-children
-	     denote-tree-swap-with-parent
-	     denote-tree-swap-with-previous
-	     denote-tree-swap-with-next
-	     denote-tree-reparent
-	     denote-tree-reparent-recursive
-	     denote-tree-renumber-recursive
-	     denote-tree-insert-sequence-note
-	     denote-tree-retag-sequence))
-
-(use-package denote-convert
-  :ensure nil
-  :after denote
-  :commands (denote-convert-file-type
-	     denote-convert-import-from-datetree))
-
 (use-package daemons-dash
   :ensure nil
   :commands (daemons-dash daemons-dash-dispatch)
