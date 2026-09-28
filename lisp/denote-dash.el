@@ -688,6 +688,7 @@ Returns a cons cell (SAVED-P . STALE-NAME)."
       (kill-buffer buf)
       (cons saved stale-name))))
 
+;;;###autoload
 (defun denote-dash-close-all-notes ()
   "Close every open Denote note buffer, prompting to save modified ones.
 For a modified buffer whose file no longer exists on disk — for example
@@ -737,6 +738,7 @@ killed."
 
 ;;; Sequence hierarchy switch-or-view
 
+;;;###autoload
 (defun denote-dash-hierarchy-switch-or-view ()
   "Select a visible hierarchy view window, or open a new one.
 When a window already displays a `denote-sequence-hierarchy-mode' buffer,
@@ -750,6 +752,7 @@ select it instead of opening a duplicate view via
       (select-window window)
     (call-interactively #'denote-sequence-view-hierarchy)))
 
+;;;###autoload
 (defun denote-dash-hierarchy-view-by-note (&optional depth)
   "View the sequence hierarchy scoped to a note chosen via ACR.
 Prompts for a Denote note with `denote-dash-note-prompt' and uses its

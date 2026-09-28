@@ -447,6 +447,7 @@ Returns t if a change was made, nil if already aligned.
   (seq-filter (lambda (f) (not (denote-tree--sequence-aligned-p f)))
               (denote-directory-files)))
 
+;;;###autoload
 (defun denote-tree-lint-sequences ()
   "Show all Denote notes whose filename and frontmatter signatures are misaligned."
   (interactive)
@@ -469,6 +470,7 @@ Returns t if a change was made, nil if already aligned.
       (special-mode))
     (pop-to-buffer buf)))
 
+;;;###autoload
 (defun denote-tree-fix-sequence-frontmatter ()
   "Fix frontmatter signature to match filename for note at point or file.
 Resolves target file via `denote-tree--file-at-point', so it works from
@@ -483,6 +485,7 @@ Denote buffer."
           (when (derived-mode-p 'denote-sequence-hierarchy-mode) (revert-buffer)))
       (message "Already aligned: %s" (file-name-nondirectory file)))))
 
+;;;###autoload
 (defun denote-tree-fix-all-sequence-frontmatter ()
   "Fix frontmatter for mismatched Denote notes, filename as truth."
   (interactive)
@@ -689,6 +692,7 @@ PLAN is a list of (FILE . NEW-SEQ) pairs, as returned by
       (quit-window t win))
     (when (buffer-live-p buf)
       (kill-buffer buf))))
+;;;###autoload
 (defun denote-tree-repack-children (prefix)
   "Compact direct children of PREFIX so their last segment has no gaps.
 Renames each child's entire subtree (child and all descendants) so that
@@ -769,6 +773,7 @@ Computed by finding the last type-transition (digit↔letter) in SEQ."
                  (concat "==" new-sig "--")
                  base t t))))
 
+;;;###autoload
 (defun denote-tree-swap-with-parent ()
   "Swap the sequence of the note at point with its direct parent.
 Both nodes must have files in the denote directory.  Uses a three-step
