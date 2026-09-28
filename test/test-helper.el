@@ -14,9 +14,11 @@
        (root (file-name-directory (directory-file-name test-dir))))
   (setq test-helper-root root)
   (add-to-list 'load-path (expand-file-name "lisp" root))
-  (dolist (dir (directory-files (expand-file-name "elpa" root) t "\\`[^.]"))
-    (when (file-directory-p dir)
-      (add-to-list 'load-path dir))))
+  (let ((elpa-dir (expand-file-name "elpa" root)))
+    (when (file-directory-p elpa-dir)
+      (dolist (dir (directory-files elpa-dir t "\\`[^.]"))
+        (when (file-directory-p dir)
+          (add-to-list 'load-path dir))))))
 
 ;;; Code coverage (undercover.el)
 ;;

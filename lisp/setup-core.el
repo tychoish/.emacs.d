@@ -87,21 +87,27 @@
 	     denote-dash-hierarchy-exclude-tag
 	     denote-dash-hierarchy-clear-filter))
 
-(use-package denote-dash-repack
+(use-package denote-tree
   :ensure nil
-  :after denote-dash
-  :commands (denote-dash-lint-sequences
-	     denote-dash-fix-sequence-frontmatter
-	     denote-dash-fix-all-sequence-frontmatter
-	     denote-dash-repack-sequence-children
-	     denote-dash-swap-with-parent
-	     denote-dash-swap-with-previous
-	     denote-dash-swap-with-next
-	     denote-dash-reparent
-	     denote-dash-reparent-recursive
-	     denote-dash-renumber-recursive
-	     denote-dash-insert-sequence-note
-	     denote-dash-retag-sequence))
+  :after (denote denote-sequence)
+  :commands (denote-tree-lint-sequences
+	     denote-tree-fix-sequence-frontmatter
+	     denote-tree-fix-all-sequence-frontmatter
+	     denote-tree-repack-children
+	     denote-tree-swap-with-parent
+	     denote-tree-swap-with-previous
+	     denote-tree-swap-with-next
+	     denote-tree-reparent
+	     denote-tree-reparent-recursive
+	     denote-tree-renumber-recursive
+	     denote-tree-insert-sequence-note
+	     denote-tree-retag-sequence))
+
+(use-package denote-convert
+  :ensure nil
+  :after denote
+  :commands (denote-convert-file-type
+	     denote-convert-import-from-datetree))
 
 (use-package daemons-dash
   :ensure nil
@@ -1274,9 +1280,9 @@ return until the minibuffer session ends."
   (keymap-set hud-denote-sequence-map "r" #'denote-sequence-rename-as-parent)
   (keymap-set hud-denote-sequence-map "p" #'denote-sequence-new-parent)
   (keymap-set hud-denote-sequence-map "l" #'denote-sequence-link)
-  (keymap-set hud-denote-sequence-map "m" #'denote-dash-reparent)
-  (keymap-set hud-denote-sequence-map "n" #'denote-dash-renumber-recursive)
-  (keymap-set hud-denote-sequence-map "i" #'denote-dash-insert-sequence-note)
+  (keymap-set hud-denote-sequence-map "m" #'denote-tree-reparent)
+  (keymap-set hud-denote-sequence-map "n" #'denote-tree-renumber-recursive)
+  (keymap-set hud-denote-sequence-map "i" #'denote-tree-insert-sequence-note)
   :config
   (setq denote-sequence-scheme 'alphanumeric)
   (add-to-list 'display-buffer-alist

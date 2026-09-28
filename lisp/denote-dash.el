@@ -55,20 +55,23 @@
 (declare-function org-read-date "org")
 (declare-function org-up-heading-safe "org")
 (defvar org-heading-regexp)
-(declare-function denote-dash-lint-sequences "denote-dash-repack")
-(declare-function denote-dash-fix-sequence-frontmatter "denote-dash-repack")
-(declare-function denote-dash-fix-all-sequence-frontmatter "denote-dash-repack")
-(declare-function denote-dash-repack-sequence-children "denote-dash-repack")
-(declare-function denote-dash-swap-with-parent "denote-dash-repack")
-(declare-function denote-dash-swap-with-previous "denote-dash-repack")
-(declare-function denote-dash-swap-with-next "denote-dash-repack")
-(declare-function denote-dash-reparent "denote-dash-repack")
-(declare-function denote-dash-reparent-recursive "denote-dash-repack")
-(declare-function denote-dash-renumber-recursive "denote-dash-repack")
-(declare-function denote-dash-insert-sequence-note "denote-dash-repack")
-(declare-function denote-dash-retag-sequence "denote-dash-repack")
+;;; Declarations for optional extensions
 
-;;; Custom variables
+(declare-function denote-tree-lint-sequences "denote-tree")
+(declare-function denote-tree-fix-sequence-frontmatter "denote-tree")
+(declare-function denote-tree-fix-all-sequence-frontmatter "denote-tree")
+(declare-function denote-tree-repack-children "denote-tree")
+(declare-function denote-tree-swap-with-parent "denote-tree")
+(declare-function denote-tree-swap-with-previous "denote-tree")
+(declare-function denote-tree-swap-with-next "denote-tree")
+(declare-function denote-tree-reparent "denote-tree")
+(declare-function denote-tree-renumber-recursive "denote-tree")
+(declare-function denote-tree-insert-sequence-note "denote-tree")
+(declare-function denote-tree-retag-sequence "denote-tree")
+(declare-function denote-tree-hierarchy-toggle-fold-sequence "denote-tree")
+(declare-function denote-tree-hierarchy-clear-fold-sequences "denote-tree")
+(declare-function denote-convert-import-from-datetree "denote-convert")
+(declare-function denote-convert-file-type "denote-convert")
 
 (defgroup denote-dash nil
   "Unified Denote dashboard and dispatch."
@@ -149,35 +152,6 @@ Built-in choices: `denote-dash-review-indicator-icon' (a filled circle when
 pending, blank otherwise) and `denote-dash-review-indicator-text' (\"due\" when
 pending, blank otherwise).  Set to a custom function for other presentations."
   :type 'function
-  :group 'denote-dash)
-
-(defcustom denote-dash-hierarchy-initial-fold-depth nil
-  "Depth to collapse to when the hierarchy view first opens.
-nil (default) shows everything expanded, matching upstream.  An integer N
-folds anything deeper than N levels — equivalent to `outline-hide-sublevels'."
-  :type '(choice (const :tag "Expand all" nil) natnum)
-  :group 'denote-dash)
-
-(defvar denote-dash-hierarchy-fold-sequences nil
-  "Sequence-ID strings whose whole subtree starts folded, unconditionally.
-Toggled from a `denote-sequence-hierarchy-mode' buffer with
-`denote-dash-hierarchy-toggle-fold-sequence' rather than customized
-statically; persisted across sessions via `savehist-mode'.  Rename-style
-commands in `denote-dash-repack' keep entries here in sync with sequence
-signatures that change underneath them.")
-
-(defcustom denote-dash-hierarchy-auto-fold-min-size nil
-  "Fold a top-level section (root sequence + descendants) this small.
-A section counts as its root note plus every descendant.  nil disables
-this rule; a small section is trivial to expand by hand, so the default
-is off — it only matters when many tiny sections clutter the view."
-  :type '(choice (const :tag "Disabled" nil) natnum)
-  :group 'denote-dash)
-
-(defcustom denote-dash-hierarchy-auto-fold-max-size nil
-  "Fold a top-level section (root sequence + descendants) larger than this.
-nil disables the rule."
-  :type '(choice (const :tag "Disabled" nil) natnum)
   :group 'denote-dash)
 
 (defcustom denote-dash-hierarchy-show-tags nil
@@ -632,25 +606,26 @@ in both ascending and descending order."
 (keymap-set denote-dash-mode-map "z" #'denote-dash-collapse-all)
 (keymap-set denote-dash-mode-map "t" #'denote-dash-toggle-non-sequence)
 (keymap-set denote-dash-mode-map "r" #'denote-rename-file-using-front-matter)
-(keymap-set denote-dash-mode-map "l" #'denote-dash-lint-sequences)
 (keymap-set denote-dash-mode-map "n" #'next-line)
 (keymap-set denote-dash-mode-map "p" #'previous-line)
 (keymap-set denote-dash-mode-map "g" #'denote-dash-refresh)
-(keymap-set denote-dash-mode-map "M-r" #'denote-dash-swap-with-parent)
-(keymap-set denote-dash-mode-map "M-p" #'denote-dash-swap-with-previous)
-(keymap-set denote-dash-mode-map "M-n" #'denote-dash-swap-with-next)
-(keymap-set denote-dash-mode-map "k" #'denote-dash-retag-sequence)
-(keymap-set denote-dash-mode-map "m" #'denote-dash-reparent)
-(keymap-set denote-dash-mode-map "u" #'denote-dash-renumber-recursive)
-(keymap-set denote-dash-mode-map "i" #'denote-dash-insert-sequence-note)
-(keymap-set denote-dash-mode-map "h" #'denote-dash-fix-sequence-frontmatter)
-(keymap-set denote-dash-mode-map "C-l" #'denote-dash-fix-all-sequence-frontmatter)
+(with-eval-after-load 'denote-tree
+  (keymap-set denote-dash-mode-map "l"   #'denote-tree-lint-sequences)
+  (keymap-set denote-dash-mode-map "M-r" #'denote-tree-swap-with-parent)
+  (keymap-set denote-dash-mode-map "M-p" #'denote-tree-swap-with-previous)
+  (keymap-set denote-dash-mode-map "M-n" #'denote-tree-swap-with-next)
+  (keymap-set denote-dash-mode-map "k"   #'denote-tree-retag-sequence)
+  (keymap-set denote-dash-mode-map "m"   #'denote-tree-reparent)
+  (keymap-set denote-dash-mode-map "u"   #'denote-tree-renumber-recursive)
+  (keymap-set denote-dash-mode-map "i"   #'denote-tree-insert-sequence-note)
+  (keymap-set denote-dash-mode-map "h"   #'denote-tree-fix-sequence-frontmatter)
+  (keymap-set denote-dash-mode-map "C-l" #'denote-tree-fix-all-sequence-frontmatter)
+  (keymap-set denote-dash-mode-map "C-c C-r" #'denote-tree-repack-children))
 (keymap-set denote-dash-mode-map "v" #'denote-dash-schedule-review-at-point)
 (keymap-set denote-dash-mode-map "?" #'denote-dash-dispatch)
 (keymap-set denote-dash-mode-map "q" #'quit-window)
 (keymap-set denote-dash-mode-map "N" #'denote)
 (keymap-set denote-dash-mode-map "w" denote-dash-narrow-map)
-(keymap-set denote-dash-mode-map "C-c C-r" #'denote-dash-repack-sequence-children)
 (keymap-set denote-dash-mode-map "b" (cons "bookmark" denote-dash-bookmark-map))
 
 
@@ -929,161 +904,6 @@ called is always that origin."
       (add-hook 'kill-buffer-hook #'denote-dash--hierarchy-kill-return-to-origin nil t))))
 
 (advice-add 'denote-sequence-hierarchy-find-file :around #'ad:denote-dash--hierarchy-track-origin)
-
-;;; Sequence hierarchy initial folding
-
-(defun denote-dash--hierarchy-heading-positions ()
-  "Return a list of (POINT LEVEL SEQUENCE) for every heading in the buffer.
-LEVEL comes from the `denote-sequence-hierarchy-level' text property and
-SEQUENCE from `denote-retrieve-filename-signature' on the file at that
-property; both are set by `denote-sequence-view-hierarchy'."
-  (let (result)
-    (save-excursion
-      (goto-char (point-min))
-      (while (not (eobp))
-        (when-let* ((level (get-text-property (point) 'denote-sequence-hierarchy-level))
-                    (file (get-text-property (point) 'denote-sequence-hierarchy-file)))
-          (push (list (point) level (denote-retrieve-filename-signature file)) result))
-        (forward-line 1)))
-    (nreverse result)))
-
-(defun denote-dash--hierarchy-section-sizes (headings)
-  "Return an alist of (POINT . SIZE) for each entry in HEADINGS.
-HEADINGS is the list returned by `denote-dash--hierarchy-heading-positions'.
-SIZE counts the heading itself plus every following heading whose level is
-strictly deeper, stopping at the next heading whose level is the same or
-shallower."
-  (let (sizes)
-    (while headings
-      (let* ((entry (car headings))
-             (level (nth 1 entry))
-             (size 1))
-        (catch 'done
-          (dolist (other (cdr headings))
-            (if (> (nth 1 other) level)
-                (setq size (1+ size))
-              (throw 'done nil))))
-        (push (cons (nth 0 entry) size) sizes))
-      (setq headings (cdr headings)))
-    (nreverse sizes)))
-
-(defun denote-dash--hierarchy-should-fold-p (seq size)
-  "Return non-nil if top-level section SEQ of size SIZE should be folded."
-  (or (member seq denote-dash-hierarchy-fold-sequences)
-      (and denote-dash-hierarchy-auto-fold-min-size
-           (<= size denote-dash-hierarchy-auto-fold-min-size))
-      (and denote-dash-hierarchy-auto-fold-max-size
-           (> size denote-dash-hierarchy-auto-fold-max-size))))
-
-(defun denote-dash--hierarchy-apply-initial-fold ()
-  "Fold sections of a freshly populated hierarchy buffer per user options.
-Composes `denote-dash-hierarchy-initial-fold-depth',
-`denote-dash-hierarchy-fold-sequences',
-`denote-dash-hierarchy-auto-fold-min-size', and
-`denote-dash-hierarchy-auto-fold-max-size' — a section folds if any
-enabled rule applies to it."
-  (when denote-dash-hierarchy-initial-fold-depth
-    (outline-hide-sublevels denote-dash-hierarchy-initial-fold-depth))
-  (when (or denote-dash-hierarchy-fold-sequences
-            denote-dash-hierarchy-auto-fold-min-size
-            denote-dash-hierarchy-auto-fold-max-size)
-    (let* ((headings (denote-dash--hierarchy-heading-positions))
-           (sizes (denote-dash--hierarchy-section-sizes headings)))
-      (dolist (entry headings)
-        (pcase-let ((`(,pos ,level ,seq) entry))
-          (when (= level 1)
-            (when (denote-dash--hierarchy-should-fold-p seq (cdr (assq pos sizes)))
-              (save-excursion
-                (goto-char pos)
-                (outline-hide-subtree)))))))))
-
-(add-hook 'denote-sequence-hierarchy-mode-hook #'denote-dash--hierarchy-apply-initial-fold t)
-
-(defun denote-dash--hierarchy-goto-root ()
-  "Move point to the top-level (level 1) heading enclosing point."
-  (while (> (denote-sequence-hierarchy-get-level) 1)
-    (outline-up-heading 1 t)))
-
-(defun denote-dash-hierarchy-toggle-fold-sequence ()
-  "Toggle persistent folding of the sequence section at point.
-Adds or removes the root sequence at point from
-`denote-dash-hierarchy-fold-sequences' — remembered across sessions via
-`savehist-mode', not a static default — and folds or unfolds the section
-to match immediately."
-  (interactive)
-  (save-excursion
-    (denote-dash--hierarchy-goto-root)
-    (if-let* ((file (get-text-property (point) 'denote-sequence-hierarchy-file))
-              (seq (denote-retrieve-filename-signature file)))
-        (if (member seq denote-dash-hierarchy-fold-sequences)
-            (progn
-              (setq denote-dash-hierarchy-fold-sequences
-                    (remove seq denote-dash-hierarchy-fold-sequences))
-              (outline-show-subtree)
-              (message "Sequence %s: fold no longer persisted" seq))
-          (setq denote-dash-hierarchy-fold-sequences
-                (cons seq denote-dash-hierarchy-fold-sequences))
-          (outline-hide-subtree)
-          (message "Sequence %s: will stay folded" seq))
-      (user-error "No sequence heading at point"))))
-
-(defun denote-dash-hierarchy-clear-fold-sequences ()
-  "Forget every sequence toggled to stay folded, then refresh the view."
-  (interactive)
-  (setq denote-dash-hierarchy-fold-sequences nil)
-  (message "Cleared all persisted sequence folds")
-  (when (derived-mode-p 'denote-sequence-hierarchy-mode)
-    (revert-buffer)))
-
-(define-key denote-sequence-hierarchy-mode-map (kbd "z")
-            #'denote-dash-hierarchy-toggle-fold-sequence)
-
-;;; Sequence hierarchy fold-sequence remapping across renames
-
-(defun denote-dash--hierarchy-remap-fold-sequence-prefix (old-seq new-seq)
-  "Rewrite entries under OLD-SEQ to NEW-SEQ in the persisted fold list.
-Any entry equal to OLD-SEQ, or with OLD-SEQ as a proper prefix (a folded
-descendant of a renamed subtree), has that prefix replaced by NEW-SEQ."
-  (when (and old-seq new-seq (not (equal old-seq new-seq)))
-    (setq denote-dash-hierarchy-fold-sequences
-          (seq-map (lambda (s)
-                     (if (string-prefix-p old-seq s)
-                         (concat new-seq (substring s (length old-seq)))
-                       s))
-                   denote-dash-hierarchy-fold-sequences))))
-
-(defun denote-dash--hierarchy-remap-fold-sequence-many (pairs)
-  "Rewrite fold-list entries per PAIRS, a list of (OLD-SEQ . NEW-SEQ).
-Only exact matches are rewritten.  Use this instead of
-`denote-dash--hierarchy-remap-fold-sequence-prefix' when descendant
-sequences are not simple prefix substitutions of the root — e.g. a
-recursive reparent/renumber that corrects letter/digit type alternation
-(`denote-dash--alphanumeric-suffix-rewrite')."
-  (setq denote-dash-hierarchy-fold-sequences
-        (seq-map (lambda (s) (or (cdr (assoc s pairs)) s))
-                 denote-dash-hierarchy-fold-sequences)))
-
-(defun denote-dash--hierarchy-swap-fold-sequence (seq-a seq-b)
-  "Swap SEQ-A and SEQ-B wherever they appear (exact match) in the fold list.
-Use this when a rename swaps exactly two files without touching their
-descendants, e.g. `denote-dash-swap-with-parent'."
-  (setq denote-dash-hierarchy-fold-sequences
-        (seq-map (lambda (s)
-                   (cond ((equal s seq-a) seq-b)
-                         ((equal s seq-b) seq-a)
-                         (t s)))
-                 denote-dash-hierarchy-fold-sequences)))
-
-(defun denote-dash--hierarchy-swap-fold-sequence-prefix (seq-a seq-b)
-  "Swap SEQ-A and SEQ-B subtree prefixes in the persisted fold list.
-Use this when a rename swaps two whole subtrees, e.g.
-`denote-dash--swap-subtrees'."
-  (setq denote-dash-hierarchy-fold-sequences
-        (seq-map (lambda (s)
-                   (cond ((string-prefix-p seq-a s) (concat seq-b (substring s (length seq-a))))
-                         ((string-prefix-p seq-b s) (concat seq-a (substring s (length seq-b))))
-                         (t s)))
-                 denote-dash-hierarchy-fold-sequences)))
 
 ;;; Navigation
 
@@ -1823,117 +1643,7 @@ named `*denote-dash: NAME*'."
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'denote-dash--filter-history)
   (add-to-list 'savehist-additional-variables 'denote-dash--persisted-columns)
-  (add-to-list 'savehist-additional-variables 'denote-dash-hierarchy-fold-sequences)
   (add-to-list 'savehist-additional-variables 'denote-dash-saved-views))
-
-;;; Org datetree import
-
-(defconst denote-dash--datetree-day-re
-  "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}"
-  "Regexp matching a YYYY-MM-DD date prefix in an org datetree day heading.")
-
-(defun denote-dash--datetree-day-date (heading)
-  "Return YYYY-MM-DD prefix if HEADING is a datetree day heading, else nil."
-  (when (string-match denote-dash--datetree-day-re heading)
-    (match-string 0 heading)))
-
-(defun denote-dash--datetree-parent-date ()
-  "Return date string if immediate parent is a datetree day heading, else nil."
-  (save-excursion
-    (when (org-up-heading-safe)
-      (denote-dash--datetree-day-date (org-get-heading t t t t)))))
-
-(defun denote-dash--entry-body ()
-  "Return the body text of the current org heading as a trimmed string."
-  (save-excursion
-    (org-back-to-heading t)
-    (forward-line 1)
-    (org-end-of-meta-data t)
-    (string-trim
-     (buffer-substring-no-properties
-      (point)
-      (if (re-search-forward org-heading-regexp nil t)
-          (match-beginning 0)
-        (point-max))))))
-
-(defun denote-dash--collect-datetree-entries ()
-  "Scan current buffer for leaf org entries under a datetree day heading."
-  (let (entries)
-    (org-map-entries
-     (lambda ()
-       (when-let* ((date (denote-dash--datetree-parent-date)))
-         (let* ((title (org-get-heading t t t t))
-                (tags  (org-get-tags))
-                (body  (denote-dash--entry-body)))
-           (push (list :date date :title title :tags tags :body body) entries))))
-     nil 'file)
-    (nreverse entries)))
-
-(defun denote-dash--import-entry (entry)
-  "Create a Denote note from ENTRY plist."
-  (let* ((date  (plist-get entry :date))
-         (title (plist-get entry :title))
-         (tags  (plist-get entry :tags))
-         (body  (plist-get entry :body))
-         (note-path (denote title tags denote-file-type nil date)))
-    (with-current-buffer (find-file-noselect note-path)
-      (save-excursion
-        (goto-char (point-max))
-        (unless (bolp) (insert "
-"))
-        (insert "
-" body)
-        (save-buffer)))))
-
-(defun denote-dash--entry-in-range-p (entry from-date to-date)
-  "Return non-nil if ENTRY date falls between FROM-DATE and TO-DATE (inclusive)."
-  (let ((d (plist-get entry :date)))
-    (and (or (null from-date) (not (string< d from-date)))
-         (or (null to-date)   (not (string< to-date d))))))
-
-(defun denote-dash-import-from-datetree (file &optional from-date to-date)
-  "Import org datetree entries from FILE as individual Denote notes.
-With optional FROM-DATE and TO-DATE (YYYY-MM-DD strings), restricts
-import to that inclusive date range.  Interactively, prompts for the
-file and whether to apply a date restriction."
-  (interactive
-   (let* ((f (read-file-name "Import from datetree: " nil nil t nil
-                             (lambda (n)
-                                (or (file-directory-p n)
-                                    (string-suffix-p ".org" n)))))
-          (restrict (yes-or-no-p "Restrict to a date range? "))
-          (from (when restrict (org-read-date nil nil nil "From (inclusive): ")))
-          (to   (when restrict (org-read-date nil nil nil "To (inclusive): "))))
-     (list f from to)))
-  (let* ((entries (with-current-buffer (find-file-noselect file)
-                    (denote-dash--collect-datetree-entries)))
-         (filtered (seq-filter (lambda (e)
-                                 (denote-dash--entry-in-range-p e from-date to-date))
-                               entries))
-         (n (length filtered)))
-    (when (zerop n)
-      (user-error "No datetree entries found%s"
-                  (if (or from-date to-date)
-                      (format " between %s and %s" from-date to-date)
-                    "")))
-    (unless (yes-or-no-p (format "Create %d denote note%s from %s? "
-                                 n (if (= n 1) "" "s")
-                                 (file-name-nondirectory file)))
-      (user-error "Import cancelled"))
-    (let ((ok 0) (fail 0))
-      (dolist (entry filtered)
-        (condition-case err
-            (progn (denote-dash--import-entry entry) (setq ok (1+ ok)))
-          (error
-           (setq fail (1+ fail))
-           (message "Skipped %S: %s"
-                    (plist-get entry :title)
-                    (error-message-string err)))))
-      (message "Imported %d/%d note%s%s."
-               ok n (if (= ok 1) "" "s")
-               (if (> fail 0) (format " (%d failed)" fail) "")))))
-
-;;; Sequence alignment, repack, swap, and reparent live in denote-dash-repack.el
 
 (defun denote-dash-rename-all-files-using-front-matter ()
   "Rename every Denote note's filename to match its front matter.
@@ -1961,69 +1671,6 @@ for every note, via `denote-rename-file-using-front-matter'."
                renamed n (if (= renamed 1) "" "s")
                (if (> errors 0) (format " (%d errors)" errors) "")))
     (when (derived-mode-p 'denote-dash-mode) (denote-dash-refresh))))
-
-;;; File type migration
-
-(defun denote-dash--front-matter-end (file-type)
-  "Return the position where FILE-TYPE's front matter block ends in the
-current buffer.  Finds the last line matching any of the title, keywords,
-signature, identifier, or date key regexps for FILE-TYPE, then also
-consumes a trailing delimiter-only line (e.g. --- or +++, used to close
-YAML/TOML front matter) and any blank separator lines that follow it."
-  (let ((end (point-min)))
-    (seq-do (lambda (component)
-              (save-excursion
-                (goto-char (point-min))
-                (when (re-search-forward
-                       (funcall (denote--get-component-key-regexp-function component) file-type)
-                       nil t)
-                  (setq end (max end (1+ (line-end-position)))))))
-            '(title keywords signature identifier date))
-    (goto-char end)
-    (when (looking-at "[ \t]*\\(?:-\\{3,\\}\\|\\+\\{3,\\}\\)[ \t]*\n")
-      (goto-char (match-end 0)))
-    (skip-chars-forward "\n")
-    (point)))
-
-(defun denote-dash-convert-file-type (file new-file-type)
-  "Migrate FILE's front matter and extension to NEW-FILE-TYPE.
-Rewrites only the front matter block (title, keywords, signature,
-identifier, date) in NEW-FILE-TYPE's syntax and renames the file to
-match NEW-FILE-TYPE's extension.  The note body is left untouched —
-converting its prose between formats (e.g. Org markup to Markdown
-syntax) is left to the author."
-  (interactive
-   (list (denote-dash--target-file)
-         (denote--valid-file-type (or (denote-file-type-prompt) denote-file-type))))
-  (let ((old-file-type (denote-filetype-heuristics file)))
-    (when (eq old-file-type new-file-type)
-      (user-error "File is already of type %s" new-file-type))
-    (unless (yes-or-no-p (format "Convert %s from %s to %s (front matter + extension only)? "
-                                 (file-name-nondirectory file) old-file-type new-file-type))
-      (user-error "Cancelled"))
-    (let* ((id (or (denote-retrieve-filename-identifier file) ""))
-           (date (denote-retrieve-front-matter-date-value file old-file-type))
-           (title (or (denote-retrieve-title-or-filename file old-file-type) ""))
-           (keywords (denote-retrieve-front-matter-keywords-value file old-file-type))
-           (signature (or (denote-retrieve-filename-signature file) ""))
-           (new-front-matter (denote--format-front-matter
-                              title date keywords id signature new-file-type))
-           (new-name (denote-format-file-name (file-name-directory file) id keywords title
-                                              (denote--file-extension new-file-type) signature))
-           (buf (find-file-noselect file)))
-      (with-current-buffer buf
-        (save-excursion
-          (goto-char (point-min))
-          (delete-region (point-min) (denote-dash--front-matter-end old-file-type))
-          (goto-char (point-min))
-          (insert new-front-matter))
-        (save-buffer))
-      (kill-buffer buf)
-      (unless (string= (expand-file-name file) (expand-file-name new-name))
-        (rename-file file new-name))
-      (message "Converted %s -> %s" (file-name-nondirectory file) (file-name-nondirectory new-name))
-      (when (derived-mode-p 'denote-dash-mode)
-        (denote-dash-refresh)))))
 
 ;;; Target file resolution
 
@@ -2173,41 +1820,41 @@ fallback prompt even when the visited buffer unambiguously named FILE."
 
 ;;; Hierarchy-view actions menu
 
-(defconst denote-dash-hierarchy-actions
-  '(("rename"             denote-dash-rename-file                   "change title/keywords/signature")
-    ("rename from fm"     denote-dash-rename-file-using-front-matter "sync filename to front matter")
-    ("retag"              denote-dash-retag-file                     "add/remove keywords")
-    ("reparent"           denote-dash-reparent                       "move under a new (or no) parent")
-    ("renumber"           denote-dash-renumber-recursive             "move to a specific sequence, recursively")
-    ("swap with parent"   denote-dash-swap-with-parent               "swap sequence position with parent")
-    ("swap with previous" denote-dash-swap-with-previous             "swap with previous sibling (with descendants)")
-    ("swap with next"     denote-dash-swap-with-next                 "swap with next sibling (with descendants)")
-    ("filter by tag"       denote-dash-hierarchy-filter               "show only notes with tag")
-    ("exclude tag"         denote-dash-hierarchy-exclude-tag          "hide notes with tag")
-    ("clear filter"        denote-dash-hierarchy-clear-filter        "remove active tag filter")
-    ("toggle tags display" denote-dash-hierarchy-toggle-show-tags    "toggle tags on/off"))
-  "Actions for `denote-dash-hierarchy-actions-menu', as (NAME FN DESCRIPTION).
-Each FN already resolves its target file from `denote-dash--file-at-point'
-via its own interactive spec, so the menu itself never has to.")
+(defun denote-dash--hierarchy-actions ()
+  "Return active actions for `denote-dash-hierarchy-actions-menu'."
+  (let ((actions
+         `(("rename"             denote-dash-rename-file                   "change title/keywords/signature")
+           ("rename from fm"     denote-dash-rename-file-using-front-matter "sync filename to front matter")
+           ("retag"              denote-dash-retag-file                     "add/remove keywords")
+           ,@(when (fboundp 'denote-tree-reparent)
+               '(("reparent"           denote-tree-reparent                       "move under a new (or no) parent")
+                 ("renumber"           denote-tree-renumber-recursive             "move to a specific sequence, recursively")
+                 ("swap with parent"   denote-tree-swap-with-parent               "swap sequence position with parent")
+                 ("swap with previous" denote-tree-swap-with-previous             "swap with previous sibling (with descendants)")
+                 ("swap with next"     denote-tree-swap-with-next                 "swap with next sibling (with descendants)")))
+           ("filter by tag"       denote-dash-hierarchy-filter               "show only notes with tag")
+           ("exclude tag"         denote-dash-hierarchy-exclude-tag          "hide notes with tag")
+           ("clear filter"        denote-dash-hierarchy-clear-filter        "remove active tag filter")
+           ("toggle tags display" denote-dash-hierarchy-toggle-show-tags    "toggle tags on/off"))))
+    actions))
 
 ;;;###autoload
 (defun denote-dash-hierarchy-actions-menu ()
   "Pick and run a rename/retag/sequence action on the hierarchy row at point.
-Candidates come from `denote-dash-hierarchy-actions'; each is one of the
-existing rename/retag/sequence commands, so this only adds a single
-entry point over them, not new file-mutating logic. Refreshes the
-hierarchy view in place afterward via `revert-buffer', so a rename,
-retag, or renumber shows up immediately without leaving the buffer."
+Candidates come from `denote-dash--hierarchy-actions'; each is one of the
+existing rename/retag/sequence commands. Refreshes the hierarchy view in
+place afterward via `revert-buffer'."
   (interactive)
   (unless (denote-dash--file-at-point)
     (user-error "No note at point"))
-  (let* ((table (seq-map (lambda (e) (cons (car e) (nth 2 e))) denote-dash-hierarchy-actions))
+  (let* ((actions (denote-dash--hierarchy-actions))
+         (table (seq-map (lambda (e) (cons (car e) (nth 2 e))) actions))
          (choice (annotated-completing-read
                   table
                   :prompt "Hierarchy action: "
                   :require-match t
                   :category 'command))
-         (fn (nth 1 (assoc choice denote-dash-hierarchy-actions))))
+         (fn (nth 1 (assoc choice actions))))
     (call-interactively fn)
     (when (derived-mode-p 'denote-sequence-hierarchy-mode)
       (revert-buffer))))
@@ -2243,6 +1890,16 @@ retag, or renumber shows up immediately without leaving the buffer."
 (defun denote-dash--denote-explore-available-p ()
   "Return non-nil if `denote-explore' is available."
   (require 'denote-explore nil t))
+
+(defun denote-dash--denote-tree-available-p ()
+  "Return non-nil if `denote-tree' is available."
+  (or (featurep 'denote-tree) (require 'denote-tree nil t)))
+
+(defun denote-dash--denote-convert-available-p ()
+  "Return non-nil if `denote-convert' is available."
+  (or (featurep 'denote-convert) (require 'denote-convert nil t)))
+
+;;;###autoload
 (transient-define-prefix denote-dash-dispatch ()
   "Dispatch Denote commands by area."
   [["Find"
@@ -2258,26 +1915,29 @@ retag, or renumber shows up immediately without leaving the buffer."
     ("ss" "seq sibling"        denote-sequence-new-sibling)
     ("sh" "seq child"          denote-sequence-new-child)
     ("sp" "seq parent"         denote-sequence-new-parent)
-    ("si" "insert at seq"      denote-dash-insert-sequence-note)
-    ("id" "from org datetree"  denote-dash-import-from-datetree)]
+    ("si" "insert at seq"      denote-tree-insert-sequence-note
+     :if denote-dash--denote-tree-available-p)
+    ("id" "from org datetree"  denote-convert-import-from-datetree
+     :if denote-dash--denote-convert-available-p)]
    ["Rename"
     ("rr" "rename file"        denote-dash-rename-file)
     ("rf" "rename from fm"     denote-dash-rename-file-using-front-matter)
     ("rt" "retag (keywords)"   denote-dash-retag-file)
-    ("rc" "convert file type"  denote-dash-convert-file-type)
+    ("rc" "convert file type"  denote-convert-file-type
+     :if denote-dash--denote-convert-available-p)
     ("raf" "update all from fm" denote-dash-rename-all-files-using-front-matter)]
-   ["Sequence"
-    ("al" "lint sequences"     denote-dash-lint-sequences)
-    ("ah" "fix frontmatter"    denote-dash-fix-sequence-frontmatter)
-    ("af" "fix all frontmatter" denote-dash-fix-all-sequence-frontmatter)
-    ("ar" "repack children"    denote-dash-repack-sequence-children)
-    ("as" "swap with parent"   denote-dash-swap-with-parent)
-    ("ap" "swap with previous" denote-dash-swap-with-previous)
-    ("an" "swap with next"     denote-dash-swap-with-next)
-    ("ak" "retag sequence"     denote-dash-retag-sequence)]]
-  [["Splice"
-    ("rp" "reparent (asks recursive)" denote-dash-reparent)
-    ("rn" "renumber recursive" denote-dash-renumber-recursive)]
+   ["Sequence" :if denote-dash--denote-tree-available-p
+    ("al" "lint sequences"     denote-tree-lint-sequences)
+    ("ah" "fix frontmatter"    denote-tree-fix-sequence-frontmatter)
+    ("af" "fix all frontmatter" denote-tree-fix-all-sequence-frontmatter)
+    ("ar" "repack children"    denote-tree-repack-children)
+    ("as" "swap with parent"   denote-tree-swap-with-parent)
+    ("ap" "swap with previous" denote-tree-swap-with-previous)
+    ("an" "swap with next"     denote-tree-swap-with-next)
+    ("ak" "retag sequence"     denote-tree-retag-sequence)]]
+  [["Splice" :if denote-dash--denote-tree-available-p
+    ("rp" "reparent (asks recursive)" denote-tree-reparent)
+    ("rn" "renumber recursive" denote-tree-renumber-recursive)]
    ["Review" :if denote-dash--denote-review-available-p
     ("rd" "set review date"    denote-review-set-date)
     ("rl" "review list"        denote-dash-review-display-list)]
@@ -2313,8 +1973,10 @@ retag, or renumber shows up immediately without leaving the buffer."
     ("wc" "clear grep filter"  denote-dash-clear-grep-filter)]
    ["Hierarchy" :if-derived denote-sequence-hierarchy-mode
     ("ha" "actions menu"       denote-dash-hierarchy-actions-menu)
-    ("hz" "toggle persist fold" denote-dash-hierarchy-toggle-fold-sequence)
-    ("hc" "clear persisted folds" denote-dash-hierarchy-clear-fold-sequences)]
+    ("hz" "toggle persist fold" denote-tree-hierarchy-toggle-fold-sequence
+     :if denote-dash--denote-tree-available-p)
+    ("hc" "clear persisted folds" denote-tree-hierarchy-clear-fold-sequences
+     :if denote-dash--denote-tree-available-p)]
    ["Org" :if-derived org-mode
     ("ox" "extract subtree"    denote-org-extract-org-subtree)
     ("or" "extract + link"     orgx-migrate-subtree-to-denote)
@@ -2323,6 +1985,24 @@ retag, or renumber shows up immediately without leaving the buffer."
     ("od" "dblock: links"      denote-org-dblock-insert-links)
     ("op" "dblock: backlinks"  denote-org-dblock-insert-backlinks)
     ("of" "dblock: files"      denote-org-dblock-insert-files)]])
+
+;;; Refresh listeners for denote-tree and denote-convert
+
+(defun denote-dash-refresh-all-buffers ()
+  "Refresh all live `denote-dash-mode' buffers."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (derived-mode-p 'denote-dash-mode)
+        (denote-dash-refresh)))))
+
+(with-eval-after-load 'denote-tree
+  (add-hook 'denote-tree-after-rename-functions (lambda (&rest _) (denote-dash-refresh-all-buffers)))
+  (add-hook 'denote-tree-after-reseq-functions (lambda (&rest _) (denote-dash-refresh-all-buffers)))
+  (add-hook 'denote-tree-after-swap-functions (lambda (&rest _) (denote-dash-refresh-all-buffers)))
+  (add-hook 'denote-tree-after-lint-fix-functions (lambda (&rest _) (denote-dash-refresh-all-buffers))))
+
+(with-eval-after-load 'denote-convert
+  (add-hook 'denote-convert-after-conversion-functions (lambda (&rest _) (denote-dash-refresh-all-buffers))))
 
 (provide 'denote-dash)
 ;;; denote-dash.el ends here
