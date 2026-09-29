@@ -247,17 +247,19 @@
 (use-package mcpkit
   :ensure t
   :defer t
-  :commands (mcpkit-start-service mcpkit-stop-service tychoish/mcpkit-start-default-services)
+  :commands (mcpkit-start-service mcpkit-stop-service mcpkit-active-port
+             tychoish/mcpkit-start-default-services)
   :init
   (defun tychoish/mcpkit-start-default-services ()
-    "Start default MCP services (denote, emacs) on port 8765."
+    "Start default MCP services (denote, emacs) on a freshly assigned port.
+Each daemon gets its own OS-assigned port rather than a shared fixed one, so
+two daemons never race over the same socket. Use `mcpkit-active-port' to
+discover the bound port afterward."
     (interactive)
     (when (require 'denote-mcp nil t)
-      (mcpkit-start-service 'denote))
+      (mcpkit-start-service 'denote :port t))
     (when (require 'mcpkit-emacs nil t)
-      (mcpkit-start-service 'emacs)))
-  (when (and (daemonp) (not (eq (daemonp) t)))
-    (add-hook 'after-init-hook #'tychoish/mcpkit-start-default-services)))
+      (mcpkit-start-service 'emacs :port t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
