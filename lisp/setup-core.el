@@ -2635,6 +2635,14 @@ calls, so it can't be added to that hook directly."
   (keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
   (keymap-set hud-robot-agent-shell-map "p" #'agent-shell-workflow-select)
   (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-workflow-dispatch-menu)
+  (keymap-set hud-robot-agent-shell-map "a" #'agent-shell-menu-select-action)
+  (keymap-set hud-robot-agent-shell-send-map "d" #'agent-shell-send-dwim)
+  (keymap-set hud-robot-agent-shell-send-map "r" #'agent-shell-send-region)
+  (keymap-set hud-robot-agent-shell-send-map "f" #'agent-shell-send-file)
+  (keymap-set hud-robot-agent-shell-send-map "t" #'agent-shell-send-file-to)
+  (keymap-set hud-robot-agent-shell-send-map "b" #'agent-shell-menu-send-buffer)
+  (keymap-set hud-robot-agent-shell-send-map "p" #'agent-shell-menu-send-file)
+  (keymap-set hud-robot-agent-shell-send-map "y" #'agent-shell-yank-dwim)
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map hud-robot-agent-shell-map
     :bind-key "x")
