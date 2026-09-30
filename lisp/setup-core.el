@@ -1299,6 +1299,12 @@ return until the minibuffer session ends."
     (setq imenu-generic-expression markdown-imenu-generic-expression))
   (add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)
 
+  (defun tychoish/markdown-disable-colon-electric-indent ()
+    "Prevent `:' from triggering `markdown-indent-line', which
+resets point to column 0 outside of definition-list context."
+    (setq-local electric-indent-chars (remq ?: electric-indent-chars)))
+  (add-hook 'markdown-mode-hook #'tychoish/markdown-disable-colon-electric-indent)
+
   (if (eq system-type 'darwin)
       (setq markdown-command "/usr/local/bin/mmd --nosmart")
     (setq markdown-command "/usr/bin/markdown"))
