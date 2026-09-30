@@ -144,7 +144,9 @@ own line.
 | `ad:`                  | Advice functions (`:around`, `:before`, `:after` targets)               |
 | `cli/`                 | Command-line argument handlers registered with `command-line-functions` |
 
-Never define `tychoish/` functions in `xlib.el`. `xlib.el` is a pure utility library with no dependency on the config's domain logic.
+Never define `tychoish/` functions in the `xtdlib` package (checked out separately at
+`~/src/xtdlib`, installed as an ELPA package — not a file in this repo's `lisp/`). It's a
+pure utility library with no dependency on this config's domain logic.
 
 #### Predicates
 
@@ -152,8 +154,8 @@ End predicate functions with `-p`: `gui-p`, `should-read-abbrev-file-p`.
 
 #### Toggle generators
 
-Use `create-toggle-functions` from `xlib.el` to generate `turn-on-X`, `turn-off-X`, and
-`toggle-X` triads. Do not write these by hand.
+Use `create-toggle-functions` from `xtdlib` (`xtd-macro.el`) to generate `turn-on-X`,
+`turn-off-X`, and `toggle-X` triads. Do not write these by hand.
 
 #### Single-use internal functions
 

@@ -39,7 +39,6 @@ Use `map-into` to build a hash table from a list of cons cells without an explic
 | `lisp/setup-core.el`             | All `use-package` forms. Organized by functional area with section headers.                   |
 | `lisp/setup-mail.el`             | Mu4e and mail account configuration.                                                          |
 | `lisp/orgx.el`                      | Org-mode, org-roam, capture templates.                                                        |
-| `lisp/xtdlib.el`                    | Pure utility library: extensions, macros, no Emacs UI deps.                                   |
 | `lisp/builder.el`                   | Compilation buffer system.                                                                    |
 | `lisp/annotated-completing-read.el` | annotated-completing-read (ACR) completion utility.                                           |
 | `elpa/agent-shell-menu/`            | ACR-based menus, transient prefixes, buffer/permission/command/collapse UI (own git repo)     |
@@ -75,7 +74,7 @@ Lexical binding is mandatory on every file.
   (`:commands` last). Use `with-eval-after-load` (not `eval-after-load`) for config that
   needs a package loaded but shouldn't trigger loading it. `declare-function` for deferred
   packages' functions.
-- Load order: `early-init.el` → `init.el` (`with-gc-suppressed`) → `xtdlib` → `bootstrap` →
+- Load order: `early-init.el` → `init.el` (`with-gc-suppressed`) → `hud-mode` → `bootstrap` →
   `setup-core` → `setup-mail` → `orgx` → `user/*.el`. Don't add top-level `require`
   calls to `init.el` outside this sequence without a strong reason.
 - Prefer `add-hook`/`add-one-shot-hook` over calling init functions directly at load time.
@@ -121,8 +120,10 @@ Lexical binding is mandatory on every file.
 ## Testing
 
 Tests live in `test/`: `M-x load-file` or `emacs -batch -l test/tychoish-test.el`. New
-`xtdlib.el` utilities or DSL macros need at least a smoke test. See
-`eglot-test-at-point.el` for test-runner integration examples.
+utilities or DSL macros added to this repo's own `lisp/*.el` files need at least a smoke
+test. (Utilities in the separate `xtdlib` package — checked out at `~/src/xtdlib` — are
+tested in that package's own repo.) See `eglot-test-at-point.el` for test-runner
+integration examples.
 
 ---
 
@@ -137,7 +138,7 @@ before committing.
 ## Commit and Change Hygiene
 
 - One concern per commit.
-- After changing `bootstrap.el`/`xtdlib.el`, byte-compile with
+- After changing `bootstrap.el`/`hud-mode.el`, byte-compile with
   `M-x byte-compile-all-user-emacs-files` to catch warnings.
 - Removing a keybinding: check other files for references first.
 - `user/` is gitignored — machine-specific overrides go there, not in committed files.
