@@ -443,6 +443,10 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
   :name "agent-shell"
   :doc "Agent shell commands under C-c r s (hud-mode).")
 
+(defvar-keymap hud-robot-agent-shell-send-map
+  :name "agent-shell-send"
+  :doc "Send file/region/buffer to an agent-shell session under C-c r s s (hud-mode).")
+
 (defvar-keymap hud-shell-eat-map
   :name "shell-eat"
   :doc "Shell eat commands under C-c s e (hud-mode).")
@@ -604,6 +608,7 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 (keymap-set hud-ide-map "l" (cons "eglot" hud-eglot-global-map))
 (keymap-set hud-shell-map "e" (cons "shell-eat" hud-shell-eat-map))
 (keymap-set hud-robot-map "s" (cons "agent-shell" hud-robot-agent-shell-map))
+(keymap-set hud-robot-agent-shell-map "s" (cons "send" hud-robot-agent-shell-send-map))
 (keymap-set hud-robot-map "g" (cons "gptel" hud-robot-gptel-map))
 (keymap-set hud-robot-gptel-map "m" (cons "gptel-set-default-model" hud-robot-gptel-set-default-model-map))
 (keymap-set hud-robot-map "o" (cons "ollama" hud-robot-ollama-map))
