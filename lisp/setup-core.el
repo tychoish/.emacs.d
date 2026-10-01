@@ -1129,16 +1129,46 @@ clipboard."
   (keymap-set hud-denote-map "b" #'denote-backlinks)
   (keymap-set hud-denote-map "r" #'denote-dash-rename-file)
   (keymap-set hud-denote-map "." #'denote-dash-dispatch)
+  (keymap-set hud-denote-map "f" #'consult-denote-find)
+  (keymap-set hud-denote-map "g" #'consult-denote-grep)
   (keymap-set hud-denote-map "," #'denote-dash)
   (keymap-set hud-denote-map "k" #'denote-dash-save-and-kill-all-notes)
   (keymap-set hud-denote-map "u" '("rename-using-front-matter". denote-dash-rename-file-using-front-matter))
+  (keymap-set hud-denote-map "j" #'denote-journal-new-entry)
   (keymap-set hud-denote-hierarchy-map "v" #'denote-dash-hierarchy-switch-or-view)
   (keymap-set hud-denote-hierarchy-map "t" #'denote-dash-hierarchy-view-by-note)
+  (keymap-set hud-denote-review-map "d" #'denote-review-set-date)
+  (keymap-set hud-denote-review-map "l" #'denote-review-display-list)
+  (keymap-set hud-denote-explore-map "n" #'denote-explore-count-notes)
+  (keymap-set hud-denote-explore-map "c" #'denote-explore-count-keywords)
+  (keymap-set hud-denote-explore-map "r" #'denote-explore-random-note)
+  (keymap-set hud-denote-explore-map "l" #'denote-explore-random-link)
+  (keymap-set hud-denote-explore-map "d" #'denote-explore-duplicate-notes)
+  (keymap-set hud-denote-explore-map "s" #'denote-explore-single-keywords)
+  (keymap-set hud-denote-explore-map "z" #'denote-explore-zero-keywords)
+  (keymap-set hud-denote-explore-map "k" #'denote-explore-rename-keyword)
+  (keymap-set hud-denote-explore-map "m" #'denote-explore-missing-links)
+  (keymap-set hud-denote-explore-map "y" #'denote-explore-sync-metadata)
+  (keymap-set hud-denote-explore-map "b" #'denote-explore-barchart-keywords)
+  (keymap-set hud-denote-explore-map "t" #'denote-explore-barchart-timeline)
+  (keymap-set hud-denote-sequence-map "c" #'denote-sequence-new-child)
+  (keymap-set hud-denote-sequence-map "s" #'denote-sequence-new-sibling)
+  (keymap-set hud-denote-sequence-map "r" #'denote-sequence-rename-as-parent)
+  (keymap-set hud-denote-sequence-map "p" #'denote-sequence-new-parent)
+  (keymap-set hud-denote-sequence-map "l" #'denote-sequence-link)
+  (keymap-set hud-denote-sequence-map "m" #'denote-tree-reparent)
+  (keymap-set hud-denote-sequence-map "n" #'denote-tree-renumber-recursive)
+  (keymap-set hud-denote-sequence-map "i" #'denote-tree-insert-sequence-note)
   (make-read-extended-command-for-prefix "denote"
     :bind-map hud-denote-map
     :bind-key "x")
   :config
   (consult-denote-mode)
+  (require 'denote-sequence)
+  (require 'denote-explore)
+  (require 'denote-review)
+  (setq denote-dash-default-filter '(not "journal"))
+  (setq denote-review-insert-after "date")
   (when (default-boundp 'denote-directory)
     (setq denote-directory '()))
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
@@ -1148,18 +1178,27 @@ clipboard."
   (setq denote-sort-keywords t)
   (setq denote-save-buffers t)
   (setq denote-prompts '(title keywords file-type))
+  (setq denote-journal-title-format nil)
+  (setq denote-journal-directory (file-name-concat local-notes-directory "denote" "journal"))
+  (setq denote-sequence-scheme 'alphanumeric)
+  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
+  (setq denote-explore-network-format "graphviz")
+  (setq denote-explore-network-graphviz-filetype "svg")
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*denote-sequence-hierarchy "
+                 (display-buffer-reuse-window display-buffer-pop-up-window)))
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
     (add-to-list 'savehist-additional-variables 'denote--keywords-history))
   (defun tychoish--denote-rename-buffer (&optional buffer)
-    "Rename denote BUFFER to `[D:SEQ] TITLE' or just TITLE when there is no sequence."
+    "Rename denote BUFFER to `[d:SEQ] TITLE' or just TITLE when there is no sequence."
     (when-let* ((file (buffer-file-name buffer))
                 ((denote-file-has-identifier-p file)))
       (let* ((sig   (denote-retrieve-filename-signature file))
              (title (or (denote-retrieve-filename-title file)
                         (file-name-base file)))
              (name  (if (and sig (not (string-empty-p sig)))
-                        (format "[D:%s] %s" sig title)
+                        (format "[d:%s] %s" sig title)
                       title)))
         (rename-buffer name :unique))))
   (setq denote-rename-buffer-function #'tychoish--denote-rename-buffer)
@@ -1206,85 +1245,11 @@ clipboard."
   (consult-notes-denote-mode 1)
 
   (defun ad:consult-notes--single-directory-string (fn &rest args)
-    "Let-bind `denote-directory' to a single string for the duration of FN.
-`consult-notes' and `consult-notes-denote' treat `denote-directory' as a
-bare directory string in several places (`expand-file-name',
-`file-relative-name'), but this config sets it to a list per the
-`denote-directories' multi-directory convention.  Substituting the common
-root here keeps those call sites working without patching the vendored
-package.  The let-binding covers the whole interactive session (including
-any async candidate recomputation), since the advised commands don't
-return until the minibuffer session ends."
+    "Let-bind `denote-directory' to a single string for the duration of FN."
     (let ((denote-directory (denote-directories-get-common-root)))
       (apply fn args)))
   (advice-add 'consult-notes :around #'ad:consult-notes--single-directory-string)
   (advice-add 'consult-notes-search-in-all-notes :around #'ad:consult-notes--single-directory-string))
-
-(use-package consult-denote
-  :ensure t
-  :defer t
-  :commands (consult-denote-mode consult-denote-find consult-denote-grep)
-  :init
-  (keymap-set hud-denote-map "f" #'consult-denote-find)
-  (keymap-set hud-denote-map "g" #'consult-denote-grep))
-
-(use-package denote-journal
-  :ensure t
-  :defer t
-  :commands (denote-journal-new-entry-after-last)
-  :init
-  (keymap-set hud-denote-map "j" #'denote-journal-new-entry)
-  :config
-  (setq denote-journal-title-format nil)
-  (setq denote-journal-directory (file-name-concat local-notes-directory "denote" "journal")))
-
-(use-package denote-sequence
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-denote-sequence-map "c" #'denote-sequence-new-child)
-  (keymap-set hud-denote-sequence-map "s" #'denote-sequence-new-sibling)
-  (keymap-set hud-denote-sequence-map "r" #'denote-sequence-rename-as-parent)
-  (keymap-set hud-denote-sequence-map "p" #'denote-sequence-new-parent)
-  (keymap-set hud-denote-sequence-map "l" #'denote-sequence-link)
-  (keymap-set hud-denote-sequence-map "m" #'denote-tree-reparent)
-  (keymap-set hud-denote-sequence-map "n" #'denote-tree-renumber-recursive)
-  (keymap-set hud-denote-sequence-map "i" #'denote-tree-insert-sequence-note)
-  :config
-  (setq denote-sequence-scheme 'alphanumeric)
-  (add-to-list 'display-buffer-alist
-               '("\\`\\*denote-sequence-hierarchy "
-                 (display-buffer-reuse-window display-buffer-pop-up-window))))
-
-(use-package denote-explore
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-denote-explore-map "n" #'denote-explore-count-notes)
-  (keymap-set hud-denote-explore-map "c" #'denote-explore-count-keywords)
-  (keymap-set hud-denote-explore-map "r" #'denote-explore-random-note)
-  (keymap-set hud-denote-explore-map "l" #'denote-explore-random-link)
-  (keymap-set hud-denote-explore-map "d" #'denote-explore-duplicate-notes)
-  (keymap-set hud-denote-explore-map "s" #'denote-explore-single-keywords)
-  (keymap-set hud-denote-explore-map "z" #'denote-explore-zero-keywords)
-  (keymap-set hud-denote-explore-map "k" #'denote-explore-rename-keyword)
-  (keymap-set hud-denote-explore-map "m" #'denote-explore-missing-links)
-  (keymap-set hud-denote-explore-map "y" #'denote-explore-sync-metadata)
-  (keymap-set hud-denote-explore-map "b" #'denote-explore-barchart-keywords)
-  (keymap-set hud-denote-explore-map "t" #'denote-explore-barchart-timeline)
-  :config
-  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
-  (setq denote-explore-network-format "graphviz")
-  (setq denote-explore-network-graphviz-filetype "svg"))
-
-(use-package denote-review
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-denote-review-map "d" #'denote-review-set-date)
-  (keymap-set hud-denote-review-map "l" #'denote-review-display-list)
-  :config
-  (setq denote-review-insert-after "date"))
 
 (use-package markdown-mode
   :ensure t

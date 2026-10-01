@@ -71,6 +71,9 @@
    denote-tree
    denote-convert
    denote-dash
+   denote-review
+   denote-sequence
+   denote-explore
    sprite
    tailscale
    docker
