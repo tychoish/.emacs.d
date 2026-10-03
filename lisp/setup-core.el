@@ -251,15 +251,29 @@
              tychoish/mcpkit-start-default-services)
   :init
   (defun tychoish/mcpkit-start-default-services ()
-    "Start default MCP services (denote, emacs) on a freshly assigned port.
+    "Start default MCP services (denote, asq, emacs, org-capture, write-plan) on a shared port.
 Each daemon gets its own OS-assigned port rather than a shared fixed one, so
 two daemons never race over the same socket. Use `mcpkit-active-port' to
-discover the bound port afterward."
+discover the bound port afterward. Also registers the daemon with `mcpkit-proxy'."
     (interactive)
     (when (require 'denote-mcp nil t)
       (mcpkit-start-service 'denote :port t))
     (when (require 'mcpkit-emacs nil t)
-      (mcpkit-start-service 'emacs :port t))))
+      (mcpkit-start-service 'emacs))
+    (when (require 'asq-mcp nil t)
+      (mcpkit-start-service 'asq))
+    (when (require 'org-capture-mcp nil t)
+      (mcpkit-start-service 'org-capture))
+    (when (require 'write-plan-mcp nil t)
+      (mcpkit-start-service 'write-plan))
+    (when-let* ((port (mcpkit-active-port)))
+      (when (require 'mcpkit-proxy nil t)
+        (let ((name (or (bound-and-true-p server-name)
+                        (and (fboundp 'daemonp) (daemonp))
+                        "main")))
+          (when (fboundp 'mcpkit-proxy-register-route)
+            (mcpkit-proxy-register-route (format "%s" name) port)))))
+    (mcpkit-active-port)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
