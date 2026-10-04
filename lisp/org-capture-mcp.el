@@ -1,1 +1,0 @@
-/home/tychoish/.claude/skills/org-capture/org-capture-mcp.el

@@ -1,1 +1,0 @@
-/home/tychoish/.claude/skills/write-plan/write-plan-mcp.el
