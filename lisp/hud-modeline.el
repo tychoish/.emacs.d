@@ -28,6 +28,7 @@
 (require 'subr-x)
 (require 'map)
 (require 'seq)
+(require 'cl-lib)
 
 (declare-function anzu--reset-status "anzu")
 (declare-function flycheck-count-errors "flycheck")
@@ -695,14 +696,16 @@ Right-alignment is provided by `mode-line-format-right-align'.")
 (defvar hud-modeline--saved-underlines nil
   "Alist of (FACE . underline-value) saved before hud-modeline-mode activation.")
 
-(defun hud-modeline--suppress-underlines ()
-  "Save and clear :underline on standard mode-line faces."
-  (setq hud-modeline--saved-underlines
-        (seq-map (lambda (face)
-                   (cons face (face-attribute face :underline nil t)))
-                 hud-modeline--mode-line-faces))
+(defun hud-modeline--suppress-underlines (&optional frame)
+  "Save and clear :underline on standard mode-line faces.
+When FRAME is non-nil, apply suppression to FRAME only."
+  (unless frame
+    (setq hud-modeline--saved-underlines
+          (seq-map (lambda (face)
+                     (cons face (face-attribute face :underline nil t)))
+                   hud-modeline--mode-line-faces)))
   (seq-do (lambda (face)
-            (set-face-attribute face nil :underline nil))
+            (set-face-attribute face frame :underline nil))
           hud-modeline--mode-line-faces))
 
 (defun hud-modeline--restore-underlines ()
@@ -727,16 +730,32 @@ Right-alignment is provided by `mode-line-format-right-align'.")
           (list :line-width line-width :style style)
         (list :line-width line-width)))))
 
-(defun hud-modeline--apply-box ()
-  "Save and apply the box spec from `hud-modeline-box-style' to mode-line faces."
+(defun hud-modeline--apply-box (&optional frame)
+  "Save and apply the box spec from `hud-modeline-box-style' to mode-line faces.
+When FRAME is non-nil, apply box spec to FRAME only."
   (when-let* ((spec (hud-modeline--box-spec)))
-    (setq hud-modeline--saved-boxes
-          (seq-map (lambda (face)
-                     (cons face (face-attribute face :box nil t)))
-                   hud-modeline--mode-line-faces))
+    (unless frame
+      (setq hud-modeline--saved-boxes
+            (seq-map (lambda (face)
+                       (cons face (face-attribute face :box nil t)))
+                     hud-modeline--mode-line-faces)))
     (seq-do (lambda (face)
-              (set-face-attribute face nil :box spec))
+              (set-face-attribute face frame :box spec))
             hud-modeline--mode-line-faces)))
+
+(defun hud-modeline--on-theme-enable (&rest _theme)
+  "Re-apply underline suppression and box style after a theme is enabled."
+  (when (bound-and-true-p hud-modeline-mode)
+    (hud-modeline--suppress-underlines)
+    (when hud-modeline-box-style
+      (hud-modeline--apply-box))))
+
+(defun hud-modeline--on-make-frame (frame)
+  "Apply underline suppression and box style to newly created FRAME."
+  (when (and (bound-and-true-p hud-modeline-mode) (frame-live-p frame))
+    (hud-modeline--suppress-underlines frame)
+    (when hud-modeline-box-style
+      (hud-modeline--apply-box frame))))
 
 (defun hud-modeline--restore-boxes ()
   "Restore saved :box values on mode-line faces."
@@ -822,9 +841,13 @@ Candidates are the segment keys; annotations show [on]/[off], name, and descript
         (hud-modeline--suppress-underlines)
         (when hud-modeline-box-style
           (hud-modeline--apply-box))
+        (add-hook 'enable-theme-functions #'hud-modeline--on-theme-enable)
+        (add-hook 'after-make-frame-functions #'hud-modeline--on-make-frame)
         (add-hook 'after-change-major-mode-hook #'hud-modeline--invalidate-icon)
         (add-hook 'compilation-start-hook #'hud-modeline--on-compilation-start)
         (add-hook 'compilation-finish-functions #'hud-modeline--on-compilation-finish))
+    (remove-hook 'enable-theme-functions #'hud-modeline--on-theme-enable)
+    (remove-hook 'after-make-frame-functions #'hud-modeline--on-make-frame)
     (remove-hook 'after-change-major-mode-hook #'hud-modeline--invalidate-icon)
     (remove-hook 'compilation-start-hook #'hud-modeline--on-compilation-start)
     (remove-hook 'compilation-finish-functions #'hud-modeline--on-compilation-finish)

@@ -244,10 +244,6 @@
   (add-hook 'arch-after-upgrade-all-hook #'arch-alert-after-upgrade-all)
   (run-with-idle-timer 2 nil #'arch--populate-cache))
 
-(use-package mcpkit
-  :ensure t
-  :defer t
-  :commands (mcpkit-start-service mcpkit-stop-service mcpkit-active-port))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Project / Repository Tools

@@ -51,6 +51,7 @@
    consult-flyspell
    consult-eglot
    flyspell-correct
+   mcpkit
    marginalia
    magit-gh
    yaml-pro

@@ -12,7 +12,10 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 (require 'hud-modeline)
+
+(defvar projectile-mode nil)
 
 ;; Declare as defvar so let-bindings produce dynamic (special) bindings.
 ;; format-mode-line reads symbol values dynamically; lexical let-bindings
@@ -425,3 +428,35 @@ not a flag-toggling command."
 
 (provide 'test-hud-modeline)
 ;;; test-hud-modeline.el ends here
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Underline suppression & theme hooks
+
+(ert-deftest hud-modeline--theme-enable-suppresses-underlines ()
+  "When a theme is enabled, `hud-modeline--on-theme-enable` re-suppresses underlines."
+  (let ((hud-modeline-mode t))
+    (set-face-attribute 'mode-line nil :underline "#123456")
+    (set-face-attribute 'mode-line-active nil :underline "#123456")
+    (hud-modeline--on-theme-enable 'some-theme)
+    (should (null (face-attribute 'mode-line :underline nil t)))
+    (should (null (face-attribute 'mode-line-active :underline nil t)))))
+
+(ert-deftest hud-modeline--on-make-frame-suppresses-underlines ()
+  "When a frame is created, `hud-modeline--on-make-frame` suppresses underlines on that frame."
+  (let ((hud-modeline-mode t)
+        (frame (selected-frame)))
+    (set-face-attribute 'mode-line frame :underline "#abcdef")
+    (hud-modeline--on-make-frame frame)
+    (should (null (face-attribute 'mode-line :underline frame t)))))
+
+(ert-deftest hud-modeline--mode-toggles-theme-and-frame-hooks ()
+  "`hud-modeline-mode` adds/removes `enable-theme-functions` and `after-make-frame-functions`."
+  (unwind-protect
+      (progn
+        (hud-modeline-mode 1)
+        (should (memq #'hud-modeline--on-theme-enable enable-theme-functions))
+        (should (memq #'hud-modeline--on-make-frame after-make-frame-functions))
+        (hud-modeline-mode -1)
+        (should-not (memq #'hud-modeline--on-theme-enable enable-theme-functions))
+        (should-not (memq #'hud-modeline--on-make-frame after-make-frame-functions)))
+    (hud-modeline-mode -1)))
