@@ -247,53 +247,7 @@
 (use-package mcpkit
   :ensure t
   :defer t
-  :commands (mcpkit-start-service mcpkit-stop-service mcpkit-active-port
-             tychoish/mcpkit-start-default-services)
-  :init
-  (defun tychoish/mcpkit-start-default-services ()
-    "Start default MCP services (denote, asq, emacs, org-capture, write-plan, hitl, elpa-package) on a shared port.
-Skipped in batch mode (`noninteractive'). Each daemon gets its own OS-assigned port
-rather than a shared fixed one, so two daemons never race over the same socket.
-Use `mcpkit-active-port' to discover the bound port afterward. Also registers the
-daemon with `mcpkit-proxy'."
-    (interactive)
-    (unless noninteractive
-      (let ((skills-dir (expand-file-name "~/.claude/skills")))
-        (dolist (dir (list (expand-file-name "org-capture" skills-dir)
-                           (expand-file-name "write-plan" skills-dir)
-                           (expand-file-name "elpa-package" skills-dir)))
-          (when (file-directory-p dir)
-            (add-to-list 'load-path dir))))
-      (when (require 'denote-mcp nil t)
-        (mcpkit-start-service 'denote :port t))
-      (when (require 'mcpkit-emacs nil t)
-        (mcpkit-start-service 'emacs))
-      (when (or (require 'asq-mcp nil t)
-                (require 'agent-shell-queue-mcp nil t))
-        (mcpkit-start-service 'asq))
-      (when (require 'org-capture-mcp nil t)
-        (mcpkit-start-service 'org-capture))
-      (when (require 'write-plan-mcp nil t)
-        (mcpkit-start-service 'write-plan))
-      (when (require 'hitl-mcp nil t)
-        (mcpkit-start-service 'hitl))
-      (when (require 'elpa-package-mcp nil t)
-        (mcpkit-start-service 'elpa-package))
-      (when-let* ((port (mcpkit-active-port)))
-        (when (require 'mcpkit-proxy nil t)
-          (let ((name (or (bound-and-true-p server-name)
-                          (and (fboundp 'daemonp) (daemonp))
-                          "main")))
-            (when (fboundp 'mcpkit-proxy-register-route)
-              (mcpkit-proxy-register-route (format "%s" name) port)))))
-      (mcpkit-active-port)))
-
-  (unless noninteractive
-    (if (daemonp)
-        (if (bound-and-true-p after-init-time)
-            (tychoish/mcpkit-start-default-services)
-          (add-hook 'after-init-hook #'tychoish/mcpkit-start-default-services))
-      (run-with-idle-timer 2 nil #'tychoish/mcpkit-start-default-services))))
+  :commands (mcpkit-start-service mcpkit-stop-service mcpkit-active-port))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Project / Repository Tools
