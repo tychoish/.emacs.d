@@ -74,6 +74,8 @@
 (setq checkdoc-spellcheck-documentation-flag t)
 
 (setq show-paren-delay 0.25)
+(setq ediff-window-setup-function 'ediff-setup-windows-plain)
+(setq ediff-split-window-function 'split-window-horizontally)
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
