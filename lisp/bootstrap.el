@@ -147,6 +147,7 @@ triggered directly by a keypress, still prompts normally.")
   (setq auto-save-list-file-prefix (sprite-state-path "auto-save-list/"))
   (setq request-storage-directory (sprite-state-path "request/"))
   (setq url-configuration-directory (sprite-state-path "url/"))
+  (setq denote-notion-cache-directory (sprite-state-path "denote-notion/"))
 
   (setq bookmark-save-flag 1)
   (setq savehist-coding-system 'utf-8-emacs)
