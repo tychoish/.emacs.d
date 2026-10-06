@@ -647,6 +647,112 @@ restarting Emacs."
 					    makefile-report)))))
 		  (f-directories-containing-file-makefile directories))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; go -- test, coverage, and tools
+
+(defun builder-go-project-root (&optional directory)
+  "Return the Go module or workspace root for DIRECTORY.
+DIRECTORY defaults to `default-directory`.
+Looks for `go.work` first, then `go.mod`."
+  (let ((dir (or directory default-directory)))
+    (or (locate-dominating-file dir "go.work")
+        (locate-dominating-file dir "go.mod"))))
+
+(defun builder-go-coverage--ensure-git-exclude (root)
+  "Ensure coverage/ is listed in .git/info/exclude if .git exists under ROOT."
+  (let* ((git-dir (expand-file-name ".git" root)))
+    (when (file-directory-p git-dir)
+      (let* ((info-dir (expand-file-name "info" git-dir))
+             (exclude-file (expand-file-name "exclude" info-dir)))
+        (unless (file-directory-p info-dir)
+          (make-directory info-dir t))
+        (let ((contents (if (file-exists-p exclude-file)
+                            (with-temp-buffer
+                              (insert-file-contents exclude-file)
+                              (buffer-string))
+                          "")))
+          (unless (string-match-p "\\(^\\|\n\\)coverage/?\\($\\|\n\\)" contents)
+            (with-temp-file exclude-file
+              (insert contents)
+              (unless (or (string-empty-p contents) (string-suffix-p "\n" contents))
+                (insert "\n"))
+              (insert "coverage/\n"))))))))
+
+(defun builder-go-coverage--refresh-buffers (root)
+  "Refresh `cov-mode` overlays in open Go buffers under ROOT."
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (when (and (derived-mode-p 'go-mode 'go-ts-mode)
+                 (buffer-file-name)
+                 (file-in-directory-p (buffer-file-name) root))
+        (if (bound-and-true-p cov-mode)
+            (when (fboundp 'cov-update)
+              (cov-update))
+          (when (fboundp 'cov-turn-on)
+            (cov-turn-on)))))))
+
+;;;###autoload
+(defun builder-go-coverage-and-convert (&optional target directory)
+  "Run `go test` with coverage and convert the profile to lcov.info via `gcov2lcov`.
+TARGET specifies the package pattern to test (defaults to \"./...\").
+DIRECTORY is the directory from which to run tests (defaults to
+`default-directory`).
+With a prefix argument, prompt for TARGET among common scopes.
+
+Coverage files are placed in <project-root>/coverage/:
+- cover.out (Go test coverage profile)
+- lcov.info (lcov-format report for `cov-mode`)
+
+Signals `user-error` if not in a Go module/project or if `go` or
+`gcov2lcov` is not found in PATH."
+  (interactive
+   (list (when current-prefix-arg
+           (completing-read "Coverage target: "
+                            '("./..." "." "project root (./...)")
+                            nil t nil nil "./..."))
+         nil))
+  (let* ((root (builder-go-project-root directory)))
+    (unless root
+      (user-error "Not in a Go module or project: no go.mod or go.work found"))
+    (unless (executable-find "go")
+      (user-error "Could not find 'go' executable in PATH"))
+    (unless (executable-find "gcov2lcov")
+      (user-error "gcov2lcov executable not found. Install it with: go install github.com/jandelgado/gcov2lcov@latest"))
+    (let* ((root-dir (file-name-as-directory (expand-file-name root)))
+           (effective-dir (cond
+                           ((equal target "project root (./...)") root-dir)
+                           (directory (file-name-as-directory (expand-file-name directory)))
+                           (t default-directory)))
+           (effective-target (if (or (null target) (equal target "project root (./...)"))
+                                 "./..."
+                               target))
+           (coverage-dir (expand-file-name "coverage" root-dir))
+           (cover-out (expand-file-name "cover.out" coverage-dir))
+           (lcov-info (expand-file-name "lcov.info" coverage-dir))
+           (proj-name (file-name-nondirectory (directory-file-name root-dir)))
+           (buf-name (format "*%s-go-coverage*" proj-name))
+           (cmd (format "go test -coverprofile=%s %s && gcov2lcov -infile %s -outfile %s"
+                        (shell-quote-argument cover-out)
+                        (shell-quote-argument effective-target)
+                        (shell-quote-argument cover-out)
+                        (shell-quote-argument lcov-info))))
+      (make-directory coverage-dir t)
+      (builder-go-coverage--ensure-git-exclude root-dir)
+      (let ((default-directory effective-dir))
+        (let ((comp-buf (compilation-start
+                         cmd
+                         'compilation-mode
+                         (compile-buffer-name buf-name))))
+          (with-current-buffer comp-buf
+            (add-hook 'compilation-finish-functions
+                      (lambda (_buffer msg)
+                        (when (string-match-p "finished" msg)
+                          (message "Go coverage converted to %s" lcov-info)
+                          (builder-go-coverage--refresh-buffers root-dir)))
+                      nil t))
+          comp-buf)))))
+
 (builder-register-candidates
  :name "go-packages"
  :pipeline (seq-mapcat
@@ -689,7 +795,19 @@ restarting Emacs."
 				      "sed -r \"$(go list -f='s%{{.ImportPath}}%{{.Dir}}%')\""
 				      "grep -v '100.0%'"
 				      "column -t;"))
-			   :annotation (s-join-with-space "collect and report coverage data for" short-path)))
+			   :annotation (s-join-with-space "collect and report coverage data for" short-path))
+			  (make-builder-candidate
+			   :name (s-join-with-space "go test +cov2lcov" proj-path-for-name)
+			   :directory directory
+			   :command (format "go test -coverprofile=%s %s && gcov2lcov -infile %s -outfile %s"
+					    (shell-quote-argument (expand-file-name "coverage/cover.out" project-root-directory))
+					    (shell-quote-argument operation-directory)
+					    (shell-quote-argument (expand-file-name "coverage/cover.out" project-root-directory))
+					    (shell-quote-argument (expand-file-name "coverage/lcov.info" project-root-directory)))
+			   :hook (lambda (_buf msg)
+				   (when (string-match-p "finished" msg)
+				     (builder-go-coverage--refresh-buffers project-root-directory)))
+			   :annotation (s-join-with-space "collect coverage and generate lcov.info for" short-path)))
 		      (seq-mapcat
 		       (lambda (it)
 			 (let ((command-prefix (car it))
@@ -818,7 +936,10 @@ restarting Emacs."
 		       (nil                "go mod tidy"              "run `go mod tidy' in package")
 		       (nil                "go doc -all"              "go doc for entire package")
 		       ("go doc -outline"  "go doc --"                "go doc outline for package")
-		       ("<pkgs> | xargs go test +race +coverage"
+		       		       ("<pkgs> | go test +cov2lcov"
+			    "go test -coverprofile=coverage/cover.out ./... && gcov2lcov -infile coverage/cover.out -outfile coverage/lcov.info"
+			    "generate lcov coverage for all submodules of")
+("<pkgs> | xargs go test +race +coverage"
 			    "go list -f '{{ if (or .TestGoFiles .XTestGoFiles) }}{{ .ImportPath }}{{ end }}' ./... | xargs --verbose go test -race -cover"
 			    "run all tests (with the race detector) for all submodules of")
 		       ("<pkgs> | xargs go build +test ./..."

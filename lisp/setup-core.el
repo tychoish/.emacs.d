@@ -1495,11 +1495,15 @@ otherwise keep replaying stale detection results."
   (require 'project)
   (add-hook 'project-find-functions #'project-find-go-module)
 
+  (keymap-set go-ts-mode-map "C-c C-t c" #'builder-go-coverage-and-convert)
+
   (defun tychoish/go-mode-setup ()
     (setq-local tab-width 8)
     (setq-local fill-column 100)
     (setq-local compilation-error-screen-columns nil)
-    (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint)))
+    (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
+    (when (fboundp 'cov-mode)
+      (cov-mode 1)))
 
   (defun tychoish/go-mode-setup-for-buffer (buf)
     (with-current-buffer buf
@@ -1688,7 +1692,7 @@ otherwise keep replaying stale detection results."
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck)
    '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
-   '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-notion denote-mcp denote-tree denote-convert denote-dash))
+   '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash))
 
   (tychoish-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 

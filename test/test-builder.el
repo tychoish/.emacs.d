@@ -755,5 +755,111 @@ or a resolved-but-unsuccessful result alike."
     (should (ht-contains-p tbl "ci-clean-elc"))
     (should (ht-contains-p tbl "ci-docker-tests"))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Go coverage and convert tests
+
+(ert-deftest builder-test/go-project-root-finds-mod-and-work ()
+  "builder-go-project-root finds go.mod and go.work files in parent directories."
+  (let ((temp-dir (make-temp-file "builder-go-root-" t)))
+    (unwind-protect
+        (let ((sub-dir (expand-file-name "pkg/sub" temp-dir)))
+          (make-directory sub-dir t)
+          (should-not (builder-go-project-root sub-dir))
+          ;; Add go.mod
+          (with-temp-file (expand-file-name "go.mod" temp-dir)
+            (insert "module example.com/test\n"))
+          (should (equal (file-name-as-directory (file-truename temp-dir))
+                         (file-name-as-directory (file-truename (builder-go-project-root sub-dir)))))
+          ;; Add go.work higher up
+          (let ((work-dir (make-temp-file "builder-go-work-" t)))
+            (unwind-protect
+                (let ((nested-mod (expand-file-name "nested" work-dir)))
+                  (make-directory nested-mod t)
+                  (with-temp-file (expand-file-name "go.work" work-dir)
+                    (insert "go 1.22\nuse ./nested\n"))
+                  (with-temp-file (expand-file-name "go.mod" nested-mod)
+                    (insert "module example.com/nested\n"))
+                  ;; go.work is chosen over go.mod if found
+                  (should (equal (file-name-as-directory (file-truename work-dir))
+                                 (file-name-as-directory (file-truename (builder-go-project-root nested-mod))))))
+              (delete-directory work-dir t))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/go-ensure-git-exclude ()
+  "builder-go-coverage--ensure-git-exclude adds coverage/ to .git/info/exclude."
+  (let ((temp-dir (make-temp-file "builder-git-test-" t)))
+    (unwind-protect
+        (let* ((git-dir (expand-file-name ".git" temp-dir))
+               (info-dir (expand-file-name "info" git-dir))
+               (exclude-file (expand-file-name "exclude" info-dir)))
+          (make-directory git-dir t)
+          ;; First run creates exclude file with coverage/
+          (builder-go-coverage--ensure-git-exclude temp-dir)
+          (should (file-exists-p exclude-file))
+          (let ((content (with-temp-buffer
+                           (insert-file-contents exclude-file)
+                           (buffer-string))))
+            (should (string-match-p "coverage/" content)))
+          ;; Second run does not duplicate coverage/
+          (builder-go-coverage--ensure-git-exclude temp-dir)
+          (let ((content2 (with-temp-buffer
+                            (insert-file-contents exclude-file)
+                            (buffer-string))))
+            (should (= 1 (cl-count "coverage/" (split-string content2 "\n" t) :test #'string-match-p)))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/go-coverage-error-outside-project ()
+  "builder-go-coverage-and-convert signals user-error when outside Go project."
+  (let ((temp-dir (make-temp-file "builder-no-go-" t)))
+    (unwind-protect
+        (let ((default-directory temp-dir))
+          (should-error (builder-go-coverage-and-convert) :type 'user-error))
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/go-coverage-error-missing-binaries ()
+  "builder-go-coverage-and-convert signals user-error when go or gcov2lcov is missing."
+  (let ((temp-dir (make-temp-file "builder-go-bin-" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "go.mod" temp-dir)
+            (insert "module example.com/test\n"))
+          (let ((default-directory temp-dir))
+            ;; Test missing 'go' executable
+            (cl-letf (((symbol-function 'executable-find)
+                       (lambda (name)
+                         (if (string-equal name "go") nil "/usr/bin/mock"))))
+              (should-error (builder-go-coverage-and-convert) :type 'user-error))
+            ;; Test missing 'gcov2lcov' executable
+            (cl-letf (((symbol-function 'executable-find)
+                       (lambda (name)
+                         (if (string-equal name "gcov2lcov") nil "/usr/bin/mock"))))
+              (should-error (builder-go-coverage-and-convert) :type 'user-error))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/go-coverage-starts-compilation ()
+  "builder-go-coverage-and-convert invokes compilation-start with expected command and directory."
+  (let ((temp-dir (make-temp-file "builder-go-comp-" t)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "go.mod" temp-dir)
+            (insert "module example.com/test\n"))
+          (let ((default-directory temp-dir)
+                comp-cmd
+                comp-dir)
+            (cl-letf (((symbol-function 'executable-find) (lambda (_) "/usr/bin/mock"))
+                      ((symbol-function 'compilation-start)
+                       (lambda (cmd &optional _mode _name-fn)
+                         (setq comp-cmd cmd)
+                         (setq comp-dir default-directory)
+                         (get-buffer-create "*mock-go-coverage*"))))
+              (let ((buf (builder-go-coverage-and-convert "./...")))
+                (should (bufferp buf))
+                (should (string-match-p "go test -coverprofile=" comp-cmd))
+                (should (string-match-p "gcov2lcov -infile" comp-cmd))
+                (should (string-match-p "lcov\\.info" comp-cmd))
+                (should (file-directory-p (expand-file-name "coverage" temp-dir)))))))
+      (delete-directory temp-dir t))))
+
 (provide 'test-builder)
 ;;; test-builder.el ends here
