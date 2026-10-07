@@ -69,6 +69,7 @@
    denote-org
    denote-journal-capture
    denote-markdown
+   denote-sync
    denote-tree
    denote-convert
    denote-dash

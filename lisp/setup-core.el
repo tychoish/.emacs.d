@@ -1234,6 +1234,12 @@ clipboard."
   (advice-add 'consult-notes :around #'ad:consult-notes--single-directory-string)
   (advice-add 'consult-notes-search-in-all-notes :around #'ad:consult-notes--single-directory-string))
 
+(with-eval-after-load 'denote-sync
+  (require 'denote-sync-notion)
+  (require 'denote-sync-gdocs)
+  (unless (getenv "GOG_KEYRING_PASSWORD")
+    (setenv "GOG_KEYRING_PASSWORD" "denote-sync-gog-keyring")))
+
 (use-package markdown-mode
   :ensure t
   :mode ("\\.mdwn" "\\.md" "\\.markdown" "\\.txt")
