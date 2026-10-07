@@ -1236,9 +1236,7 @@ clipboard."
 
 (with-eval-after-load 'denote-sync
   (require 'denote-sync-notion)
-  (require 'denote-sync-gdocs)
-  (unless (getenv "GOG_KEYRING_PASSWORD")
-    (setenv "GOG_KEYRING_PASSWORD" "denote-sync-gog-keyring")))
+  (require 'denote-sync-gdocs))
 
 (use-package markdown-mode
   :ensure t
