@@ -76,7 +76,10 @@
    denote-review
    denote-sequence
    denote-explore
+   flycheck-eglot
+   shell-maker
    sprite
+   arch
    tailscale
    docker
    sqlite-mode-extras

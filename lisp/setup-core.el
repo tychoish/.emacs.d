@@ -221,19 +221,19 @@
 
       (async-package-do-action op valid-packages filename))))
 
-(use-package arch
-  :ensure t
-  :defer t
-  :config
+(with-eval-after-load 'arch
   (defun arch-alert-after-install (pkg)
     (alert (format "Installed package %s" (arch-pkg-name pkg))
            :title "Arch Package Manager"))
+
   (defun arch-alert-after-upgrade (pkg)
     (alert (format "Upgraded package %s" (arch-pkg-name pkg))
            :title "Arch Package Manager"))
+
   (defun arch-alert-after-remove (pkg)
     (alert (format "Removed package %s" (arch-pkg-name pkg))
            :title "Arch Package Manager"))
+
   (defun arch-alert-after-upgrade-all ()
     (alert "System upgrade completed"
            :title "Arch Package Manager"))
@@ -1873,7 +1873,7 @@ otherwise keep replaying stale detection results."
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
 
 (use-package cov
-  :ensure nil
+  :ensure t
   :defer t
   :commands (cov-mode cov-turn-on cov-turn-off)
   :config
@@ -2364,10 +2364,7 @@ calls, so it can't be added to that hook directly."
       (with-demoted-errors "WARN (`eglot-organize-imports-for-hook'): %S"
         (eglot-code-action-organize-imports (point-min) (point-max))))))
 
-(use-package flycheck-eglot
-  :ensure t
-  :defer t
-  :config
+(with-eval-after-load 'flycheck-eglot
   (setq-default flycheck-eglot-exclusive nil)
   (add-to-list 'flycheck-checkers 'eglot-check)
   (setq flycheck-eglot-enable-diagnostic-tags nil)
@@ -2572,10 +2569,7 @@ calls, so it can't be added to that hook directly."
   :config
   (ollama-tailnet-setup-laptop-presets))
 
-(use-package shell-maker
-  :ensure t
-  :defer t
-  :config
+(with-eval-after-load 'shell-maker
   (defalias 'shell-maker-map 'shell-maker-major-mode-map)
   (setq shell-maker-root-path (sprite-state-path "shell-maker")))
 
