@@ -129,6 +129,10 @@
 
   (org-load-modules-maybe t)
 
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   (append org-babel-load-languages '((python . t))))
+
   ;; org-faces
   (require 'modus-themes)
   (setq org-todo-keyword-faces
