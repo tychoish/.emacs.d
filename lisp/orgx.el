@@ -342,6 +342,43 @@ header text, or leaves the default when nil."
   (when (require 'toc-org nil t)
     (save-excursion (toc-org-insert-toc))))
 
+;; toc-org: keep the priority cookie in the link of prioritized headings
+;;
+;; GitHub's Org renderer drops the TODO keyword but keeps a priority cookie
+;; as heading text, so `*** TODO [#B] Foo' is anchored `#b-foo'.  toc-org
+;; strips priorities and links `#foo', which then points nowhere.
+
+(defvar orgx--toc-priorities nil
+  "Alist of (HEADING-TEXT . PRIORITY-CHAR) for the TOC being generated.")
+
+(defun orgx--toc-collect-priorities ()
+  "Return (TITLE . PRIORITY) for each prioritized heading, in order."
+  (let (alist)
+    (org-with-wide-buffer
+     (org-map-entries
+      (lambda ()
+        (when-let* ((priority (nth 3 (org-heading-components)))
+                    (title (org-get-heading t t t t)))
+          (push (cons title priority) alist)))))
+    (nreverse alist)))
+
+(defun orgx--toc-bind-priorities (fn &rest args)
+  "Around advice for `toc-org-insert-toc': make the buffer's priorities known."
+  (let ((orgx--toc-priorities (orgx--toc-collect-priorities)))
+    (apply fn args)))
+
+(defun orgx--toc-hrefify-priority (fn str &optional hash)
+  "Around advice for `toc-org-hrefify-gh': include a heading's priority cookie.
+Repeated titles take their priorities in document order."
+  (if-let* ((cell (assoc str orgx--toc-priorities)))
+      (progn (setq orgx--toc-priorities (delq cell orgx--toc-priorities))
+             (funcall fn (format "[#%c] %s" (cdr cell) str) hash))
+    (funcall fn str hash)))
+
+(with-eval-after-load 'toc-org
+  (advice-add 'toc-org-insert-toc :around #'orgx--toc-bind-priorities)
+  (advice-add 'toc-org-hrefify-gh :around #'orgx--toc-hrefify-priority))
+
 (defun orgx--background-revbufs ()
   "Run `revbufs' without disturbing the current window configuration."
   (save-window-excursion (revbufs)))
@@ -953,24 +990,35 @@ new note's identifier reflects that date."
         (funcall orig-fn new-path in-emacs))
     (funcall orig-fn path in-emacs)))
 
+(defun orgx--github-anchor-positions ()
+  "Return an alist of (ANCHOR . POSITION) for the headings in this buffer.
+ANCHOR is what GitHub's Org renderer gives the heading and what toc-org
+links: the heading text with its priority cookie but no TODO keyword,
+slugged by `toc-org-hrefify-gh', with -1, -2... for repeated titles."
+  (require 'toc-org)
+  (let ((seen (make-hash-table :test #'equal))
+        alist)
+    (org-with-wide-buffer
+     (org-map-entries
+      (lambda ()
+        (let* ((text (org-link-display-format (org-get-heading t t nil t)))
+               (base (substring (toc-org-hrefify-gh text) 1))
+               (n (gethash base seen 0)))
+          (puthash base (1+ n) seen)
+          (push (cons (if (zerop n) base (format "%s-%d" base n)) (point)) alist)))))
+    (nreverse alist)))
+
 (defun orgx-open-custom-id-slug-fallback (path)
-  "Resolve GitHub-style TOC anchors (#heading-slug) when no CUSTOM_ID exists."
+  "Follow GitHub-style heading anchors (#heading-slug) when no CUSTOM_ID matches.
+These are the links `toc-org' generates, so they resolve the way they do on
+GitHub, including prioritized headings (`#b-title')."
   (when (and (derived-mode-p 'org-mode)
              (not (org-find-property "CUSTOM_ID" path)))
-    (let* ((slug-words (split-string path "-"))
-           (slug-re (mapconcat #'regexp-quote slug-words "[ -]+"))
-           (case-fold-search t)
-           (found nil))
-      (save-excursion
-        (goto-char (point-min))
-        (while (and (not found)
-                    (re-search-forward (concat "^\\*+\\s-+" slug-re) nil t))
-          (setq found (line-beginning-position))))
-      (when found
-        (org-mark-ring-push)
-        (goto-char found)
-        (org-show-context)
-        t))))
+    (when-let* ((pos (cdr (assoc path (orgx--github-anchor-positions)))))
+      (org-mark-ring-push)
+      (goto-char pos)
+      (org-show-context)
+      t)))
 
 (defalias 'tychoish/org-link-github-line-support #'orgx-link-github-line-support)
 (defalias 'tychoish/org-open-custom-id-slug-fallback #'orgx-open-custom-id-slug-fallback)
