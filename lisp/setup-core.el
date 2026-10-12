@@ -2996,6 +2996,7 @@ asynchronously via `sprite-future-then'."
   (require 'agent-shell-queue-org)
   (setq agent-shell-queue-serialization-format 'org)
   (setq agent-shell-queue-default-pause-delay 30.0)
+  (setq agent-shell-queue-stall-timeout 600)
   ;; Route agent-shell's built-in busy-prompt queue through agent-shell-queue
   ;; for persistence, introspection, and pause/resume instead of the
   ;; in-memory ring `agent-shell-prompt-queue' uses on its own.
