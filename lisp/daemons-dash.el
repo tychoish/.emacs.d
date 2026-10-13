@@ -765,6 +765,7 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
     (define-key map (kbd "e")   #'daemons-dash-enable)
     (define-key map (kbd "d")   #'daemons-dash-disable)
     (define-key map (kbd "f")   #'daemons-dash-filter-menu)
+    (define-key map (kbd "/")   #'daemons-dash-filter-menu)
     (define-key map (kbd "v")   #'daemons-dash-verify-config)
     (define-key map (kbd "g")   #'daemons-dash-refresh)
     (define-key map (kbd "q")   #'quit-window)
@@ -925,7 +926,7 @@ MESSAGE-FMT is the format string for the success message."
     :transient t)
    ("ss" "Choose state..." daemons-dash-toggle-state-filter :transient t)]
   ["Filter Controls"
-   ("ra" "Reset all filters (show all)" daemons-dash-filter-reset :transient t)
+   ("fc" "Clear all filters (show all)" daemons-dash-filter-reset :transient t)
    ("g"  "Refresh view"                 daemons-dash-refresh :transient t)
    ("q"  "Quit filter menu"             transient-quit-one)])
 
@@ -943,11 +944,11 @@ MESSAGE-FMT is the format string for the success message."
     ("v" "Verify config"     daemons-dash-verify-config)
     ("g" "Refresh"           daemons-dash-refresh)]
    ["Filters & Narrowing"
-    ("F"  "Filter menu..."   daemons-dash-filter-menu)
+    ("fm" "Filter menu..."   daemons-dash-filter-menu)
     ("fa" "Toggle active"    daemons-dash-filter-toggle-active :transient t)
     ("fi" "Toggle inactive"  daemons-dash-filter-toggle-inactive :transient t)
     ("ff" "Toggle failed"    daemons-dash-filter-toggle-failed :transient t)
-    ("fr" "Reset filters"    daemons-dash-filter-reset :transient t)]
+    ("fc" "Clear filters"    daemons-dash-filter-reset :transient t)]
    ["Other"
     ("q" "Quit"              quit-window)]])
 
