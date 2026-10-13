@@ -1696,7 +1696,7 @@ otherwise keep replaying stale detection results."
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck)
    '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
-   '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash))
+   '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup))
 
   (tychoish-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
