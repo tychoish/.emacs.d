@@ -1746,15 +1746,10 @@ otherwise keep replaying stale detection results."
 (use-package compile
   :defer t
   :defines (compilation-mode-map)
-  :commands (tychoish-compile)
+  :commands (builder-compile)
   :init
-  (keymap-set hud-core-map "c" #'tychoish-compile)
+  (keymap-set hud-core-map "c" #'builder-compile)
   :config
-  (defun tychoish-compile ()
-    "Run compile operation selecting compile buffer and commands."
-    (interactive)
-    (builder-compile-project))
-
   (defun tychoish-compile-project-super-lint ()
     (interactive)
     (let* ((project-directory (projectile-project-root))
