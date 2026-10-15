@@ -90,6 +90,7 @@
    emojify
    deadgrep
    annotated-completing-read
+   builder
    org-docsgen
    undercover
    pkgbuild-mode

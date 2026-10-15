@@ -730,6 +730,91 @@ or a resolved-but-unsuccessful result alike."
             (builder-candidates-for-emacs-lisp-project-test temp-dir "demo" (list temp-dir) tbl))
           (should (cl-some (lambda (k) (string-match-p "test-project-ert-all" k)) (ht-keys tbl))))
       (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/elisp-package-reload-success ()
+  "Test that `builder-elisp-package-reload' loads and reloads package definitions."
+  (let* ((temp-dir (make-temp-file "builder-pkg-test-" t))
+         (pkg-file (expand-file-name (concat (file-name-nondirectory temp-dir) ".el") temp-dir))
+         (orig-load-path load-path))
+    (unwind-protect
+        (progn
+          (with-temp-file pkg-file
+            (insert ";;; -*- lexical-binding: t; -*-\n"
+                    "(defun builder-test--reload-marker () 'version-1)\n"
+                    (format "(provide '%s)\n" (file-name-nondirectory temp-dir))))
+          (let ((count (builder-elisp-package-reload temp-dir)))
+            (should (= count 1))
+            (should (equal (builder-test--reload-marker) 'version-1))
+            (should (featurep (intern (file-name-nondirectory temp-dir))))
+            (should (member (file-name-as-directory temp-dir) load-path)))
+          ;; Update file and reload to verify in-session update
+          (with-temp-file pkg-file
+            (insert ";;; -*- lexical-binding: t; -*-\n"
+                    "(defun builder-test--reload-marker () 'version-2)\n"
+                    (format "(provide '%s)\n" (file-name-nondirectory temp-dir))))
+          (let ((count (builder-elisp-package-reload temp-dir)))
+            (should (= count 1))
+            (should (equal (builder-test--reload-marker) 'version-2))))
+      (setq load-path orig-load-path)
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/elisp-package-reload-pkg-subdirectory ()
+  "Test that `builder-elisp-package-reload' works with packages structured under pkg/."
+  (let* ((temp-dir (make-temp-file "builder-pkg-sub-" t))
+         (name (file-name-nondirectory temp-dir))
+         (pkg-dir (expand-file-name "pkg" temp-dir))
+         (main-file (expand-file-name (concat name ".el") pkg-dir))
+         (sub-file (expand-file-name "sub.el" pkg-dir))
+         (orig-load-path load-path))
+    (unwind-protect
+        (progn
+          (make-directory pkg-dir t)
+          (with-temp-file main-file
+            (insert ";;; -*- lexical-binding: t; -*-\n"
+                    "(defun builder-test--sub-main () 'main-ok)\n"
+                    (format "(provide '%s)\n" name)))
+          (with-temp-file sub-file
+            (insert ";;; -*- lexical-binding: t; -*-\n"
+                    "(defun builder-test--sub-helper () 'helper-ok)\n"))
+          (let ((count (builder-elisp-package-reload temp-dir)))
+            (should (= count 2))
+            (should (equal (builder-test--sub-main) 'main-ok))
+            (should (equal (builder-test--sub-helper) 'helper-ok))
+            (should (featurep (intern name)))))
+      (setq load-path orig-load-path)
+      (delete-directory temp-dir t))))
+
+(ert-deftest builder-test/elisp-package-reload-error-on-invalid-dir ()
+  "Test that `builder-elisp-package-reload' errors on non-existent or empty directories."
+  (let ((non-existent (make-temp-name "/tmp/non-existent-dir-")))
+    (should-error (builder-elisp-package-reload non-existent) :type 'user-error))
+  (let ((empty-dir (make-temp-file "builder-empty-" t)))
+    (unwind-protect
+        (should-error (builder-elisp-package-reload empty-dir) :type 'user-error)
+      (delete-directory empty-dir t))))
+
+(ert-deftest builder-test/elisp-package-path-resolvers-custom ()
+  "Test that custom functions added to `builder-elisp-package-path-resolvers' resolve package files."
+  (let* ((temp-dir (make-temp-file "builder-pkg-custom-" t))
+         (name (file-name-nondirectory temp-dir))
+         (custom-dir (expand-file-name "custom-lisp" temp-dir))
+         (main-file (expand-file-name (concat name ".el") custom-dir))
+         (builder-elisp-package-path-resolvers (copy-sequence builder-elisp-package-path-resolvers)))
+    (unwind-protect
+        (progn
+          (make-directory custom-dir t)
+          (with-temp-file main-file
+            (insert ";;; -*- lexical-binding: t; -*-\n"
+                    (format "(provide '%s)\n" name)))
+          ;; Before registering custom resolver, main file is nil
+          (should-not (builder-elisp-package--main-file temp-dir))
+          ;; Register custom resolver lambda
+          (builder-register-elisp-package-path-resolver
+           (lambda (root &optional _name) (expand-file-name "custom-lisp" root)))
+          ;; Now main-file and directories resolve correctly
+          (should (equal (builder-elisp-package--main-file temp-dir) main-file))
+          (should (member custom-dir (builder-elisp-package-directories temp-dir name))))
+      (delete-directory temp-dir t))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; emacs-conf CI tasks & elc cleanup
 

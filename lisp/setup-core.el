@@ -77,27 +77,11 @@
   (require 'daemons-dash-config nil t))
 
 (use-package builder
-  :commands (make-builder-candidate
-	     builder-register-candidates
-	     builder--read-command
-	     builder-compile-project
-	     builder-change-directory
-	     builder-emacs-conf-run-ci-tests
-	     builder-emacs-conf-run-ci-tests-isolated
-	     builder-emacs-conf-byte-compile-and-delete-artifact
-	     builder-emacs-conf-load-check
-	     builder-emacs-conf-elisp-package-test-isolated
-	     builder-emacs-conf-async-byte-compile-check
-	     builder-emacs-conf-sprite-eval
-	     builder-emacs-conf-sprite-byte-compile-check
-	     builder-emacs-conf-sprite-load-check
-	     builder-emacs-conf-sprite-test-check
-	     builder-emacs-conf-native-compile-all
-	     builder-emacs-conf-byte-recompile-directory
-	     builder-emacs-conf-recompile-vendored-packages)
+  :commands (builder builder-compile-project builder-mode)
   :init
-  (with-eval-after-load 'compile
-    (keymap-set compilation-mode-map "d" #'builder-change-directory)))
+  (add-to-list 'load-path (expand-file-name "~/src/builder"))
+  :config
+  (builder-mode 1))
 
 (use-package magit-dash
   :ensure t
@@ -1695,7 +1679,7 @@ otherwise keep replaying stale detection results."
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck)
-   '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen)
+   '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen builder)
    '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup))
 
   (tychoish-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
@@ -1761,33 +1745,11 @@ otherwise keep replaying stale detection results."
 
 (use-package compile
   :defer t
-  :defines (compile-add-error-syntax compilation-mode-map)
+  :defines (compilation-mode-map)
   :commands (tychoish-compile)
   :init
   (keymap-set hud-core-map "c" #'tychoish-compile)
   :config
-  (keymap-set compilation-mode-map "C" #'compile)
-  (add-to-list 'compilation-error-regexp-alist 'go-test)
-  (add-to-list 'compilation-error-regexp-alist 'go-panic)
-
-  (setq compilation-error-regexp-alist-alist ; first remove the standard conf; it's not good.
-        (remove 'go-panic (remove 'go-test compilation-error-regexp-alist-alist)))
-
-  (add-to-list 'compilation-error-regexp-alist-alist
-               '(go-test . ("^[[:space:]]*\\([[:alnum:]_./-]+\\.go\\):\\([0-9]+\\):" 1 2)))
-  (add-to-list 'compilation-error-regexp-alist-alist
-               '(go-panic . ("^[[:space:]]*\\([[:alnum:]_./-]+\\.go\\):\\([0-9]+\\):" 1 2)))
-
-  (defun compile-add-error-syntax (name regexp file line &optional col level)
-    "Register new compilation error syntax."
-    (add-to-list 'compilation-error-regexp-alist-alist (list name regexp file line col level))
-    (add-to-list 'compilation-error-regexp-alist name))
-
-  (declare-function 'ansi-color-apply-on-region "ansi-color")
-
-  (defun colorize-compilation-buffer ()
-    (ansi-color-apply-on-region compilation-filter-start (point)))
-
   (defun tychoish-compile ()
     "Run compile operation selecting compile buffer and commands."
     (interactive)
@@ -1796,40 +1758,21 @@ otherwise keep replaying stale detection results."
   (defun tychoish-compile-project-super-lint ()
     (interactive)
     (let* ((project-directory (projectile-project-root))
-	   (options (list "VALIDATE_YAML=true"
-			  "VALIDATE_OPENAPI=true"
-			  "VALIDATE_MD=true"
-			  "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
-			  "VALIDATE_ALL_CODEBASE=true"
-			  "LINTER_RULES_PATH=."
-			  "RUN_LOCAL=true"))
-	   (optstr (format "-e %s" (string-join options " -e ")))
-	   (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
+           (options (list "VALIDATE_YAML=true"
+                          "VALIDATE_OPENAPI=true"
+                          "VALIDATE_MD=true"
+                          "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
+                          "VALIDATE_ALL_CODEBASE=true"
+                          "LINTER_RULES_PATH=."
+                          "RUN_LOCAL=true"))
+           (optstr (format "-e %s" (string-join options " -e ")))
+           (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
       (builder-compile-project "super-lint" command-string)))
 
   (with-eval-after-load 'rust-mode
     (require 'rust-compile))
 
-  (defun tychoish-compilation-read-command (command)
-    (let* ((results (builder--read-command command))
-	   (candidate (car results))
-	   (command (builder-candidate-command candidate)))
-      (read-from-minibuffer "edit command => " command)))
-
-  (add-hook 'compilation-finish-functions #'alert-after-finish-in-background)
-
-  (defun alert-after-finish-in-background (buf str)
-    (when (or (not (get-buffer-window buf 'visible)) (not (frame-focus-state)))
-      (alert str :buffer buf)))
-
-  (setq compilation-max-output-line-length nil)
-  (setq compilation-scroll-output t)
-
-  (setq-default compilation-save-buffers-predicate #'projectile-project-root)
-  (compile-add-error-syntax 'rust-pretty-logfile "^\s+ at \\(.*\\):\\([0-9]+\\)" 1 2)
-
-  (add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
-  (advice-add 'compilation-read-command :override 'tychoish-compilation-read-command))
+  (setq-default compilation-save-buffers-predicate #'projectile-project-root))
 
 (use-package flycheck-aspell
   :ensure t
