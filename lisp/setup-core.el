@@ -1090,50 +1090,17 @@ clipboard."
   :defer t
   :commands (denote-dired denote-directories)
   :init
-  (keymap-set hud-denote-map "n" #'denote)
-  (keymap-set hud-denote-map "m" #'denote-open-or-create)
-  (keymap-set hud-denote-map "l" #'denote-link)
-  (keymap-set hud-denote-map "b" #'denote-backlinks)
-  (keymap-set hud-denote-map "r" #'denote-dash-rename-file)
-  (keymap-set hud-denote-map "." #'denote-dash-dispatch)
-  (keymap-set hud-denote-map "f" #'consult-denote-find)
-  (keymap-set hud-denote-map "g" #'consult-denote-grep)
-  (keymap-set hud-denote-map "," #'denote-dash)
-  (keymap-set hud-denote-map "k" #'denote-dash-save-and-kill-all-notes)
-  (keymap-set hud-denote-map "u" '("rename-using-front-matter". denote-dash-rename-file-using-front-matter))
-  (keymap-set hud-denote-map "j" #'denote-journal-new-entry)
-  (keymap-set hud-denote-hierarchy-map "v" #'denote-dash-hierarchy-switch-or-view)
-  (keymap-set hud-denote-hierarchy-map "t" #'denote-dash-hierarchy-view-by-note)
-  (keymap-set hud-denote-review-map "d" #'denote-review-set-date)
-  (keymap-set hud-denote-review-map "l" #'denote-review-display-list)
-  (keymap-set hud-denote-explore-map "n" #'denote-explore-count-notes)
-  (keymap-set hud-denote-explore-map "c" #'denote-explore-count-keywords)
-  (keymap-set hud-denote-explore-map "r" #'denote-explore-random-note)
-  (keymap-set hud-denote-explore-map "l" #'denote-explore-random-link)
-  (keymap-set hud-denote-explore-map "d" #'denote-explore-duplicate-notes)
-  (keymap-set hud-denote-explore-map "s" #'denote-explore-single-keywords)
-  (keymap-set hud-denote-explore-map "z" #'denote-explore-zero-keywords)
-  (keymap-set hud-denote-explore-map "k" #'denote-explore-rename-keyword)
-  (keymap-set hud-denote-explore-map "m" #'denote-explore-missing-links)
-  (keymap-set hud-denote-explore-map "y" #'denote-explore-sync-metadata)
-  (keymap-set hud-denote-explore-map "b" #'denote-explore-barchart-keywords)
-  (keymap-set hud-denote-explore-map "t" #'denote-explore-barchart-timeline)
-  (keymap-set hud-denote-sequence-map "c" #'denote-sequence-new-child)
-  (keymap-set hud-denote-sequence-map "s" #'denote-sequence-new-sibling)
-  (keymap-set hud-denote-sequence-map "r" #'denote-sequence-rename-as-parent)
-  (keymap-set hud-denote-sequence-map "p" #'denote-sequence-new-parent)
-  (keymap-set hud-denote-sequence-map "l" #'denote-sequence-link)
-  (keymap-set hud-denote-sequence-map "m" #'denote-tree-reparent)
-  (keymap-set hud-denote-sequence-map "n" #'denote-tree-renumber-recursive)
-  (keymap-set hud-denote-sequence-map "i" #'denote-tree-insert-sequence-note)
   (make-read-extended-command-for-prefix "denote"
-    :bind-map hud-denote-map
+    :bind-map (if (boundp 'denote-dash-global-map) denote-dash-global-map hud-denote-map)
     :bind-key "x")
   :config
   (consult-denote-mode)
   (require 'denote-sequence)
   (require 'denote-explore)
   (require 'denote-review)
+  (require 'denote-tree)
+  (require 'denote-dash)
+  (denote-dash-global-mode 1)
   (setq denote-dash-default-filter '(not "journal"))
   (setq denote-review-insert-after "date")
   (when (default-boundp 'denote-directory)
@@ -1157,26 +1124,9 @@ clipboard."
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
     (add-to-list 'savehist-additional-variables 'denote--keywords-history))
-  (defun tychoish--denote-rename-buffer (&optional buffer)
-    "Rename denote BUFFER to `[d:SEQ] TITLE' or just TITLE when there is no sequence."
-    (when-let* ((file (buffer-file-name buffer))
-                ((denote-file-has-identifier-p file)))
-      (let* ((sig   (denote-retrieve-filename-signature file))
-             (title (or (denote-retrieve-filename-title file)
-                        (file-name-base file)))
-             (name  (if (and sig (not (string-empty-p sig)))
-                        (format "[d:%s] %s" sig title)
-                      title)))
-        (rename-buffer name :unique))))
-  (setq denote-rename-buffer-function #'tychoish--denote-rename-buffer)
-  (denote-rename-buffer-mode 1)
 
-  (defun ad:denote-rename-file-using-front-matter--no-confirm (fn &rest args)
-    (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t))
-              ((symbol-function 'y-or-n-p)    (lambda (&rest _) t)))
-      (apply fn args)))
-  (advice-add 'denote-rename-file-using-front-matter :around
-              #'ad:denote-rename-file-using-front-matter--no-confirm)
+  (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
+  (denote-rename-buffer-mode 1)
 
   (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
     "Only call FN in `org-mode' buffers.
@@ -1188,26 +1138,14 @@ clipboard."
   (advice-add 'denote-link-ol-get-heading :around
               #'ad:denote-link-ol-get-heading--org-only)
 
-  (defun tychoish--denote-link-description-with-signature-and-title (file &optional file-type)
-    "Format denote link description for FILE with FILE-TYPE as `<title> [<signature>]`."
-    (let* ((type (or file-type (denote-filetype-heuristics file)))
-           (signature (denote-retrieve-filename-signature file))
-           (title (denote-retrieve-title-or-filename file type))
-           (region-text (denote--get-active-region-content)))
-      (cond
-       (region-text region-text)
-       ((and signature title) (format "%s [%s]" title signature))
-       (title (format "%s" title))
-       (signature (format "[%s]" signature))
-       (t ""))))
-  (setq denote-link-description-format #'tychoish--denote-link-description-with-signature-and-title))
+  (setq denote-link-description-format #'denote-dash-link-description-format))
 
 (use-package consult-notes
   :ensure t
   :defer t
   :init
-  (keymap-set hud-denote-map ";" #'consult-notes)
-  (keymap-set hud-denote-map "/" #'consult-notes-search-in-all-notes)
+  (keymap-set (if (boundp 'denote-dash-global-map) denote-dash-global-map hud-denote-map) ";" #'consult-notes)
+  (keymap-set (if (boundp 'denote-dash-global-map) denote-dash-global-map hud-denote-map) "/" #'consult-notes-search-in-all-notes)
   :config
   (consult-notes-denote-mode 1)
 

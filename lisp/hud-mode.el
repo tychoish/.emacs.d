@@ -30,6 +30,7 @@
 ;;; Code:
 
 (require 'seq)
+(require 'denote-dash nil t)
 (eval-when-compile
   (require 'cl-lib))
 
@@ -324,9 +325,11 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 
 (keymap-set hud-shell-map "m" #'eshell)
 
-(defvar-keymap hud-denote-map
-  :name "denote"
-  :doc "Denote commands under C-c d (hud-mode).")
+(if (boundp 'denote-dash-global-map)
+    (defvaralias 'hud-denote-map 'denote-dash-global-map)
+  (defvar-keymap hud-denote-map
+    :name "denote"
+    :doc "Denote commands under C-c d (hud-mode)."))
 
 (defvar-keymap hud-robot-map
   :name "robot"
@@ -460,32 +463,41 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
   :bind-map hud-shell-eat-map
   :bind-key "m")
 
-(defvar-keymap hud-denote-sequence-map
-  :name "denote-sequence"
-  :doc "Denote sequence commands under C-c d s (hud-mode).")
+(if (boundp 'denote-dash-sequence-map)
+    (defvaralias 'hud-denote-sequence-map 'denote-dash-sequence-map)
+  (defvar-keymap hud-denote-sequence-map
+    :name "denote-sequence"
+    :doc "Denote sequence commands under C-c d s (hud-mode)."))
 
-(defvar-keymap hud-denote-org-map
-  :name "denote-org"
-  :doc "Denote org commands under C-c d o (hud-mode).")
+(if (boundp 'denote-dash-org-map)
+    (defvaralias 'hud-denote-org-map 'denote-dash-org-map)
+  (defvar-keymap hud-denote-org-map
+    :name "denote-org"
+    :doc "Denote org commands under C-c d o (hud-mode)."
+    "l" #'denote-org-link-to-heading
+    "b" #'denote-org-backlinks-for-heading
+    "x" #'denote-org-extract-org-subtree
+    "d" #'denote-org-dblock-insert-links
+    "p" #'denote-org-dblock-insert-backlinks
+    "f" #'denote-org-dblock-insert-files))
 
-(keymap-set hud-denote-org-map "l" #'denote-org-link-to-heading)
-(keymap-set hud-denote-org-map "b" #'denote-org-backlinks-for-heading)
-(keymap-set hud-denote-org-map "x" #'denote-org-extract-org-subtree)
-(keymap-set hud-denote-org-map "d" #'denote-org-dblock-insert-links)
-(keymap-set hud-denote-org-map "p" #'denote-org-dblock-insert-backlinks)
-(keymap-set hud-denote-org-map "f" #'denote-org-dblock-insert-files)
+(if (boundp 'denote-dash-explore-map)
+    (defvaralias 'hud-denote-explore-map 'denote-dash-explore-map)
+  (defvar-keymap hud-denote-explore-map
+    :name "denote-explore"
+    :doc "Denote explore commands under C-c d e (hud-mode)."))
 
-(defvar-keymap hud-denote-explore-map
-  :name "denote-explore"
-  :doc "Denote explore commands under C-c d e (hud-mode).")
+(if (boundp 'denote-dash-review-map)
+    (defvaralias 'hud-denote-review-map 'denote-dash-review-map)
+  (defvar-keymap hud-denote-review-map
+    :name "denote-review"
+    :doc "Denote review commands under C-c d c (hud-mode)."))
 
-(defvar-keymap hud-denote-review-map
-  :name "denote-review"
-  :doc "Denote review commands under C-c d c (hud-mode).")
-
-(defvar-keymap hud-denote-hierarchy-map
-  :name "denote-hierarchy"
-  :doc "Denote sequence hierarchy view commands under C-c d h (hud-mode).")
+(if (boundp 'denote-dash-hierarchy-map)
+    (defvaralias 'hud-denote-hierarchy-map 'denote-dash-hierarchy-map)
+  (defvar-keymap hud-denote-hierarchy-map
+    :name "denote-hierarchy"
+    :doc "Denote sequence hierarchy view commands under C-c d h (hud-mode)."))
 
 (defvar-keymap hud-consult-mode-map
   :name "consult"
