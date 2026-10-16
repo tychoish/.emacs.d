@@ -129,7 +129,59 @@ Override in user/*.el to customize per machine or instance.")
 
 (add-hook 'project-find-functions #'project-find-cmake-project)
 
-(add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
+(declare-function which-key-setup-side-window-bottom "which-key")
+(defvar which-key-show-prefix)
+
+(defun bootstrap-which-key--extract-keymap-prompt (keys)
+  "Extract prompt or name from the keymap bound to KEYS."
+  (when (and (stringp keys) (not (string-empty-p keys)))
+    (let* ((key-seq (kbd keys))
+           (binding (key-binding key-seq)))
+      (or (and (keymapp binding) (keymap-prompt binding))
+          (let* ((seq (listify-key-sequence key-seq))
+                 (last-ev (car (last seq)))
+                 (prefix-evs (butlast seq))
+                 (parent-map (if prefix-evs
+                                 (key-binding (vconcat prefix-evs))
+                               (current-active-maps))))
+            (if (and parent-map (keymapp parent-map))
+                (let ((entry (assq last-ev (cdr-safe parent-map))))
+                  (when (and (consp entry) (stringp (cadr entry)))
+                    (cadr entry)))
+              (when (listp parent-map)
+                (cl-some (lambda (m)
+                           (when (keymapp m)
+                             (let ((entry (assq last-ev (cdr-safe m))))
+                               (when (and (consp entry) (stringp (cadr entry)))
+                                 (cadr entry)))))
+                         parent-map))))))))
+
+(defun bootstrap-which-key--format-prefix-title (orig-fn keys)
+  "Augment `which-key--maybe-get-prefix-title' to include keymap prompt strings."
+  (let ((title (funcall orig-fn keys)))
+    (if (and (stringp title)
+             (not (string-empty-p title))
+             (not (string-prefix-p "Following " title)))
+        (if (string-match-p (regexp-quote keys) title)
+            title
+          (format "%s: %s" keys title))
+      (if-let* ((prompt (bootstrap-which-key--extract-keymap-prompt keys)))
+          (format "%s: %s" keys prompt)
+        (if (and (stringp title) (not (string-empty-p title)))
+            title
+          (if (and (stringp keys) (not (string-empty-p keys)))
+              (format "Following %s" keys)
+            ""))))))
+
+(defun bootstrap-which-key-setup ()
+  "Configure `which-key' side-window layout with prefix displayed at top."
+  (which-key-setup-side-window-bottom)
+  (setq which-key-show-prefix 'top))
+
+(add-hook 'which-key-mode-hook #'bootstrap-which-key-setup)
+
+(with-eval-after-load 'which-key
+  (advice-add 'which-key--maybe-get-prefix-title :around #'bootstrap-which-key--format-prefix-title))
 
 ;;; TK(...) placeholder font-lock definitions
 
