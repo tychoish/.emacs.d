@@ -102,7 +102,7 @@ feature it actually depends on, so a plain `require' triggers it."
   (should (memq 'tychoish/python-setup python-ts-mode-hook)))
 
 (ert-deftest tychoish-core/compilation-read-command ()
-  "Test that `tychoish-compilation-read-command' processes `builder--read-command'
+  "Test that `builder-compilation-read-command' processes `builder--read-command'
 correctly and reads from the minibuffer using the candidate's command."
   (let* ((c (make-builder-candidate :command "make -j8" :name "build"))
          (mock-results (cons c nil)))
@@ -113,7 +113,7 @@ correctly and reads from the minibuffer using the candidate's command."
                  (should (equal "edit command => " prompt))
                  (should (equal "make -j8" val))
                  val)))
-      (should (equal "make -j8" (tychoish-compilation-read-command "make"))))))
+      (should (equal "make -j8" (builder-compilation-read-command "make"))))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; tychoish-mail account definition and immediate activation
 
