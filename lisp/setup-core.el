@@ -2551,18 +2551,8 @@ calls, so it can't be added to that hook directly."
   (setq agent-shell-thought-process-expand-by-default t)
   (setq agent-shell-tool-use-expand-by-default nil)
   (setq agent-shell-user-message-expand-by-default nil)
-  (setq agent-shell-buffer-name-format
-	(lambda (agent-name project-name)
-          (let* ((raw (string-trim project-name))
-		 (base (file-name-nondirectory (directory-file-name raw)))
-		 (stripped (replace-regexp-in-string "\\`[./]+" "" base))
-		 (slug (downcase (replace-regexp-in-string "\\s-+" "-"
-                                                           (if (string-empty-p stripped) base stripped)))))
-            (format "*%s-%s*"
-                    (car (split-string (downcase (string-trim agent-name))))
-                    slug))))
-
   (require 'agent-shell-menu)
+  (setq agent-shell-buffer-name-format #'agent-shell-menu-format-buffer-name)
 
   (defvar shell-maker--busy)
 
