@@ -21,6 +21,8 @@ jobs:
       matrix:
         emacs_version:
           - "30.2"
+          - "31.1"
+
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
