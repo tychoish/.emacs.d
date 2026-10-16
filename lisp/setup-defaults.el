@@ -131,6 +131,29 @@ Override in user/*.el to customize per machine or instance.")
 
 (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
 
+;;; TK(...) placeholder font-lock definitions
+
+(defface tk-delimiter-face
+  '((((class color) (background light)) :foreground "#0031a9" :weight bold)
+    (((class color) (background dark))  :foreground "#2fafff" :weight bold)
+    (t :weight bold))
+  "Face for the \='TK(\=' and \=')\=' delimiters in TK(\"...\") annotations."
+  :group 'font-lock-faces)
+
+(defface tk-content-face
+  '((((class color) (background light)) :foreground "#595959" :weight bold)
+    (((class color) (background dark))  :foreground "#989898" :weight bold)
+    (t :weight bold))
+  "Face for the explanation text in TK(\"...\") annotations."
+  :group 'font-lock-faces)
+
+(defconst tk-font-lock-keywords
+  '(("\\b\\(TK(\\)\\(\"[^\"]*\"\\|[^)]*\\)\\()\\)"
+     (1 'tk-delimiter-face t)
+     (2 'tk-content-face t)
+     (3 'tk-delimiter-face t)))
+  "Font-lock keywords for TK(\"<expl>\") annotations.")
+
 (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
 (add-hook 'LaTeX-mode-hook #'turn-on-reftex)
 (add-hook 'LaTeX-mode-hook #'visual-line-mode)

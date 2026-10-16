@@ -54,6 +54,7 @@
    :hook 'org-mode-hook
    :operation #'orgx--install-auxiliary-packages)
   :config
+  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
   (orgx--setup-standard-capture-templates)
   (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
@@ -142,6 +143,7 @@
   (delight 'nerd-icons-xref-mode nil 'nerd-icons-xref)
   (delight 'nerd-icons-completion-mode nil 'nerd-icons-completion)
   (delight 'nerd-icons-dired-mode "")
+  (delight 'builder-mode "")
   (delight 'projectile-mode nil 'projectile)
   (delight 'eglot--managed-mode nil 'eglot)
   (delight 'eldoc-mode nil 'eldoc)
@@ -1167,6 +1169,8 @@ clipboard."
              tychoish/markdown-align-tables-in-file
              tychoish/markdown-align-tables-dired)
   :config
+  (font-lock-add-keywords 'markdown-mode tk-font-lock-keywords 'append)
+  (font-lock-add-keywords 'gfm-mode tk-font-lock-keywords 'append)
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook 'turn-off-auto-fill)
   (defun tychoish/markdown-setup-imenu ()

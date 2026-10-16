@@ -284,17 +284,19 @@ triggered directly by a keypress, still prompts normally.")
     (winner-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] electric-pair-mode"
     (electric-pair-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] hud-mode"
-    (hud-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] pixel-scroll-precision-mode"
     (pixel-scroll-precision-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] repeat"
+    (with-silence
+      (repeat-mode 1)))
+  (with-slow-op-timer "<bootstrap> [modes] hud-mode"
+    (hud-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] sprite-mode"
     (sprite-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] which-key"
     (which-key-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] repeat"
-    (with-silence
-      (repeat-mode 1)))
+  (with-slow-op-timer "<bootstrap> [modes] builder"
+    (builder-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"
     (nerd-icons-completion-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] delight"
@@ -497,6 +499,19 @@ triggered directly by a keypress, still prompts normally.")
 (defun bootstrap-ensure-dark-theme ()
   (unless custom-enabled-themes
     (bootstrap-load-dark-theme)))
+
+(defun tk-faces-setup (&rest _)
+  (when (featurep 'modus-themes)
+    (when (facep 'tk-delimiter-face)
+      (set-face-attribute 'tk-delimiter-face nil
+                          :foreground (modus-themes-get-color-value 'blue)
+                          :weight 'bold))
+    (when (facep 'tk-content-face)
+      (set-face-attribute 'tk-content-face nil
+                          :foreground (modus-themes-get-color-value 'fg-dim)
+                          :weight 'bold))))
+
+(add-hook 'enable-theme-functions #'tk-faces-setup)
 
 (add-one-shot-hook
  :name "<modus-themes> ensure light theme"
