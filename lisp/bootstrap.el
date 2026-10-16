@@ -76,12 +76,14 @@
    denote-review
    denote-sequence
    denote-explore
+   builder
    flycheck-eglot
    shell-maker
    sprite
    arch
    tailscale
    docker
+   slime
    sqlite-mode-extras
    nerd-icons
    nerd-icons-dired
@@ -291,6 +293,8 @@ triggered directly by a keypress, still prompts normally.")
       (repeat-mode 1)))
   (with-slow-op-timer "<bootstrap> [modes] hud-mode"
     (hud-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] denote-dash-global-mode"
+    (denote-dash-global-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] sprite-mode"
     (sprite-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] which-key"

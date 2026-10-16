@@ -22,3 +22,4 @@ request
 **/.agent-shell/**
 /.emacs.d
 /.agent-shell/
+*.eld

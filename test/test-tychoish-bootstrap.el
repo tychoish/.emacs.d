@@ -10,7 +10,7 @@
 (require 'bootstrap)
 (require 'setup-defaults)
 (require 'setup-package-defaults)
-(require 'setup-package-hooks)
+(require 'setup-hooks)
 
 (require 'setup-core)
 
@@ -1133,13 +1133,13 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish-transient-insert-suffix-once
+;;; hud-transient-insert-suffix-once
 
 (ert-deftest bootstrap/transient-insert-suffix-once-idempotent ()
-  "tychoish-transient-insert-suffix-once inserts only once and handles missing layouts."
+  "hud-transient-insert-suffix-once inserts only once and handles missing layouts."
   (require 'transient)
   ;; 1. No-op without error when prefix has no layout
-  (should (null (tychoish-transient-insert-suffix-once
+  (should (null (hud-transient-insert-suffix-once
                  'bootstrap--test-nonexistent-menu
                  '(-1 0)
                  '("x" "test command" ignore))))
@@ -1147,13 +1147,13 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (transient-define-prefix bootstrap--test-ert-menu ()
     ["Test"
      ("a" "Action A" ignore)])
-  (should (tychoish-transient-insert-suffix-once
+  (should (hud-transient-insert-suffix-once
            'bootstrap--test-ert-menu
            '(-1 0)
            '("x" "test command" ignore)))
   (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x")))
   ;; 3. Second call is idempotent (no-ops and does not duplicate or error)
-  (should (null (tychoish-transient-insert-suffix-once
+  (should (null (hud-transient-insert-suffix-once
                  'bootstrap--test-ert-menu
                  '(-1 0)
                  '("x" "test command" ignore))))

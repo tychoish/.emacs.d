@@ -152,8 +152,8 @@ Runs from `after-init-hook', after the full config has loaded."
       (with-slow-op-timer "<init> [local] require setup-defaults.el"
 	(require 'setup-defaults))
 
-      (with-slow-op-timer "<init> [local] require setup-package-hooks.el"
-	(require 'setup-package-hooks))
+      (with-slow-op-timer "<init> [local] require setup-hooks.el"
+	(require 'setup-hooks))
 
       ;; remaining use-package declarations.
       (with-slow-op-timer "<init> [local] require setup-core.el"

@@ -153,6 +153,16 @@ category+command combination."
                         hud-command-table))))
 
 ;;;###autoload
+(defun hud-transient-insert-suffix-once (prefix loc suffix)
+  "Insert SUFFIX at LOC in transient PREFIX unless already present.
+No-op if PREFIX has no `transient--layout' defined yet, or if a suffix
+with the same key already exists in PREFIX."
+  (when (get prefix 'transient--layout)
+    (let ((key (if (consp suffix) (car suffix) suffix)))
+      (unless (ignore-errors (transient-get-suffix prefix key))
+        (transient-insert-suffix prefix loc suffix)))))
+
+;;;###autoload
 (transient-define-prefix hud-dispatch ()
   "Session-wide HUD command menu."
   [:class transient-columns

@@ -45,7 +45,6 @@
   (keymap-set orgx-global-map "j" #'orgx-capture)
   (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
   (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
-  (keymap-set hud-denote-org-map "r" #'orgx-migrate-subtree-to-denote)
 
   (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
   (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
@@ -76,13 +75,6 @@
   (keymap-set hud-core-map "s" #'daemons-dash)
   :config
   (require 'daemons-dash-config nil t))
-
-(use-package builder
-  :commands (builder builder-compile-project builder-mode)
-  :init
-  (add-to-list 'load-path (expand-file-name "~/src/builder"))
-  :config
-  (builder-mode 1))
 
 (use-package magit-dash
   :ensure t
@@ -1013,8 +1005,8 @@ clipboard."
 	     telega-extras-force-kill
 	     telega-extras-disconnect)
   :init
-  (tychoish-bind-deferred-keymap hud-mode-map "C-c v" 'telega 'telega-prefix-map "telega")
-  (tychoish-bind-deferred-keymap hud-mode-map "C-c n" 'telega 'telega-prefix-map "telega")
+  (hud-bind-deferred-keymap hud-mode-map "C-c v" 'telega 'telega-prefix-map "telega")
+  (hud-bind-deferred-keymap hud-mode-map "C-c n" 'telega 'telega-prefix-map "telega")
   :config
   (add-hook 'telega-chat-mode-hook 'tychoish/corfu-text-mode-setup)
 
@@ -1091,18 +1083,12 @@ clipboard."
   :ensure t
   :defer t
   :commands (denote-dired denote-directories)
-  :init
-  (make-read-extended-command-for-prefix "denote"
-    :bind-map (if (boundp 'denote-dash-global-map) denote-dash-global-map hud-denote-map)
-    :bind-key "x")
   :config
   (consult-denote-mode)
   (require 'denote-sequence)
   (require 'denote-explore)
   (require 'denote-review)
   (require 'denote-tree)
-  (require 'denote-dash)
-  (denote-dash-global-mode 1)
   (setq denote-dash-default-filter '(not "journal"))
   (setq denote-review-insert-after "date")
   (when (default-boundp 'denote-directory)
@@ -1145,9 +1131,6 @@ clipboard."
 (use-package consult-notes
   :ensure t
   :defer t
-  :init
-  (keymap-set (if (boundp 'denote-dash-global-map) denote-dash-global-map hud-denote-map) ";" #'consult-notes)
-  (keymap-set (if (boundp 'denote-dash-global-map) denote-dash-global-map hud-denote-map) "/" #'consult-notes-search-in-all-notes)
   :config
   (consult-notes-denote-mode 1)
 
@@ -1591,19 +1574,6 @@ otherwise keep replaying stale detection results."
   (setq web-mode-enable-auto-expanding t)
   (setq web-mode-enable-css-colorization t))
 
-(use-package slime
-  :defer t
-  :mode ("\\.lisp" . lisp-mode)
-  :init
-  (keymap-set hud-docs-map "c" #'hyperspec-lookup)
-  :config
-  (make-read-extended-command-for-prefix "slime"
-    :key-alias "slime-commands"
-    :bind-map hud-ide-map
-    :bind-key "s")
-  (setq ls-lisp-dirs-first t)
-  (setq inferior-lisp-program "sbcl"))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; programming adjacent tools
@@ -1612,10 +1582,6 @@ otherwise keep replaying stale detection results."
   :ensure t
   :defer t
   :init
-  (make-read-extended-command-for-prefix "elpaish"
-    :bind-key "e"
-    :bind-map hud-core-map
-    :key-alias "elpaish-commands")
   :config
   (elpaish-install-add-bootstrap-packages
    '(acp shell-maker agent-shell gptel gptel-agent)
@@ -1624,7 +1590,7 @@ otherwise keep replaying stale detection results."
    '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen builder)
    '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup))
 
-  (tychoish-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
+  (hud-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1829,26 +1795,7 @@ every timer tick instead of failing once."
 
   (advice-add 'eglot-completion-at-point :around #'ad:eglot-completion-at-point-guard-no-server)
 
-  (defvar-keymap tychoish/eglot-map) ;; "C-c l"
-  (keymap-set eglot-mode-map "C-c l" (cons "eglot" tychoish/eglot-map))
-  (keymap-set tychoish/eglot-map "s" #'consult-eglot-symbols)
-  (keymap-set tychoish/eglot-map "r" #'eglot-rename)
-  (keymap-set tychoish/eglot-map "a" #'eglot-code-actions)
-  (keymap-set tychoish/eglot-map "i" #'eglot-code-action-inline)
-  (keymap-set tychoish/eglot-map "f" #'eglot-format-buffer)
-  (keymap-set tychoish/eglot-map "o" #'eglot-code-action-organize-imports)
-  (keymap-set tychoish/eglot-map "q" #'eglot-code-action-quickfix)
-  (keymap-set tychoish/eglot-map "w" #'eglot-code-action-rewrite)
-  (keymap-set tychoish/eglot-map "t" #'eglot-test-at-point)
-  (keymap-set tychoish/eglot-map "u" #'eglot-update-workspace)
-
-  (make-read-extended-command-for-prefix "eglot"
-    :bind-map tychoish/eglot-map
-    :bind-key "e")
-
-  (make-read-extended-command-for-prefix "xref"
-    :bind-map hud-ide-map
-    :bind-key "x")
+  (keymap-set eglot-mode-map "C-c l" (cons "eglot" hud-eglot-mode-map))
 
   (setq eglot-menu-string "eg")
 
@@ -2431,7 +2378,7 @@ calls, so it can't be added to that hook directly."
   :config
   (with-eval-after-load 'ollama-transient
     (with-eval-after-load 'transient
-      (tychoish-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))))
+      (hud-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))))
 
 (use-package ollama-tailnet
   :defer t
@@ -2446,10 +2393,6 @@ calls, so it can't be added to that hook directly."
   :init
   :config
   (ollama-tailnet-setup-laptop-presets))
-
-(with-eval-after-load 'shell-maker
-  (defalias 'shell-maker-map 'shell-maker-major-mode-map)
-  (setq shell-maker-root-path (sprite-state-path "shell-maker")))
 
 (use-package agent-shell
   :ensure t

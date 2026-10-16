@@ -30,7 +30,6 @@
 ;;; Code:
 
 (require 'seq)
-(require 'denote-dash nil t)
 (eval-when-compile
   (require 'cl-lib))
 
@@ -235,6 +234,25 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 
 ;; keymap definitions -- top level C-c <> maps
 
+;;;###autoload
+(defun hud-bind-deferred-keymap (map key package keymap-symbol name)
+  "Bind KEY in MAP to load PACKAGE on first use, then dispatch through it.
+KEYMAP-SYMBOL is the variable PACKAGE defines to hold its real keymap; it
+isn't bound until PACKAGE loads, so this binds KEY to a stand-in command
+that requires PACKAGE, rebinds KEY to the now-defined keymap, then replays
+the keystroke so it falls through to that keymap.  NAME annotates the
+binding (see `keymap-set'.)"
+  (keymap-set map key
+    (cons name
+          (lambda ()
+            (interactive)
+            (require package)
+            (keymap-set map key (symbol-value keymap-symbol))
+            (setq unread-command-events
+                  (listify-key-sequence (this-command-keys-vector)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defvar-keymap hud-core-map
   :name "core"
   :doc "Core commands under C-c t (hud-mode).")
@@ -245,6 +263,11 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 (keymap-set hud-core-map "j" #'journalctl)
 (keymap-set hud-core-map "m" #'hud-dispatch)
 (keymap-set hud-core-map "," #'hud-select)
+
+(make-read-extended-command-for-prefix "elpaish"
+  :bind-key "e"
+  :bind-map hud-core-map
+  :key-alias "elpaish-commands")
 
 (defvar-keymap hud-display-map
   :name "display"
@@ -286,6 +309,7 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 (keymap-set hud-docs-map "j" #'jump-to-elisp-help)
 (keymap-set hud-docs-map "e" #'eldoc)
 (keymap-set hud-docs-map "b" #'eldoc-doc-buffer)
+(keymap-set hud-docs-map "c" #'hyperspec-lookup)
 
 (defvar-keymap hud-ecclectic-grep-map
   :name "grep"
@@ -304,6 +328,10 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 (keymap-set hud-ide-map "p" #'xref-go-back)
 (keymap-set hud-ide-map "n" #'xref-go-forward)
 (keymap-set hud-ide-map "o" #'xref-find-definitions-other-window)
+
+(make-read-extended-command-for-prefix "xref"
+  :bind-map hud-ide-map
+  :bind-key "x")
 
 (defvar-keymap hud-completion-map
   :name "completion"
@@ -324,12 +352,6 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
   :doc "Shell commands under C-c s (hud-mode).")
 
 (keymap-set hud-shell-map "m" #'eshell)
-
-(if (boundp 'denote-dash-global-map)
-    (defvaralias 'hud-denote-map 'denote-dash-global-map)
-  (defvar-keymap hud-denote-map
-    :name "denote"
-    :doc "Denote commands under C-c d (hud-mode)."))
 
 (defvar-keymap hud-robot-map
   :name "robot"
@@ -442,6 +464,25 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
   :name "eglot"
   :doc "Eglot commands under C-c l l (hud-mode).")
 
+(defvar-keymap hud-eglot-mode-map
+  :name "eglot-mode"
+  :doc "Eglot buffer commands (hud-mode).")
+
+(keymap-set hud-eglot-mode-map "s" #'consult-eglot-symbols)
+(keymap-set hud-eglot-mode-map "r" #'eglot-rename)
+(keymap-set hud-eglot-mode-map "a" #'eglot-code-actions)
+(keymap-set hud-eglot-mode-map "i" #'eglot-code-action-inline)
+(keymap-set hud-eglot-mode-map "f" #'eglot-format-buffer)
+(keymap-set hud-eglot-mode-map "o" #'eglot-code-action-organize-imports)
+(keymap-set hud-eglot-mode-map "q" #'eglot-code-action-quickfix)
+(keymap-set hud-eglot-mode-map "w" #'eglot-code-action-rewrite)
+(keymap-set hud-eglot-mode-map "t" #'eglot-test-at-point)
+(keymap-set hud-eglot-mode-map "u" #'eglot-update-workspace)
+
+(make-read-extended-command-for-prefix "eglot"
+  :bind-map hud-eglot-mode-map
+  :bind-key "e")
+
 (defvar-keymap hud-robot-agent-shell-map
   :name "agent-shell"
   :doc "Agent shell commands under C-c r s (hud-mode).")
@@ -462,42 +503,6 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 (make-read-extended-command-for-prefix "eat"
   :bind-map hud-shell-eat-map
   :bind-key "m")
-
-(if (boundp 'denote-dash-sequence-map)
-    (defvaralias 'hud-denote-sequence-map 'denote-dash-sequence-map)
-  (defvar-keymap hud-denote-sequence-map
-    :name "denote-sequence"
-    :doc "Denote sequence commands under C-c d s (hud-mode)."))
-
-(if (boundp 'denote-dash-org-map)
-    (defvaralias 'hud-denote-org-map 'denote-dash-org-map)
-  (defvar-keymap hud-denote-org-map
-    :name "denote-org"
-    :doc "Denote org commands under C-c d o (hud-mode)."
-    "l" #'denote-org-link-to-heading
-    "b" #'denote-org-backlinks-for-heading
-    "x" #'denote-org-extract-org-subtree
-    "d" #'denote-org-dblock-insert-links
-    "p" #'denote-org-dblock-insert-backlinks
-    "f" #'denote-org-dblock-insert-files))
-
-(if (boundp 'denote-dash-explore-map)
-    (defvaralias 'hud-denote-explore-map 'denote-dash-explore-map)
-  (defvar-keymap hud-denote-explore-map
-    :name "denote-explore"
-    :doc "Denote explore commands under C-c d e (hud-mode)."))
-
-(if (boundp 'denote-dash-review-map)
-    (defvaralias 'hud-denote-review-map 'denote-dash-review-map)
-  (defvar-keymap hud-denote-review-map
-    :name "denote-review"
-    :doc "Denote review commands under C-c d c (hud-mode)."))
-
-(if (boundp 'denote-dash-hierarchy-map)
-    (defvaralias 'hud-denote-hierarchy-map 'denote-dash-hierarchy-map)
-  (defvar-keymap hud-denote-hierarchy-map
-    :name "denote-hierarchy"
-    :doc "Denote sequence hierarchy view commands under C-c d h (hud-mode)."))
 
 (defvar-keymap hud-consult-mode-map
   :name "consult"
@@ -634,12 +639,6 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 (keymap-set hud-robot-network-map "y" #'tailscale-copy-ip)
 (keymap-set hud-robot-network-map "f" #'tailscale-file-send)
 
-(keymap-set hud-denote-map "o" (cons "denote-org" hud-denote-org-map))
-(keymap-set hud-denote-map "s" (cons "denote-sequence" hud-denote-sequence-map))
-(keymap-set hud-denote-map "e" (cons "denote-explore" hud-denote-explore-map))
-(keymap-set hud-denote-map "c" (cons "denote-review" hud-denote-review-map))
-(keymap-set hud-denote-map "h" (cons "denote-hierarchy" hud-denote-hierarchy-map))
-
 (keymap-set hud-smerge-map "n" #'smerge-vc-next-conflict)
 (keymap-set hud-smerge-map "k" #'smerge-kill-current)
 (keymap-set hud-smerge-map "s" #'smerge-start-session)
@@ -658,7 +657,6 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 (keymap-set hud-mode-map "C-c q" (cons "anzu" hud-anzu-map))
 (keymap-set hud-mode-map "C-x g" (cons "magit" hud-magit-map))
 (keymap-set hud-mode-map "C-x d" (cons "docker" hud-docker-map))
-(keymap-set hud-mode-map "C-c d" (cons "denote" hud-denote-map))
 (keymap-set hud-mode-map "C-c o" (cons "org" orgx-global-map))
 (keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
 (keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))

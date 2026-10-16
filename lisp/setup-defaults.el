@@ -183,6 +183,9 @@ Override in user/*.el to customize per machine or instance.")
 (add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.bashrc\\'" . bash-ts-mode))
 (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
+
+(add-to-list 'auto-mode-alist '("\\.lisp'" . lisp-mode))
+
 ;; -- js/web
 (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.js\\'" . js-ts-mode))
@@ -200,6 +203,7 @@ Override in user/*.el to customize per machine or instance.")
 (add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-ts-mode))
 ;; -- jvm
 (add-to-list 'auto-mode-alist '("\\.java\\'" . java-ts-mode))
+
 (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
 (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
 (add-to-list 'major-mode-remap-alist '(java-mode . java-ts-mode))

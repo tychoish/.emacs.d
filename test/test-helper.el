@@ -6,6 +6,8 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
 (defvar test-helper-root nil
   "Repository root directory, set once `test-helper' loads.")
 
@@ -80,6 +82,36 @@ key event) are never confused with multi-character sequences like \"dv\"."
             (push k dups))
         (push k seen)))
     dups))
+
+;;; Package testing helpers
+
+(cl-defmacro with-temporary-package-require (feature &rest body)
+  "Install FEATURE to a temporary package directory, require it, then eval BODY.
+FEATURE is a quoted symbol naming the package/feature (e.g. \\='package-lint).
+BODY may start with a `:path PATH' pair naming the directory to use as
+`package-user-dir'; it defaults to a per-instance subdir of
+`temporary-file-directory'.  Remaining BODY forms are evaluated after the
+package is installed and required."
+  (declare (indent 1))
+  (let (path)
+    (when (eq (car body) :path)
+      (setq path (cadr body)
+            body (cddr body)))
+    `(let* ((package-user-dir (or ,path
+                                  (file-name-concat temporary-file-directory
+                                                    (if (fboundp 'sprite-instance-name)
+                                                        (sprite-instance-name)
+                                                      "emacs"))))
+            (load-path load-path)
+            (package-activated-list package-activated-list))
+       (unless (file-exists-p package-user-dir)
+         (make-directory package-user-dir t))
+       (require 'package)
+       (package-initialize)
+       (unless (package-installed-p ,feature)
+         (package-install ,feature))
+       (require ,feature)
+       ,@body)))
 
 (provide 'test-helper)
 ;;; test-helper.el ends here

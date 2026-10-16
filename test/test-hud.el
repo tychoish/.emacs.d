@@ -461,5 +461,17 @@
       (should (map-elt lookup "visible-cmd"))
       (should (null (map-elt lookup "hidden-cmd"))))))
 
+(ert-deftest hud-test/eglot-mode-map-defined ()
+  "Test that `hud-eglot-mode-map` is defined with expected bindings."
+  (should (keymapp hud-eglot-mode-map))
+  (should (eq (lookup-key hud-eglot-mode-map "s") 'consult-eglot-symbols))
+  (should (eq (lookup-key hud-eglot-mode-map "r") 'eglot-rename))
+  (should (eq (lookup-key hud-eglot-mode-map "a") 'eglot-code-actions))
+  (should (eq (lookup-key hud-eglot-mode-map "f") 'eglot-format-buffer)))
+
+(ert-deftest hud-test/transient-insert-suffix-once ()
+  "Test `hud-transient-insert-suffix-once`."
+  (should (fboundp 'hud-transient-insert-suffix-once)))
+
 (provide 'test-hud)
 ;;; test-hud.el ends here
