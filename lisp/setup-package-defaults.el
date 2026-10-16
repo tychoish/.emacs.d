@@ -27,9 +27,26 @@
 (defvar bootstrap-package-quickstart-refresh-delay 1.0
   "Idle time in seconds to wait before regenerating `package-quickstart-file'.")
 
+(defun bootstrap-sync-package-load-paths ()
+  "Prune stale package directories from `load-path'.
+Also ensures current ELPA directories and autoloads are loaded."
+  (let ((elpa-dir (expand-file-name "elpa" user-emacs-directory)))
+    (when (file-directory-p elpa-dir)
+      (setq load-path (seq-filter #'file-directory-p load-path))
+      (dolist (dir (directory-files elpa-dir t "^[^.]"))
+        (when (file-directory-p dir)
+          (add-to-list 'load-path dir)
+          (let* ((pkg-base (file-name-nondirectory dir))
+                 (pkg-name (replace-regexp-in-string "-[0-9].*\\'" "" pkg-base))
+                 (autoloads-file (expand-file-name (concat pkg-name "-autoloads") dir)))
+            (when (or (file-exists-p (concat autoloads-file ".el"))
+                      (file-exists-p (concat autoloads-file ".elc")))
+              (load autoloads-file t t))))))))
+
 (defun bootstrap-refresh-package-quickstart ()
   "Regenerate `package-quickstart-file' and clear the debounce timer."
   (setq bootstrap--package-quickstart-refresh-timer nil)
+  (bootstrap-sync-package-load-paths)
   (package-quickstart-refresh))
 
 (defun bootstrap-flush-package-quickstart ()
