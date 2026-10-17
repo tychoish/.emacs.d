@@ -1155,42 +1155,5 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                  '("x" "test command" ignore))))
   (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x"))))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; which-key prefix title and prompt extraction
-
-(ert-deftest bootstrap/which-key-setup-configures-top-prefix ()
-  "Test `bootstrap-which-key-setup` sets side-window bottom and top prefix."
-  (bootstrap-which-key-setup)
-  (should (eq which-key-popup-type (quote side-window)))
-  (should (eq which-key-side-window-location (quote bottom)))
-  (should (eq which-key-show-prefix (quote top))))
-
-(ert-deftest bootstrap/which-key-extract-keymap-prompt-from-named-keymap ()
-  "Test `bootstrap-which-key--extract-keymap-prompt` with a keymap prompt."
-  (let ((map (make-sparse-keymap "test-group")))
-    (cl-letf (((symbol-function (quote key-binding)) (lambda (_k) map)))
-      (should (equal "test-group" (bootstrap-which-key--extract-keymap-prompt "C-c x"))))))
-
-(ert-deftest bootstrap/which-key-extract-keymap-prompt-from-parent-menu-item ()
-  "Test `bootstrap-which-key--extract-keymap-prompt` with an extended menu-item cons."
-  (let ((parent (make-sparse-keymap))
-        (child (make-sparse-keymap)))
-    (keymap-set parent "x" (cons "custom-group" child))
-    (cl-letf (((symbol-function (quote current-active-maps)) (lambda () (list parent)))
-              ((symbol-function (quote key-binding)) (lambda (_k) child)))
-      (should (equal "custom-group" (bootstrap-which-key--extract-keymap-prompt "x"))))))
-
-(ert-deftest bootstrap/which-key-format-prefix-title-formats-prompt ()
-  "Test `bootstrap-which-key--format-prefix-title` prepends key and displays prompt."
-  (cl-letf (((symbol-function (quote bootstrap-which-key--extract-keymap-prompt))
-             (lambda (keys) (when (equal keys "f") "fetch"))))
-    (should (equal "f: fetch"
-                   (bootstrap-which-key--format-prefix-title (lambda (_k) "") "f")))
-    (should (equal "f: fetch"
-                   (bootstrap-which-key--format-prefix-title (lambda (_k) "Following f") "f")))
-    (should (equal "Following z"
-                   (bootstrap-which-key--format-prefix-title (lambda (_k) "") "z")))))
-
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here

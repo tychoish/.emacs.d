@@ -91,6 +91,7 @@
   (setq magit-dash-gh-prune-pr-limit 50)
   (setq magit-dash-show-discovered-submodules nil)
   (setq magit-dash-render-branch-name-as-basename t)
+  (setq magit-dash-which-key-abbreviate-commands 'strip)
   (add-hook 'magit-status-mode-hook
 	    (lambda ()
 	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
@@ -1583,7 +1584,7 @@ otherwise keep replaying stale detection results."
   :defer t
   :init
   :config
-  (elpaish-install-add-bootstrap-packages
+  (elpaish-install-register-upgrade-package
    '(acp shell-maker agent-shell gptel gptel-agent)
    '(vertico consult corfu cape marginalia tempel orderless)
    '(magit flycheck)
