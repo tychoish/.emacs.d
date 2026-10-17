@@ -128,7 +128,6 @@ Override in user/*.el to customize per machine or instance.")
     (cons 'cmake-root root)))
 
 (add-hook 'project-find-functions #'project-find-cmake-project)
-
 (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
 
 ;;; TK(...) placeholder font-lock definitions
@@ -154,6 +153,7 @@ Override in user/*.el to customize per machine or instance.")
      (3 'tk-delimiter-face t)))
   "Font-lock keywords for TK(\"<expl>\") annotations.")
 
+(add-hook 'dired-mode-hook 'dired-async-mode)
 (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
 (add-hook 'LaTeX-mode-hook #'turn-on-reftex)
 (add-hook 'LaTeX-mode-hook #'visual-line-mode)

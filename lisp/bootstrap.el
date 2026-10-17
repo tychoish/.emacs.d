@@ -85,6 +85,8 @@
    docker
    slime
    sqlite-mode-extras
+   ollama
+   ollama-tailnet
    nerd-icons
    nerd-icons-dired
    nerd-icons-corfu
@@ -98,6 +100,14 @@
    pkgbuild-mode
    protobuf-mode
    ninja-mode))
+
+(elpaish-install-register-upgrade-package
+ '(acp shell-maker agent-shell gptel gptel-agent)
+ '(vertico consult corfu cape marginalia tempel orderless)
+ '(magit flycheck)
+ '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen builder)
+ '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup))
+
 
 (defvar tychoish--suppress-supersession-prompt nil
   "Non-nil while handling an `emacsclient --eval' request or a timer callback.

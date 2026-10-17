@@ -79,6 +79,7 @@ Also ensures current ELPA directories and autoloads are loaded."
           package-vc-upgrade-all))
 
 (add-hook 'async-pkg-install-after-hook #'ad:refresh-package-quickstart)
+(add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
 (add-hook 'kill-emacs-hook #'bootstrap-flush-package-quickstart)
 
 ;;;; use-package packaging extensions
@@ -140,7 +141,24 @@ this widens it to four for finer-grained startup profiling."
 
 ;;;; Async package installation
 
-(autoload 'async-package-operation "setup-core")
+(autoload 'async-package-do-action "async-package")
+
+(defun async-package-operation (op pkgs)
+  (let* ((ops '(install upgrade 'reinstall))
+         (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it)) pkgs))
+         (filename (concat (file-name-concat temporary-file-directory
+                                             (string-join (list
+                                                           "emacs" sprite-instance-id
+                                                           "async-package"
+                                                           (symbol-name op))
+                                                          "-")) ".log")))
+    (unless (member op ops)
+      (user-error "%s is not a valid operation %S" op ops))
+
+    (unless valid-packages
+      (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
+
+    (async-package-do-action op valid-packages filename)))
 
 (defun package-install-async (pkgs)
   "Install PKGS asynchronously using `async-package-operation'."

@@ -185,56 +185,6 @@
   (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications)
   (delight 'terraform-mode "tf" 'terraform-mode))
 
-(use-package async
-  :ensure t
-  :defer t
-  :init
-  (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
-  (add-hook 'dired-mode-hook 'dired-async-mode)
-  :config
-  (declare-function package-desc-p "package")
-  (autoload 'async-package-do-action "async-package")
-
-  (defun async-package-operation (op pkgs)
-    (let* ((ops '(install upgrade 'reinstall))
-           (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it)) pkgs))
-           (filename (concat (file-name-concat temporary-file-directory
-                                                (string-join (list
-                                                               "emacs" sprite-instance-id
-                                                               "async-package"
-                                                               (symbol-name op))
-                                                              "-")) ".log")))
-      (unless (member op ops)
-        (user-error "%s is not a valid operation %S" op ops))
-
-      (unless valid-packages
-        (user-error "must define one or more valid packages %s [%s]" valid-packages pkgs))
-
-      (async-package-do-action op valid-packages filename))))
-
-(with-eval-after-load 'arch
-  (defun arch-alert-after-install (pkg)
-    (alert (format "Installed package %s" (arch-pkg-name pkg))
-           :title "Arch Package Manager"))
-
-  (defun arch-alert-after-upgrade (pkg)
-    (alert (format "Upgraded package %s" (arch-pkg-name pkg))
-           :title "Arch Package Manager"))
-
-  (defun arch-alert-after-remove (pkg)
-    (alert (format "Removed package %s" (arch-pkg-name pkg))
-           :title "Arch Package Manager"))
-
-  (defun arch-alert-after-upgrade-all ()
-    (alert "System upgrade completed"
-           :title "Arch Package Manager"))
-
-  (add-hook 'arch-after-install-hook #'arch-alert-after-install)
-  (add-hook 'arch-after-upgrade-hook #'arch-alert-after-upgrade)
-  (add-hook 'arch-after-remove-hook #'arch-alert-after-remove)
-  (add-hook 'arch-after-upgrade-all-hook #'arch-alert-after-upgrade-all)
-  (run-with-idle-timer 2 nil #'arch--populate-cache))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Project / Repository Tools
@@ -1519,24 +1469,6 @@ otherwise keep replaying stale detection results."
   (setq web-mode-enable-auto-expanding t)
   (setq web-mode-enable-css-colorization t))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; programming adjacent tools
-
-(use-package elpaish
-  :ensure t
-  :defer t
-  :init
-  :config
-  (elpaish-install-register-upgrade-package
-   '(acp shell-maker agent-shell gptel gptel-agent)
-   '(vertico consult corfu cape marginalia tempel orderless)
-   '(magit flycheck)
-   '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen builder)
-   '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup))
-
-  (hud-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; build/compilation support
@@ -1670,52 +1602,6 @@ otherwise keep replaying stale detection results."
   (setq cov-lcov-file-name "coverage/lcov.info")
   (setq cov-coverage-file-paths '("cover" "coverage" ".")))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; language server protocol (lsp) [eglot] + treesitter
-
-(use-package treesit
-  :defer t
-  :config
-  (add-hook 'js-ts-mode-hook (make-run-hooks-function-for js-mode))
-  (add-hook 'c-ts-mode-hook (make-run-hooks-function-for c-mode))
-  (add-hook 'c++-ts-mode-hook (make-run-hooks-function-for c++-mode))
-
-  (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
-
-  (font-lock-add-keywords 'c-ts-mode (font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c++-ts-mode (font-lock-width-keyword 100))
-
-  (setq treesit-language-source-alist
-	'((bash "https://github.com/tree-sitter/tree-sitter-bash")
-	  (cmake "https://github.com/uyha/tree-sitter-cmake")
-	  (c "https://github.com/tree-sitter/tree-sitter-c")
-	  (css "https://github.com/tree-sitter/tree-sitter-css")
-	  (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
-	  (go "https://github.com/tree-sitter/tree-sitter-go")
-	  (html "https://github.com/tree-sitter/tree-sitter-html")
-	  (java "https://github.com/tree-sitter/tree-sitter-java")
-	  (dockerfile "https://github.com/camdencheek/tree-sitter-dockerfile")
-	  (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
-	  (json "https://github.com/tree-sitter/tree-sitter-json")
-	  (python "https://github.com/tree-sitter/tree-sitter-python")
-	  (ruby "https://github.com/tree-sitter/tree-sitter-ruby")
-	  (rust "https://github.com/tree-sitter/tree-sitter-rust")
-	  (toml "https://github.com/tree-sitter/tree-sitter-toml")
-	  (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
-	  (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
-	  (yaml "https://github.com/ikatyang/tree-sitter-yaml")
-	  (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")))
-
-  (defun tychoish-background-rebuild-treesit-bindings ()
-    (interactive)
-    (async-start
-     `(lambda ()
-	,(async-inject-variables "treesit-language-source-alist")
-	(mapc #'treesit-install-language-grammar (seq-map #'car treesit-language-source-alist)))
-     (lambda (result)
-       (message "rebuilt treesit grammars for %s" result)))))
 
 (use-package dape
   :ensure t
@@ -1827,51 +1713,6 @@ otherwise keep replaying stale detection results."
 
   (gptel-set-backend-default-gemini-flash-preview)
   (require 'gptel-integrations))
-
-(use-package ollama
-  :ensure t
-  :defer t
-  :commands (ollama-status
-             ollama-list-models
-             ollama-pull-model
-             ollama-delete-model
-             ollama-copy-model
-             ollama-show-model
-             ollama-check-server
-             ollama-transient-menu
-             ollama-transient-setup)
-  :init
-  (keymap-set hud-robot-ollama-map "o" #'ollama-transient-menu)
-  (keymap-set hud-robot-ollama-map "s" #'ollama-status)
-  (keymap-set hud-robot-ollama-map "l" #'ollama-list-models)
-  (keymap-set hud-robot-ollama-map "p" #'ollama-pull-model)
-  (keymap-set hud-robot-ollama-map "d" #'ollama-delete-model)
-  (keymap-set hud-robot-ollama-map "c" #'ollama-copy-model)
-  (keymap-set hud-robot-ollama-map "i" #'ollama-show-model)
-  (keymap-set hud-robot-ollama-map "k" #'ollama-check-server)
-  (keymap-set hud-robot-ollama-map "r" #'ollama-status-refresh)
-
-  (make-read-extended-command-for-prefix "ollama"
-    :bind-key "x"
-    :bind-map hud-robot-ollama-map)
-  :config
-  (with-eval-after-load 'ollama-transient
-    (with-eval-after-load 'transient
-      (hud-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))))
-
-(use-package ollama-tailnet
-  :defer t
-  :commands (ollama-tailnet-status
-             ollama-tailnet-pull-model
-             ollama-tailnet-service-restart
-             ollama-tailnet-service-status
-             ollama-tailnet-set-gptel-backend
-             ollama-tailnet-setup-laptop-presets
-             ollama-tailnet-models
-             ollama-tailnet-search-model)
-  :init
-  :config
-  (ollama-tailnet-setup-laptop-presets))
 
 (use-package agent-shell
   :ensure t

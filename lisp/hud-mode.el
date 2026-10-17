@@ -520,6 +520,21 @@ binding (see `keymap-set'.)"
   :name "ollama"
   :doc "Ollama commands under C-c r o (hud-mode).")
 
+(keymap-set hud-robot-ollama-map "o" #'ollama-transient-menu)
+(keymap-set hud-robot-ollama-map "s" #'ollama-status)
+(keymap-set hud-robot-ollama-map "l" #'ollama-list-models)
+(keymap-set hud-robot-ollama-map "p" #'ollama-pull-model)
+(keymap-set hud-robot-ollama-map "d" #'ollama-delete-model)
+(keymap-set hud-robot-ollama-map "c" #'ollama-copy-model)
+(keymap-set hud-robot-ollama-map "i" #'ollama-show-model)
+(keymap-set hud-robot-ollama-map "k" #'ollama-check-server)
+(keymap-set hud-robot-ollama-map "r" #'ollama-status-refresh)
+
+(make-read-extended-command-for-prefix "ollama"
+  :bind-key "x"
+  :bind-map hud-robot-ollama-map)
+
+
 (defvar-keymap hud-robot-ollama-tailnet-map
   :name "ollama-tailnet"
   :doc "Ollama tailnet orchestration under C-c r o t (hud-mode).")

@@ -132,9 +132,38 @@ completion candidate outlives its buffer."
     :bind-map denote-dash-global-map
     :bind-key "x"))
 
+(with-eval-after-load 'flycheck-eglot
+  (setq-default flycheck-eglot-exclusive nil)
+  (add-to-list 'flycheck-checkers 'eglot-check)
+  (setq flycheck-eglot-enable-diagnostic-tags nil)
+  (flycheck-add-next-checker 'eglot-check 'go-gofmt))
+
 (with-eval-after-load 'denote-sync
   (require 'denote-sync-notion)
   (require 'denote-sync-gdocs))
+
+(with-eval-after-load 'arch
+  (defun arch-alert-after-install (pkg)
+    (alert (format "Installed package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+
+  (defun arch-alert-after-upgrade (pkg)
+    (alert (format "Upgraded package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+
+  (defun arch-alert-after-remove (pkg)
+    (alert (format "Removed package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+
+  (defun arch-alert-after-upgrade-all ()
+    (alert "System upgrade completed"
+           :title "Arch Package Manager"))
+
+  (add-hook 'arch-after-install-hook #'arch-alert-after-install)
+  (add-hook 'arch-after-upgrade-hook #'arch-alert-after-upgrade)
+  (add-hook 'arch-after-remove-hook #'arch-alert-after-remove)
+  (add-hook 'arch-after-upgrade-all-hook #'arch-alert-after-upgrade-all)
+  (run-with-idle-timer 2 nil #'arch--populate-cache))
 
 (with-eval-after-load 'slime
   (make-read-extended-command-for-prefix "slime"
@@ -147,12 +176,53 @@ completion candidate outlives its buffer."
 (with-eval-after-load 'builder-core
   (require 'builder-tasks))
 
-(with-eval-after-load 'flycheck-eglot
-  (setq-default flycheck-eglot-exclusive nil)
-  (add-to-list 'flycheck-checkers 'eglot-check)
-  (setq flycheck-eglot-enable-diagnostic-tags nil)
-  (flycheck-add-next-checker 'eglot-check 'go-gofmt))
+(with-eval-after-load 'ollama-tailnet
+  (ollama-tailnet-setup-laptop-presets)
+  (hud-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
 
+(with-eval-after-load 'elpaish
+  (hud-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
+
+(with-eval-after-load 'treesit
+  (add-hook 'js-ts-mode-hook (make-run-hooks-function-for js-mode))
+  (add-hook 'c-ts-mode-hook (make-run-hooks-function-for c-mode))
+  (add-hook 'c++-ts-mode-hook (make-run-hooks-function-for c++-mode))
+
+  (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
+
+  (font-lock-add-keywords 'c-ts-mode (font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c++-ts-mode (font-lock-width-keyword 100))
+
+  (setq treesit-language-source-alist
+	'((bash "https://github.com/tree-sitter/tree-sitter-bash")
+	  (cmake "https://github.com/uyha/tree-sitter-cmake")
+	  (c "https://github.com/tree-sitter/tree-sitter-c")
+	  (css "https://github.com/tree-sitter/tree-sitter-css")
+	  (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
+	  (go "https://github.com/tree-sitter/tree-sitter-go")
+	  (html "https://github.com/tree-sitter/tree-sitter-html")
+	  (java "https://github.com/tree-sitter/tree-sitter-java")
+	  (dockerfile "https://github.com/camdencheek/tree-sitter-dockerfile")
+	  (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
+	  (json "https://github.com/tree-sitter/tree-sitter-json")
+	  (python "https://github.com/tree-sitter/tree-sitter-python")
+	  (ruby "https://github.com/tree-sitter/tree-sitter-ruby")
+	  (rust "https://github.com/tree-sitter/tree-sitter-rust")
+	  (toml "https://github.com/tree-sitter/tree-sitter-toml")
+	  (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
+	  (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
+	  (yaml "https://github.com/ikatyang/tree-sitter-yaml")
+	  (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")))
+
+  (defun tychoish-background-rebuild-treesit-bindings ()
+    (interactive)
+    (async-start
+     `(lambda ()
+	,(async-inject-variables "treesit-language-source-alist")
+	(mapc #'treesit-install-language-grammar (seq-map #'car treesit-language-source-alist)))
+     (lambda (result)
+       (message "rebuilt treesit grammars for %s" result)))))
 
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here
