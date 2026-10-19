@@ -185,6 +185,7 @@ transient project and cleans both up afterward."
       (eglox-format-for-hook)
       (should-not formatted))
     (cl-letf (((symbol-function 'eglot-managed-p) (lambda () t))
+              ((symbol-function 'eglox-server-live-p) (lambda () t))
               ((symbol-function 'eglot-format-buffer) (lambda () (setq formatted t))))
       (eglox-format-for-hook)
       (should formatted))))
@@ -202,6 +203,7 @@ transient project and cleans both up afterward."
         (should-not called-with))
       ;; Managed
       (cl-letf (((symbol-function 'eglot-managed-p) (lambda () t))
+                ((symbol-function 'eglox-server-live-p) (lambda () t))
                 ((symbol-function 'eglot-code-action-organize-imports)
                  (lambda (beg end) (setq called-with (list beg end)))))
         (eglox-organize-imports-for-hook)
@@ -537,6 +539,7 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
          (buffers (mapcar (lambda (n)
                             (let ((buf (generate-new-buffer (format "eglox-throttle-test-%d" n))))
                               (with-current-buffer buf
+                                (insert "x = 1\n")
                                 (setq buffer-file-name (format "/tmp/eglox-throttle-test-%d.py" n))
                                 (setq major-mode 'python-mode))
                               buf))
@@ -555,6 +558,43 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
       (when (timerp eglox-activate-timer)
         (cancel-timer eglox-activate-timer))
       (seq-do #'kill-buffer buffers))))
+
+(ert-deftest eglox/activate-queue-prunes-empty-and-dead-buffers ()
+  "Empty, dead, and managed buffers are dropped from the activation queue."
+  (let* ((eglox-activate-queue nil)
+         (eglox-activate-timer nil)
+         (eglox-activate-last-log 0.0)
+         (full (generate-new-buffer "eglox-prune-full"))
+         (empty (generate-new-buffer "eglox-prune-empty"))
+         (dead (generate-new-buffer "eglox-prune-dead")))
+    (unwind-protect
+        (progn
+          (with-current-buffer full (insert "x"))
+          (with-current-buffer dead (insert "x"))
+          (setq eglox-activate-queue (list full empty dead))
+          (kill-buffer dead)
+          (should (= 2 (eglox-activate-prune-queue)))
+          (should (equal (list full) eglox-activate-queue))
+          (eglox-activate-enqueue empty)
+          (should (equal (list full) eglox-activate-queue)))
+      (when (timerp eglox-activate-timer)
+        (cancel-timer eglox-activate-timer))
+      (seq-do #'kill-buffer (seq-filter #'buffer-live-p (list full empty dead))))))
+
+(ert-deftest eglox/activate-queue-size-prunes-and-counts ()
+  "`eglox-activate-queue-size' counts only pending buffers."
+  (let* ((eglox-activate-queue nil)
+         (eglox-activate-timer nil)
+         (full (generate-new-buffer "eglox-size-full"))
+         (empty (generate-new-buffer "eglox-size-empty")))
+    (unwind-protect
+        (progn
+          (with-current-buffer full (insert "x"))
+          (setq eglox-activate-queue (list full empty))
+          (should (= 1 (eglox-activate-queue-size)))
+          (should (string-match-p "1 buffer" (eglox-activate-queue-report)))
+          (should (string-match-p "idle" (eglox-activate-queue-report))))
+      (seq-do #'kill-buffer (list full empty)))))
 
 (ert-deftest eglox/activate-editing-mode-unmanaged-bypasses-throttle ()
   "Regression test: buffers without a file or configured server bypass throttle."
@@ -584,8 +624,11 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
          (eglox-activate-timer nil)
          (activated nil)
          (total (* 2 eglox-activate-burst-limit))
-         (buffers (mapcar (lambda (n) (generate-new-buffer (format "eglox-drain-test-%d" n)))
-                           (number-sequence 1 total))))
+         (buffers (mapcar (lambda (n)
+                            (with-current-buffer (generate-new-buffer (format "eglox-drain-test-%d" n))
+                              (insert "x")
+                              (current-buffer)))
+                          (number-sequence 1 total))))
     (unwind-protect
         (cl-letf (((symbol-function 'eglot--maybe-activate-editing-mode)
                    (lambda () (push (current-buffer) activated))))
@@ -649,6 +692,63 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
     (when yaml
       (should (listp (plist-get yaml :format)))
       (should-not (keywordp (plist-get yaml :format))))))
+
+(ert-deftest eglox/save-hooks-reconnect-when-server-dead ()
+  "Save hooks skip dead servers and trigger stale connection cleanup."
+  (let ((cleanups 0)
+        (acted nil))
+    (cl-letf (((symbol-function 'eglot-managed-p) (lambda () t))
+              ((symbol-function 'eglox-server-live-p) (lambda () nil))
+              ((symbol-function 'eglox-cleanup-stale-connections)
+               (lambda () (cl-incf cleanups)))
+              ((symbol-function 'eglot-format-buffer) (lambda () (setq acted t)))
+              ((symbol-function 'eglot-code-action-organize-imports)
+               (lambda (&rest _) (setq acted t))))
+      (eglox-format-for-hook)
+      (eglox-organize-imports-for-hook)
+      (should (= 2 cleanups))
+      (should-not acted))))
+
+(ert-deftest eglox/ensure-unmanaged-buffers-enqueues-file-buffers ()
+  "Unmanaged file buffers in eglox modes are queued; others are skipped."
+  (let* ((eglox-activate-queue nil)
+         (eglox-activate-timer nil)
+         (py (generate-new-buffer "eglox-unmanaged-py"))
+         (txt (generate-new-buffer "eglox-unmanaged-txt")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'eglot-ensure) #'ignore))
+          (with-current-buffer py
+            (insert "x = 1\n")
+            (setq buffer-file-name "/tmp/eglox-unmanaged.py")
+            (setq major-mode 'python-mode))
+          (with-current-buffer txt
+            (insert "x")
+            (setq buffer-file-name "/tmp/eglox-unmanaged.txt"))
+          (should (= 1 (eglox-ensure-unmanaged-buffers)))
+          (should (memq py eglox-activate-queue))
+          (should-not (memq txt eglox-activate-queue)))
+      (when (timerp eglox-activate-timer)
+        (cancel-timer eglox-activate-timer))
+      (seq-do #'kill-buffer (list py txt)))))
+
+(ert-deftest eglox/activate-flush-queue-bypasses-throttle ()
+  "Flushing activates COUNT buffers at once, beyond the burst limit."
+  (let* ((eglox-activate-queue nil)
+         (eglox-activate-recent nil)
+         (eglox-activate-timer nil)
+         (activated 0)
+         (buffers (mapcar (lambda (n)
+                            (with-current-buffer (generate-new-buffer (format "eglox-flush-%d" n))
+                              (insert "x")
+                              (current-buffer)))
+                          (number-sequence 1 (* 3 eglox-activate-burst-limit)))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'eglot--maybe-activate-editing-mode)
+                   (lambda () (cl-incf activated))))
+          (setq eglox-activate-queue (copy-sequence buffers))
+          (should (= 1 (eglox-activate-flush-queue (1- (length buffers)))))
+          (should (= (1- (length buffers)) activated)))
+      (seq-do #'kill-buffer buffers))))
 
 (provide 'test-egloxtra)
 ;;; test-egloxtra.el ends here

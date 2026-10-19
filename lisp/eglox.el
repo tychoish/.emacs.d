@@ -53,6 +53,7 @@
 (declare-function eglot-current-server "eglot")
 (declare-function eglot--current-server-or-lose "eglot")
 (declare-function eglot-ensure "eglot")
+(declare-function eglox-activate-enqueue "eglox")
 (declare-function eglot-managed-p "eglot")
 (declare-function eglot--lookup-mode "eglot")
 (declare-function eglot--maybe-activate-editing-mode "eglot")
@@ -189,9 +190,9 @@
 (defvar eglox--eglot-initialized nil
   "Non-nil when Eglot settings and integrations have been applied.")
 
-(defun eglox--init-eglot (&optional _arg)
+(defun eglox--init-eglot (&rest _args)
   "Initialize Eglot settings, server programs, and capabilities.
-Optional argument _ARG is ignored so this can be used on hooks or advices."
+Rest argument _ARGS is ignored so this can be used on hooks or advices."
   (unless eglox--eglot-initialized
     (setq eglox--eglot-initialized t)
     (let ((gc-cons-threshold most-positive-fixnum))
@@ -315,20 +316,31 @@ Cancels `eglox-projectile-warm-cache-idle-timer' when the queue is empty."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Save Hooks & Actions
 
+(defun eglox-server-live-p ()
+  "Return non-nil if the current buffer's Eglot server process is running."
+  (when-let* ((server (eglot-current-server)))
+    (process-live-p (jsonrpc--process server))))
+
 ;;;###autoload
 (defun eglox-format-for-hook ()
-  "Format the current buffer using Eglot if managed."
+  "Format the current buffer using Eglot if managed.
+When the buffer's server has died, reconnect orphaned buffers instead."
   (interactive)
   (when (eglot-managed-p)
-    (eglot-format-buffer)))
+    (if (eglox-server-live-p)
+        (eglot-format-buffer)
+      (eglox-cleanup-stale-connections))))
 
 ;;;###autoload
 (defun eglox-organize-imports-for-hook ()
-  "Organize imports for the current buffer using Eglot if managed."
+  "Organize imports for the current buffer using Eglot if managed.
+When the buffer's server has died, reconnect orphaned buffers instead."
   (interactive)
   (when (eglot-managed-p)
-    (with-demoted-errors "WARN (`eglox-organize-imports-for-hook'): %S"
-      (eglot-code-action-organize-imports (point-min) (point-max)))))
+    (if (eglox-server-live-p)
+        (with-demoted-errors "WARN (`eglox-organize-imports-for-hook'): %S"
+          (eglot-code-action-organize-imports (point-min) (point-max)))
+      (eglox-cleanup-stale-connections))))
 
 ;;;###autoload
 (defun eglox-code-action-inline ()
@@ -388,6 +400,32 @@ compatibility with `eglot-connect-hook'."
          (when buffer-file-name
            (ignore-errors (eglot-ensure))))))
    (buffer-list)))
+
+;;;###autoload
+(defun eglox-ensure-unmanaged-buffers ()
+  "Run `eglot-ensure' in file buffers of `eglox-mode-hooks' modes lacking Eglot.
+Buffers are queued for throttled activation against an existing server, and
+`eglot-ensure' covers projects with no server yet, so this does not start a
+connection storm.  Return the number of buffers scheduled."
+  (interactive)
+  (let* ((modes (seq-map (lambda (hook)
+                           (intern (string-remove-suffix "-hook" (symbol-name hook))))
+                         eglox-mode-hooks))
+         (buffers (seq-filter
+                   (lambda (buffer)
+                     (with-current-buffer buffer
+                       (and buffer-file-name
+                            (apply #'derived-mode-p modes)
+                            (not (bound-and-true-p eglot--managed-mode)))))
+                   (buffer-list))))
+    (seq-do (lambda (buffer)
+              (with-current-buffer buffer
+                (ignore-errors (eglot-ensure)))
+              (eglox-activate-enqueue buffer))
+            buffers)
+    (when (called-interactively-p 'interactive)
+      (message "eglox: scheduled eglot in %d buffer(s)" (length buffers)))
+    (length buffers)))
 
 ;;;###autoload
 (defun eglox-cleanup-stale-connections ()
@@ -453,26 +491,92 @@ is currently in flight for PROJECT."
 (defvar eglox-activate-timer nil
   "Timer draining `eglox-activate-queue', or nil when idle.")
 
+(defconst eglox-activate-log-interval 60
+  "Minimum seconds between queue size log messages from the drain timer.")
+
+(defvar eglox-activate-last-log 0.0
+  "Float time of the last `eglox-activate-queue' size log message.")
+
+(defun eglox-activate-buffer-pending-p (buffer)
+  "Return non-nil if BUFFER is live, non-empty, and not yet managed by Eglot."
+  (and (buffer-live-p buffer)
+       (with-current-buffer buffer
+         (and (not (zerop (buffer-size)))
+              (not (bound-and-true-p eglot--managed-mode))))))
+
+(defun eglox-activate-prune-queue ()
+  "Drop dead, empty, and already managed buffers from `eglox-activate-queue'.
+Return the number of buffers removed."
+  (let ((before (length eglox-activate-queue)))
+    (setq eglox-activate-queue
+          (seq-filter #'eglox-activate-buffer-pending-p eglox-activate-queue))
+    (- before (length eglox-activate-queue))))
+
+;;;###autoload
+(defun eglox-activate-queue-size ()
+  "Return the number of pending buffers in `eglox-activate-queue'.
+Dead, empty, and managed buffers are pruned first."
+  (eglox-activate-prune-queue)
+  (length eglox-activate-queue))
+
+;;;###autoload
+(defun eglox-activate-queue-report ()
+  "Report the activation queue size and drain timer state in the echo area."
+  (interactive)
+  (let ((pruned (eglox-activate-prune-queue)))
+    (message "eglox: %d buffer(s) queued for activation (%d pruned), drain timer %s"
+             (length eglox-activate-queue) pruned
+             (if (timerp eglox-activate-timer) "active" "idle"))))
+
+(defun eglox-activate-log-queue (pruned)
+  "Log the size of `eglox-activate-queue' and PRUNED count at most once per interval."
+  (when (>= (- (float-time) eglox-activate-last-log) eglox-activate-log-interval)
+    (setq eglox-activate-last-log (float-time))
+    (message "eglox: %d buffer(s) queued for activation (%d pruned)"
+             (length eglox-activate-queue) pruned)))
+
 (defun eglox-activate-process-queue ()
-  "Drain up to `eglox-activate-burst-limit' queued buffers per tick.
+  "Prune, then drain up to `eglox-activate-burst-limit' queued buffers per tick.
 Cancels `eglox-activate-timer' when the queue is empty."
-  (if (null eglox-activate-queue)
-      (when eglox-activate-timer
-        (cancel-timer eglox-activate-timer)
-        (setq eglox-activate-timer nil))
-    (dotimes (_ eglox-activate-burst-limit)
-      (when-let* ((buf (pop eglox-activate-queue)))
-        (ignore-errors
-          (when (buffer-live-p buf)
-            (with-current-buffer buf
-              (eglot--maybe-activate-editing-mode))))))))
+  (let ((pruned (eglox-activate-prune-queue)))
+    (if (null eglox-activate-queue)
+        (when eglox-activate-timer
+          (cancel-timer eglox-activate-timer)
+          (setq eglox-activate-timer nil))
+      (eglox-activate-log-queue pruned)
+      (dotimes (_ eglox-activate-burst-limit)
+        (when-let* ((buf (pop eglox-activate-queue)))
+          (ignore-errors
+            (when (buffer-live-p buf)
+              (with-current-buffer buf
+                (eglot--maybe-activate-editing-mode)))))))))
+
+;;;###autoload
+(defun eglox-activate-flush-queue (&optional count)
+  "Activate up to COUNT queued buffers now, bypassing the burst throttle.
+COUNT defaults to 25; interactively, use a numeric prefix argument to change it.
+Return the number of buffers left in the queue."
+  (interactive "P")
+  (eglox-activate-prune-queue)
+  (dotimes (_ (if count (prefix-numeric-value count) 25))
+    (when-let* ((buf (pop eglox-activate-queue)))
+      (ignore-errors
+        (when (buffer-live-p buf)
+          (with-current-buffer buf
+            (let ((eglox-activate-recent nil))
+              (eglot--maybe-activate-editing-mode)))))))
+  (when (called-interactively-p 'interactive)
+    (message "eglox: %d buffer(s) still queued" (length eglox-activate-queue)))
+  (length eglox-activate-queue))
 
 (defun eglox-activate-enqueue (buffer)
-  "Add BUFFER to `eglox-activate-queue' and start drain timer if needed."
-  (unless (memq buffer eglox-activate-queue)
+  "Add BUFFER to `eglox-activate-queue' if pending, and start drain timer if needed."
+  (eglox-activate-prune-queue)
+  (when (and (eglox-activate-buffer-pending-p buffer)
+             (not (memq buffer eglox-activate-queue)))
     (setq eglox-activate-queue
           (append eglox-activate-queue (list buffer))))
-  (unless eglox-activate-timer
+  (when (and eglox-activate-queue (not eglox-activate-timer))
     (setq eglox-activate-timer
           (run-with-timer eglox-activate-batch-delay
                           eglox-activate-batch-delay

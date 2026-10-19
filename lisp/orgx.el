@@ -1153,6 +1153,7 @@ the toc-org write hook."
 (keymap-set orgx-agenda-minor-mode-map "C-e" #'orgx-migrate-subtree-to-denote)
 (keymap-set orgx-agenda-minor-mode-map "C-b" #'orgx-agenda-switch-buffer)
 (keymap-set orgx-agenda-minor-mode-map "M-a" #'orgx-agenda-view)
+(keymap-set orgx-agenda-minor-mode-map "r" #'org-agenda-refile)
 
 (define-minor-mode orgx-agenda-minor-mode
   "Personal org-agenda keybindings and setup."
