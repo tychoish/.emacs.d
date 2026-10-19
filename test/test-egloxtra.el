@@ -304,6 +304,21 @@ transient project and cleans both up afterward."
       (should dup-called)
       (should reconnect-called))))
 
+(ert-deftest eglox/cleanup-stale-connections-safe-when-no-servers ()
+  "Test `eglox-cleanup-stale-connections' runs cleanly with an empty servers table."
+  (let ((eglot--servers-by-project (make-hash-table :test #'equal)))
+    (eglox-cleanup-stale-connections)))
+
+(ert-deftest eglox/global-mode-defers-when-eglot-uninitialized ()
+  "Test `eglox-global-mode' does not start timer or install advice when Eglot is uninitialized."
+  (let ((eglox--eglot-initialized nil))
+    (eglox-global-mode -1)
+    (eglox-global-mode 1)
+    (should eglox-global-mode)
+    (should (null eglox-cleanup-stale-connections-timer))
+    (should-not (advice-member-p #'ad:eglot-completion-at-point-guard-no-server 'eglot-completion-at-point))
+    (eglox-global-mode -1)))
+
 (ert-deftest eglox/mark-and-unmark-connecting ()
   "Test `eglox-mark-connecting' and `eglox-unmark-connecting'."
   (eglox-test--with-fake-eglot-server srv

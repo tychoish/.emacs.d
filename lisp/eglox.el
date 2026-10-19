@@ -79,7 +79,7 @@
 (defvar eglot-workspace-configuration)
 (defvar eglot-mode-map)
 (defvar eglot--managed-mode)
-(defvar eglot--servers-by-project)
+(defvar eglot--servers-by-project (make-hash-table :test #'equal))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Keymaps
@@ -219,7 +219,8 @@ Optional argument _ARG is ignored so this can be used on hooks or advices."
              (workspace (plist-get caps :workspace)))
         (plist-put workspace :didChangeWatchedFiles
                    (list :dynamicRegistration :json-false))
-        caps))))
+        caps))
+    (eglox--install-eglot-integrations)))
 
 (defun eglox--after-load-hook (file)
   "Hook for `after-load-functions' to initialize Eglot when its FILE loads."
@@ -380,7 +381,7 @@ compatibility with `eglot-connect-hook'."
    (lambda (buffer)
      (with-current-buffer buffer
        (when (and (bound-and-true-p eglot--managed-mode)
-                  eglot--cached-server
+                  (bound-and-true-p eglot--cached-server)
                   (not (process-live-p (jsonrpc--process eglot--cached-server))))
          (setq eglot--cached-server nil)
          (ignore-errors (eglot--managed-mode-off))
@@ -525,44 +526,55 @@ Surplus buffers are queued in `eglox-activate-queue'."
   "Synchronize `eglox-mode' with `eglot--managed-mode'."
   (eglox-mode (if (bound-and-true-p eglot--managed-mode) 1 -1)))
 
-(defun eglox--enable-global ()
-  "Enable global Eglot extensions, advices, hooks, and timers."
-  (advice-add 'eglot-completion-at-point :around #'ad:eglot-completion-at-point-guard-no-server)
-  (advice-add 'eglot--connect :around #'ad:eglot--connect-dedupe)
-  (advice-add 'eglot--on-shutdown :around #'ad:eglot--on-shutdown-cleanup-stale)
-  (advice-add 'eglot--maybe-activate-editing-mode :around #'ad:eglot--maybe-activate-editing-mode-throttle)
-  (add-hook 'eglot-managed-mode-hook #'eglox--managed-mode-sync)
-  (add-hook 'eglot-connect-hook #'eglox-prune-duplicate-servers)
-  (add-hook 'eglot-connect-hook #'eglox--init-eglot)
-  (add-hook 'eglot-server-initialized-hook #'eglox-mark-connecting)
-  (add-hook 'eglot-connect-hook #'eglox-unmark-connecting)
-  (add-hook 'projectile-project-changed-functions #'eglox-projectile-warm-cache-on-project-change)
-  (add-hook 'window-selection-change-functions #'eglox-activate-prioritize-visible)
-  (dolist (hook eglox-mode-hooks)
-    (add-hook hook #'eglox-ensure))
-  (keymap-set hud-ide-map "l" (cons "eglot" eglox-global-map))
-  (unless (timerp eglox-cleanup-stale-connections-timer)
-    (setq eglox-cleanup-stale-connections-timer
-          (run-with-idle-timer 300 t #'eglox-cleanup-stale-connections))))
+(defvar eglox-global-mode)
 
-(defun eglox--disable-global ()
-  "Disable global Eglot extensions, advices, hooks, and timers."
+(defun eglox--install-eglot-integrations ()
+  "Install advices, hooks, and background timers for Eglot.
+Only called when `eglot' is loaded and `eglox-global-mode' is enabled."
+  (when eglox-global-mode
+    (advice-add 'eglot-completion-at-point :around #'ad:eglot-completion-at-point-guard-no-server)
+    (advice-add 'eglot--connect :around #'ad:eglot--connect-dedupe)
+    (advice-add 'eglot--on-shutdown :around #'ad:eglot--on-shutdown-cleanup-stale)
+    (advice-add 'eglot--maybe-activate-editing-mode :around #'ad:eglot--maybe-activate-editing-mode-throttle)
+    (add-hook 'eglot-managed-mode-hook #'eglox--managed-mode-sync)
+    (add-hook 'eglot-connect-hook #'eglox-prune-duplicate-servers)
+    (add-hook 'eglot-server-initialized-hook #'eglox-mark-connecting)
+    (add-hook 'eglot-connect-hook #'eglox-unmark-connecting)
+    (unless (timerp eglox-cleanup-stale-connections-timer)
+      (setq eglox-cleanup-stale-connections-timer
+            (run-with-idle-timer 300 t #'eglox-cleanup-stale-connections)))))
+
+(defun eglox--uninstall-eglot-integrations ()
+  "Remove advices, hooks, and background timers for Eglot."
   (advice-remove 'eglot-completion-at-point #'ad:eglot-completion-at-point-guard-no-server)
   (advice-remove 'eglot--connect #'ad:eglot--connect-dedupe)
   (advice-remove 'eglot--on-shutdown #'ad:eglot--on-shutdown-cleanup-stale)
   (advice-remove 'eglot--maybe-activate-editing-mode #'ad:eglot--maybe-activate-editing-mode-throttle)
   (remove-hook 'eglot-managed-mode-hook #'eglox--managed-mode-sync)
   (remove-hook 'eglot-connect-hook #'eglox-prune-duplicate-servers)
-  (remove-hook 'eglot-connect-hook #'eglox--init-eglot)
   (remove-hook 'eglot-server-initialized-hook #'eglox-mark-connecting)
   (remove-hook 'eglot-connect-hook #'eglox-unmark-connecting)
+  (when (timerp eglox-cleanup-stale-connections-timer)
+    (cancel-timer eglox-cleanup-stale-connections-timer)
+    (setq eglox-cleanup-stale-connections-timer nil)))
+
+(defun eglox--enable-global ()
+  "Enable global Eglot extensions, mode hooks, and projectile integration."
+  (add-hook 'projectile-project-changed-functions #'eglox-projectile-warm-cache-on-project-change)
+  (add-hook 'window-selection-change-functions #'eglox-activate-prioritize-visible)
+  (dolist (hook eglox-mode-hooks)
+    (add-hook hook #'eglox-ensure))
+  (keymap-set hud-ide-map "l" (cons "eglot" eglox-global-map))
+  (when eglox--eglot-initialized
+    (eglox--install-eglot-integrations)))
+
+(defun eglox--disable-global ()
+  "Disable global Eglot extensions, mode hooks, timers, and advices."
   (remove-hook 'projectile-project-changed-functions #'eglox-projectile-warm-cache-on-project-change)
   (remove-hook 'window-selection-change-functions #'eglox-activate-prioritize-visible)
   (dolist (hook eglox-mode-hooks)
     (remove-hook hook #'eglox-ensure))
-  (when (timerp eglox-cleanup-stale-connections-timer)
-    (cancel-timer eglox-cleanup-stale-connections-timer)
-    (setq eglox-cleanup-stale-connections-timer nil))
+  (eglox--uninstall-eglot-integrations)
   (when (timerp eglox-activate-timer)
     (cancel-timer eglox-activate-timer)
     (setq eglox-activate-timer nil))

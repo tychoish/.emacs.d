@@ -1096,11 +1096,6 @@ clipboard."
   :defer t
   :commands (denote-dired denote-directories)
   :config
-  (consult-denote-mode)
-  (require 'denote-sequence)
-  (require 'denote-explore)
-  (require 'denote-review)
-  (require 'denote-tree)
   (setq denote-dash-default-filter '(not "journal"))
   (setq denote-review-insert-after "date")
   (when (default-boundp 'denote-directory)
@@ -1384,8 +1379,6 @@ otherwise keep replaying stale detection results."
   (add-to-list 'major-mode-remap-alist '((go-mode . go-ts-mode)))
   (add-to-list 'major-mode-remap-alist '((go-mod-mode . go-mod-ts-mode)))
   :config
-  (setenv "GOTOOLCHAIN" "local")
-
   (require 'project)
   (add-hook 'project-find-functions #'project-find-go-module)
 
