@@ -299,6 +299,8 @@ triggered directly by a keypress, still prompts normally.")
     (sprite-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] which-key"
     (which-key-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] eglox-global-mode"
+    (eglox-global-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] builder"
     (builder-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"

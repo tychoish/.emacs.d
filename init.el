@@ -14,9 +14,6 @@
 
   (defvar tychoish/startup-complete-time nil
     "Timestamp when startup finished.")
-  (defvar tychoish/eglot-default-server-configuration nil
-    "Eglot server configuration, populated later.")
-
   (defvar sprite-instance-id nil
     "Name of this Emacs instance, e.g. `work', `personal', `hud'.")
 

@@ -132,6 +132,10 @@ completion candidate outlives its buffer."
     :bind-map denote-dash-global-map
     :bind-key "x"))
 
+(with-eval-after-load 'denote-sync
+  (require 'denote-sync-notion)
+  (require 'denote-sync-gdocs))
+
 (with-eval-after-load 'slime
   (make-read-extended-command-for-prefix "slime"
     :key-alias "slime-commands"
@@ -139,6 +143,13 @@ completion candidate outlives its buffer."
     :bind-key "s")
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
+
+(with-eval-after-load 'flycheck-eglot
+  (setq-default flycheck-eglot-exclusive nil)
+  (add-to-list 'flycheck-checkers 'eglot-check)
+  (setq flycheck-eglot-enable-diagnostic-tags nil)
+  (flycheck-add-next-checker 'eglot-check 'go-gofmt))
+
 
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here

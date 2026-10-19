@@ -30,6 +30,7 @@
 ;;; Code:
 
 (require 'seq)
+(require 'subr-x)
 (eval-when-compile
   (require 'cl-lib))
 
@@ -329,6 +330,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-ide-map "n" #'xref-go-forward)
 (keymap-set hud-ide-map "o" #'xref-find-definitions-other-window)
 
+(make-read-extended-command-for-prefix "eglot")
 (make-read-extended-command-for-prefix "xref"
   :bind-map hud-ide-map
   :bind-key "x")
@@ -460,29 +462,6 @@ binding (see `keymap-set'.)"
   :name "consult-search"
   :doc "Consult search commands under C-c g s (hud-mode).")
 
-(defvar-keymap hud-eglot-global-map
-  :name "eglot"
-  :doc "Eglot commands under C-c l l (hud-mode).")
-
-(defvar-keymap hud-eglot-mode-map
-  :name "eglot-mode"
-  :doc "Eglot buffer commands (hud-mode).")
-
-(keymap-set hud-eglot-mode-map "s" #'consult-eglot-symbols)
-(keymap-set hud-eglot-mode-map "r" #'eglot-rename)
-(keymap-set hud-eglot-mode-map "a" #'eglot-code-actions)
-(keymap-set hud-eglot-mode-map "i" #'eglot-code-action-inline)
-(keymap-set hud-eglot-mode-map "f" #'eglot-format-buffer)
-(keymap-set hud-eglot-mode-map "o" #'eglot-code-action-organize-imports)
-(keymap-set hud-eglot-mode-map "q" #'eglot-code-action-quickfix)
-(keymap-set hud-eglot-mode-map "w" #'eglot-code-action-rewrite)
-(keymap-set hud-eglot-mode-map "t" #'eglot-test-at-point)
-(keymap-set hud-eglot-mode-map "u" #'eglot-update-workspace)
-
-(make-read-extended-command-for-prefix "eglot"
-  :bind-map hud-eglot-mode-map
-  :bind-key "e")
-
 (defvar-keymap hud-robot-agent-shell-map
   :name "agent-shell"
   :doc "Agent shell commands under C-c r s (hud-mode).")
@@ -597,7 +576,6 @@ binding (see `keymap-set'.)"
 (create-toggle-functions electric-pair-inhibition)
 (create-toggle-functions electric-pair-eagerness)
 
-
 (keymap-set minibuffer-local-map "C-g" #'hud-super-abort-minibuffers)
 (keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
 (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
@@ -622,7 +600,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-ecclectic-grep-map "s" (cons "consult-search" hud-consult-search-map))
 
 (keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
-(keymap-set hud-ide-map "l" (cons "eglot" hud-eglot-global-map))
+(hud-bind-deferred-keymap hud-ide-map "l" 'eglox 'eglox-global-map "eglot")
 (keymap-set hud-shell-map "e" (cons "shell-eat" hud-shell-eat-map))
 (keymap-set hud-robot-map "s" (cons "agent-shell" hud-robot-agent-shell-map))
 (keymap-set hud-robot-agent-shell-map "s" (cons "send" hud-robot-agent-shell-send-map))
