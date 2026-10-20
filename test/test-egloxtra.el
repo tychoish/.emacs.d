@@ -540,6 +540,7 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
                             (let ((buf (generate-new-buffer (format "eglox-throttle-test-%d" n))))
                               (with-current-buffer buf
                                 (insert "x = 1\n")
+                                (set-buffer-modified-p nil)
                                 (setq buffer-file-name (format "/tmp/eglox-throttle-test-%d.py" n))
                                 (setq major-mode 'python-mode))
                               buf))
@@ -557,7 +558,11 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
           (should eglox-activate-timer))
       (when (timerp eglox-activate-timer)
         (cancel-timer eglox-activate-timer))
-      (seq-do #'kill-buffer buffers))))
+      (seq-do (lambda (buf)
+                (when (buffer-live-p buf)
+                  (with-current-buffer buf (set-buffer-modified-p nil))
+                  (kill-buffer buf)))
+              buffers))))
 
 (ert-deftest eglox/activate-queue-prunes-empty-and-dead-buffers ()
   "Empty, dead, and managed buffers are dropped from the activation queue."
@@ -719,17 +724,23 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
         (cl-letf (((symbol-function 'eglot-ensure) #'ignore))
           (with-current-buffer py
             (insert "x = 1\n")
+            (set-buffer-modified-p nil)
             (setq buffer-file-name "/tmp/eglox-unmanaged.py")
             (setq major-mode 'python-mode))
           (with-current-buffer txt
             (insert "x")
+            (set-buffer-modified-p nil)
             (setq buffer-file-name "/tmp/eglox-unmanaged.txt"))
           (should (= 1 (eglox-ensure-unmanaged-buffers)))
           (should (memq py eglox-activate-queue))
           (should-not (memq txt eglox-activate-queue)))
       (when (timerp eglox-activate-timer)
         (cancel-timer eglox-activate-timer))
-      (seq-do #'kill-buffer (list py txt)))))
+      (seq-do (lambda (buf)
+                (when (buffer-live-p buf)
+                  (with-current-buffer buf (set-buffer-modified-p nil))
+                  (kill-buffer buf)))
+              (list py txt)))))
 
 (ert-deftest eglox/activate-flush-queue-bypasses-throttle ()
   "Flushing activates COUNT buffers at once, beyond the burst limit."
