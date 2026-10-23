@@ -144,6 +144,9 @@ completion candidate outlives its buffer."
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
 
+(with-eval-after-load 'builder-core
+  (require 'builder-tasks))
+
 (with-eval-after-load 'flycheck-eglot
   (setq-default flycheck-eglot-exclusive nil)
   (add-to-list 'flycheck-checkers 'eglot-check)
