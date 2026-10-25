@@ -1,0 +1,287 @@
+;;; setup-project.el --- Projectile and project management configuration -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Extracted from setup-core.el for modularity and isolation of Projectile setup.
+
+;;; Code:
+
+(require 'cl-lib)
+(require 'seq)
+(require 'subr-x)
+
+(use-package projectile
+  :ensure t
+  :commands (projectile-project-name
+	     projectile-project-root)
+  :init
+  (defun turn-on-projectile-mode ()
+    (interactive)
+    (require 'project)
+    (projectile-mode 1))
+  (add-hook 'prog-mode-hook #'turn-on-projectile-mode)
+  (add-hook 'text-mode-hook #'turn-on-projectile-mode)
+  (add-hook 'dired-mode-hook #'turn-on-projectile-mode)
+  :config
+  (when (boundp 'hud-mode-map)
+    (keymap-set hud-mode-map "C-c p" (cons "projectile" projectile-command-map)))
+  (when (boundp 'hud-ecclectic-grep-project-map)
+    (keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag))
+
+  (defun tychoish/save-buffers-in-project-directory (dir)
+    (let ((default-directory (expand-file-name dir)))
+      (alert (projectile-save-project-buffers)
+	     :title (format "emacs<%s> (%s)" (or (bound-and-true-p sprite-instance-id) "primary") dir))))
+
+  (defun tychoish/save-project-buffers ()
+    (interactive)
+    (tychoish/save-buffers-in-project-directory
+     (annotated-completing-read
+      (thread-last
+	(buffer-list)
+	(seq-map #'buffer-file-name)
+	(seq-filter 'identity)
+	(seq-sort #'string<)
+	(seq-map #'projectile-project-root)
+	(seq-uniq)
+	(seq-filter 'identity)
+	(seq-map (lambda (dir) (cons dir nil))))
+      :prompt "directories =>"
+      :category 'file)))
+
+  (setq projectile-use-git-grep t)
+  (setq projectile-enable-caching 'persistent)
+  (setq projectile-require-project-root nil)
+  (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
+  (setq projectile-frecency-file (sprite-state-path "projectile-frecency.el"))
+
+  (defvar projectile-cache-fallback-directory
+    (sprite-state-path "projectile-cache")
+    "Directory used for persistent projectile caches when a project root is not writable.")
+
+  (defun tychoish/projectile--fallback-file (name-source)
+    "Return the fallback cache file path for NAME-SOURCE, ensuring dir exists."
+    (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
+           (norm (directory-file-name (expand-file-name name-source)))
+           (slug (concat (file-name-nondirectory norm)
+                         "-"
+                         (md5 norm)
+                         ".eld")))
+      (unless (file-directory-p cache-dir)
+        (ignore-errors (make-directory cache-dir t)))
+      (expand-file-name slug cache-dir)))
+
+  (defun tychoish/projectile-project-cache-file-fallback (orig-fn &optional project-root)
+    "Return cache file for PROJECT-ROOT, using a fallback state dir when non-writable."
+    (let* ((root (or project-root (projectile-project-root)))
+           (in-tree (and root (funcall orig-fn root))))
+      (if (or (null root) (null in-tree))
+          in-tree
+        (let* ((norm-root (directory-file-name (expand-file-name root)))
+               (in-tree-writable (if (file-exists-p in-tree)
+                                     (file-writable-p in-tree)
+                                   (file-writable-p norm-root))))
+          (if in-tree-writable
+              in-tree
+            (tychoish/projectile--fallback-file norm-root))))))
+
+  (advice-add 'projectile-project-cache-file :around #'tychoish/projectile-project-cache-file-fallback)
+
+  (defun tychoish/projectile-serialize-silent-fallback (orig-fn data filename)
+    "Avoid noisy warning when FILENAME is not writable by silently writing to fallback if possible."
+    (if (file-writable-p filename)
+        (funcall orig-fn data filename)
+      (let ((fallback-file (tychoish/projectile--fallback-file filename)))
+        (when (file-writable-p fallback-file)
+          (with-temp-file fallback-file
+            (insert (let (print-length) (prin1-to-string data))))))))
+
+  (advice-add 'projectile-serialize :around #'tychoish/projectile-serialize-silent-fallback)
+
+  (defun projectile-mode-enable-for-buffer (buf)
+    (with-current-buffer buf
+      (projectile-mode 1)))
+
+  (defun projectile-mode-disable-for-buffer (buf)
+    (with-current-buffer buf
+      (projectile-mode -1)))
+
+  (cl-defun projectile-enable-all-buffers (&key delay on-done (progress-interval 10))
+    "Enable `projectile-mode' in all live buffers incrementally.
+Uses `gen.el' yielding generator iterators to enable `projectile-mode'
+cooperatively without blocking the Emacs event loop."
+    (interactive)
+    (let* ((bufs (buffer-list))
+           (total (length bufs))
+           (count 0)
+           (processed 0)
+           (del (or delay 0.0)))
+      (if (and (require 'gen nil t) (fboundp 'gen-run-async))
+          (let ((stream (gen-wrap (iter-make (dolist (buf bufs) (iter-yield buf))))))
+            (when (called-interactively-p 'any)
+              (message "Enabling projectile-mode across %d buffers..." total))
+            (gen-run-async
+             (lambda (buf done-cb)
+               (when (buffer-live-p buf)
+                 (projectile-mode-enable-for-buffer buf)
+                 (cl-incf count))
+               (cl-incf processed)
+               (when (and progress-interval
+                          (or (= processed total)
+                              (zerop (mod processed progress-interval))))
+                 (message "Enabling projectile-mode [%d/%d]..." processed total))
+               (funcall done-cb))
+             stream
+             :concurrency 1
+             :delay del
+             :on-done (lambda ()
+                        (when (called-interactively-p 'any)
+                          (message "Enabled projectile-mode in %d buffer%s (scanned %d)."
+                                   count (if (= count 1) "" "s") total))
+                        (when on-done (funcall on-done count)))
+             :on-error (lambda (err)
+                         (message "Error enabling projectile-mode: %S" err))))
+        ;; Synchronous fallback
+        (seq-do #'projectile-mode-enable-for-buffer bufs)
+        (when (called-interactively-p 'any)
+          (message "Enabled projectile-mode in %d buffer%s."
+                   total (if (= total 1) "" "s")))
+        (when on-done (funcall on-done total)))))
+
+  (cl-defun projectile-disable-all-buffers (&key delay on-done (progress-interval 10))
+    "Disable `projectile-mode' in all live buffers incrementally.
+Uses `gen.el' yielding generator iterators to disable `projectile-mode'
+cooperatively without blocking the Emacs event loop."
+    (interactive)
+    (let* ((bufs (buffer-list))
+           (total (length bufs))
+           (count 0)
+           (processed 0)
+           (del (or delay 0.0)))
+      (if (and (require 'gen nil t) (fboundp 'gen-run-async))
+          (let ((stream (gen-wrap (iter-make (dolist (buf bufs) (iter-yield buf))))))
+            (when (called-interactively-p 'any)
+              (message "Disabling projectile-mode across %d buffers..." total))
+            (gen-run-async
+             (lambda (buf done-cb)
+               (when (buffer-live-p buf)
+                 (projectile-mode-disable-for-buffer buf)
+                 (cl-incf count))
+               (cl-incf processed)
+               (when (and progress-interval
+                          (or (= processed total)
+                              (zerop (mod processed progress-interval))))
+                 (message "Disabling projectile-mode [%d/%d]..." processed total))
+               (funcall done-cb))
+             stream
+             :concurrency 1
+             :delay del
+             :on-done (lambda ()
+                        (when (called-interactively-p 'any)
+                          (message "Disabled projectile-mode in %d buffer%s (scanned %d)."
+                                   count (if (= count 1) "" "s") total))
+                        (when on-done (funcall on-done count)))
+             :on-error (lambda (err)
+                         (message "Error disabling projectile-mode: %S" err))))
+        ;; Synchronous fallback
+        (seq-do #'projectile-mode-disable-for-buffer bufs)
+        (when (called-interactively-p 'any)
+          (message "Disabled projectile-mode in %d buffer%s."
+                   total (if (= total 1) "" "s")))
+        (when on-done (funcall on-done total)))))
+
+  (cl-defun projectile-load-project-buffers (&optional project &key delay on-done (progress-interval 5))
+    "Load project files into buffers incrementally without blocking.
+PROJECT defaults to the current project's root.  Uses `gen.el' yielding
+generator iterators to open files sequentially with cooperative delays."
+    (interactive)
+    (let* ((root (or project (projectile-project-root)))
+           (files (and root (projectile-project-files root))))
+      (unless root
+        (user-error "Not in a project"))
+      (unless files
+        (user-error "No files found in project %s" root))
+      (let* ((total (length files))
+             (loaded 0)
+             (processed 0)
+             (del (or delay 0.0)))
+        (if (and (require 'gen nil t) (fboundp 'gen-run-async))
+            (let ((stream (gen-wrap (iter-make (dolist (file files) (iter-yield file))))))
+              (message "Loading %d buffers for project %s..." total (projectile-project-name))
+              (gen-run-async
+               (lambda (file done-cb)
+                 (let ((fpath (expand-file-name file root)))
+                   (when (and (file-regular-p fpath)
+                              (not (find-buffer-visiting fpath)))
+                     (find-file-noselect fpath)
+                     (cl-incf loaded)))
+                 (cl-incf processed)
+                 (when (and progress-interval
+                            (or (= processed total)
+                                (zerop (mod processed progress-interval))))
+                   (message "Loading project buffers [%d/%d]..." processed total))
+                 (funcall done-cb))
+               stream
+               :concurrency 1
+               :delay del
+               :on-done (lambda ()
+                          (message "Loaded %d new buffer%s for project %s (scanned %d)."
+                                   loaded (if (= loaded 1) "" "s")
+                                   (projectile-project-name) total)
+                          (when on-done (funcall on-done loaded)))
+               :on-error (lambda (err)
+                           (message "Error loading project buffers: %S" err))))
+          ;; Fallback
+          (dolist (file files)
+            (let ((fpath (expand-file-name file root)))
+              (when (and (file-regular-p fpath)
+                         (not (find-buffer-visiting fpath)))
+                (find-file-noselect fpath)
+                (cl-incf loaded))))
+          (message "Loaded %d new buffer%s for project %s."
+                   loaded (if (= loaded 1) "" "s") (projectile-project-name))
+          (when on-done (funcall on-done loaded))))))
+
+  (cl-defun projectile-session-restore-async (&optional project &key delay on-done)
+    "Restore PROJECT's saved session buffers incrementally without blocking.
+PROJECT defaults to the current project's root.  Uses `gen.el' yielding
+generator iterators to recreate buffers cooperatively."
+    (interactive)
+    (let* ((root (or project (projectile-project-root)))
+           (data (and root (fboundp 'projectile-session--read) (projectile-session--read root))))
+      (cond
+       (data
+        (let* ((saved-bufs (plist-get data :buffers))
+               (total (length saved-bufs))
+               (recreated 0)
+               (processed 0)
+               (del (or delay 0.0)))
+          (if (and (require 'gen nil t) (fboundp 'gen-run-async))
+              (let ((stream (gen-wrap (iter-make (dolist (saved saved-bufs) (iter-yield saved))))))
+                (message "Restoring %d session buffers for %s incrementally..." total root)
+                (gen-run-async
+                 (lambda (saved done-cb)
+                   (when (ignore-errors (buffer-live-p (projectile-session--recreate-buffer saved)))
+                     (cl-incf recreated))
+                   (cl-incf processed)
+                   (funcall done-cb))
+                 stream
+                 :concurrency 1
+                 :delay del
+                 :on-done (lambda ()
+                            (when-let* ((state (plist-get data :window-state)))
+                              (condition-case err
+                                  (window-state-put (projectile-session--sanitize-window-state state)
+                                                    (frame-root-window) 'safe)
+                                (error
+                                 (message "projectile-session: could not restore window layout: %S" err))))
+                            (message "Restored %d session buffer%s for %s."
+                                     recreated (if (= recreated 1) "" "s") root)
+                            (when on-done (funcall on-done recreated)))))
+            ;; Synchronous fallback
+            (projectile-session-restore root)
+            (when on-done (funcall on-done t)))))
+       ((called-interactively-p 'any)
+        (user-error "No saved session for %s" (or root "current project")))))))
+
+(provide 'setup-project)
+;;; setup-project.el ends here

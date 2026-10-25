@@ -8,6 +8,8 @@
 (require 'ert)
 (require 'test-helper)
 (require 'cl-lib)
+(defvar hud-mode-map (make-sparse-keymap))
+(defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
 (require 'setup-core)
 (require 'builder)
 
@@ -138,6 +140,92 @@ correctly and reads from the minibuffer using the candidate's command."
       (should (equal user-mail-address "test@example.com"))
       (should (equal user-full-name "Test User"))
       (should (equal mu4e-get-mail-command "true")))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Projectile yielding / incremental operations
+
+(ert-deftest tychoish-core/projectile-enable-all-buffers-yielding ()
+  "Test that `projectile-enable-all-buffers` enables projectile-mode in live buffers."
+  (require 'hud-mode nil t)
+  (defvar hud-mode-map (make-sparse-keymap))
+  (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
+  (require 'projectile)
+  (require 'gen)
+  (let ((b1 (generate-new-buffer "test-proj-1"))
+        (b2 (generate-new-buffer "test-proj-2"))
+        (done-count nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer b1 (projectile-mode -1))
+          (with-current-buffer b2 (projectile-mode -1))
+          (cl-letf (((symbol-function 'buffer-list) (lambda (&optional _frame) (list b1 b2))))
+            (projectile-enable-all-buffers
+             :delay 0.0
+             :on-done (lambda (cnt) (setq done-count cnt)))
+            (let ((timeout 3.0)
+                  (start (float-time)))
+              (while (and (null done-count) (< (- (float-time) start) timeout))
+                (sit-for 0.02)))
+            (should (equal done-count 2))
+            (with-current-buffer b1 (should projectile-mode))
+            (with-current-buffer b2 (should projectile-mode))))
+      (kill-buffer b1)
+      (kill-buffer b2))))
+
+(ert-deftest tychoish-core/projectile-disable-all-buffers-yielding ()
+  "Test that `projectile-disable-all-buffers` disables projectile-mode in live buffers."
+  (require 'hud-mode nil t)
+  (defvar hud-mode-map (make-sparse-keymap))
+  (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
+  (require 'projectile)
+  (require 'gen)
+  (let ((b1 (generate-new-buffer "test-proj-1"))
+        (b2 (generate-new-buffer "test-proj-2"))
+        (done-count nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer b1 (projectile-mode 1))
+          (with-current-buffer b2 (projectile-mode 1))
+          (cl-letf (((symbol-function 'buffer-list) (lambda (&optional _frame) (list b1 b2))))
+            (projectile-disable-all-buffers
+             :delay 0.0
+             :on-done (lambda (cnt) (setq done-count cnt)))
+            (let ((timeout 3.0)
+                  (start (float-time)))
+              (while (and (null done-count) (< (- (float-time) start) timeout))
+                (sit-for 0.02)))
+            (should (equal done-count 2))
+            (with-current-buffer b1 (should-not projectile-mode))
+            (with-current-buffer b2 (should-not projectile-mode))))
+      (kill-buffer b1)
+      (kill-buffer b2))))
+
+(ert-deftest tychoish-core/projectile-load-project-buffers-yielding ()
+  "Test that `projectile-load-project-buffers` loads project files incrementally."
+  (require 'hud-mode nil t)
+  (defvar hud-mode-map (make-sparse-keymap))
+  (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
+  (require 'projectile)
+  (require 'gen)
+  (let* ((loaded-files nil)
+         (done-loaded nil))
+    (cl-letf (((symbol-function 'projectile-project-root) (lambda (&optional _) "/fake/project/"))
+              ((symbol-function 'projectile-project-files) (lambda (_r) (list "a.txt" "b.txt")))
+              ((symbol-function 'projectile-project-name) (lambda () "fake"))
+              ((symbol-function 'file-regular-p) (lambda (_) t))
+              ((symbol-function 'find-buffer-visiting) (lambda (_) nil))
+              ((symbol-function 'find-file-noselect) (lambda (f) (push f loaded-files) (generate-new-buffer " *dummy*"))))
+      (projectile-load-project-buffers
+       "/fake/project/"
+       :delay 0.0
+       :on-done (lambda (cnt) (setq done-loaded cnt)))
+      (let ((timeout 3.0)
+            (start (float-time)))
+        (while (and (null done-loaded) (< (- (float-time) start) timeout))
+          (sit-for 0.02)))
+      (should (equal done-loaded 2))
+      (should (equal (length loaded-files) 2)))))
 
 (provide 'test-setup-core)
 ;;; test-setup-core.el ends here

@@ -12,6 +12,12 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (require 'cl-lib)
+  (require 'generator))
+(require 'cl-lib)
+(require 'generator)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; INTERNAL
@@ -70,6 +76,8 @@
   (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
   (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
+
+(require 'setup-project)
 
 (use-package setup-mail
   :ensure nil
@@ -188,111 +196,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Project / Repository Tools
-
-(use-package projectile
-  :ensure t
-  :commands (projectile-project-name
-	     projectile-project-root)
-  :init
-  (defun turn-on-projectile-mode ()
-    (interactive)
-    (require 'project)
-    (projectile-mode 1))
-  (add-hook 'prog-mode-hook #'turn-on-projectile-mode)
-  (add-hook 'text-mode-hook #'turn-on-projectile-mode)
-  (add-hook 'dired-mode-hook #'turn-on-projectile-mode)
-  :config
-  (keymap-set hud-mode-map "C-c p" (cons "projectile" projectile-command-map))
-  (keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag)
-
-  (defun tychoish/save-buffers-in-project-directory (dir)
-    (let ((default-directory (expand-file-name dir)))
-      (alert (projectile-save-project-buffers)
-	     :title (format "emacs<%s> (%s)" sprite-instance-id dir))))
-
-  (defun tychoish/save-project-buffers ()
-    (interactive)
-    (tychoish/save-buffers-in-project-directory
-     (annotated-completing-read
-      (thread-last
-	(buffer-list)
-	(seq-map #'buffer-file-name)
-	(seq-filter 'identity)
-	(seq-sort #'string<)
-	(seq-map #'projectile-project-root)
-	(seq-uniq)
-	(seq-filter 'identity)
-	(seq-map (lambda (dir) (cons dir nil))))
-      :prompt "directories =>"
-      :category 'file)))
-
-  (setq projectile-use-git-grep t)
-  (setq projectile-enable-caching 'persistent)
-  (setq projectile-require-project-root nil)
-  (setq projectile-known-projects-file (sprite-state-path "projectile-bookmarks.el"))
-  (setq projectile-frecency-file (sprite-state-path "projectile-frecency.el"))
-
-  (defvar projectile-cache-fallback-directory
-    (sprite-state-path "projectile-cache")
-    "Directory used for persistent projectile caches when a project root is not writable.")
-
-  (defun tychoish/projectile--fallback-file (name-source)
-    "Return the fallback cache file path for NAME-SOURCE, ensuring dir exists."
-    (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
-           (norm (directory-file-name (expand-file-name name-source)))
-           (slug (concat (file-name-nondirectory norm)
-                         "-"
-                         (md5 norm)
-                         ".eld")))
-      (unless (file-directory-p cache-dir)
-        (ignore-errors (make-directory cache-dir t)))
-      (expand-file-name slug cache-dir)))
-
-  (defun tychoish/projectile-project-cache-file-fallback (orig-fn &optional project-root)
-    "Return cache file for PROJECT-ROOT, using a fallback state dir when non-writable."
-    (let* ((root (or project-root (projectile-project-root)))
-           (in-tree (and root (funcall orig-fn root))))
-      (if (or (null root) (null in-tree))
-          in-tree
-        (let* ((norm-root (directory-file-name (expand-file-name root)))
-               (in-tree-writable (if (file-exists-p in-tree)
-                                     (file-writable-p in-tree)
-                                   (file-writable-p norm-root))))
-          (if in-tree-writable
-              in-tree
-            (tychoish/projectile--fallback-file norm-root))))))
-
-  (advice-add 'projectile-project-cache-file :around #'tychoish/projectile-project-cache-file-fallback)
-
-  (defun tychoish/projectile-serialize-silent-fallback (orig-fn data filename)
-    "Avoid noisy warning when FILENAME is not writable by silently writing to fallback if possible."
-    (if (file-writable-p filename)
-        (funcall orig-fn data filename)
-      (let ((fallback-file (tychoish/projectile--fallback-file filename)))
-        (when (file-writable-p fallback-file)
-          (with-temp-file fallback-file
-            (insert (let (print-length) (prin1-to-string data))))))))
-
-  (advice-add 'projectile-serialize :around #'tychoish/projectile-serialize-silent-fallback)
-
-
-  (defun projectile-mode-enable-for-buffer (buf)
-    (with-current-buffer buf
-      (projectile-mode 1)))
-
-  (defun projectile-mode-disable-for-buffer (buf)
-    (with-current-buffer buf
-      (projectile-mode -1)))
-
-  (defun projectile-enable-all-buffers ()
-    "Enable `projectile-mode' in all live buffers."
-    (interactive)
-    (seq-do #'projectile-mode-enable-for-buffer (buffer-list)))
-
-  (defun projectile-disable-all-buffers ()
-    "Disable `projectile-mode' in all live buffers."
-    (interactive)
-    (seq-do #'projectile-mode-disable-for-buffer (buffer-list))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -2265,6 +2168,16 @@ asynchronously via `sprite-future-then'."
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
+
+
+;;; MCP Services (mcpkit)
+
+(use-package mcpkit
+  :commands (mcpkit-start-all-services
+             mcpkit-stop-all-services
+             mcpkit-restart-all-services
+             mcpkit-services-status
+             mcpkit-allocate-free-port))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here

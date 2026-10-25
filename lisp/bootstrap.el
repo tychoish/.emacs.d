@@ -77,6 +77,7 @@
    denote-sequence
    denote-explore
    builder
+   hitl
    flycheck-eglot
    shell-maker
    sprite
@@ -106,7 +107,7 @@
  '(vertico consult corfu cape marginalia tempel orderless)
  '(magit flycheck)
  '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen builder)
- '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup))
+ '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup hitl))
 
 
 (defvar tychoish--suppress-supersession-prompt nil
@@ -285,6 +286,37 @@ triggered directly by a keypress, still prompts normally.")
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
+(defvar bootstrap-mcp-packages
+  '(mcpkit
+    mcpkit-emacs
+    mcpkit-editing
+    denote-mcp
+    agent-shell-queue-mcp
+    builder-mcp
+    hitl-mcp)
+  "List of MCP package and feature symbols to require during bootstrap.")
+
+(defun bootstrap-load-mcp-services ()
+  "Require all packages in `bootstrap-mcp-packages' and register tool extensions."
+  (message "[mcpkit]: loading service packages...")
+  (dolist (pkg bootstrap-mcp-packages)
+    (require pkg nil t))
+  (when (and (fboundp 'mcpkit-editing-register-tools)
+             (fboundp 'mcpkit-get-service)
+             (mcpkit-get-service 'emacs))
+    (mcpkit-editing-register-tools 'emacs))
+  (message "[mcpkit]: service packages loaded"))
+
+(defun bootstrap-start-mcp-services ()
+  "Start all MCP services on the configured default port."
+  (when (fboundp 'mcpkit-start-all-services)
+    (mcpkit-start-all-services)))
+
+(defun bootstrap-init-mcp-services ()
+  "Initialize and start MCPKit services configured in `bootstrap-mcp-packages'."
+  (bootstrap-load-mcp-services)
+  (bootstrap-start-mcp-services))
+
 (defun bootstrap-init-late-enable-modes ()
   (with-slow-op-timer "<bootstrap> [modes] set-fringe-mode"
     (set-fringe-mode '(4 . 4)))
@@ -322,6 +354,16 @@ triggered directly by a keypress, still prompts normally.")
  :name "<bootstrap> [modes] late batch"
  :operation 'bootstrap-init-late-enable-modes
  :delay 0.1275)
+
+(add-lazy-init
+ :name "<bootstrap> [services] mcpkit load"
+ :operation 'bootstrap-load-mcp-services
+ :delay 0.3)
+
+(add-lazy-init
+ :name "<bootstrap> [services] mcpkit start"
+ :operation 'bootstrap-start-mcp-services
+ :delay 0.45)
 
 (add-one-shot-hook
  :name "<bootstrap> hud-modeline"
