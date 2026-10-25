@@ -2,7 +2,7 @@
 
 ;; Author: Tycho Garen
 ;; Keywords: convenience, completion, matching, tools
-;; Package-Requires: ((emacs "29.1") (vertico "1.0") (marginalia "1.0") (orderless "1.0") (corfu "1.0") (cape "1.0"))
+;; Package-Requires: ((emacs "29.1") (vertico "1.0") (marginalia "1.0") (orderless "1.0") (corfu "1.0") (cape "1.0") (tempel "1.0") (consult "1.0") (embark "1.0") (annotated-completing-read "0.1"))
 
 ;;; Commentary:
 ;;
@@ -21,19 +21,13 @@
 ;;    and teardown across all component packages in a single switch.
 ;; 2. Eager UI core: Vertico, Marginalia, Orderless, Corfu, and Cape are
 ;;    hard-required for instant minibuffer and in-buffer completion.
-;; 3. Lazy command suites: Consult and Embark are lazily loaded on first use;
-;;    customization is handled through public variables and advice without
-;;    `with-eval-after-load' or private internal alists.
-;; 4. Keymap hygiene: completion, search, and navigation shortcuts belong to
-;;    `minaid-global-map' (activated via `minaid-mode') and its dedicated sub-maps
-;;    (`minaid-completion-map', `minaid-consult-map', `minaid-consult-search-map'),
-;;    decoupled entirely from `hud-mode'.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'project)
 
 ;; Hard-required core minad dependencies
 (require 'vertico)
@@ -45,66 +39,16 @@
 (require 'corfu-indexed)
 (require 'corfu-popupinfo)
 (require 'cape)
+(require 'tempel)
+(require 'annotated-completing-read)
 
-;; External optional packages for compilation only
-(eval-when-compile
-  (require 'xref)
-  (require 'consult)
-  (require 'embark))
-
-;; Forward declarations for lazily loaded Consult commands
-(declare-function consult-buffer "consult")
-(declare-function consult-buffer-other-window "consult")
-(declare-function consult-buffer-other-frame "consult")
-(declare-function consult-buffer-other-tab "consult")
-(declare-function consult-bookmark "consult")
-(declare-function consult-project-buffer "consult")
-(declare-function consult-recent-file "consult")
-(declare-function consult-register "consult")
-(declare-function consult-register-load "consult")
-(declare-function consult-register-store "consult")
-(declare-function consult-register-window "consult")
-(declare-function consult-yank-from-kill-ring "consult")
-(declare-function consult-yank-pop "consult")
-(declare-function consult-yank-replace "consult")
-(declare-function consult-imenu "consult")
-(declare-function consult-imenu-multi "consult")
-(declare-function consult-compile-error "consult")
-(declare-function consult-goto-line "consult")
-(declare-function consult-mark "consult")
-(declare-function consult-global-mark "consult")
-(declare-function consult-line "consult")
-(declare-function consult-line-multi "consult")
-(declare-function consult-keep-lines "consult")
-(declare-function consult-focus-lines "consult")
+;; Forward declarations for functions from lazily loaded packages called directly in Lisp
 (declare-function consult-find "consult")
-(declare-function consult-locate "consult")
-(declare-function consult-grep "consult")
-(declare-function consult-git-grep "consult")
 (declare-function consult-ripgrep "consult")
-(declare-function consult-isearch-history "consult")
-(declare-function consult-history "consult")
-(declare-function consult-info "consult")
-(declare-function consult-man "consult")
-(declare-function consult-kmacro "consult")
-(declare-function consult-mode-command "consult")
-(declare-function consult-xref "consult")
 (declare-function consult-completion-in-region "consult")
-(declare-function consult-eglot-symbols "consult-eglot")
-
-;; Forward declarations for lazily loaded Embark and external packages
-(declare-function embark-act "embark")
-(declare-function embark-bindings "embark")
-(declare-function embark-dwim "embark")
-(declare-function embark-keymap-prompter "embark")
 (declare-function nerd-icons-corfu-formatter "nerd-icons-corfu")
 (declare-function nerd-icons-completion-marginalia-setup "nerd-icons-completion")
 (declare-function eglot-completion-at-point "eglot")
-(declare-function tempel-complete "tempel")
-(declare-function tempel-insert "tempel")
-(declare-function projectile-project-root "projectile")
-(declare-function annotated-completing-read-directory "annotated-completing-read")
-(declare-function annotated-completing-read-context-from-point "annotated-completing-read")
 
 (defvar embark-prompter)
 (defvar embark-quit-after-action)
@@ -158,48 +102,48 @@
   :doc "Completion and template commands under C-c .")
 
 (keymap-set minaid-completion-map "TAB" #'completion-at-point)
-(keymap-set minaid-completion-map "."   #'completion-at-point)
-(keymap-set minaid-completion-map "p"   #'completion-at-point)
-(keymap-set minaid-completion-map "/"   #'dabbrev-expand)
-(keymap-set minaid-completion-map "c"   #'dabbrev-completion)
-(keymap-set minaid-completion-map "i"   #'tempel-insert)
-(keymap-set minaid-completion-map "s"   #'tempel-complete)
-(keymap-set minaid-completion-map "x"   #'tempel-expand)
-(keymap-set minaid-completion-map "v"   #'tempel-open-custom-file)
-(keymap-set minaid-completion-map "d"   #'cape-dabbrev)
-(keymap-set minaid-completion-map "h"   #'cape-history)
-(keymap-set minaid-completion-map "f"   #'cape-file)
-(keymap-set minaid-completion-map "n"   #'cape-elisp-symbol)
-(keymap-set minaid-completion-map "b"   #'cape-elisp-block)
-(keymap-set minaid-completion-map "a"   #'cape-abbrev)
-(keymap-set minaid-completion-map "l"   #'cape-line)
-(keymap-set minaid-completion-map "w"   #'cape-dict)
-(keymap-set minaid-completion-map "k"   #'cape-keyword)
-(keymap-set minaid-completion-map ":"   #'cape-emoji)
-(keymap-set minaid-completion-map "e"   #'cape-emoji)
-(keymap-set minaid-completion-map "m"   #'cape-sgml)
-(keymap-set minaid-completion-map "\\"   #'cape-tex)
-(keymap-set minaid-completion-map "u"   #'cape-rfc1345)
-(keymap-set minaid-completion-map ";"   #'corfu-at-point)
+(keymap-set minaid-completion-map "." #'completion-at-point)
+(keymap-set minaid-completion-map "p" #'completion-at-point)
+(keymap-set minaid-completion-map "/" #'dabbrev-expand)
+(keymap-set minaid-completion-map "c" #'dabbrev-completion)
+(keymap-set minaid-completion-map "i" 'tempel-insert)
+(keymap-set minaid-completion-map "s" 'tempel-complete)
+(keymap-set minaid-completion-map "x" 'tempel-expand)
+(keymap-set minaid-completion-map "v" 'tempel-open-custom-file)
+(keymap-set minaid-completion-map "d" #'cape-dabbrev)
+(keymap-set minaid-completion-map "h" #'cape-history)
+(keymap-set minaid-completion-map "f" #'cape-file)
+(keymap-set minaid-completion-map "n" #'cape-elisp-symbol)
+(keymap-set minaid-completion-map "b" #'cape-elisp-block)
+(keymap-set minaid-completion-map "a" #'cape-abbrev)
+(keymap-set minaid-completion-map "l" #'cape-line)
+(keymap-set minaid-completion-map "w" #'cape-dict)
+(keymap-set minaid-completion-map "k" #'cape-keyword)
+(keymap-set minaid-completion-map ":" #'cape-emoji)
+(keymap-set minaid-completion-map "e" #'cape-emoji)
+(keymap-set minaid-completion-map "m" #'cape-sgml)
+(keymap-set minaid-completion-map "u" #'cape-rfc1345)
+(keymap-set minaid-completion-map ";" #'corfu-at-point)
+(keymap-set minaid-completion-map "\\" #'cape-tex)
 
 ;;;###autoload
 (defvar-keymap minaid-consult-map
   :doc "Consult commands under C-c C-;")
 
-(keymap-set minaid-consult-map "s" #'tempel-insert)
-(keymap-set minaid-consult-map "h" #'consult-history)
+(keymap-set minaid-consult-map "s" 'tempel-insert)
+(keymap-set minaid-consult-map "h" 'consult-history)
 (keymap-set minaid-consult-map "d" #'consult-rg-pwd)
 (keymap-set minaid-consult-map "r" #'consult-rg)
-(keymap-set minaid-consult-map "m" #'consult-kmacro)
+(keymap-set minaid-consult-map "m" 'consult-kmacro)
 
 ;;;###autoload
 (defvar-keymap minaid-consult-search-map
   :doc "Consult search commands under C-c g s")
 
-(keymap-set minaid-consult-search-map "l" #'consult-line)
-(keymap-set minaid-consult-search-map "m" #'consult-line-multi)
-(keymap-set minaid-consult-search-map "k" #'consult-keep-lines)
-(keymap-set minaid-consult-search-map "f" #'consult-focus-lines)
+(keymap-set minaid-consult-search-map "l" 'consult-line)
+(keymap-set minaid-consult-search-map "m" 'consult-line-multi)
+(keymap-set minaid-consult-search-map "k" 'consult-keep-lines)
+(keymap-set minaid-consult-search-map "f" 'consult-focus-lines)
 
 ;;;###autoload
 (defvaralias 'minaid-mode-map 'minaid-global-map
@@ -214,36 +158,36 @@
 (keymap-set minaid-global-map "M-/" #'dabbrev-completion)
 (keymap-set minaid-global-map "C-M-/" #'dabbrev-expand)
 (keymap-set minaid-global-map "C-<tab>" #'completion-at-point)
-(keymap-set minaid-global-map "C-." #'embark-act)
-(keymap-set minaid-global-map "C-c H" #'embark-bindings)
-(keymap-set minaid-global-map "M-;" #'embark-dwim)
-(keymap-set minaid-global-map "<remap> <Info-search>" #'consult-info)
-(keymap-set minaid-global-map "C-x :" #'consult-complex-command)
-(keymap-set minaid-global-map "C-x b" #'consult-buffer)
-(keymap-set minaid-global-map "C-x 4 b" #'consult-buffer-other-window)
-(keymap-set minaid-global-map "C-x 5 b" #'consult-buffer-other-frame)
-(keymap-set minaid-global-map "C-x t b" #'consult-buffer-other-tab)
-(keymap-set minaid-global-map "C-x r b" #'consult-bookmark)
-(keymap-set minaid-global-map "C-x p b" #'consult-project-buffer)
-(keymap-set minaid-global-map "C-x C-r" #'consult-recent-file)
-(keymap-set minaid-global-map "C-c C-x r r" #'consult-register)
-(keymap-set minaid-global-map "M-'" #'consult-register-store)
-(keymap-set minaid-global-map "M-#" #'consult-register-load)
-(keymap-set minaid-global-map "C-M-#" #'consult-register)
-(keymap-set minaid-global-map "M-y" #'consult-yank-from-kill-ring)
-(keymap-set minaid-global-map "C-M-I" #'consult-imenu-multi)
-(keymap-set minaid-global-map "M-g e" #'consult-compile-error)
-(keymap-set minaid-global-map "M-g g" #'consult-goto-line)
-(keymap-set minaid-global-map "M-g M-g" #'consult-goto-line)
-(keymap-set minaid-global-map "M-g m" #'consult-mark)
-(keymap-set minaid-global-map "M-g k" #'consult-global-mark)
-(keymap-set minaid-global-map "M-g i" #'consult-imenu)
-(keymap-set minaid-global-map "M-g s" #'consult-line)
+(keymap-set minaid-global-map "C-." 'embark-act)
+(keymap-set minaid-global-map "C-c H" 'embark-bindings)
+(keymap-set minaid-global-map "M-;" 'embark-dwim)
+(keymap-set minaid-global-map "<remap> <Info-search>" 'consult-info)
+(keymap-set minaid-global-map "C-x :" 'consult-complex-command)
+(keymap-set minaid-global-map "C-x b" 'consult-buffer)
+(keymap-set minaid-global-map "C-x 4 b" 'consult-buffer-other-window)
+(keymap-set minaid-global-map "C-x 5 b" 'consult-buffer-other-frame)
+(keymap-set minaid-global-map "C-x t b" 'consult-buffer-other-tab)
+(keymap-set minaid-global-map "C-x r b" 'consult-bookmark)
+(keymap-set minaid-global-map "C-x p b" 'consult-project-buffer)
+(keymap-set minaid-global-map "C-x C-r" 'consult-recent-file)
+(keymap-set minaid-global-map "C-c C-x r r" 'consult-register)
+(keymap-set minaid-global-map "M-'" 'consult-register-store)
+(keymap-set minaid-global-map "M-#" 'consult-register-load)
+(keymap-set minaid-global-map "C-M-#" 'consult-register)
+(keymap-set minaid-global-map "M-y" 'consult-yank-from-kill-ring)
+(keymap-set minaid-global-map "C-M-I" 'consult-imenu-multi)
+(keymap-set minaid-global-map "M-g e" 'consult-compile-error)
+(keymap-set minaid-global-map "M-g g" 'consult-goto-line)
+(keymap-set minaid-global-map "M-g M-g" 'consult-goto-line)
+(keymap-set minaid-global-map "M-g m" 'consult-mark)
+(keymap-set minaid-global-map "M-g k" 'consult-global-mark)
+(keymap-set minaid-global-map "M-g i" 'consult-imenu)
+(keymap-set minaid-global-map "M-g s" 'consult-line)
 (keymap-set minaid-global-map "M-g r" #'consult-rg)
-(keymap-set minaid-global-map "M-i" #'consult-imenu)
+(keymap-set minaid-global-map "M-i" 'consult-imenu)
 (keymap-set minaid-global-map "M-s d" #'consult-find-at-point)
-(keymap-set minaid-global-map "M-s c" #'consult-locate)
-(keymap-set minaid-global-map "M-s e" #'consult-isearch-history)
+(keymap-set minaid-global-map "M-s c" 'consult-locate)
+(keymap-set minaid-global-map "M-s e" 'consult-isearch-history)
 
 ;; State tracking for clean mode reversals
 (defvar minaid--saved-completion-styles nil
@@ -412,6 +356,21 @@
       (funcall orig-fn prompt make-builder dir initial))))
 
 ;;;###autoload
+(defun tempel-open-custom-file ()
+  "Open the user Tempel templates file."
+  (interactive)
+  (find-file (expand-file-name "templates" user-emacs-directory)))
+
+(defun minaid--project-root ()
+  "Return the project root directory.
+Prefers Projectile root, falling back to `project.el' and `default-directory'."
+  (or (when (fboundp 'projectile-project-root)
+        (projectile-project-root))
+      (when-let* ((pr (and (fboundp 'project-current) (project-current))))
+        (project-root pr))
+      default-directory))
+
+;;;###autoload
 (defun consult-find-at-point (&optional dir initial)
   "Run `consult-find' defaulting INITIAL input to symbol/filename at point."
   (interactive)
@@ -430,10 +389,15 @@ interactively with a prefix argument), prompt for the initial query
 using ACR context from point."
   (interactive)
   (let* ((dir (or directory
-                  (annotated-completing-read-directory)
-                  (projectile-project-root)))
+                  (if (fboundp 'annotated-completing-read-directory)
+                      (annotated-completing-read-directory)
+                    (read-directory-name "Ripgrep directory: " (minaid--project-root)))
+                  (minaid--project-root)
+                  default-directory))
          (query (if (or context (and (called-interactively-p 'any) current-prefix-arg))
-                    (annotated-completing-read-context-from-point :prompt "rg:")
+                    (if (fboundp 'annotated-completing-read-context-from-point)
+                        (annotated-completing-read-context-from-point :prompt "rg:")
+                      (read-string "rg: " (thing-at-point 'symbol t)))
                   initial))
          (this-command 'consult-ripgrep))
     (consult-ripgrep dir query)))
@@ -442,8 +406,10 @@ using ACR context from point."
 (defun consult-rg-project (&optional initial context)
   "Start an iterative Ripgrep session in the project root, falling back as needed."
   (interactive)
-  (consult-rg (or (projectile-project-root)
-                  (annotated-completing-read-directory))
+  (consult-rg (or (minaid--project-root)
+                  (if (fboundp 'annotated-completing-read-directory)
+                      (annotated-completing-read-directory)
+                    default-directory))
               initial
               (or context current-prefix-arg)))
 
@@ -452,7 +418,9 @@ using ACR context from point."
   "Start an iterative Ripgrep session for the current default directory."
   (interactive)
   (consult-rg (or default-directory
-                  (annotated-completing-read-directory))
+                  (if (fboundp 'annotated-completing-read-directory)
+                      (annotated-completing-read-directory)
+                    default-directory))
               initial
               (or context current-prefix-arg)))
 
@@ -526,7 +494,7 @@ using ACR context from point."
 
 (defun minaid--configure-embark ()
   "Configure Embark prompter and buffer display rules."
-  (setq embark-prompter #'embark-keymap-prompter)
+  (setq embark-prompter 'embark-keymap-prompter)
   (setq embark-quit-after-action '((kill-buffer . nil)))
   (add-to-list 'display-buffer-alist
                '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
@@ -535,33 +503,33 @@ using ACR context from point."
 
 (defun minaid--configure-consult ()
   "Configure Consult variables, xref hooks, and deferred customizations."
-  (setq register-preview-delay 0.05)
-  (setq xref-show-xrefs-function #'consult-xref)
-  (setq xref-show-definitions-function #'consult-xref)
+  (setq register-preview-delay 0.1)
+  (setq xref-show-xrefs-function 'consult-xref)
+  (setq xref-show-definitions-function 'consult-xref)
   (setq consult-narrow-key "C-+")
   (setq consult-async-split-style 'semicolon)
   (setq consult-async-min-input 2)
   (setq consult-async-input-debounce 0.05)
   (setq consult-async-input-throttle 0.125)
   (setq consult-async-refresh-delay 0.05)
-  (setq consult-project-function #'projectile-project-root)
+  (setq consult-project-function #'minaid--project-root)
   (setq consult-preview-key 'any)
-  (advice-add #'register-preview :override #'consult-register-window)
-  (advice-add #'consult--grep :around #'minaid--consult-grep-wrapper))
+  (advice-add 'register-preview :override 'consult-register-window)
+  (advice-add 'consult--grep :around #'minaid--consult-grep-wrapper))
 
 (defun minaid--install-external-keybindings ()
   "Mount sub-maps and hooks into HUD maps, minibuffer, and isearch."
   (when (boundp 'hud-docs-map)
-    (keymap-set hud-docs-map "i" #'consult-info)
-    (keymap-set hud-docs-map "m" #'consult-man)
-    (keymap-set hud-docs-map "a" #'consult-eglot-symbols))
+    (keymap-set hud-docs-map "i" 'consult-info)
+    (keymap-set hud-docs-map "m" 'consult-man)
+    (keymap-set hud-docs-map "a" 'consult-eglot-symbols))
 
   (when (boundp 'hud-ecclectic-grep-map)
     (keymap-set hud-ecclectic-grep-map "s" (cons "consult-search" minaid-consult-search-map))
-    (keymap-set hud-ecclectic-grep-map "f" #'consult-grep))
+    (keymap-set hud-ecclectic-grep-map "f" 'consult-grep))
 
   (when (boundp 'hud-ecclectic-grep-project-map)
-    (keymap-set hud-ecclectic-grep-project-map "g" #'consult-git-grep)
+    (keymap-set hud-ecclectic-grep-project-map "g" 'consult-git-grep)
     (keymap-set hud-ecclectic-grep-project-map "r" #'consult-rg-project))
 
   (when (boundp 'hud-ecclectic-rg-map)
@@ -573,15 +541,15 @@ using ACR context from point."
 
   ;; Minibuffer and Isearch integration
   (when (boundp 'minibuffer-local-map)
-    (keymap-set minibuffer-local-map "M-s" #'consult-history)
-    (keymap-set minibuffer-local-map "M-r" #'consult-history)
+    (keymap-set minibuffer-local-map "M-s" 'consult-history)
+    (keymap-set minibuffer-local-map "M-r" 'consult-history)
     (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle))
 
   (when (boundp 'isearch-mode-map)
-    (keymap-set isearch-mode-map "M-e" #'consult-isearch-history)
-    (keymap-set isearch-mode-map "M-s e" #'consult-isearch-history)
-    (keymap-set isearch-mode-map "M-s l" #'consult-line)
-    (keymap-set isearch-mode-map "M-s L" #'consult-line-multi)))
+    (keymap-set isearch-mode-map "M-e" 'consult-isearch-history)
+    (keymap-set isearch-mode-map "M-s e" 'consult-isearch-history)
+    (keymap-set isearch-mode-map "M-s l" 'consult-line)
+    (keymap-set isearch-mode-map "M-s L" 'consult-line-multi)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Mode Lifecycle (Enablement / Teardown)
@@ -637,8 +605,8 @@ using ACR context from point."
   "Tear down all minad completion components and restore original state."
 
   ;; Remove Consult advice
-  (advice-remove #'register-preview #'consult-register-window)
-  (advice-remove #'consult--grep #'minaid--consult-grep-wrapper)
+  (advice-remove 'register-preview 'consult-register-window)
+  (advice-remove 'consult--grep #'minaid--consult-grep-wrapper)
 
   ;; Deactivate Vertico & Marginalia
   (vertico-mode -1)
