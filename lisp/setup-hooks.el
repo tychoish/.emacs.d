@@ -54,7 +54,7 @@
 
   (add-hook 'comint-mode-hook 'ansi-color-for-comint-mode-on)
   (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
-  (add-hook 'shell-mode-hook 'tychoish/corfu-prog-mode-setup)
+  (add-hook 'shell-mode-hook #'minaid-corfu-prog-mode-setup)
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
   (keymap-set comint-mode-map "M-p" #'comint-previous-input)
   (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)

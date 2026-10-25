@@ -335,20 +335,6 @@ binding (see `keymap-set'.)"
   :bind-map hud-ide-map
   :bind-key "x")
 
-(defvar-keymap hud-completion-map
-  :name "completion"
-  :doc "Completion commands under C-c . (hud-mode).")
-
-(keymap-set hud-completion-map "TAB" #'completion-at-point)
-(keymap-set hud-completion-map "." #'completion-at-point)
-(keymap-set hud-completion-map "p" #'completion-at-point)
-(keymap-set hud-completion-map "/" #'dabbrev-expand)
-(keymap-set hud-completion-map "c" #'dabbrev-completion)
-(keymap-set hud-completion-map "i" #'tempel-insert)
-(keymap-set hud-completion-map "s" #'tempel-complete)
-(keymap-set hud-completion-map "x" #'tempel-expand)
-(keymap-set hud-completion-map "v" #'tempel-open-custom-file)
-
 (defvar-keymap hud-shell-map
   :name "shell"
   :doc "Shell commands under C-c s (hud-mode).")
@@ -460,10 +446,6 @@ binding (see `keymap-set'.)"
   :name "+ripgrep"
   :doc "Ripgrep commands under C-c g r (hud-mode).")
 
-(defvar-keymap hud-consult-search-map
-  :name "consult-search"
-  :doc "Consult search commands under C-c g s (hud-mode).")
-
 (defvar-keymap hud-robot-agent-shell-map
   :name "agent-shell"
   :doc "Agent shell commands under C-c r s (hud-mode).")
@@ -484,12 +466,6 @@ binding (see `keymap-set'.)"
 (make-read-extended-command-for-prefix "eat"
   :bind-map hud-shell-eat-map
   :bind-key "m")
-
-(defvar-keymap hud-consult-mode-map
-  :name "consult"
-  :doc "Consult commands under C-c C-; (hud-mode).")
-
-(keymap-set hud-consult-mode-map "s" #'tempel-insert)
 
 (defvar-keymap hud-smerge-map
   :name "smerge"
@@ -614,7 +590,7 @@ binding (see `keymap-set'.)"
 
 (keymap-set hud-ecclectic-grep-map "p" (cons "project-grep" hud-ecclectic-grep-project-map))
 (keymap-set hud-ecclectic-grep-map "r" (cons "+ripgrep" hud-ecclectic-rg-map))
-(keymap-set hud-ecclectic-grep-map "s" (cons "consult-search" hud-consult-search-map))
+(keymap-set hud-ecclectic-grep-map "s" (cons "consult-search" 'minaid-consult-search-map))
 
 (keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
 (hud-bind-deferred-keymap hud-ide-map "l" 'eglox 'eglox-global-map "eglot")
@@ -644,7 +620,6 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-c k" (cons "kill" hud-kill-map))
 (keymap-set hud-mode-map "C-c w" (cons "web-browser" hud-web-browser-map))
 (keymap-set hud-mode-map "C-c g" (cons "grep" hud-ecclectic-grep-map))
-(keymap-set hud-mode-map "C-c ." (cons "completion" hud-completion-map))
 (keymap-set hud-mode-map "C-c h" (cons "docs" hud-docs-map))
 (keymap-set hud-mode-map "C-c l" (cons "ide" hud-ide-map))
 (keymap-set hud-mode-map "C-c s" (cons "shell" hud-shell-map))
@@ -655,12 +630,9 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-c o" (cons "org" orgx-global-map))
 (keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
 (keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
-(keymap-set hud-mode-map "C-c C-;" (cons "consult" hud-consult-mode-map))
 (keymap-set hud-mode-map "C-c p" (cons "projectile" 'projectile-command-map))
 
 (keymap-set hud-mode-map "M-." #'xref-find-definitions)
-(keymap-set hud-mode-map "M-/" #'dabbrev-completion)
-(keymap-set hud-mode-map "C-M-/" #'dabbrev-expand)
 
 (keymap-set hud-mode-map "M-h" #'windmove-left)
 (keymap-set hud-mode-map "M-j" #'windmove-down)
@@ -696,7 +668,6 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-w" #'kill-region)
 (keymap-set hud-mode-map "C-h" #'backward-kill-word)
 (keymap-set hud-mode-map "C-<backspace>" #'backward-kill-word)
-(keymap-set hud-mode-map "C-<tab>" #'completion-at-point)
 (keymap-set hud-mode-map "M-<SPC>" #'set-mark-command)
 (keymap-set hud-mode-map "M-X" #'execute-extended-command-for-buffer)
 (keymap-set hud-mode-map "s-c" #'clipboard-kill-ring-save) ;; (CUA/macOS) copy

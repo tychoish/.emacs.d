@@ -185,7 +185,8 @@
   (delight 'python-mode "py")
   (delight 'lisp-mode "lisp")
   (delight 'slime-mode "sl")
-  (delight 'slime-autodoc-mode "")
+  (delight 'slime-autodoc-mode nil)
+  (delight 'minaid-mode nil 'minaid)
 
   (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
   (delight 'outline-minor-mode nil 'outline)

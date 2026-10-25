@@ -176,6 +176,7 @@ triggered directly by a keypress, still prompts normally.")
     (bootstrap-set-up-named-instance-file-locks))
 
   (annotated-completing-read-setup-history)
+  (add-to-list 'savehist-additional-variables 'compile-history)
 
   (with-silence
     (recentf-mode 1)
