@@ -301,5 +301,24 @@ correctly and reads from the minibuffer using the candidate's command."
         (should (member "EMACS_MCP_URL=http://127.0.0.1:8765/mcp" env))
         (should (member "FOO=bar" env))))))
 
+(ert-deftest tychoish-core/gptel-mcp-session-setup ()
+  "Test that `gptel-mcp-setup-session` configures buffer-local MCPKit tools."
+  (require 'gptel)
+  (require 'gptel-mcp)
+  (let ((gptel-tools nil)
+        (gptel-use-tools nil)
+        (mcpkit-registry nil)
+        (gptel--known-tools nil)
+        (gptel-mcp-default-services '(core_test)))
+    (mcpkit-define-service 'core_test :description "core test service")
+    (mcpkit-register-tool 'core_test_tool 'core_test
+      :description "core test tool"
+      (identity "test-result"))
+    (with-temp-buffer
+      (gptel-mcp-setup-session (current-buffer))
+      (should gptel-use-tools)
+      (should (= (length gptel-tools) 1))
+      (should (equal (gptel-tool-name (car gptel-tools)) "core_test_tool")))))
+
 (provide 'test-setup-core)
 ;;; test-setup-core.el ends here

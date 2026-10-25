@@ -62,6 +62,7 @@
    embark-consult
    gptel-aibo
    gptel-agent
+   gptel-mcp
    agent-shell-workflow
    telega-bot
    denote-sync
@@ -103,7 +104,7 @@
    ninja-mode))
 
 (elpaish-install-register-upgrade-package
- '(acp shell-maker agent-shell gptel gptel-agent)
+ '(acp shell-maker agent-shell gptel gptel-agent gptel-mcp)
  '(vertico consult corfu cape marginalia tempel orderless)
  '(magit flycheck)
  '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen builder)
@@ -374,8 +375,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
   (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"
     (nerd-icons-completion-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] minaid"
-    (when (fboundp 'minaid-mode)
-      (minaid-mode 1)))
+    (minaid-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] delight"
     (require 'delight)))
 

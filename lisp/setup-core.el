@@ -1182,6 +1182,17 @@ otherwise keep replaying stale detection results."
   (gptel-set-backend-default-gemini-flash-preview)
   (require 'gptel-integrations))
 
+(use-package gptel-mcp
+  :after (gptel mcpkit)
+  :commands (gptel-mcp-mode
+             gptel-mcp-setup-session
+             gptel-mcp-register-all-services
+             gptel-mcp-enable
+             gptel-mcp-disable)
+  :config
+  (setq gptel-mcp-default-services '(emacs denote))
+  (gptel-mcp-mode 1))
+
 (use-package agent-shell
   :ensure t
   :defer t
