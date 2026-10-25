@@ -436,7 +436,7 @@ clipboard."
   (hud-bind-deferred-keymap hud-mode-map "C-c v" 'telega 'telega-prefix-map "telega")
   (hud-bind-deferred-keymap hud-mode-map "C-c n" 'telega 'telega-prefix-map "telega")
   :config
-  (add-hook 'telega-chat-mode-hook 'tychoish/corfu-text-mode-setup)
+  (add-hook 'telega-chat-mode-hook #'minaid-corfu-text-mode-setup)
 
   (defvar-keymap tychoish/telega-buffer-management-map) ;; "d"
   (keymap-set telega-prefix-map "d" '(tychoish/telega-buffer-management-map . "telega-buffer-management"))
@@ -653,7 +653,8 @@ resets point to column 0 outside of definition-list context."
   (keymap-set hud-mode-map "M-$" #'flyspell-correct-at-point)
   (keymap-set hud-mode-map "C-;" #'flyspell-correct-previous)
 
-  (keymap-set hud-consult-mode-map "f" #'consult-flyspell)
+  (with-eval-after-load 'minaid
+    (keymap-set minaid-consult-map "f" #'consult-flyspell))
 
   (add-hook 'prog-mode-hook #'tychoish--flyspell-prog-mode-idle)
   (add-hook 'text-mode-hook #'tychoish--flyspell-mode-idle)
@@ -946,7 +947,8 @@ otherwise keep replaying stale detection results."
   :commands (flycheck-disable-checker)
   :init
   (keymap-set hud-mode-map "M-g f" #'flycheck-mode)
-  (keymap-set hud-consult-mode-map "c" #'consult-flycheck)
+  (with-eval-after-load 'minaid
+    (keymap-set minaid-consult-map "c" #'consult-flycheck))
   (keymap-set hud-mode-map "C-c f f" #'flycheck-mode)
   :config
   (defun tychoish/flycheck-prefer-eldoc ()
@@ -1448,6 +1450,62 @@ See `tychoish/agent-shell--force-clear-busy'."
 
   (advice-add 'agent-shell--refresh-session-title :around
               #'ad:agent-shell--refresh-session-title)
+
+  ;; MCPKit dynamic session integration
+  (defun agent-shell-mcpkit-active-url ()
+    "Return HTTP URL for current Emacs session's active MCP server, or nil."
+    (when-let* ((port (or (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
+                          (and (fboundp 'bootstrap-init-mcp-services)
+                               (progn (bootstrap-init-mcp-services) (mcpkit-active-port)))
+                          (and (fboundp 'mcpkit-start-all-services)
+                               (mcpkit-start-all-services)))))
+      (if (and (fboundp 'mcpkit-proxy-active-port)
+               (mcpkit-proxy-active-port)
+               (bound-and-true-p sprite-instance-id))
+          (format "http://127.0.0.1:%d/sprite/%s/mcp"
+                  (mcpkit-proxy-active-port)
+                  sprite-instance-id)
+        (format "http://127.0.0.1:%d/mcp" port))))
+
+  (defun agent-shell-mcpkit-server-spec ()
+    "Return normalized ACP McpServer specification for current session's MCPKit."
+    (when-let* ((url (agent-shell-mcpkit-active-url)))
+      `((name . "emacs")
+        (type . "http")
+        (url . ,url)
+        (headers . ()))))
+
+  (setq agent-shell-mcp-servers
+        (list (lambda () (agent-shell-mcpkit-server-spec))))
+
+  (defun ad:agent-shell--mcp-servers-filter-nil (orig-fn &rest args)
+    "Filter out null server entries produced when dynamic MCP resolvers yield nil."
+    (when-let* ((servers (apply orig-fn args)))
+      (let ((filtered (seq-filter (lambda (s) (map-elt s 'name)) servers)))
+        (when (> (length filtered) 0)
+          (apply #'vector (append filtered nil))))))
+
+  (advice-add 'agent-shell--mcp-servers :around #'ad:agent-shell--mcp-servers-filter-nil)
+
+  (defun agent-shell-mcpkit-environment-variables ()
+    "Return environment variables exposing current Emacs session MCPKit info."
+    (when-let* ((port (ignore-errors (and (fboundp 'mcpkit-active-port) (mcpkit-active-port)))))
+      (list (format "MCPKIT_PORT=%d" port)
+            (format "EMACS_MCP_PORT=%d" port)
+            (format "EMACS_MCP_URL=http://127.0.0.1:%d/mcp" port)
+            (format "EMACS_SPRITE_ID=%s" (or (bound-and-true-p sprite-instance-id) (system-name)))
+            (format "EMACS_SERVER_NAME=%s" (or (bound-and-true-p server-name) "server")))))
+
+  (defun ad:agent-shell--make-acp-client-inject-mcpkit-env (orig-fn &rest args)
+    "Inject current session's MCPKit environment variables into ACP client."
+    (let* ((env (plist-get args :environment-variables))
+           (extra (agent-shell-mcpkit-environment-variables)))
+      (if extra
+          (apply orig-fn (plist-put (copy-sequence args) :environment-variables (append extra env)))
+        (apply orig-fn args))))
+
+  (advice-add 'agent-shell--make-acp-client :around
+              #'ad:agent-shell--make-acp-client-inject-mcpkit-env)
 
   (defun tychoish/agent-shell-antigravity--do-bootstrap (install-dir platform-sym bin-path)
     "Download and install the Antigravity ACP server binary to INSTALL-DIR."

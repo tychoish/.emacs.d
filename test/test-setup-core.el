@@ -8,6 +8,7 @@
 (require 'ert)
 (require 'test-helper)
 (require 'cl-lib)
+(require 'hud-mode)
 (defvar hud-mode-map (make-sparse-keymap))
 (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
 (require 'setup-core)
@@ -226,6 +227,79 @@ correctly and reads from the minibuffer using the candidate's command."
           (sit-for 0.02)))
       (should (equal done-loaded 2))
       (should (equal (length loaded-files) 2)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; agent-shell MCPKit session integration
+
+(ert-deftest tychoish-core/agent-shell-mcpkit-active-url ()
+  "Test active URL generation for direct and sprite-proxy MCP endpoints."
+  (require 'agent-shell)
+  (require 'server)
+  ;; Direct port
+  (cl-letf (((symbol-function 'mcpkit-active-port) (lambda () 8765))
+            ((symbol-function 'mcpkit-proxy-active-port) (lambda () nil)))
+    (let ((sprite-instance-id nil))
+      (should (equal "http://127.0.0.1:8765/mcp" (agent-shell-mcpkit-active-url)))))
+  ;; Proxy routing
+  (cl-letf (((symbol-function 'mcpkit-active-port) (lambda () 8765))
+            ((symbol-function 'mcpkit-proxy-active-port) (lambda () 8760)))
+    (let ((sprite-instance-id "work"))
+      (should (equal "http://127.0.0.1:8760/sprite/work/mcp" (agent-shell-mcpkit-active-url))))))
+
+(ert-deftest tychoish-core/agent-shell-mcpkit-server-spec ()
+  "Test ACP server spec construction."
+  (require 'agent-shell)
+  (require 'server)
+  (cl-letf (((symbol-function 'agent-shell-mcpkit-active-url) (lambda () "http://127.0.0.1:8765/mcp")))
+    (should (equal '((name . "emacs")
+                     (type . "http")
+                     (url . "http://127.0.0.1:8765/mcp")
+                     (headers . ()))
+                   (agent-shell-mcpkit-server-spec)))))
+
+(ert-deftest tychoish-core/agent-shell-mcpkit-environment-variables ()
+  "Test environment variable list generation."
+  (require 'agent-shell)
+  (require 'server)
+  (cl-letf (((symbol-function 'mcpkit-active-port) (lambda () 8765)))
+    (let ((sprite-instance-id "primary")
+          (server-name "test-server"))
+      (let ((env (agent-shell-mcpkit-environment-variables)))
+        (should (member "MCPKIT_PORT=8765" env))
+        (should (member "EMACS_MCP_PORT=8765" env))
+        (should (member "EMACS_MCP_URL=http://127.0.0.1:8765/mcp" env))
+        (should (member "EMACS_SPRITE_ID=primary" env))
+        (should (member "EMACS_SERVER_NAME=test-server" env))))))
+
+(ert-deftest tychoish-core/agent-shell-mcp-servers-dynamic-resolution ()
+  "Test that `agent-shell--mcp-servers' evaluates dynamically and filters nil."
+  (require 'agent-shell)
+  (require 'server)
+  ;; Active server returns normalized vector
+  (cl-letf (((symbol-function 'agent-shell-mcpkit-server-spec)
+             (lambda () '((name . "emacs") (type . "http") (url . "http://127.0.0.1:8765/mcp")))))
+    (let ((agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec)))))
+      (should (equal [((name . "emacs") (type . "http") (url . "http://127.0.0.1:8765/mcp") (headers . []))]
+                     (agent-shell--mcp-servers)))))
+  ;; Inactive server returns nil
+  (cl-letf (((symbol-function 'agent-shell-mcpkit-server-spec) (lambda () nil)))
+    (let ((agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec)))))
+      (should-not (agent-shell--mcp-servers)))))
+
+(ert-deftest tychoish-core/agent-shell-acp-client-injects-mcpkit-env ()
+  "Test that `agent-shell--make-acp-client' advice injects MCPKit env vars."
+  (require 'agent-shell)
+  (require 'server)
+  (cl-letf (((symbol-function 'agent-shell-mcpkit-environment-variables)
+             (lambda () '("MCPKIT_PORT=8765" "EMACS_MCP_URL=http://127.0.0.1:8765/mcp"))))
+    (let ((client (agent-shell--make-acp-client
+                   :command "echo"
+                   :command-params '("test")
+                   :environment-variables '("FOO=bar"))))
+      (let ((env (map-elt client :environment-variables)))
+        (should (member "MCPKIT_PORT=8765" env))
+        (should (member "EMACS_MCP_URL=http://127.0.0.1:8765/mcp" env))
+        (should (member "FOO=bar" env))))))
 
 (provide 'test-setup-core)
 ;;; test-setup-core.el ends here
