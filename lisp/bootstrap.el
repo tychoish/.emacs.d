@@ -296,26 +296,54 @@ triggered directly by a keypress, still prompts normally.")
     hitl-mcp)
   "List of MCP package and feature symbols to require during bootstrap.")
 
-(defun bootstrap-load-mcp-services ()
-  "Require all packages in `bootstrap-mcp-packages' and register tool extensions."
-  (message "[mcpkit]: loading service packages...")
-  (dolist (pkg bootstrap-mcp-packages)
-    (require pkg nil t))
-  (when (and (fboundp 'mcpkit-editing-register-tools)
-             (fboundp 'mcpkit-get-service)
-             (mcpkit-get-service 'emacs))
-    (mcpkit-editing-register-tools 'emacs))
-  (message "[mcpkit]: service packages loaded"))
+(cl-defun bootstrap-load-mcp-services (&key on-done (delay 0.01))
+  "Require all packages in `bootstrap-mcp-packages' incrementally with `gen.el'.
+Wraps each load operation in `with-slow-op-timer' and emits individual
+registration messages without batch logging. Calls ON-DONE when complete."
+  (interactive)
+  (if (and (require 'gen nil t) (fboundp 'gen-run-async))
+      (let ((stream (gen-wrap (iter-make (dolist (pkg bootstrap-mcp-packages) (iter-yield pkg))))))
+        (gen-run-async
+         (lambda (pkg done-cb)
+           (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
+             (when (require pkg nil t)
+               (message "[mcpkit]: registered %s" pkg)))
+           (funcall done-cb))
+         stream
+         :concurrency 1
+         :delay (or delay 0.01)
+         :on-done (lambda ()
+                    (with-slow-op-timer "<bootstrap> [mcpkit] post-load"
+                      (when (and (fboundp 'mcpkit-editing-register-tools)
+                                 (fboundp 'mcpkit-get-service)
+                                 (mcpkit-get-service 'emacs))
+                        (mcpkit-editing-register-tools 'emacs)))
+                    (when on-done (funcall on-done)))
+         :on-error (lambda (err)
+                     (message "[mcpkit]: load error: %S" err))))
+    ;; Synchronous fallback
+    (dolist (pkg bootstrap-mcp-packages)
+      (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
+        (when (require pkg nil t)
+          (message "[mcpkit]: registered %s" pkg))))
+    (with-slow-op-timer "<bootstrap> [mcpkit] post-load"
+      (when (and (fboundp 'mcpkit-editing-register-tools)
+                 (fboundp 'mcpkit-get-service)
+                 (mcpkit-get-service 'emacs))
+        (mcpkit-editing-register-tools 'emacs)))
+    (when on-done (funcall on-done))))
 
 (defun bootstrap-start-mcp-services ()
   "Start all MCP services on the configured default port."
-  (when (fboundp 'mcpkit-start-all-services)
-    (mcpkit-start-all-services)))
+  (with-slow-op-timer "<bootstrap> [mcpkit] start-services"
+    (when (fboundp 'mcpkit-start-all-services)
+      (mcpkit-start-all-services))))
 
 (defun bootstrap-init-mcp-services ()
   "Initialize and start MCPKit services configured in `bootstrap-mcp-packages'."
-  (bootstrap-load-mcp-services)
-  (bootstrap-start-mcp-services))
+  (interactive)
+  (bootstrap-load-mcp-services
+   :on-done #'bootstrap-start-mcp-services))
 
 (defun bootstrap-init-late-enable-modes ()
   (with-slow-op-timer "<bootstrap> [modes] set-fringe-mode"
@@ -356,14 +384,9 @@ triggered directly by a keypress, still prompts normally.")
  :delay 0.1275)
 
 (add-lazy-init
- :name "<bootstrap> [services] mcpkit load"
- :operation 'bootstrap-load-mcp-services
+ :name "<bootstrap> [services] mcpkit"
+ :operation 'bootstrap-init-mcp-services
  :delay 0.3)
-
-(add-lazy-init
- :name "<bootstrap> [services] mcpkit start"
- :operation 'bootstrap-start-mcp-services
- :delay 0.45)
 
 (add-one-shot-hook
  :name "<bootstrap> hud-modeline"

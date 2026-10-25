@@ -431,6 +431,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-buffer-control-map "r" #'revbufs)
 (keymap-set hud-buffer-control-map "b" #'switch-to-buffer)
 (keymap-set hud-buffer-control-map "n" #'switch-to-buffer-other-window)
+(keymap-set hud-buffer-control-map "s" #'projectile-save-project-buffers-picker)
 
 (defvar-keymap hud-blogging-map
   :name "blogging"
@@ -453,6 +454,7 @@ binding (see `keymap-set'.)"
   :doc "Project grep commands under C-c g p (hud-mode).")
 
 (keymap-set hud-ecclectic-grep-project-map "f" #'find-grep)
+(keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag)
 
 (defvar-keymap hud-ecclectic-rg-map
   :name "+ripgrep"
@@ -654,6 +656,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
 (keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
 (keymap-set hud-mode-map "C-c C-;" (cons "consult" hud-consult-mode-map))
+(keymap-set hud-mode-map "C-c p" (cons "projectile" 'projectile-command-map))
 
 (keymap-set hud-mode-map "M-." #'xref-find-definitions)
 (keymap-set hud-mode-map "M-/" #'dabbrev-completion)
