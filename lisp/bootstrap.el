@@ -306,8 +306,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
         (gen-run-async
          (lambda (pkg done-cb)
            (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
-             (when (require pkg nil t)
-               (message "[mcpkit]: registered %s" pkg)))
+             (require pkg nil t))
            (funcall done-cb))
          stream
          :concurrency 1
@@ -324,8 +323,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
     ;; Synchronous fallback
     (dolist (pkg bootstrap-mcp-packages)
       (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
-        (when (require pkg nil t)
-          (message "[mcpkit]: registered %s" pkg))))
+        (require pkg nil t)))
     (with-slow-op-timer "<bootstrap> [mcpkit] post-load"
       (when (and (fboundp 'mcpkit-editing-register-tools)
                  (fboundp 'mcpkit-get-service)
@@ -375,6 +373,9 @@ registration messages without batch logging. Calls ON-DONE when complete."
     (builder-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"
     (nerd-icons-completion-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] minaid"
+    (when (fboundp 'minaid-mode)
+      (minaid-mode 1)))
   (with-slow-op-timer "<bootstrap> [modes] delight"
     (require 'delight)))
 
@@ -400,10 +401,6 @@ registration messages without batch logging. Calls ON-DONE when complete."
  ;; Depth below 0: must run before `package--save-selected-packages'.
  :depth -90)
 
-(add-one-shot-hook
- :name "<bootstrap> marginalia"
- :function marginalia-mode
- :hook 'minibuffer-setup-hook)
 
 (add-one-shot-hook
  :name "<bootstrap> alias mouse mode"

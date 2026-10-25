@@ -153,6 +153,9 @@ Runs from `after-init-hook', after the full config has loaded."
 	(require 'setup-hooks))
 
       ;; remaining use-package declarations.
+      (with-slow-op-timer "<init> [local] require minaid.el"
+	(require 'minaid))
+
       (with-slow-op-timer "<init> [local] require setup-core.el"
 	(require 'setup-core)))
 
