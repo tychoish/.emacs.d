@@ -474,6 +474,7 @@ using ACR context from point."
   (setq corfu-on-exact-match nil)
   (setq corfu-auto t)
   (setq corfu-auto-delay minaid-corfu-auto-delay)
+  (setq corfu-auto-prefix minaid-corfu-prog-auto-prefix)
   (setq corfu-popupinfo-delay 0.125)
   (setq corfu-indexed-start 1)
   (setq global-corfu-minibuffer nil)
@@ -563,10 +564,11 @@ using ACR context from point."
   (minaid--configure-consult)
   (minaid--install-external-keybindings)
 
-  ;; Activate Vertico & Marginalia
+  ;; Activate Vertico, Marginalia, & Corfu
   (vertico-mode 1)
   (vertico-multiform-mode 1)
   (marginalia-mode 1)
+  (global-corfu-mode 1)
 
   ;; Cape wrap buster for Eglot
   (when (fboundp 'cape-wrap-buster)
@@ -590,6 +592,7 @@ using ACR context from point."
   ;; Corfu buffer hooks (add-hook works even before modes load)
   (add-hook 'text-mode-hook #'minaid-corfu-text-mode-setup)
   (add-hook 'prog-mode-hook #'minaid-corfu-prog-mode-setup)
+  (add-hook 'comint-mode-hook #'minaid-corfu-prog-mode-setup)
   (add-hook 'eat-mode-hook #'minaid-corfu-prog-mode-setup)
   (add-hook 'eshell-mode-hook #'minaid-corfu-prog-mode-setup)
   (add-hook 'shell-mode-hook #'minaid-corfu-prog-mode-setup)
@@ -608,10 +611,11 @@ using ACR context from point."
   (advice-remove 'register-preview 'consult-register-window)
   (advice-remove 'consult--grep #'minaid--consult-grep-wrapper)
 
-  ;; Deactivate Vertico & Marginalia
+  ;; Deactivate Vertico, Marginalia, & Corfu
   (vertico-mode -1)
   (vertico-multiform-mode -1)
   (marginalia-mode -1)
+  (global-corfu-mode -1)
 
   ;; Restore completion styles
   (when minaid--saved-completion-styles
@@ -636,6 +640,7 @@ using ACR context from point."
   ;; Remove Corfu hooks
   (remove-hook 'text-mode-hook #'minaid-corfu-text-mode-setup)
   (remove-hook 'prog-mode-hook #'minaid-corfu-prog-mode-setup)
+  (remove-hook 'comint-mode-hook #'minaid-corfu-prog-mode-setup)
   (remove-hook 'eat-mode-hook #'minaid-corfu-prog-mode-setup)
   (remove-hook 'eshell-mode-hook #'minaid-corfu-prog-mode-setup)
   (remove-hook 'shell-mode-hook #'minaid-corfu-prog-mode-setup)

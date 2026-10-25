@@ -5,6 +5,7 @@
 (require 'cl-lib)
 (require 'hud-mode)
 (require 'minaid)
+(require 'comint)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Alias and Keymap Tests
@@ -45,19 +46,23 @@
     ;; Enable mode
     (minaid-mode 1)
     (should minaid-mode)
+    (should global-corfu-mode)
     (should (equal completion-styles '(orderless basic)))
     (should (assq 'file completion-category-overrides))
     (should (memq #'minaid-elisp-capf-setup emacs-lisp-mode-hook))
     (should (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
+    (should (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))
     (should (eq (lookup-key minaid-mode-map (kbd "C-.")) #'embark-act))
 
     ;; Disable mode
     (minaid-mode -1)
     (should-not minaid-mode)
+    (should-not global-corfu-mode)
     (should (equal completion-styles orig-styles))
     (should (equal completion-category-overrides orig-overrides))
     (should-not (memq #'minaid-elisp-capf-setup emacs-lisp-mode-hook))
-    (should-not (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))))
+    (should-not (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
+    (should-not (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Capf Configuration & Dispatch Tests
@@ -113,6 +118,20 @@
   (with-temp-buffer
     (minaid-corfu-prog-mode-setup)
     (should (= corfu-auto-prefix 3))))
+
+(ert-deftest minaid-test/corfu-enabled-in-all-buffers ()
+  "Test that minaid-mode enables corfu in text, prog, fundamental, comint buffers."
+  (let ((noninteractive nil))
+    (minaid-mode 1)
+    (unwind-protect
+        (dolist (mode '(fundamental-mode text-mode prog-mode comint-mode))
+          (let ((buf (generate-new-buffer (format "test-corfu-%s" mode))))
+            (unwind-protect
+                (with-current-buffer buf
+                  (funcall mode)
+                  (should corfu-mode))
+              (kill-buffer buf))))
+      (minaid-mode -1))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Completion In-Region Wrapper Tests
