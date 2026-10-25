@@ -1441,6 +1441,14 @@ See `tychoish/agent-shell--force-clear-busy'."
   (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
   (add-hook 'agent-shell-mode-hook #'ansi-color-for-comint-mode-on)
 
+  (defun tychoish/agent-shell-shorten-antigravity-modeline ()
+    "Ensure Antigravity session modeline displays \=`agy\=`."
+    (when (or (eq (map-nested-elt agent-shell--state '(:agent-config :identifier)) 'antigravity)
+              (equal mode-name "Antigravity"))
+      (setq mode-name "agy")))
+
+  (add-hook 'agent-shell-mode-hook #'tychoish/agent-shell-shorten-antigravity-modeline)
+
   (defun tychoish--agent-shell-buffer-p (buffer _action)
     "Return non-nil if BUFFER is an agent-shell communication buffer."
     (with-current-buffer buffer
