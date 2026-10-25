@@ -12,7 +12,9 @@
 (require 'map)
 (require 'mu4e-autoloads nil t)
 
-(autoload 'mu4e-update-index "mu4e-update")
+(autoload 'mu4e-update-index "mu4e")
+(autoload 'mu4e-update-mail-and-index "mu4e")
+(autoload 'mu4e-quit "mu4e")
 (autoload 'annotated-completing-read "annotated-completing-read")
 (autoload 'annotated-completing-read-directory "annotated-completing-read")
 
