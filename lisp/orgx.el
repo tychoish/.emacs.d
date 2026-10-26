@@ -48,6 +48,7 @@
 (declare-function denote-directory-files "denote")
 (declare-function denote-directories "denote")
 (declare-function denote-retrieve-filename-signature "denote")
+(declare-function denote-retrieve-filename-keywords-as-list "denote")
 (declare-function agent-shell-queue-org-refile-from-heading "agent-shell-queue-org")
 
 ;; Declared special so the `let'-binding in `orgx-mark-done-and-archive'
@@ -218,16 +219,106 @@
 
 ;; org-agenda keybindings and configuration.
 
-(defun orgx--denote-agenda-settings (header)
+(defun orgx-denote-files ()
+  "Return every .org file across all directories in `denote-directories'.
+Computed fresh on each call so newly added or renamed notes, and any
+change to `denote-directory', are always picked up — do not cache the
+result."
+  (thread-last
+    (denote-directories)
+    (seq-mapcat (lambda (dir) (directory-files-recursively dir "\\.org\\'")))))
+
+(defcustom orgx-denote-agenda-suppress-completed t
+  "Suppress items from closed/completed notes in denote composite agenda."
+  :type 'boolean
+  :group 'orgx)
+
+(defun orgx-denote-file-completed-p (file)
+  "Return non-nil if FILE represents a closed/completed denote note.
+A note is considered completed if its filename keywords include \"x\" (or
+legacy \"done\"), or if its frontmatter specifies completed, executed,
+or closed status or has an :x: or :done: filetag."
+  (when (and file (file-exists-p file))
+    (require 'denote nil t)
+    (let ((kws (if (fboundp 'denote-retrieve-filename-keywords-as-list)
+                   (denote-retrieve-filename-keywords-as-list file)
+                 (when (string-match "__\([a-zA-Z0-9_]+\)\." (file-name-nondirectory file))
+                   (split-string (match-string 1 (file-name-nondirectory file)) "_")))))
+      (or (member "x" kws)
+          (member "done" kws)
+          (let ((buf (get-file-buffer file)))
+            (if buf
+                (with-current-buffer buf
+                  (save-excursion
+                    (goto-char (point-min))
+                    (or (re-search-forward "^#\\+\\(?:execution_status\\|status\\):[ \t]*\\(?:complete\\|executed\\|closed\\)" 1024 t)
+                        (re-search-forward "^#\\+filetags:.*:\\(?:x\\|done\\):" 1024 t))))
+              (with-temp-buffer
+                (insert-file-contents file nil 0 1024)
+                (goto-char (point-min))
+                (or (re-search-forward "^#\\+\\(?:execution_status\\|status\\):[ \t]*\\(?:complete\\|executed\\|closed\\)" nil t)
+                    (re-search-forward "^#\\+filetags:.*:\\(?:x\\|done\\):" nil t)))))))))
+
+(defun orgx-denote-plan-file-p (file)
+  "Return non-nil if FILE represents a plan or tracker note."
+  (when (and file (file-exists-p file))
+    (require 'denote nil t)
+    (let ((kws (if (fboundp 'denote-retrieve-filename-keywords-as-list)
+                   (denote-retrieve-filename-keywords-as-list file)
+                 (when (string-match "__\([a-zA-Z0-9_]+\)\." (file-name-nondirectory file))
+                   (split-string (match-string 1 (file-name-nondirectory file)) "_"))))
+          (base (file-name-nondirectory file)))
+      (or (member "plan" kws)
+          (member "tracker" kws)
+          (string-match-p "_plan" base)
+          (string-match-p "_tracker" base)
+          (let ((buf (get-file-buffer file)))
+            (if buf
+                (with-current-buffer buf
+                  (save-excursion
+                    (goto-char (point-min))
+                    (re-search-forward "^#\\+filetags:.*:\\(?:plan\\|tracker\\):" 1024 t)))
+              (with-temp-buffer
+                (insert-file-contents file nil 0 1024)
+                (goto-char (point-min))
+                (re-search-forward "^#\\+filetags:.*:\\(?:plan\\|tracker\\):" nil t))))))))
+
+(defun orgx-denote-active-files ()
+  "Return all denote files that are not closed, completed, or tagged x."
+  (seq-remove #'orgx-denote-file-completed-p (orgx-denote-files)))
+
+(defun orgx-denote-composite-files ()
+  "Return files to include in the denote composite agenda view.
+When `orgx-denote-agenda-suppress-completed' is non-nil (the default),
+excludes notes that are closed, completed, or tagged x.
+Otherwise returns all denote files."
+  (if orgx-denote-agenda-suppress-completed
+      (orgx-denote-active-files)
+    (orgx-denote-files)))
+
+(defun orgx-denote-completed-plan-files ()
+  "Return all denote files that are completed plans or trackers."
+  (seq-filter (lambda (f)
+                (and (orgx-denote-plan-file-p f)
+                     (orgx-denote-file-completed-p f)))
+              (orgx-denote-files)))
+
+(defun orgx-skip-if-completed-note ()
+  "Skip the current heading if its visiting file is a closed/completed note."
+  (when (and orgx-denote-agenda-suppress-completed
+             (orgx-denote-file-completed-p (buffer-file-name)))
+    (or (outline-next-heading) (point-max))))
+
+(defun orgx--denote-agenda-settings (header &optional files-form)
   "Return shared `org-agenda-custom-commands' SETTINGS for a denote view.
-Scopes the view to `orgx-denote-files', sorts by denote signature via
-`orgx-agenda-cmp-denote-signature', and shows only the file's sequence
-number (via `orgx-denote-agenda-category') in place of the full denote
-filename — for both the \"todo\" and \"tags\" agenda line types, since
-custom commands built from `todo' and `tags-todo' render through
-different `org-agenda-prefix-format' keys. HEADER overrides the agenda
-header text, or leaves the default when nil."
-  `((org-agenda-files (orgx-denote-files))
+Scopes the view to FILES-FORM (defaults to `(orgx-denote-files)'), sorts by
+denote signature via `orgx-agenda-cmp-denote-signature', and shows only
+the file's sequence number (via `orgx-denote-agenda-category') in place of
+the full denote filename — for both the \"todo\" and \"tags\" agenda line
+types, since custom commands built from `todo' and `tags-todo' render
+through different `org-agenda-prefix-format' keys. HEADER overrides the
+agenda header text, or leaves the default when nil."
+  `((org-agenda-files ,(or files-form '(orgx-denote-files)))
     (org-agenda-skip-function-global nil)
     (org-agenda-overriding-header ,header)
     (org-agenda-sorting-strategy '(user-defined-up))
@@ -281,7 +372,20 @@ header text, or leaves the default when nil."
                        ((org-agenda-overriding-header "Tasks")))
             (tags-todo "+agent-question-TODO=\"QUESTION\"-TODO=\"CONSIDER\"-TODO=\"MUST\"-TODO=\"INPROGRESS\"-TODO=\"PAUSED\"-TODO=\"SCHEDULED\"-TODO=\"BLOCKED\""
                        ((org-agenda-overriding-header "Agent tasks"))))
-           ,(orgx--denote-agenda-settings nil))
+           ,(orgx--denote-agenda-settings nil '(orgx-denote-composite-files)))
+          ("dx" "Completed Plans"
+           ((tags "+question|TODO=\"QUESTION\""
+                  ((org-agenda-skip-function #'orgx-skip-unless-open-question)
+                   (org-agenda-overriding-header "Open Questions in Completed Plans")))
+            (tags-todo "TODO=\"INPROGRESS\"|TODO=\"PAUSED\"|TODO=\"SCHEDULED\"|TODO=\"BLOCKED\""
+                       ((org-agenda-overriding-header "Active/Incomplete Tasks in Completed Plans")))
+            (tags-todo "-agent-question-TODO=\"QUESTION\""
+                       ((org-agenda-overriding-header "Tasks in Completed Plans")))
+            (tags-todo "+agent-question-TODO=\"QUESTION\""
+                       ((org-agenda-overriding-header "Agent Tasks in Completed Plans")))
+            (tags "TODO=\"DONE\"|TODO=\"ANSWERED\"|TODO=\"COMPLETE\"|TODO=\"CANCELED\"|TODO=\"ABANDONED\""
+                  ((org-agenda-overriding-header "Completed Tasks in Completed Plans"))))
+           ,(orgx--denote-agenda-settings "Completed Plans" '(orgx-denote-completed-plan-files)))
 	  ("i" . "including inherited")
           ("iu" "Untagged TODOs (incl. inherited)" todo ""
            ((org-agenda-skip-function #'orgx-skip-unless-untagged)
@@ -603,19 +707,22 @@ tags are tested; when non-nil, inherited tags are included in the check."
   "Skip headings in agenda views that are not open human questions.
 Returns point after subtree to skip when the heading is not an open question
 \(e.g. answered/done items, metadata subheadings like Context/Response, or child headings inheriting :question:)."
-  (let* ((hl (org-get-heading t t t t))
-         (todo (org-get-todo-state))
-         (local-tags (org-get-tags nil t))
-         (is-answered (or (equal todo "ANSWERED")
-                          (equal todo "DONE")
-                          (and hl (string-prefix-p "ANSWERED " hl))))
-         (is-metadata (member hl '("Context" "Response" "LOGBOOK" "PROPERTIES")))
-         (is-question (or (member "question" local-tags)
-                          (equal todo "QUESTION")
-                          (and hl (string-prefix-p "QUESTION " hl)))))
-    (if (or is-answered is-metadata (not is-question))
-        (or (outline-next-heading) (point-max))
-      nil)))
+  (if (and orgx-denote-agenda-suppress-completed
+           (orgx-denote-file-completed-p (buffer-file-name)))
+      (point-max)
+    (let* ((hl (org-get-heading t t t t))
+           (todo (org-get-todo-state))
+           (local-tags (org-get-tags nil t))
+           (is-answered (or (equal todo "ANSWERED")
+                            (equal todo "DONE")
+                            (and hl (string-prefix-p "ANSWERED " hl))))
+           (is-metadata (member hl '("Context" "Response" "LOGBOOK" "PROPERTIES")))
+           (is-question (or (member "question" local-tags)
+                            (equal todo "QUESTION")
+                            (and hl (string-prefix-p "QUESTION " hl)))))
+      (if (or is-answered is-metadata (not is-question))
+          (or (outline-next-heading) (point-max))
+        nil))))
 
 (defun orgx-agenda-untagged-in-file (file &optional tag todo-only inherited)
   "Show an agenda for FILE restricted to items lacking TAG.
@@ -711,14 +818,6 @@ visible in a window, and switches to the chosen one."
 
 ;; denote agenda integration
 
-(defun orgx-denote-files ()
-  "Return every .org file across all directories in `denote-directories'.
-Computed fresh on each call so newly added or renamed notes, and any
-change to `denote-directory', are always picked up — do not cache the
-result."
-  (thread-last
-    (denote-directories)
-    (seq-mapcat (lambda (dir) (directory-files-recursively dir "\\.org\\'")))))
 
 (defconst orgx-denote-agenda-category-width 8
   "Max width, in characters, of `orgx-denote-agenda-category'.")
@@ -766,6 +865,20 @@ Convenience entry point for the \"dq\" custom agenda command, which scans
 QUESTION TODO keyword, ordered by denote signature."
   (interactive)
   (org-agenda nil "dq"))
+
+;;;###autoload
+(defun orgx-agenda-denote-composite ()
+  "Show composite denote agenda, suppressing closed/completed notes by default.
+Convenience entry point for the \"dc\" custom agenda command."
+  (interactive)
+  (org-agenda nil "dc"))
+
+;;;###autoload
+(defun orgx-agenda-denote-completed-plans ()
+  "Show all items from completed plans across the denote tree.
+Convenience entry point for the \"dx\" custom agenda command."
+  (interactive)
+  (org-agenda nil "dx"))
 
 ;;;###autoload
 (defun orgx-insert-question (question &optional context)

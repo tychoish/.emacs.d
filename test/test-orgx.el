@@ -253,6 +253,71 @@
 (ert-deftest orgx/denote-questions-command-exists ()
   "orgx-agenda-denote-questions is an interactive command targeting agenda key dq."
   (should (commandp #'orgx-agenda-denote-questions)))
+
+(ert-deftest orgx/denote-composite-and-completed-plans-commands-exist ()
+  "orgx-agenda-denote-composite and orgx-agenda-denote-completed-plans are interactive commands."
+  (should (commandp #'orgx-agenda-denote-composite))
+  (should (commandp #'orgx-agenda-denote-completed-plans)))
+
+(ert-deftest orgx/denote-agenda-dx-custom-command-structure ()
+  "The 'dx' completed plans agenda command contains the expected blocks and scopes to completed plans."
+  (require 'org-agenda)
+  (let ((dx-cmd (assoc "dx" org-agenda-custom-commands)))
+    (should dx-cmd)
+    (should (equal "Completed Plans" (nth 1 dx-cmd)))
+    (let ((blocks (nth 2 dx-cmd)))
+      (should (= 5 (length blocks)))
+      (should (equal "Open Questions in Completed Plans" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 0 blocks))))))
+      (should (equal "Active/Incomplete Tasks in Completed Plans" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 1 blocks))))))
+      (should (equal "Tasks in Completed Plans" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 2 blocks))))))
+      (should (equal "Agent Tasks in Completed Plans" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 3 blocks))))))
+      (should (equal "Completed Tasks in Completed Plans" (cadr (assq 'org-agenda-overriding-header (nth 2 (nth 4 blocks)))))))
+    (should (equal '(org-agenda-files (orgx-denote-completed-plan-files))
+                   (assq 'org-agenda-files (nth 3 dx-cmd))))))
+
+(ert-deftest orgx/denote-file-completed-p-checks ()
+  (require 'denote nil t)
+  "orgx-denote-file-completed-p identifies files with x/done tags or completion directives."
+  (let ((dir (make-temp-file "test-denote-comp-" t)))
+    (unwind-protect
+        (let ((file-x (expand-file-name "20260101T000000==1a--test-plan__agent_plan_x.org" dir))
+              (file-done (expand-file-name "20260101T000001==1b--test-plan__agent_plan_done.org" dir))
+              (file-status (expand-file-name "20260101T000002==1c--test-plan__agent_plan.org" dir))
+              (file-active (expand-file-name "20260101T000003==1d--test-plan__agent_plan.org" dir)))
+          (with-temp-file file-x (insert "#+title: Plan X
+"))
+          (with-temp-file file-done (insert "#+title: Plan Done
+"))
+          (with-temp-file file-status (insert "#+title: Plan Status
+#+execution_status: complete
+"))
+          (with-temp-file file-active (insert "#+title: Plan Active
+#+execution_status: in-progress
+"))
+          (should (orgx-denote-file-completed-p file-x))
+          (should (orgx-denote-file-completed-p file-done))
+          (should (orgx-denote-file-completed-p file-status))
+          (should-not (orgx-denote-file-completed-p file-active)))
+      (delete-directory dir t))))
+
+(ert-deftest orgx/denote-composite-files-filtering ()
+  (require 'denote nil t)
+  "orgx-denote-composite-files respects orgx-denote-agenda-suppress-completed."
+  (let ((dir (make-temp-file "test-denote-comp-files-" t)))
+    (unwind-protect
+        (let ((file-completed (expand-file-name "20260101T000000==1a--test-plan__agent_plan_x.org" dir))
+              (file-active (expand-file-name "20260101T000001==1b--test-plan__agent_plan.org" dir)))
+          (with-temp-file file-completed (insert "#+title: Closed Note
+"))
+          (with-temp-file file-active (insert "#+title: Active Note
+"))
+          (cl-letf (((symbol-function 'orgx-denote-files)
+                     (lambda () (list file-completed file-active))))
+            (let ((orgx-denote-agenda-suppress-completed t))
+              (should (equal (list file-active) (orgx-denote-composite-files))))
+            (let ((orgx-denote-agenda-suppress-completed nil))
+              (should (equal (list file-completed file-active) (orgx-denote-composite-files))))))
+      (delete-directory dir t))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Quick task capture templates (tq / :immediate-finish t)
 
