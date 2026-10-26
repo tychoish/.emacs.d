@@ -34,8 +34,33 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'generator)
 (require 'hud-mode)
 (require 'xtd-macro)
+
+(eval-and-compile
+  (unless (fboundp 'with-gc-suppressed)
+    (defmacro with-gc-suppressed (&rest body)
+      "Execute BODY with garbage collection temporarily suppressed."
+      (declare (indent 0) (debug t))
+      `(let ((gc-cons-threshold 800000000000000)
+             (gc-cons-percentage 1.0))
+         (prog1
+             (progn ,@body)
+           (garbage-collect)))))
+
+  (unless (fboundp 'with-slow-op-timer)
+    (defmacro with-slow-op-timer (name &rest body)
+      "Execute BODY, logging if duration exceeds threshold."
+      (declare (indent defun) (debug t))
+      (let ((sym (gensym "timer-")))
+        `(let ((,sym (current-time)))
+           (prog1
+               (progn ,@body)
+             (when (bound-and-true-p slow-op-reporting)
+               (let ((dur (float-time (time-subtract (current-time) ,sym))))
+                 (when (> dur (bound-and-true-p slow-op-threshold))
+                   (message "[op]: %s: %.06fs" ,name dur))))))))))
 
 (elpaish-install-register-package
  '(f
@@ -299,13 +324,12 @@ Wraps each load operation in `with-slow-op-timer' and emits individual
 registration messages without batch logging. Calls ON-DONE when complete."
   (interactive)
   (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-      (let ((stream (gen-wrap (iter-make (dolist (pkg bootstrap-mcp-packages) (iter-yield pkg))))))
-        (gen-run-async
-         (lambda (pkg done-cb)
-           (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
-             (require pkg nil t))
-           (funcall done-cb))
-         stream
+      (gen-run-async
+       (lambda (pkg done-cb)
+         (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
+           (require pkg nil t))
+         (funcall done-cb))
+       bootstrap-mcp-packages
          :concurrency 1
          :delay (or delay 0.01)
          :on-done (lambda ()
@@ -316,7 +340,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
                         (mcpkit-editing-register-tools 'emacs)))
                     (when on-done (funcall on-done)))
          :on-error (lambda (err)
-                     (message "[mcpkit]: load error: %S" err))))
+                    (message "[mcpkit]: load error: %S" err)))
     ;; Synchronous fallback
     (dolist (pkg bootstrap-mcp-packages)
       (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)

@@ -6,6 +6,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'generator)
 (require 'seq)
 (require 'subr-x)
 (require 'projectile)
@@ -131,7 +132,7 @@ cooperatively without blocking the Emacs event loop."
          (processed 0)
          (del (or delay 0.0)))
     (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-        (let ((stream (gen-wrap (iter-make (dolist (buf bufs) (iter-yield buf))))))
+        (progn
           (when (called-interactively-p 'any)
             (message "Enabling projectile-mode across %d buffers..." total))
           (gen-run-async
@@ -145,7 +146,7 @@ cooperatively without blocking the Emacs event loop."
                             (zerop (mod processed progress-interval))))
                (message "Enabling projectile-mode [%d/%d]..." processed total))
              (funcall done-cb))
-           stream
+           bufs
            :concurrency 1
            :delay del
            :on-done (lambda ()
@@ -174,7 +175,7 @@ cooperatively without blocking the Emacs event loop."
          (processed 0)
          (del (or delay 0.0)))
     (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-        (let ((stream (gen-wrap (iter-make (dolist (buf bufs) (iter-yield buf))))))
+        (progn
           (when (called-interactively-p 'any)
             (message "Disabling projectile-mode across %d buffers..." total))
           (gen-run-async
@@ -188,7 +189,7 @@ cooperatively without blocking the Emacs event loop."
                             (zerop (mod processed progress-interval))))
                (message "Disabling projectile-mode [%d/%d]..." processed total))
              (funcall done-cb))
-           stream
+           bufs
            :concurrency 1
            :delay del
            :on-done (lambda ()
@@ -222,7 +223,7 @@ generator iterators to open files sequentially with cooperative delays."
            (processed 0)
            (del (or delay 0.0)))
       (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-          (let ((stream (gen-wrap (iter-make (dolist (file files) (iter-yield file))))))
+          (progn
             (message "Loading %d buffers for project %s..." total (projectile-project-name))
             (gen-run-async
              (lambda (file done-cb)
@@ -237,7 +238,7 @@ generator iterators to open files sequentially with cooperative delays."
                               (zerop (mod processed progress-interval))))
                  (message "Loading project buffers [%d/%d]..." processed total))
                (funcall done-cb))
-             stream
+             files
              :concurrency 1
              :delay del
              :on-done (lambda ()
@@ -274,7 +275,7 @@ generator iterators to recreate buffers cooperatively."
              (processed 0)
              (del (or delay 0.0)))
         (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-            (let ((stream (gen-wrap (iter-make (dolist (saved saved-bufs) (iter-yield saved))))))
+            (progn
               (message "Restoring %d session buffers for %s incrementally..." total root)
               (gen-run-async
                (lambda (saved done-cb)
@@ -282,7 +283,7 @@ generator iterators to recreate buffers cooperatively."
                    (cl-incf recreated))
                  (cl-incf processed)
                  (funcall done-cb))
-               stream
+               saved-bufs
                :concurrency 1
                :delay del
                :on-done (lambda ()
