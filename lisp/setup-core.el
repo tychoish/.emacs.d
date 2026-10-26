@@ -16,6 +16,9 @@
 
 ;; INTERNAL
 
+(eval-when-compile
+  (require 'xtd-macro))
+
 (autoload 'hud-dispatch "hud" nil t)
 (autoload 'hud-select "hud" nil t)
 (autoload 'eglox-global-mode "eglox")
