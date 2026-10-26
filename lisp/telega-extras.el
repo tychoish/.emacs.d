@@ -20,6 +20,7 @@
 (require 'bootstrap)
 
 (declare-function resolve-plural-form "xtdlib")
+(defvar bootstrap-fallback-buffer-name "*scratch*")
 
 (require 'telega)
 (require 'telega-server)
@@ -208,6 +209,15 @@ non-interactive callers never see a prompt."
 ;;
 ;; Buffer management
 
+(defvar-keymap telega-extras-buffer-management-map
+  :name "telega-buffer-management"
+  :doc "Buffer management keymap under telega prefix C-c v d.")
+
+(keymap-set telega-extras-buffer-management-map "h" #'telega-extras-bury-chat-buffers)
+(keymap-set telega-extras-buffer-management-map "k" #'telega-extras-kill-chat-buffers)
+
+(defvaralias 'tychoish/telega-buffer-management-map 'telega-extras-buffer-management-map)
+
 (defun telega-extras-bury-chat-buffers ()
   "Bury all live telega chat buffers and replace visible ones with the root buffer."
   (interactive)
@@ -343,6 +353,13 @@ Example: (telega-extras-root-default-for-instances \\='(\"telega\" \"primary\"))
   (telega-extras-start-idle-timer)
   (telega-extras-start-logind-watch)
   (telega-extras-start-chatbuf-idle-timers)
+  (when (boundp 'telega-prefix-map)
+    (keymap-set telega-prefix-map "d" (cons "telega-buffer-management" telega-extras-buffer-management-map)))
+  (when (boundp 'telega-root-mode-map)
+    (keymap-set telega-root-mode-map "<tab>" #'telega-extras-root-cycle-next)
+    (keymap-set telega-root-mode-map "h" #'telega-extras-bury-chat-buffers)
+    (keymap-set telega-root-mode-map "C-k" #'telega-extras-kill-chat-buffers)
+    (keymap-set telega-root-mode-map "d" #'telega-extras-disconnect))
   (advice-add 'telega-notifications-msg-notify-p
               :around #'telega-extras--notify-skip-own))
 
