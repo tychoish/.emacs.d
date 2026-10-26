@@ -80,6 +80,34 @@
     (cl-letf (((symbol-function 'dbus-register-signal) nil))
       (should-not (telega-extras--logind-available-p)))))
 
+(ert-deftest telega-extras/logind-unavailable-without-dbusbind ()
+  "`telega-extras--logind-available-p' returns nil when Emacs lacks dbusbind."
+  (defvar features)
+  (let ((system-type 'gnu/linux)
+        (features (remq 'dbusbind features)))
+    (should-not (telega-extras--logind-available-p))))
+
+(ert-deftest telega-extras/logind-available-on-linux-with-dbusbind ()
+  "`telega-extras--logind-available-p' returns non-nil on Linux with dbusbind."
+  (defvar features)
+  (let ((system-type 'gnu/linux)
+        (features (cons 'dbusbind features)))
+    (cl-letf (((symbol-function 'fboundp)
+               (lambda (sym)
+                 (if (eq sym 'dbus-register-signal) t (fboundp sym)))))
+      (should (telega-extras--logind-available-p)))))
+
+(ert-deftest telega-extras/start-logind-watch-noop-without-dbusbind ()
+  "`telega-extras-start-logind-watch' does nothing when dbusbind is missing."
+  (defvar features)
+  (let ((system-type 'gnu/linux)
+        (features (remq 'dbusbind features))
+        watch-started)
+    (cl-letf (((symbol-function 'sprite-system-start-logind-watch)
+               (lambda () (setq watch-started t))))
+      (telega-extras-start-logind-watch)
+      (should-not watch-started))))
+
 (ert-deftest telega-extras/on-prepare-for-sleep-skips-when-waking ()
   "`telega-extras--on-prepare-for-sleep' does not kill telega on wake."
   (let (kill-called)

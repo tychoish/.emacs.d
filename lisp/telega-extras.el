@@ -141,6 +141,7 @@ Only has effect when `telega-extras-enable-chatbuf-idle-timers' is non-nil."
 (defun telega-extras--logind-available-p ()
   "Return non-nil when systemd-logind DBus integration is available."
   (and (eq system-type 'gnu/linux)
+       (featurep 'dbusbind)
        (fboundp 'dbus-register-signal)))
 
 (defvar telega-extras--was-live-before-sleep nil
@@ -178,15 +179,17 @@ GOING-TO-SLEEP is t when entering sleep, nil on wake."
 
 (defun telega-extras-start-logind-watch ()
   "Register sleep/wake handlers on session hooks and start watch."
-  (add-hook 'sprite-system-before-sleep-hook #'telega-extras--on-before-sleep)
-  (add-hook 'sprite-system-after-sleep-hook #'telega-extras--on-after-sleep)
-  (sprite-system-start-logind-watch))
+  (when (telega-extras--logind-available-p)
+    (add-hook 'sprite-system-before-sleep-hook #'telega-extras--on-before-sleep)
+    (add-hook 'sprite-system-after-sleep-hook #'telega-extras--on-after-sleep)
+    (sprite-system-start-logind-watch)))
 
 (defun telega-extras-stop-logind-watch ()
   "Remove sleep/wake handlers from session hooks and stop watch."
   (remove-hook 'sprite-system-before-sleep-hook #'telega-extras--on-before-sleep)
   (remove-hook 'sprite-system-after-sleep-hook #'telega-extras--on-after-sleep)
-  (sprite-system-stop-logind-watch))
+  (when (fboundp 'sprite-system-stop-logind-watch)
+    (sprite-system-stop-logind-watch)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
