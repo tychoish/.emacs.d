@@ -35,6 +35,8 @@
   (require 'cl-lib))
 
 (declare-function which-key-add-keymap-based-replacements "which-key")
+(declare-function consult-info "consult")
+(declare-function consult-man "consult")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Configuration & scheduling macros (relocated from xtd-macro.el)
@@ -311,13 +313,10 @@ binding (see `keymap-set'.)"
 (keymap-set hud-docs-map "e" #'eldoc)
 (keymap-set hud-docs-map "b" #'eldoc-doc-buffer)
 (keymap-set hud-docs-map "c" #'hyperspec-lookup)
+(keymap-set hud-docs-map "i" #'consult-info)
+(keymap-set hud-docs-map "m" #'consult-man)
+(keymap-set hud-docs-map "a" #'consult-eglot-symbols)
 
-(defvar-keymap hud-ecclectic-grep-map
-  :name "grep"
-  :doc "Grep commands under C-c g (hud-mode).")
-
-(keymap-set hud-ecclectic-grep-map "o" #'occur)
-(keymap-set hud-ecclectic-grep-map "g" #'grep)
 
 (defvar-keymap hud-ide-map
   :name "ide"
@@ -435,16 +434,6 @@ binding (see `keymap-set'.)"
   :name "whitespace"
   :doc "Whitespace commands under C-c t w (hud-mode).")
 
-(defvar-keymap hud-ecclectic-grep-project-map
-  :name "project-grep"
-  :doc "Project grep commands under C-c g p (hud-mode).")
-
-(keymap-set hud-ecclectic-grep-project-map "f" #'find-grep)
-(keymap-set hud-ecclectic-grep-project-map "a" #'projectile-ag)
-
-(defvar-keymap hud-ecclectic-rg-map
-  :name "+ripgrep"
-  :doc "Ripgrep commands under C-c g r (hud-mode).")
 
 (defvar-keymap hud-robot-agent-shell-map
   :name "agent-shell"
@@ -582,15 +571,11 @@ binding (see `keymap-set'.)"
 (keymap-set hud-display-opacity-map "-" #'hud-opacity-decrease)
 (keymap-set hud-display-opacity-map "0" #'hud-opacity-reset)
 (keymap-set hud-docs-map "h" #'help)
-(keymap-set hud-docs-map "a" #'mark-whole-buffer)
 
 (keymap-set hud-core-map "b" (cons "blogging" hud-blogging-map))
 (keymap-set hud-core-map "t" (cons "theme" hud-theme-map))
 (keymap-set hud-core-map "w" (cons "whitespace" hud-whitespace-map))
 
-(keymap-set hud-ecclectic-grep-map "p" (cons "project-grep" hud-ecclectic-grep-project-map))
-(keymap-set hud-ecclectic-grep-map "r" (cons "+ripgrep" hud-ecclectic-rg-map))
-(keymap-set hud-ecclectic-grep-map "s" (cons "consult-search" 'minaid-consult-search-map))
 
 (keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
 (hud-bind-deferred-keymap hud-ide-map "l" 'eglox 'eglox-global-map "eglot")
@@ -619,7 +604,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))
 (keymap-set hud-mode-map "C-c k" (cons "kill" hud-kill-map))
 (keymap-set hud-mode-map "C-c w" (cons "web-browser" hud-web-browser-map))
-(keymap-set hud-mode-map "C-c g" (cons "grep" hud-ecclectic-grep-map))
+(hud-bind-deferred-keymap hud-mode-map "C-c g" 'grepx 'grepx-map "grep")
 (keymap-set hud-mode-map "C-c h" (cons "docs" hud-docs-map))
 (keymap-set hud-mode-map "C-c l" (cons "ide" hud-ide-map))
 (keymap-set hud-mode-map "C-c s" (cons "shell" hud-shell-map))

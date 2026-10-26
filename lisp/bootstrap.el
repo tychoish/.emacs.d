@@ -377,8 +377,14 @@ registration messages without batch logging. Calls ON-DONE when complete."
     (nerd-icons-completion-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] minaid"
     (minaid-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] delight"
-    (require 'delight)))
+  (with-slow-op-timer "<bootstrap> [modules] grepx"
+    (require 'grepx))
+  (with-slow-op-timer "<bootstrap> [modes] grepx"
+    (grepx-mode 1))
+  (with-slow-op-timer "<bootstrap> [modules] delight"
+    (require 'delight))
+  (with-slow-op-timer "<bootstrap> [modules] setup-project"
+    (require 'setup-project)))
 
 (add-lazy-init
  :name "<bootstrap> [modes] late batch"
