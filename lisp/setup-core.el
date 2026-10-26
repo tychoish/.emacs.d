@@ -577,7 +577,7 @@ otherwise keep replaying stale detection results."
    :model 'gpt-5.6-terra
    :api-key openai-api-key)
 
-  (gptel-set-backend-default-gemini-flash-preview)
+  (gptel-set-backend-default-gemini-flash)
   (require 'gptel-integrations)
   (gptel-mcp-mode 1))
 

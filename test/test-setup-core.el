@@ -117,6 +117,7 @@ correctly and reads from the minibuffer using the candidate's command."
                  (should (equal "make -j8" val))
                  val)))
       (should (equal "make -j8" (builder-compilation-read-command "make"))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; tychoish-mail account definition and immediate activation
 
