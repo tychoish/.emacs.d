@@ -177,57 +177,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; grep/search
-
-(use-package anzu
-  :ensure t
-  :defer t
-  :init
-  (keymap-set isearch-mode-map "C-o" #'isearch-occur)
-  (add-hook 'isearch-mode-hook #'anzu-mode)
-  (setq anzu-cons-mode-line-p nil)
-  :config
-  (seq-do #'make-variable-buffer-local
-          '(anzu--total-matched anzu--current-position anzu--state
-            anzu--cached-count anzu--cached-positions anzu--last-command
-            anzu--last-isearch-string anzu--overflow-p)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Completion & Selection Suite (Minaid)
-
-(use-package revbufs
-  :ensure t
-  :defer t
-  :config
-  (keymap-set revbufs-mode-map "C-k" #'revbufs-kill)
-  (keymap-set revbufs-mode-map "q" #'bury-buffer)
-
-  (defalias 'revbufs-kill
-    (kmacro "C-f C-f C-f C-k")))
-
-(use-package popper
-  :ensure t
-  :commands (popper-cycle popper-toggle popper-kill-latest-popup)
-  :config
-  (add-hook 'popper-mode-hook 'popper-echo-mode)
-  (setq popper-reference-buffers
-        '("\\*Messages\\*"
-          "\\*Warnings\\*"
-          "\\*Backtrace\\*"
-          "\\*Compile-Log\\*"
-          "\\*compilation\\*"
-          "\\*grep\\*"
-          "\\*xref\\*"
-          "\\*Flymake diagnostics.*\\*"
-          help-mode
-          compilation-mode))
-  (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
-  (setq popper-display-control nil)
-  (setq popper-group-function #'popper-group-by-projectile))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; version control
 
 (use-package magit
@@ -260,21 +209,6 @@
       (transient-append-suffix 'magit-gh '(-1)
         ["magit-dash"
          ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))))
-
-(use-package git-link
-  :ensure t
-  :defer t
-  :config
-  (defun ad:git-link--new-copy-to-clipboard (link)
-    "Also copy LINK to the system clipboard.
-`select-enable-clipboard' is nil, so `kill-new' (called by
-`git-link--new') only reaches the Emacs kill-ring, not the OS
-clipboard."
-    (with-temp-buffer
-      (insert link)
-      (clipboard-kill-ring-save (point-min) (point-max))))
-
-  (advice-add 'git-link--new :after #'ad:git-link--new-copy-to-clipboard))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -434,19 +368,6 @@ clipboard."
               #'ad:denote-link-ol-get-heading--org-only)
 
   (setq denote-link-description-format #'denote-dash-link-description-format))
-
-(use-package consult-notes
-  :ensure t
-  :defer t
-  :config
-  (consult-notes-denote-mode 1)
-
-  (defun ad:consult-notes--single-directory-string (fn &rest args)
-    "Let-bind `denote-directory' to a single string for the duration of FN."
-    (let ((denote-directory (denote-directories-get-common-root)))
-      (apply fn args)))
-  (advice-add 'consult-notes :around #'ad:consult-notes--single-directory-string)
-  (advice-add 'consult-notes-search-in-all-notes :around #'ad:consult-notes--single-directory-string))
 
 (use-package flyspell
   :ensure t
@@ -635,32 +556,6 @@ otherwise keep replaying stale detection results."
   (setq flycheck-go-build-install-deps nil)
   (setq flycheck-flake8-maximum-line-length 100))
 
-(use-package compile
-  :defer t
-  :defines (compilation-mode-map)
-  :commands (builder-compile)
-  :init
-  (keymap-set hud-core-map "c" #'builder-compile)
-  :config
-  (defun tychoish-compile-project-super-lint ()
-    (interactive)
-    (let* ((project-directory (projectile-project-root))
-           (options (list "VALIDATE_YAML=true"
-                          "VALIDATE_OPENAPI=true"
-                          "VALIDATE_MD=true"
-                          "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
-                          "VALIDATE_ALL_CODEBASE=true"
-                          "LINTER_RULES_PATH=."
-                          "RUN_LOCAL=true"))
-           (optstr (format "-e %s" (string-join options " -e ")))
-           (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
-      (builder-compile-project "super-lint" command-string)))
-
-  (with-eval-after-load 'rust-mode
-    (require 'rust-compile))
-
-  (setq-default compilation-save-buffers-predicate #'projectile-project-root))
-
 (use-package flycheck-aspell
   :ensure t
   :defer t
@@ -699,32 +594,6 @@ otherwise keep replaying stale detection results."
     (flycheck-remove-next-checker 'markdown-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'org-aspell-dynamic 'vale)
     (flycheck-remove-next-checker 'rst-aspell-dynamic 'vale)))
-
-(use-package cov
-  :ensure t
-  :defer t
-  :commands (cov-mode cov-turn-on cov-turn-off)
-  :config
-  (setq cov-coverage-mode 'both)
-  (setq cov-lcov-file-name "coverage/lcov.info")
-  (setq cov-coverage-file-paths '("cover" "coverage" ".")))
-
-
-(use-package dape
-  :ensure t
-  :defer t
-  :init
-  (keymap-set hud-mode-map "C-c C-d" '(dape-global-map . "dape-map"))
-  :config
-  (add-hook 'kill-emacs-hook 'dape-bakepoint-save)
-  (add-hook 'dape-start-hook #'save-all-buffers)
-  ;; (setq dape-info-hide-mode-line nil)
-  ;;
-  ;; Pulse source line (performance hit)
-  ;; (add-hook 'dape-display-source-hook #'pulse-momentary-highlight-one-line)
-  (setq dape-key-prefix (kbd "C-c C-d"))
-  (setq dape-buffer-window-arrangement 'right)
-  (setq dape-cwd-function #'projectile-project-root))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
