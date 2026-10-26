@@ -23,6 +23,9 @@
 (setq auto-revert-avoid-polling t)
 (setq auto-revert-interval 60)
 
+(setq vc-follow-symlinks t)
+(setq version-control t)
+
 (setq recentf-auto-cleanup 'never)
 (setq recentf-keep '(file-remote-p file-readable-p))
 (setq recentf-max-menu-items 100)

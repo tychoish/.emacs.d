@@ -33,6 +33,12 @@
   (setq emojify-display-style 'unicode)
   (setq emojify-point-entered-behaviour 'echo))
 
+(with-eval-after-load 'erc
+  (require 'tracking))
+
+(with-eval-after-load 'tracking
+  (setq tracking-max-mode-line-entries 3))
+
 (with-eval-after-load 'shell-maker
   (defalias 'shell-maker-map 'shell-maker-major-mode-map)
   (setq shell-maker-root-path (sprite-state-path "shell-maker")))
@@ -70,6 +76,22 @@
 (add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
+
+(with-eval-after-load 'whitespace
+  ;; TODO(): are the following settings material?
+  (setq whitespace-style
+        '(face
+          trailing
+          tabs
+          spaces
+          lines
+          newline
+          missing-newline-at-eof
+          empty
+          space-mark
+          tab-mark
+          newline-mark)))
+
 
 (defun tempel-setup-capf ()
   (setq-local completion-at-point-functions
@@ -480,6 +502,30 @@ clipboard."
   (setq dape-key-prefix (kbd "C-c C-d"))
   (setq dape-buffer-window-arrangement 'right)
   (setq dape-cwd-function #'projectile-project-root))
+
+(with-eval-after-load 'magit
+  (setq magit-module-sections-nested t)
+  (put 'magit-diff-edit-hunk-commit 'disabled nil)
+  (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
+  (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
+
+  (defvar-keymap magit-command-mode-map) ;; "/"
+  (keymap-set magit-mode-map "/" '(magit-command-mode-map . "magit-command"))
+  (keymap-set magit-status-mode-map "C-n" #'next-line)
+  (keymap-set magit-status-mode-map "C-p" #'previous-line)
+  (keymap-set magit-command-mode-map "x" '(execute-extended-magit-command . "magit-commands"))
+  (keymap-set magit-command-mode-map "m" '(execute-extended-magit-command . "(s)merge-commands"))
+
+  (when (fboundp 'hud-modeline-set-segment-action)
+    (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
+
+(with-eval-after-load 'magit-gh
+  (unless (condition-case nil
+              (transient-get-suffix 'magit-gh "g")
+            (error nil))
+    (transient-append-suffix 'magit-gh '(-1)
+      ["magit-dash"
+       ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
 
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here

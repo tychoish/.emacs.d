@@ -105,6 +105,7 @@
    gptel-mcp
    hitl
    journalctl-mode
+   magit
    magit-gh
    marginalia
    mcpkit
@@ -128,6 +129,7 @@
    telega-bot
    tempel
    tempel-collection
+   tracking
    undercover
    wgrep
    yaml-pro))
@@ -583,6 +585,12 @@ registration messages without batch logging. Calls ON-DONE when complete."
 
 (defun bootstrap-ensure-default-font ()
   (bootstrap-ensure-font "Source Code Pro" 13))
+
+(defun bootstrap-set-up-show-whitespace ()
+  (setq-local show-trailing-whitespace t))
+
+(add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
+(add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)
 
 (setq modus-themes-deuteranopia t)
 (setq modus-themes-common-palette-overrides

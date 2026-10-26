@@ -16,22 +16,10 @@
 
 ;; INTERNAL
 
-(use-package hud
-  :ensure nil
-  :defer t
-  :commands (hud-dispatch hud-select))
-
-(use-package eglox
-  :ensure nil
-  :defer t
-  :commands (eglox-mode
-	     eglox-global-mode
-	     eglox-ensure
-	     eglox-cleanup-stale-connections
-	     eglox-update-workspace
-	     eglox-code-action-inline
-	     eglox-format-for-hook
-	     eglox-organize-imports-for-hook))
+(autoload 'hud-dispatch "hud" nil t)
+(autoload 'hud-select "hud" nil t)
+(autoload 'eglox-global-mode "eglox")
+(autoload 'eglox-mode "eglox")
 
 (use-package orgx
   :ensure nil
@@ -53,11 +41,13 @@
     (require 'orgx))
   (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
   (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+
+  :config
   (add-one-shot-hook
    :name "org-install-aux-packages"
    :hook 'org-mode-hook
    :operation #'orgx--install-auxiliary-packages)
-  :config
+
   (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
   (orgx--setup-standard-capture-templates)
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
@@ -167,41 +157,6 @@
   (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications)
   (delight 'terraform-mode "tf" 'terraform-mode))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; version control
-
-(use-package magit
-  :ensure t
-  :defer t
-  :commands (magit-toplevel)
-  :config
-  (setq vc-follow-symlinks t)
-  (setq version-control t)
-  (setq magit-module-sections-nested t)
-  (put 'magit-diff-edit-hunk-commit 'disabled nil)
-  (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
-  (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
-
-  (defvar-keymap magit-command-mode-map) ;; "/"
-  (keymap-set magit-mode-map "/" '(magit-command-mode-map . "magit-command"))
-  (keymap-set magit-command-mode-map "x" '(execute-extended-magit-command . "magit-commands"))
-  (keymap-set magit-command-mode-map "m" '(execute-extended-magit-command . "(s)merge-commands"))
-
-  (keymap-set magit-status-mode-map "C-n" #'next-line)
-  (keymap-set magit-status-mode-map "C-p" #'previous-line)
-
-  (when (fboundp 'hud-modeline-set-segment-action)
-    (hud-modeline-set-segment-action 'vc #'magit-dispatch))
-
-  (with-eval-after-load 'magit-gh
-    (unless (condition-case nil
-                (transient-get-suffix 'magit-gh "g")
-              (error nil))
-      (transient-append-suffix 'magit-gh '(-1)
-        ["magit-dash"
-         ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; chat and notifications
@@ -237,13 +192,6 @@
 	(setq-default alert-default-style 'osx-notifier)
       (remove-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server)
       (unintern 'tychoish/darwin-alert-config-for-server obarray))))
-
-(use-package tracking
-  :ensure t
-  :after (:any telega erc)
-  :defer t
-  :config
-  (setq tracking-max-mode-line-entries 3))
 
 (use-package telega
   :ensure t
@@ -303,6 +251,7 @@
   (setq telega-chat--display-buffer-action
 	'((display-buffer-reuse-window display-buffer-use-some-window)))
 
+  (require 'tracking)
   (require 'telega-alert)
   (require 'telega-extras)
   (telega-extras-setup)
@@ -453,40 +402,6 @@ otherwise keep replaying stale detection results."
   (setq flyspell-timer-aux nil)
   (setq flyspell-min-buffer-size (* flyspell-guess-size flyspell-guess-slots))
   (setq flyspell-guess-indicator nil))
-
-(use-package whitespace
-  :ensure nil
-  :defer t
-  :commands (toggle-local-whitespace-cleanup)
-  :init
-  (defun bootstrap-set-up-show-whitespace ()
-    (setq-local show-trailing-whitespace t))
-
-  (add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
-  (add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)
-  :config
-  (defun toggle-local-whitespace-cleanup ()
-    "Reset the before-save hook to preven cleaning up."
-    (interactive)
-    (if (setq-local show-trailing-whitespace (not show-trailing-whitespace))
-        (progn
-          (add-hook 'before-save-hook 'whitespace-cleanup nil t)
-          (message "turned on whitespace-cleanup for '%s'" (buffer-file-name (current-buffer))))
-      (remove-hook 'before-save-hook 'whitespace-cleanup)
-      (message "turned off whitespace-cleanup for '%s'" (buffer-file-name (current-buffer)))))
-
-  (setq whitespace-style
-        '(face
-          trailing
-          tabs
-          spaces
-          lines
-          newline
-          missing-newline-at-eof
-          empty
-          space-mark
-          tab-mark
-          newline-mark)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -647,29 +562,10 @@ otherwise keep replaying stale detection results."
    :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
 
   (make-gptel-set-up-backend-functions
-   :name "gemini-flash-preview"
-   :key "f"
-   :model 'gemini-3-flash-preview
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
-
-  (make-gptel-set-up-backend-functions
-   :name "gemini-flash-lite"
-   :key "l"
-   :model 'gemini-flash-lite-latest
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
-
-  (make-gptel-set-up-backend-functions
    :name "copilot"
    :key "c"
    :model 'gpt-5-mini
    :backend (gptel-make-gh-copilot "copilot"))
-
-  (make-gptel-set-up-backend-functions
-   :name "gpt-5"
-   :key "5"
-   :model 'gpt-5
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :api-key openai-api-key)
 
   (make-gptel-set-up-backend-functions
    :name "gpt-5.6-terra"
@@ -693,7 +589,6 @@ otherwise keep replaying stale detection results."
   (keymap-set hud-robot-agent-shell-map "n" #'agent-shell-new-shell)
   (keymap-set hud-robot-agent-shell-map "e" #'agent-shell-new-temp-shell)
   (keymap-set hud-robot-agent-shell-map "w" #'agent-shell-new-worktree-shell)
-  (keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
   (keymap-set hud-robot-agent-shell-map "p" #'agent-shell-workflow-select)
   (keymap-set hud-robot-agent-shell-map "m" #'agent-shell-workflow-dispatch-menu)
   (keymap-set hud-robot-agent-shell-map "a" #'agent-shell-menu-select-action)
@@ -707,6 +602,9 @@ otherwise keep replaying stale detection results."
   (make-read-extended-command-for-prefix "agent-shell"
     :bind-map hud-robot-agent-shell-map
     :bind-key "x")
+
+  (keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
+
   (with-eval-after-load 'which-key
     (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
 
@@ -1300,7 +1198,6 @@ asynchronously via `sprite-future-then'."
   (setq agent-shell-notifications-transform-function #'identity)
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
-
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
