@@ -12,6 +12,7 @@
 (defvar hud-mode-map (make-sparse-keymap))
 (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
 (require 'setup-core)
+(require 'setup-project)
 (require 'builder)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -319,6 +320,16 @@ correctly and reads from the minibuffer using the candidate's command."
       (should gptel-use-tools)
       (should (= (length gptel-tools) 1))
       (should (equal (gptel-tool-name (car gptel-tools)) "core_test_tool")))))
+
+(ert-deftest tychoish-core/agent-shell-queue-menu-bindings ()
+  "Test that `agent-shell-queue' configures `agent-shell-menu' mode keys without error."
+  (require 'agent-shell)
+  (require 'agent-shell-queue)
+  (should (fboundp 'agent-shell-menu-dispatch))
+  (should (equal (lookup-key agent-shell-mode-map (kbd "m"))
+                 'agent-shell-menu-output-key-m))
+  (should (equal (lookup-key agent-shell-mode-map (kbd "?"))
+                 'agent-shell-menu-output-key-?)))
 
 (provide 'test-setup-core)
 ;;; test-setup-core.el ends here

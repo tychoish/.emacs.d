@@ -12,10 +12,6 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'cl-lib)
-  (require 'generator))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; INTERNAL
@@ -602,6 +598,9 @@ otherwise keep replaying stale detection results."
   (defvar anthropic-api-key nil)
   (defvar openai-api-key nil)
 
+  (eval-when-compile
+    (require 'cl-lib))
+
   (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
     (declare (indent defun) (debug (def-form form)))
 
@@ -879,6 +878,9 @@ See `tychoish/agent-shell--force-clear-busy'."
 
   (declare-function agent-shell-ui--group-header-range "agent-shell-ui")
   (declare-function agent-shell-ui--block-range "agent-shell-ui")
+
+  (eval-when-compile
+    (require 'cl-lib))
 
   (cl-defun ad:agent-shell-ui--group-children-bounded (&key group-qualified-id)
     "Reimplementation of `agent-shell-ui--group-children' that cannot spin forever."
@@ -1172,6 +1174,8 @@ asynchronously via `sprite-future-then'."
   (keymap-set hud-robot-agent-shell-map "/" #'agent-shell-queue-capture)
   (keymap-unset agent-shell-mode-map "<spc>")
 
+  (eval-when-compile
+    (require 'agent-shell-menu nil t))
   (require 'agent-shell-menu)
   (agent-shell-menu-mode-key "m" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
@@ -1187,7 +1191,7 @@ asynchronously via `sprite-future-then'."
   (agent-shell-menu-mode-key "TAB" agent-shell-ui-toggle-fragment)
   (agent-shell-menu-mode-key "q" agent-shell-queue-buffer-open)
 
-  (unbind-key "SPC" 'agent-shell-mode-map)
+  (keymap-unset agent-shell-mode-map "SPC")
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure corfu and dabbrev completion for agent-shell-queue capture/edit buffers."

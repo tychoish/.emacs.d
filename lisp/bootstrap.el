@@ -318,6 +318,8 @@ triggered directly by a keypress, still prompts normally.")
     hitl-mcp)
   "List of MCP package and feature symbols to require during bootstrap.")
 
+(setq mcpkit-default-port 'free)
+
 (cl-defun bootstrap-load-mcp-services (&key on-done (delay 0.01))
   "Require all packages in `bootstrap-mcp-packages' incrementally with `gen.el'.
 Wraps each load operation in `with-slow-op-timer' and emits individual
@@ -353,10 +355,11 @@ registration messages without batch logging. Calls ON-DONE when complete."
     (when on-done (funcall on-done))))
 
 (defun bootstrap-start-mcp-services ()
-  "Start all MCP services on the configured default port."
+  "Start all MCP services on dynamic OS-assigned free ports."
   (with-slow-op-timer "<bootstrap> [mcpkit] start-services"
+    (setq mcpkit-default-port 'free)
     (when (fboundp 'mcpkit-start-all-services)
-      (mcpkit-start-all-services))))
+      (mcpkit-start-all-services 'free))))
 
 (defun bootstrap-init-mcp-services ()
   "Initialize and start MCPKit services configured in `bootstrap-mcp-packages'."

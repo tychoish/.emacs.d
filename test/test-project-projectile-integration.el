@@ -15,6 +15,7 @@
 (require 'ert)
 (require 'project)
 (require 'projectile)
+(require 'setup-project)
 
 (cl-defmethod project-name ((project (head projectile)))
   (projectile-project-name (project-root project)))

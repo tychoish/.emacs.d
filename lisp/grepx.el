@@ -23,13 +23,17 @@
 ;;    and `grepx-search-map'.
 ;; 6. Interactive Dispatch Menu: Provides `grepx-menu' (C-c g m) via
 ;;    `annotated-completing-read'.
+;; 7. Pluggable Backend Registry: Decoupled providers for persistent and live
+;;    search with graceful degradation (deadgrep, compile-rg, grep, occur;
+;;    consult-ripgrep, acr-wizard).
 
 ;;; Code:
 
 (require 'cl-lib)
-(require 'deadgrep nil t)
-(require 'consult nil t)
-(require 'annotated-completing-read nil t)
+(require 'deadgrep)
+(require 'consult)
+(require 'annotated-completing-read)
+(require 'isearch)
 
 (defgroup grepx nil
   "Consolidated grep and search tools."
@@ -47,11 +51,83 @@
   :type 'string
   :group 'grepx)
 
+(defcustom grepx-preferred-persistent-backend nil
+  "Explicit preference for persistent backend name, overriding priority."
+  :type '(choice (const :tag "Default (Priority)" nil)
+                 (symbol :tag "Backend Name"))
+  :group 'grepx)
+
+(defcustom grepx-preferred-live-backend nil
+  "Explicit preference for live backend name, overriding priority."
+  :type '(choice (const :tag "Default (Priority)" nil)
+                 (symbol :tag "Backend Name"))
+  :group 'grepx)
+
+(defcustom grepx-ag-args "ag --vimgrep --smart-case --numbers"
+  "Command line arguments for ag live search."
+  :type 'string
+  :group 'grepx)
+
+(defcustom grepx-ugrep-args "ugrep --vimgrep --smart-case -k -j -I"
+  "Command line arguments for ugrep live search."
+  :type 'string
+  :group 'grepx)
+
 (defvar grepx-regexp-history nil
   "History list for search regular expressions.")
 
 (defvar grepx-menu-history nil
   "History list for `grepx-menu' selections.")
+
+(defvar deadgrep--search-type)
+
+(defvar grepx-backends nil
+  "List of registered Grepx backends.
+Each entry is a plist with keys:
+:name (symbol), :type (:persistent or :live), :priority (integer),
+:available-p (function returning boolean),
+:run-fn (function taking dir and query), and :description (string).")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Backend Registry API
+
+(cl-defun grepx-register-backend (name &key type priority available-p run-fn description)
+  "Register backend NAME with search attributes.
+TYPE is :persistent or :live.
+PRIORITY is an integer determining selection order.
+AVAILABLE-P is a nullary function returning non-nil when backend can run.
+RUN-FN is a binary function taking (dir query).
+DESCRIPTION is a human-readable string."
+  (let ((entry (list :name name
+                     :type type
+                     :priority (or priority 50)
+                     :available-p (or available-p (lambda () t))
+                     :run-fn run-fn
+                     :description description)))
+    (setq grepx-backends (cons entry (seq-remove (lambda (b) (eq (plist-get b :name) name))
+                                                 grepx-backends)))))
+
+(defun grepx-find-backend (type &optional name)
+  "Find backend of TYPE (:persistent or :live).
+If NAME is provided, find backend with that name.
+If preferred backend is configured for TYPE, return that backend if found.
+Otherwise, return the highest-priority available backend of TYPE."
+  (if name
+      (seq-find (lambda (b) (and (eq (plist-get b :type) type)
+                                 (eq (plist-get b :name) name)))
+                grepx-backends)
+    (let ((pref (if (eq type :persistent)
+                    grepx-preferred-persistent-backend
+                  grepx-preferred-live-backend)))
+      (or (when pref
+            (seq-find (lambda (b) (and (eq (plist-get b :type) type)
+                                       (eq (plist-get b :name) pref)))
+                      grepx-backends))
+          (let ((candidates (seq-filter (lambda (b)
+                                          (and (eq (plist-get b :type) type)
+                                               (funcall (plist-get b :available-p))))
+                                        grepx-backends)))
+            (car (seq-sort-by (lambda (b) (plist-get b :priority)) #'> candidates)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Keymaps Owned by Grepx
@@ -102,7 +178,7 @@
 
 ;; Wire root grepx-map
 (keymap-set grepx-map "o" #'occur)
-(keymap-set grepx-map "g" #'grep)
+(keymap-set grepx-map "g" #'grepx-grep)
 (keymap-set grepx-map "d" #'grepx-find)
 (keymap-set grepx-map "c" #'grepx-compile)
 (keymap-set grepx-map "m" #'grepx-menu)
@@ -123,6 +199,10 @@
     (keymap-set map "M-d" #'grepx-live-to-buffer)
     map)
   "Keymap active in minibuffer during live ripgrep sessions.")
+
+;; Install isearch bindings
+(define-key isearch-mode-map (kbd "M-s r") #'grepx-live)
+(define-key isearch-mode-map (kbd "M-s g") #'grepx-project)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Project and Context Helpers
@@ -279,7 +359,7 @@ Ensures successive invocations do not replace or hide the search buffer."
     (funcall orig-fn arg reset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Consult Integration Advice
+;;; Consult Integration Advice & Builders
 
 (defun grepx--consult-grep-wrapper (orig-fn prompt make-builder &optional dir initial)
   "Around advice configuring prompt and keymap for Consult grep family.
@@ -291,43 +371,42 @@ ORIG-FN is called with PROMPT, MAKE-BUILDER, DIR, and INITIAL."
                      (use-local-map (make-composed-keymap grepx-live-minibuffer-map (current-local-map))))))
       (funcall orig-fn prompt make-builder dir initial))))
 
+(defun grepx--ag-make-builder (paths)
+  "Create ag command line builder given PATHS."
+  (if (fboundp 'consult--build-args)
+      (let ((cmd (consult--build-args grepx-ag-args)))
+        (lambda (input)
+          (pcase-let* ((`(,arg . ,opts) (if (fboundp 'consult--command-split)
+                                            (consult--command-split input)
+                                          (cons input nil))))
+            (when (and arg (not (string-empty-p arg)))
+              (cons (append cmd (list arg) opts paths)
+                    (if (fboundp 'consult--highlight-literals)
+                        (apply-partially #'consult--highlight-literals arg nil)
+                      (lambda (_) nil)))))))
+    (lambda (input)
+      (cons (append '("ag" "--vimgrep") (list input) paths)
+            (lambda (_) nil)))))
+
+(defun grepx--ugrep-make-builder (paths)
+  "Create ugrep command line builder given PATHS."
+  (if (fboundp 'consult--build-args)
+      (let ((cmd (consult--build-args grepx-ugrep-args)))
+        (lambda (input)
+          (pcase-let* ((`(,arg . ,opts) (if (fboundp 'consult--command-split)
+                                            (consult--command-split input)
+                                          (cons input nil))))
+            (when (and arg (not (string-empty-p arg)))
+              (cons (append cmd (list arg) opts paths)
+                    (if (fboundp 'consult--highlight-literals)
+                        (apply-partially #'consult--highlight-literals arg nil)
+                      (lambda (_) nil)))))))
+    (lambda (input)
+      (cons (append '("ugrep" "--vimgrep") (list input) paths)
+            (lambda (_) nil)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Persistent Search Commands
-
-;;;###autoload
-(defun grepx-find (&optional search-term directory)
-  "Run persistent search for SEARCH-TERM in DIRECTORY (or `default-directory')."
-  (interactive)
-  (let* ((dir (or directory default-directory))
-         (term (or search-term (grepx--resolve-regexp :directory dir))))
-    (deadgrep term dir)))
-
-;;;###autoload
-(defun grepx-directory (&optional search-term directory)
-  "Run persistent search for SEARCH-TERM in DIRECTORY (prompted via ACR)."
-  (interactive)
-  (let* ((dir (or directory
-                  (if (fboundp 'annotated-completing-read-directory)
-                      (annotated-completing-read-directory)
-                    (read-directory-name "Search directory: " default-directory))))
-         (term (or search-term (grepx--resolve-regexp :directory dir))))
-    (deadgrep term dir)))
-
-;;;###autoload
-(defun grepx-project (&optional search-term)
-  "Run persistent search for SEARCH-TERM in the project root."
-  (interactive)
-  (let* ((root (or (grepx--project-root) default-directory))
-         (term (or search-term (grepx--resolve-regexp :directory root))))
-    (deadgrep term root)))
-
-;;;###autoload
-(defun grepx-merge-conflicts ()
-  "Search for git conflict markers across the project in a persistent buffer."
-  (interactive)
-  (let* ((root (or (grepx--project-root) default-directory))
-         (deadgrep--search-type 'regexp))
-    (deadgrep "^(=======$|<<<<<<<|>>>>>>>)" root)))
+;;; Search Commands
 
 ;;;###autoload
 (defun grepx-compile (&optional search-term directory)
@@ -340,8 +419,59 @@ Presents one match per line in standard `grep-mode'."
                       (shell-quote-argument term))))
     (compilation-start cmd 'grep-mode (lambda (_) (format "*rg: %s*" term)))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Secondary Search Backends
+;;;###autoload
+(defun grepx--run-acr-wizard (&optional directory initial)
+  "Two-stage interactive search wizard for DIRECTORY with query INITIAL."
+  (interactive)
+  (let* ((dir (or directory
+                  (if (fboundp 'annotated-completing-read-directory)
+                      (annotated-completing-read-directory)
+                    (read-directory-name "Search directory: " (or (grepx--project-root) default-directory)))))
+         (query (or initial
+                    (if (fboundp 'annotated-completing-read-context-from-point)
+                        (annotated-completing-read-context-from-point :prompt "Search query: ")
+                      (read-string "Search query: " (thing-at-point 'symbol))))))
+    (grepx-find query dir)))
+
+;;;###autoload
+(defun grepx-find (&optional search-term directory)
+  "Run persistent search for SEARCH-TERM in DIRECTORY (or `default-directory')."
+  (interactive)
+  (let* ((dir (or directory default-directory))
+         (term (or search-term (grepx--resolve-regexp :directory dir)))
+         (backend (grepx-find-backend :persistent)))
+    (if backend
+        (funcall (plist-get backend :run-fn) dir term)
+      (user-error "No persistent search backend available for grepx-find"))))
+
+;;;###autoload
+(defun grepx-directory (&optional search-term directory)
+  "Run persistent search for SEARCH-TERM in DIRECTORY (prompted via ACR)."
+  (interactive)
+  (let* ((dir (or directory
+                  (if (fboundp 'annotated-completing-read-directory)
+                      (annotated-completing-read-directory)
+                    (read-directory-name "Search directory: " default-directory))))
+         (term (or search-term (grepx--resolve-regexp :directory dir))))
+    (grepx-find term dir)))
+
+;;;###autoload
+(defun grepx-project (&optional search-term)
+  "Run persistent search for SEARCH-TERM in the project root."
+  (interactive)
+  (let* ((root (or (grepx--project-root) default-directory))
+         (term (or search-term (grepx--resolve-regexp :directory root))))
+    (grepx-find term root)))
+
+;;;###autoload
+(defun grepx-merge-conflicts ()
+  "Search for git conflict markers across the project in a persistent buffer."
+  (interactive)
+  (let* ((root (or (grepx--project-root) default-directory))
+         (deadgrep--search-type 'regexp))
+    (if (fboundp 'deadgrep)
+        (deadgrep "^(=======$|<<<<<<<|>>>>>>>)" root)
+      (grepx-compile "^(=======$|<<<<<<<|>>>>>>>)" root))))
 
 ;;;###autoload
 (defun grepx-ag-pwd (&optional search-term)
@@ -349,7 +479,7 @@ Presents one match per line in standard `grep-mode'."
   (interactive)
   (let ((term (or search-term (grepx--resolve-regexp :directory default-directory))))
     (if (fboundp 'ag)
-        (ag term default-directory)
+        (funcall 'ag term default-directory)
       (compilation-start (format "ag --nocolor --nogroup %s" (shell-quote-argument term))
                          'grep-mode))))
 
@@ -360,7 +490,7 @@ Presents one match per line in standard `grep-mode'."
   (let* ((root (or (grepx--project-root) default-directory))
          (term (or search-term (grepx--resolve-regexp :directory root))))
     (if (fboundp 'ag-project)
-        (ag-project term)
+        (funcall 'ag-project term)
       (compilation-start (format "ag --nocolor --nogroup %s %s"
                                  (shell-quote-argument term)
                                  (shell-quote-argument root))
@@ -389,12 +519,44 @@ Presents one match per line in standard `grep-mode'."
       (user-error "Ugrep executable not found on exec-path"))))
 
 ;;;###autoload
-(defun grepx-git-grep ()
-  "Run `vc-git-grep' in current Git repository."
+(defun grepx-git-grep (&optional dir initial)
+  "Run git-grep search in DIR with INITIAL.
+Dispatches to `consult-git-grep' if available, otherwise `vc-git-grep'."
   (interactive)
   (if (fboundp 'consult-git-grep)
-      (consult-git-grep)
-    (call-interactively #'vc-git-grep)))
+      (consult-git-grep dir initial)
+    (let ((default-directory (or dir default-directory)))
+      (if (commandp 'vc-git-grep)
+          (call-interactively 'vc-git-grep)
+        (user-error "Neither consult-git-grep nor vc-git-grep is available")))))
+
+;;;###autoload
+(defun grepx-grep (&optional dir initial)
+  "Run standard grep in DIR with INITIAL.
+Dispatches to `consult-grep' if available, otherwise `grep'."
+  (interactive)
+  (if (fboundp 'consult-grep)
+      (consult-grep dir initial)
+    (let ((default-directory (or dir default-directory)))
+      (if (and initial (not (string-empty-p initial)))
+          (grep (format "grep -nH -e %s" (shell-quote-argument initial)))
+        (call-interactively #'grep)))))
+
+;;;###autoload
+(defun grepx-consult-ag (&optional dir initial)
+  "Run interactive Ag search in DIR with INITIAL using Consult."
+  (interactive)
+  (if (fboundp 'consult--grep)
+      (consult--grep "Ag: " #'grepx--ag-make-builder dir initial)
+    (grepx-ag-pwd initial)))
+
+;;;###autoload
+(defun grepx-consult-ugrep (&optional dir initial)
+  "Run interactive Ugrep search in DIR with INITIAL using Consult."
+  (interactive)
+  (if (fboundp 'consult--grep)
+      (consult--grep "Ugrep: " #'grepx--ugrep-make-builder dir initial)
+    (grepx-ugrep-pwd initial)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Live Search & Bridging
@@ -425,7 +587,7 @@ Presents one match per line in standard `grep-mode'."
                   ""))
          (dir default-directory))
     (minibuffer-quit-recursive-edit)
-    (run-at-time 0.05 nil #'deadgrep query dir)))
+    (run-at-time 0.05 nil #'grepx-find query dir)))
 
 ;;;###autoload
 (defun grepx-live (&optional directory initial context)
@@ -442,8 +604,10 @@ prompt for the initial query using ACR context-at-point."
          (query (if (or context (and (called-interactively-p 'any) current-prefix-arg))
                     (grepx--resolve-regexp :directory dir :initial initial)
                   initial))
-         (this-command 'consult-ripgrep))
-    (consult-ripgrep dir query)))
+         (backend (grepx-find-backend :live)))
+    (if backend
+        (funcall (plist-get backend :run-fn) dir query)
+      (user-error "No live search backend available for grepx-live"))))
 
 ;;;###autoload
 (defun grepx-live-project (&optional initial context)
@@ -465,45 +629,96 @@ prompt for the initial query using ACR context-at-point."
 ;;; ACR Menu Dispatcher
 
 (defconst grepx-menu--commands
-  '(("Search (pwd)"                grepx-find            "Persistent deadgrep buffer in default-directory")
-    ("Search (directory)"          grepx-directory       "Persistent deadgrep buffer in chosen directory")
-    ("Search (project)"            grepx-project         "Persistent deadgrep buffer in project root")
-    ("Compile Grep (1 line/match)" grepx-compile         "Ripgrep in classic grep-mode buffer (one line per match)")
-    ("Git Conflict Markers"        grepx-merge-conflicts "Search for git conflict markers across project")
-    ("Live Search (dwim)"          grepx-live            "Iterative ripgrep search session")
-    ("Live Search (pwd)"           grepx-live-pwd        "Iterative ripgrep in default-directory")
-    ("Live Search (project)"       grepx-live-project    "Iterative ripgrep in project root")
-    ("Occur"                       occur                 "Search lines matching regexp in current buffer")
-    ("Standard Grep"               grep                  "Run standard grep command")
-    ("Find-Grep (recursive)"       find-grep             "Run find and grep recursively")
-    ("Deadgrep (raw)"              deadgrep              "Start raw deadgrep session")
-    ("Projectile Grep"             projectile-grep       "Run grep in current project via Projectile")
-    ("Projectile Ag"               projectile-ag         "Run silver searcher (ag) in project via Projectile")
-    ("Projectile Ripgrep"          projectile-ripgrep    "Run ripgrep in project via Projectile")
-    ("Silver Searcher (pwd)"       grepx-ag-pwd          "Run ag in default-directory")
-    ("Silver Searcher (project)"   grepx-ag-project      "Run ag in project root")
-    ("Ugrep (pwd)"                 grepx-ugrep-pwd       "Run ugrep in default-directory")
-    ("Ugrep (project)"             grepx-ugrep-project   "Run ugrep in project root")
-    ("Git Grep"                    grepx-git-grep        "Run git grep in repository")
-    ("Consult Line"                consult-line          "Search lines in current buffer")
-    ("Consult Line Multi"          consult-line-multi    "Search lines across matching buffers"))
+  '(("Search (pwd)"                "Persistent search buffer in default-directory" . grepx-find)
+    ("Search (directory)"          "Persistent search buffer in chosen directory" . grepx-directory)
+    ("Search (project)"            "Persistent search buffer in project root" . grepx-project)
+    ("Compile Grep (1 line/match)" "Ripgrep in classic grep-mode buffer (one line per match)" . grepx-compile)
+    ("Git Conflict Markers"        "Search for git conflict markers across project" . grepx-merge-conflicts)
+    ("Live Search (dwim)"          "Iterative search session" . grepx-live)
+    ("Live Search (pwd)"           "Iterative search in default-directory" . grepx-live-pwd)
+    ("Live Search (project)"       "Iterative search in project root" . grepx-live-project)
+    ("Live Search (ag)"            "Iterative silver searcher session" . grepx-consult-ag)
+    ("Live Search (ugrep)"         "Iterative ugrep session" . grepx-consult-ugrep)
+    ("Search Wizard (ACR)"         "Two-stage interactive search wizard" . grepx--run-acr-wizard)
+    ("Occur"                       "Search lines matching regexp in current buffer" . occur)
+    ("Standard Grep"               "Run standard grep command" . grepx-grep)
+    ("Find-Grep (recursive)"       "Run find and grep recursively" . find-grep)
+    ("Deadgrep (raw)"              "Start raw deadgrep session" . deadgrep)
+    ("Projectile Grep"             "Run grep in current project via Projectile" . projectile-grep)
+    ("Projectile Ag"               "Run silver searcher (ag) in project via Projectile" . projectile-ag)
+    ("Projectile Ripgrep"          "Run ripgrep in project via Projectile" . projectile-ripgrep)
+    ("Silver Searcher (pwd)"       "Run ag in default-directory" . grepx-ag-pwd)
+    ("Silver Searcher (project)"   "Run ag in project root" . grepx-ag-project)
+    ("Ugrep (pwd)"                 "Run ugrep in default-directory" . grepx-ugrep-pwd)
+    ("Ugrep (project)"             "Run ugrep in project root" . grepx-ugrep-project)
+    ("Git Grep"                    "Run git grep in repository" . grepx-git-grep)
+    ("Consult Line"                "Search lines in current buffer" . consult-line)
+    ("Consult Line Multi"          "Search lines across matching buffers" . consult-line-multi))
   "Available commands and descriptions for `grepx-menu'.")
 
 ;;;###autoload
 (defun grepx-menu ()
   "Interactively dispatch a grep or search command using ACR."
   (interactive)
-  (let* ((table (seq-map (lambda (e) (cons (car e) (nth 2 e))) grepx-menu--commands))
-         (choice (if (fboundp 'annotated-completing-read)
-                     (annotated-completing-read table
+  (let* ((choice (if (fboundp 'annotated-completing-read)
+                     (annotated-completing-read grepx-menu--commands
                                                 :prompt "Grep/Search: "
                                                 :category 'command
                                                 :history 'grepx-menu-history
                                                 :require-match t)
-                   (completing-read "Grep/Search: " (seq-map #'car grepx-menu--commands) nil t)))
-         (cmd (nth 1 (assoc choice grepx-menu--commands))))
-    (when cmd
-      (call-interactively cmd))))
+                   (completing-read "Grep/Search: " (mapcar #'car grepx-menu--commands) nil t)))
+         (target (if (fboundp 'annotated-completing-read--resolve-target)
+                     (let ((map (annotated-completing-read--to-map grepx-menu--commands)))
+                       (annotated-completing-read--resolve-target map choice))
+                   (cdr (assoc choice grepx-menu--commands)))))
+    (when (and target (commandp target))
+      (call-interactively target))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Default Backend Registrations
+
+(defun grepx--register-default-backends ()
+  "Register built-in search backends in `grepx-backends'."
+  (grepx-register-backend 'deadgrep
+    :type :persistent
+    :priority 100
+    :available-p (lambda () (featurep 'deadgrep))
+    :run-fn (lambda (dir term) (deadgrep term dir))
+    :description "Deadgrep interactive persistent search buffer")
+  (grepx-register-backend 'compile-rg
+    :type :persistent
+    :priority 80
+    :available-p (lambda () (and (executable-find "rg") t))
+    :run-fn (lambda (dir term) (grepx-compile term dir))
+    :description "Ripgrep in compilation-mode buffer")
+  (grepx-register-backend 'grep
+    :type :persistent
+    :priority 50
+    :available-p (lambda () t)
+    :run-fn (lambda (dir term)
+              (let ((default-directory (or dir default-directory)))
+                (grep (format "grep -nH -e %s" (shell-quote-argument (or term ""))))))
+    :description "Standard grep compilation buffer")
+  (grepx-register-backend 'occur
+    :type :persistent
+    :priority 30
+    :available-p (lambda () t)
+    :run-fn (lambda (_dir term) (occur (or term "")))
+    :description "In-buffer regexp search via occur")
+  (grepx-register-backend 'consult-ripgrep
+    :type :live
+    :priority 100
+    :available-p (lambda () (fboundp 'consult-ripgrep))
+    :run-fn (lambda (dir initial) (consult-ripgrep dir initial))
+    :description "Consult live interactive ripgrep")
+  (grepx-register-backend 'acr-wizard
+    :type :live
+    :priority 80
+    :available-p (lambda () t)
+    :run-fn (lambda (dir initial) (grepx--run-acr-wizard dir initial))
+    :description "Annotated completing-read search wizard"))
+
+(grepx--register-default-backends)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Grepx Global Minor Mode
@@ -515,7 +730,10 @@ prompt for the initial query using ACR context-at-point."
     (keymap-set deadgrep-mode-map "w" #'deadgrep-edit-mode))
   (when (boundp 'consult-async-map)
     (keymap-set consult-async-map "C-l" #'grepx-live-up-directory)
-    (keymap-set consult-async-map "M-d" #'grepx-live-to-buffer)))
+    (keymap-set consult-async-map "M-d" #'grepx-live-to-buffer))
+  (when (boundp 'isearch-mode-map)
+    (define-key isearch-mode-map (kbd "M-s r") #'grepx-live)
+    (define-key isearch-mode-map (kbd "M-s g") #'grepx-project)))
 
 ;;;###autoload
 (define-minor-mode grepx-mode
