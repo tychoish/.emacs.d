@@ -20,7 +20,13 @@
     (when (file-directory-p elpa-dir)
       (dolist (dir (directory-files elpa-dir t "\\`[^.]"))
         (when (file-directory-p dir)
-          (add-to-list 'load-path dir))))))
+          (add-to-list 'load-path dir)
+          (let* ((pkg-base (file-name-nondirectory dir))
+                 (pkg-name (replace-regexp-in-string "-[0-9].*\\'" "" pkg-base))
+                 (af (expand-file-name (concat pkg-name "-autoloads") dir)))
+            (when (or (file-exists-p (concat af ".el"))
+                      (file-exists-p (concat af ".elc")))
+              (load af t t))))))))
 
 ;;; Code coverage (undercover.el)
 ;;
