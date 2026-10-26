@@ -173,10 +173,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; Project / Repository Tools
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; version control
 
 (use-package magit
@@ -496,8 +492,6 @@ otherwise keep replaying stale detection results."
           tab-mark
           newline-mark)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; build/compilation support
@@ -598,8 +592,6 @@ otherwise keep replaying stale detection results."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; ROBOTS (AI) Integration
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (use-package gptel
   :ensure t
@@ -688,17 +680,7 @@ otherwise keep replaying stale detection results."
    :api-key openai-api-key)
 
   (gptel-set-backend-default-gemini-flash-preview)
-  (require 'gptel-integrations))
-
-(use-package gptel-mcp
-  :after (gptel mcpkit)
-  :commands (gptel-mcp-mode
-             gptel-mcp-setup-session
-             gptel-mcp-register-all-services
-             gptel-mcp-enable
-             gptel-mcp-disable)
-  :config
-  (setq gptel-mcp-default-services '(emacs denote))
+  (require 'gptel-integrations)
   (gptel-mcp-mode 1))
 
 (use-package agent-shell
