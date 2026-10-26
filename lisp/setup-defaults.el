@@ -128,6 +128,15 @@ Override in user/*.el to customize per machine or instance.")
     (cons 'cmake-root root)))
 
 (add-hook 'project-find-functions #'project-find-cmake-project)
+
+(cl-defmethod project-root ((project (head go-module))) (cdr project))
+
+(defun project-find-go-module (dir)
+  (when-let* ((root (or (locate-dominating-file dir "go.work")
+                        (locate-dominating-file dir "go.mod"))))
+    (cons 'go-module root)))
+
+(add-hook 'project-find-functions #'project-find-go-module)
 (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
 
 ;;; TK(...) placeholder font-lock definitions
@@ -177,6 +186,7 @@ Override in user/*.el to customize per machine or instance.")
 
 (add-to-list 'auto-mode-alist '("\\.mdwn\\'" . markdown-mode))
 (add-to-list 'auto-mode-alist '("\\.md\\'" . markdown-mode))
+(add-to-list 'auto-mode-alist '("\\.markdown\\'" . markdown-mode))
 (add-to-list 'auto-mode-alist '("\\.txt\\'" . markdown-mode))
 
 
@@ -194,6 +204,24 @@ Override in user/*.el to customize per machine or instance.")
 (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
 
 (add-to-list 'auto-mode-alist '("\\.lisp'" . lisp-mode))
+
+;; -- yaml
+(add-to-list 'auto-mode-alist '("\\.ya?ml\\'" . yaml-mode))
+(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
+
+;; -- go
+(add-to-list 'auto-mode-alist '("\\.go\\'" . go-ts-mode))
+(add-to-list 'auto-mode-alist '("/go\\.work\\'" . go-mod-ts-mode))
+(add-to-list 'auto-mode-alist '("/go\\.mod\\'" . go-mod-ts-mode))
+(add-to-list 'major-mode-remap-alist '(go-mode . go-ts-mode))
+(add-to-list 'major-mode-remap-alist '(go-mod-mode . go-mod-ts-mode))
+
+;; -- rust
+(add-to-list 'auto-mode-alist '("\\.rs\\'" . rustic-mode))
+(add-to-list 'auto-mode-alist '("/Cargo\\.lock\\'" . toml-ts-mode))
+
+;; -- python
+(add-to-list 'auto-mode-alist '("\\.py\\'" . python-ts-mode))
 
 ;; -- js/web
 (add-to-list 'auto-mode-alist '("\\.html\\'" . web-mode))
