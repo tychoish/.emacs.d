@@ -237,5 +237,160 @@ completion candidate outlives its buffer."
   (setq web-mode-enable-auto-expanding t)
   (setq web-mode-enable-css-colorization t))
 
+(with-eval-after-load 'markdown-mode
+  (font-lock-add-keywords 'markdown-mode tk-font-lock-keywords 'append)
+  (font-lock-add-keywords 'gfm-mode tk-font-lock-keywords 'append)
+  (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
+  (add-hook 'markdown-mode-hook #'turn-off-auto-fill)
+  (defun tychoish/markdown-setup-imenu ()
+    (setq imenu-generic-expression markdown-imenu-generic-expression))
+  (add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)
+
+  (defun tychoish/markdown-disable-colon-electric-indent ()
+    "Prevent `:' from triggering `markdown-indent-line', which
+resets point to column 0 outside of definition-list context."
+    (setq-local electric-indent-chars (remq ?: electric-indent-chars)))
+  (add-hook 'markdown-mode-hook #'tychoish/markdown-disable-colon-electric-indent)
+
+  (if (eq system-type 'darwin)
+      (setq markdown-command "/usr/local/bin/mmd --nosmart")
+    (setq markdown-command "/usr/bin/markdown"))
+
+  (setq markdown-imenu-generic-expression
+	'(("title"  "^\\(.*\\)[\n]=+$" 1)
+	  ("h2-"    "^\\(.*\\)[\n]-+$" 1)
+	  ("h1"	    "^# \\(.*\\)$" 1)
+	  ("h2"	    "^## \\(.*\\)$" 1)
+	  ("h3"	    "^### \\(.*\\)$" 1)
+	  ("h4"	    "^#### \\(.*\\)$" 1)
+	  ("h5"	    "^##### \\(.*\\)$" 1)
+	  ("h6"	    "^###### \\(.*\\)$" 1)
+	  ("fn"	    "^\\[^\\(.*\\)\\]" 1)))
+
+  (defun tychoish/markdown-align-tables ()
+    "Align all tables in the current buffer."
+    (interactive)
+    (save-excursion
+      (goto-char (point-min))
+      (let ((count 0))
+        (while (re-search-forward "^|" nil t)
+          (when (markdown-table-at-point-p)
+            (markdown-table-align)
+            (setq count (1+ count))
+            (goto-char (markdown-table-end))))
+        (message "Aligned %d table(s)" count))))
+
+  (defun tychoish/markdown-align-tables-in-file (file)
+    "Align all markdown tables in FILE."
+    (interactive "fMarkdown file: ")
+    (with-current-buffer (find-file-noselect file)
+      (tychoish/markdown-align-tables)
+      (save-buffer)))
+
+  (defun tychoish/markdown-align-tables-dired ()
+    "Align tables in all marked files in the current dired buffer."
+    (interactive)
+    (seq-do #'tychoish/markdown-align-tables-in-file (dired-get-marked-files))))
+
+(with-eval-after-load 'yaml-mode
+  (add-hook 'yaml-mode-hook #'yaml-pro-mode)
+  (add-hook 'yaml-mode-hook (hud-set-tab-width 2)))
+
+(with-eval-after-load 'go-ts-mode
+  (keymap-set go-ts-mode-map "C-c C-t c" #'builder-go-coverage-and-convert)
+
+  (defun tychoish/go-mode-setup ()
+    (setq-local tab-width 8)
+    (setq-local fill-column 100)
+    (setq-local compilation-error-screen-columns nil)
+    (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
+    (when (fboundp 'cov-mode)
+      (cov-mode 1)))
+
+  (defun tychoish/go-mode-setup-for-buffer (buf)
+    (with-current-buffer buf
+      (tychoish/go-mode-setup)))
+
+  (defun go-mode-set-up-all-buffers ()
+    (interactive)
+    (thread-last (buffer-list)
+		 (seq-filter (lambda (buf) (with-current-buffer buf
+					     (or (derived-mode-p 'go-ts-mode)
+						 (derived-mode-p 'go-mode)))))
+		 (mapc #'tychoish/go-mode-setup-for-buffer)))
+
+  (add-hook 'go-ts-mode-hook #'tychoish/go-mode-setup)
+  (add-hook 'go-mode-hook #'tychoish/go-mode-setup)
+
+  (let ((current-path (getenv "PATH"))
+	(gopath (getenv "GOPATH")))
+    (unless gopath
+      (setq gopath (setenv "GOPATH" (expand-file-name "~/go"))))
+    (let ((local-go-bin (expand-file-name (concat gopath "/bin"))))
+      (add-to-list 'exec-path local-go-bin)
+      (unless (string-search local-go-bin current-path)
+        (setenv "PATH" (format "%s:%s" current-path local-go-bin))))))
+
+(with-eval-after-load 'rustic
+  (defun rustic-mode-auto-save-hook ()
+    "Enable auto-saving in rustic-mode buffers."
+    (when buffer-file-name
+      (setq-local compilation-ask-about-save nil)))
+  (add-hook 'rustic-mode-hook #'rustic-mode-auto-save-hook)
+
+  (setq rust-mode-treesitter-derive t)
+  (setq rustic-lsp-client 'eglot)
+  (setq rustic-format-trigger 'on-save)
+  (setq rustic-cargo-clippy-trigger-fix 'on-compile)
+  (setq rustic-use-rust-save-some-buffers t)
+  (setq rustic-clippy-arguments "--all --all-features -- --deny warnings")
+
+  (when (executable-find "rustup")
+    (setq rustic-rustfmt-args "+nightly"))
+
+  (with-eval-after-load 'flycheck
+    (add-to-list 'flycheck-checkers 'rustic-clippy)))
+
+(with-eval-after-load 'python
+  (defun tychoish/python-setup ()
+    (setq-local python-indent-offset 4)
+    (setq-local tab-width 4)
+    (setq-local fill-column 100))
+  (add-hook 'python-ts-mode-hook #'tychoish/python-setup)
+
+  (declare-function python-indent-shift-left "python")
+  (declare-function python-indent-shift-right "python")
+
+  (defun balle-python-shift-left ()
+    (interactive)
+    (let (start end bds)
+      (if (and transient-mark-mode
+	       mark-active)
+	  (setq start (region-beginning) end (region-end))
+	(progn
+	  (setq bds (bounds-of-thing-at-point 'line))
+	  (setq start (car bds) end (cdr bds))))
+      (python-indent-shift-left start end))
+    (setq deactivate-mark nil))
+
+  (defun balle-python-shift-right ()
+    (interactive)
+    (let (start end bds)
+      (if (and transient-mark-mode
+	       mark-active)
+	  (setq start (region-beginning) end (region-end))
+	(progn
+	  (setq bds (bounds-of-thing-at-point 'line))
+	  (setq start (car bds) end (cdr bds))))
+      (python-indent-shift-right start end))
+    (setq deactivate-mark nil))
+
+  (keymap-set python-ts-mode-map "M-<left>" #'balle-python-shift-left)
+  (keymap-set python-ts-mode-map "M-<right>" #'balle-python-shift-right)
+  (when (fboundp 'font-lock-show-tabs)
+    (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs)))
+  (when (fboundp 'font-lock-width-keyword)
+    (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100))))
+
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here
