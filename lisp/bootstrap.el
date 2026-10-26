@@ -101,7 +101,14 @@
    undercover
    pkgbuild-mode
    protobuf-mode
-   ninja-mode))
+   ninja-mode
+   anzu
+   popper
+   revbufs
+   git-link
+   consult-notes
+   cov
+   dape))
 
 (elpaish-install-register-upgrade-package
  '(acp shell-maker agent-shell gptel gptel-agent gptel-mcp)
@@ -426,7 +433,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
 (add-one-shot-hook
  :name "<bootstrap> enable popper"
  :hook '(compilation-mode-hook help-mode-hook special-mode-hook)
- :form (when (boundp 'popper-mode)
+ :form (when (require 'popper nil t)
          (popper-mode +1)))
 
 (add-one-shot-hook

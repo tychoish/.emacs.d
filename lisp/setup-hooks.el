@@ -348,6 +348,22 @@ resets point to column 0 outside of definition-list context."
   (when (executable-find "rustup")
     (setq rustic-rustfmt-args "+nightly"))
 
+  (with-eval-after-load 'compile
+  (require 'rust-compile nil t)
+  (defun tychoish-compile-project-super-lint ()
+    (interactive)
+    (let* ((project-directory (projectile-project-root))
+           (options (list "VALIDATE_YAML=true"
+                          "VALIDATE_OPENAPI=true"
+                          "VALIDATE_MD=true"
+                          "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
+                          "VALIDATE_ALL_CODEBASE=true"
+                          "LINTER_RULES_PATH=."
+                          "RUN_LOCAL=true"))
+           (optstr (format "-e %s" (string-join options " -e ")))
+           (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
+      (builder-compile-project "super-lint" command-string))))
+
   (with-eval-after-load 'flycheck
     (add-to-list 'flycheck-checkers 'rustic-clippy)))
 
@@ -391,6 +407,79 @@ resets point to column 0 outside of definition-list context."
     (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs)))
   (when (fboundp 'font-lock-width-keyword)
     (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100))))
+
+;;; Search / isearch / anzu
+(keymap-set isearch-mode-map "C-o" #'isearch-occur)
+(add-hook 'isearch-mode-hook #'anzu-mode)
+(setq anzu-cons-mode-line-p nil)
+
+(with-eval-after-load 'anzu
+  (seq-do #'make-variable-buffer-local
+          '(anzu--total-matched anzu--current-position anzu--state
+            anzu--cached-count anzu--cached-positions anzu--last-command
+            anzu--last-isearch-string anzu--overflow-p)))
+
+;;; revbufs
+(with-eval-after-load 'revbufs
+  (defalias 'revbufs-kill (kmacro "C-f C-f C-f C-k"))
+  (keymap-set revbufs-mode-map "C-k" #'revbufs-kill)
+  (keymap-set revbufs-mode-map "q" #'bury-buffer))
+
+;;; popper
+(with-eval-after-load 'popper
+  (add-hook 'popper-mode-hook #'popper-echo-mode)
+  (setq popper-reference-buffers
+        '("\\*Messages\\*"
+          "\\*Warnings\\*"
+          "\\*Backtrace\\*"
+          "\\*Compile-Log\\*"
+          "\\*compilation\\*"
+          "\\*grep\\*"
+          "\\*xref\\*"
+          "\\*Flymake diagnostics.*\\*"
+          help-mode
+          compilation-mode))
+  (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
+  (setq popper-display-control nil)
+  (setq popper-group-function #'popper-group-by-projectile))
+
+;;; git-link
+(with-eval-after-load 'git-link
+  (defun ad:git-link--new-copy-to-clipboard (link)
+    "Also copy LINK to the system clipboard.
+`select-enable-clipboard' is nil, so `kill-new' (called by
+`git-link--new') only reaches the Emacs kill-ring, not the OS
+clipboard."
+    (with-temp-buffer
+      (insert link)
+      (clipboard-kill-ring-save (point-min) (point-max))))
+
+  (advice-add 'git-link--new :after #'ad:git-link--new-copy-to-clipboard))
+
+;;; consult-notes
+(with-eval-after-load 'consult-notes
+  (consult-notes-denote-mode 1)
+
+  (defun ad:consult-notes--single-directory-string (fn &rest args)
+    "Let-bind `denote-directory' to a single string for the duration of FN."
+    (let ((denote-directory (denote-directories-get-common-root)))
+      (apply fn args)))
+  (advice-add 'consult-notes :around #'ad:consult-notes--single-directory-string)
+  (advice-add 'consult-notes-search-in-all-notes :around #'ad:consult-notes--single-directory-string))
+
+;;; cov
+(with-eval-after-load 'cov
+  (setq cov-coverage-mode 'both)
+  (setq cov-lcov-file-name "coverage/lcov.info")
+  (setq cov-coverage-file-paths '("cover" "coverage" ".")))
+
+;;; dape
+(with-eval-after-load 'dape
+  (add-hook 'kill-emacs-hook #'dape-breakpoint-save)
+  (add-hook 'dape-start-hook #'save-all-buffers)
+  (setq dape-key-prefix (kbd "C-c C-d"))
+  (setq dape-buffer-window-arrangement 'right)
+  (setq dape-cwd-function #'projectile-project-root))
 
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here
