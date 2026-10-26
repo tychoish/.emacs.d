@@ -14,7 +14,8 @@
 
 (eval-when-compile
   (require 'cl-lib)
-  (require 'generator))
+  (require 'generator)
+  (require 'agent-shell-menu nil t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1172,9 +1173,9 @@ asynchronously via `sprite-future-then'."
   (keymap-set hud-robot-agent-shell-map "/" #'agent-shell-queue-capture)
   (keymap-unset agent-shell-mode-map "<spc>")
 
-  (with-eval-after-load 'agent-shell-menu
-    (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch))
-
+  (require 'agent-shell-menu)
+  (agent-shell-menu-mode-key "m" agent-shell-menu-dispatch)
+  (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key "p" agent-shell-menu-resolve-permission)
   (agent-shell-menu-mode-key "/" agent-shell-prompt-queue)
   (agent-shell-menu-mode-key "a" agent-shell-menu-select-action)
@@ -1183,7 +1184,6 @@ asynchronously via `sprite-future-then'."
   (agent-shell-menu-mode-key "f" agent-shell-menu-select-collapse)
   (agent-shell-menu-mode-key "c" agent-shell-menu-select-command)
   (agent-shell-menu-mode-key "t" agent-shell-set-session-thought-level)
-  (agent-shell-menu-mode-key "m" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key " " agent-shell-set-session-mode)
   (agent-shell-menu-mode-key "TAB" agent-shell-ui-toggle-fragment)
   (agent-shell-menu-mode-key "q" agent-shell-queue-buffer-open)
