@@ -34,8 +34,10 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'hud-mode)
+(require 'xtd-macro)
 
-(elpaish-install-packages
+(elpaish-install-register-package
  '(f
    eat
    async
@@ -51,7 +53,6 @@
    consult-flyspell
    consult-eglot
    flyspell-correct
-   mcpkit
    marginalia
    magit-gh
    yaml-pro
@@ -70,7 +71,6 @@
    denote-org
    denote-journal-capture
    denote-markdown
-   denote-sync
    denote-tree
    denote-convert
    denote-dash
@@ -96,7 +96,6 @@
    emojify
    deadgrep
    annotated-completing-read
-   builder
    org-docsgen
    undercover
    pkgbuild-mode
@@ -278,17 +277,6 @@ triggered directly by a keypress, still prompts normally.")
 
 (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
 
-;; TODO remove these after emacs 31
-(defun fixed-native--compile-async-skip-p (native--compile-async-skip-p file load selector)
-  "Hacky fix to resolve issue with native comp."
-  ;; https://emacs.stackexchange.com/questions/82010/why-is-emacs-recompiling-some-packages-on-every-startup
-  (let* ((naive-elc-file (file-name-with-extension file "elc"))
-         (elc-file (replace-regexp-in-string "\\.el\\.elc$" ".elc" naive-elc-file)))
-    (or (map-elt comp--no-native-compile elc-file)
-        (funcall native--compile-async-skip-p file load selector))))
-
-(advice-add 'native--compile-async-skip-p :around 'fixed-native--compile-async-skip-p)
-
 (autoload 'hud-modeline-mode "hud-modeline.el")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -370,33 +358,45 @@ registration messages without batch logging. Calls ON-DONE when complete."
       (repeat-mode 1)))
   (with-slow-op-timer "<bootstrap> [modes] hud-mode"
     (hud-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] denote-dash-global-mode"
-    (denote-dash-global-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] sprite-mode"
     (sprite-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] which-key"
     (which-key-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] eglox-global-mode"
     (eglox-global-mode 1))
+  (with-slow-op-timer "<bootstrap> [modes] minaid"
+    (minaid-mode 1))
+  (with-slow-op-timer "<bootstrap> [modules] delight"
+    (require 'delight)))
+
+(defun bootstrap-init-integrations ()
+  (with-slow-op-timer "<bootstrap> [modes] denote-dash-global-mode"
+    (denote-dash-global-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] builder"
     (builder-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"
     (nerd-icons-completion-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] minaid"
-    (minaid-mode 1))
+  (with-slow-op-timer "<bootstrap> [modules] setup-project"
+    (require 'setup-project))
   (with-slow-op-timer "<bootstrap> [modules] grepx"
     (require 'grepx))
   (with-slow-op-timer "<bootstrap> [modes] grepx"
-    (grepx-mode 1))
-  (with-slow-op-timer "<bootstrap> [modules] delight"
-    (require 'delight))
-  (with-slow-op-timer "<bootstrap> [modules] setup-project"
-    (require 'setup-project)))
+    (grepx-mode 1)))
 
 (add-lazy-init
  :name "<bootstrap> [modes] late batch"
  :operation 'bootstrap-init-late-enable-modes
  :delay 0.1275)
+
+(add-lazy-init
+ :name "<bootstrap> [modes] integrations"
+ :operation 'bootstrap-init-integrations
+ :delay 0.35)
+
+(add-lazy-init
+ :name "<bootstrap> elpaish ensure packages"
+ :operation (lambda () (elpaish-install-packages :async t))
+ :delay 1.5)
 
 (add-lazy-init
  :name "<bootstrap> [services] mcpkit"
@@ -418,7 +418,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
 
 (add-one-shot-hook
  :name "<bootstrap> alias mouse mode"
- :hook after-first-frame-created
+ :hook 'after-first-frame-created
  :form (unless (fboundp 'mouse-major-mode-menu)
 	 (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map)))
 
@@ -434,11 +434,12 @@ registration messages without batch logging. Calls ON-DONE when complete."
  :name "<bootstrap> enable popper"
  :hook '(compilation-mode-hook help-mode-hook special-mode-hook)
  :form (when (require 'popper nil t)
+         (require 'projectile nil t)
          (popper-mode +1)))
 
 (add-one-shot-hook
  :name "<bootstrap> auto-revert after first file"
- :hook find-file-hook
+ :hook 'find-file-hook
  :form (global-auto-revert-mode 1))
 
 (add-lazy-init
@@ -607,7 +608,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
 
 (add-one-shot-hook
  :name "<modus-themes> ensure light theme"
- :hook after-first-frame-created
+ :hook 'after-first-frame-created
  :form (bootstrap-ensure-light-theme)
  :idle-timer 0.1)
 
