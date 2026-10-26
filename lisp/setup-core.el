@@ -1,4 +1,4 @@
-;;; setup-core.el -- contains all major use-package forms -*- lexical-binding: t; -*- no-byte-compile: t; -*-
+;;; setup-core.el -- contains all major use-package forms -*- lexical-binding: t; -*-
 
 ;; Package-Requires: ((emacs "30.1"))
 
@@ -14,8 +14,7 @@
 
 (eval-when-compile
   (require 'cl-lib)
-  (require 'generator)
-  (require 'agent-shell-menu nil t))
+  (require 'generator))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
