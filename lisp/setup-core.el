@@ -55,13 +55,6 @@
   :init
   (with-eval-after-load 'ol
     (require 'orgx))
-  (keymap-set orgx-global-map "a" #'orgx-agenda-view)
-  (keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
-  (keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
-  (keymap-set orgx-global-map "j" #'orgx-capture)
-  (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
-  (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
-
   (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
   (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
   (add-one-shot-hook
@@ -71,7 +64,6 @@
   :config
   (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
   (orgx--setup-standard-capture-templates)
-  (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
   (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
 
@@ -80,28 +72,17 @@
   :defer t
   :commands (tychoish-mail-select-account
 	     tychoish-define-mail-account
-	     tychoish-mail-add-refile-rule)
-  :init
-  (keymap-set hud-mail-map "a" #'tychoish-mail-select-account))
+	     tychoish-mail-add-refile-rule))
 
 (use-package daemons-dash
   :ensure nil
   :commands (daemons-dash daemons-dash-dispatch)
-  :init
-  (keymap-set hud-core-map "s" #'daemons-dash)
   :config
   (require 'daemons-dash-config nil t))
 
 (use-package magit-dash
   :ensure t
   :defer t
-  :init
-  (keymap-set hud-magit-map "d" #'magit-dash-open)
-  (keymap-set hud-magit-map "o" #'magit-dash-open-repo)
-  (keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
-  (keymap-set hud-magit-map "w" #'magit-dash-worktree-dispatch)
-  (keymap-set hud-core-map "d" #'magit-dash-open)
-  (keymap-set hud-core-map "g" #'magit-dash-open)
   :config
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
   (setq magit-dash-gh-prune-pr-limit 50)
@@ -218,8 +199,6 @@
 (use-package revbufs
   :ensure t
   :defer t
-  :init
-  (keymap-set global-map "C-x x a" #'revbufs)
   :config
   (keymap-set revbufs-mode-map "C-k" #'revbufs-kill)
   (keymap-set revbufs-mode-map "q" #'bury-buffer)
@@ -230,10 +209,6 @@
 (use-package popper
   :ensure t
   :commands (popper-cycle popper-toggle popper-kill-latest-popup)
-  :init
-  (keymap-set global-map "C-c '" #'popper-toggle)
-  (keymap-set global-map "C-c \\" #'popper-cycle)
-  (keymap-set global-map "C-c C-'" #'popper-kill-latest-popup)
   :config
   (add-hook 'popper-mode-hook 'popper-echo-mode)
   (setq popper-reference-buffers
@@ -289,8 +264,6 @@
 (use-package git-link
   :ensure t
   :defer t
-  :init
-  (keymap-set hud-magit-map "l" #'git-link)
   :config
   (defun ad:git-link--new-copy-to-clipboard (link)
     "Also copy LINK to the system clipboard.
@@ -569,11 +542,6 @@ resets point to column 0 outside of definition-list context."
     "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
     (tychoish--flyspell-enable-idle #'flyspell-prog-mode))
 
-  (keymap-set hud-mode-map "C-c [" #'flyspell-correct-next)
-  (keymap-set hud-mode-map "C-c ]" #'flyspell-correct-previous)
-  (keymap-set hud-mode-map "M-$" #'flyspell-correct-at-point)
-  (keymap-set hud-mode-map "C-;" #'flyspell-correct-previous)
-
   (with-eval-after-load 'minaid
     (keymap-set minaid-consult-map "f" #'consult-flyspell))
 
@@ -651,10 +619,6 @@ otherwise keep replaying stale detection results."
   :init
   (defun bootstrap-set-up-show-whitespace ()
     (setq-local show-trailing-whitespace t))
-
-  (keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
-  (keymap-set hud-whitespace-map "c" #'whitespace-cleanup)
-  (keymap-set hud-whitespace-map "t" #'toggle-local-whitespace-cleanup)
 
   (add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
   (add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)
@@ -840,10 +804,8 @@ otherwise keep replaying stale detection results."
   :defines (flycheck-checkers)
   :commands (flycheck-disable-checker)
   :init
-  (keymap-set hud-mode-map "M-g f" #'flycheck-mode)
   (with-eval-after-load 'minaid
     (keymap-set minaid-consult-map "c" #'consult-flycheck))
-  (keymap-set hud-mode-map "C-c f f" #'flycheck-mode)
   :config
   (defun tychoish/flycheck-prefer-eldoc ()
     (add-hook 'eldoc-documentation-functions #'flycheck-eldoc nil t) ;; local

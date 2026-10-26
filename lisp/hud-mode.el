@@ -35,6 +35,29 @@
   (require 'cl-lib))
 
 (declare-function which-key-add-keymap-based-replacements "which-key")
+(declare-function daemons-dash "daemons-dash")
+(declare-function magit-dash-open "magit-dash")
+(declare-function magit-dash-open-repo "magit-dash")
+(declare-function magit-dash-gh-menu "magit-dash")
+(declare-function magit-dash-worktree-dispatch "magit-dash")
+(declare-function git-link "git-link")
+(declare-function tychoish-mail-select-account "setup-mail")
+(declare-function orgx-agenda-view "orgx")
+(declare-function orgx-agenda-files-reload "orgx")
+(declare-function orgx-agenda-files-open "orgx")
+(declare-function orgx-capture "orgx")
+(declare-function orgx-agenda-untagged-in-file "orgx")
+(declare-function orgx-agenda-for-file "orgx")
+(declare-function whitespace-cleanup "whitespace")
+(declare-function flyspell-correct-next "flyspell-correct")
+(declare-function flyspell-correct-previous "flyspell-correct")
+(declare-function flyspell-correct-at-point "flyspell-correct")
+(declare-function flycheck-mode "flycheck")
+(declare-function popper-toggle "popper")
+(declare-function popper-cycle "popper")
+(declare-function popper-kill-latest-popup "popper")
+(declare-function revbufs "revbufs")
+(defvar orgx-minor-mode-capture-map)
 (declare-function consult-info "consult")
 (declare-function consult-man "consult")
 
@@ -266,6 +289,9 @@ binding (see `keymap-set'.)"
 (keymap-set hud-core-map "j" #'journalctl)
 (keymap-set hud-core-map "m" #'hud-dispatch)
 (keymap-set hud-core-map "," #'hud-select)
+(keymap-set hud-core-map "s" #'daemons-dash)
+(keymap-set hud-core-map "d" #'magit-dash-open)
+(keymap-set hud-core-map "g" #'magit-dash-open)
 
 (make-read-extended-command-for-prefix "elpaish"
   :bind-key "e"
@@ -359,6 +385,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mail-map "d" #'mu4e-search-maildir)
 (keymap-set hud-mail-map "b" #'mu4e-search-bookmark)
 (keymap-set hud-mail-map "c" #'mu4e-compose-new)
+(keymap-set hud-mail-map "a" #'tychoish-mail-select-account)
 
 (defvar-keymap hud-magit-map
   :name "magit"
@@ -367,6 +394,11 @@ binding (see `keymap-set'.)"
 (keymap-set hud-magit-map "s" #'magit-status)
 (keymap-set hud-magit-map "f" #'magit-branch)
 (keymap-set hud-magit-map "b" #'magit-blame)
+(keymap-set hud-magit-map "d" #'magit-dash-open)
+(keymap-set hud-magit-map "o" #'magit-dash-open-repo)
+(keymap-set hud-magit-map "g" #'magit-dash-gh-menu)
+(keymap-set hud-magit-map "w" #'magit-dash-worktree-dispatch)
+(keymap-set hud-magit-map "l" #'git-link)
 
 (make-read-extended-command-for-prefix "magit"
   :bind-map hud-magit-map
@@ -390,6 +422,13 @@ binding (see `keymap-set'.)"
 (keymap-set orgx-global-map "4" #'org-agenda)
 (keymap-set orgx-global-map "k" #'org-capture)
 (keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
+(keymap-set orgx-global-map "a" #'orgx-agenda-view)
+(keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
+(keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
+(keymap-set orgx-global-map "j" #'orgx-capture)
+(keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
+(keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
+(keymap-set orgx-global-map "c" (cons "org-capture-commands" 'orgx-minor-mode-capture-map))
 
 ;; nested keymaps
 (defvar-keymap orgx-link-map
@@ -430,9 +469,22 @@ binding (see `keymap-set'.)"
 (keymap-set hud-theme-map "d" #'bootstrap-load-dark-theme)
 (keymap-set hud-theme-map "l" #'bootstrap-load-light-theme)
 
+(defun toggle-local-whitespace-cleanup ()
+  "Toggle whitespace cleanup on save for the current buffer."
+  (interactive)
+  (if (setq-local show-trailing-whitespace (not show-trailing-whitespace))
+      (progn
+        (add-hook 'before-save-hook #'whitespace-cleanup nil t)
+        (message "whitespace-cleanup: enabled"))
+    (remove-hook 'before-save-hook #'whitespace-cleanup t)
+    (message "whitespace-cleanup: disabled")))
+
 (defvar-keymap hud-whitespace-map
   :name "whitespace"
   :doc "Whitespace commands under C-c t w (hud-mode).")
+
+(keymap-set hud-whitespace-map "c" #'whitespace-cleanup)
+(keymap-set hud-whitespace-map "t" #'toggle-local-whitespace-cleanup)
 
 
 (defvar-keymap hud-robot-agent-shell-map
@@ -563,6 +615,18 @@ binding (see `keymap-set'.)"
 (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
 
 (keymap-set orgx-global-map "l" (cons "org-link" orgx-link-map))
+
+(keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
+(keymap-set hud-mode-map "C-c [" #'flyspell-correct-next)
+(keymap-set hud-mode-map "C-c ]" #'flyspell-correct-previous)
+(keymap-set hud-mode-map "M-$" #'flyspell-correct-at-point)
+(keymap-set hud-mode-map "C-;" #'flyspell-correct-previous)
+(keymap-set hud-mode-map "M-g f" #'flycheck-mode)
+(keymap-set hud-mode-map "C-c f f" #'flycheck-mode)
+(keymap-set hud-mode-map "C-x x a" #'revbufs)
+(keymap-set hud-mode-map "C-c '" #'popper-toggle)
+(keymap-set hud-mode-map "C-c \\" #'popper-cycle)
+(keymap-set hud-mode-map "C-c C-'" #'popper-kill-latest-popup)
 
 (keymap-set hud-blogging-map "m" #'hud-insert-date)
 (keymap-set hud-display-map "o" (cons "opacity" hud-display-opacity-map))
