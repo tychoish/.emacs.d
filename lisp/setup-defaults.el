@@ -175,9 +175,18 @@ Override in user/*.el to customize per machine or instance.")
 (add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.conf\\'" . conf-unix-mode))
 
+(add-to-list 'auto-mode-alist '("\\.mdwn\\'" . markdown-mode))
+(add-to-list 'auto-mode-alist '("\\.md\\'" . markdown-mode))
+(add-to-list 'auto-mode-alist '("\\.txt\\'" . markdown-mode))
+
+
 (add-to-list 'auto-mode-alist '("PKGBUILD\\'" . pkgbuild-mode))
 (add-to-list 'auto-mode-alist '("\\.proto\\'" . protobuf-mode))
 (add-to-list 'auto-mode-alist '("\\.ninja\\'" . ninja-mode))
+
+(add-to-list 'auto-mode-alist '("\\.tf\\'" . terraform-mode))
+(add-to-list 'auto-mode-alist '("\\.tfvars\\'" . terraform-mode))
+(add-to-list 'auto-mode-alist '("\\.tfvars\\.example\\'" . terraform-mode))
 
 (add-to-list 'auto-mode-alist '("\\.sh\\'" . bash-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
@@ -187,6 +196,15 @@ Override in user/*.el to customize per machine or instance.")
 (add-to-list 'auto-mode-alist '("\\.lisp'" . lisp-mode))
 
 ;; -- js/web
+(add-to-list 'auto-mode-alist '("\\.html\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.htm\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.as[cp]x\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.djhtml\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.jsp\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.tpl\\.php\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.js\\'" . js-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))

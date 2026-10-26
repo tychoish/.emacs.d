@@ -224,5 +224,18 @@ completion candidate outlives its buffer."
      (lambda (result)
        (message "rebuilt treesit grammars for %s" result)))))
 
+(with-eval-after-load 'terraform-mode
+  (setq terraform-format-on-save t)
+  (setq terraform-indent-level 2))
+
+(with-eval-after-load 'web-mode
+  (setq web-mode-markup-indent-offset 2)
+  (setq web-mode-code-indent-offset 2)
+  (setq web-mode-css-indent-offset 2)
+  (setq js-indent-level 2)
+  (setq web-mode-enable-auto-pairing t)
+  (setq web-mode-enable-auto-expanding t)
+  (setq web-mode-enable-css-colorization t))
+
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here

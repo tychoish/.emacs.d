@@ -15,8 +15,6 @@
 (eval-when-compile
   (require 'cl-lib)
   (require 'generator))
-(require 'cl-lib)
-(require 'generator)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -76,8 +74,6 @@
   (keymap-set orgx-global-map "c" (cons "org-capture-commands" orgx-minor-mode-capture-map))
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
   (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
-
-(require 'setup-project)
 
 (use-package setup-mail
   :ensure nil
@@ -202,80 +198,6 @@
 ;;
 ;; grep/search
 
-(use-package ripgrep
-  :ensure t
-  :defines (hud-ecclectic-rg-map)
-  :defer t
-  :init
-  ;; "C-c g r"
-  (keymap-set hud-ecclectic-rg-map "x" #'deadgrep)
-  (keymap-set hud-ecclectic-rg-map "d" #'find-ripgrep)
-  (keymap-set hud-ecclectic-rg-map "c" #'find-ripgrep-compile)
-  (keymap-set hud-ecclectic-rg-map "m" #'find-merge-conflicts)
-  (keymap-set hud-ecclectic-grep-project-map "p" #'find-ripgrep-project)
-  (defvar ripgrep-regexp-history nil)
-
-  ;; find-ripgrep -- compilation buffer wrappers
-
-  (cl-defun ripgrep-compile (&key regexp directory buffer-name)
-    (let ((compilation-buffer-name-function (lambda (&optional _) (or buffer-name (format "*%s-rg*" (projectile-project-name))))))
-      (ripgrep-regexp regexp directory)))
-
-  (cl-defun find-ripgrep--resolve-regexp (&key regexp directory)
-    (annotated-completing-read-context-from-point
-     :prompt (format "[%s]<rg>:" directory)
-     :history 'ripgrep-regexp-history
-     :initial-input regexp))
-
-  (defun find-ripgrep ()
-    "Run `rg' (ripgrep) from the system in a compile buffer with the provided regular expression."
-    (interactive)
-    (ripgrep-compile
-     :directory default-directory
-     :buffer-name (format "*%s-rg*" (file-name-nondirectory default-directory))
-     :regexp (find-ripgrep--resolve-regexp
-	      :directory default-directory)))
-
-  (defun find-ripgrep-compile (&optional initial)
-    (interactive)
-    (let ((directory (annotated-completing-read-directory)))
-      (ripgrep-compile
-       :directory directory
-       :buffer-name (format "*%s-rg*" (file-name-nondirectory (directory-file-name directory)))
-       :regexp (find-ripgrep--resolve-regexp
-		:regexp initial
-		:directory directory))))
-
-  (defun find-ripgrep-project ()
-    "Run `rg' from the system at the project root. Output is written to a compile buffer."
-    (interactive)
-    (ripgrep-compile
-     :directory (projectile-project-root)
-     :regexp (find-ripgrep--resolve-regexp
-	      :directory (projectile-project-root))))
-
-  (defun find-merge-conflicts ()
-    "Use ripgrep to identify all merge conflict artifacts"
-    (interactive)
-    (let ((root (projectile-project-root)))
-      (ripgrep-compile
-       :regexp "^(=======$|<<<<<<<|>>>>>>>)"
-       :directory root
-       :buffer-name (format "*%s-merge-conflicts*"
-                            (file-name-nondirectory (directory-file-name root))))))
-  :config
-  (setenv "RIPGREP_CONFIG_PATH" (expand-file-name "~/.ripgreprc")))
-
-(use-package wgrep
-  :ensure t
-  :defer t
-  :commands (wgrep-change-to-wgrep-mode)
-  :after (grep)
-  :init
-  (keymap-set grep-mode-map "w" #'wgrep-change-to-wgrep-mode)
-  :config
-  (setq wgrep-enable-key "w"))
-
 (use-package anzu
   :ensure t
   :defer t
@@ -292,8 +214,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Completion & Selection Suite (Minaid)
-
-(require 'minaid)
 
 (use-package revbufs
   :ensure t
@@ -909,33 +829,6 @@ otherwise keep replaying stale detection results."
   (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs))
   (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100)))
 
-(use-package terraform-mode
-  :ensure t
-  :mode ("\\.tf" "\\.tfvars" "\\.tfvars.example")
-  :config
-  (setq terraform-format-on-save t)
-  (setq terraform-indent-level 2))
-
-(use-package web-mode
-  :ensure t
-  :mode (("\\.html$" . web-mode)
-	 ("\\.htm\\'". web-mode)
-	 ("\\.html\\'". web-mode)
-	 ("\\.as[cp]x\\'" . web-mode)
-	 ("\\.djhtml\\'" . web-mode)
-	 ("\\.erb" . web-mode)
-	 ("\\.jsp\\'" . web-mode)
-	 ("\\.mustache\\'" . web-mode)
-	 ("\\.phtml\\'" . web-mode)
-	 ("\\.tpl\\.php\\'" . web-mode))
-  :config
-  (setq web-mode-markup-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
-  (setq web-mode-css-indent-offset 2)
-  (setq js-indent-level 2)
-  (setq web-mode-enable-auto-pairing t)
-  (setq web-mode-enable-auto-expanding t)
-  (setq web-mode-enable-css-colorization t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1810,15 +1703,6 @@ asynchronously via `sprite-future-then'."
   (setq agent-shell-notifications-transform-timeout-function #'identity)
   (setq agent-shell-notifications-timeout 30))
 
-
-;;; MCP Services (mcpkit)
-
-(use-package mcpkit
-  :commands (mcpkit-start-all-services
-             mcpkit-stop-all-services
-             mcpkit-restart-all-services
-             mcpkit-services-status
-             mcpkit-allocate-free-port))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
