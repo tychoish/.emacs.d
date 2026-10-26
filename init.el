@@ -120,6 +120,7 @@ Runs from `after-init-hook', after the full config has loaded."
 	(package-quickstart-refresh)))
 
     (with-slow-op-timer "<init> package activation"
+      (require 'cl-macs)
       (load package-quickstart-file t t t t))
 
     (with-slow-op-timer "<init> [local] require all"

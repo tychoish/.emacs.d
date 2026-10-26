@@ -63,76 +63,74 @@
                    (message "[op]: %s: %.06fs" ,name dur))))))))))
 
 (elpaish-install-register-package
- '(f
-   eat
+ '(agent-shell-workflow
+   annotated-completing-read
+   anzu
+   arch
    async
+   builder
    cond-let
-   uuidgen
-   popon
-   package-build
-   journalctl-mode
-   gist
-   mcpkit
-   consult-gh
+   consult-denote
+   consult-eglot
    consult-flycheck
    consult-flyspell
-   consult-eglot
-   flyspell-correct
-   marginalia
-   magit-gh
-   yaml-pro
-   tempel
-   eglot-tempel
-   eglot-test-at-point
-   tempel-collection
-   embark-consult
-   gptel-aibo
-   gptel-agent
-   gptel-mcp
-   agent-shell-workflow
-   telega-bot
-   denote-sync
-   denote-mcp
-   denote-org
-   denote-journal-capture
-   denote-markdown
-   denote-tree
+   cov
+   dape
+   deadgrep
    denote-convert
    denote-dash
+   denote-explore
+   denote-journal-capture
+   denote-markdown
+   denote-mcp
+   denote-org
    denote-review
    denote-sequence
-   denote-explore
-   builder
-   hitl
-   flycheck-eglot
-   shell-maker
-   sprite
-   arch
-   tailscale
+   denote-silo
+   denote-sync
+   denote-tree
    docker
-   slime
-   sqlite-mode-extras
+   eat
+   eglot-tempel
+   eglot-test-at-point
+   embark-consult
+   emojify
+   f
+   flycheck-eglot
+   flyspell-correct
+   gist
+   git-link
+   gptel-agent
+   gptel-aibo
+   gptel-mcp
+   hitl
+   journalctl-mode
+   magit-gh
+   marginalia
+   mcpkit
+   nerd-icons
+   nerd-icons-corfu
+   nerd-icons-dired
+   nerd-icons-xref
+   ninja-mode
    ollama
    ollama-tailnet
-   nerd-icons
-   nerd-icons-dired
-   nerd-icons-corfu
-   nerd-icons-xref
-   emojify
-   deadgrep
-   annotated-completing-read
    org-docsgen
-   undercover
+   package-build
    pkgbuild-mode
-   protobuf-mode
-   ninja-mode
-   anzu
    popper
+   protobuf-mode
    revbufs
-   git-link
-   consult-notes
-   cov
-   dape))
+   shell-maker
+   slime
+   sprite
+   tailscale
+   telega-bot
+   tempel
+   tempel-collection
+   undercover
+   wgrep
+   yaml-pro))
 
 (elpaish-install-register-upgrade-package
  '(acp shell-maker agent-shell gptel gptel-agent gptel-mcp)

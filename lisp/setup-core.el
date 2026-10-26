@@ -1175,8 +1175,7 @@ asynchronously via `sprite-future-then'."
   (keymap-unset agent-shell-mode-map "<spc>")
 
   (eval-when-compile
-    (require 'agent-shell-menu nil t))
-  (require 'agent-shell-menu)
+    (require 'agent-shell-menu))
   (agent-shell-menu-mode-key "m" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
   (agent-shell-menu-mode-key "p" agent-shell-menu-resolve-permission)
