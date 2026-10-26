@@ -11,6 +11,10 @@
 (require 'projectile)
 (require 'sprite nil t)
 
+(defvar compilation-save-buffers-predicate)
+
+(setq compilation-save-buffers-predicate #'projectile-project-root)
+
 ;;;###autoload
 (defun turn-on-projectile-mode ()
   "Enable projectile-mode with project.el integration."

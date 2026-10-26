@@ -36,6 +36,7 @@
 
 (declare-function which-key-add-keymap-based-replacements "which-key")
 (declare-function daemons-dash "daemons-dash")
+(declare-function builder-compile "builder")
 (declare-function magit-dash-open "magit-dash")
 (declare-function magit-dash-open-repo "magit-dash")
 (declare-function magit-dash-gh-menu "magit-dash")
@@ -292,6 +293,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-core-map "s" #'daemons-dash)
 (keymap-set hud-core-map "d" #'magit-dash-open)
 (keymap-set hud-core-map "g" #'magit-dash-open)
+(keymap-set hud-core-map "c" #'builder-compile)
 
 (make-read-extended-command-for-prefix "elpaish"
   :bind-key "e"
@@ -553,7 +555,6 @@ binding (see `keymap-set'.)"
   :bind-key "x"
   :bind-map hud-robot-ollama-map)
 
-
 (defvar-keymap hud-robot-ollama-tailnet-map
   :name "ollama-tailnet"
   :doc "Ollama tailnet orchestration under C-c r o t (hud-mode).")
@@ -574,6 +575,8 @@ binding (see `keymap-set'.)"
 (defvar-keymap hud-mode-map
   :name "hud"
   :doc "Global keybindings for hud-mode.")
+
+(hud-bind-deferred-keymap hud-mode-map "C-c C-d" 'dape 'dape-global-map "dape")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
