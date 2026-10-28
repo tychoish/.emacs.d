@@ -6,9 +6,11 @@
 
 ;;; Code:
 
-(require 'package)
 (require 'seq)
 (require 'map)
+(require 'cl-lib)
+
+(setq autoload-compute-prefixes nil)
 
 (setq package-archives
       '(("melpa" . "https://melpa.org/packages/")
@@ -44,47 +46,131 @@ Also ensures current ELPA directories and autoloads are loaded."
                       (file-exists-p (concat autoloads-file ".elc")))
               (load autoloads-file t t))))))))
 
-(defun bootstrap-refresh-package-quickstart ()
-  "Regenerate `package-quickstart-file' and clear the debounce timer."
+(defun bootstrap-optimize-quickstart-file (file)
+  "Transform FILE (package-quickstart.el) into a streamlined, high-speed format.
+Consolidates individual `load-path' additions into a single batched `thread-last'
+form, strips docstrings from autoload definitions, and removes definition prefixes."
+  (when (file-exists-p file)
+    (with-temp-buffer
+      (delay-mode-hooks (emacs-lisp-mode))
+      (insert-file-contents file)
+      (let ((dirs nil))
+        ;; 1. Collect directories and delete individual (add-to-list 'load-path ...) forms
+        (goto-char (point-min))
+        (while (re-search-forward "(add-to-list 'load-path (or (and load-file-name (directory-file-name (file-name-directory load-file-name))) (car load-path)))" nil t)
+          (let ((match-beg (match-beginning 0))
+                (match-end (match-end 0)))
+            (save-excursion
+              (when (re-search-backward "load-file-name \"\\([^\"]+\\)\"" nil t)
+                (push (file-name-directory (match-string 1)) dirs)))
+            (delete-region match-beg match-end)))
+
+        ;; 2. Strip definition prefixes (register-definition-prefixes ...)
+        (goto-char (point-min))
+        (while (re-search-forward "register-definition-prefixes" nil t)
+          (while (> (car (syntax-ppss)) 1)
+            (backward-up-list 1))
+          (let ((beg (point)))
+            (forward-sexp 1)
+            (when (looking-at "\n") (forward-char 1))
+            (delete-region beg (point))))
+
+        ;; 3. Strip docstrings from autoload definitions:
+        ;; Match (autoload ... \"file\" \"docstring...\") and replace \"docstring...\" with nil
+        (goto-char (point-min))
+        (while (re-search-forward "(autoload[ \t\n\r]+['#][^ \t\n\r]+[ \t\n\r]+\"[^\"]+\"[ \t\n\r]+\"" nil t)
+          (backward-char 1)
+          (let ((beg (point)))
+            (forward-sexp 1)
+            (delete-region beg (point))
+            (insert "nil")))
+
+        ;; 4. Insert consolidated, deduplicated load-path batch form at the top
+        (goto-char (point-min))
+        (forward-line 3)
+        (insert "(require 'subr-x)\n")
+        (insert "(setq load-path\n      (append (thread-last\n                  '")
+        (prin1 (nreverse (delete-dups (mapcar #'directory-file-name dirs))) (current-buffer))
+        (insert "\n                (mapcar #'expand-file-name)\n                (delete-dups))\n              load-path))\n\n")
+
+        ;; Save the optimized file
+        (write-region (point-min) (point-max) file nil 'silent)))))
+
+(defun ad:package-quickstart-refresh--optimize (orig-fn &rest args)
+  "Optimize quickstart file format and suppress bytecode compilation."
+  (cl-letf (((symbol-function 'byte-compile-file)
+             (lambda (file)
+               (bootstrap-optimize-quickstart-file file)
+               (let ((elc (concat (file-name-sans-extension file) ".elc")))
+                 (when (file-exists-p elc)
+                   (delete-file elc)))
+               file)))
+    (apply orig-fn args)))
+
+(defun bootstrap-package-quickstart-stale-p ()
+  "Return non-nil when `package-quickstart-file' is missing or older than an installed package."
+  (or (not (file-exists-p package-quickstart-file))
+      (and (file-directory-p package-user-dir)
+           (let ((quickstart-mtime (file-attribute-modification-time
+                                    (file-attributes package-quickstart-file))))
+             (seq-some (lambda (pkg-dir)
+                         (and (file-directory-p pkg-dir)
+                              (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
+                              (time-less-p quickstart-mtime
+                                           (file-attribute-modification-time (file-attributes pkg-dir)))))
+                       (directory-files package-user-dir t "\\`[^.]" t))))))
+
+(defun bootstrap-refresh-package-quickstart (&optional force)
+  "Regenerate `package-quickstart-file' and clear the debounce timer.
+When FORCE is nil, do nothing unless `bootstrap-package-quickstart-stale-p' is non-nil."
+  (interactive "P")
   (setq bootstrap--package-quickstart-refresh-timer nil)
-  (bootstrap-sync-package-load-paths)
-  (package-quickstart-refresh))
+  (when (or force (bootstrap-package-quickstart-stale-p))
+    (message "[bootstrap] package-quickstart-file is stale relative to package-user-dir; refreshing")
+    (require 'package)
+    (bootstrap-sync-package-load-paths)
+    (package-quickstart-refresh)))
 
 (defun bootstrap-flush-package-quickstart ()
   "Ensure any pending `package-quickstart-refresh' runs immediately."
   (when (timerp bootstrap--package-quickstart-refresh-timer)
     (cancel-timer bootstrap--package-quickstart-refresh-timer)
-    (bootstrap-refresh-package-quickstart)))
+    (bootstrap-refresh-package-quickstart t)))
 
 (defun ad:refresh-package-quickstart (&rest _)
   "Debounce regeneration of `package-quickstart-file' after package operations."
   (if noninteractive
-      (package-quickstart-refresh)
+      (bootstrap-refresh-package-quickstart t)
     (when (timerp bootstrap--package-quickstart-refresh-timer)
       (cancel-timer bootstrap--package-quickstart-refresh-timer))
     (setq bootstrap--package-quickstart-refresh-timer
           (run-with-idle-timer bootstrap-package-quickstart-refresh-delay
                                nil
-                               #'bootstrap-refresh-package-quickstart))))
+                               (lambda () (bootstrap-refresh-package-quickstart t))))))
 
-(seq-do (lambda (fn) (advice-add fn :after #'ad:refresh-package-quickstart))
-        '(package-install
-          package-reinstall
-          package-delete
-          package-upgrade
-          package-upgrade-all
-          package-autoremove
-          package-vc-install
-          package-vc-upgrade
-          package-vc-upgrade-all))
+(with-eval-after-load 'package
+  (seq-do (lambda (fn) (advice-add fn :after #'ad:refresh-package-quickstart))
+          '(package-install
+            package-reinstall
+            package-delete
+            package-upgrade
+            package-upgrade-all
+            package-autoremove
+            package-vc-install
+            package-vc-upgrade
+            package-vc-upgrade-all))
+  (advice-add 'package-quickstart-refresh :around #'ad:package-quickstart-refresh--optimize)
+  (add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode))
 
 (add-hook 'async-pkg-install-after-hook #'ad:refresh-package-quickstart)
-(add-hook 'package--post-download-archives-hook 'async-bytecomp-package-mode)
 (add-hook 'kill-emacs-hook #'bootstrap-flush-package-quickstart)
+
+(with-eval-after-load 'elpaish-install
+  (require 'setup-packages))
 
 ;;;; use-package packaging extensions
 
-(with-eval-after-load 'use-package-core
+(require 'use-package-core)
   (defun ad:use-package-statistics-convert--higher-precision-time (result)
     "Reformat the duration column in RESULT with higher precision.
 `use-package-statistics-convert' only reports two decimal places;
@@ -137,7 +223,7 @@ this widens it to four for finer-grained startup profiling."
                 commands)))
           `(progn
              ,@wrapper-defs
-             ,@body))))))
+             ,@body)))))
 
 ;;;; Async package installation
 

@@ -219,8 +219,6 @@ non-interactive callers never see a prompt."
 (keymap-set telega-extras-buffer-management-map "h" #'telega-extras-bury-chat-buffers)
 (keymap-set telega-extras-buffer-management-map "k" #'telega-extras-kill-chat-buffers)
 
-(defvaralias 'tychoish/telega-buffer-management-map 'telega-extras-buffer-management-map)
-
 (defun telega-extras-bury-chat-buffers ()
   "Bury all live telega chat buffers and replace visible ones with the root buffer."
   (interactive)

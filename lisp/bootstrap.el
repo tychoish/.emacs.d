@@ -62,84 +62,8 @@
                  (when (> dur (bound-and-true-p slow-op-threshold))
                    (message "[op]: %s: %.06fs" ,name dur))))))))))
 
-(elpaish-install-register-package
- '(agent-shell-workflow
-   annotated-completing-read
-   anzu
-   arch
-   async
-   builder
-   cond-let
-   consult-denote
-   consult-eglot
-   consult-flycheck
-   consult-flyspell
-   cov
-   dape
-   deadgrep
-   denote-convert
-   denote-dash
-   denote-explore
-   denote-journal-capture
-   denote-markdown
-   denote-mcp
-   denote-org
-   denote-review
-   denote-sequence
-   denote-silo
-   denote-sync
-   denote-tree
-   docker
-   eat
-   eglot-tempel
-   eglot-test-at-point
-   embark-consult
-   emojify
-   f
-   flycheck-eglot
-   flyspell-correct
-   gist
-   git-link
-   gptel-agent
-   gptel-aibo
-   gptel-mcp
-   hitl
-   journalctl-mode
-   magit
-   magit-gh
-   marginalia
-   mcpkit
-   nerd-icons
-   nerd-icons-corfu
-   nerd-icons-dired
-   nerd-icons-xref
-   ninja-mode
-   ollama
-   ollama-tailnet
-   org-docsgen
-   package-build
-   pkgbuild-mode
-   popper
-   protobuf-mode
-   revbufs
-   shell-maker
-   slime
-   sprite
-   tailscale
-   telega-bot
-   tempel
-   tempel-collection
-   tracking
-   undercover
-   wgrep
-   yaml-pro))
-
-(elpaish-install-register-upgrade-package
- '(acp shell-maker agent-shell gptel gptel-agent gptel-mcp)
- '(vertico consult corfu cape marginalia tempel orderless)
- '(magit flycheck)
- '(sprite xtdlib elpaish elpaish-keyring annotated-completing-read mcpkit gen builder)
- '(agent-shell-queue agent-shell-workflow magit-dash telega-bot ollama-tailnet arch org-docsgen tailscale eglot-test-at-point denote-sync denote-mcp denote-tree denote-convert denote-dash gptel-pup hitl))
+(autoload 'minaid-mode "minaid" "Global minor mode coordinating the consolidated Minad completion suite." t)
+(defvar setup-packages-list)
 
 
 (defvar tychoish--suppress-supersession-prompt nil
@@ -367,7 +291,8 @@ registration messages without batch logging. Calls ON-DONE when complete."
   (bootstrap-load-mcp-services
    :on-done #'bootstrap-start-mcp-services))
 
-(defun bootstrap-init-late-enable-modes ()
+(defun bootstrap-init-early-modes ()
+  "Initialize core editor UI, display modes, font, and instance persistence."
   (with-slow-op-timer "<bootstrap> [modes] set-fringe-mode"
     (set-fringe-mode '(4 . 4)))
   (with-slow-op-timer "<bootstrap> [modes] column-number-mode"
@@ -394,7 +319,11 @@ registration messages without batch logging. Calls ON-DONE when complete."
   (with-slow-op-timer "<bootstrap> [modes] minaid"
     (minaid-mode 1))
   (with-slow-op-timer "<bootstrap> [modules] delight"
-    (require 'delight)))
+    (require 'delight))
+  (with-slow-op-timer "<bootstrap> [font] ensure default font"
+    (bootstrap-ensure-default-font))
+  (with-slow-op-timer "<bootstrap> [persistence] emacs-instance-persistence"
+    (bootstrap-set-up-emacs-instance-persistence)))
 
 (defun bootstrap-init-integrations ()
   (with-slow-op-timer "<bootstrap> [modes] denote-dash-global-mode"
@@ -410,30 +339,63 @@ registration messages without batch logging. Calls ON-DONE when complete."
   (with-slow-op-timer "<bootstrap> [modes] grepx"
     (grepx-mode 1)))
 
-(add-lazy-init
- :name "<bootstrap> [modes] late batch"
- :operation 'bootstrap-init-late-enable-modes
- :delay 0.1275)
+(defun bootstrap-init-late-services ()
+  "Initialize secondary tool integrations, services, and background maintenance."
+  (with-slow-op-timer "<bootstrap> [integrations] all"
+    (bootstrap-init-integrations))
+  (with-slow-op-timer "<bootstrap> [desktop] restore"
+    (bootstrap-desktop-read-init))
+  (with-slow-op-timer "<bootstrap> [services] mcpkit"
+    (bootstrap-init-mcp-services))
+  (with-slow-op-timer "<bootstrap> [packages] elpaish ensure"
+    (require 'setup-packages)
+    (elpaish-install-packages setup-packages-list :async t))
+  (with-slow-op-timer "<bootstrap> [packages] quickstart check"
+    (bootstrap-refresh-package-quickstart)))
 
 (add-lazy-init
- :name "<bootstrap> [modes] integrations"
- :operation 'bootstrap-init-integrations
- :delay 0.35)
+ :name "<bootstrap> [early] ui & modes"
+ :operation 'bootstrap-init-early-modes
+ :delay 0.1)
 
 (add-lazy-init
- :name "<bootstrap> elpaish ensure packages"
- :operation (lambda () (elpaish-install-packages :async t))
+ :name "<bootstrap> [late] integrations & services"
+ :operation 'bootstrap-init-late-services
  :delay 1.5)
 
-(add-lazy-init
- :name "<bootstrap> [services] mcpkit"
- :operation 'bootstrap-init-mcp-services
- :delay 0.3)
-
 (add-one-shot-hook
- :name "<bootstrap> hud-modeline"
- :form (run-with-idle-timer 0.1 nil #'hud-modeline-mode 1)
- :hook 'after-first-frame-created)
+ :name "<bootstrap> first-frame setup"
+ :hook 'after-first-frame-created
+ :form (progn
+         (unless (fboundp 'mouse-major-mode-menu)
+           (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map))
+         (add-to-list 'display-buffer-alist
+                      '(hud--readonly-file-buffer-p
+                        (hud--reuse-readonly-file-window
+                         display-buffer-use-some-window)))
+         (hud-modeline-mode 1)
+         (bootstrap-ensure-light-theme)))
+
+(defvar tychoish/startup-complete-time nil
+  "Timestamp when startup finished.")
+
+(defun tychoish/startup-report-timing ()
+  (let ((startup-time (float-time (time-subtract tychoish/startup-complete-time before-init-time)))
+	(init-time (float-time (time-subtract after-init-time before-init-time)))
+	(wall-time (float-time (time-since before-init-time))))
+    (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
+    (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
+    (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
+    (when (fboundp 'alert)
+      (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
+	     :title (format "emacs-%s" sprite-instance-id)))))
+
+(defun tychoish/startup-mark-complete ()
+  (unless tychoish/startup-complete-time
+    (setq tychoish/startup-complete-time (current-time))))
+
+(add-hook 'emacs-startup-hook #'tychoish/startup-mark-complete 99)
+(add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'tychoish/startup-report-timing 100)
 
 (add-one-shot-hook
  :name "<bootstrap> set-custom-file"
@@ -441,21 +403,6 @@ registration messages without batch logging. Calls ON-DONE when complete."
  :form (setq custom-file (sprite-state-path "custom.el"))
  ;; Depth below 0: must run before `package--save-selected-packages'.
  :depth -90)
-
-
-(add-one-shot-hook
- :name "<bootstrap> alias mouse mode"
- :hook 'after-first-frame-created
- :form (unless (fboundp 'mouse-major-mode-menu)
-	 (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map)))
-
-(add-one-shot-hook
- :name "<bootstrap> display-buffer-alist"
- :hook 'after-first-frame-created
- :form (add-to-list 'display-buffer-alist
-		    '(hud--readonly-file-buffer-p
-		      (hud--reuse-readonly-file-window
-                       display-buffer-use-some-window))))
 
 (add-one-shot-hook
  :name "<bootstrap> enable popper"
@@ -468,21 +415,6 @@ registration messages without batch logging. Calls ON-DONE when complete."
  :name "<bootstrap> auto-revert after first file"
  :hook 'find-file-hook
  :form (global-auto-revert-mode 1))
-
-(add-lazy-init
- :name "<bootstrap> ensure default font"
- :operation 'bootstrap-ensure-default-font
- :delay 0.075)
-
-(add-lazy-init
- :name "restore-desktop"
- :operation 'bootstrap-desktop-read-init
- :delay 0.5)
-
-(add-lazy-init
- :name "emacs-instance-persistence"
- :operation 'bootstrap-set-up-emacs-instance-persistence
- :delay 0.25)
 
 (add-one-shot-hook
  :name "ssh-agent"
@@ -638,12 +570,6 @@ registration messages without batch logging. Calls ON-DONE when complete."
                           :weight 'bold))))
 
 (add-hook 'enable-theme-functions #'tk-faces-setup)
-
-(add-one-shot-hook
- :name "<modus-themes> ensure light theme"
- :hook 'after-first-frame-created
- :form (bootstrap-ensure-light-theme)
- :idle-timer 0.1)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -50,6 +50,7 @@
 (setq truncate-lines t)
 (setq use-dialog-box nil)
 (setq use-short-answers t)
+(setq ollama-tailnet-fallback-strategy :auto-local)
 (setq load-prefer-newer t)
 (setq indent-tabs-mode nil) ; (setq tab-width 4)
 (setq shell-command-dont-erase-buffer 'end-last-out)

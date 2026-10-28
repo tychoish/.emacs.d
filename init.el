@@ -12,8 +12,6 @@
   (eval-when-compile
     (require 'subr-x))
 
-  (defvar tychoish/startup-complete-time nil
-    "Timestamp when startup finished.")
   (defvar sprite-instance-id nil
     "Name of this Emacs instance, e.g. `work', `personal', `hud'.")
 
@@ -79,49 +77,19 @@ Runs from `after-init-hook', after the full config has loaded."
   (add-hook 'after-init-hook #'cli/org-exec-run)
   (add-hook 'after-init-hook #'cli/org-exec-dir-run)
 
-  (defun tychoish/startup-report-timing ()
-    (let ((startup-time (float-time (time-subtract tychoish/startup-complete-time before-init-time)))
-	  (init-time (float-time (time-subtract after-init-time before-init-time)))
-	  (wall-time (float-time (time-since before-init-time))))
-      (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
-      (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
-      (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
-      (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
-	     :title (format "emacs-%s" sprite-instance-id))))
-
-  (defun tychoish/startup-mark-complete ()
-    (unless tychoish/startup-complete-time
-      (setq tychoish/startup-complete-time (current-time))))
-
-  (add-hook 'emacs-startup-hook 'tychoish/startup-mark-complete 99)
-  (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) 'tychoish/startup-report-timing 100)
-
-  (defun bootstrap-package-quickstart-stale-p ()
-    "Return non-nil when `package-quickstart-file' is missing or older than an installed package."
-    (or (not (file-exists-p package-quickstart-file))
-        (and (file-directory-p package-user-dir)
-             (let ((quickstart-mtime (file-attribute-modification-time
-                                       (file-attributes package-quickstart-file))))
-               (seq-some (lambda (pkg-dir)
-                           (and (file-directory-p pkg-dir)
-                                (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
-                                (time-less-p quickstart-mtime
-                                             (file-attribute-modification-time (file-attributes pkg-dir)))))
-                         (directory-files package-user-dir t "\\`[^.]" t))))))
 
   (with-slow-op-timer "<init> package all"
-    (with-slow-op-timer "<init> package require"
-      (require 'package))
+    (with-slow-op-timer "<init> require cl-macs"
+      (require 'cl-macs))
 
-    (with-slow-op-timer "<init> package quickstart"
-      (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
-      (when (bootstrap-package-quickstart-stale-p)
-	(message "[bootstrap] package-quickstart-file is stale relative to package-user-dir; refreshing")
-	(package-quickstart-refresh)))
+    (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
 
-    (with-slow-op-timer "<init> package activation"
-      (require 'cl-macs)
-      (load package-quickstart-file t t t t))
+    (if (file-exists-p package-quickstart-file)
+	(with-slow-op-timer "<init> package quickstart"
+          (load package-quickstart-file t t t t))
+      (with-slow-op-timer "<init> package activation"
+        (require 'package)
+        (package-activate-all)))
 
     (with-slow-op-timer "<init> [local] require all"
       (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
@@ -130,10 +98,20 @@ Runs from `after-init-hook', after the full config has loaded."
 	(require 'setup-package-defaults))
 
       (with-slow-op-timer "<init> [local] install elpaish"
-	(unless (package-installed-p 'elpaish) (package-install 'elpaish)))
+	(unless (package-installed-p 'elpaish)
+	  (package-install 'elpaish)))
 
       (with-slow-op-timer "<init> [local] install sprite xtdlib"
-	(elpaish-install-packages '(sprite xtdlib)))
+	(unless (and (package-installed-p 'sprite)
+	             (package-installed-p 'xtdlib))
+	  (elpaish-install-packages '(sprite xtdlib))))
+
+      (unless (file-exists-p package-quickstart-file)
+        (require 'setup-packages)
+        (with-slow-op-timer "<init> [cold] install all configured packages"
+          (elpaish-install-packages setup-packages-list :sync t))
+        (with-slow-op-timer "<init> [cold] generate package quickstart"
+          (bootstrap-refresh-package-quickstart t)))
 
       (with-slow-op-timer "<init> [local] require sprite"
 	(require 'sprite))
@@ -152,9 +130,6 @@ Runs from `after-init-hook', after the full config has loaded."
 
       (with-slow-op-timer "<init> [local] require setup-hooks.el"
 	(require 'setup-hooks))
-
-      (with-slow-op-timer "<init> [local] require minaid.el"
-	(require 'minaid))
 
       ;; remaining use-package declarations.
       (with-slow-op-timer "<init> [local] require setup-core.el"

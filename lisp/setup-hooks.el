@@ -77,6 +77,9 @@
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
 
+(add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
+(add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+
 (with-eval-after-load 'whitespace
   ;; TODO(): are the following settings material?
   (setq whitespace-style
@@ -91,7 +94,6 @@
           space-mark
           tab-mark
           newline-mark)))
-
 
 (defun tempel-setup-capf ()
   (setq-local completion-at-point-functions
@@ -153,6 +155,20 @@ completion candidate outlives its buffer."
   (make-read-extended-command-for-prefix "denote"
     :bind-map denote-dash-global-map
     :bind-key "x"))
+
+(with-eval-after-load 'ol
+  (require 'orgx))
+
+(with-eval-after-load 'orgx
+  (add-one-shot-hook
+   :name "org-install-aux-packages"
+   :hook 'org-mode-hook
+   :operation #'orgx--install-auxiliary-packages)
+
+  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
+  (orgx--setup-standard-capture-templates)
+  (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
+  (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
 
 (with-eval-after-load 'flycheck-eglot
   (setq-default flycheck-eglot-exclusive nil)
@@ -344,6 +360,7 @@ resets point to column 0 outside of definition-list context."
   (add-hook 'go-ts-mode-hook #'tychoish/go-mode-setup)
   (add-hook 'go-mode-hook #'tychoish/go-mode-setup)
 
+  (setenv "GOSUMDB" "sum.golang.org")
   (let ((current-path (getenv "PATH"))
 	(gopath (getenv "GOPATH")))
     (unless gopath

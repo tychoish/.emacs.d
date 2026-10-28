@@ -6,7 +6,7 @@
 
 ;;; Code:
 (defmacro with-gc-suppressed (&rest body)
-  `(let ((gc-cons-threshold 800000000000000)
+  `(let ((gc-cons-threshold 8000000000000000)
          (gc-cons-percentage 1.0))
      (prog1
 	 (progn ,@body)
@@ -48,6 +48,7 @@ call in the main synchronous init path would go unmeasured.")
 (setq package-quickstart t)
 (setq package-enable-at-startup nil)
 (setq use-package-expand-minimally t)
+(setq autoload-compute-prefixes nil)
 
 (push '(tool-bar-lines . 0) default-frame-alist)
 (push '(menu-bar-lines . 0) default-frame-alist)

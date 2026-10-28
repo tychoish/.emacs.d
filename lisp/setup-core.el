@@ -24,44 +24,13 @@
 (autoload 'eglox-global-mode "eglox")
 (autoload 'eglox-mode "eglox")
 
-(use-package orgx
-  :ensure nil
-  :commands (orgx-capture
-	     orgx-agenda-view
-	     orgx-agenda-files-open
-	     orgx-agenda-files-reload
-	     orgx-agenda-untagged-in-file
-	     orgx-agenda-for-file
-	     orgx-minor-mode-turn-on
-	     orgx-agenda-minor-mode-turn-on
-	     orgx--install-auxiliary-packages
-	     ad:org-agenda--open-files
-	     ad:org-agenda-redo
-	     orgx-link-github-line-support
-	     orgx-open-custom-id-slug-fallback)
-  :init
-  (with-eval-after-load 'ol
-    (require 'orgx))
-  (add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
-  (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+(autoload 'tychoish-mail-select-account "setup-mail" nil t)
+(autoload 'tychoish-define-mail-account "setup-mail")
+(autoload 'tychoish-mail-add-refile-rule "setup-mail")
 
-  :config
-  (add-one-shot-hook
-   :name "org-install-aux-packages"
-   :hook 'org-mode-hook
-   :operation #'orgx--install-auxiliary-packages)
-
-  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
-  (orgx--setup-standard-capture-templates)
-  (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
-  (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
-
-(use-package setup-mail
-  :ensure nil
-  :defer t
-  :commands (tychoish-mail-select-account
-	     tychoish-define-mail-account
-	     tychoish-mail-add-refile-rule))
+(autoload 'orgx-capture "orgx" nil t)
+(autoload 'orgx-agenda-view "orgx" nil t)
+(autoload 'orgx-agenda-files-open "orgx" nil t)
 
 (use-package daemons-dash
   :ensure nil
