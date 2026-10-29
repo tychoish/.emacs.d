@@ -336,6 +336,10 @@ registration messages without batch logging. Calls ON-DONE when complete."
     (require 'setup-project))
   (with-slow-op-timer "<bootstrap> [modules] grepx"
     (require 'grepx))
+  (with-slow-op-timer "<bootstrap> [modules] projectile"
+    (require 'projectile))
+  (with-slow-op-timer "<bootstrap> [modules] popper"
+    (popper-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] grepx"
     (grepx-mode 1)))
 
@@ -403,13 +407,6 @@ registration messages without batch logging. Calls ON-DONE when complete."
  :form (setq custom-file (sprite-state-path "custom.el"))
  ;; Depth below 0: must run before `package--save-selected-packages'.
  :depth -90)
-
-(add-one-shot-hook
- :name "<bootstrap> enable popper"
- :hook '(compilation-mode-hook help-mode-hook special-mode-hook)
- :form (when (require 'popper nil t)
-         (require 'projectile nil t)
-         (popper-mode +1)))
 
 (add-one-shot-hook
  :name "<bootstrap> auto-revert after first file"

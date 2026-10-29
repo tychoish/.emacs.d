@@ -131,29 +131,10 @@
     xtdlib)
   "List of packages to keep upgraded to latest via elpaish.")
 
-(defun setup-packages-register ()
-  "Register packages with elpaish, supporting both current and legacy APIs."
-  (cond
-   ((fboundp 'elpaish-install-register-package)
-    (elpaish-install-register-package setup-packages-list)
-    (when (fboundp 'elpaish-install-register-upgrade-package)
-      (elpaish-install-register-upgrade-package setup-packages-upgrade-list)))
-   (t
-    (when (boundp 'elpaish-install-packages-list)
-      (setq elpaish-install-packages-list
-            (delete-dups (append setup-packages-list elpaish-install-packages-list))))
-    (when (boundp 'elpaish-install-bootstrap-packages-list)
-      (setq elpaish-install-bootstrap-packages-list
-            (delete-dups (append setup-packages-list elpaish-install-bootstrap-packages-list))))
-    (when (boundp 'elpaish-install-upgrade-packages-list)
-      (setq elpaish-install-upgrade-packages-list
-            (delete-dups (append setup-packages-upgrade-list elpaish-install-upgrade-packages-list)))))))
-
 ;; Auto-register whenever elpaish-install is loaded or if already loaded
-(if (featurep 'elpaish-install)
-    (setup-packages-register)
-  (with-eval-after-load 'elpaish-install
-    (setup-packages-register)))
+(with-eval-after-load 'elpaish-install
+  (elpaish-install-register-package setup-packages-list)
+  (elpaish-install-register-upgrade-package setup-packages-upgrade-list))
 
 (provide 'setup-packages)
 ;;; setup-packages.el ends here
