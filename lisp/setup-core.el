@@ -19,6 +19,12 @@
 (eval-when-compile
   (require 'xtd-macro))
 
+(defvar local-notes-directory nil
+  "Directory where notes (org, roam, deft, etc.) are stored.")
+
+(defvar user-org-directories nil
+  "Additional directories that may contain org files.")
+
 (autoload 'hud-dispatch "hud" nil t)
 (autoload 'hud-select "hud" nil t)
 (autoload 'eglox-global-mode "eglox")
@@ -255,7 +261,7 @@
   (setq denote-save-buffers t)
   (setq denote-prompts '(title keywords file-type))
   (setq denote-journal-title-format nil)
-  (setq denote-journal-directory (file-name-concat local-notes-directory "denote" "journal"))
+  (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal"))
   (setq denote-sequence-scheme 'alphanumeric)
   (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
   (setq denote-explore-network-format "graphviz")

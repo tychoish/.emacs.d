@@ -437,6 +437,12 @@ registration messages without batch logging. Calls ON-DONE when complete."
     (bootstrap--load-user-file
      (file-name-sans-extension (file-name-nondirectory file)))))
 
+(defvar local-notes-directory nil
+  "Directory where notes (org, roam, deft, etc.) are stored.")
+
+(defvar user-org-directories nil
+  "Additional directories that may contain org files.")
+
 (defun bootstrap-set-notes-directory (&optional path)
   (when path
     (setq local-notes-directory (expand-file-name path)))
