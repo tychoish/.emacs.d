@@ -10,6 +10,9 @@
 (require 'map)
 (require 'cl-lib)
 
+(defvar autoload-compute-prefixes)
+(defvar sprite-instance-id)
+
 (setq autoload-compute-prefixes nil)
 
 (setq package-archives
@@ -47,9 +50,9 @@ Also ensures current ELPA directories and autoloads are loaded."
               (load autoloads-file t t))))))))
 
 (defun bootstrap-optimize-quickstart-file (file)
-  "Transform FILE (package-quickstart.el) into a streamlined, high-speed format.
-Consolidates individual `load-path' additions into a single batched `thread-last'
-form, strips docstrings from autoload definitions, and removes definition prefixes."
+  "Transform FILE (package-quickstart.el) into a streamlined format.
+Consolidates `load-path' additions into a batched `thread-last' form, strips
+docstrings from autoload definitions, and removes definition prefixes."
   (when (file-exists-p file)
     (with-temp-buffer
       (delay-mode-hooks (emacs-lisp-mode))
@@ -108,7 +111,7 @@ form, strips docstrings from autoload definitions, and removes definition prefix
     (apply orig-fn args)))
 
 (defun bootstrap-package-quickstart-stale-p ()
-  "Return non-nil when `package-quickstart-file' is missing or older than an installed package."
+  "Return non-nil when quickstart file is missing or older than a package."
   (or (not (file-exists-p package-quickstart-file))
       (and (file-directory-p package-user-dir)
            (let ((quickstart-mtime (file-attribute-modification-time
@@ -122,7 +125,7 @@ form, strips docstrings from autoload definitions, and removes definition prefix
 
 (defun bootstrap-refresh-package-quickstart (&optional force)
   "Regenerate `package-quickstart-file' and clear the debounce timer.
-When FORCE is nil, do nothing unless `bootstrap-package-quickstart-stale-p' is non-nil."
+When FORCE is nil, do nothing unless quickstart file is stale."
   (interactive "P")
   (setq bootstrap--package-quickstart-refresh-timer nil)
   (when (or force (bootstrap-package-quickstart-stale-p))
@@ -231,7 +234,7 @@ this widens it to four for finer-grained startup profiling."
 
 (defun async-package-operation (op pkgs)
   (let* ((ops '(install upgrade 'reinstall))
-         (valid-packages (seq-filter (lambda (it) (or (symbolp it)kage-desc-p it)) pkgs))
+         (valid-packages (seq-filter (lambda (it) (or (symbolp it) (package-desc-p it))) pkgs))
          (filename (concat (file-name-concat temporary-file-directory
                                              (string-join (list
                                                            "emacs" sprite-instance-id

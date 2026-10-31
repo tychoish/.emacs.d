@@ -1,4 +1,4 @@
-;;; daemons-dash.el --- System Daemon Dashboard -*- lexical-binding: t; -*- no-byte-compile: t; -*-
+;;; daemons-dash.el --- System Daemon Dashboard -*- lexical-binding: t; -*-
 
 ;; Author: Tycho Garen
 ;; Keywords: convenience, processes, services, systemd, docker, sprite, ollama

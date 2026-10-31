@@ -10,6 +10,7 @@
 (require 'bootstrap)
 (require 'setup-defaults)
 (require 'setup-package-defaults)
+(require 'setup-project)
 (require 'setup-hooks)
 
 (require 'setup-core)

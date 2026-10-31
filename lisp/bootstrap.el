@@ -1,4 +1,4 @@
-;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*- no-byte-compile: t;  -*-
+;;; bootstrap.el --- Utilities used during emacs setup -*- lexical-binding: t; -*-
 
 ;; Author: tychoish
 ;; Maintainer: tychoish
@@ -35,6 +35,7 @@
 
 (require 'cl-lib)
 (require 'generator)
+(require 'sprite)
 (require 'hud-mode)
 (require 'xtd-macro)
 
@@ -47,24 +48,42 @@
              (gc-cons-percentage 1.0))
          (prog1
              (progn ,@body)
-           (garbage-collect)))))
+           (garbage-collect))))))
 
-  (unless (fboundp 'with-slow-op-timer)
-    (defmacro with-slow-op-timer (name &rest body)
-      "Execute BODY, logging if duration exceeds threshold."
-      (declare (indent defun) (debug t))
-      (let ((sym (gensym "timer-")))
-        `(let ((,sym (current-time)))
-           (prog1
-               (progn ,@body)
-             (when (bound-and-true-p slow-op-reporting)
-               (let ((dur (float-time (time-subtract (current-time) ,sym))))
-                 (when (> dur (bound-and-true-p slow-op-threshold))
-                   (message "[op]: %s: %.06fs" ,name dur))))))))))
+
 
 (autoload 'minaid-mode "minaid" "Global minor mode coordinating the consolidated Minad completion suite." t)
-(defvar setup-packages-list)
+(autoload 'eglox-global-mode "eglox" "Global minor mode managing Eglot LSP lifecycle." t)
+(autoload 'grepx-mode "grepx" "Minor mode for persistent grepx search buffers." t)
+(autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
+(autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
 
+(eval-when-compile
+  (require 'desktop))
+
+(defvar project-list-file)
+(defvar savehist-file)
+(defvar savehist-coding-system)
+(defvar savehist-additional-variables)
+(defvar bookmark-default-file)
+(defvar bookmark-save-flag)
+(defvar tramp-persistency-file-name)
+(defvar transient-history-file)
+(defvar request-storage-directory)
+(defvar url-configuration-directory)
+(defvar denote-sync-cache-directory)
+(defvar mcpkit-default-port)
+(defvar org-directory)
+(defvar org-agenda-files)
+(defvar org-annotate-file-storage-file)
+(defvar org-default-notes-file)
+(defvar org-archive-location)
+(defvar deft-directory)
+(defvar denote-directory)
+(defvar modus-themes-deuteranopia)
+(defvar modus-themes-common-palette-overrides)
+
+(declare-function modus-themes-get-color-value "modus-themes")
 
 (defvar tychoish--suppress-supersession-prompt nil
   "Non-nil while handling an `emacsclient --eval' request or a timer callback.
@@ -226,8 +245,6 @@ triggered directly by a keypress, still prompts normally.")
 
 (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
 
-(autoload 'hud-modeline-mode "hud-modeline.el")
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
@@ -359,7 +376,7 @@ registration messages without batch logging. Calls ON-DONE when complete."
     (bootstrap-init-mcp-services))
   (with-slow-op-timer "<bootstrap> [packages] elpaish ensure"
     (require 'setup-packages)
-    (elpaish-install-packages setup-packages-list :async t))
+    (elpaish-install-packages :async t))
   (with-slow-op-timer "<bootstrap> [packages] quickstart check"
     (bootstrap-refresh-package-quickstart)))
 

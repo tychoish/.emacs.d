@@ -48,6 +48,24 @@
 (declare-function orgx-agenda-files-open "orgx")
 (declare-function orgx-capture "orgx")
 (declare-function orgx-agenda-untagged-in-file "orgx")
+(declare-function agent-shell "agent-shell")
+(declare-function agent-shell-toggle "agent-shell")
+(declare-function agent-shell-switch-buffer "agent-shell")
+(declare-function agent-shell-new-shell "agent-shell")
+(declare-function agent-shell-new-temp-shell "agent-shell")
+(declare-function agent-shell-new-worktree-shell "agent-shell")
+(declare-function agent-shell-workflow-select "agent-shell-workflow-menu")
+(declare-function agent-shell-workflow-dispatch-menu "agent-shell-workflow-menu")
+(declare-function agent-shell-menu-select-action "agent-shell-menu")
+(declare-function agent-shell-queue-buffer-open "agent-shell-queue")
+(declare-function agent-shell-queue-capture "agent-shell-queue")
+(declare-function agent-shell-send-dwim "agent-shell")
+(declare-function agent-shell-send-region "agent-shell")
+(declare-function agent-shell-send-file "agent-shell")
+(declare-function agent-shell-send-file-to "agent-shell")
+(declare-function agent-shell-menu-send-buffer "agent-shell-menu")
+(declare-function agent-shell-menu-send-file "agent-shell-menu")
+(declare-function agent-shell-yank-dwim "agent-shell")
 (declare-function orgx-agenda-for-file "orgx")
 (declare-function whitespace-cleanup "whitespace")
 (declare-function flyspell-correct-next "flyspell-correct")
@@ -276,7 +294,8 @@ binding (see `keymap-set'.)"
             (require package)
             (keymap-set map key (symbol-value keymap-symbol))
             (setq unread-command-events
-                  (listify-key-sequence (this-command-keys-vector)))))))
+                  (append (listify-key-sequence (this-command-keys-vector))
+                          unread-command-events))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -430,7 +449,7 @@ binding (see `keymap-set'.)"
 (keymap-set orgx-global-map "j" #'orgx-capture)
 (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
 (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
-(keymap-set orgx-global-map "c" (cons "org-capture-commands" 'orgx-minor-mode-capture-map))
+(hud-bind-deferred-keymap orgx-global-map "c" 'orgx 'orgx-minor-mode-capture-map "org-capture-commands")
 
 ;; nested keymaps
 (defvar-keymap orgx-link-map
@@ -489,13 +508,40 @@ binding (see `keymap-set'.)"
 (keymap-set hud-whitespace-map "t" #'toggle-local-whitespace-cleanup)
 
 
+(autoload 'tychoish/agent-shell-toggle-terse-output "setup-agent-shell" nil t)
+
 (defvar-keymap hud-robot-agent-shell-map
   :name "agent-shell"
   :doc "Agent shell commands under C-c r s (hud-mode).")
 
+(keymap-set hud-robot-agent-shell-map "o" #'agent-shell)
+(keymap-set hud-robot-agent-shell-map "t" #'agent-shell-toggle)
+(keymap-set hud-robot-agent-shell-map "b" #'agent-shell-switch-buffer)
+(keymap-set hud-robot-agent-shell-map "n" #'agent-shell-new-shell)
+(keymap-set hud-robot-agent-shell-map "e" #'agent-shell-new-temp-shell)
+(keymap-set hud-robot-agent-shell-map "w" #'agent-shell-new-worktree-shell)
+(keymap-set hud-robot-agent-shell-map "p" #'agent-shell-workflow-select)
+(keymap-set hud-robot-agent-shell-map "m" #'agent-shell-workflow-dispatch-menu)
+(keymap-set hud-robot-agent-shell-map "a" #'agent-shell-menu-select-action)
+(keymap-set hud-robot-agent-shell-map "q" #'agent-shell-queue-buffer-open)
+(keymap-set hud-robot-agent-shell-map "/" #'agent-shell-queue-capture)
+(keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
+
+(make-read-extended-command-for-prefix "agent-shell"
+  :bind-map hud-robot-agent-shell-map
+  :bind-key "x")
+
 (defvar-keymap hud-robot-agent-shell-send-map
   :name "agent-shell-send"
   :doc "Send file/region/buffer to an agent-shell session under C-c r s s (hud-mode).")
+
+(keymap-set hud-robot-agent-shell-send-map "d" #'agent-shell-send-dwim)
+(keymap-set hud-robot-agent-shell-send-map "r" #'agent-shell-send-region)
+(keymap-set hud-robot-agent-shell-send-map "f" #'agent-shell-send-file)
+(keymap-set hud-robot-agent-shell-send-map "t" #'agent-shell-send-file-to)
+(keymap-set hud-robot-agent-shell-send-map "b" #'agent-shell-menu-send-buffer)
+(keymap-set hud-robot-agent-shell-send-map "p" #'agent-shell-menu-send-file)
+(keymap-set hud-robot-agent-shell-send-map "y" #'agent-shell-yank-dwim)
 
 (defvar-keymap hud-shell-eat-map
   :name "shell-eat"

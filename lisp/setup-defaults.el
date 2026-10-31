@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'sprite)
 
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
@@ -113,34 +114,7 @@
   "Buffer name used as a last-resort fallback when no other buffer is available.
 Override in user/*.el to customize per machine or instance.")
 
-(defvar electric-pair-inhibition nil)
-(defvar electric-pair-eagerness t)
 
-(setq electric-indent-chars '(?\n ?:))
-
-(defun bootstrap-electric-pair-inhibition (char)
-  (if electric-pair-inhibition
-      nil
-    (if electric-pair-eagerness
-        (electric-pair-default-inhibit char)
-      (electric-pair-conservative-inhibit char))))
-
-(cl-defmethod project-root ((project (head cmake-root))) (cdr project))
-
-(defun project-find-cmake-project (dir)
-  (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
-    (cons 'cmake-root root)))
-
-(add-hook 'project-find-functions #'project-find-cmake-project)
-
-(cl-defmethod project-root ((project (head go-module))) (cdr project))
-
-(defun project-find-go-module (dir)
-  (when-let* ((root (or (locate-dominating-file dir "go.work")
-                        (locate-dominating-file dir "go.mod"))))
-    (cons 'go-module root)))
-
-(add-hook 'project-find-functions #'project-find-go-module)
 (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
 
 ;;; TK(...) placeholder font-lock definitions

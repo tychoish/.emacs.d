@@ -9,6 +9,7 @@
 (eval-when-compile
   (require 'xtd-macro))
 
+(require 'hud-mode)
 (require 'map)
 (require 'mu4e-autoloads nil t)
 
@@ -30,6 +31,29 @@
 (declare-function mu4e-contact-email "mu4e-contacts")
 (declare-function mu4e-contact-name "mu4e-contacts")
 (declare-function cape-capf-prefix-length "cape")
+
+(eval-when-compile
+  (require 'message)
+  (require 'sendmail)
+  (require 'smtpmail))
+
+(defvar mm-discouraged-alternatives)
+(defvar mml-secure-openpgp-sign-with-sender)
+(defvar mail-imenu-generic-expression)
+(defvar mu4e-compose-minor-mode-map)
+(defvar mu4e-headers-actions)
+(defvar mu4e-headers-mode-map)
+(defvar mu4e-view-actions)
+(defvar mu4e-refile-folder)
+(defvar mu4e-bookmarks)
+(defvar mu4e-compose-complete-only-after)
+(defvar mu4e-search-include-related)
+(defvar mu4e-search-results-limit)
+(defvar mu4e--header-separator)
+(defvar mu4e-get-mail-command)
+(defvar mu4e-compose-parent-message)
+(defvar mu4e-mu-home)
+(defvar mu4e-compose-reply-to-address)
 
 (defconst tychoish-mail-id-template "tychoish-mail-%s")
 (defvar tychoish-mail-accounts-table (make-hash-table :test #'equal))
@@ -430,7 +454,9 @@ live in MAILDIR's tools/signatures directory."
 	  (systems '())
 	  default)
   "Register a mail account and bind KEY in `hud-mail-map' to activate it.
-Returns the symbol of the generated activation command."
+Returns the symbol of the generated activation command.
+
+\\(fn &key NAME ADDRESS KEY ID [COMMAND] [MAILDIR] [INSTANCES] [SYSTEMS] DEFAULT)"
   (unless (and name address key id maildir)
     (user-error "cannot define mail account without name, address, key and id %S" (list :name name :address address :key key :id id :maildir maildir)))
 

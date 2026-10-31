@@ -7,12 +7,60 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'sprite)
 (require 'xtd-macro)
+(require 'hud-mode)
 
 (autoload 'hud-transient-insert-suffix-once "hud")
+(autoload 'bootstrap-load-abbrev-files "bootstrap")
+(autoload 'bootstrap-set-up-auto-save "bootstrap")
+(autoload 'font-lock-width-keyword "bootstrap")
+(autoload 'font-lock-show-tabs "bootstrap")
+
+(declare-function electric-pair-default-inhibit "elec-pair")
+(declare-function electric-pair-conservative-inhibit "elec-pair")
+(declare-function ansi-color-apply-on-region "ansi-color")
+(declare-function dired-get-marked-files "dired")
+(declare-function smerge-kill-current "smerge-mode")
+(declare-function smerge-vc-next-conflict "smerge-mode")
+(declare-function transient-get-suffix "transient")
+
+(defvar denote-directory)
+(defvar python-ts-mode-map)
+(defvar revbufs-mode-map)
+(defvar magit-mode-map)
+(defvar magit-status-mode-map)
+(defvar magit-module-sections-nested)
+(defvar popper-reference-buffers)
+(defvar popper-echo-dispatch-keys)
+(defvar popper-display-control)
+(defvar popper-group-function)
+(defvar cov-coverage-mode)
+(defvar cov-lcov-file-name)
+(defvar cov-coverage-file-paths)
+(defvar dape-key-prefix)
+(defvar dape-buffer-window-arrangement)
+(defvar dape-cwd-function)
+(defvar rustic-use-rust-save-some-buffers)
+(defvar rustic-clippy-arguments)
+(defvar rustic-rustfmt-args)
+(defvar anzu-cons-mode-line-p)
+
+(defvar electric-pair-inhibition nil)
+(defvar electric-pair-eagerness t)
+
+(defun setup-electric-pair-inhibition (char)
+  (if electric-pair-inhibition
+      nil
+    (if electric-pair-eagerness
+        (electric-pair-default-inhibit char)
+      (electric-pair-conservative-inhibit char))))
+
+(defalias 'bootstrap-electric-pair-inhibition #'setup-electric-pair-inhibition)
 
 (with-eval-after-load 'elec-pair
-  (setq electric-pair-inhibit-predicate #'bootstrap-electric-pair-inhibition)
+  (setq electric-indent-chars '(?\n ?:))
+  (setq electric-pair-inhibit-predicate #'setup-electric-pair-inhibition)
   (add-to-list 'electric-pair-pairs '(?< . ?>)))
 
 (with-eval-after-load 'transient
@@ -38,6 +86,18 @@
 
 (with-eval-after-load 'tracking
   (setq tracking-max-mode-line-entries 3))
+
+(with-eval-after-load 'agent-shell
+  (require 'setup-agent-shell))
+
+(autoload 'tychoish/agent-shell-antigravity-bootstrap "setup-agent-shell")
+
+(add-lazy-init
+ :name "<bootstrap> agent-shell antigravity"
+ :delay 60
+ :operation (lambda ()
+              (require 'agent-shell)
+              (tychoish/agent-shell-antigravity-bootstrap)))
 
 (with-eval-after-load 'shell-maker
   (defalias 'shell-maker-map 'shell-maker-major-mode-map)
@@ -156,9 +216,6 @@ completion candidate outlives its buffer."
     :bind-map denote-dash-global-map
     :bind-key "x"))
 
-(with-eval-after-load 'ol
-  (require 'orgx))
-
 (with-eval-after-load 'orgx
   (add-one-shot-hook
    :name "org-install-aux-packages"
@@ -169,6 +226,9 @@ completion candidate outlives its buffer."
   (orgx--setup-standard-capture-templates)
   (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
   (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
+
+(with-eval-after-load 'daemons-dash
+  (require 'daemons-dash-config))
 
 (with-eval-after-load 'flycheck-eglot
   (setq-default flycheck-eglot-exclusive nil)

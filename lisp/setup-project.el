@@ -9,8 +9,28 @@
 (require 'generator)
 (require 'seq)
 (require 'subr-x)
+(require 'project)
 (require 'projectile)
 (require 'sprite nil t)
+
+(autoload 'annotated-completing-read "acr")
+
+(cl-defmethod project-root ((project (head cmake-root))) (cdr project))
+
+(defun project-find-cmake-project (dir)
+  (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
+    (cons 'cmake-root root)))
+
+(add-hook 'project-find-functions #'project-find-cmake-project)
+
+(cl-defmethod project-root ((project (head go-module))) (cdr project))
+
+(defun project-find-go-module (dir)
+  (when-let* ((root (or (locate-dominating-file dir "go.work")
+                        (locate-dominating-file dir "go.mod"))))
+    (cons 'go-module root)))
+
+(add-hook 'project-find-functions #'project-find-go-module)
 
 (defvar compilation-save-buffers-predicate)
 
@@ -67,7 +87,7 @@
 
 (defvar projectile-cache-fallback-directory
   (projectile-state-path "projectile-cache")
-  "Directory used for persistent projectile caches when a project root is not writable.")
+  "Directory used for projectile caches when project root is not writable.")
 
 (defun projectile-cache--fallback-file (name-source)
   "Return the fallback cache file path for NAME-SOURCE, ensuring dir exists."
@@ -82,7 +102,7 @@
     (expand-file-name slug cache-dir)))
 
 (defun projectile-project-cache-file-fallback (orig-fn &optional project-root)
-  "Return cache file for PROJECT-ROOT, using a fallback state dir when non-writable."
+  "Return cache file for PROJECT-ROOT using fallback dir when non-writable."
   (let* ((root (or project-root (projectile-project-root)))
          (in-tree (and root (funcall orig-fn root))))
     (if (or (null root) (null in-tree))
@@ -98,7 +118,7 @@
 (advice-add 'projectile-project-cache-file :around #'projectile-project-cache-file-fallback)
 
 (defun projectile-serialize-silent-fallback (orig-fn data filename)
-  "Avoid noisy warning when FILENAME is not writable by silently writing to fallback if possible."
+  "Silently serialize DATA to fallback file when FILENAME is not writable."
   (if (file-writable-p filename)
       (funcall orig-fn data filename)
     (let ((fallback-file (projectile-cache--fallback-file filename)))

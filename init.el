@@ -22,9 +22,6 @@
   ;; (setq server-port 2286)
 
   (with-slow-op-timer "<init> package all"
-    (with-slow-op-timer "<init> require cl-macs"
-      (require 'cl-macs))
-
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
     (with-slow-op-timer "<init> [local] require clix"
@@ -48,20 +45,11 @@
         (with-slow-op-timer "<init> [cold] setup packages"
           (require 'setup-packages))
         (with-slow-op-timer "<init> [cold] install all configured packages"
-          (elpaish-install-packages setup-packages-list :sync t))
+          (elpaish-install-packages :sync t))
         (with-slow-op-timer "<init> [cold] generate package quickstart"
           (bootstrap-refresh-package-quickstart t))))
 
     (with-slow-op-timer "<init> [local] require all"
-      (with-slow-op-timer "<init> [local] [pkg] require sprite"
-        (require 'sprite))
-
-      (with-slow-op-timer "<init> [local] [pkg] require xtd-macro"
-        (require 'xtd-macro))
-
-      (with-slow-op-timer "<init> [local] [feature] require hud-mode.el"
-        (require 'hud-mode))
-
       (with-slow-op-timer "<init> [local] [feature] require bootstrap.el"
         (require 'bootstrap))
 
