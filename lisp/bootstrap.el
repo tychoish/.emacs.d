@@ -314,68 +314,82 @@ registration messages without batch logging. Calls ON-DONE when complete."
   (bootstrap-load-mcp-services
    :on-done #'bootstrap-start-mcp-services))
 
-(defun bootstrap-init-early-modes ()
-  "Initialize core editor UI, display modes, font, and instance persistence."
-  (with-slow-op-timer "<bootstrap> [modes] set-fringe-mode"
-    (set-fringe-mode '(4 . 4)))
-  (with-slow-op-timer "<bootstrap> [modes] column-number-mode"
-    (column-number-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] delete-selection-mode"
-    (delete-selection-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] winner-mode"
-    (winner-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] electric-pair-mode"
-    (electric-pair-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] pixel-scroll-precision-mode"
-    (pixel-scroll-precision-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] repeat"
-    (with-silence
-      (repeat-mode 1)))
-  (with-slow-op-timer "<bootstrap> [modes] hud-mode"
-    (hud-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] sprite-mode"
-    (sprite-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] which-key"
-    (which-key-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] eglox-global-mode"
-    (eglox-global-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] minaid"
-    (minaid-mode 1))
-  (with-slow-op-timer "<bootstrap> [modules] delight"
-    (require 'delight))
-  (with-slow-op-timer "<bootstrap> [font] ensure default font"
-    (bootstrap-ensure-default-font))
-  (with-slow-op-timer "<bootstrap> [persistence] emacs-instance-persistence"
-    (bootstrap-set-up-emacs-instance-persistence)))
-
 (declare-function orgx-global-mode "orgx")
 
-(defcustom bootstrap-late-enable-modes-hook nil
+(defun bootstrap-run-enable-modes-hook (hook)
+  "Run HOOK to enable modes and integrations.
+Each entry in HOOK is executed with `with-slow-op-timer' reporting,
+and is called with argument 1 (or 0 arguments if not accepted) so that
+running HOOK repeatedly is idempotent and never toggles modes off."
+  (run-hook-wrapped
+   hook
+   (lambda (fn)
+     (let ((name (cond
+                  ((symbolp fn) (symbol-name fn))
+                  ((byte-code-function-p fn) "<bytecode>")
+                  (t "<function>"))))
+       (with-slow-op-timer (format "<bootstrap> [modes] %s" name)
+         (condition-case nil
+             (funcall fn 1)
+           (wrong-number-of-arguments
+            (funcall fn)))))
+     nil)))
+
+(defcustom bootstrap-early-enable-modes-hook
+  '(bootstrap-init-early-ui
+    column-number-mode
+    delete-selection-mode
+    winner-mode
+    electric-pair-mode
+    pixel-scroll-precision-mode
+    repeat-mode
+    hud-mode
+    sprite-mode
+    which-key-mode
+    eglox-global-mode
+    minaid-mode
+    bootstrap-init-early-instance)
+  "Hook run during early bootstrap to enable core UI and editing modes."
+  :type 'hook
+  :group 'bootstrap)
+
+(defun bootstrap-init-early-ui ()
+  "Initialize early fringe, delight module, and default font."
+  (set-fringe-mode '(4 . 4))
+  (require 'delight)
+  (bootstrap-ensure-default-font))
+
+(defun bootstrap-init-early-instance ()
+  "Set up instance persistence."
+  (bootstrap-set-up-emacs-instance-persistence))
+
+(defun bootstrap-init-early-modes ()
+  "Initialize core editor UI, display modes, font, and instance persistence."
+  (interactive)
+  (bootstrap-run-enable-modes-hook 'bootstrap-early-enable-modes-hook))
+
+(defcustom bootstrap-late-enable-modes-hook
+  '(bootstrap-init-project
+    popper-mode
+    grepx-mode
+    denote-dash-global-mode
+    builder-mode
+    nerd-icons-completion-mode
+    orgx-global-mode)
   "Hook run during late bootstrap to enable tool and integration modes."
   :type 'hook
   :group 'bootstrap)
 
-(defun bootstrap-init-integrations ()
-  (with-slow-op-timer "<bootstrap> [modes] denote-dash-global-mode"
-    (denote-dash-global-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] builder"
-    (builder-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] nerd-icons-completion"
-    (nerd-icons-completion-mode 1))
-  (with-slow-op-timer "<bootstrap> [modules] setup-project"
-    (require 'setup-project))
-  (with-slow-op-timer "<bootstrap> [modules] grepx"
-    (require 'grepx))
-  (with-slow-op-timer "<bootstrap> [modules] projectile"
-    (require 'projectile))
-  (with-slow-op-timer "<bootstrap> [modules] popper"
-    (popper-mode 1))
-  (with-slow-op-timer "<bootstrap> [modes] grepx"
-    (grepx-mode 1))
-  (with-slow-op-timer "<bootstrap> [hook] late-enable-modes"
-    (run-hooks 'bootstrap-late-enable-modes-hook)))
+(defun bootstrap-init-project ()
+  "Load project management, projectile, and grepx modules."
+  (require 'setup-project)
+  (require 'projectile)
+  (require 'grepx))
 
-(add-hook 'bootstrap-late-enable-modes-hook #'orgx-global-mode)
+(defun bootstrap-init-integrations ()
+  "Initialize secondary tool integrations and modes via `bootstrap-late-enable-modes-hook'."
+  (interactive)
+  (bootstrap-run-enable-modes-hook 'bootstrap-late-enable-modes-hook))
 
 (defun bootstrap-init-late-services ()
   "Initialize secondary tool integrations, services, and background maintenance."
@@ -477,27 +491,8 @@ registration messages without batch logging. Calls ON-DONE when complete."
 (defvar user-org-directories nil
   "Additional directories that may contain org files.")
 
-(defun bootstrap-set-notes-directory (&optional path)
-  (when path
-    (setq local-notes-directory (expand-file-name path)))
-
-  (unless local-notes-directory
-    (error "must have defined the `local-notes-directory'"))
-
-  (setq org-directory (file-name-concat local-notes-directory "org"))
-  (setq org-agenda-files (thread-last (list org-directory user-org-directories)
-                                      (flatten-tree)
-                                      (seq-map #'expand-file-name)
-			              (seq-filter 'identity)
-			              (seq-map #'string-trim)
-			              (seq-remove #'string-empty-p)
-                                      (seq-uniq)))
-  (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
-  (setq org-default-notes-file (file-name-concat org-directory "records.org"))
-  (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
-  (setq deft-directory (file-name-concat local-notes-directory "deft"))
-  (setq denote-directory (file-name-concat local-notes-directory "denote"))
-  local-notes-directory)
+(autoload 'orgx-set-notes-directory "orgx" nil t)
+(defalias 'bootstrap-set-notes-directory #'orgx-set-notes-directory)
 
 (defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))
