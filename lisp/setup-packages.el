@@ -36,7 +36,6 @@
    denote-sync
    denote-tree
    eglot-test-at-point
-   elisp-autofmt
    elpaish
    elpaish-keyring
    flycheck
@@ -47,7 +46,6 @@
    gptel-mcp
    gptel-pup
    hitl
-   jarchive
    magit
    magit-dash
    marginalia
