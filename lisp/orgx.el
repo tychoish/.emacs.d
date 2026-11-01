@@ -39,6 +39,9 @@
 ;; Forward declarations and dynamic variables
 (autoload 'org-annotate-file "org-annotate-file")
 (autoload 'consult-org-heading "consult-org")
+(autoload 'orgx-capture-shell "orgx-capture-shell" nil t)
+(autoload 'orgx-capture-shell-toggle "orgx-capture-shell" nil t)
+(autoload 'orgx-capture-shell-transient "orgx-capture-shell" nil t)
 (declare-function toc-org-insert-toc "toc-org")
 (declare-function toc-org-hrefify-gh "toc-org")
 (autoload 'annotated-completing-read "annotated-completing-read")
@@ -932,6 +935,9 @@ GitHub, including prioritized headings (`#b-title')."
 (keymap-set orgx-minor-mode-capture-map "t" #'org-capture-goto-target)
 (keymap-set orgx-minor-mode-capture-map "r" #'org-capture-refile)
 (keymap-set orgx-minor-mode-capture-map "w" #'org-capture-refile)
+(keymap-set orgx-minor-mode-capture-map "s" #'orgx-capture-shell)
+(keymap-set orgx-minor-mode-capture-map "t" #'orgx-capture-shell-toggle)
+(keymap-set orgx-minor-mode-capture-map "C-t" #'orgx-capture-shell-transient)
 
 (defvar-keymap orgx-minor-mode-archive-map
   :name "orgx-archive"
@@ -961,6 +967,8 @@ GitHub, including prioritized headings (`#b-title')."
 (keymap-set orgx-minor-mode-commands-map "w" #'org-refile)
 (keymap-set orgx-minor-mode-commands-map "d" #'orgx-date-now)
 (keymap-set orgx-minor-mode-commands-map "s" #'org-save-all-org-buffers)
+(keymap-set orgx-minor-mode-commands-map "C-s" #'orgx-capture-shell-toggle)
+(keymap-set orgx-minor-mode-commands-map "C-t" #'orgx-capture-shell-transient)
 
 (keymap-set orgx-minor-mode-commands-map "u" (cons "untaged-in-file" #'orgx-agenda-untagged-in-file))
 (keymap-set orgx-minor-mode-commands-map "c" (cons "capture" orgx-minor-mode-capture-map))

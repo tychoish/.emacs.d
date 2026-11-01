@@ -61,6 +61,7 @@
 (declare-function agent-shell-queue-capture "agent-shell-queue")
 (declare-function agent-shell-send-dwim "agent-shell")
 (declare-function agent-shell-send-region "agent-shell")
+(declare-function agent-shell-send-region-to "agent-shell")
 (declare-function agent-shell-send-file "agent-shell")
 (declare-function agent-shell-send-file-to "agent-shell")
 (declare-function agent-shell-menu-send-buffer "agent-shell-menu")
@@ -450,6 +451,8 @@ binding (see `keymap-set'.)"
 (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
 (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
 (hud-bind-deferred-keymap orgx-global-map "c" 'orgx 'orgx-minor-mode-capture-map "org-capture-commands")
+(keymap-set orgx-global-map "C-s" #'orgx-capture-shell-toggle)
+(keymap-set orgx-global-map "C-t" #'orgx-capture-shell-transient)
 
 ;; nested keymaps
 (defvar-keymap orgx-link-map
@@ -537,6 +540,7 @@ binding (see `keymap-set'.)"
 
 (keymap-set hud-robot-agent-shell-send-map "d" #'agent-shell-send-dwim)
 (keymap-set hud-robot-agent-shell-send-map "r" #'agent-shell-send-region)
+(keymap-set hud-robot-agent-shell-send-map "s" #'agent-shell-send-region-to)
 (keymap-set hud-robot-agent-shell-send-map "f" #'agent-shell-send-file)
 (keymap-set hud-robot-agent-shell-send-map "t" #'agent-shell-send-file-to)
 (keymap-set hud-robot-agent-shell-send-map "b" #'agent-shell-menu-send-buffer)
