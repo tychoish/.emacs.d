@@ -1,16 +1,19 @@
-;;; orgx.el --- personal org-mode configuration and extensions -*- lexical-binding: t; -*-
+;;; orgx.el --- Org-mode conveniences, keymaps, and structured navigation -*- lexical-binding: t; -*-
+
+;; Author: tychoish <tychoish@tychoish.com>
+;; URL: https://github.com/tychoish/orgx
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "29.1") (org "9.6"))
+;; Keywords: org, outlines, convenience
 
 ;;; Commentary:
-;; Personal org-mode setup, split into two sections:
+;; Core Org mode extensions, unified keymaps, and navigation helpers.
 ;;
-;;   1. Configuration: package declarations, `setq' settings, hooks, and
-;;      keybindings (both in upstream maps like `org-mode-map' and in the
-;;      `orgx-' prefix maps defined here).
-;;   2. Functionality: the commands, helpers, and capture-template machinery
-;;      implemented for this configuration.
-;;
-;; Section 1 refers to symbols defined in section 2; forward `declare-function'
-;; declarations near the top keep the byte-compiler quiet.
+;; Provides:
+;; - Global and minor mode keymaps for Org operations
+;; - Structured heading and agenda navigation
+;; - Date helpers and buffer formatting
+;; - Soft-loaded Denote and agent-shell-queue integrations
 
 ;;; Code:
 
@@ -19,30 +22,35 @@
   (require 'org-element))
 
 (require 'subr-x)
+(require 'cl-lib)
+(require 'seq)
+(require 'outline)
 (require 'org)
+(require 'org-fold)
+(require 'org-capture)
+(require 'org-refile)
+(require 'org-agenda)
+(require 'org-archive)
+(require 'ol)
+(autoload 'whitespace-cleanup "whitespace")
 
 (require 'orgx-capture)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;; Section 1: Configuration and keybindings
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Autoloads and forward declarations
-
-(add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
-
-(autoload 'org-agenda-files "org")
-(autoload 'org-save-all-org-buffers "org")
-(autoload 'org-store-link "ol")
-(autoload 'org-insert-link "ol")
+;; Forward declarations and dynamic variables
 (autoload 'org-annotate-file "org-annotate-file")
+(autoload 'consult-org-heading "consult-org")
+(declare-function toc-org-insert-toc "toc-org")
+(declare-function toc-org-hrefify-gh "toc-org")
 (autoload 'annotated-completing-read "annotated-completing-read")
 (autoload 'org-id-get-create "org-id")
 
 (declare-function org-agenda-goto "org-agenda")
+(declare-function org-agenda-refile "org-agenda")
+(declare-function org-agenda-open-link "org-agenda")
+(declare-function org-agenda-goto-calendar "org-agenda")
 (declare-function org-archive-set-tag "org-archive")
+(declare-function org-archive-to-archive-sibling "org-archive")
+(declare-function org-cycle-force-archived "org-cycle")
 (declare-function denote-org-extract-org-subtree "denote-org")
 (declare-function denote-format-link "denote")
 (declare-function denote-directory-files "denote")
@@ -51,173 +59,12 @@
 (declare-function denote-retrieve-filename-keywords-as-list "denote")
 (declare-function agent-shell-queue-org-refile-from-heading "agent-shell-queue-org")
 
-;; Declared special so the `let'-binding in `orgx-mark-done-and-archive'
-;; takes effect dynamically and the byte compiler doesn't warn about an unused
-;; lexical variable.
 (defvar org-archive-sibling-heading)
-
-;; `org-todo' dynamically binds these around `org-after-todo-state-change-hook';
-;; declared here so `orgx-enforce-question-answered' can read them without a
-;; free-variable warning.
 (defvar org-state)
 (defvar org-last-state)
-
-;; `org-capture-templates' is populated by whatever loads capture templates
-;; into it (`orgx-capture', `org-capture' itself, etc.); `orgx-capture' below
-;; only ever reads it, so this file has no load-time dependency on any of
-;; them. Defaults to nil (matching `org-capture''s own default) so reading
-;; it here doesn't signal void-variable before anything has populated it.
 (defvar org-capture-templates nil)
-
-;; Supporting export/format packages.
-
-(use-package org-contrib
-  :ensure t
-  :defer t)
-
-(use-package ox-hugo
-  :ensure t
-  :defer t)
-
-(use-package ox-gfm
-  :ensure t
-  :defer t)
-
-(use-package ox-gist
-  :ensure t
-  :commands (org-gist-export-to-gist))
-
-(use-package toc-org
-  :ensure t
-  :commands (toc-org-insert-toc))
-
-(use-package ox-leanpub
-  :ensure t
-  :commands (org-leanpub-book-export-markdown
-	     org-leanpub-book-export-markua
-	     org-leanpub-markua-export-to-markua
-	     org-leanpub-markua-export-as-markua
-	     org-leanpub-markdown-export-to-markdown
-	     org-leanpub-markdown-export-as-markdown))
-
-(use-package ox-rst
-  :ensure t
-  :defer t
-  :commands (org-rst-export-to-rst org-rst-export-as-rst)
-  :config
-  (setq org-rst-headline-underline-characters (list ?= ?- ?~ ?' ?^ ?`)))
-
-(use-package ob-mermaid
-  :ensure t
-  :defer t)
-
-;; org-mode configuration, hooks, and keybindings.
-
-(with-eval-after-load 'org
-  (add-hook 'org-ctrl-c-ctrl-c-hook 'orgx-set-weekday-of-timestamp)
-  (add-hook 'org-shiftup-final-hook 'windmove-up)
-  (add-hook 'org-shiftleft-final-hook 'windmove-left)
-  (add-hook 'org-shiftdown-final-hook 'windmove-down)
-  (add-hook 'org-shiftright-final-hook 'windmove-right)
-  (add-hook 'org-after-todo-state-change-hook 'orgx-enforce-question-answered)
-
-  (setq org-modules
-	'(org-capture
-          org-datetree
-          org-annotate-file
-          org-depend
-          org-habit))
-
-  (org-load-modules-maybe t)
-
-  (org-babel-do-load-languages
-   'org-babel-load-languages
-   (append org-babel-load-languages '((python . t))))
-
-  ;; org-faces
-  (require 'modus-themes)
-  (setq org-todo-keyword-faces
-        `(("TODO" . (:foreground ,(modus-themes-get-color-value 'red) :weight bold))
-          ("DONE" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("QUESTION" . (:foreground ,(modus-themes-get-color-value 'cyan) :weight bold))
-          ("ANSWERED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("CONSIDER" . (:foreground ,(modus-themes-get-color-value 'yellow) :weight bold))
-          ("MUST" . (:foreground ,(modus-themes-get-color-value 'yellow-warmer) :weight bold))
-          ("ACKNOWLEDGED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("IGNORED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("REJECTED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("BACKLOG" . (:foreground ,(modus-themes-get-color-value 'indigo) :weight bold))
-          ("INPROGRESS" . (:foreground ,(modus-themes-get-color-value 'blue) :weight bold))
-          ("SCHEDULED" . (:foreground ,(modus-themes-get-color-value 'cyan-warmer) :weight bold))
-          ("GONEAWAY" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("INCOMPLETE" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("BLOCKED" . (:foreground ,(modus-themes-get-color-value 'rust) :weight bold))
-          ("PAUSED" . (:foreground ,(modus-themes-get-color-value 'magenta) :weight bold))
-          ("SKIPPED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("CANCELED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("DISMISSED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("ABANDONED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
-          ("PROJECT" . (:foreground ,(modus-themes-get-color-value 'blue-warmer) :weight bold))))
-
-  ;; ;; org.el
-  (setq org-todo-keywords
-        '((sequence "TODO(t)" "|" "DONE(d!)")
-          (sequence "QUESTION(q)" "|" "ANSWERED(a@)")
-	  (sequence "INPROGRESS" "|" "COMPLETE")
-          (sequence "CONSIDER(c)" "MUST(m)" "|" "ACKNOWLEDGED(k@)" "IGNORED(u)" "REJECTED(r)" "DISMISSED(p)")
-          (sequence "BACKLOG(b)" "SCHEDULED(h)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")
-          (sequence "BLOCKED(o)" "PAUSED(h)" "|" "SKIPPED(k@)" "CANCELED(x@)" "INCOMPLETE(i@)" "ABANDONED(@l)")))
-
-  (setq org-tag-alist
-        '((:startgroup . nil)
-          ("inbox" . ?i)
-          ("backlog" . ?b)
-          (:endgroup . nil)
-          (:startgroup . nil)
-          ("@desk" . ?d)
-          ("@personal" . ?p)
-          ("@work" . ?w)
-          (:endgroup . nil)
-          ("question" . ?q)))
-
-  (setq org-tags-column -70)
-  (setq org-blank-before-new-entry '((heading . nil) (plain-list-item . nil)))
-  (setq org-enforce-todo-checkbox-dependencies t)
-  (setq org-enforce-todo-dependencies t)
-  (setq org-fast-tag-selection-include-todo t)
-  (setq org-fontify-done-headline t)
-  (setq org-footnote-auto-label nil)
-  (setq org-footnote-define-inline nil)
-  (setq org-footnote-section nil)
-  (setq org-log-into-drawer t)
-  (setq org-provide-todo-statistics t)
-  (setq org-reverse-note-order t)
-  (setq org-startup-folded 'content)
-  (setq org-startup-indented nil)
-  (setq org-tags-exclude-from-inheritance '("project"))
-  (setq org-track-ordered-property-with-tag t)
-  (setq org-use-fast-tag-selection 'auto)
-  (setq org-use-fast-todo-selection 'auto)
-
-  ;; org-refile.el
-  (setq org-outline-path-complete-in-steps nil)
-  (setq org-refile-allow-creating-parent-nodes 'confirm)
-  (setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
-  (setq org-refile-use-outline-path 'file)
-
-  ;; org-keys.el
-  (setq org-replace-disputed-keys t)
-  (setq org-return-follows-link t)
-  (setq org-use-speed-commands #'orgx--use-speed-commands))
-
-(defvar-keymap orgx-gist-map
-  :name "org-gist"
-  :doc "keymap for org-gist commands")
-
-(keymap-set orgx-gist-map "p" #'org-gist-export-private-gist)
-(keymap-set orgx-gist-map "g" #'org-gist-export-public-gist)
-
-;; org-agenda keybindings and configuration.
+(defvar org-agenda-custom-commands)
+(defvar org-agenda-files)
 
 (defun orgx-denote-files ()
   "Return every .org file across all directories in `denote-directories'.
@@ -327,99 +174,7 @@ agenda header text, or leaves the default when nil."
                                 (tags . " %i %-8(orgx-denote-agenda-category) ")))))
 
 
-(with-eval-after-load 'org-agenda
-  (setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
-  (setq org-agenda-sticky t)
 
-  (setq org-agenda-custom-commands
-        `(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
-           ((org-agenda-skip-function-global nil)))
-          ("u" "Untagged TODOs (local)" todo ""
-           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
-            (org-agenda-overriding-header "TODOs with no local tags")))
-          ("h" "Untagged headings (local)" tags "LEVEL>=1-TODO={.+}"
-           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
-            (org-agenda-overriding-header "Headings with no local tags")))
-	  ("d" . "denote database files")
-          ("da" "Denote Agenda" todo ""
-	   ,(orgx--denote-agenda-settings "Denote Agenda: All"))
-          ("dt" "Denote Agenda Tasks (without agent or questions)"
-	   ((tags-todo "-agent-question-TODO=\"QUESTION\""
-                       ((org-agenda-overriding-header "Denote Agenda"))))
-           ,(orgx--denote-agenda-settings "Denote Agenda: Tasks"))
-          ("dn" "Denote Agenda (without agent)"
-	   ((tags-todo "-agent"
-                       ((org-agenda-overriding-header "Denote (non) Agent Tasks"))))
-           ,(orgx--denote-agenda-settings "Denote Agenda: Non-agent tasks"))
-          ("dg" "Denote Agenda (agent only)"
-	   ((tags-todo "+agent-question-TODO=\"QUESTION\""
-                       ((org-agenda-overriding-header "Denote Agent Tasks"))))
-           ,(orgx--denote-agenda-settings "Denote Agenda: Agent tasks"))
-          ("dq" "Human Questions"
-           ((tags "+question|TODO=\"QUESTION\""
-                  ((org-agenda-skip-function #'orgx-skip-unless-open-question)
-                   (org-agenda-overriding-header "Human Questions"))))
-           ,(orgx--denote-agenda-settings nil))
-          ("dc" "Denote Composite Agenda"
-           ((tags "+question|TODO=\"QUESTION\""
-                  ((org-agenda-skip-function #'orgx-skip-unless-open-question)
-                   (org-agenda-overriding-header "Human questions")))
-            (tags-todo "TODO=\"CONSIDER\"|TODO=\"MUST\""
-                       ((org-agenda-overriding-header "Pending Considerations")))
-            (tags-todo "TODO=\"INPROGRESS\"|TODO=\"PAUSED\"|TODO=\"SCHEDULED\"|TODO=\"BLOCKED\""
-                       ((org-agenda-overriding-header "Active Tasks")))
-            (tags-todo "-agent-question-TODO=\"QUESTION\""
-                       ((org-agenda-overriding-header "Tasks")))
-            (tags-todo "+agent-question-TODO=\"QUESTION\"-TODO=\"CONSIDER\"-TODO=\"MUST\"-TODO=\"INPROGRESS\"-TODO=\"PAUSED\"-TODO=\"SCHEDULED\"-TODO=\"BLOCKED\""
-                       ((org-agenda-overriding-header "Agent tasks"))))
-           ,(orgx--denote-agenda-settings nil '(orgx-denote-composite-files)))
-          ("dx" "Completed Plans"
-           ((tags "+question|TODO=\"QUESTION\""
-                  ((org-agenda-skip-function #'orgx-skip-unless-open-question)
-                   (org-agenda-overriding-header "Open Questions in Completed Plans")))
-            (tags-todo "TODO=\"INPROGRESS\"|TODO=\"PAUSED\"|TODO=\"SCHEDULED\"|TODO=\"BLOCKED\""
-                       ((org-agenda-overriding-header "Active/Incomplete Tasks in Completed Plans")))
-            (tags-todo "-agent-question-TODO=\"QUESTION\""
-                       ((org-agenda-overriding-header "Tasks in Completed Plans")))
-            (tags-todo "+agent-question-TODO=\"QUESTION\""
-                       ((org-agenda-overriding-header "Agent Tasks in Completed Plans")))
-            (tags "TODO=\"DONE\"|TODO=\"ANSWERED\"|TODO=\"COMPLETE\"|TODO=\"CANCELED\"|TODO=\"ABANDONED\""
-                  ((org-agenda-overriding-header "Completed Tasks in Completed Plans"))))
-           ,(orgx--denote-agenda-settings "Completed Plans" '(orgx-denote-completed-plan-files)))
-	  ("i" . "including inherited")
-          ("iu" "Untagged TODOs (incl. inherited)" todo ""
-           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
-            (org-agenda-overriding-header "TODOs with no local or inherited tags")
-            (orgx-agenda-include-inherited-tags t)))
-          ("ih" "Untagged headings (incl. inherited)" tags "LEVEL>=1-TODO={.+}"
-           ((org-agenda-skip-function #'orgx-skip-unless-untagged)
-            (org-agenda-overriding-header "Headings with no local or inherited tags")
-            (orgx-agenda-include-inherited-tags t)))))
-
-  (setq org-agenda-include-diary nil)
-  (setq org-agenda-block-separator nil)
-  (setq org-agenda-columns-add-appointments-to-effort-sum t)
-  (setq org-agenda-compact-blocks t)
-  (setq org-agenda-default-appointment-duration 60)
-  (setq org-agenda-inhibit-startup nil)
-  (setq org-agenda-mouse-1-follows-link t)
-  (setq org-agenda-use-time-grid t)
-  (setq org-agenda-skip-deadline-if-done nil)
-  (setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
-  (setq org-agenda-skip-scheduled-if-done t)
-  (setq org-agenda-skip-unavailable-files t)
-  (setq org-agenda-skip-timestamp-if-done t)
-  (setq org-agenda-todo-ignore-deadlines t)
-  (setq org-agenda-todo-ignore-scheduled t)
-  (setq org-agenda-start-on-weekday nil))
-
-(setq org-archive-default-command #'org-archive-to-archive-sibling)
-
-;; Startup hooks and advice are registered in the `use-package orgx' :init
-;; block in `setup-core.el' so they can trigger this file's deferred load.
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
 ;;; Section 2: Custom functionality
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -483,9 +238,12 @@ Repeated titles take their priorities in document order."
   (advice-add 'toc-org-insert-toc :around #'orgx--toc-bind-priorities)
   (advice-add 'toc-org-hrefify-gh :around #'orgx--toc-hrefify-priority))
 
+(declare-function revbufs "revbufs")
+
 (defun orgx--background-revbufs ()
   "Run `revbufs' without disturbing the current window configuration."
-  (save-window-excursion (revbufs)))
+  (when (fboundp 'revbufs)
+    (save-window-excursion (revbufs))))
 
 (defun orgx--use-speed-commands ()
   (and (looking-at org-outline-regexp) (looking-back "^\\**" nil)))
@@ -499,7 +257,7 @@ Repeated titles take their priorities in document order."
   (let* ((files (thread-last (org-agenda-files)
                              (seq-mapcat (lambda (it)
                                            (if (file-directory-p it)
-                                               (f-glob "*.org" it)
+                                               (directory-files it t "\\.org\\\'")
                                              (list it))))
                              (seq-remove (lambda (it)
                                            (string-suffix-p "archive.org" it)))))
@@ -535,15 +293,7 @@ Repeated titles take their priorities in document order."
           (user-error "Agenda buffer is unpopulated; select an agenda view first"))
       (apply orig-fun args))))
 
-;; gist export (ox-gist integration)
-
-(defun org-gist-export-private-gist ()
-  (interactive)
-  (org-gist-export-to-gist nil 'open))
-
-(defun org-gist-export-public-gist ()
-  (interactive)
-  (org-gist-export-to-gist 'public))
+;; (gist export moved to setup-orgx.el)
 
 ;; timestamps and archiving
 
@@ -601,7 +351,7 @@ full file.  Skips any entry whose tree already carries the :ARCHIVE: tag
   (let ((scope (if (org-before-first-heading-p) 'file 'tree))
         markers)
     (org-map-entries
-     (fn (push (point-marker) markers))
+     (lambda () (push (point-marker) markers))
      (orgx-done-state-match)
      scope
      'archive)
@@ -668,12 +418,14 @@ key-prefix's root description when even that is unknown."
 ;; org-agenda: untagged filter
 
 (defvar orgx-agenda-required-tag nil
-  "Dynamic binding used by `orgx-skip-unless-untagged'.
-When nil: skip entries that have any local tag (show only fully-untagged items).
-When set to a tag string: skip entries that possess that tag (show items missing it).")
+  "Dynamic binding used by `orgx-skip-unless-untagged\x27.
+When nil: skip entries that have any local tag (show only
+fully-untagged items).
+When set to a tag string: skip entries that possess that tag
+(show items missing it).")
 
 (defvar orgx-agenda-include-inherited-tags nil
-  "Dynamic binding used by `orgx-skip-unless-untagged'.
+  "Dynamic binding used by `orgx-skip-unless-untagged\x27.
 When nil (default): only local tags are considered — headings that merely
 inherit tags from ancestors are treated as untagged.
 When non-nil: inherited tags are included — a heading is considered tagged
@@ -706,7 +458,7 @@ tags are tested; when non-nil, inherited tags are included in the check."
 (defun orgx-skip-unless-open-question ()
   "Skip headings in agenda views that are not open human questions.
 Returns point after subtree to skip when the heading is not an open question
-\(e.g. answered/done items, metadata subheadings like Context/Response, or child headings inheriting :question:)."
+\(e.g. answered/done items, metadata subheadings like Context/Response,\nor child headings inheriting :question:)."
   (if (and orgx-denote-agenda-suppress-completed
            (orgx-denote-file-completed-p (buffer-file-name)))
       (point-max)
@@ -731,7 +483,7 @@ When TODO-ONLY is non-nil, restrict to TODO-keyword headings.
 When INHERITED is non-nil, headings that inherit tags from ancestors are
 also considered tagged and excluded.
 Interactively, prompts for file and tag; \\[universal-argument] toggles
-TODO-only, \\[universal-argument] \\[universal-argument] adds inherited-tag checking."
+TODO-only,\n\\[universal-argument] \\[universal-argument] adds inherited-tag checking."
   (interactive
    (list (read-file-name "Org file: " nil nil t nil
                          (lambda (n) (or (file-directory-p n)
@@ -1007,16 +759,7 @@ or Global (further split by command type) — via
 
 ;; auxiliary package installation
 
-(defvar orgx--auxiliary-packages
-  '(org-contrib toc-org ox-gist ox-hugo ox-rst ox-leanpub ob-mermaid)
-  "Supporting org packages that should be installed when org-mode loads the first time.")
-
-(defun orgx--install-auxiliary-packages ()
-  "Install all of the auxiliary packages."
-  (thread-last orgx--auxiliary-packages
-	       (seq-remove #'package-installed-p)
-	       (mapcar #'package-install-async)
-	       (length)))
+;; (auxiliary package installation moved to setup-orgx.el)
 
 ;; heading navigation
 
@@ -1052,7 +795,7 @@ or Global (further split by command type) — via
 
 ;;;###autoload
 (defun orgx-migrate-subtree-to-denote ()
-  "Extract the current Org subtree to a new denote note, replacing the heading with a link.
+  "Extract the current Org subtree to a new denote note.\nReplaces the heading with a link.
 Works from an `org-agenda-mode' buffer or an `org-mode' buffer: in the
 former, first jumps to the underlying entry via `org-agenda-goto'.
 
@@ -1130,7 +873,9 @@ GitHub, including prioritized headings (`#b-title')."
     (when-let* ((pos (cdr (assoc path (orgx--github-anchor-positions)))))
       (org-mark-ring-push)
       (goto-char pos)
-      (org-show-context)
+      (if (fboundp (quote org-fold-show-context))
+          (org-fold-show-context)
+        (with-no-warnings (org-show-context)))
       t)))
 
 (defalias 'tychoish/org-link-github-line-support #'orgx-link-github-line-support)
@@ -1241,8 +986,8 @@ GitHub, including prioritized headings (`#b-title')."
 
 (define-minor-mode orgx-minor-mode
   "Personal org-mode keybindings and buffer setup.
-Activates `orgx-minor-mode-commands-map' under C-c o, sets fill-column, and wires
-the toc-org write hook."
+Activates `orgx-minor-mode-commands-map' under C-c o,
+sets fill-column, and wires the toc-org write hook."
   :lighter " ox"
   :keymap orgx-minor-mode-map
   (when orgx-minor-mode

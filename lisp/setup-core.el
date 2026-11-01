@@ -44,6 +44,9 @@
 (autoload 'orgx-agenda-untagged-in-file "orgx" nil t)
 (autoload 'orgx-agenda-for-file "orgx" nil t)
 
+(with-eval-after-load 'org
+  (require 'setup-orgx))
+
 (autoload 'daemons-dash "daemons-dash" nil t)
 (autoload 'daemons-dash-dispatch "daemons-dash" nil t)
 

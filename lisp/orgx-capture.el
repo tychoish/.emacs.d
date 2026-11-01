@@ -1,26 +1,68 @@
-;;; orgx-capture.el --- org-capture template configuration -*- lexical-binding: t; -*-
+;;; orgx-capture.el --- org-capture template DSL and registration -*- lexical-binding: t; -*-
+
+;; Author: tychoish <tychoish@tychoish.com>
+;; URL: https://github.com/tychoish/orgx
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "29.1") (org "9.6"))
+;; Keywords: org, capture, convenience
 
 ;;; Commentary:
-;; Capture template registration for `orgx'.  Defines the flat
-;; note/journal/task template families, the project-file registration
-;; helper, the standard template set installed at startup, and the
-;; integration templates for denote and agent-shell-queue.
-;; The interactive `orgx-capture' selector itself lives in `orgx.el'.
+;; Capture template registration and builder DSL for `orgx'.  Defines flat
+;; note, journal, and task template families, project-file registration
+;; macros, customizable standard template sets, and soft-loaded hooks for
+;; Denote and agent-shell-queue.
+;;
+;; The interactive `orgx-capture' command lives in `orgx.el'.
 
 ;;; Code:
 
+(require 'cl-lib)
+(require 'seq)
+(require 'subr-x)
+
 (eval-when-compile
-  (require 'subr-x))
+  (require 'org))
 
 (declare-function denote-org-capture "denote")
 (declare-function denote-last-path "denote")
 (declare-function denote-journal-capture-entry-for-date "denote-journal-capture")
 (declare-function denote-journal-capture-entry-today "denote-journal-capture")
+(declare-function denote-journal-capture-timestamp "denote-journal-capture")
 (declare-function agent-shell-queue-capture-from-context "agent-shell-queue")
+(declare-function annotated-completing-read "annotated-completing-read")
+(declare-function org-agenda-files "org")
 
 (defvar org-capture-templates nil)
+(defvar org-capture-plist nil)
+(defvar org-stored-links nil)
+(defvar org-directory)
 
-;; Capture template integrations for external packages.
+(defgroup orgx-capture nil
+  "Capture template DSL and registration for `orgx'."
+  :group 'org-capture
+  :prefix "orgx-capture-")
+
+(defcustom orgx-capture-default-notes-file "records.org"
+  "Default file name for general note capture templates."
+  :type 'string
+  :group 'orgx-capture)
+
+(defcustom orgx-capture-default-journal-file "journal.org"
+  "Default file name for general journal capture templates."
+  :type 'string
+  :group 'orgx-capture)
+
+(defcustom orgx-capture-default-tasks-file "planner.org"
+  "Default file name for primary task capture templates."
+  :type 'string
+  :group 'orgx-capture)
+
+(defcustom orgx-capture-default-agent-file "agentic.org"
+  "Default file name for agent task and journal capture templates."
+  :type 'string
+  :group 'orgx-capture)
+
+;;; External package integrations
 
 (with-eval-after-load 'denote
   (add-to-list 'org-capture-templates
@@ -58,9 +100,12 @@
                                     (call-interactively
                                      #'agent-shell-queue-capture-from-context)))))
 
-;; org-capture-templates
+;;; Reset and helper functions
 
+;;;###autoload
 (defun orgx-reset-capture-templates ()
+  "Reset `org-capture-templates' to the standard base categories."
+  (interactive)
   (setq org-capture-templates '(("t" "tasks")
                                 ("j" "journal")
                                 ("n" "notes")
@@ -82,12 +127,17 @@ Otherwise prompts for a link target and optional description."
                                           link)
                                         item)))
                               (bound-and-true-p org-stored-links)))
-         (choice (if candidates
-                     (annotated-completing-read
-                      candidates
-                      :prompt "Select stored org-link (or type new): "
-                      :require-match nil)
-                   (read-string "org-link (URL/file/path) => "))))
+         (choice (cond
+                  ((and candidates (fboundp 'annotated-completing-read))
+                   (annotated-completing-read
+                    candidates
+                    :prompt "Select stored org-link (or type new): "
+                    :require-match nil))
+                  (candidates
+                   (completing-read "Select stored org-link (or type new): "
+                                    candidates nil nil))
+                  (t
+                   (read-string "org-link (URL/file/path) => ")))))
     (if-let* ((found (assoc choice candidates)))
         (let ((link (cadr found))
               (desc (caddr found)))
@@ -118,6 +168,8 @@ If unavailable, interactively prompts the user to select or create a link."
      (t
       (orgx--capture-prompt-link)))))
 
+;;; Flat template generator engine
+
 (cl-defun orgx--capture-add-flat-templates
     (&key kind char name path (key "") target body-fn first-sub default-subs
           (prepend t) (time-prompt-suffix nil))
@@ -141,7 +193,7 @@ each becomes a \"<key><suffix>\" template.
 PREPEND becomes the templates' :prepend value.  When a key sequence
 ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
   (when (string-equal char key)
-    (user-error "cannot define %s %s org-capture-templates with key `%s'" kind name char))
+    (user-error "Cannot define %s %s org-capture-templates with key `%s'" kind name char))
 
   (let (specs append-item)
     (unless (string-equal "" key)
@@ -179,8 +231,11 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
           (setq template (append template (list :time-prompt t))))
         (add-to-list 'org-capture-templates template append-item)))))
 
+;;; Public template builder entrypoints
+
 ;;;###autoload
 (cl-defun orgx-capture-add-journal-templates (&key name path (key ""))
+  "Register a full set of journal capture templates for NAME at PATH."
   (orgx--capture-add-flat-templates
    :kind "journal" :char "j" :name name :path path :key key
    :target (if (string-equal "" key)
@@ -207,6 +262,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 
 ;;;###autoload
 (cl-defun orgx-capture-add-task-templates (&key name path (key ""))
+  "Register a full set of task capture templates for NAME at PATH."
   (orgx--capture-add-flat-templates
    :kind "tasks" :char "t" :name name :path path :key key
    :target (list 'file+headline path "Tasks")
@@ -229,6 +285,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 
 ;;;###autoload
 (cl-defun orgx-capture-add-note-templates (&key name path (key ""))
+  "Register a full set of note capture templates for NAME at PATH."
   (orgx--capture-add-flat-templates
    :kind "notes" :char "n" :name name :path path :key key
    :target (list 'file+headline path "Inbox")
@@ -248,7 +305,7 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
                    ("nlq" "%(orgx--capture-prompt-link)" "quick org-link (heading)" :heading-anchor t :immediate-finish t)
                    ("nk" "%c" "emacs kill-ring"))))
 
-;; registration helpers
+;;; Registration helpers
 
 ;;;###autoload
 (defmacro orgx-add-project-file-capture-templates (&rest args)
@@ -256,22 +313,17 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 Expands to a call to `orgx--add-project-file-capture-templates',
 forwarding ARGS (the same :name/:path/:key/:agenda keywords), wrapped in
 `with-eval-after-load' so the templates take effect the moment `org' loads
---- including when `org' loads because the user just ran `org-capture' ---
-without needing a manual, ordered setup step from a per-machine user file.
-Also avoids forcing `org' to load during init merely to register templates."
+without needing a manual, ordered setup step from a per-machine user file."
   `(with-eval-after-load 'org
      (orgx--add-project-file-capture-templates ,@args)))
 
 (cl-defun orgx--add-project-file-capture-templates (&key name (path nil) (key "") (agenda nil))
-  "Defines a set of capture mode templates for adding notes and tasks to a file.
-Called via the `orgx-add-project-file-capture-templates' macro, which
-defers invocation until `org' is loaded.  Call this directly only from code
-that already runs after `org' is loaded."
+  "Define a set of capture templates for adding notes and tasks to PATH."
   (unless (and (boundp 'org-capture-templates) org-capture-templates)
     (orgx-reset-capture-templates))
 
-  (when (and agenda (not (-contains-p (org-agenda-files) (f-full path))))
-    (add-to-list 'org-agenda-files path))
+  (when (and agenda (boundp 'org-agenda-files) (not (member (expand-file-name path) (org-agenda-files))))
+    (add-to-list 'org-agenda-files (expand-file-name path)))
   (when (not (equal "" key))
     (when (string-search "jnt" key)
       (error "org-capture prefix key '%s' for '%s' contains well-known prefix" key path))
@@ -282,22 +334,24 @@ that already runs after `org' is loaded."
     (setq name "planner"))
 
   (setq path (if path
-		 (expand-file-name path)
-	       (concat (f-make-slug name) ".org")))
+                 (expand-file-name path)
+               (concat (subst-char-in-string ?\s ?- (downcase name)) ".org")))
 
-  (add-to-list 'org-capture-templates (list key (format "%s (project; %s)" name (file-name-nondirectory path))) t)
+  (add-to-list 'org-capture-templates
+               (list key (format "%s (project; %s)" name (file-name-nondirectory path)))
+               t)
 
   (when-let* ((file-dir (file-name-directory path))
-	      (_ (not (string-equal file-dir org-directory))))
-    (add-to-list 'org-agenda-files path))
+              (_ (boundp 'org-directory))
+              (_ (not (string-equal file-dir (expand-file-name org-directory)))))
+    (when (boundp 'org-agenda-files)
+      (add-to-list 'org-agenda-files path)))
 
-  (let ((org-filename (if (or (file-exists-p path)
-			      (and
-			       (< 1 (length (f-split path)))
-			       (file-exists-p (f-dirname path))))
-			  path
-			(concat org-directory "/" path))))
-
+  (let ((org-filename (if (file-exists-p path)
+                          path
+                        (if (boundp 'org-directory)
+                            (file-name-concat org-directory path)
+                          path))))
     (orgx-capture-add-note-templates
      :name name
      :key key
@@ -313,28 +367,30 @@ that already runs after `org' is loaded."
      :key key
      :path org-filename)))
 
-;; org capture templates definitions
+;;;###autoload
 (defun orgx--setup-standard-capture-templates ()
+  "Install standard orgx capture templates using customizable default files."
+  (interactive)
   (orgx-capture-add-note-templates
    :name "notes"
-   :path "records.org")
+   :path orgx-capture-default-notes-file)
 
   (orgx-capture-add-journal-templates
    :name "diary"
-   :path "journal.org")
+   :path orgx-capture-default-journal-file)
 
   (orgx-capture-add-task-templates
    :name "prime"
-   :path "planner.org")
+   :path orgx-capture-default-tasks-file)
 
   (orgx-capture-add-task-templates
    :name "agentic"
-   :path "agentic.org"
+   :path orgx-capture-default-agent-file
    :key "a")
 
   (orgx-capture-add-journal-templates
    :name "agentic"
-   :path "agentic.org"
+   :path orgx-capture-default-agent-file
    :key "a"))
 
 (provide 'orgx-capture)
