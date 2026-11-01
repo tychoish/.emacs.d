@@ -70,7 +70,7 @@
 
 ;; Org-mode hooks, faces, and variables
 
-(with-eval-after-load 'org
+(progn
   (add-hook 'org-ctrl-c-ctrl-c-hook #'orgx-set-weekday-of-timestamp)
   (add-hook 'org-shiftup-final-hook #'windmove-up)
   (add-hook 'org-shiftleft-final-hook #'windmove-left)
@@ -168,7 +168,7 @@
 
 ;; Org-agenda custom commands and views
 
-(with-eval-after-load 'org-agenda
+(progn
   (setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
   (setq org-agenda-sticky t)
 
@@ -257,8 +257,7 @@
 (setq org-archive-default-command #'org-archive-to-archive-sibling)
 
 ;; Initialize standard capture templates
-(with-eval-after-load 'orgx-capture
-  (orgx--setup-standard-capture-templates))
+(add-hook 'org-capture-mode-hook #'orgx--setup-standard-capture-templates)
 
 
 ;; Auxiliary package installation for this machine

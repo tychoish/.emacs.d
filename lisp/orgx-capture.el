@@ -64,41 +64,20 @@
 
 ;;; External package integrations
 
-(with-eval-after-load 'denote
-  (add-to-list 'org-capture-templates
-               '("dn" "denote note" plain
-                 (file denote-last-path)
-                 #'denote-org-capture
-                 :no-save t
-                 :immediate-finish nil
-                 :kill-buffer t
-                 :jump-to-captured t)))
+(defun orgx-capture-setup-asq-template ()
+  "Register `agent-shell-queue' template in `org-capture-templates'."
+  (when (and (boundp 'org-capture-templates)
+             (fboundp 'agent-shell-queue-capture-from-context))
+    (add-to-list 'org-capture-templates
+                 '("q" "agent queue item" plain
+                   (function ignore)
+                   ""
+                   :immediate-finish t
+                   :before-finalize (lambda ()
+                                      (call-interactively
+                                       #'agent-shell-queue-capture-from-context))))))
 
-(with-eval-after-load 'denote-journal-capture
-  (add-to-list 'org-capture-templates
-               '("dj" "denote journal (today)" entry
-                 (file+olp denote-journal-capture-entry-today "Journal")
-                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
-                 :no-save t
-                 :kill-buffer t
-                 :jump-to-captured t))
-  (add-to-list 'org-capture-templates
-               '("dJ" "denote journal (date)" entry
-                 (file+olp denote-journal-capture-entry-for-date "Journal")
-                 "* %(denote-journal-capture-timestamp) %^{Entry}\n%?"
-                 :no-save t
-                 :kill-buffer t
-                 :jump-to-captured t)))
-
-(with-eval-after-load 'agent-shell-queue
-  (add-to-list 'org-capture-templates
-               '("q" "agent queue item" plain
-                 (function ignore)
-                 ""
-                 :immediate-finish t
-                 :before-finalize (lambda ()
-                                    (call-interactively
-                                     #'agent-shell-queue-capture-from-context)))))
+(add-hook 'org-capture-mode-hook #'orgx-capture-setup-asq-template)
 
 ;;; Reset and helper functions
 
@@ -309,13 +288,13 @@ ends with TIME-PROMPT-SUFFIX, the template is marked :time-prompt t."
 
 ;;;###autoload
 (defmacro orgx-add-project-file-capture-templates (&rest args)
-  "Register project file capture templates once `org' is loaded.
-Expands to a call to `orgx--add-project-file-capture-templates',
-forwarding ARGS (the same :name/:path/:key/:agenda keywords), wrapped in
-`with-eval-after-load' so the templates take effect the moment `org' loads
-without needing a manual, ordered setup step from a per-machine user file."
-  `(with-eval-after-load 'org
-     (orgx--add-project-file-capture-templates ,@args)))
+  "Register project file capture templates for PATH.
+If `org' is loaded, configures templates immediately; otherwise hooks
+into `org-load-hook'."
+  `(if (featurep 'org)
+       (orgx--add-project-file-capture-templates ,@args)
+     (add-hook 'org-load-hook
+               (lambda () (orgx--add-project-file-capture-templates ,@args)))))
 
 (cl-defun orgx--add-project-file-capture-templates (&key name (path nil) (key "") (agenda nil))
   "Define a set of capture templates for adding notes and tasks to PATH."
