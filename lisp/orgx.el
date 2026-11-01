@@ -33,6 +33,7 @@
 (require 'org-archive)
 (require 'ol)
 
+(declare-function org-cycle-force-archived "org")
 (declare-function whitespace-cleanup "whitespace")
 (declare-function org-annotate-file "org-annotate-file")
 (declare-function consult-org-heading "consult")
