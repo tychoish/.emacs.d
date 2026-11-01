@@ -77,7 +77,7 @@
 (declare-function popper-cycle "popper")
 (declare-function popper-kill-latest-popup "popper")
 (declare-function revbufs "revbufs")
-(defvar orgx-minor-mode-capture-map)
+(defvar orgx-capture-map)
 (declare-function consult-info "consult")
 (declare-function consult-man "consult")
 
@@ -450,7 +450,7 @@ binding (see `keymap-set'.)"
 (keymap-set orgx-global-map "j" #'orgx-capture)
 (keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
 (keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
-(hud-bind-deferred-keymap orgx-global-map "c" 'orgx 'orgx-minor-mode-capture-map "org-capture-commands")
+(hud-bind-deferred-keymap orgx-global-map "c" 'orgx 'orgx-capture-map "org-capture-commands")
 (keymap-set orgx-global-map "C-s" #'orgx-capture-shell-toggle)
 (keymap-set orgx-global-map "C-t" #'orgx-capture-shell-transient)
 

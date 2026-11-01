@@ -23,7 +23,6 @@
 (autoload 'orgx-mode-turn-on "orgx" nil t)
 (autoload 'orgx-mode "orgx" nil t)
 (autoload 'orgx-capture-setup-standard-templates "orgx-capture" nil t)
-(autoload 'orgx-setup-standard-capture-templates "orgx" nil t)
 (autoload 'orgx-denote-setup-agenda-commands "orgx-denote" nil t)
 
 ;; Supporting export/format packages and commands

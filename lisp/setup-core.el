@@ -39,7 +39,6 @@
 (autoload 'orgx-agenda-view "orgx" nil t)
 (autoload 'orgx-agenda-files-open "orgx" nil t)
 (autoload 'orgx-mode-turn-on "orgx")
-(autoload 'orgx-minor-mode-turn-on "orgx")
 (autoload 'orgx-mode "orgx" nil t)
 (autoload 'orgx-agenda-minor-mode-turn-on "orgx")
 (autoload 'orgx-agenda-files-reload "orgx" nil t)

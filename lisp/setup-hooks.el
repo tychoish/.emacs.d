@@ -137,7 +137,7 @@
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
 
-(add-hook 'org-mode-hook #'orgx-minor-mode-turn-on)
+(add-hook 'org-mode-hook #'orgx-mode-turn-on)
 (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
 
 (with-eval-after-load 'whitespace
@@ -211,14 +211,14 @@ completion candidate outlives its buffer."
   (hud-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
 (with-eval-after-load 'denote-dash
-  (keymap-set denote-dash-org-map "r" #'orgx-migrate-subtree-to-denote)
+  (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree)
   (make-read-extended-command-for-prefix "denote"
     :bind-map denote-dash-global-map
     :bind-key "x"))
 
 (with-eval-after-load 'orgx
   (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
-  (orgx-setup-standard-capture-templates))
+  (orgx-capture-setup-standard-templates))
 
 (with-eval-after-load 'daemons-dash
   (require 'daemons-dash-config))
