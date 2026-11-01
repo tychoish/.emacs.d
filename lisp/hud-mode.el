@@ -43,11 +43,6 @@
 (declare-function magit-dash-worktree-dispatch "magit-dash")
 (declare-function git-link "git-link")
 (declare-function tychoish-mail-select-account "setup-mail")
-(declare-function orgx-agenda-view "orgx")
-(declare-function orgx-agenda-files-reload "orgx")
-(declare-function orgx-agenda-files-open "orgx")
-(declare-function orgx-capture "orgx")
-(declare-function orgx-agenda-untagged-in-file "orgx")
 (declare-function agent-shell "agent-shell")
 (declare-function agent-shell-toggle "agent-shell")
 (declare-function agent-shell-switch-buffer "agent-shell")
@@ -67,7 +62,6 @@
 (declare-function agent-shell-menu-send-buffer "agent-shell-menu")
 (declare-function agent-shell-menu-send-file "agent-shell-menu")
 (declare-function agent-shell-yank-dwim "agent-shell")
-(declare-function orgx-agenda-for-file "orgx")
 (declare-function whitespace-cleanup "whitespace")
 (declare-function flyspell-correct-next "flyspell-correct")
 (declare-function flyspell-correct-previous "flyspell-correct")
@@ -77,7 +71,6 @@
 (declare-function popper-cycle "popper")
 (declare-function popper-kill-latest-popup "popper")
 (declare-function revbufs "revbufs")
-(defvar orgx-capture-map)
 (declare-function consult-info "consult")
 (declare-function consult-man "consult")
 
@@ -437,33 +430,6 @@ binding (see `keymap-set'.)"
 (keymap-set hud-docker-map "m" #'docker-contexts)
 (keymap-set hud-docker-map "p" #'docker-compose)
 
-(defvar-keymap orgx-global-map
-  :name "org"
-  :doc "Org commands under C-c o (hud-mode).")
-
-(keymap-set orgx-global-map "4" #'org-agenda)
-(keymap-set orgx-global-map "k" #'org-capture)
-(keymap-set orgx-global-map "s" #'org-save-all-org-buffers)
-(keymap-set orgx-global-map "a" #'orgx-agenda-view)
-(keymap-set orgx-global-map "r" #'orgx-agenda-files-reload)
-(keymap-set orgx-global-map "f" #'orgx-agenda-files-open)
-(keymap-set orgx-global-map "j" #'orgx-capture)
-(keymap-set orgx-global-map "u" (cons "untagged-in-file" #'orgx-agenda-untagged-in-file))
-(keymap-set orgx-global-map "/" #'orgx-agenda-for-file)
-(hud-bind-deferred-keymap orgx-global-map "c" 'orgx 'orgx-capture-map "org-capture-commands")
-(keymap-set orgx-global-map "C-s" #'orgx-capture-shell-toggle)
-(keymap-set orgx-global-map "C-t" #'orgx-capture-shell-transient)
-
-;; nested keymaps
-(defvar-keymap orgx-link-map
-  :name "org-link"
-  :doc "Org link commands under C-c o l (hud-mode).")
-
-(keymap-set orgx-link-map "s" #'org-store-link)
-(keymap-set orgx-link-map "a" #'org-id-store-link)
-(keymap-set orgx-link-map "i" #'org-insert-link)
-(keymap-set orgx-link-map "n" #'org-annotate-file)
-
 (defvar-keymap hud-display-opacity-map
   :name "opacity"
   :doc "Opacity commands under C-c f o (hud-mode).")
@@ -667,8 +633,6 @@ binding (see `keymap-set'.)"
 (keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
 (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
 
-(keymap-set orgx-global-map "l" (cons "org-link" orgx-link-map))
-
 (keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
 (keymap-set hud-mode-map "C-c [" #'flyspell-correct-next)
 (keymap-set hud-mode-map "C-c ]" #'flyspell-correct-previous)
@@ -729,7 +693,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-c q" (cons "anzu" hud-anzu-map))
 (keymap-set hud-mode-map "C-x g" (cons "magit" hud-magit-map))
 (keymap-set hud-mode-map "C-x d" (cons "docker" hud-docker-map))
-(keymap-set hud-mode-map "C-c o" (cons "org" orgx-global-map))
+(hud-bind-deferred-keymap hud-mode-map "C-c o" 'orgx 'orgx-global-map "org")
 (keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
 (keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
 (keymap-set hud-mode-map "C-c p" (cons "projectile" 'projectile-command-map))
