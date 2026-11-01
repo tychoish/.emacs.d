@@ -36,9 +36,9 @@
 (autoload 'tychoish-mail-add-refile-rule "setup-mail")
 
 (with-eval-after-load 'org
-  (require 'setup-orgx))
+  (require 'orgx))
 (with-eval-after-load 'org-capture
-  (require 'setup-orgx))
+  (require 'orgx))
 
 (autoload 'daemons-dash "daemons-dash" nil t)
 (autoload 'daemons-dash-dispatch "daemons-dash" nil t)

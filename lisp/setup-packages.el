@@ -98,7 +98,9 @@
    nerd-icons-dired
    nerd-icons-xref
    ninja-mode
+   ob-go
    ob-mermaid
+   ob-rust
    ollama
    org-contrib
    ox-gfm
