@@ -56,6 +56,7 @@
    ollama-tailnet
    orderless
    org-docsgen
+   orgx
    shell-maker
    sprite
    tailscale
@@ -99,7 +100,14 @@
    nerd-icons-dired
    nerd-icons-xref
    ninja-mode
+   ob-mermaid
    ollama
+   org-contrib
+   ox-gfm
+   ox-gist
+   ox-hugo
+   ox-leanpub
+   ox-rst
    package-build
    pkgbuild-mode
    popper
@@ -107,6 +115,7 @@
    revbufs
    slime
    tempel-collection
+   toc-org
    tracking
    undercover
    wgrep

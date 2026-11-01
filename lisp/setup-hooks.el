@@ -217,15 +217,8 @@ completion candidate outlives its buffer."
     :bind-key "x"))
 
 (with-eval-after-load 'orgx
-  (add-one-shot-hook
-   :name "org-install-aux-packages"
-   :hook 'org-mode-hook
-   :operation #'orgx--install-auxiliary-packages)
-
   (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
-  (orgx--setup-standard-capture-templates)
-  (advice-add 'org-agenda :before #'ad:org-agenda--open-files)
-  (advice-add 'org-agenda-redo :around #'ad:org-agenda-redo))
+  (orgx-setup-standard-capture-templates))
 
 (with-eval-after-load 'daemons-dash
   (require 'daemons-dash-config))
