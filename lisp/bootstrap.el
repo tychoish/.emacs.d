@@ -348,6 +348,13 @@ registration messages without batch logging. Calls ON-DONE when complete."
   (with-slow-op-timer "<bootstrap> [persistence] emacs-instance-persistence"
     (bootstrap-set-up-emacs-instance-persistence)))
 
+(declare-function orgx-global-mode "orgx")
+
+(defcustom bootstrap-late-enable-modes-hook nil
+  "Hook run during late bootstrap to enable tool and integration modes."
+  :type 'hook
+  :group 'bootstrap)
+
 (defun bootstrap-init-integrations ()
   (with-slow-op-timer "<bootstrap> [modes] denote-dash-global-mode"
     (denote-dash-global-mode 1))
@@ -364,7 +371,11 @@ registration messages without batch logging. Calls ON-DONE when complete."
   (with-slow-op-timer "<bootstrap> [modules] popper"
     (popper-mode 1))
   (with-slow-op-timer "<bootstrap> [modes] grepx"
-    (grepx-mode 1)))
+    (grepx-mode 1))
+  (with-slow-op-timer "<bootstrap> [hook] late-enable-modes"
+    (run-hooks 'bootstrap-late-enable-modes-hook)))
+
+(add-hook 'bootstrap-late-enable-modes-hook #'orgx-global-mode)
 
 (defun bootstrap-init-late-services ()
   "Initialize secondary tool integrations, services, and background maintenance."

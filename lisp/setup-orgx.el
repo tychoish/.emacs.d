@@ -75,31 +75,7 @@
         (:endgroup . nil)
         ("question" . ?q)))
 
-;; Refile targets (file scope)
-
-(setq org-refile-targets '((org-agenda-files :maxlevel . 4)))
-
 ;; Agenda custom commands and views
-
-(setq org-agenda-sticky t)
-(setq org-agenda-include-diary nil)
-(setq org-agenda-block-separator nil)
-(setq org-agenda-columns-add-appointments-to-effort-sum t)
-(setq org-agenda-compact-blocks t)
-(setq org-agenda-default-appointment-duration 60)
-(setq org-agenda-inhibit-startup nil)
-(setq org-agenda-mouse-1-follows-link t)
-(setq org-agenda-use-time-grid t)
-(setq org-agenda-skip-deadline-if-done nil)
-(setq org-agenda-skip-scheduled-if-deadline-is-shown nil)
-(setq org-agenda-skip-scheduled-if-done t)
-(setq org-agenda-skip-unavailable-files t)
-(setq org-agenda-skip-timestamp-if-done t)
-(setq org-agenda-todo-ignore-deadlines t)
-(setq org-agenda-todo-ignore-scheduled t)
-(setq org-agenda-start-on-weekday nil)
-
-(setq org-agenda-skip-function-global #'orgx-skip-child-of-project-tag)
 
 (setq org-agenda-custom-commands
       `(("b" "Backlog" tags "+backlog|+inbox-ITEM=\"Inbox\"|TODO=BLOCKED"
@@ -119,10 +95,6 @@
          ((org-agenda-skip-function #'orgx-skip-unless-untagged)
           (org-agenda-overriding-header "Headings with no local or inherited tags")
           (orgx-agenda-include-inherited-tags t)))))
-
-;; Global mode activation (runs `orgx-setup' and wires org/agenda/capture hooks)
-
-(orgx-global-minor-mode 1)
 
 (provide 'setup-orgx)
 ;;; setup-orgx.el ends here
