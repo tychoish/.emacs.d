@@ -80,6 +80,7 @@
         ("ACKNOWLEDGED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
         ("IGNORED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
         ("REJECTED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
+        ("DISMISSED" . (:foreground ,(modus-themes-get-color-value 'fg-dim)))
         ("BACKLOG" . (:foreground ,(modus-themes-get-color-value 'indigo) :weight bold))
         ("INPROGRESS" . (:foreground ,(modus-themes-get-color-value 'blue) :weight bold))
         ("SCHEDULED" . (:foreground ,(modus-themes-get-color-value 'cyan-warmer) :weight bold))
@@ -190,7 +191,10 @@
 (setq org-archive-default-command #'org-archive-to-archive-sibling)
 
 ;; Initialize standard capture templates
-(add-hook 'org-capture-mode-hook #'orgx-capture-setup-standard-templates)
+(with-eval-after-load 'org-capture
+  (orgx-capture-setup-standard-templates))
+(when (featurep 'org-capture)
+  (orgx-capture-setup-standard-templates))
 
 (provide 'setup-orgx)
 ;;; setup-orgx.el ends here

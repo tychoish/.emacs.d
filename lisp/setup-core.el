@@ -53,6 +53,8 @@
 
 (add-hook 'org-load-hook (lambda () (require 'setup-orgx)))
 (add-hook 'org-mode-hook (lambda () (require 'setup-orgx)))
+(with-eval-after-load 'org-capture
+  (require 'setup-orgx))
 
 (autoload 'daemons-dash "daemons-dash" nil t)
 (autoload 'daemons-dash-dispatch "daemons-dash" nil t)
