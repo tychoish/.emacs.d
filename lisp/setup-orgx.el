@@ -120,15 +120,9 @@
           (org-agenda-overriding-header "Headings with no local or inherited tags")
           (orgx-agenda-include-inherited-tags t)))))
 
-;; Initialize orgx defaults, templates, and agenda integration
+;; Global mode activation (runs `orgx-setup' and wires org/agenda/capture hooks)
 
-(orgx-setup)
-
-;; Hooks and minor mode activation
-
-(add-hook 'org-mode-hook #'orgx-mode-turn-on)
-(add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
-(add-hook 'org-capture-mode-hook #'orgx-mode-turn-on)
+(orgx-global-minor-mode 1)
 
 (provide 'setup-orgx)
 ;;; setup-orgx.el ends here
