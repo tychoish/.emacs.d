@@ -53,33 +53,33 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; orgx minor-mode keymap structure
 
-(ert-deftest orgx/minor-mode-map-is-keymap ()
-  "orgx-minor-mode-map is a real keymap."
-  (should (keymapp orgx-minor-mode-map)))
+(ert-deftest orgx/mode-map-is-keymap ()
+  "orgx-mode-map is a real keymap."
+  (should (keymapp orgx-mode-map)))
 
-(ert-deftest orgx/minor-mode-map-C-c-o-is-personal-map ()
-  "C-c o in orgx-minor-mode-map leads to orgx-minor-mode-commands-map."
-  (should (eq orgx-minor-mode-commands-map
-              (keymap-lookup orgx-minor-mode-map "C-c o"))))
+(ert-deftest orgx/mode-map-C-c-o-is-command-map ()
+  "C-c o in orgx-mode-map leads to orgx-command-map."
+  (should (eq orgx-command-map
+              (keymap-lookup orgx-mode-map "C-c o"))))
 
-(ert-deftest orgx/personal-map-f-is-archive-submap ()
-  "f in orgx-minor-mode-commands-map leads to the archive submap."
-  (should (eq orgx-minor-mode-archive-map
-              (keymap-lookup orgx-minor-mode-commands-map "f"))))
+(ert-deftest orgx/command-map-f-is-agenda-files-open ()
+  "f in orgx-command-map opens agenda files."
+  (should (eq #'orgx-agenda-files-open
+              (keymap-lookup orgx-command-map "f"))))
 
-(ert-deftest orgx/personal-map-c-is-capture-submap ()
-  "c in orgx-minor-mode-commands-map leads to the capture submap."
-  (should (eq orgx-minor-mode-capture-map
-              (keymap-lookup orgx-minor-mode-commands-map "c"))))
+(ert-deftest orgx/command-map-c-is-capture-submap ()
+  "c in orgx-command-map leads to the capture submap."
+  (should (eq orgx-capture-map
+              (keymap-lookup orgx-command-map "c"))))
 
-(ert-deftest orgx/personal-map-no-capitals ()
-  "No plain capital-letter keys in orgx-minor-mode-commands-map (W was dropped)."
-  (should-not (keymap-lookup orgx-minor-mode-commands-map "W")))
+(ert-deftest orgx/command-map-no-capitals ()
+  "No plain capital-letter keys in orgx-command-map (W was dropped)."
+  (should-not (keymap-lookup orgx-command-map "W")))
 
-(ert-deftest orgx/personal-map-has-reload-and-for-file ()
-  "r (reload) and / (for-file) are in orgx-minor-mode-commands-map."
-  (should (commandp (keymap-lookup orgx-minor-mode-commands-map "r")))
-  (should (commandp (keymap-lookup orgx-minor-mode-commands-map "/"))))
+(ert-deftest orgx/command-map-has-reload-and-for-file ()
+  "r (reload) and / (for-file) are in orgx-command-map."
+  (should (commandp (keymap-lookup orgx-command-map "r")))
+  (should (commandp (keymap-lookup orgx-command-map "/"))))
 
 (ert-deftest orgx/agenda-minor-mode-map-is-keymap ()
   "orgx-agenda-minor-mode-map is a real keymap."
@@ -93,7 +93,7 @@
 
 (ert-deftest orgx/turn-on-fns-on-hooks ()
   "Named turn-on functions are registered on the mode hooks."
-  (should (memq #'orgx-minor-mode-turn-on org-mode-hook))
+  (should (memq #'orgx-mode-turn-on org-mode-hook))
   (should (memq #'orgx-agenda-minor-mode-turn-on org-agenda-mode-hook)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

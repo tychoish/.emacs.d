@@ -693,7 +693,6 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-c q" (cons "anzu" hud-anzu-map))
 (keymap-set hud-mode-map "C-x g" (cons "magit" hud-magit-map))
 (keymap-set hud-mode-map "C-x d" (cons "docker" hud-docker-map))
-(hud-bind-deferred-keymap hud-mode-map "C-c o" 'orgx 'orgx-global-map "org")
 (keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
 (keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
 (keymap-set hud-mode-map "C-c p" (cons "projectile" 'projectile-command-map))
