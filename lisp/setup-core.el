@@ -306,8 +306,6 @@
     "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
     (tychoish--flyspell-enable-idle #'flyspell-prog-mode))
 
-  (with-eval-after-load 'minaid
-    (keymap-set minaid-consult-map "f" #'consult-flyspell))
 
   (add-hook 'prog-mode-hook #'tychoish--flyspell-prog-mode-idle)
   (add-hook 'text-mode-hook #'tychoish--flyspell-mode-idle)
@@ -386,8 +384,6 @@ otherwise keep replaying stale detection results."
   :defines (flycheck-checkers)
   :commands (flycheck-disable-checker)
   :init
-  (with-eval-after-load 'minaid
-    (keymap-set minaid-consult-map "c" #'consult-flycheck))
   :config
   (defun tychoish/flycheck-prefer-eldoc ()
     (add-hook 'eldoc-documentation-functions #'flycheck-eldoc nil t) ;; local

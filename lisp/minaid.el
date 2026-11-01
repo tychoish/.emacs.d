@@ -56,6 +56,8 @@
 (declare-function consult-line-multi "consult")
 (declare-function consult-history "consult")
 (declare-function consult-isearch-history "consult")
+(declare-function consult-flyspell "consult-flyspell")
+(declare-function consult-flycheck "consult-flycheck")
 (declare-function nerd-icons-corfu-formatter "nerd-icons-corfu")
 (declare-function nerd-icons-completion-marginalia-setup "nerd-icons-completion")
 (declare-function eglot-completion-at-point "eglot")
@@ -186,6 +188,8 @@
 (keymap-set minaid-consult-map "g" #'grepx-project)
 (keymap-set minaid-consult-map "m" #'grepx-menu)
 (keymap-set minaid-consult-map "k" 'consult-kmacro)
+(keymap-set minaid-consult-map "f" #'consult-flyspell)
+(keymap-set minaid-consult-map "c" #'consult-flycheck)
 
 (defvaralias 'minaid-mode-map 'minaid-global-map
   "Alias for `minaid-global-map' matching conventional minor-mode keymap name.")

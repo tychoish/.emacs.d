@@ -56,8 +56,6 @@
         (electric-pair-default-inhibit char)
       (electric-pair-conservative-inhibit char))))
 
-(defalias 'bootstrap-electric-pair-inhibition #'setup-electric-pair-inhibition)
-
 (with-eval-after-load 'elec-pair
   (setq electric-indent-chars '(?\n ?:))
   (setq electric-pair-inhibit-predicate #'setup-electric-pair-inhibition)
@@ -94,7 +92,7 @@
 
 (add-lazy-init
  :name "<bootstrap> agent-shell antigravity"
- :delay 60
+ :delay 20
  :operation (lambda ()
               (require 'agent-shell)
               (tychoish/agent-shell-antigravity-bootstrap)))
@@ -219,9 +217,6 @@ completion candidate outlives its buffer."
 (with-eval-after-load 'orgx
   (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
   (orgx-capture-setup-standard-templates))
-
-(with-eval-after-load 'daemons-dash
-  (require 'daemons-dash-config))
 
 (with-eval-after-load 'flycheck-eglot
   (setq-default flycheck-eglot-exclusive nil)

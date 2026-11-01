@@ -132,22 +132,21 @@ Otherwise, return the highest-priority available backend of TYPE."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Keymaps Owned by Grepx
 
-;;;###autoload
 (defvar-keymap grepx-rg-map
   :name "+ripgrep"
   :doc "Ripgrep commands under C-c g r.")
 
-;;;###autoload
 (defvar-keymap grepx-project-map
   :name "project-grep"
   :doc "Project search commands under C-c g p.")
 
-;;;###autoload
 (defvar-keymap grepx-search-map
   :name "search"
   :doc "In-buffer and multi-buffer search commands under C-c g s.")
 
-;;;###autoload
+(defvaralias 'grepx-command-map 'grepx-map
+  "Alias for `grepx-map' matching standard package keymap conventions.")
+
 (defvar-keymap grepx-map
   :name "grep"
   :doc "Root search commands under C-c g.")
@@ -188,10 +187,13 @@ Otherwise, return the highest-priority available backend of TYPE."
 (keymap-set grepx-map "r" (cons "+ripgrep" grepx-rg-map))
 (keymap-set grepx-map "p" (cons "+project" grepx-project-map))
 
-;;;###autoload
+(defvaralias 'grepx-global-mode-map 'grepx-mode-map
+  "Alias for `grepx-mode-map' matching standard global minor-mode conventions.")
+
 (defvar-keymap grepx-mode-map
   :doc "Keymap active when `grepx-mode' is enabled."
-  "C-c g" (cons "grep" grepx-map))
+  "C-c g" (cons "grep" grepx-command-map))
+
 
 (defvar grepx-live-minibuffer-map
   (let ((map (make-sparse-keymap)))
@@ -736,10 +738,17 @@ prompt for the initial query using ACR context-at-point."
     (define-key isearch-mode-map (kbd "M-s g") #'grepx-project)))
 
 ;;;###autoload
+(defvaralias 'grepx-global-mode 'grepx-mode
+  "Alias for `grepx-mode' matching global minor-mode conventions.")
+
+(defalias 'grepx-global-mode #'grepx-mode
+  "Alias for `grepx-mode' matching global minor-mode conventions.")
+
 (define-minor-mode grepx-mode
   "Global minor mode consolidating grep, ripgrep, and search interfaces."
   :global t
   :group 'grepx
+  :keymap grepx-mode-map
   (if grepx-mode
       (progn
         (when (and grepx-ripgrep-config-path

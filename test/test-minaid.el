@@ -41,6 +41,8 @@
   (should (eq (keymap-lookup minaid-consult-map "r") #'grepx-live))
   (should (eq (keymap-lookup minaid-consult-map "g") #'grepx-project))
   (should (eq (keymap-lookup minaid-consult-map "m") #'grepx-menu))
+  (should (eq (keymap-lookup minaid-consult-map "f") #'consult-flyspell))
+  (should (eq (keymap-lookup minaid-consult-map "c") #'consult-flycheck))
   (should (eq (keymap-lookup minaid-consult-search-map "l") #'consult-line))
   (should (eq (keymap-lookup minaid-consult-search-map "r") #'grepx-live))
   (should (eq (keymap-lookup minaid-consult-search-map "g") #'grepx-project))

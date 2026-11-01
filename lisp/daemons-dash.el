@@ -880,8 +880,7 @@ MESSAGE-FMT is the format string for the success message."
 (defun daemons-dash-verify-config ()
   "Trigger declarative config verification and refresh dashboard."
   (interactive)
-  (require 'daemons-dash-config nil t)
-  (daemons-dash-refresh)
+    (daemons-dash-refresh)
   (message "daemons-dash: declarative config verification updated"))
 
 ;;; Transient Menus
@@ -966,4 +965,5 @@ MESSAGE-FMT is the format string for the success message."
     buf))
 
 (provide 'daemons-dash)
+(require 'daemons-dash-config nil t)
 ;;; daemons-dash.el ends here

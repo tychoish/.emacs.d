@@ -688,8 +688,5 @@ Only called when `eglot' is loaded and `eglox-global-mode' is enabled."
       (eglox--enable-global)
     (eglox--disable-global)))
 
-(with-eval-after-load 'eglot
-  (eglox--init-eglot))
-
 (provide 'eglox)
 ;;; eglox.el ends here

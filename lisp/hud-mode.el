@@ -264,10 +264,9 @@ Optionally bind the command to BIND-KEY in BIND-MAP with KEY-ALIAS as the which-
 	 ,(format "Predicate for `read-extended-command-predicate' to filter commands returning only those that start with the prefix `%s'" prefix)
 	 (string-prefix-p ,prefix (symbol-name command)))
        ,(when bind-key
-	  `(progn
-	     (keymap-set ,(or bind-map 'global-map) ,bind-key #',user-command-symbol)
-	     (with-eval-after-load 'which-key
-	       (which-key-add-keymap-based-replacements ,(or bind-map 'global-map) ,bind-key ,(or key-alias (format "%s-commands" prefix)))))))))
+	  `(keymap-set ,(or bind-map 'global-map) ,bind-key
+                       (cons ,(or key-alias (format "%s-commands" prefix))
+                             #',user-command-symbol))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -659,7 +658,6 @@ binding (see `keymap-set'.)"
 
 
 (keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
-(hud-bind-deferred-keymap hud-ide-map "l" 'eglox 'eglox-global-map "eglot")
 (keymap-set hud-shell-map "e" (cons "shell-eat" hud-shell-eat-map))
 (keymap-set hud-robot-map "s" (cons "agent-shell" hud-robot-agent-shell-map))
 (keymap-set hud-robot-agent-shell-map "s" (cons "send" hud-robot-agent-shell-send-map))
@@ -685,9 +683,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))
 (keymap-set hud-mode-map "C-c k" (cons "kill" hud-kill-map))
 (keymap-set hud-mode-map "C-c w" (cons "web-browser" hud-web-browser-map))
-(hud-bind-deferred-keymap hud-mode-map "C-c g" 'grepx 'grepx-map "grep")
 (keymap-set hud-mode-map "C-c h" (cons "docs" hud-docs-map))
-(keymap-set hud-mode-map "C-c l" (cons "ide" hud-ide-map))
 (keymap-set hud-mode-map "C-c s" (cons "shell" hud-shell-map))
 (keymap-set hud-mode-map "C-c r" (cons "robot" hud-robot-map))
 (keymap-set hud-mode-map "C-c q" (cons "anzu" hud-anzu-map))

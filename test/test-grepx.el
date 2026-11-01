@@ -138,7 +138,10 @@
   (should (eq (keymap-lookup grepx-project-map "f") #'find-grep))
   (should (eq (keymap-lookup grepx-project-map "c") #'grepx-compile))
 
-  ;; grepx-mode-map bindings
+  ;; grepx aliases and mode maps
+  (should (eq grepx-command-map grepx-map))
+  (should (eq grepx-global-mode-map grepx-mode-map))
+  (should (eq (keymap-lookup grepx-global-mode-map "C-c g") grepx-command-map))
   (should (eq (keymap-lookup grepx-mode-map "C-c g") grepx-map))
 
   ;; deadgrep-mode-map bindings
