@@ -82,6 +82,13 @@
 ;;; Reset and helper functions
 
 ;;;###autoload
+(defun orgx-capture (&optional goto keys)
+  "Launch Org capture using `orgx-capture' configured templates.
+GOTO and KEYS are passed directly to `org-capture'."
+  (interactive "P")
+  (org-capture goto keys))
+
+;;;###autoload
 (defun orgx-reset-capture-templates ()
   "Reset `org-capture-templates' to the standard base categories."
   (interactive)

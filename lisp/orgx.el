@@ -33,18 +33,17 @@
 (require 'org-archive)
 (require 'ol)
 
-(autoload 'whitespace-cleanup "whitespace")
-(autoload 'org-annotate-file "org-annotate-file")
-(autoload 'consult-org-heading "consult")
-(autoload 'agent-shell-queue-org-refile-from-heading "agent-shell-queue-org" nil t)
+(declare-function whitespace-cleanup "whitespace")
+(declare-function org-annotate-file "org-annotate-file")
+(declare-function consult-org-heading "consult")
+(declare-function agent-shell-queue-org-refile-from-heading "agent-shell-queue-org")
 
-;; Autoload capture workflows from orgx-capture and orgx-capture-shell on demand
-(autoload 'orgx-capture "orgx-capture" "Entrypoint for orgx capture workflows." t)
-(autoload 'orgx-reset-capture-templates "orgx-capture" "Reset org-capture-templates.")
-(autoload 'orgx-capture-shell "orgx-capture-shell" "Launch the orgx capture shell." t)
-(autoload 'orgx-capture-shell-toggle "orgx-capture-shell" "Toggle the orgx capture shell popup window." t)
-(autoload 'orgx-capture-shell-transient "orgx-capture-shell" "Summon transient modal interface for orgx capture shell." t)
-(autoload 'orgx-migrate-subtree-to-denote "orgx-denote" "Extract Org subtree to Denote note." t)
+(declare-function orgx-capture "orgx-capture")
+(declare-function orgx-reset-capture-templates "orgx-capture")
+(declare-function orgx-capture-shell "orgx-capture-shell")
+(declare-function orgx-capture-shell-toggle "orgx-capture-shell")
+(declare-function orgx-capture-shell-transient "orgx-capture-shell")
+(declare-function orgx-migrate-subtree-to-denote "orgx-denote")
 
 (defvar org-link-parameters)
 (defvar org-stored-links)
