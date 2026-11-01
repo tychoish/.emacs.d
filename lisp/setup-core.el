@@ -35,7 +35,13 @@
 (autoload 'tychoish-define-mail-account "setup-mail")
 (autoload 'tychoish-mail-add-refile-rule "setup-mail")
 
-(autoload 'orgx-capture "orgx" nil t)
+(unless (locate-library "orgx")
+  (let ((local-orgx (expand-file-name "~/src/orgx/lisp")))
+    (when (file-directory-p local-orgx)
+      (add-to-list 'load-path local-orgx)
+      (load (expand-file-name "orgx-loaddefs.el" local-orgx) t t))))
+
+(autoload 'orgx-capture "orgx-capture" nil t)
 (autoload 'orgx-agenda-view "orgx" nil t)
 (autoload 'orgx-agenda-files-open "orgx" nil t)
 (autoload 'orgx-mode-turn-on "orgx")
