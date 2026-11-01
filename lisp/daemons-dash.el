@@ -82,7 +82,11 @@
 
 (defun daemons-dash-get-provider (name)
   "Return provider struct registered under symbol NAME, or nil."
-  (map-elt daemons-dash-providers name))
+  (or (map-elt daemons-dash-providers name)
+      (progn
+        (when (= (hash-table-count daemons-dash-providers) 0)
+          (daemons-dash-register-default-providers))
+        (map-elt daemons-dash-providers name))))
 
 ;;; Customization Options & Group
 
@@ -302,18 +306,7 @@ PROVIDER-SYM is `systemd-user' or `systemd-system'."
     (require 'journalctl-mode nil t)
     (daemons-dash--show-journalctl (format "--user-unit=%s" unit))))
 
-(daemons-dash-register-provider
- (daemons-dash-provider--make
-  :name 'systemd-user
-  :label "systemd-user"
-  :list-fn #'daemons-dash-systemd-user-list
-  :start-fn #'daemons-dash-systemd-user-start
-  :stop-fn #'daemons-dash-systemd-user-stop
-  :restart-fn #'daemons-dash-systemd-user-restart
-  :enable-fn #'daemons-dash-systemd-user-enable
-  :disable-fn #'daemons-dash-systemd-user-disable
-  :logs-fn #'daemons-dash-systemd-user-logs
-  :inspect-fn #'daemons-dash-systemd-user-logs))
+
 
 ;; 2. systemd-system
 (defun daemons-dash-systemd-system-list ()
@@ -367,18 +360,7 @@ PROVIDER-SYM is `systemd-user' or `systemd-system'."
     (require 'journalctl-mode nil t)
     (daemons-dash--show-journalctl (format "--unit=%s" unit))))
 
-(daemons-dash-register-provider
- (daemons-dash-provider--make
-  :name 'systemd-system
-  :label "systemd-system"
-  :list-fn #'daemons-dash-systemd-system-list
-  :start-fn #'daemons-dash-systemd-system-start
-  :stop-fn #'daemons-dash-systemd-system-stop
-  :restart-fn #'daemons-dash-systemd-system-restart
-  :enable-fn #'daemons-dash-systemd-system-enable
-  :disable-fn #'daemons-dash-systemd-system-disable
-  :logs-fn #'daemons-dash-systemd-system-logs
-  :inspect-fn #'daemons-dash-systemd-system-logs))
+
 
 ;; 3. sprite
 (defun daemons-dash-sprite--make-item (sprite)
@@ -438,18 +420,7 @@ PROVIDER-SYM is `systemd-user' or `systemd-system'."
       (pop-to-buffer (sprite--log-buffer-name name)))
      (t (message "No log buffer available for sprite %s" name)))))
 
-(daemons-dash-register-provider
- (daemons-dash-provider--make
-  :name 'sprite
-  :label "sprite"
-  :list-fn #'daemons-dash-sprite-list
-  :start-fn #'ignore
-  :stop-fn #'daemons-dash-sprite-stop
-  :restart-fn #'daemons-dash-sprite-restart
-  :enable-fn #'ignore
-  :disable-fn #'ignore
-  :logs-fn #'daemons-dash-sprite-logs
-  :inspect-fn #'daemons-dash-sprite-logs))
+
 
 ;; 4. docker
 (defun daemons-dash-docker--parse-line (line)
@@ -525,18 +496,7 @@ PROVIDER-SYM is `systemd-user' or `systemd-system'."
     (pop-to-buffer buf)
     buf))
 
-(daemons-dash-register-provider
- (daemons-dash-provider--make
-  :name 'docker
-  :label "docker"
-  :list-fn #'daemons-dash-docker-list
-  :start-fn #'daemons-dash-docker-start
-  :stop-fn #'daemons-dash-docker-stop
-  :restart-fn #'daemons-dash-docker-restart
-  :enable-fn #'ignore
-  :disable-fn #'ignore
-  :logs-fn #'daemons-dash-docker-logs
-  :inspect-fn #'daemons-dash-docker-logs))
+
 
 ;; 5. ollama
 (defun daemons-dash-ollama--model-to-item (m)
@@ -601,18 +561,69 @@ PROVIDER-SYM is `systemd-user' or `systemd-system'."
   "View logs for Ollama daemon."
   (daemons-dash-systemd-system-logs "systemd-system:ollama.service"))
 
-(daemons-dash-register-provider
- (daemons-dash-provider--make
-  :name 'ollama
-  :label "ollama"
-  :list-fn #'daemons-dash-ollama-list
-  :start-fn #'ignore
-  :stop-fn #'ignore
-  :restart-fn #'ignore
-  :enable-fn #'ignore
-  :disable-fn #'ignore
-  :logs-fn #'daemons-dash-ollama-logs
-  :inspect-fn #'daemons-dash-ollama-logs))
+(defun daemons-dash-register-default-providers ()
+  "Register standard built-in daemons-dash providers into `daemons-dash-providers'."
+  (interactive)
+  (daemons-dash-register-provider
+   (daemons-dash-provider--make
+    :name 'systemd-user
+    :label "systemd-user"
+    :list-fn #'daemons-dash-systemd-user-list
+    :start-fn #'daemons-dash-systemd-user-start
+    :stop-fn #'daemons-dash-systemd-user-stop
+    :restart-fn #'daemons-dash-systemd-user-restart
+    :enable-fn #'daemons-dash-systemd-user-enable
+    :disable-fn #'daemons-dash-systemd-user-disable
+    :logs-fn #'daemons-dash-systemd-user-logs
+    :inspect-fn #'daemons-dash-systemd-user-logs))
+  (daemons-dash-register-provider
+   (daemons-dash-provider--make
+    :name 'systemd-system
+    :label "systemd-system"
+    :list-fn #'daemons-dash-systemd-system-list
+    :start-fn #'daemons-dash-systemd-system-start
+    :stop-fn #'daemons-dash-systemd-system-stop
+    :restart-fn #'daemons-dash-systemd-system-restart
+    :enable-fn #'daemons-dash-systemd-system-enable
+    :disable-fn #'daemons-dash-systemd-system-disable
+    :logs-fn #'daemons-dash-systemd-system-logs
+    :inspect-fn #'daemons-dash-systemd-system-logs))
+  (daemons-dash-register-provider
+   (daemons-dash-provider--make
+    :name 'sprite
+    :label "sprite"
+    :list-fn #'daemons-dash-sprite-list
+    :start-fn #'ignore
+    :stop-fn #'daemons-dash-sprite-stop
+    :restart-fn #'daemons-dash-sprite-restart
+    :enable-fn #'ignore
+    :disable-fn #'ignore
+    :logs-fn #'daemons-dash-sprite-logs
+    :inspect-fn #'daemons-dash-sprite-logs))
+  (daemons-dash-register-provider
+   (daemons-dash-provider--make
+    :name 'docker
+    :label "docker"
+    :list-fn #'daemons-dash-docker-list
+    :start-fn #'daemons-dash-docker-start
+    :stop-fn #'daemons-dash-docker-stop
+    :restart-fn #'daemons-dash-docker-restart
+    :enable-fn #'ignore
+    :disable-fn #'ignore
+    :logs-fn #'daemons-dash-docker-logs
+    :inspect-fn #'daemons-dash-docker-logs))
+  (daemons-dash-register-provider
+   (daemons-dash-provider--make
+    :name 'ollama
+    :label "ollama"
+    :list-fn #'daemons-dash-ollama-list
+    :start-fn #'ignore
+    :stop-fn #'ignore
+    :restart-fn #'ignore
+    :enable-fn #'ignore
+    :disable-fn #'ignore
+    :logs-fn #'daemons-dash-ollama-logs
+    :inspect-fn #'daemons-dash-ollama-logs)))
 
 ;;; Data Fetching & Aggregation
 
@@ -778,6 +789,8 @@ Annotates entries with configuration status if `daemons-dash-config' is loaded."
   "Major mode for displaying system services and background daemons.
 
 \\{daemons-dash-mode-map}"
+  (when (= (hash-table-count daemons-dash-providers) 0)
+    (daemons-dash-register-default-providers))
   (setq-local daemons-dash-hidden-providers (copy-sequence daemons-dash-hidden-providers))
   (setq-local daemons-dash-hidden-states (copy-sequence daemons-dash-hidden-states))
   (setq tabulated-list-format

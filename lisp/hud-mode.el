@@ -628,9 +628,6 @@ binding (see `keymap-set'.)"
 (create-toggle-functions electric-pair-inhibition)
 (create-toggle-functions electric-pair-eagerness)
 
-(keymap-set minibuffer-local-map "C-g" #'hud-super-abort-minibuffers)
-(keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
-(keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle)
 
 (keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
 (keymap-set hud-mode-map "C-c [" #'flyspell-correct-next)
@@ -1334,13 +1331,33 @@ interactively then remove duplicate items from the `kill-ring'."
 
 ;; the mode
 
+(declare-function marginalia-cycle "marginalia")
+
+(defun hud-mode--enable ()
+  "Enable `hud-mode' integrations and minibuffer bindings."
+  (keymap-set minibuffer-local-map "C-g" #'hud-super-abort-minibuffers)
+  (keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
+  (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle))
+
+(defun hud-mode--disable ()
+  "Disable `hud-mode' integrations and minibuffer bindings."
+  (when (eq (keymap-lookup minibuffer-local-map "C-g") #'hud-super-abort-minibuffers)
+    (keymap-unset minibuffer-local-map "C-g" t))
+  (when (eq (keymap-lookup minibuffer-local-map "C-l") #'backward-kill-word)
+    (keymap-unset minibuffer-local-map "C-l" t))
+  (when (eq (keymap-lookup minibuffer-local-map "C-c a") #'marginalia-cycle)
+    (keymap-unset minibuffer-local-map "C-c a" t)))
+
 ;;;###autoload
 (define-minor-mode hud-mode
   "Global minor mode holding all of tycho's custom keybindings.
 See `hud-mode-map'."
   :global t
   :group 'convenience
-  :keymap hud-mode-map)
+  :keymap hud-mode-map
+  (if hud-mode
+      (hud-mode--enable)
+    (hud-mode--disable)))
 
 (provide 'hud-mode)
 ;;; hud-mode.el ends here

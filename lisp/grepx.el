@@ -81,7 +81,46 @@
 
 (defvar deadgrep--search-type)
 
-(defvar grepx-backends nil
+(defvar grepx-backends
+  (list
+   (list :name 'deadgrep
+         :type :persistent
+         :priority 100
+         :available-p (lambda () (featurep 'deadgrep))
+         :run-fn (lambda (dir term) (deadgrep term dir))
+         :description "Deadgrep interactive persistent search buffer")
+   (list :name 'compile-rg
+         :type :persistent
+         :priority 80
+         :available-p (lambda () (and (executable-find "rg") t))
+         :run-fn (lambda (dir term) (grepx-compile term dir))
+         :description "Ripgrep in compilation-mode buffer")
+   (list :name 'grep
+         :type :persistent
+         :priority 50
+         :available-p (lambda () t)
+         :run-fn (lambda (dir term)
+                   (let ((default-directory (or dir default-directory)))
+                     (grep (format "grep -nH -e %s" (shell-quote-argument (or term ""))))))
+         :description "Standard grep compilation buffer")
+   (list :name 'occur
+         :type :persistent
+         :priority 30
+         :available-p (lambda () t)
+         :run-fn (lambda (_dir term) (occur (or term "")))
+         :description "In-buffer regexp search via occur")
+   (list :name 'consult-ripgrep
+         :type :live
+         :priority 100
+         :available-p (lambda () (fboundp 'consult-ripgrep))
+         :run-fn (lambda (dir initial) (consult-ripgrep dir initial))
+         :description "Consult live interactive ripgrep")
+   (list :name 'acr-wizard
+         :type :live
+         :priority 80
+         :available-p (lambda () t)
+         :run-fn (lambda (dir initial) (grepx--run-acr-wizard dir initial))
+         :description "Annotated completing-read search wizard"))
   "List of registered Grepx backends.
 Each entry is a plist with keys:
 :name (symbol), :type (:persistent or :live), :priority (integer),
@@ -202,9 +241,6 @@ Otherwise, return the highest-priority available backend of TYPE."
     map)
   "Keymap active in minibuffer during live ripgrep sessions.")
 
-;; Install isearch bindings
-(define-key isearch-mode-map (kbd "M-s r") #'grepx-live)
-(define-key isearch-mode-map (kbd "M-s g") #'grepx-project)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Project and Context Helpers
@@ -720,8 +756,6 @@ prompt for the initial query using ACR context-at-point."
     :run-fn (lambda (dir initial) (grepx--run-acr-wizard dir initial))
     :description "Annotated completing-read search wizard"))
 
-(grepx--register-default-backends)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Grepx Global Minor Mode
 
@@ -734,8 +768,20 @@ prompt for the initial query using ACR context-at-point."
     (keymap-set consult-async-map "C-l" #'grepx-live-up-directory)
     (keymap-set consult-async-map "M-d" #'grepx-live-to-buffer))
   (when (boundp 'isearch-mode-map)
-    (define-key isearch-mode-map (kbd "M-s r") #'grepx-live)
-    (define-key isearch-mode-map (kbd "M-s g") #'grepx-project)))
+    (keymap-set isearch-mode-map "M-s r" #'grepx-live)
+    (keymap-set isearch-mode-map "M-s g" #'grepx-project)))
+
+(defun grepx--teardown-keybindings ()
+  "Remove Grepx bindings from search modes."
+  (when (boundp 'deadgrep-mode-map)
+    (keymap-unset deadgrep-mode-map "?" t)
+    (keymap-unset deadgrep-mode-map "w" t))
+  (when (boundp 'consult-async-map)
+    (keymap-unset consult-async-map "C-l" t)
+    (keymap-unset consult-async-map "M-d" t))
+  (when (boundp 'isearch-mode-map)
+    (keymap-unset isearch-mode-map "M-s r" t)
+    (keymap-unset isearch-mode-map "M-s g" t)))
 
 ;;;###autoload
 (defvaralias 'grepx-global-mode 'grepx-mode
@@ -760,7 +806,8 @@ prompt for the initial query using ACR context-at-point."
         (grepx--setup-keybindings))
     (advice-remove 'deadgrep--write-heading #'grepx--heading-wrapper)
     (advice-remove 'deadgrep-next-error #'grepx--next-error-wrapper)
-    (advice-remove 'consult--grep #'grepx--consult-grep-wrapper)))
+    (advice-remove 'consult--grep #'grepx--consult-grep-wrapper)
+    (grepx--teardown-keybindings)))
 
 (provide 'grepx)
 ;;; grepx.el ends here

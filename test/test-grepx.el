@@ -348,5 +348,6 @@
 
 (ert-deftest grepx-test/isearch-bindings ()
   "Test that grepx binds M-s r and M-s g in the built-in isearch-mode-map."
+  (grepx-mode 1)
   (should (eq (lookup-key isearch-mode-map (kbd "M-s r")) #'grepx-live))
   (should (eq (lookup-key isearch-mode-map (kbd "M-s g")) #'grepx-project)))
