@@ -11,11 +11,12 @@
 ;;
 ;; Features:
 ;; - `eglox-mode': Buffer-local minor mode for Eglot-managed buffers, bundling
-;;   save hooks, import organization, and buffer-local LSP keybindings.
+;;   save hooks, import organization, and buffer-local LSP keybindings under `C-c l'.
 ;; - `eglox-global-mode': Global minor mode managing connection throttling,
-;;   server deduplication, dead server pruning, and projectile cache warming.
-;; - `eglox-global-map' and `eglox-mode-map': Dedicated keymaps for global and
-;;   buffer-local LSP commands.
+;;   server deduplication, dead server pruning, projectile cache warming, and
+;;   global LSP keybindings under `C-c l'.
+;; - `eglox-command-map', `eglox-mode-map', and `eglox-global-mode-map': Dedicated
+;;   command prefix and minor mode maps for LSP commands.
 ;; - Rate-limited buffer activation to avoid connection storms.
 ;; - Dead and duplicate server pruning to prevent resource leaks and reconnect loops.
 ;; - Projectile cache warming integration on project switch.
@@ -27,7 +28,6 @@
 (require 'seq)
 (require 'map)
 (require 'subr-x)
-(require 'hud-mode)
 
 (declare-function projectile-project-root "projectile")
 (declare-function projectile-index-project-async "projectile")
@@ -53,7 +53,6 @@
 (declare-function eglot-current-server "eglot")
 (declare-function eglot--current-server-or-lose "eglot")
 (declare-function eglot-ensure "eglot")
-(declare-function eglox-activate-enqueue "eglox")
 (declare-function eglot-managed-p "eglot")
 (declare-function eglot--lookup-mode "eglot")
 (declare-function eglot--maybe-activate-editing-mode "eglot")
@@ -68,7 +67,6 @@
 (defvar projectile-projects-cache)
 (defvar projectile-enable-caching)
 (defvar projectile-project-changed-functions)
-(defvar hud-ide-map)
 (defvar eglot-tempel-mode nil)
 (defvar eglot--cached-server)
 (defvar eglot-menu-string)
@@ -85,10 +83,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Keymaps
 
-;;;###autoload
+(defvaralias 'eglox-server-map 'eglox-global-map)
 (defvar-keymap eglox-global-map
-  :name "eglot"
-  :doc "Eglot global commands under C-c l l."
+  :name "eglot-server"
+  :doc "Eglot global server management commands."
   "s" #'eglot
   "r" #'eglot-reconnect
   "k" #'eglot-shutdown
@@ -96,25 +94,30 @@
   "c" #'execute-extended-eglot-command
   "g" #'eglot-forget-pending-continuations)
 
-;;;###autoload
-(defvar-keymap eglox-mode-map
-  :name "eglot-mode"
-  :doc "Eglot buffer commands."
-  "e" #'execute-extended-eglot-command
-  "s" #'consult-eglot-symbols
-  "r" #'eglot-rename
+(defvar-keymap eglox-command-map
+  :name "eglot"
+  :doc "Eglot buffer and server commands prefix map."
   "a" #'eglot-code-actions
-  "i" #'eglox-code-action-inline
+  "e" #'execute-extended-eglot-command
   "f" #'eglot-format-buffer
+  "i" #'eglox-code-action-inline
   "o" #'eglox-organize-imports-for-hook
   "q" #'eglot-code-action-quickfix
-  "w" #'eglot-code-action-rewrite
+  "r" #'eglot-rename
+  "s" #'consult-eglot-symbols
   "t" #'eglot-test-at-point
-  "u" #'eglox-update-workspace)
+  "u" #'eglox-update-workspace
+  "w" #'eglot-code-action-rewrite
+  "l" eglox-global-map)
 
-(defvar-keymap eglox-minor-mode-map
+(defvaralias 'eglox-minor-mode-map 'eglox-mode-map)
+(defvar-keymap eglox-mode-map
   :doc "Keymap active when `eglox-mode' is enabled."
-  "C-c l" (cons "eglot" eglox-mode-map))
+  "C-c l" (cons "eglot" eglox-command-map))
+
+(defvar-keymap eglox-global-mode-map
+  :doc "Keymap active when `eglox-global-mode' is enabled."
+  "C-c l" (cons "eglot" eglox-command-map))
 
 (defconst eglox-mode-hooks
   '(js-mode-hook
@@ -214,7 +217,7 @@ Rest argument _ARGS is ignored so this can be used on hooks or advices."
                          ("clangd")
                          ("ccls")))))
     (setq-default eglot-workspace-configuration eglox-default-server-configuration)
-    (keymap-set eglot-mode-map "C-c l" (cons "eglot" eglox-mode-map))
+    (keymap-set eglot-mode-map "C-c l" (cons "eglot" eglox-command-map))
     (cl-defmethod eglot-client-capabilities :around (_server)
       (let* ((caps (cl-call-next-method))
              (workspace (plist-get caps :workspace)))
@@ -223,22 +226,12 @@ Rest argument _ARGS is ignored so this can be used on hooks or advices."
         caps))
     (eglox--install-eglot-integrations)))
 
-(defun eglox--after-load-hook (file)
-  "Hook for `after-load-functions' to initialize Eglot when its FILE loads."
-  (when (string-match-p "/eglot\\(\\.\\|\\'\\)" file)
-    (eglox--init-eglot)))
-
 ;;;###autoload
 (defun eglox-ensure ()
   "Initialize Eglot and ensure it manages the current buffer."
   (interactive)
   (eglox--init-eglot)
   (eglot-ensure))
-
-(add-hook 'after-load-functions #'eglox--after-load-hook)
-(advice-add 'eglot :before #'eglox--init-eglot)
-(advice-add 'eglot-reconnect :before #'eglox--init-eglot)
-(advice-add 'eglot-ensure :before #'eglox--init-eglot)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Managed Mode Hook & Completion Guard
@@ -618,7 +611,7 @@ Surplus buffers are queued in `eglox-activate-queue'."
 (define-minor-mode eglox-mode
   "Buffer-local minor mode for Eglot enhancements in managed buffers."
   :lighter " eglox"
-  :keymap eglox-minor-mode-map
+  :keymap eglox-mode-map
   (if eglox-mode
       (progn
         (eglox-ensure-hook)
@@ -668,7 +661,6 @@ Only called when `eglot' is loaded and `eglox-global-mode' is enabled."
   (add-hook 'window-selection-change-functions #'eglox-activate-prioritize-visible)
   (dolist (hook eglox-mode-hooks)
     (add-hook hook #'eglox-ensure))
-  (keymap-set hud-ide-map "l" (cons "eglot" eglox-global-map))
   (when eglox--eglot-initialized
     (eglox--install-eglot-integrations)))
 
@@ -690,10 +682,14 @@ Only called when `eglot' is loaded and `eglox-global-mode' is enabled."
 (define-minor-mode eglox-global-mode
   "Global minor mode bundling Eglot enhancements and stability protections."
   :global t
+  :keymap eglox-global-mode-map
   :group 'eglot
   (if eglox-global-mode
       (eglox--enable-global)
     (eglox--disable-global)))
+
+(with-eval-after-load 'eglot
+  (eglox--init-eglot))
 
 (provide 'eglox)
 ;;; eglox.el ends here

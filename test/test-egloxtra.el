@@ -11,6 +11,7 @@
 (require 'eglot)
 (require 'eglox)
 (require 'projectile nil t)
+(require 'hud-mode nil t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Test Helpers
@@ -433,20 +434,28 @@ transient project and cleans both up afterward."
   (should (eq (keymap-lookup eglox-global-map "c") #'execute-extended-eglot-command))
   (should (eq (keymap-lookup eglox-global-map "g") #'eglot-forget-pending-continuations)))
 
+(ert-deftest eglox/command-map-bindings ()
+  "Test `eglox-command-map' contains expected bindings."
+  (should (keymapp eglox-command-map))
+  (should (eq (keymap-lookup eglox-command-map "e") #'execute-extended-eglot-command))
+  (should (eq (keymap-lookup eglox-command-map "s") #'consult-eglot-symbols))
+  (should (eq (keymap-lookup eglox-command-map "r") #'eglot-rename))
+  (should (eq (keymap-lookup eglox-command-map "a") #'eglot-code-actions))
+  (should (eq (keymap-lookup eglox-command-map "i") #'eglox-code-action-inline))
+  (should (eq (keymap-lookup eglox-command-map "f") #'eglot-format-buffer))
+  (should (eq (keymap-lookup eglox-command-map "o") #'eglox-organize-imports-for-hook))
+  (should (eq (keymap-lookup eglox-command-map "q") #'eglot-code-action-quickfix))
+  (should (eq (keymap-lookup eglox-command-map "w") #'eglot-code-action-rewrite))
+  (should (eq (keymap-lookup eglox-command-map "t") #'eglot-test-at-point))
+  (should (eq (keymap-lookup eglox-command-map "u") #'eglox-update-workspace))
+  (should (keymapp (keymap-lookup eglox-command-map "l"))))
+
 (ert-deftest eglox/mode-map-bindings ()
-  "Test `eglox-mode-map' contains expected bindings."
+  "Test `eglox-mode-map' and `eglox-global-mode-map' bind C-c l to `eglox-command-map'."
   (should (keymapp eglox-mode-map))
-  (should (eq (keymap-lookup eglox-mode-map "e") #'execute-extended-eglot-command))
-  (should (eq (keymap-lookup eglox-mode-map "s") #'consult-eglot-symbols))
-  (should (eq (keymap-lookup eglox-mode-map "r") #'eglot-rename))
-  (should (eq (keymap-lookup eglox-mode-map "a") #'eglot-code-actions))
-  (should (eq (keymap-lookup eglox-mode-map "i") #'eglox-code-action-inline))
-  (should (eq (keymap-lookup eglox-mode-map "f") #'eglot-format-buffer))
-  (should (eq (keymap-lookup eglox-mode-map "o") #'eglox-organize-imports-for-hook))
-  (should (eq (keymap-lookup eglox-mode-map "q") #'eglot-code-action-quickfix))
-  (should (eq (keymap-lookup eglox-mode-map "w") #'eglot-code-action-rewrite))
-  (should (eq (keymap-lookup eglox-mode-map "t") #'eglot-test-at-point))
-  (should (eq (keymap-lookup eglox-mode-map "u") #'eglox-update-workspace))
+  (should (keymapp eglox-global-mode-map))
+  (should (keymapp (keymap-lookup eglox-mode-map "C-c l")))
+  (should (keymapp (keymap-lookup eglox-global-mode-map "C-c l")))
   (should (keymapp (keymap-lookup eglox-minor-mode-map "C-c l"))))
 
 (ert-deftest eglox/minor-mode-lifecycle ()
