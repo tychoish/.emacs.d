@@ -36,8 +36,8 @@
         (sequence "QUESTION(q)" "|" "ANSWERED(a@)")
         (sequence "INPROGRESS" "|" "COMPLETE")
         (sequence "CONSIDER(c)" "MUST(m)" "|" "ACKNOWLEDGED(k@)" "IGNORED(u)" "REJECTED(r)" "DISMISSED(p)")
-        (sequence "BACKLOG(b)" "SCHEDULED(h)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")
-        (sequence "BLOCKED(o)" "PAUSED(h)" "|" "SKIPPED(k@)" "CANCELED(x@)" "INCOMPLETE(i@)" "ABANDONED(@l)")))
+        (sequence "BACKLOG(b)" "SCHEDULED(s)" "|" "GONEAWAY(g@)" "INCOMPLETE(i@)")
+        (sequence "BLOCKED(o)" "PAUSED(h)" "|" "SKIPPED(j@)" "CANCELED(x@)" "INCOMPLETE(i@)" "ABANDONED(l@)")))
 
 (setq org-todo-keyword-faces
       `(("TODO" . (:foreground ,(modus-themes-get-color-value 'red) :weight bold))
@@ -66,14 +66,18 @@
 (setq org-tag-alist
       '((:startgroup . nil)
         ("inbox" . ?i)
+	("active" . ?s)
         ("backlog" . ?b)
+        ("canceled" . ?c)
         (:endgroup . nil)
         (:startgroup . nil)
-        ("@desk" . ?d)
+        ("@agent" . ?a)
         ("@personal" . ?p)
         ("@work" . ?w)
         (:endgroup . nil)
-        ("question" . ?q)))
+        (:startgroup . nil)
+        ("question" . ?q)
+        (:endgroup . nil)))
 
 ;; Agenda custom commands and views
 
