@@ -35,7 +35,6 @@
 (autoload 'tychoish-define-mail-account "setup-mail")
 (autoload 'tychoish-mail-add-refile-rule "setup-mail")
 
-
 (autoload 'daemons-dash "daemons-dash" nil t)
 (autoload 'daemons-dash-dispatch "daemons-dash" nil t)
 

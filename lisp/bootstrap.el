@@ -99,6 +99,8 @@
 
 (declare-function modus-themes-get-color-value "modus-themes")
 
+(defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map)
+
 (defvar tychoish--suppress-supersession-prompt nil
   "Non-nil while handling an `emacsclient --eval' request or a timer callback.
 Bound by advice on `server-eval-and-print' and `timer-event-handler' --
@@ -386,15 +388,6 @@ If :sync is non-nil or running noninteractively, load and start synchronously."
 
 (declare-function orgx-global-mode "orgx")
 
-(defun bootstrap--hook-iterator (funcs)
-  "Return a generator closure that yields each function in FUNCS sequentially.
-Returns :done when FUNCS is exhausted."
-  (let ((remaining funcs))
-    (lambda ()
-      (if remaining
-          (pop remaining)
-        :done))))
-
 (defun bootstrap--execute-mode-function (fn)
   "Execute mode or setup function FN idempotently with slow-op reporting."
   (let ((name (cond
@@ -426,37 +419,36 @@ Returns :done when FUNCS is exhausted."
      (t nil))))
 
 (defun bootstrap-run-enable-modes-hook (hook &rest args)
-  "Run HOOK to enable modes and integrations non-blockingly using a generator iterator.
+  "Run HOOK functions non-blockingly, yielding to the event loop between each.
 In interactive sessions, yields execution between functions via idle timers of
-DELAY seconds, giving the Emacs event loop time to process input and redraw.
+DELAY seconds (default 0.05), giving the Emacs event loop time to process input and redraw.
 In `noninteractive' sessions, drains synchronously.
 Calls ON-DONE when iteration completes.
 Returns a cancellation function that halts pending iterations."
   (interactive (list 'bootstrap-late-enable-modes-hook))
   (let* ((delay (or (plist-get args :delay) 0.05))
          (on-done (plist-get args :on-done))
-         (funcs (bootstrap--resolve-hook-functions hook))
-         (it (bootstrap--hook-iterator funcs))
+         (remaining (bootstrap--resolve-hook-functions hook))
          (timer nil)
          (canceled nil))
     (if noninteractive
         (progn
-          (let ((fn (funcall it)))
-            (while (not (eq fn :done))
-              (bootstrap--execute-mode-function fn)
-              (setq fn (funcall it))))
+          (while remaining
+            (bootstrap--execute-mode-function (pop remaining)))
           (when on-done (funcall on-done))
           #'ignore)
       (letrec ((drain
                 (lambda ()
                   (setq timer nil)
                   (unless canceled
-                    (let ((next-fn (funcall it)))
-                      (if (eq next-fn :done)
-                          (when on-done (funcall on-done))
-                        (bootstrap--execute-mode-function next-fn)
-                        (setq timer (run-with-idle-timer (or delay 0.05) nil drain))))))))
-        (setq timer (run-with-idle-timer (or delay 0.05) nil drain))
+                    (if remaining
+                        (progn
+                          (bootstrap--execute-mode-function (pop remaining))
+                          (if remaining
+                              (setq timer (run-with-idle-timer delay nil drain))
+                            (when on-done (funcall on-done))))
+                      (when on-done (funcall on-done)))))))
+        (setq timer (run-with-idle-timer delay nil drain))
         (lambda ()
           (setq canceled t)
           (when (timerp timer)
@@ -574,8 +566,6 @@ Returns a cancellation function that halts pending iterations."
  :name "<bootstrap> first-frame setup"
  :hook 'after-first-frame-created
  :form (progn
-         (unless (fboundp 'mouse-major-mode-menu)
-           (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map))
          (add-to-list 'display-buffer-alist
                       '(hud--readonly-file-buffer-p
                         (hud--reuse-readonly-file-window
