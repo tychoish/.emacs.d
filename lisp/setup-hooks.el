@@ -137,7 +137,6 @@
 (add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
-
 (add-hook 'org-mode-hook #'orgx-mode-turn-on)
 (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
 
@@ -234,6 +233,34 @@ completion candidate outlives its buffer."
 (with-eval-after-load 'denote-sync
   (require 'denote-sync-notion)
   (require 'denote-sync-gdocs))
+
+(with-eval-after-load 'alert
+  (setq alert-log-messages nil)
+  (setq alert-fade-time 15)
+
+  (cond
+   ((and (eq system-type 'darwin))
+    (cond
+     ((window-system)
+      (setq-default alert-default-style 'osx-notifier))
+     ((daemonp)
+      (setq alert-default-style 'notifier)
+      (add-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server))
+     (t
+      (setq-default alert-default-style 'notifier))))
+   ((and (eql system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
+    (setq-default alert-default-style 'notifications))
+   (alert-libnotify-command
+    (setq-default alert-default-style 'libnotify))
+   (t (setq-default alert-default-style 'message)))
+
+  (defun tychoish/darwin-alert-config-for-server ()
+    (if (and (window-system)
+	     (eq system-type 'darwin)
+	     (not (eq alert-default-style 'osx-notifier)))
+	(setq-default alert-default-style 'osx-notifier)
+      (remove-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server)
+      (unintern 'tychoish/darwin-alert-config-for-server obarray))))
 
 (with-eval-after-load 'arch
   (defun arch-alert-after-install (pkg)
@@ -598,6 +625,36 @@ clipboard."
     (transient-append-suffix 'magit-gh '(-1)
       ["magit-dash"
        ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
+
+(with-eval-after-load 'magit-dash
+  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
+  (setq magit-dash-gh-prune-pr-limit 50)
+  (setq magit-dash-show-discovered-submodules nil)
+  (setq magit-dash-render-branch-name-as-basename t)
+  (setq magit-dash-which-key-abbreviate-commands 'strip)
+
+  (defun magit-dash--lazy-prefetch-gh ()
+    (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch))
+
+  (defun magit-dash--set-up-nerd-icons (entry)
+    (add-to-list 'nerd-icons-mode-icon-alist entry))
+
+  (defun magit-dash--clean-up-nerd-icons (entry)
+    (memq (car entry) '(magit-dash-mode
+                        magit-dash-gh-pr-dashboard-mode
+                        magit-dash-gh-actions-log-mode)))
+
+  (add-hook 'magit-status-mode-hook #'magit-dash--lazy-prefetch-gh)
+  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
+
+  (with-eval-after-load 'nerd-icons
+    (setq nerd-icons-mode-icon-alist
+          (seq-remove #'magit-dash--clean-up-nerd-icons nerd-icons-mode-icon-alist))
+    (seq-do #'magit-dash--set-up-nerd-icons
+	    '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
+	      (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
+	      (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
+
 
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here

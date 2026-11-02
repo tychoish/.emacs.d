@@ -65,7 +65,8 @@
    xtdlib))
 
 (elpaish-install-register-package
- '(anzu
+ '(alert
+   anzu
    async
    consult-denote
    consult-eglot

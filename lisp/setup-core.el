@@ -38,34 +38,6 @@
 (autoload 'daemons-dash "daemons-dash" nil t)
 (autoload 'daemons-dash-dispatch "daemons-dash" nil t)
 
-(use-package magit-dash
-  :ensure t
-  :defer t
-  :config
-  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
-  (setq magit-dash-gh-prune-pr-limit 50)
-  (setq magit-dash-show-discovered-submodules nil)
-  (setq magit-dash-render-branch-name-as-basename t)
-  (setq magit-dash-which-key-abbreviate-commands 'strip)
-  (add-hook 'magit-status-mode-hook
-	    (lambda ()
-	      (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch)))
-
-  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
-
-  (with-eval-after-load 'nerd-icons
-    (setq nerd-icons-mode-icon-alist
-          (seq-remove (lambda (entry)
-                        (memq (car entry) '(magit-dash-mode
-                                            magit-dash-gh-pr-dashboard-mode
-                                            magit-dash-gh-actions-log-mode)))
-                      nerd-icons-mode-icon-alist))
-    (seq-do (lambda (entry)
-              (add-to-list 'nerd-icons-mode-icon-alist entry))
-            '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
-              (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
-              (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; CORE PACKAGES
@@ -132,38 +104,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; chat and notifications
-
-(use-package alert
-  :ensure t
-  :defer t
-  :defines (alert-styles alert-libnotify-command)
-  :config
-  (setq alert-log-messages nil)
-  (setq alert-fade-time 15)
-
-  (cond
-   ((and (eq system-type 'darwin))
-    (cond
-     ((window-system)
-      (setq-default alert-default-style 'osx-notifier))
-     ((daemonp)
-      (setq alert-default-style 'notifier)
-      (add-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server))
-     (t
-      (setq-default alert-default-style 'notifier))))
-   (alert-libnotify-command
-    (setq-default alert-default-style 'libnotify))
-   ((and (eql system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
-    (setq-default alert-default-style 'notifications))
-   (t (setq-default alert-default-style 'message)))
-
-  (defun tychoish/darwin-alert-config-for-server ()
-    (if (and (window-system)
-	     (eq system-type 'darwin)
-	     (not (eq alert-default-style 'osx-notifier)))
-	(setq-default alert-default-style 'osx-notifier)
-      (remove-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server)
-      (unintern 'tychoish/darwin-alert-config-for-server obarray))))
 
 (use-package telega
   :ensure t
