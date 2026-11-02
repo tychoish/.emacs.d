@@ -220,10 +220,6 @@ completion candidate outlives its buffer."
 (with-eval-after-load 'orgx
   (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append))
 
-(with-eval-after-load 'org-capture
-  (unless (and (boundp 'org-capture-templates) org-capture-templates)
-    (orgx-capture-setup-standard-templates)))
-
 (add-lazy-init
  :name "<bootstrap> [orgx] capture templates"
  :operation #'orgx-capture-setup-standard-templates
