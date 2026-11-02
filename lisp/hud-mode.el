@@ -820,6 +820,12 @@ binding (see `keymap-set'.)"
     (set-window-buffer win buffer)
     win))
 
+(defconst hud--readonly-display-buffer-entry
+  '(hud--readonly-file-buffer-p
+    (hud--reuse-readonly-file-window
+     display-buffer-use-some-window))
+  "`display-buffer-alist' entry installed while `hud-mode' is enabled.")
+
 (defun contextual-menubar (&optional frame)
   "Display the menubar in FRAME (default: selected frame) if on a graphical display, but hide it if in terminal."
   (interactive)
@@ -1340,12 +1346,15 @@ interactively then remove duplicate items from the `kill-ring'."
 
 (defun hud-mode--enable ()
   "Enable `hud-mode' integrations and minibuffer bindings."
+  (add-to-list 'display-buffer-alist hud--readonly-display-buffer-entry)
   (keymap-set minibuffer-local-map "C-g" #'hud-super-abort-minibuffers)
   (keymap-set minibuffer-local-map "C-l" #'backward-kill-word)
   (keymap-set minibuffer-local-map "C-c a" #'marginalia-cycle))
 
 (defun hud-mode--disable ()
   "Disable `hud-mode' integrations and minibuffer bindings."
+  (setq display-buffer-alist
+        (delete hud--readonly-display-buffer-entry display-buffer-alist))
   (when (eq (keymap-lookup minibuffer-local-map "C-g") #'hud-super-abort-minibuffers)
     (keymap-unset minibuffer-local-map "C-g" t))
   (when (eq (keymap-lookup minibuffer-local-map "C-l") #'backward-kill-word)

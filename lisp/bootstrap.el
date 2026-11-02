@@ -37,8 +37,6 @@
 (require 'xtd-macro)
 
 (autoload 'hud-mode "hud-mode" "Global HUD minor mode." t)
-(autoload 'hud--readonly-file-buffer-p "hud-mode" nil nil)
-(autoload 'hud--reuse-readonly-file-window "hud-mode" nil nil)
 
 (eval-and-compile
   (unless (fboundp 'with-gc-suppressed)
@@ -560,10 +558,6 @@ Returns a cancellation function that halts pending iterations."
  :name "<bootstrap> first-frame setup"
  :hook 'after-first-frame-created
  :form (progn
-         (add-to-list 'display-buffer-alist
-                      '(hud--readonly-file-buffer-p
-                        (hud--reuse-readonly-file-window
-                         display-buffer-use-some-window)))
 	 (with-slow-op-timer "<bootstrap> [hook] enable hud-modeline"
            (hud-modeline-mode 1))
 	 (with-slow-op-timer "<bootstrap> [hook] enable light theme"
