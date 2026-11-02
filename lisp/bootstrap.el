@@ -566,7 +566,8 @@ Returns a cancellation function that halts pending iterations."
                          display-buffer-use-some-window)))
 	 (with-slow-op-timer "<bootstrap> [hook] enable hud-modeline"
            (hud-modeline-mode 1))
-         (run-with-idle-timer 0.02 nil #'bootstrap-ensure-light-theme)))
+	 (with-slow-op-timer "<bootstrap> [hook] enable light theme"
+           (bootstrap-ensure-light-theme))))
 
 (defvar tychoish/startup-complete-time nil
   "Timestamp when startup finished.")
@@ -740,11 +741,9 @@ Returns a cancellation function that halts pending iterations."
 
 (defun bootstrap-load-light-theme ()
   (interactive)
-  (unless (member 'modus-operandi custom-enabled-themes)
-    (when custom-enabled-themes
-      (disable-all-themes))
-    (when (load-theme 'modus-operandi t t)
-      (enable-theme 'modus-operandi)))
+  (disable-all-themes)
+  (when (load-theme 'modus-operandi t t)
+    (enable-theme 'modus-operandi))
   (unless (map-elt default-frame-alist 'alpha)
     (add-to-list 'default-frame-alist '(alpha . 97))))
 
