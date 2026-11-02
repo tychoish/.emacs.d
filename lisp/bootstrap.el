@@ -564,8 +564,9 @@ Returns a cancellation function that halts pending iterations."
                       '(hud--readonly-file-buffer-p
                         (hud--reuse-readonly-file-window
                          display-buffer-use-some-window)))
-         (hud-modeline-mode 1)
-         (bootstrap-ensure-light-theme)))
+	 (with-slow-op-timer "<bootstrap> [hook] enable hud-modeline"
+           (hud-modeline-mode 1))
+         (run-with-idle-timer 0.02 nil #'bootstrap-ensure-light-theme)))
 
 (defvar tychoish/startup-complete-time nil
   "Timestamp when startup finished.")
@@ -653,7 +654,8 @@ Returns a cancellation function that halts pending iterations."
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
 
-(defalias 'orgx-set-notes-directory #'bootstrap-set-notes-directory)
+(unless (fboundp 'orgx-set-notes-directory)
+  (defalias 'orgx-set-notes-directory #'bootstrap-set-notes-directory))
 
 (defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))
@@ -744,24 +746,28 @@ Returns a cancellation function that halts pending iterations."
   (unless (member 'modus-operandi custom-enabled-themes)
     (when custom-enabled-themes
       (disable-all-themes))
-    (load-theme 'modus-operandi t nil))
+    (when (load-theme 'modus-operandi t t)
+      (enable-theme 'modus-operandi)))
   (unless (map-elt default-frame-alist 'alpha)
     (add-to-list 'default-frame-alist '(alpha . 97))))
 
 (defun bootstrap-ensure-light-theme ()
   (unless custom-enabled-themes
-    (bootstrap-load-light-theme)))
+    (with-slow-op-timer "<bootstrap> [theme] load light theme"
+      (bootstrap-load-light-theme))))
 
 (defun bootstrap-load-dark-theme ()
   (interactive)
   (disable-all-themes)
   (when (load-theme 'modus-vivendi t t)
     (enable-theme 'modus-vivendi))
-  (add-to-list 'default-frame-alist '(alpha . 95)))
+  (unless (map-elt default-frame-alist 'alpha)
+    (add-to-list 'default-frame-alist '(alpha . 95))))
 
 (defun bootstrap-ensure-dark-theme ()
   (unless custom-enabled-themes
-    (bootstrap-load-dark-theme)))
+    (with-slow-op-timer "<bootstrap> [theme] load dark theme"
+      (bootstrap-load-dark-theme))))
 
 (defun tk-faces-setup (&rest _)
   (when (featurep 'modus-themes)

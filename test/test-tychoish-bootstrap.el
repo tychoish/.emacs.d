@@ -1258,5 +1258,41 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
     (should (equal deft-directory (expand-file-name "/tmp/test-notes/deft")))
     (should (equal denote-directory (expand-file-name "/tmp/test-notes/denote")))))
 
+
+(ert-deftest bootstrap/optimize-quickstart-transforms-correctly ()
+  "Test that bootstrap-optimize-quickstart-file streamlines quickstart contents."
+  (let ((tmp-file (make-temp-file "test-quickstart-" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp-file
+            (insert ";;; Quickstart\n\n")
+            (insert "(let* ((load-file-name \"/tmp/dummy/pkg-autoloads.el\")(load-true-file-name load-file-name))\n")
+            (insert "  (add-to-list 'load-path (or (and load-file-name (directory-file-name (file-name-directory load-file-name))) (car load-path)))\n")
+            (insert "  (register-definition-prefixes \"pkg\" '(\"pkg-\" \"pkg/\"))\n")
+            (insert "  (autoload 'pkg-fn \"pkg\" \"This is a docstring\" t)\n")
+            (insert "  (provide 'pkg-autoloads)\n)\n\x0c\n"))
+          (bootstrap-optimize-quickstart-file tmp-file)
+          (with-temp-buffer
+            (insert-file-contents tmp-file)
+            (let ((content (buffer-string)))
+              (should (string-match-p "(setq load-path" content))
+              (should (string-match-p "(append '(\"/tmp/dummy\")" content))
+              (should-not (string-match-p "register-definition-prefixes" content))
+              (should-not (string-match-p "This is a docstring" content))
+              (should-not (string-match-p "provide 'pkg-autoloads" content))
+              (should-not (string-match-p "let\*" content))
+              (should-not (string-match-p "\x0c" content))
+              (should (string-match-p "(autoload 'pkg-fn \"pkg\" nil t)" content)))))
+      (when (file-exists-p tmp-file)
+        (delete-file tmp-file)))))
+
+(ert-deftest bootstrap/package-quickstart-stale-p-detects-missing-elc ()
+  "Test that stale-p returns non-nil when the .elc file is missing."
+  (let* ((tmp-el (make-temp-file "test-qs-" nil ".el"))
+         (package-quickstart-file tmp-el))
+    (unwind-protect
+        (should (bootstrap-package-quickstart-stale-p))
+      (when (file-exists-p tmp-el) (delete-file tmp-el)))))
+
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here

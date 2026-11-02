@@ -51,8 +51,9 @@ Also ensures current ELPA directories and autoloads are loaded."
 
 (defun bootstrap-optimize-quickstart-file (file)
   "Transform FILE (package-quickstart.el) into a streamlined format.
-Consolidates `load-path' additions into a batched `thread-last' form, strips
-docstrings from autoload definitions, and removes definition prefixes."
+Consolidates `load-path' additions into a static pre-expanded list,
+strips docstrings, removes definition prefixes, strips unused let* scopes,
+removes autoload feature provisions, and eliminates extraneous whitespace."
   (when (file-exists-p file)
     (with-temp-buffer
       (delay-mode-hooks (emacs-lisp-mode))
@@ -88,40 +89,61 @@ docstrings from autoload definitions, and removes definition prefixes."
             (delete-region beg (point))
             (insert "nil")))
 
-        ;; 4. Insert consolidated, deduplicated load-path batch form at the top
+        ;; 4. Strip (provide '...-autoloads) forms
+        (goto-char (point-min))
+        (while (re-search-forward "(provide '[^)]+-autoloads)" nil t)
+          (delete-region (match-beginning 0) (match-end 0)))
+
+        ;; 5. Replace (let* ((load-file-name ...)(load-true-file-name load-file-name)) with (progn
+        (goto-char (point-min))
+        (while (re-search-forward "(let\\*\\s-*((\\s-*load-file-name\\s-+\"[^\"]+\"\\s-*)\\s-*(\\s-*load-true-file-name\\s-+load-file-name\\s-*))" nil t)
+          (replace-match "(progn"))
+
+        ;; 6. Clean up form-feeds and collapse blank lines
+        (goto-char (point-min))
+        (while (re-search-forward "[\x0c\r]" nil t)
+          (replace-match ""))
+        (goto-char (point-min))
+        (while (re-search-forward "\n[ \t]*\n[ \t]*\n+" nil t)
+          (replace-match "\n\n"))
+
+        ;; 7. Insert pre-expanded, deduplicated static load-path list at the top
         (goto-char (point-min))
         (forward-line 3)
-        (insert "(require 'subr-x)\n")
-        (insert "(setq load-path\n      (append (thread-last\n                  '")
-        (prin1 (nreverse (delete-dups (mapcar #'directory-file-name dirs))) (current-buffer))
-        (insert "\n                (mapcar #'expand-file-name)\n                (delete-dups))\n              load-path))\n\n")
+        (let ((clean-dirs (delete-dups (mapcar #'expand-file-name (mapcar #'directory-file-name (nreverse dirs))))))
+          (insert "(setq load-path\n      (append '")
+          (prin1 clean-dirs (current-buffer))
+          (insert "\n              load-path))\n\n"))
 
         ;; Save the optimized file
         (write-region (point-min) (point-max) file nil 'silent)))))
 
 (defun ad:package-quickstart-refresh--optimize (orig-fn &rest args)
-  "Optimize quickstart file format and suppress bytecode compilation."
-  (cl-letf (((symbol-function 'byte-compile-file)
-             (lambda (file)
-               (bootstrap-optimize-quickstart-file file)
-               (let ((elc (concat (file-name-sans-extension file) ".elc")))
-                 (when (file-exists-p elc)
-                   (delete-file elc)))
-               file)))
-    (apply orig-fn args)))
+  "Optimize quickstart file format and compile bytecode."
+  (let ((real-byte-compile (symbol-function 'byte-compile-file)))
+    (cl-letf (((symbol-function 'byte-compile-file)
+               (lambda (file)
+                 (bootstrap-optimize-quickstart-file file)
+                 (funcall real-byte-compile file)
+                 file)))
+      (apply orig-fn args))))
 
 (defun bootstrap-package-quickstart-stale-p ()
-  "Return non-nil when quickstart file is missing or older than a package."
-  (or (not (file-exists-p package-quickstart-file))
-      (and (file-directory-p package-user-dir)
-           (let ((quickstart-mtime (file-attribute-modification-time
-                                    (file-attributes package-quickstart-file))))
-             (seq-some (lambda (pkg-dir)
-                         (and (file-directory-p pkg-dir)
-                              (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
-                              (time-less-p quickstart-mtime
-                                           (file-attribute-modification-time (file-attributes pkg-dir)))))
-                       (directory-files package-user-dir t "\\`[^.]" t))))))
+  "Return non-nil when quickstart file or its .elc is missing or stale."
+  (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
+    (or (not (file-exists-p package-quickstart-file))
+        (not (file-exists-p elc))
+        (time-less-p (file-attribute-modification-time (file-attributes elc))
+                     (file-attribute-modification-time (file-attributes package-quickstart-file)))
+        (and (file-directory-p package-user-dir)
+             (let ((quickstart-mtime (file-attribute-modification-time
+                                      (file-attributes elc))))
+               (seq-some (lambda (pkg-dir)
+                           (and (file-directory-p pkg-dir)
+                                (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
+                                (time-less-p quickstart-mtime
+                                             (file-attribute-modification-time (file-attributes pkg-dir))))))
+                         (directory-files package-user-dir t "\\`[^.]" t))))))
 
 (defun bootstrap-refresh-package-quickstart (&optional force)
   "Regenerate `package-quickstart-file' and clear the debounce timer.

@@ -32,22 +32,24 @@
 
     (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
 
-    (if (file-exists-p package-quickstart-file)
-        (with-slow-op-timer "<init> [warm] package quickstart"
-          (load package-quickstart-file t t t t))
-      (with-slow-op-timer "<init> [cold] bootstrap packages"
-        (with-slow-op-timer "<init> package activation"
-          (require 'package)
-          (package-activate-all))
-        (with-slow-op-timer "<init> [cold] install elpaish"
-          (unless (package-installed-p 'elpaish)
-            (package-install 'elpaish)))
-        (with-slow-op-timer "<init> [cold] setup packages"
-          (require 'setup-packages))
-        (with-slow-op-timer "<init> [cold] install all configured packages"
-          (elpaish-install-packages :sync t))
-        (with-slow-op-timer "<init> [cold] generate package quickstart"
-          (bootstrap-refresh-package-quickstart t))))
+    (let ((quickstart-target (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
+                               (if (file-exists-p elc) elc package-quickstart-file))))
+      (if (file-exists-p quickstart-target)
+          (with-slow-op-timer "<init> [warm] package quickstart"
+            (load quickstart-target t t t t))
+        (with-slow-op-timer "<init> [cold] bootstrap packages"
+          (with-slow-op-timer "<init> package activation"
+            (require 'package)
+            (package-activate-all))
+          (with-slow-op-timer "<init> [cold] install elpaish"
+            (unless (package-installed-p 'elpaish)
+              (package-install 'elpaish)))
+          (with-slow-op-timer "<init> [cold] setup packages"
+            (require 'setup-packages))
+          (with-slow-op-timer "<init> [cold] install all configured packages"
+            (elpaish-install-packages :sync t))
+          (with-slow-op-timer "<init> [cold] generate package quickstart"
+            (bootstrap-refresh-package-quickstart t)))))
 
     (with-slow-op-timer "<init> [local] require all"
       (with-slow-op-timer "<init> [local] [feature] require bootstrap.el"
