@@ -494,7 +494,6 @@ Returns a cancellation function that halts pending iterations."
     denote-tree-mode
     magit-dash-global-mode
     builder-mode
-    ollama-tailnet-mode
     agent-shell-queue-global-mode
     nerd-icons-completion-mode
     orgx-global-mode)
