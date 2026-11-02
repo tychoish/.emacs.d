@@ -1156,5 +1156,105 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                  '("x" "test command" ignore))))
   (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x"))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; bootstrap-run-enable-modes-hook (generator iterator)
+
+(ert-deftest bootstrap/run-enable-modes-hook-noninteractive ()
+  "Executes all hook functions in order and calls on-done when noninteractive."
+  (let* ((order nil)
+         (done nil)
+         (noninteractive t)
+         (test-hook (list (lambda (arg) (push (cons 'f1 arg) order))
+                          (lambda () (push 'f2 order))
+                          (lambda (arg) (push (cons 'f3 arg) order)))))
+    (bootstrap-run-enable-modes-hook test-hook :on-done (lambda () (setq done t)))
+    (should (equal '((f1 . 1) f2 (f3 . 1)) (nreverse order)))
+    (should (eq t done))))
+
+(ert-deftest bootstrap/run-enable-modes-hook-catches-errors ()
+  "Errors in individual hook functions are caught and iteration continues."
+  (let* ((order nil)
+         (done nil)
+         (noninteractive t)
+         (test-hook (list (lambda (arg) (push 'f1 order))
+                          (lambda () (error "simulated mode failure"))
+                          (lambda (arg) (push 'f3 order)))))
+    (bootstrap-run-enable-modes-hook test-hook :on-done (lambda () (setq done t)))
+    (should (equal '(f1 f3) (nreverse order)))
+    (should (eq t done))))
+
+(ert-deftest bootstrap/run-enable-modes-hook-cancel ()
+  "Cancellation function halts pending execution in interactive mode."
+  (let* ((order nil)
+         (noninteractive nil)
+         (test-hook (list (lambda (arg) (push 'f1 order))
+                          (lambda (arg) (push 'f2 order))))
+         (cancel-fn (bootstrap-run-enable-modes-hook test-hook :delay 10.0)))
+    (funcall cancel-fn)
+    (should (null order))))
+
+(ert-deftest bootstrap/with-gc-suppressed-schedules-idle-gc ()
+  "with-gc-suppressed schedules an idle GC timer instead of blocking."
+  (load-file (expand-file-name "early-init.el" user-emacs-directory))
+  (let ((noninteractive nil))
+    (when (timerp bootstrap--gc-idle-timer)
+      (cancel-timer bootstrap--gc-idle-timer)
+      (setq bootstrap--gc-idle-timer nil))
+    (unwind-protect
+        (progn
+          (with-gc-suppressed (+ 1 1))
+          (should (timerp bootstrap--gc-idle-timer)))
+      (when (timerp bootstrap--gc-idle-timer)
+        (cancel-timer bootstrap--gc-idle-timer)
+        (setq bootstrap--gc-idle-timer nil)))))
+
+(ert-deftest bootstrap/port-available-p-and-find-available-port ()
+  "Tests that port probing correctly detects bound ports and finds the next available port."
+  (let* ((base-port 29935)
+         (bound-proc (make-network-process
+                      :name "ert-bound-probe"
+                      :server t
+                      :host "127.0.0.1"
+                      :service base-port
+                      :noquery t
+                      :family (quote ipv4))))
+    (unwind-protect
+        (progn
+          (should-not (bootstrap-port-available-p base-port))
+          (let ((next-port (bootstrap-find-available-port base-port 10)))
+            (should (= next-port (1+ base-port)))))
+      (delete-process bound-proc))))
+
+(ert-deftest bootstrap/mcpkit-instance-port-solo-concurrency ()
+  "Multiple solo instances sequentially claim consecutive free ports without collisions."
+  (let* ((sprite-instance-id "solo")
+         (base-port (+ 20000 (mod (abs (sxhash-equal "solo")) 10000)))
+         (proc1 (make-network-process
+                 :name "ert-solo-1"
+                 :server t
+                 :host "127.0.0.1"
+                 :service base-port
+                 :noquery t
+                 :family (quote ipv4))))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function (quote sprite-instance-name)) (lambda () "solo")))
+            (should (= (bootstrap-mcpkit-instance-port) (1+ base-port)))))
+      (delete-process proc1))))
+
+(ert-deftest bootstrap/set-notes-directory-sets-paths-without-requiring-org ()
+  "bootstrap-set-notes-directory sets all note directory variables without requiring org."
+  (let ((local-notes-directory nil)
+        (user-org-directories nil)
+        (org-directory nil)
+        (org-agenda-files nil)
+        (deft-directory nil)
+        (denote-directory nil))
+    (bootstrap-set-notes-directory "/tmp/test-notes")
+    (should (equal local-notes-directory (expand-file-name "/tmp/test-notes")))
+    (should (equal org-directory (expand-file-name "/tmp/test-notes/org")))
+    (should (equal deft-directory (expand-file-name "/tmp/test-notes/deft")))
+    (should (equal denote-directory (expand-file-name "/tmp/test-notes/denote")))))
+
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here

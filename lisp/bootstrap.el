@@ -48,9 +48,10 @@
              (gc-cons-percentage 1.0))
          (prog1
              (progn ,@body)
-           (garbage-collect))))))
-
-
+           (if (fboundp 'bootstrap-schedule-idle-gc)
+               (bootstrap-schedule-idle-gc 5)
+             (unless noninteractive
+               (run-with-idle-timer 5 nil #'garbage-collect))))))))
 
 (autoload 'minaid-mode "minaid" "Global minor mode coordinating the consolidated Minad completion suite." t)
 (autoload 'eglox-global-mode "eglox" "Global minor mode managing Eglot LSP lifecycle." t)
@@ -259,9 +260,46 @@ triggered directly by a keypress, still prompts normally.")
     hitl-mcp)
   "List of MCP package and feature symbols to require during bootstrap.")
 
+(defun bootstrap-port-available-p (port)
+  "Return non-nil if local TCP PORT is available to bind."
+  (condition-case nil
+      (let ((proc (make-network-process
+                   :name " mcpkit-port-probe"
+                   :server t
+                   :host 'local
+                   :service port
+                   :noquery t
+                   :family 'ipv4)))
+        (delete-process proc)
+        t)
+    (file-error nil)))
+
+(defun bootstrap-find-available-port (base-port &optional max-tries)
+  "Find an available port starting at BASE-PORT, probing up to MAX-TRIES."
+  (let ((port base-port)
+        (tries (or max-tries 50)))
+    (while (and (> tries 0) (not (bootstrap-port-available-p port)))
+      (setq port (1+ port))
+      (setq tries (1- tries)))
+    (if (> tries 0)
+        port
+      (if (fboundp 'mcpkit-allocate-free-port)
+          (mcpkit-allocate-free-port)
+        (+ base-port (random 1000))))))
+
 (defun bootstrap-mcpkit-instance-port ()
-  "Return a TCP port derived from `sprite-instance-name', stable across restarts."
-  (+ 20000 (mod (abs (sxhash-equal (sprite-instance-name))) 10000)))
+  "Return a TCP port derived from `sprite-instance-name', stable across restarts.
+For named instances, the port is deterministic based on the instance name.
+For \"solo\" instances (or if the preferred port is already bound by another
+process), sequential probing starting at the base port assigns distinct,
+deterministic ports (base, base+1, base+2, ...) so concurrent instances
+never collide or fail to start."
+  (let* ((name (or (ignore-errors (sprite-instance-name))
+                   (bound-and-true-p sprite-instance-id)
+                   (system-name)
+                   "solo"))
+         (base-port (+ 20000 (mod (abs (sxhash-equal name)) 10000))))
+    (bootstrap-find-available-port base-port 50)))
 
 (setq mcpkit-default-port (bootstrap-mcpkit-instance-port))
 
@@ -302,38 +340,105 @@ registration messages without batch logging. Calls ON-DONE when complete."
 (defun bootstrap-start-mcp-services ()
   "Start all MCP services on this instance's stable port."
   (with-slow-op-timer "<bootstrap> [mcpkit] start-services"
-    (setq mcpkit-default-port (bootstrap-mcpkit-instance-port))
-    (when (fboundp 'mcpkit-mode)
-      (mcpkit-mode 1))
-    (when (fboundp 'mcpkit-start-all-services)
-      (mcpkit-start-all-services mcpkit-default-port))))
+    (let ((port (or (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
+                    (bootstrap-mcpkit-instance-port))))
+      (setq mcpkit-default-port port)
+      (when (fboundp 'mcpkit-start-all-services)
+        (mcpkit-start-all-services port)))))
 
-(defun bootstrap-init-mcp-services ()
-  "Initialize and start MCPKit services configured in `bootstrap-mcp-packages'."
+(cl-defun bootstrap-init-mcp-services (&key sync)
+  "Initialize and start MCPKit services configured in `bootstrap-mcp-packages'.
+If SYNC is non-nil or running noninteractively, load and start synchronously."
   (interactive)
-  (bootstrap-load-mcp-services
-   :on-done #'bootstrap-start-mcp-services))
+  (unless (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
+    (if (or sync noninteractive)
+        (progn
+          (dolist (pkg bootstrap-mcp-packages)
+            (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
+              (require pkg nil t)))
+          (with-slow-op-timer "<bootstrap> [mcpkit] post-load"
+            (when (and (fboundp 'mcpkit-editing-register-tools)
+                       (fboundp 'mcpkit-get-service)
+                       (mcpkit-get-service 'emacs))
+              (mcpkit-editing-register-tools 'emacs)))
+          (bootstrap-start-mcp-services))
+      (bootstrap-load-mcp-services
+       :on-done #'bootstrap-start-mcp-services))))
 
 (declare-function orgx-global-mode "orgx")
 
-(defun bootstrap-run-enable-modes-hook (hook)
-  "Run HOOK to enable modes and integrations.
-Each entry in HOOK is executed with `with-slow-op-timer' reporting,
-and is called with argument 1 (or 0 arguments if not accepted) so that
-running HOOK repeatedly is idempotent and never toggles modes off."
-  (run-hook-wrapped
-   hook
-   (lambda (fn)
-     (let ((name (cond
-                  ((symbolp fn) (symbol-name fn))
-                  ((byte-code-function-p fn) "<bytecode>")
-                  (t "<function>"))))
-       (with-slow-op-timer (format "<bootstrap> [modes] %s" name)
-         (condition-case nil
-             (funcall fn 1)
-           (wrong-number-of-arguments
-            (funcall fn)))))
-     nil)))
+(iter-defun bootstrap--hook-iterator (funcs)
+  "Yield each function in FUNCS sequentially."
+  (dolist (fn funcs)
+    (iter-yield fn)))
+
+(defun bootstrap--execute-mode-function (fn)
+  "Execute mode or setup function FN idempotently with slow-op reporting."
+  (let ((name (cond
+               ((symbolp fn) (symbol-name fn))
+               ((byte-code-function-p fn) "<bytecode>")
+               (t "<function>"))))
+    (with-slow-op-timer (format "<bootstrap> [modes] %s" name)
+      (condition-case err
+          (condition-case nil
+              (funcall fn 1)
+            (wrong-number-of-arguments
+             (funcall fn)))
+        (error
+         (message "[bootstrap] error enabling mode %s: %s" name (error-message-string err)))))))
+
+(defun bootstrap--resolve-hook-functions (hook)
+  "Return a flat list of callable functions from HOOK symbol or list."
+  (let ((val (cond
+              ((symbolp hook) (and (boundp hook) (symbol-value hook)))
+              ((listp hook) hook)
+              ((functionp hook) (list hook))
+              (t nil))))
+    (cond
+     ((null val) nil)
+     ((functionp val) (list val))
+     ((listp val)
+      (seq-filter (lambda (fn) (and fn (not (eq fn t))))
+                  (flatten-tree val)))
+     (t nil))))
+
+(cl-defun bootstrap-run-enable-modes-hook (hook &key (delay 0.05) on-done)
+  "Run HOOK to enable modes and integrations non-blockingly using a generator iterator.
+In interactive sessions, yields execution between functions via idle timers of
+DELAY seconds, giving the Emacs event loop time to process input and redraw.
+In `noninteractive' sessions, drains synchronously.
+Calls ON-DONE when iteration completes.
+Returns a cancellation function that halts pending iterations."
+  (interactive (list 'bootstrap-late-enable-modes-hook))
+  (let* ((funcs (bootstrap--resolve-hook-functions hook))
+         (it (bootstrap--hook-iterator funcs))
+         (timer nil)
+         (canceled nil))
+    (if noninteractive
+        (progn
+          (condition-case nil
+              (while t
+                (bootstrap--execute-mode-function (iter-next it)))
+            (iter-end-of-sequence nil))
+          (when on-done (funcall on-done))
+          #'ignore)
+      (letrec ((drain
+                (lambda ()
+                  (setq timer nil)
+                  (unless canceled
+                    (let ((next-fn (condition-case nil
+                                       (iter-next it)
+                                     (iter-end-of-sequence :done))))
+                      (if (eq next-fn :done)
+                          (when on-done (funcall on-done))
+                        (bootstrap--execute-mode-function next-fn)
+                        (setq timer (run-with-idle-timer (or delay 0.05) nil drain))))))))
+        (setq timer (run-with-idle-timer (or delay 0.05) nil drain))
+        (lambda ()
+          (setq canceled t)
+          (when (timerp timer)
+            (cancel-timer timer)
+            (setq timer nil)))))))
 
 (defcustom bootstrap-early-enable-modes-hook
   '(bootstrap-init-early-ui
@@ -363,10 +468,12 @@ running HOOK repeatedly is idempotent and never toggles modes off."
   "Set up instance persistence."
   (bootstrap-set-up-emacs-instance-persistence))
 
-(defun bootstrap-init-early-modes ()
+(defun bootstrap-init-early-modes (&optional on-done)
   "Initialize core editor UI, display modes, font, and instance persistence."
   (interactive)
-  (bootstrap-run-enable-modes-hook 'bootstrap-early-enable-modes-hook))
+  (bootstrap-run-enable-modes-hook 'bootstrap-early-enable-modes-hook
+                                   :delay 0.02
+                                   :on-done on-done))
 
 (defcustom bootstrap-late-enable-modes-hook
   '(bootstrap-init-project
@@ -390,34 +497,54 @@ running HOOK repeatedly is idempotent and never toggles modes off."
   (require 'projectile)
   (require 'grepx))
 
-(defun bootstrap-init-integrations ()
+(defun bootstrap-init-integrations (&optional on-done)
   "Initialize secondary tool integrations and modes via `bootstrap-late-enable-modes-hook'."
   (interactive)
-  (bootstrap-run-enable-modes-hook 'bootstrap-late-enable-modes-hook))
+  (bootstrap-run-enable-modes-hook 'bootstrap-late-enable-modes-hook
+                                   :delay 0.05
+                                   :on-done on-done))
 
 (defun bootstrap-init-late-services ()
-  "Initialize secondary tool integrations, services, and background maintenance."
-  (with-slow-op-timer "<bootstrap> [integrations] all"
-    (bootstrap-init-integrations))
-  (with-slow-op-timer "<bootstrap> [desktop] restore"
-    (bootstrap-desktop-read-init))
-  (with-slow-op-timer "<bootstrap> [services] mcpkit"
-    (bootstrap-init-mcp-services))
-  (with-slow-op-timer "<bootstrap> [packages] elpaish ensure"
-    (require 'setup-packages)
-    (elpaish-install-packages :async t))
-  (with-slow-op-timer "<bootstrap> [packages] quickstart check"
-    (bootstrap-refresh-package-quickstart)))
+  "Initialize secondary tool integrations, services, and background maintenance synchronously."
+  (interactive)
+  (bootstrap-init-integrations)
+  (bootstrap-desktop-read-init)
+  (bootstrap-init-mcp-services :sync t)
+  (require 'setup-packages)
+  (elpaish-install-packages :async t)
+  (bootstrap-refresh-package-quickstart))
 
 (add-lazy-init
  :name "<bootstrap> [early] ui & modes"
- :operation 'bootstrap-init-early-modes
+ :operation #'bootstrap-init-early-modes
  :delay 0.1)
 
 (add-lazy-init
- :name "<bootstrap> [late] integrations & services"
- :operation 'bootstrap-init-late-services
- :delay 1.5)
+ :name "<bootstrap> [services] mcpkit"
+ :operation #'bootstrap-init-mcp-services
+ :delay 0.5)
+
+(add-lazy-init
+ :name "<bootstrap> [late] integrations"
+ :operation #'bootstrap-init-integrations
+ :delay 0.8)
+
+(add-lazy-init
+ :name "<bootstrap> [desktop] restore"
+ :operation #'bootstrap-desktop-read-init
+ :delay 1.8)
+
+(add-lazy-init
+ :name "<bootstrap> [packages] elpaish ensure"
+ :operation (lambda ()
+              (require 'setup-packages)
+              (elpaish-install-packages :async t))
+ :delay 6.0)
+
+(add-lazy-init
+ :name "<bootstrap> [packages] quickstart check"
+ :operation #'bootstrap-refresh-package-quickstart
+ :delay 10.0)
 
 (add-one-shot-hook
  :name "<bootstrap> first-frame setup"
@@ -485,7 +612,7 @@ running HOOK repeatedly is idempotent and never toggles modes off."
 
 (defun bootstrap-set-up-user-local-config (path)
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
-  (dolist (file (directory-files path :full ".el$") nil)
+  (dolist (file (directory-files path :full "\\.el$") nil)
     (bootstrap--load-user-file
      (file-name-sans-extension (file-name-nondirectory file)))))
 
@@ -495,8 +622,30 @@ running HOOK repeatedly is idempotent and never toggles modes off."
 (defvar user-org-directories nil
   "Additional directories that may contain org files.")
 
-(autoload 'orgx-set-notes-directory "orgx" nil t)
-(defalias 'bootstrap-set-notes-directory #'orgx-set-notes-directory)
+(defun bootstrap-set-notes-directory (&optional path)
+  "Set the notes directory to PATH and update note and org-mode paths."
+  (interactive
+   (list (read-directory-name "Notes directory: " (or local-notes-directory "~/notes"))))
+  (when path
+    (setq local-notes-directory (expand-file-name path)))
+  (unless local-notes-directory
+    (error "Must define `local-notes-directory'"))
+  (setq org-directory (file-name-concat local-notes-directory "org"))
+  (setq org-agenda-files (thread-last (list org-directory user-org-directories)
+                                      (flatten-tree)
+                                      (seq-map #'expand-file-name)
+                                      (seq-filter #'identity)
+                                      (seq-map #'string-trim)
+                                      (seq-remove #'string-empty-p)
+                                      (seq-uniq)))
+  (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
+  (setq org-default-notes-file (file-name-concat org-directory "records.org"))
+  (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
+  (setq deft-directory (file-name-concat local-notes-directory "deft"))
+  (setq denote-directory (file-name-concat local-notes-directory "denote"))
+  local-notes-directory)
+
+(defalias 'orgx-set-notes-directory #'bootstrap-set-notes-directory)
 
 (defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))

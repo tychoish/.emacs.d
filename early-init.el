@@ -5,12 +5,29 @@
 ;; native compilation settings, and early frame configuration.
 
 ;;; Code:
+
+(defvar bootstrap--gc-idle-timer nil
+  "Debounced idle timer for running deferred garbage collection.")
+
+(defun bootstrap-schedule-idle-gc (&optional delay)
+  "Schedule garbage collection to run DELAY seconds after Emacs becomes idle."
+  (unless noninteractive
+    (when (timerp bootstrap--gc-idle-timer)
+      (cancel-timer bootstrap--gc-idle-timer))
+    (setq bootstrap--gc-idle-timer
+          (run-with-idle-timer (or delay 5) nil
+                               (lambda ()
+                                 (setq bootstrap--gc-idle-timer nil)
+                                 (garbage-collect))))))
+
 (defmacro with-gc-suppressed (&rest body)
+  "Execute BODY with garbage collection temporarily suppressed.
+Defers cleanup to an idle timer after execution completes."
   `(let ((gc-cons-threshold 8000000000000000)
          (gc-cons-percentage 1.0))
      (prog1
 	 (progn ,@body)
-       (garbage-collect))))
+       (bootstrap-schedule-idle-gc 5))))
 
 (defmacro with-file-name-handler-disabled (&rest body)
   `(let ((file-name-handler-alist nil))
