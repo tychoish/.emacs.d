@@ -16,8 +16,9 @@
 (autoload 'hud-transient-insert-suffix-once "hud")
 (autoload 'bootstrap-load-abbrev-files "bootstrap")
 (autoload 'bootstrap-set-up-auto-save "bootstrap")
-(autoload 'font-lock-width-keyword "bootstrap")
-(autoload 'font-lock-show-tabs "bootstrap")
+(autoload 'font-lock-width-keyword "hud-mode")
+(autoload 'font-lock-show-tabs "hud-mode")
+(autoload 'orgx-capture-setup-standard-templates "orgx-capture")
 
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
@@ -217,8 +218,14 @@ completion candidate outlives its buffer."
     :bind-key "x"))
 
 (with-eval-after-load 'orgx
-  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append)
-  (orgx-capture-setup-standard-templates))
+  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append))
+
+(with-eval-after-load 'org-capture
+  (unless (and (boundp 'org-capture-templates) org-capture-templates)
+    (orgx-capture-setup-standard-templates)))
+
+;; Initialize default orgx capture templates during startup
+(orgx-capture-setup-standard-templates)
 
 (with-eval-after-load 'flycheck-eglot
   (setq-default flycheck-eglot-exclusive nil)
