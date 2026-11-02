@@ -142,8 +142,8 @@ removes autoload feature provisions, and eliminates extraneous whitespace."
                            (and (file-directory-p pkg-dir)
                                 (file-exists-p (expand-file-name (package--description-file pkg-dir) pkg-dir))
                                 (time-less-p quickstart-mtime
-                                             (file-attribute-modification-time (file-attributes pkg-dir))))))
-                         (directory-files package-user-dir t "\\`[^.]" t))))))
+                                             (file-attribute-modification-time (file-attributes pkg-dir)))))
+                         (directory-files package-user-dir t "\\`[^.]" t)))))))
 
 (defun bootstrap-refresh-package-quickstart (&optional force)
   "Regenerate `package-quickstart-file' and clear the debounce timer.
