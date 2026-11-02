@@ -575,12 +575,17 @@ binding (see `keymap-set'.)"
   :doc "Ollama tailnet orchestration under C-c r o t (hud-mode).")
 
 (keymap-set hud-robot-ollama-tailnet-map "s" #'ollama-tailnet-status)
+(keymap-set hud-robot-ollama-tailnet-map "d" #'ollama-tailnet-discover-hosts)
 (keymap-set hud-robot-ollama-tailnet-map "p" #'ollama-tailnet-pull-model)
 (keymap-set hud-robot-ollama-tailnet-map "r" #'ollama-tailnet-service-restart)
 (keymap-set hud-robot-ollama-tailnet-map "t" #'ollama-tailnet-service-status)
 (keymap-set hud-robot-ollama-tailnet-map "b" #'ollama-tailnet-set-gptel-backend)
 (keymap-set hud-robot-ollama-tailnet-map "l" #'ollama-tailnet-models)
 (keymap-set hud-robot-ollama-tailnet-map "S" #'ollama-tailnet-search-model)
+
+(make-read-extended-command-for-prefix "ollama-tailnet"
+  :bind-key "x"
+  :bind-map hud-robot-ollama-tailnet-map)
 
 (defvar-keymap hud-robot-network-map
   :name "network"
