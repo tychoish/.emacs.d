@@ -9,7 +9,9 @@
 (require 'cl-lib)
 (require 'sprite)
 (require 'xtd-macro)
-(require 'hud-mode)
+(defvar hud-smerge-map)
+(defvar hud-ide-map)
+(autoload 'hud-mode "hud-mode" nil t)
 
 (autoload 'hud-transient-insert-suffix-once "hud")
 (autoload 'bootstrap-load-abbrev-files "bootstrap")

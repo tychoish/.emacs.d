@@ -33,11 +33,12 @@
 
 ;;; Code:
 
-(require 'cl-lib)
-(require 'generator)
 (require 'sprite)
-(require 'hud-mode)
 (require 'xtd-macro)
+
+(autoload 'hud-mode "hud-mode" "Global HUD minor mode." t)
+(autoload 'hud--readonly-file-buffer-p "hud-mode" nil nil)
+(autoload 'hud--reuse-readonly-file-window "hud-mode" nil nil)
 
 (eval-and-compile
   (unless (fboundp 'with-gc-suppressed)
@@ -59,8 +60,20 @@
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
 
-(eval-when-compile
-  (require 'desktop))
+(defvar desktop-base-file-name)
+(defvar desktop-base-lock-name)
+(defvar desktop-path)
+(defvar desktop-save)
+(defvar desktop-restore-frames)
+(defvar desktop-restore-in-current-display)
+(defvar desktop-restore-eager)
+(defvar desktop-load-locked-desktop)
+(defvar desktop-globals-to-save)
+(defvar desktop-modes-not-to-save)
+(defvar desktop-buffers-not-to-save)
+(defvar desktop-files-not-to-save)
+(declare-function desktop-save "desktop")
+(declare-function desktop-read "desktop")
 
 (defvar project-list-file)
 (defvar savehist-file)
@@ -301,14 +314,19 @@ never collide or fail to start."
          (base-port (+ 20000 (mod (abs (sxhash-equal name)) 10000))))
     (bootstrap-find-available-port base-port 50)))
 
-(setq mcpkit-default-port (bootstrap-mcpkit-instance-port))
+(defvar mcpkit-default-port nil
+  "Default TCP port for MCPKit server.
+Computed dynamically on demand by `bootstrap-mcpkit-instance-port'.")
 
-(cl-defun bootstrap-load-mcp-services (&key on-done (delay 0.01))
+(defun bootstrap-load-mcp-services (&rest args)
   "Require all packages in `bootstrap-mcp-packages' incrementally with `gen.el'.
 Wraps each load operation in `with-slow-op-timer' and emits individual
-registration messages without batch logging. Calls ON-DONE when complete."
+registration messages without batch logging. Calls ON-DONE when complete.
+Keyword arguments: :on-done, :delay."
   (interactive)
-  (if (and (require 'gen nil t) (fboundp 'gen-run-async))
+  (let ((on-done (plist-get args :on-done))
+        (delay (or (plist-get args :delay) 0.01)))
+    (if (and (require 'gen nil t) (fboundp 'gen-run-async))
       (gen-run-async
        (lambda (pkg done-cb)
          (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
@@ -335,23 +353,24 @@ registration messages without batch logging. Calls ON-DONE when complete."
                  (fboundp 'mcpkit-get-service)
                  (mcpkit-get-service 'emacs))
         (mcpkit-editing-register-tools 'emacs)))
-    (when on-done (funcall on-done))))
+    (when on-done (funcall on-done)))))
 
 (defun bootstrap-start-mcp-services ()
   "Start all MCP services on this instance's stable port."
   (with-slow-op-timer "<bootstrap> [mcpkit] start-services"
     (let ((port (or (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
-                    (bootstrap-mcpkit-instance-port))))
-      (setq mcpkit-default-port port)
+                    mcpkit-default-port
+                    (setq mcpkit-default-port (bootstrap-mcpkit-instance-port)))))
       (when (fboundp 'mcpkit-start-all-services)
         (mcpkit-start-all-services port)))))
 
-(cl-defun bootstrap-init-mcp-services (&key sync)
+(defun bootstrap-init-mcp-services (&rest args)
   "Initialize and start MCPKit services configured in `bootstrap-mcp-packages'.
-If SYNC is non-nil or running noninteractively, load and start synchronously."
+If :sync is non-nil or running noninteractively, load and start synchronously."
   (interactive)
-  (unless (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
-    (if (or sync noninteractive)
+  (let ((sync (plist-get args :sync)))
+    (unless (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
+      (if (or sync noninteractive)
         (progn
           (dolist (pkg bootstrap-mcp-packages)
             (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
@@ -363,14 +382,18 @@ If SYNC is non-nil or running noninteractively, load and start synchronously."
               (mcpkit-editing-register-tools 'emacs)))
           (bootstrap-start-mcp-services))
       (bootstrap-load-mcp-services
-       :on-done #'bootstrap-start-mcp-services))))
+       :on-done #'bootstrap-start-mcp-services)))))
 
 (declare-function orgx-global-mode "orgx")
 
-(iter-defun bootstrap--hook-iterator (funcs)
-  "Yield each function in FUNCS sequentially."
-  (dolist (fn funcs)
-    (iter-yield fn)))
+(defun bootstrap--hook-iterator (funcs)
+  "Return a generator closure that yields each function in FUNCS sequentially.
+Returns :done when FUNCS is exhausted."
+  (let ((remaining funcs))
+    (lambda ()
+      (if remaining
+          (pop remaining)
+        :done))))
 
 (defun bootstrap--execute-mode-function (fn)
   "Execute mode or setup function FN idempotently with slow-op reporting."
@@ -402,7 +425,7 @@ If SYNC is non-nil or running noninteractively, load and start synchronously."
                   (flatten-tree val)))
      (t nil))))
 
-(cl-defun bootstrap-run-enable-modes-hook (hook &key (delay 0.05) on-done)
+(defun bootstrap-run-enable-modes-hook (hook &rest args)
   "Run HOOK to enable modes and integrations non-blockingly using a generator iterator.
 In interactive sessions, yields execution between functions via idle timers of
 DELAY seconds, giving the Emacs event loop time to process input and redraw.
@@ -410,25 +433,25 @@ In `noninteractive' sessions, drains synchronously.
 Calls ON-DONE when iteration completes.
 Returns a cancellation function that halts pending iterations."
   (interactive (list 'bootstrap-late-enable-modes-hook))
-  (let* ((funcs (bootstrap--resolve-hook-functions hook))
+  (let* ((delay (or (plist-get args :delay) 0.05))
+         (on-done (plist-get args :on-done))
+         (funcs (bootstrap--resolve-hook-functions hook))
          (it (bootstrap--hook-iterator funcs))
          (timer nil)
          (canceled nil))
     (if noninteractive
         (progn
-          (condition-case nil
-              (while t
-                (bootstrap--execute-mode-function (iter-next it)))
-            (iter-end-of-sequence nil))
+          (let ((fn (funcall it)))
+            (while (not (eq fn :done))
+              (bootstrap--execute-mode-function fn)
+              (setq fn (funcall it))))
           (when on-done (funcall on-done))
           #'ignore)
       (letrec ((drain
                 (lambda ()
                   (setq timer nil)
                   (unless canceled
-                    (let ((next-fn (condition-case nil
-                                       (iter-next it)
-                                     (iter-end-of-sequence :done))))
+                    (let ((next-fn (funcall it)))
                       (if (eq next-fn :done)
                           (when on-done (funcall on-done))
                         (bootstrap--execute-mode-function next-fn)
@@ -442,6 +465,7 @@ Returns a cancellation function that halts pending iterations."
 
 (defcustom bootstrap-early-enable-modes-hook
   '(bootstrap-init-early-ui
+    bootstrap-global-show-whitespace-mode
     column-number-mode
     delete-selection-mode
     winner-mode
@@ -703,11 +727,23 @@ Returns a cancellation function that halts pending iterations."
 (defun bootstrap-ensure-default-font ()
   (bootstrap-ensure-font "Source Code Pro" 13))
 
-(defun bootstrap-set-up-show-whitespace ()
-  (setq-local show-trailing-whitespace t))
+(define-minor-mode bootstrap-show-whitespace-mode
+  "Buffer-local minor mode to show trailing whitespace."
+  :lighter ""
+  (setq-local show-trailing-whitespace (if bootstrap-show-whitespace-mode t nil)))
 
-(add-hook 'prog-mode-hook #'bootstrap-set-up-show-whitespace)
-(add-hook 'text-mode-hook #'bootstrap-set-up-show-whitespace)
+(defun bootstrap-set-up-show-whitespace ()
+  "Enable whitespace visualization in current buffer."
+  (interactive)
+  (bootstrap-show-whitespace-mode 1)
+  t)
+
+(define-globalized-minor-mode bootstrap-global-show-whitespace-mode
+  bootstrap-show-whitespace-mode
+  (lambda ()
+    (when (derived-mode-p 'prog-mode 'text-mode)
+      (bootstrap-show-whitespace-mode 1)))
+  :group 'bootstrap)
 
 (setq modus-themes-deuteranopia t)
 (setq modus-themes-common-palette-overrides

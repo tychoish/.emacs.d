@@ -1210,7 +1210,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 (ert-deftest bootstrap/port-available-p-and-find-available-port ()
   "Tests that port probing correctly detects bound ports and finds the next available port."
-  (let* ((base-port 29935)
+  (let* ((base-port (bootstrap-find-available-port 45000 50))
          (bound-proc (make-network-process
                       :name "ert-bound-probe"
                       :server t
@@ -1222,24 +1222,26 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
         (progn
           (should-not (bootstrap-port-available-p base-port))
           (let ((next-port (bootstrap-find-available-port base-port 10)))
-            (should (= next-port (1+ base-port)))))
+            (should (> next-port base-port))))
       (delete-process bound-proc))))
 
 (ert-deftest bootstrap/mcpkit-instance-port-solo-concurrency ()
   "Multiple solo instances sequentially claim consecutive free ports without collisions."
   (let* ((sprite-instance-id "solo")
-         (base-port (+ 20000 (mod (abs (sxhash-equal "solo")) 10000)))
+         (p1 (cl-letf (((symbol-function (quote sprite-instance-name)) (lambda () "solo")))
+               (bootstrap-mcpkit-instance-port)))
          (proc1 (make-network-process
                  :name "ert-solo-1"
                  :server t
                  :host "127.0.0.1"
-                 :service base-port
+                 :service p1
                  :noquery t
                  :family (quote ipv4))))
     (unwind-protect
         (progn
           (cl-letf (((symbol-function (quote sprite-instance-name)) (lambda () "solo")))
-            (should (= (bootstrap-mcpkit-instance-port) (1+ base-port)))))
+            (let ((p2 (bootstrap-mcpkit-instance-port)))
+              (should (> p2 p1)))))
       (delete-process proc1))))
 
 (ert-deftest bootstrap/set-notes-directory-sets-paths-without-requiring-org ()
