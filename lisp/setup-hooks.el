@@ -414,7 +414,11 @@ resets point to column 0 outside of definition-list context."
 
 (with-eval-after-load 'yaml-mode
   (add-hook 'yaml-mode-hook #'yaml-pro-mode)
-  (add-hook 'yaml-mode-hook (hud-set-tab-width 2)))
+
+  (defun tychoish-yaml-set-tab-width ()
+    (setq-local tab-width 2))
+
+  (add-hook 'yaml-mode-hook #'tychoish-yaml-set-tab-width))
 
 (with-eval-after-load 'go-ts-mode
   (keymap-set go-ts-mode-map "C-c C-t c" #'builder-go-coverage-and-convert)
