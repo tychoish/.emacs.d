@@ -378,6 +378,8 @@ running HOOK repeatedly is idempotent and never toggles modes off."
     denote-tree-mode
     magit-dash-global-mode
     builder-mode
+    ollama-tailnet-mode
+    agent-shell-queue-global-mode
     nerd-icons-completion-mode
     orgx-global-mode)
   "Hook run during late bootstrap to enable tool and integration modes."
