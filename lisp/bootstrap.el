@@ -260,10 +260,8 @@ triggered directly by a keypress, still prompts normally.")
   "List of MCP package and feature symbols to require during bootstrap.")
 
 (defun bootstrap-mcpkit-instance-port ()
-  "Return a TCP port derived from `sprite-instance-id', stable across restarts."
-  (+ 20000 (mod (abs (sxhash-equal (or (bound-and-true-p sprite-instance-id)
-                                       (system-name))))
-                10000)))
+  "Return a TCP port derived from `sprite-instance-name', stable across restarts."
+  (+ 20000 (mod (abs (sxhash-equal (sprite-instance-name))) 10000)))
 
 (setq mcpkit-default-port (bootstrap-mcpkit-instance-port))
 
