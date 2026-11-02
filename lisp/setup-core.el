@@ -482,36 +482,36 @@ otherwise keep replaying stale detection results."
   (defvar anthropic-api-key nil)
   (defvar openai-api-key nil)
 
-  (eval-when-compile
-    (require 'cl-lib))
+  (require 'cl-lib)
 
-  (cl-defmacro make-gptel-set-up-backend-functions (&key name model backend key api-key)
-    (declare (indent defun) (debug (def-form form)))
-
+  (cl-defun make-gptel-set-up-backend-functions (&key name model backend key api-key)
+    "Register buffer-local and session-default backend switchers for MODEL as NAME."
+    (declare (indent defun))
     (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
           (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
-      `(progn
-	 (defun ,local-function-symbol ()
-           ,(format "Set LLM backend for the current buffer to `%s'" model)
-           (interactive)
-           (setq-local gptel-model ,model)
-           ,(when api-key
-              `(setq-local gptel-api-key (lambda () ,api-key)))
-           (setq-local gptel-backend ,backend)
-           (or (message "[gptel] set backend to %s for the local buffer" ,name)))
+      (defalias local-function-symbol
+        (lambda ()
+          (interactive)
+          (setq-local gptel-model model)
+          (when api-key
+            (setq-local gptel-api-key (if (functionp api-key) api-key (lambda () api-key))))
+          (setq-local gptel-backend backend)
+          (message "[gptel] set backend to %s for the local buffer" name))
+        (format "Set LLM backend for the current buffer to `%s'" model))
 
-	 (defun ,default-function-symbol ()
-           ,(format "Set the default LLM backend for the current session to `%s'" model)
-           (interactive)
-           (setq-default gptel-model ,model)
-           ,(when api-key
-              `(setq-default gptel-api-key (lambda () ,api-key)))
-           (setq-default gptel-backend ,backend)
-           (or (message "[gptel] set default backend to %s" ,name)))
+      (defalias default-function-symbol
+        (lambda ()
+          (interactive)
+          (setq-default gptel-model model)
+          (when api-key
+            (setq-default gptel-api-key (if (functionp api-key) api-key (lambda () api-key))))
+          (setq-default gptel-backend backend)
+          (message "[gptel] set default backend to %s" name))
+        (format "Set the default LLM backend for the current session to `%s'" model))
 
-	 (keymap-set gptel-mode-map ,(format "C-c r a m %s" (upcase key)) #',default-function-symbol)
-	 (keymap-set gptel-mode-map ,(format "C-c r a m %s" (downcase key)) #',local-function-symbol)
-	 (keymap-set hud-robot-gptel-set-default-model-map ,(downcase key) #',default-function-symbol))))
+      (keymap-set gptel-mode-map (format "C-c r a m %s" (upcase key)) default-function-symbol)
+      (keymap-set gptel-mode-map (format "C-c r a m %s" (downcase key)) local-function-symbol)
+      (keymap-set hud-robot-gptel-set-default-model-map (downcase key) default-function-symbol)))
 
   (keymap-set gptel-mode-map "C-c m" #'gptel-menu)
 
