@@ -406,17 +406,12 @@ If :sync is non-nil or running noninteractively, load and start synchronously."
 (defun bootstrap--resolve-hook-functions (hook)
   "Return a flat list of callable functions from HOOK symbol or list."
   (let ((val (cond
-              ((symbolp hook) (and (boundp hook) (symbol-value hook)))
-              ((listp hook) hook)
               ((functionp hook) (list hook))
+              ((and (symbolp hook) (boundp hook)) (symbol-value hook))
+              ((listp hook) hook)
               (t nil))))
-    (cond
-     ((null val) nil)
-     ((functionp val) (list val))
-     ((listp val)
-      (seq-filter (lambda (fn) (and fn (not (eq fn t))))
-                  (flatten-tree val)))
-     (t nil))))
+    (seq-filter (lambda (fn) (and fn (not (eq fn t))))
+                (flatten-tree (if (listp val) val (list val))))))
 
 (defun bootstrap-run-enable-modes-hook (hook &rest args)
   "Run HOOK functions non-blockingly, yielding to the event loop between each.
@@ -429,31 +424,31 @@ Returns a cancellation function that halts pending iterations."
   (let* ((delay (or (plist-get args :delay) 0.05))
          (on-done (plist-get args :on-done))
          (remaining (bootstrap--resolve-hook-functions hook))
-         (timer nil)
-         (canceled nil))
-    (if noninteractive
-        (progn
-          (while remaining
-            (bootstrap--execute-mode-function (pop remaining)))
-          (when on-done (funcall on-done))
-          #'ignore)
-      (letrec ((drain
+         (timer nil))
+    (cond
+     ((null remaining)
+      (when on-done (funcall on-done))
+      #'ignore)
+     (noninteractive
+      (dolist (fn remaining)
+        (bootstrap--execute-mode-function fn))
+      (when on-done (funcall on-done))
+      #'ignore)
+     (t
+      (letrec ((step
                 (lambda ()
                   (setq timer nil)
-                  (unless canceled
+                  (when remaining
+                    (bootstrap--execute-mode-function (pop remaining))
                     (if remaining
-                        (progn
-                          (bootstrap--execute-mode-function (pop remaining))
-                          (if remaining
-                              (setq timer (run-with-idle-timer delay nil drain))
-                            (when on-done (funcall on-done))))
+                        (setq timer (run-with-idle-timer delay nil step))
                       (when on-done (funcall on-done)))))))
-        (setq timer (run-with-idle-timer delay nil drain))
+        (setq timer (run-with-idle-timer delay nil step))
         (lambda ()
-          (setq canceled t)
+          (setq remaining nil)
           (when (timerp timer)
             (cancel-timer timer)
-            (setq timer nil)))))))
+            (setq timer nil))))))))
 
 (defcustom bootstrap-early-enable-modes-hook
   '(bootstrap-init-early-ui
