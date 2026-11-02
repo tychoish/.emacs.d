@@ -770,6 +770,25 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
           (should (= (1- (length buffers)) activated)))
       (seq-do #'kill-buffer buffers))))
 
+(ert-deftest eglox/use-flycheck-option ()
+  "Test that eglox-use-flycheck controls Flycheck cycling."
+  (let ((eglox-use-flycheck nil)
+        (flycheck-called nil))
+    (cl-letf (((symbol-function 'flycheck-eglot-mode)
+               (lambda (&rest _) (setq flycheck-called t)))
+              ((symbol-function 'eglot-tempel-mode) #'ignore))
+      (setq-local eglot-tempel-mode t)
+      (eglox-ensure-hook)
+      (should-not flycheck-called)))
+  (let ((eglox-use-flycheck t)
+        (flycheck-calls 0))
+    (cl-letf (((symbol-function 'flycheck-eglot-mode)
+               (lambda (&rest _) (cl-incf flycheck-calls)))
+              ((symbol-function 'eglot-tempel-mode) #'ignore))
+      (setq-local eglot-tempel-mode t)
+      (eglox-ensure-hook)
+      (should (= flycheck-calls 2)))))
+
 (provide 'test-egloxtra)
 ;;; test-egloxtra.el ends here
 

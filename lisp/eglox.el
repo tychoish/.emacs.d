@@ -190,6 +190,13 @@
              :pyflakes (:enabled :json-false))))
   "Default Eglot workspace configuration.")
 
+(defcustom eglox-use-flycheck t
+  "Whether eglox should configure Flycheck and disable Flymake in Eglot buffers.
+When non-nil (the default), `eglot-stay-out-of' includes \='flymake and
+`flycheck-eglot-mode' is activated for diagnostic reporting."
+  :type 'boolean
+  :group 'eglox)
+
 (defvar eglox--eglot-initialized nil
   "Non-nil when Eglot settings and integrations have been applied.")
 
@@ -204,7 +211,9 @@ Rest argument _ARGS is ignored so this can be used on hooks or advices."
     (setq eglot-autoshutdown t)
     (setq eglot-extend-to-xref t)
     (setq eglot-report-progress nil)
-    (add-to-list 'eglot-stay-out-of 'flymake)
+    (if eglox-use-flycheck
+        (add-to-list 'eglot-stay-out-of 'flymake)
+      (setq eglot-stay-out-of (delq 'flymake eglot-stay-out-of)))
     (add-to-list 'eglot-stay-out-of 'company)
     (set-face-attribute 'eglot-highlight-symbol-face nil :underline nil :weight 'bold)
     (add-to-list 'eglot-server-programs
@@ -241,8 +250,9 @@ Rest argument _ARGS is ignored so this can be used on hooks or advices."
 Avoids reconnect loops by only activating `eglot-tempel-mode' when disabled."
   (unless eglot-tempel-mode
     (eglot-tempel-mode 1))
-  (flycheck-eglot-mode -1)
-  (flycheck-eglot-mode 1))
+  (when eglox-use-flycheck
+    (flycheck-eglot-mode -1)
+    (flycheck-eglot-mode 1)))
 
 (defun ad:eglot-completion-at-point-guard-no-server (orig-fn)
   "Return nil if no Eglot server is connected instead of signaling error.
