@@ -654,9 +654,6 @@ Returns a cancellation function that halts pending iterations."
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
 
-(unless (fboundp 'orgx-set-notes-directory)
-  (defalias 'orgx-set-notes-directory #'bootstrap-set-notes-directory))
-
 (defun bootstrap-set-up-auto-save ()
   (let ((path (sprite-state-path "backup/")))
     (setq auto-save-file-name-transforms `((".*" ,path t)))
