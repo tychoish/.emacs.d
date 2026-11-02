@@ -305,6 +305,8 @@ registration messages without batch logging. Calls ON-DONE when complete."
   "Start all MCP services on this instance's stable port."
   (with-slow-op-timer "<bootstrap> [mcpkit] start-services"
     (setq mcpkit-default-port (bootstrap-mcpkit-instance-port))
+    (when (fboundp 'mcpkit-mode)
+      (mcpkit-mode 1))
     (when (fboundp 'mcpkit-start-all-services)
       (mcpkit-start-all-services mcpkit-default-port))))
 
@@ -373,6 +375,8 @@ running HOOK repeatedly is idempotent and never toggles modes off."
     popper-mode
     grepx-mode
     denote-dash-global-mode
+    denote-tree-mode
+    magit-dash-global-mode
     builder-mode
     nerd-icons-completion-mode
     orgx-global-mode)
