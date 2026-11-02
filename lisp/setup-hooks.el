@@ -224,8 +224,10 @@ completion candidate outlives its buffer."
   (unless (and (boundp 'org-capture-templates) org-capture-templates)
     (orgx-capture-setup-standard-templates)))
 
-;; Initialize default orgx capture templates during startup
-(orgx-capture-setup-standard-templates)
+(add-lazy-init
+ :name "<bootstrap> [orgx] capture templates"
+ :operation #'orgx-capture-setup-standard-templates
+ :delay 0.05)
 
 (with-eval-after-load 'flycheck-eglot
   (setq-default flycheck-eglot-exclusive nil)
