@@ -49,7 +49,6 @@
   :commands (delight)
   :config
   (delight 'fundamental-mode "fun" 'simple)
-
   (delight 'abbrev-mode "abb")
   (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
   (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
@@ -76,13 +75,10 @@
   (delight 'overwrite-mode " om" 'simple)
   (delight 'refill-mode " rf" 'refill)
   (delight 'auto-revert-mode nil 'autorevert)
-
   (delight 'async-bytecomp-package-mode "" 'async-bytecomp)
   (delight 'dired-async-mode "" 'dired-async)
-
   (delight 'agent-shell-completion-mode nil 'agent-shell-completion)
   (delight 'agent-shell-ui-mode nil 'agent-shell-ui)
-
   (delight 'go-ts-mode "go.ts")
   (delight 'go-mod-ts-mode "go.mod.ts")
   (delight 'go-mode "go")
@@ -94,7 +90,6 @@
   (delight 'slime-mode "sl")
   (delight 'slime-autodoc-mode nil)
   (delight 'minaid-mode nil 'minaid)
-
   (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
   (delight 'outline-minor-mode nil 'outline)
   (delight 'cursor-sensor-mode nil 'cursor-sensor)
@@ -245,7 +240,6 @@
     "Enable `flyspell-prog-mode' in the current buffer once Emacs is idle."
     (tychoish--flyspell-enable-idle #'flyspell-prog-mode))
 
-
   (add-hook 'prog-mode-hook #'tychoish--flyspell-prog-mode-idle)
   (add-hook 'text-mode-hook #'tychoish--flyspell-mode-idle)
   (add-hook 'telega-chat-mode-hook #'tychoish--flyspell-mode-idle)
@@ -322,7 +316,6 @@ otherwise keep replaying stale detection results."
   :defer t
   :defines (flycheck-checkers)
   :commands (flycheck-disable-checker)
-  :init
   :config
   (defun tychoish/flycheck-prefer-eldoc ()
     (add-hook 'eldoc-documentation-functions #'flycheck-eldoc nil t) ;; local
