@@ -739,7 +739,7 @@ Returns a cancellation function that halts pending iterations."
   (when (load-theme 'modus-operandi t t)
     (enable-theme 'modus-operandi))
   (unless (map-elt default-frame-alist 'alpha)
-    (add-to-list 'default-frame-alist '(alpha . 97))))
+    (add-to-list 'default-frame-alist '(alpha . 95))))
 
 (defun bootstrap-ensure-light-theme ()
   (unless custom-enabled-themes
