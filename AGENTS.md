@@ -77,6 +77,12 @@ Lexical binding is mandatory on every file.
 - Load order: `early-init.el` → `init.el` (`with-gc-suppressed`) → `hud-mode` → `bootstrap` →
   `setup-core` → `setup-mail` → `orgx` → `user/*.el`. Don't add top-level `require`
   calls to `init.el` outside this sequence without a strong reason.
+- Dependencies are explicit or absent. Never write optional requires — `(require 'foo nil t)`
+  or `(require 'foo nil 'noerror)` — to limit dependency expression: they hide a missing
+  dependency until a feature silently does nothing. Either `require` the feature plainly
+  (and declare it in `Package-Requires` for packages), or don't require it: rely on
+  autoloads, `declare-function`, and `fboundp`/`featurep` guards at the call site, and
+  make the skipped path visible (return or log that it was skipped).
 - Prefer `add-hook`/`add-one-shot-hook` over calling init functions directly at load time.
 - `add-one-shot-hook`: `:function #'sym` (no parens) or `:form (progn ...)` for an
   arbitrary expression — never a call-expression as `:function`.

@@ -50,6 +50,7 @@
    magit-dash
    marginalia
    mcpkit
+   minaid
    modus-themes
    ollama-tailnet
    orderless

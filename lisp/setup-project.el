@@ -10,10 +10,13 @@
 (require 'seq)
 (require 'subr-x)
 (require 'project)
-(require 'projectile)
-(require 'sprite nil t)
 
-(autoload 'annotated-completing-read "acr")
+(require 'projectile)
+
+(require 'sprite)
+(require 'annotated-completing-read)
+
+(defvar compilation-save-buffers-predicate)
 
 (cl-defmethod project-root ((project (head cmake-root))) (cdr project))
 
@@ -31,8 +34,6 @@
     (cons 'go-module root)))
 
 (add-hook 'project-find-functions #'project-find-go-module)
-
-(defvar compilation-save-buffers-predicate)
 
 (setq compilation-save-buffers-predicate #'projectile-project-root)
 
@@ -76,6 +77,7 @@
 (setq projectile-use-git-grep t)
 (setq projectile-enable-caching 'persistent)
 (setq projectile-require-project-root nil)
+
 (defun projectile-state-path (name)
   "Return path for state file NAME, delegating to `sprite-state-path' if available."
   (if (fboundp 'sprite-state-path)
