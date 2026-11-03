@@ -1,9 +1,10 @@
 ;;; minaid.el --- Unified minad completion and selection stack -*- lexical-binding: t; -*-
 
 ;; Author: Tycho Garen
+;; URL: https://github.com/tychoish/minaid
 ;; Keywords: convenience, completion, matching, tools
 ;; Version: 0.2.0
-;; Package-Requires: ((emacs "29.1") (vertico "1.0") (marginalia "1.0") (orderless "1.0") (corfu "1.0") (cape "1.0") (tempel "1.0") (consult "1.0") (embark "1.0") (grepx "0.1.0"))
+;; Package-Requires: ((emacs "29.1") (vertico "1.0") (marginalia "1.0") (orderless "1.0") (corfu "1.0") (cape "1.0") (tempel "1.0") (consult "1.0") (embark "1.0"))
 
 ;;; Commentary:
 ;;
@@ -28,15 +29,14 @@
 
 (require 'cl-lib)
 (require 'seq)
-(eval-when-compile
-  (when (bound-and-true-p byte-compile-current-file)
-    (require 'subr-x)
-    (require 'vertico)
-    (require 'vertico-multiform)
-    (require 'marginalia)
-    (require 'orderless)
-    (require 'corfu)
-    (require 'cape)))
+(require 'subr-x)
+(require 'vertico)
+(require 'vertico-multiform)
+(require 'marginalia)
+(require 'orderless)
+(require 'corfu)
+(require 'cape)
+(require 'tempel)
 
 ;; Autoload on-demand grepx commands
 (autoload 'grepx-live "grepx" nil t)
@@ -61,10 +61,6 @@
 (declare-function nerd-icons-corfu-formatter "nerd-icons-corfu")
 (declare-function nerd-icons-completion-marginalia-setup "nerd-icons-completion")
 (declare-function eglot-completion-at-point "eglot")
-(declare-function corfu--in-region "corfu")
-(declare-function corfu-complete "corfu")
-(declare-function corfu-insert "corfu")
-(declare-function corfu-insert-separator "corfu")
 (declare-function corfu-history-mode "corfu-history")
 (declare-function corfu-indexed-mode "corfu-indexed")
 (declare-function corfu-popupinfo-mode "corfu-popupinfo")
@@ -72,17 +68,10 @@
 (declare-function corfu-quick-jump "corfu-quick")
 (declare-function corfu-quick-complete "corfu-quick")
 (declare-function corfu-quick-insert "corfu-quick")
-(declare-function cape-keyword "cape-keyword")
 (defvar corfu-popupinfo-delay)
 (defvar corfu-indexed-start)
 (declare-function project-current "project")
 (declare-function project-root "project")
-(declare-function tempel-insert "tempel")
-(declare-function tempel-complete "tempel")
-(declare-function tempel-expand "tempel")
-(declare-function vertico-multiform-mode "vertico-multiform")
-(defvar vertico-multiform-commands)
-(defvar vertico-multiform-categories)
 (declare-function projectile-project-root "projectile")
 (declare-function annotated-completing-read-directory "annotated-completing-read")
 
@@ -97,8 +86,8 @@
 (defvar consult-async-refresh-delay)
 (defvar consult-project-function)
 (defvar register-preview-delay)
-(defvar xref-show-xrefs-function nil)
-(defvar xref-show-definitions-function nil)
+(defvar xref-show-xrefs-function)
+(defvar xref-show-definitions-function)
 (defvar completion-preview-sort-function)
 (defvar corfu-auto-prefix)
 (defvar corfu-auto-delay)
@@ -147,7 +136,7 @@
 (keymap-set minaid-completion-map "i" #'tempel-insert)
 (keymap-set minaid-completion-map "s" #'tempel-complete)
 (keymap-set minaid-completion-map "x" #'tempel-expand)
-(keymap-set minaid-completion-map "v" #'tempel-open-custom-file)
+(keymap-set minaid-completion-map "v" #'minaid-open-custom-template-file)
 (keymap-set minaid-completion-map "d" #'cape-dabbrev)
 (keymap-set minaid-completion-map "h" #'cape-history)
 (keymap-set minaid-completion-map "f" #'cape-file)
@@ -161,7 +150,7 @@
 (keymap-set minaid-completion-map "e" #'cape-emoji)
 (keymap-set minaid-completion-map "m" #'cape-sgml)
 (keymap-set minaid-completion-map "u" #'cape-rfc1345)
-(keymap-set minaid-completion-map ";" #'corfu-at-point)
+(keymap-set minaid-completion-map ";" #'minaid-corfu-at-point)
 (keymap-set minaid-completion-map "\\" #'cape-tex)
 
 (defvar-keymap minaid-consult-search-map
@@ -232,7 +221,7 @@
 (keymap-set minaid-global-map "M-s r" #'grepx-live)
 (keymap-set minaid-global-map "M-s g" #'grepx-project)
 (keymap-set minaid-global-map "M-s d" #'grepx-directory)
-(keymap-set minaid-global-map "M-s f" #'consult-find-at-point)
+(keymap-set minaid-global-map "M-s f" #'minaid-consult-find-at-point)
 (keymap-set minaid-global-map "M-s c" 'consult-locate)
 (keymap-set minaid-global-map "M-s e" 'consult-isearch-history)
 (keymap-set minaid-global-map "M-s l" 'consult-line)
@@ -266,7 +255,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cape Capf Infrastructure & Composition
 
-(defun cape-capf-wrapper (wrapper inner)
+(defun minaid-cape-capf-wrapper (wrapper inner)
   "Wrap INNER Capf using Cape WRAPPER function without defining synthetic symbols."
   (funcall wrapper inner))
 
@@ -302,7 +291,6 @@
 
 (defun minaid-elisp-capf-setup ()
   "Configure buffer-local `completion-at-point-functions' for Emacs Lisp mode."
-  (require 'cape nil t)
   (setq-local completion-at-point-functions
               (thread-last
                 (list #'cape-elisp-symbol
@@ -334,7 +322,7 @@
                 (seq-uniq))))
 
 ;;;###autoload
-(defun setup-capfs ()
+(defun minaid-setup-capfs ()
   "Configure local `completion-at-point-functions' for the current buffer."
   (interactive)
   (cond
@@ -347,12 +335,12 @@
                (buffer-name) major-mode completion-at-point-functions))))
 
 ;;;###autoload
-(defun setup-all-capfs ()
+(defun minaid-setup-all-capfs ()
   "Set local `completion-at-point-functions' for all open file-visiting buffers."
   (interactive)
   (thread-last (buffer-list)
                (seq-filter #'buffer-file-name)
-               (seq-map (lambda (buf) (with-current-buffer buf (setup-capfs))))))
+               (seq-map (lambda (buf) (with-current-buffer buf (minaid-setup-capfs))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Corfu In-Buffer Completion
@@ -377,7 +365,7 @@ preserving explicit `@` file, `/` command, and TAB completion."
   (setq-local corfu-quit-at-boundary t))
 
 ;;;###autoload
-(defun corfu-at-point ()
+(defun minaid-corfu-at-point ()
   "Run `completion-at-point' forcing Corfu in-region completion UI."
   (interactive)
   (let ((completion-in-region-function #'corfu--in-region))
@@ -387,14 +375,14 @@ preserving explicit `@` file, `/` command, and TAB completion."
 ;;; Consult Custom Commands & Project Helpers
 
 ;;;###autoload
-(defun consult-at-point ()
+(defun minaid-consult-at-point ()
   "Run `completion-at-point' forcing Consult in-region completion UI."
   (interactive)
   (let ((completion-in-region-function #'consult-completion-in-region))
     (completion-at-point)))
 
 ;;;###autoload
-(defun tempel-open-custom-file ()
+(defun minaid-open-custom-template-file ()
   "Open the user Tempel templates file."
   (interactive)
   (find-file (expand-file-name "templates" user-emacs-directory)))
@@ -414,8 +402,8 @@ Prefers Projectile root, falling back to `project.el' and `default-directory'."
         default-directory)))
 
 ;;;###autoload
-(defun consult-find-at-point (&optional dir initial)
-  "Run `consult-find' defaulting INITIAL input to symbol/filename at point."
+(defun minaid-consult-find-at-point (&optional dir initial)
+  "Run `consult-find' in DIR, defaulting INITIAL input to symbol/filename at point."
   (interactive)
   (let ((init (or initial
                   (thing-at-point 'existing-filename)
@@ -516,12 +504,6 @@ Prefers Projectile root, falling back to `project.el' and `default-directory'."
 
 (defun minaid--enable ()
   "Perform enablement of all minad completion components."
-  (require 'vertico)
-  (require 'vertico-multiform)
-  (require 'marginalia)
-  (require 'orderless)
-  (require 'corfu)
-  (require 'cape)
   (minaid--configure-vertico)
   (minaid--configure-orderless)
   (minaid--configure-corfu)
