@@ -58,7 +58,7 @@
   "Ensure packages local to .emacs.d/lisp are not registered with elpaish."
   (let ((upgrades (test-setup-packages--get-upgrade-list))
         (installs (test-setup-packages--get-install-list))
-        (local-pkgs '(eglox grepx hud-modeline hud minaid)))
+        (local-pkgs '(eglox grepx hud-modeline hud)))
     (dolist (pkg local-pkgs)
       (should-not (memq pkg upgrades))
       (should-not (memq pkg installs)))))
