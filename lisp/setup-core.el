@@ -25,17 +25,6 @@
 (defvar user-org-directories nil
   "Additional directories that may contain org files.")
 
-(autoload 'hud-dispatch "hud" nil t)
-(autoload 'hud-select "hud" nil t)
-(autoload 'eglox-mode "eglox")
-
-(autoload 'tychoish-mail-select-account "setup-mail" nil t)
-(autoload 'tychoish-define-mail-account "setup-mail")
-(autoload 'tychoish-mail-add-refile-rule "setup-mail")
-
-(autoload 'daemons-dash "daemons-dash" nil t)
-(autoload 'daemons-dash-dispatch "daemons-dash" nil t)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; CORE PACKAGES

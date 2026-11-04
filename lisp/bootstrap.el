@@ -59,6 +59,17 @@
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
 
+(autoload 'hud-dispatch "hud" nil t)
+(autoload 'hud-select "hud" nil t)
+(autoload 'eglox-mode "eglox")
+
+(autoload 'tychoish-mail-select-account "setup-mail" nil t)
+(autoload 'tychoish-define-mail-account "setup-mail")
+(autoload 'tychoish-mail-add-refile-rule "setup-mail")
+
+(autoload 'daemons-dash "daemons-dash" nil t)
+(autoload 'daemons-dash-dispatch "daemons-dash" nil t)
+
 (defvar desktop-base-file-name)
 (defvar desktop-base-lock-name)
 (defvar desktop-path)
@@ -510,9 +521,10 @@ Returns a cancellation function that halts pending iterations."
 (defun bootstrap-init-integrations (&optional on-done)
   "Initialize secondary tool integrations and modes via `bootstrap-late-enable-modes-hook'."
   (interactive)
-  (bootstrap-run-enable-modes-hook 'bootstrap-late-enable-modes-hook
-                                   :delay 0.05
-                                   :on-done on-done))
+  (bootstrap-run-enable-modes-hook
+   'bootstrap-late-enable-modes-hook
+   :delay 0.05
+   :on-done on-done))
 
 (defun bootstrap-init-late-services ()
   "Initialize secondary tool integrations, services, and background maintenance synchronously."
