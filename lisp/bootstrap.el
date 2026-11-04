@@ -58,10 +58,10 @@
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
+(autoload 'eglox-mode "eglox")
 
 (autoload 'hud-dispatch "hud" nil t)
 (autoload 'hud-select "hud" nil t)
-(autoload 'eglox-mode "eglox")
 
 (autoload 'tychoish-mail-select-account "setup-mail" nil t)
 (autoload 'tychoish-define-mail-account "setup-mail")
