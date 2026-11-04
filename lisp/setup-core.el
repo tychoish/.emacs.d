@@ -215,12 +215,6 @@
 
   (setq denote-link-description-format #'denote-dash-link-description-format))
 
-(use-package chex
-  :ensure nil
-  :demand t
-  :config
-  (chex-global-mode 1))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; ROBOTS (AI) Integration

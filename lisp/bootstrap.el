@@ -55,6 +55,7 @@
 (autoload 'minaid-mode "minaid" "Global minor mode coordinating the consolidated Minad completion suite." t)
 (autoload 'eglox-global-mode "eglox" "Global minor mode managing Eglot LSP lifecycle." t)
 (autoload 'grepx-mode "grepx" "Minor mode for persistent grepx search buffers." t)
+(autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
 
@@ -492,6 +493,7 @@ Returns a cancellation function that halts pending iterations."
     denote-tree-mode
     magit-dash-global-mode
     builder-mode
+    chex-global-mode
     agent-shell-queue-global-mode
     nerd-icons-completion-mode
     orgx-global-mode)

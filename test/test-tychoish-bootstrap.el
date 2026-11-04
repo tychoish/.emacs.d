@@ -1159,6 +1159,11 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; bootstrap-run-enable-modes-hook (generator iterator)
 
+(ert-deftest bootstrap/chex-mode-available-to-startup-hook ()
+  "The late startup hook can invoke Chex before it has been loaded."
+  (should (memq 'chex-global-mode bootstrap-late-enable-modes-hook))
+  (should (fboundp 'chex-global-mode)))
+
 (ert-deftest bootstrap/run-enable-modes-hook-noninteractive ()
   "Executes all hook functions in order and calls on-done when noninteractive."
   (let* ((order nil)

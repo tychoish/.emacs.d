@@ -1,6 +1,6 @@
 ;;; chex.el --- Checking and spelling integration -*- lexical-binding: t; -*-
 
-;; Author: Tycho Garen
+;; Author: tychoish
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1") (flycheck "32") (flycheck-aspell "0.3") (flycheck-eglot "0.1") (flycheck-vale "0.1") (flyspell-correct "0.6") (consult-flycheck "0.1") (consult-flyspell "0.1"))
 ;; Keywords: convenience, tools, languages
@@ -59,6 +59,7 @@
           (seq-do (lambda (var) (insert (format "(setq %s '%S)\n" var (symbol-value var))))
                   chex--ispell-cache-vars))))))
 
+;;;###autoload
 (defun chex-ispell-clear-cache ()
   "Delete the cached Aspell dictionary detection result."
   (interactive)
@@ -93,11 +94,13 @@
   "Schedule spelling for the current programming buffer."
   (chex--flyspell-schedule #'flyspell-prog-mode))
 
+;;;###autoload
 (defun chex-consult-flyspell-round-trip ()
   "Correct a word and return to the spelling list."
   (flyspell-correct-at-point)
   (consult-flyspell))
 
+;;;###autoload
 (defun chex-flycheck-eldoc (callback &rest _ignored)
   "Pass Flycheck diagnostics at point to CALLBACK."
   (when-let* ((errors (flycheck-overlay-errors-at (point))))
@@ -159,6 +162,7 @@
     markdown-aspell-dynamic mail-aspell-dynamic)
   "Aspell checkers registered with Flycheck.")
 
+;;;###autoload
 (defun chex-flycheck-vale-enable ()
   "Enable Vale and chain it after the Aspell checkers."
   (interactive)
@@ -166,6 +170,7 @@
   (setq-default flycheck-vale-enabled t)
   (seq-do (lambda (checker) (flycheck-add-next-checker checker 'vale))
           chex-vale-checkers))
+;;;###autoload
 (defun chex-flycheck-vale-disable ()
   "Disable Vale and remove its Aspell checker chains."
   (interactive)
@@ -265,7 +270,8 @@
         (define-key flycheck-mode-map flycheck-keymap-prefix flycheck-command-map)
         (keymap-set flycheck-command-map ";" #'consult-flycheck)
         (keymap-set flycheck-command-map "m" #'consult-flycheck)
-        (seq-do (lambda (checker) (add-to-list 'flycheck-checkers checker))
+        (seq-do (lambda (checker)
+		  (add-to-list 'flycheck-checkers checker))
                 chex-aspell-checkers)
         (add-hook 'prog-mode-hook #'chex--flyspell-prog)
         (add-hook 'text-mode-hook #'chex--flyspell-text)
