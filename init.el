@@ -61,6 +61,9 @@
       (with-slow-op-timer "<init> [local] [config] require setup-hooks.el"
         (require 'setup-hooks))
 
+      (with-slow-op-timer "<init> [local] [feature] require hud-mode"
+	(require 'hud-mode))
+
       ;; remaining use-package declarations.
       (with-slow-op-timer "<init> [local] [config] require setup-core.el"
         (require 'setup-core))))

@@ -19,8 +19,6 @@
 (eval-when-compile
   (require 'xtd-macro))
 
-(require 'hud-mode)
-
 (defvar local-notes-directory nil
   "Directory where notes (org, roam, deft, etc.) are stored.")
 
