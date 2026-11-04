@@ -216,19 +216,11 @@ completion candidate outlives its buffer."
     :bind-map denote-dash-global-map
     :bind-key "x"))
 
-(with-eval-after-load 'orgx
-  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append))
 
 (add-lazy-init
  :name "<bootstrap> [orgx] capture templates"
  :operation #'orgx-capture-setup-standard-templates
  :delay 0.05)
-
-(with-eval-after-load 'flycheck-eglot
-  (setq-default flycheck-eglot-exclusive nil)
-  (add-to-list 'flycheck-checkers 'eglot-check)
-  (setq flycheck-eglot-enable-diagnostic-tags nil)
-  (flycheck-add-next-checker 'eglot-check 'go-gofmt))
 
 (with-eval-after-load 'denote-sync
   (require 'denote-sync-notion)
@@ -357,6 +349,9 @@ completion candidate outlives its buffer."
   (setq web-mode-enable-auto-expanding t)
   (setq web-mode-enable-css-colorization t))
 
+(with-eval-after-load 'orgx
+  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append))
+
 (with-eval-after-load 'markdown-mode
   (font-lock-add-keywords 'markdown-mode tk-font-lock-keywords 'append)
   (font-lock-add-keywords 'gfm-mode tk-font-lock-keywords 'append)
@@ -423,7 +418,6 @@ resets point to column 0 outside of definition-list context."
     (setq-local tab-width 8)
     (setq-local fill-column 100)
     (setq-local compilation-error-screen-columns nil)
-    (setq-local flycheck-disabled-checkers '(go-unconvert go-errcheck go-staticcheck go-vet go-build go-test go-gofmt golangci-lint))
     (when (fboundp 'cov-mode)
       (cov-mode 1)))
 
@@ -483,10 +477,7 @@ resets point to column 0 outside of definition-list context."
                           "RUN_LOCAL=true"))
            (optstr (format "-e %s" (string-join options " -e ")))
            (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
-      (builder-compile-project "super-lint" command-string))))
-
-  (with-eval-after-load 'flycheck
-    (add-to-list 'flycheck-checkers 'rustic-clippy)))
+      (builder-compile-project "super-lint" command-string)))))
 
 (with-eval-after-load 'python
   (defun tychoish/python-setup ()

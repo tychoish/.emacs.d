@@ -63,10 +63,6 @@
 (declare-function agent-shell-menu-send-file "agent-shell-menu")
 (declare-function agent-shell-yank-dwim "agent-shell")
 (declare-function whitespace-cleanup "whitespace")
-(declare-function flyspell-correct-next "flyspell-correct")
-(declare-function flyspell-correct-previous "flyspell-correct")
-(declare-function flyspell-correct-at-point "flyspell-correct")
-(declare-function flycheck-mode "flycheck")
 (declare-function popper-toggle "popper")
 (declare-function popper-cycle "popper")
 (declare-function popper-kill-latest-popup "popper")
@@ -635,12 +631,6 @@ binding (see `keymap-set'.)"
 
 
 (keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
-(keymap-set hud-mode-map "C-c [" #'flyspell-correct-next)
-(keymap-set hud-mode-map "C-c ]" #'flyspell-correct-previous)
-(keymap-set hud-mode-map "M-$" #'flyspell-correct-at-point)
-(keymap-set hud-mode-map "C-;" #'flyspell-correct-previous)
-(keymap-set hud-mode-map "M-g f" #'flycheck-mode)
-(keymap-set hud-mode-map "C-c f f" #'flycheck-mode)
 (keymap-set hud-mode-map "C-x x a" #'revbufs)
 (keymap-set hud-mode-map "C-c '" #'popper-toggle)
 (keymap-set hud-mode-map "C-c \\" #'popper-cycle)

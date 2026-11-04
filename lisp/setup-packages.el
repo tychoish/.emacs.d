@@ -39,6 +39,8 @@
    elpaish
    elpaish-keyring
    flycheck
+   flycheck-aspell
+   flycheck-vale
    gen
    gptel
    gptel-agent
