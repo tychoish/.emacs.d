@@ -165,21 +165,25 @@
   :defer t
   :commands (denote-dired denote-directories)
   :config
-  (setq denote-dash-default-filter '(not "journal"))
-  (setq denote-review-insert-after "date")
+
+  ;; site configuration (paths)
   (when (default-boundp 'denote-directory)
     (setq denote-directory '()))
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
-  (setq denote-file-type 'org)
+  (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal"))
+  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
+
+  ;; configuration/settings
+  (setq denote-dash-default-filter '(not "journal"))
+  (setq denote-review-insert-after "date")
   (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "migration" "agent" "plan" "singing"))
+  (setq denote-file-type 'org)
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
   (setq denote-save-buffers t)
   (setq denote-prompts '(title keywords file-type))
   (setq denote-journal-title-format nil)
-  (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal"))
   (setq denote-sequence-scheme 'alphanumeric)
-  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
   (setq denote-explore-network-format "graphviz")
   (setq denote-explore-network-graphviz-filetype "svg")
   (add-to-list 'display-buffer-alist
@@ -190,6 +194,7 @@
     (add-to-list 'savehist-additional-variables 'denote--keywords-history))
 
   (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
+
   (denote-rename-buffer-mode 1)
 
   (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
