@@ -59,6 +59,108 @@
         (electric-pair-default-inhibit char)
       (electric-pair-conservative-inhibit char))))
 
+;;; Search / isearch / anzu
+(keymap-set isearch-mode-map "C-o" #'isearch-occur)
+(add-hook 'isearch-mode-hook #'anzu-mode)
+(setq anzu-cons-mode-line-p nil)
+
+(autoload 'tychoish/agent-shell-antigravity-bootstrap "setup-agent-shell")
+
+(add-lazy-init
+ :name "<bootstrap> agent-shell antigravity"
+ :delay 20
+ :operation (lambda ()
+              (require 'agent-shell)
+              (tychoish/agent-shell-antigravity-bootstrap)))
+
+(add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
+(add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
+(add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
+(add-hook 'org-mode-hook #'orgx-mode-turn-on)
+(add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+
+(defun tempel-setup-capf ()
+  (setq-local completion-at-point-functions
+              (cons #'tempel-complete completion-at-point-functions)))
+
+(defun tempel-open-custom-file ()
+  (interactive)
+  (find-file (expand-file-name "templates" user-emacs-directory)))
+
+(add-hook 'conf-mode-hook #'tempel-setup-capf)
+(add-hook 'prog-mode-hook #'tempel-setup-capf)
+(add-hook 'text-mode-hook #'tempel-setup-capf)
+
+(with-eval-after-load 'tempel
+  (setq tempel-path (expand-file-name "templates" user-emacs-directory)))
+
+(with-eval-after-load 'marginalia
+  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu)))
+
+(add-lazy-init
+ :name "<bootstrap> [orgx] capture templates"
+ :operation #'orgx-capture-setup-standard-templates
+ :delay 0.05)
+
+
+(with-eval-after-load 'arch
+  (defun arch-alert-after-install (pkg)
+    (alert (format "Installed package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+
+  (defun arch-alert-after-upgrade (pkg)
+    (alert (format "Upgraded package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+
+  (defun arch-alert-after-remove (pkg)
+    (alert (format "Removed package %s" (arch-pkg-name pkg))
+           :title "Arch Package Manager"))
+
+  (defun arch-alert-after-upgrade-all ()
+    (alert "System upgrade completed"
+           :title "Arch Package Manager"))
+
+  (add-hook 'arch-after-install-hook #'arch-alert-after-install)
+  (add-hook 'arch-after-upgrade-hook #'arch-alert-after-upgrade)
+  (add-hook 'arch-after-remove-hook #'arch-alert-after-remove)
+  (add-hook 'arch-after-upgrade-all-hook #'arch-alert-after-upgrade-all)
+  (run-with-idle-timer 2 nil #'arch--populate-cache))
+
+(with-eval-after-load 'builder-core
+  (require 'builder-tasks))
+
+(with-eval-after-load 'orgx
+  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append))
+
+(with-eval-after-load 'magit-dash
+  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
+  (setq magit-dash-gh-prune-pr-limit 50)
+  (setq magit-dash-show-discovered-submodules nil)
+  (setq magit-dash-render-branch-name-as-basename t)
+  (setq magit-dash-which-key-abbreviate-commands 'strip)
+
+  (defun magit-dash--lazy-prefetch-gh ()
+    (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch))
+
+  (defun magit-dash--set-up-nerd-icons (entry)
+    (add-to-list 'nerd-icons-mode-icon-alist entry))
+
+  (defun magit-dash--clean-up-nerd-icons (entry)
+    (memq (car entry) '(magit-dash-mode
+                        magit-dash-gh-pr-dashboard-mode
+                        magit-dash-gh-actions-log-mode)))
+
+  (add-hook 'magit-status-mode-hook #'magit-dash--lazy-prefetch-gh)
+  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
+
+  (with-eval-after-load 'nerd-icons
+    (setq nerd-icons-mode-icon-alist
+          (seq-remove #'magit-dash--clean-up-nerd-icons nerd-icons-mode-icon-alist))
+    (seq-do #'magit-dash--set-up-nerd-icons
+	    '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
+	      (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
+	      (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
+
 (with-eval-after-load 'elec-pair
   (setq electric-indent-chars '(?\n ?:))
   (setq electric-pair-inhibit-predicate #'setup-electric-pair-inhibition)
@@ -90,15 +192,6 @@
 
 (with-eval-after-load 'agent-shell
   (require 'setup-agent-shell))
-
-(autoload 'tychoish/agent-shell-antigravity-bootstrap "setup-agent-shell")
-
-(add-lazy-init
- :name "<bootstrap> agent-shell antigravity"
- :delay 20
- :operation (lambda ()
-              (require 'agent-shell)
-              (tychoish/agent-shell-antigravity-bootstrap)))
 
 (with-eval-after-load 'shell-maker
   (defalias 'shell-maker-map 'shell-maker-major-mode-map)
@@ -134,12 +227,6 @@
   (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
   (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
 
-(add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
-(add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
-(add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
-(add-hook 'org-mode-hook #'orgx-mode-turn-on)
-(add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
-
 (with-eval-after-load 'whitespace
   ;; TODO(): are the following settings material?
   (setq whitespace-style
@@ -154,21 +241,6 @@
           space-mark
           tab-mark
           newline-mark)))
-
-(defun tempel-setup-capf ()
-  (setq-local completion-at-point-functions
-              (cons #'tempel-complete completion-at-point-functions)))
-
-(defun tempel-open-custom-file ()
-  (interactive)
-  (find-file (expand-file-name "templates" user-emacs-directory)))
-
-(add-hook 'conf-mode-hook #'tempel-setup-capf)
-(add-hook 'prog-mode-hook #'tempel-setup-capf)
-(add-hook 'text-mode-hook #'tempel-setup-capf)
-
-(with-eval-after-load 'tempel
-  (setq tempel-path (expand-file-name "templates" user-emacs-directory)))
 
 (with-eval-after-load 'nerd-icons
   (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
@@ -194,9 +266,6 @@ completion candidate outlives its buffer."
         (cl-call-next-method)
       "")))
 
-(with-eval-after-load 'marginalia
-  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu)))
-
 (with-eval-after-load 'smerge-mode
   (keymap-set hud-smerge-map "r" #'smerge-kill-and-vc-next-conflict)
 
@@ -215,12 +284,6 @@ completion candidate outlives its buffer."
   (make-read-extended-command-for-prefix "denote"
     :bind-map denote-dash-global-map
     :bind-key "x"))
-
-
-(add-lazy-init
- :name "<bootstrap> [orgx] capture templates"
- :operation #'orgx-capture-setup-standard-templates
- :delay 0.05)
 
 (with-eval-after-load 'denote-sync
   (require 'denote-sync-notion)
@@ -254,29 +317,6 @@ completion candidate outlives its buffer."
       (remove-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server)
       (unintern 'tychoish/darwin-alert-config-for-server obarray))))
 
-(with-eval-after-load 'arch
-  (defun arch-alert-after-install (pkg)
-    (alert (format "Installed package %s" (arch-pkg-name pkg))
-           :title "Arch Package Manager"))
-
-  (defun arch-alert-after-upgrade (pkg)
-    (alert (format "Upgraded package %s" (arch-pkg-name pkg))
-           :title "Arch Package Manager"))
-
-  (defun arch-alert-after-remove (pkg)
-    (alert (format "Removed package %s" (arch-pkg-name pkg))
-           :title "Arch Package Manager"))
-
-  (defun arch-alert-after-upgrade-all ()
-    (alert "System upgrade completed"
-           :title "Arch Package Manager"))
-
-  (add-hook 'arch-after-install-hook #'arch-alert-after-install)
-  (add-hook 'arch-after-upgrade-hook #'arch-alert-after-upgrade)
-  (add-hook 'arch-after-remove-hook #'arch-alert-after-remove)
-  (add-hook 'arch-after-upgrade-all-hook #'arch-alert-after-upgrade-all)
-  (run-with-idle-timer 2 nil #'arch--populate-cache))
-
 (with-eval-after-load 'slime
   (make-read-extended-command-for-prefix "slime"
     :key-alias "slime-commands"
@@ -284,9 +324,6 @@ completion candidate outlives its buffer."
     :bind-key "s")
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
-
-(with-eval-after-load 'builder-core
-  (require 'builder-tasks))
 
 (with-eval-after-load 'ollama-tailnet
   (ollama-tailnet-setup-laptop-presets)
@@ -348,9 +385,6 @@ completion candidate outlives its buffer."
   (setq web-mode-enable-auto-pairing t)
   (setq web-mode-enable-auto-expanding t)
   (setq web-mode-enable-css-colorization t))
-
-(with-eval-after-load 'orgx
-  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append))
 
 (with-eval-after-load 'markdown-mode
   (font-lock-add-keywords 'markdown-mode tk-font-lock-keywords 'append)
@@ -520,11 +554,6 @@ resets point to column 0 outside of definition-list context."
   (when (fboundp 'font-lock-width-keyword)
     (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100))))
 
-;;; Search / isearch / anzu
-(keymap-set isearch-mode-map "C-o" #'isearch-occur)
-(add-hook 'isearch-mode-hook #'anzu-mode)
-(setq anzu-cons-mode-line-p nil)
-
 (with-eval-after-load 'anzu
   (seq-do #'make-variable-buffer-local
           '(anzu--total-matched anzu--current-position anzu--state
@@ -617,34 +646,6 @@ clipboard."
       ["magit-dash"
        ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
 
-(with-eval-after-load 'magit-dash
-  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
-  (setq magit-dash-gh-prune-pr-limit 50)
-  (setq magit-dash-show-discovered-submodules nil)
-  (setq magit-dash-render-branch-name-as-basename t)
-  (setq magit-dash-which-key-abbreviate-commands 'strip)
-
-  (defun magit-dash--lazy-prefetch-gh ()
-    (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch))
-
-  (defun magit-dash--set-up-nerd-icons (entry)
-    (add-to-list 'nerd-icons-mode-icon-alist entry))
-
-  (defun magit-dash--clean-up-nerd-icons (entry)
-    (memq (car entry) '(magit-dash-mode
-                        magit-dash-gh-pr-dashboard-mode
-                        magit-dash-gh-actions-log-mode)))
-
-  (add-hook 'magit-status-mode-hook #'magit-dash--lazy-prefetch-gh)
-  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
-
-  (with-eval-after-load 'nerd-icons
-    (setq nerd-icons-mode-icon-alist
-          (seq-remove #'magit-dash--clean-up-nerd-icons nerd-icons-mode-icon-alist))
-    (seq-do #'magit-dash--set-up-nerd-icons
-	    '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
-	      (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
-	      (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
 (with-eval-after-load 'delight
   (delight 'fundamental-mode "fun" 'simple)
   (delight 'abbrev-mode "abb")
