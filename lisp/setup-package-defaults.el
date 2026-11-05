@@ -156,6 +156,30 @@ When FORCE is nil, do nothing unless quickstart file is stale."
     (bootstrap-sync-package-load-paths)
     (package-quickstart-refresh)))
 
+(defun bootstrap-force-refresh-package-quickstart ()
+  "Unconditionally regenerate `package-quickstart-file'.
+Intended as a magit-dash post-fetch hook, after submodules have changed."
+  (bootstrap-refresh-package-quickstart t))
+
+(autoload 'magit-run-git-async "magit-process")
+
+(defun bootstrap-pull-submodules (_repo on-complete)
+  "Run `git submodule foreach git pull' via Magit, then regenerate the quickstart.
+Intended as a magit-dash command: runs in `default-directory' and calls
+ON-COMPLETE with `ok', or `error' when git fails (output is in the
+*magit-process* buffer)."
+  (let ((proc (magit-run-git-async "submodule" "foreach" "git" "pull")))
+    (add-function :after (process-sentinel proc)
+                  (lambda (p _event)
+                    (unless (process-live-p p)
+                      (cond
+                       ((zerop (process-exit-status p))
+                        (bootstrap-force-refresh-package-quickstart)
+                        (funcall on-complete 'ok))
+                       (t
+                        (funcall on-complete 'error "git submodule foreach pull failed; see *magit-process*"))))))
+    proc))
+
 (defun bootstrap-flush-package-quickstart ()
   "Ensure any pending `package-quickstart-refresh' runs immediately."
   (when (timerp bootstrap--package-quickstart-refresh-timer)
