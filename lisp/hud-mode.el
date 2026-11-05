@@ -1239,16 +1239,12 @@ leaves the file on disk.  Never prompts when called non-interactively."
     (when (called-interactively-p 'any)
       (message "Deleted %s" (hud--minimize-path file)))))
 
+(declare-function minibuffer-keyboard-quit "delsel")
+
 (defun hud-super-abort-minibuffers ()
+  "Quit the minibuffer using the standard command."
   (interactive)
-  (if (not (minibuffer-selected-window))
-      (keyboard-quit)
-    (abort-minibuffers)
-    (minibuffer-keyboard-quit))
-  (when (minibuffer-selected-window)
-    (move-beginning-of-line nil)
-    (kill-line)
-    (abort-minibuffers)))
+  (minibuffer-keyboard-quit))
 
 ;;;###autoload
 (defun pin-buffer-to-window-toggle ()
