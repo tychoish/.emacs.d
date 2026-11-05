@@ -11,11 +11,11 @@
 (require 'clix)
 
 (defvar argi)
-(defvar argv)
+(defvar command-line-args-left)
 (defvar test-hook nil)
 
 (ert-deftest clix-test/register-flag-consumes-argument ()
-  "Test that `register-clix-flag' with :consume t sets clix-arg-<name> and pops argv."
+  "Test that `register-clix-flag' with :consume t sets clix-arg-<name> and pops command-line-args-left."
   (let ((command-line-functions nil))
     (register-clix-flag test-consume
       :flag "--test-consume"
@@ -27,13 +27,13 @@
     (should (memq 'cli/test-consume command-line-functions))
 
     (let ((argi "--test-consume")
-          (argv '("my-value" "extra-arg")))
+          (command-line-args-left '("my-value" "extra-arg")))
       (should (cli/test-consume))
       (should (equal clix-arg-test-consume "my-value"))
-      (should (equal argv '("extra-arg"))))))
+      (should (equal command-line-args-left '("extra-arg"))))))
 
 (ert-deftest clix-test/register-flag-no-consume ()
-  "Test that `register-clix-flag' with :consume nil does not consume from argv."
+  "Test that `register-clix-flag' with :consume nil does not consume from command-line-args-left."
   (let ((command-line-functions nil)
         (triggered nil))
     (register-clix-flag test-no-consume
@@ -46,10 +46,10 @@
     (should-not (boundp 'clix-arg-test-no-consume))
 
     (let ((argi "--test-toggle")
-          (argv '("keep-this")))
+          (command-line-args-left '("keep-this")))
       (should (cli/test-no-consume))
       (should (eq triggered t))
-      (should (equal argv '("keep-this"))))))
+      (should (equal command-line-args-left '("keep-this"))))))
 
 (ert-deftest clix-test/register-flag-custom-var ()
   "Test that `register-clix-flag' with explicit :var sets the custom symbol."
@@ -63,10 +63,10 @@
     (should (boundp 'my-custom-cli-var))
 
     (let ((argi "--test-custom")
-          (argv '("custom-val")))
+          (command-line-args-left '("custom-val")))
       (should (cli/test-custom-var))
       (should (equal my-custom-cli-var "custom-val"))
-      (should (null argv)))))
+      (should (null command-line-args-left)))))
 
 (ert-deftest clix-test/register-flag-immediate-action ()
   "Test that :action executes immediately when :hook is nil."
@@ -80,7 +80,7 @@
       :action (setq action-executed (format "ran with %s" clix-arg-test-immediate)))
 
     (let ((argi "--test-imm")
-          (argv '("payload")))
+          (command-line-args-left '("payload")))
       (should (cli/test-immediate))
       (should (equal action-executed "ran with payload")))))
 
@@ -100,7 +100,7 @@
     (should (memq 'cli/test-hooked-run test-hook))
 
     (let ((argi "--test-hook")
-          (argv '("delayed-payload")))
+          (command-line-args-left '("delayed-payload")))
       (should (cli/test-hooked))
       (should-not action-executed)
       (run-hooks 'test-hook)
@@ -112,8 +112,45 @@
     :flag "--test-unmatched"
     :consume nil)
   (let ((argi "--other-flag")
-        (argv nil))
+        (command-line-args-left nil))
     (should-not (cli/test-unmatched))))
+
+(ert-deftest clix-test/exact-and-attached-values ()
+  (register-clix-flag test-exact :flag "--test-exact" :doc "Test value.")
+  (let ((argi "--test-exact-other") (command-line-args-left '("keep")))
+    (should-not (cli/test-exact))
+    (should (equal command-line-args-left '("keep"))))
+  (let ((argi "--test-exact=a=b") (command-line-args-left '("keep")))
+    (should (cli/test-exact))
+    (should (equal clix-arg-test-exact "a=b"))
+    (should (equal command-line-args-left '("keep"))))
+  (let ((argi "--test-exact") (command-line-args-left nil))
+    (should-error (cli/test-exact) :type 'user-error)))
+
+(ert-deftest clix-test/final-and-hooked-switch ()
+  (let ((test-hook nil) (command-line-functions nil) (exits nil) (ran nil))
+    (register-clix-flag test-final :flag "--test-final" :consume nil
+      :hook 'test-hook :action (setq ran t) :final ran)
+    (cl-letf (((symbol-function 'kill-emacs) (lambda (code) (push code exits))))
+      (run-hooks 'test-hook)
+      (should-not ran)
+      (let ((argi "--test-final")) (should (cli/test-final)))
+      (run-hooks 'test-hook)
+      (should ran)
+      (should (equal exits '(0)))
+      (run-hooks 'test-hook)
+      (should (equal exits '(0))))))
+
+(ert-deftest clix-test/help-and-subcommands ()
+  (let ((output (with-output-to-string (clix-help))))
+    (should (string-match-p (regexp-quote "--clix-help") output))
+    (should-not (string-match-p "^  --help
+" output))
+    (should (string-match-p (regexp-quote "--org-exec VALUE") output)))
+  (let ((argi "help") (called nil))
+    (cl-letf (((symbol-function 'kill-emacs) (lambda (_) (setq called t))))
+      (with-output-to-string (should (cli/help-command)))
+      (should called))))
 
 (provide 'test-clix)
 ;;; test-clix.el ends here
