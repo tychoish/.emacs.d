@@ -52,6 +52,9 @@
             (bootstrap-refresh-package-quickstart t)))))
 
     (with-slow-op-timer "<init> [local] require all"
+      (with-slow-op-timer "<init> [local] [feature] require hud-mode"
+	(require 'hud-mode))
+
       (with-slow-op-timer "<init> [local] [feature] require bootstrap.el"
         (require 'bootstrap))
 
@@ -60,9 +63,6 @@
 
       (with-slow-op-timer "<init> [local] [config] require setup-hooks.el"
         (require 'setup-hooks))
-
-      (with-slow-op-timer "<init> [local] [feature] require hud-mode"
-	(require 'hud-mode))
 
       ;; remaining use-package declarations.
       (with-slow-op-timer "<init> [local] [config] require setup-core.el"

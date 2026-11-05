@@ -35,8 +35,7 @@
 
 (require 'sprite)
 (require 'xtd-macro)
-
-(autoload 'hud-mode "hud-mode" "Global HUD minor mode." t)
+(require 'hud-mode)
 
 (eval-and-compile
   (unless (fboundp 'with-gc-suppressed)
@@ -480,9 +479,8 @@ Returns a cancellation function that halts pending iterations."
   :group 'bootstrap)
 
 (defun bootstrap-init-early-ui ()
-  "Initialize early fringe, delight module, and default font."
+  "Initialize early fringe and default font."
   (set-fringe-mode '(4 . 4))
-  (require 'delight)
   (bootstrap-ensure-default-font))
 
 (defun bootstrap-init-early-instance ()
@@ -492,9 +490,10 @@ Returns a cancellation function that halts pending iterations."
 (defun bootstrap-init-early-modes (&optional on-done)
   "Initialize core editor UI, display modes, font, and instance persistence."
   (interactive)
-  (bootstrap-run-enable-modes-hook 'bootstrap-early-enable-modes-hook
-                                   :delay 0.02
-                                   :on-done on-done))
+  (bootstrap-run-enable-modes-hook
+   'bootstrap-early-enable-modes-hook
+   :delay 0.01
+   :on-done on-done))
 
 (defcustom bootstrap-late-enable-modes-hook
   '(bootstrap-init-project

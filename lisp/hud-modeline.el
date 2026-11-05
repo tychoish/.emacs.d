@@ -836,6 +836,7 @@ Candidates are the segment keys; annotations show [on]/[off], name, and descript
   :group 'hud-modeline
   (if hud-modeline-mode
       (progn
+        (require 'delight)
         (setq hud-modeline--saved-format (default-value 'mode-line-format))
         (setq-default mode-line-format hud-modeline-format)
         (hud-modeline--suppress-underlines)
