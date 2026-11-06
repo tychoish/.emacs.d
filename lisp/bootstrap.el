@@ -52,6 +52,7 @@
                (run-with-idle-timer 5 nil #'garbage-collect))))))))
 
 (autoload 'minaid-mode "minaid" "Global minor mode coordinating the consolidated Minad completion suite." t)
+(autoload 'overmark-global-mode "overmark" "Highlight annotations in text buffers." t)
 (autoload 'eglox-global-mode "eglox" "Global minor mode managing Eglot LSP lifecycle." t)
 (autoload 'grepx-mode "grepx" "Minor mode for persistent grepx search buffers." t)
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
@@ -369,6 +370,7 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     magit-dash-global-mode
     builder-mode
     chex-global-mode
+    overmark-global-mode
     agent-shell-queue-global-mode
     nerd-icons-completion-mode
     orgx-global-mode
@@ -581,19 +583,6 @@ Call ON-DONE after the last operation.  Return a cancellation function."
   (interactive)
   (when (load-theme 'modus-operandi t t)
     (enable-theme 'modus-operandi)))
-
-(defun tk-faces-setup (&rest _)
-  (when (featurep 'modus-themes)
-    (when (facep 'tk-delimiter-face)
-      (set-face-attribute 'tk-delimiter-face nil
-                          :foreground (modus-themes-get-color-value 'blue)
-                          :weight 'bold))
-    (when (facep 'tk-content-face)
-      (set-face-attribute 'tk-content-face nil
-                          :foreground (modus-themes-get-color-value 'fg-dim)
-                          :weight 'bold))))
-
-(add-hook 'enable-theme-functions #'tk-faces-setup)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -6,6 +6,7 @@
 ;;   (ert "^bootstrap/")
 
 (require 'ert)
+(require 'overmark)
 (require 'cl-lib)
 (require 'bootstrap)
 (require 'setup-defaults)
@@ -446,61 +447,61 @@
     (should (equal "a\nb\nc\n" (buffer-string)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; font-lock-width-keyword
+;;; overmark-font-lock-width-keyword
 
-(ert-deftest bootstrap/font-lock-width-keyword-returns-list ()
+(ert-deftest bootstrap/overmark-font-lock-width-keyword-returns-list ()
   "Returns a non-nil list."
-  (should (listp (font-lock-width-keyword 80)))
-  (should (font-lock-width-keyword 80)))
+  (should (listp (overmark-font-lock-width-keyword 80)))
+  (should (overmark-font-lock-width-keyword 80)))
 
-(ert-deftest bootstrap/font-lock-width-keyword-regexp-matches-long ()
+(ert-deftest bootstrap/overmark-font-lock-width-keyword-regexp-matches-long ()
   "The keyword regexp matches a line longer than the specified width."
-  (let* ((kw (font-lock-width-keyword 80))
+  (let* ((kw (overmark-font-lock-width-keyword 80))
          (re (caar kw))
          (long-line (make-string 85 ?a)))
     (should (string-match re long-line))))
 
-(ert-deftest bootstrap/font-lock-width-keyword-regexp-no-match-short ()
+(ert-deftest bootstrap/overmark-font-lock-width-keyword-regexp-no-match-short ()
   "The keyword regexp does not match a line at or under the width."
-  (let* ((kw (font-lock-width-keyword 80))
+  (let* ((kw (overmark-font-lock-width-keyword 80))
          (re (caar kw))
          (short-line (make-string 79 ?a)))
     (should-not (string-match re short-line))))
 
-(ert-deftest bootstrap/font-lock-width-keyword-uses-warning-face ()
+(ert-deftest bootstrap/overmark-font-lock-width-keyword-uses-warning-face ()
   "The keyword specifies `font-lock-warning-face'."
-  (let ((result (font-lock-width-keyword 80)))
+  (let ((result (overmark-font-lock-width-keyword 80)))
     (should (eq 'font-lock-warning-face (nth 1 (cadar result))))))
 
-(ert-deftest bootstrap/font-lock-width-keyword-respects-width ()
+(ert-deftest bootstrap/overmark-font-lock-width-keyword-respects-width ()
   "Different widths produce different regexps."
-  (let ((kw-60 (caar (font-lock-width-keyword 60)))
-        (kw-120 (caar (font-lock-width-keyword 120))))
+  (let ((kw-60 (caar (overmark-font-lock-width-keyword 60)))
+        (kw-120 (caar (overmark-font-lock-width-keyword 120))))
     (should-not (equal kw-60 kw-120))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; font-lock-show-tabs
+;;; overmark-font-lock-show-tabs
 
-(ert-deftest bootstrap/font-lock-show-tabs-returns-list ()
+(ert-deftest bootstrap/overmark-font-lock-show-tabs-returns-list ()
   "Returns a non-nil list."
-  (should (listp (font-lock-show-tabs)))
-  (should (font-lock-show-tabs)))
+  (should (listp (overmark-font-lock-show-tabs)))
+  (should (overmark-font-lock-show-tabs)))
 
-(ert-deftest bootstrap/font-lock-show-tabs-matches-tab ()
+(ert-deftest bootstrap/overmark-font-lock-show-tabs-matches-tab ()
   "The pattern in the result matches a literal tab character."
-  (let* ((result (font-lock-show-tabs))
+  (let* ((result (overmark-font-lock-show-tabs))
          (pattern (caar result)))
     (should (string-match pattern "\t"))))
 
-(ert-deftest bootstrap/font-lock-show-tabs-no-match-space ()
+(ert-deftest bootstrap/overmark-font-lock-show-tabs-no-match-space ()
   "The tab pattern does not match a space."
-  (let* ((result (font-lock-show-tabs))
+  (let* ((result (overmark-font-lock-show-tabs))
          (pattern (caar result)))
     (should-not (string-match pattern " "))))
 
-(ert-deftest bootstrap/font-lock-show-tabs-pure ()
+(ert-deftest bootstrap/overmark-font-lock-show-tabs-pure ()
   "Returns an equal value on every call (no side effects)."
-  (should (equal (font-lock-show-tabs) (font-lock-show-tabs))))
+  (should (equal (overmark-font-lock-show-tabs) (overmark-font-lock-show-tabs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; set-tab-width

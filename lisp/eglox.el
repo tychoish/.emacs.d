@@ -20,6 +20,8 @@
 ;; - Rate-limited buffer activation to avoid connection storms.
 ;; - Dead and duplicate server pruning to prevent resource leaks and reconnect loops.
 ;; - Projectile cache warming integration on project switch.
+;; - `eglox-ide-map': xref/imenu/extended-command navigation, bound at `C-c l x'.
+;; - `eglox-describe-symbol-dwim': slime/eglot/describe-symbol contextual lookup.
 ;; - Guarded completion-at-point to prevent repeating jsonrpc errors.
 
 ;;; Code:
@@ -34,8 +36,15 @@
 (declare-function projectile-load-project-cache "projectile")
 (declare-function eglot-tempel-mode "eglot-tempel")
 (declare-function flycheck-eglot-mode "flycheck-eglot")
-(declare-function execute-extended-eglot-command "hud-mode")
+(declare-function slime-describe-symbol "slime")
+(declare-function slime-connected-p "slime")
 (declare-function consult-eglot-symbols "consult-eglot")
+(declare-function imenu "imenu")
+(declare-function xref-find-references "xref")
+(declare-function xref-find-definitions "xref")
+(declare-function xref-go-back "xref")
+(declare-function xref-go-forward "xref")
+(declare-function xref-find-definitions-other-window "xref")
 (declare-function eglot-test-at-point "eglot-test-at-point")
 
 (declare-function eglot "eglot")
@@ -81,7 +90,83 @@
 (defvar eglot--servers-by-project (make-hash-table :test #'equal))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Prefix-filtered extended commands
+
+(defun read-extended-command-for-eglot-prefix-p (command _)
+  "Predicate for `read-extended-command-predicate' accepting only eglot commands.
+COMMAND is a symbol; return non-nil when its name starts with \"eglot\"."
+  (string-prefix-p "eglot" (symbol-name command)))
+
+;;;###autoload
+(defun execute-extended-eglot-command ()
+  "Read extended command but filtered for only those beginning with prefix `eglot'."
+  (interactive)
+  (let ((read-extended-command-predicate #'read-extended-command-for-eglot-prefix-p))
+    (with-suppressed-warnings ((interactive-only execute-extended-command))
+      (execute-extended-command nil))))
+
+(defun read-extended-command-for-xref-prefix-p (command _)
+  "Predicate for `read-extended-command-predicate' accepting only xref commands.
+COMMAND is a symbol; return non-nil when its name starts with \"xref\"."
+  (string-prefix-p "xref" (symbol-name command)))
+
+;;;###autoload
+(defun execute-extended-xref-command ()
+  "Read extended command but filtered for only those beginning with prefix `xref'."
+  (interactive)
+  (let ((read-extended-command-predicate #'read-extended-command-for-xref-prefix-p))
+    (with-suppressed-warnings ((interactive-only execute-extended-command))
+      (execute-extended-command nil))))
+
+(defun read-extended-command-for-slime-prefix-p (command _)
+  "Predicate for `read-extended-command-predicate' accepting only slime commands.
+COMMAND is a symbol; return non-nil when its name starts with \"slime\"."
+  (string-prefix-p "slime" (symbol-name command)))
+
+;;;###autoload
+(defun execute-extended-slime-command ()
+  "Read extended command but filtered for only those beginning with prefix `slime'."
+  (interactive)
+  (let ((read-extended-command-predicate #'read-extended-command-for-slime-prefix-p))
+    (with-suppressed-warnings ((interactive-only execute-extended-command))
+      (execute-extended-command nil))))
+
+;;;###autoload
+(defun eglox-describe-symbol-dwim (prefix)
+  "Look up symbol at point contextually.
+With PREFIX arg, always use `describe-symbol'.
+Otherwise: use `slime-describe-symbol' if slime is connected,
+`consult-eglot-symbols' if in an eglot-managed buffer,
+or `describe-symbol' as fallback."
+  (interactive "P")
+  (cond
+   (prefix
+    (call-interactively #'describe-symbol))
+   ((and (fboundp 'slime-describe-symbol)
+         (fboundp 'slime-connected-p)
+         (slime-connected-p))
+    (call-interactively #'slime-describe-symbol))
+   ((and (fboundp 'eglot-current-server)
+         (fboundp 'consult-eglot-symbols)
+         (eglot-current-server))
+    (consult-eglot-symbols))
+   (t
+    (call-interactively #'describe-symbol))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Keymaps
+
+(defvar-keymap eglox-ide-map
+  :name "ide"
+  :doc "IDE/language navigation commands, attached to `eglox-command-map' at \"x\"."
+  "m" #'imenu
+  "c" #'xref-find-references
+  "d" #'xref-find-definitions
+  "p" #'xref-go-back
+  "n" #'xref-go-forward
+  "o" #'xref-find-definitions-other-window
+  "x" #'execute-extended-xref-command
+  "s" #'execute-extended-slime-command)
 
 (defvaralias 'eglox-server-map 'eglox-global-map)
 (defvar-keymap eglox-global-map
@@ -108,6 +193,7 @@
   "t" #'eglot-test-at-point
   "u" #'eglox-update-workspace
   "w" #'eglot-code-action-rewrite
+  "x" (cons "ide" eglox-ide-map)
   "l" eglox-global-map)
 
 (defvaralias 'eglox-minor-mode-map 'eglox-mode-map)

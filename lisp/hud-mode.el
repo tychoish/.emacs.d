@@ -980,15 +980,6 @@ at point rather than just the current line."
   (interactive "nTab width: ")
   (setq-local tab-width num-spaces))
 
-(defun font-lock-show-tabs ()
-  "Return a font-lock style keyword for tab characters."
-  '(("\t" 0 'trailing-whitespace prepend)))
-
-(defun font-lock-width-keyword (width)
-  "Return a font-lock style keyword for strings beyond WIDTH that use `font-lock-warning-face'."
-  `((,(format "^%s\\(.+\\)" (make-string width ?.))
-     (1 font-lock-warning-face t))))
-
 ;; line manipulation
 
 ;;;###autoload

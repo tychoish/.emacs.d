@@ -15,8 +15,8 @@
 
 (autoload 'hud-transient-insert-suffix-once "hud")
 (autoload 'bootstrap-set-up-auto-save "bootstrap")
-(autoload 'font-lock-width-keyword "hud-mode")
-(autoload 'font-lock-show-tabs "hud-mode")
+(autoload 'overmark-font-lock-width-keyword "overmark")
+(autoload 'overmark-font-lock-show-tabs "overmark")
 (autoload 'orgx-capture-setup-standard-templates "orgx-capture")
 
 (declare-function electric-pair-default-inhibit "elec-pair")
@@ -93,9 +93,6 @@
 
 (with-eval-after-load 'builder-core
   (require 'builder-tasks))
-
-(with-eval-after-load 'orgx
-  (font-lock-add-keywords 'org-mode tk-font-lock-keywords 'append))
 
 (with-eval-after-load 'magit-dash
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
@@ -318,11 +315,11 @@ completion candidate outlives its buffer."
   (add-hook 'c-ts-mode-hook (make-run-hooks-function-for c-mode))
   (add-hook 'c++-ts-mode-hook (make-run-hooks-function-for c++-mode))
 
-  (font-lock-add-keywords 'c-mode (font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c++-mode (font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c-mode (overmark-font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c++-mode (overmark-font-lock-width-keyword 100))
 
-  (font-lock-add-keywords 'c-ts-mode (font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c++-ts-mode (font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c-ts-mode (overmark-font-lock-width-keyword 100))
+  (font-lock-add-keywords 'c++-ts-mode (overmark-font-lock-width-keyword 100))
 
   (setq treesit-language-source-alist
 	'((bash "https://github.com/tree-sitter/tree-sitter-bash")
@@ -368,8 +365,6 @@ completion candidate outlives its buffer."
   (setq web-mode-enable-css-colorization t))
 
 (with-eval-after-load 'markdown-mode
-  (font-lock-add-keywords 'markdown-mode tk-font-lock-keywords 'append)
-  (font-lock-add-keywords 'gfm-mode tk-font-lock-keywords 'append)
   (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook #'turn-off-auto-fill)
   (defun tychoish/markdown-setup-imenu ()
@@ -530,10 +525,10 @@ resets point to column 0 outside of definition-list context."
 
   (keymap-set python-ts-mode-map "M-<left>" #'balle-python-shift-left)
   (keymap-set python-ts-mode-map "M-<right>" #'balle-python-shift-right)
-  (when (fboundp 'font-lock-show-tabs)
-    (font-lock-add-keywords 'python-ts-mode (font-lock-show-tabs)))
-  (when (fboundp 'font-lock-width-keyword)
-    (font-lock-add-keywords 'python-ts-mode (font-lock-width-keyword 100))))
+  (when (fboundp 'overmark-font-lock-show-tabs)
+    (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-show-tabs)))
+  (when (fboundp 'overmark-font-lock-width-keyword)
+    (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-width-keyword 100))))
 
 (with-eval-after-load 'anzu
   (seq-do #'make-variable-buffer-local
