@@ -31,7 +31,6 @@
 
 (require 'seq)
 (require 'subr-x)
-(require 'xtd-macro)
 (eval-when-compile
   (require 'cl-lib))
 
@@ -345,6 +344,7 @@ binding (see `keymap-set'.)"
   :name "docs"
   :doc "Documentation commands under C-c h (hud-mode).")
 
+(keymap-set hud-docs-map "h" #'help)
 (keymap-set hud-docs-map "s" #'hud-describe-symbol-dwim)
 (keymap-set hud-docs-map "v" #'describe-variable)
 (keymap-set hud-docs-map "q" #'kill-eldoc-and-help-buffers)
@@ -428,9 +428,17 @@ binding (see `keymap-set'.)"
 (keymap-set hud-docker-map "m" #'docker-contexts)
 (keymap-set hud-docker-map "p" #'docker-compose)
 
+(make-read-extended-command-for-prefix "docker"
+  :bind-key "x"
+  :bind-map hud-docker-map)
+
 (defvar-keymap hud-display-opacity-map
   :name "opacity"
   :doc "Opacity commands under C-c f o (hud-mode).")
+
+(keymap-set hud-display-opacity-map "=" #'hud-opacity-increase)
+(keymap-set hud-display-opacity-map "-" #'hud-opacity-decrease)
+(keymap-set hud-display-opacity-map "0" #'hud-opacity-reset)
 
 (defvar-keymap hud-buffer-control-map
   :name "buffer-control"
@@ -448,6 +456,8 @@ binding (see `keymap-set'.)"
 (defvar-keymap hud-blogging-map
   :name "blogging"
   :doc "Blogging commands under C-c t b (hud-mode).")
+
+(keymap-set hud-core-map "b" (cons "blogging" hud-blogging-map))
 
 (defvar-keymap hud-theme-map
   :name "theme"
@@ -471,9 +481,9 @@ binding (see `keymap-set'.)"
   :name "whitespace"
   :doc "Whitespace commands under C-c t w (hud-mode).")
 
+(keymap-set hud-core-map "w" (cons "whitespace" hud-whitespace-map))
 (keymap-set hud-whitespace-map "c" #'whitespace-cleanup)
 (keymap-set hud-whitespace-map "t" #'toggle-local-whitespace-cleanup)
-
 
 (autoload 'tychoish/agent-shell-toggle-terse-output "setup-agent-shell" nil t)
 
@@ -493,6 +503,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-robot-agent-shell-map "q" #'agent-shell-queue-buffer-open)
 (keymap-set hud-robot-agent-shell-map "/" #'agent-shell-queue-capture)
 (keymap-set hud-robot-agent-shell-map "v" #'tychoish/agent-shell-toggle-terse-output)
+
 
 (make-read-extended-command-for-prefix "agent-shell"
   :bind-map hud-robot-agent-shell-map
@@ -515,6 +526,7 @@ binding (see `keymap-set'.)"
   :name "shell-eat"
   :doc "Shell eat commands under C-c s e (hud-mode).")
 
+(keymap-set hud-shell-map "e" (cons "shell-eat" hud-shell-eat-map))
 (keymap-set hud-shell-eat-map "e" #'eat)
 (keymap-set hud-shell-eat-map "o" #'eat-other-window)
 (keymap-set hud-shell-eat-map "p" #'eat-project)
@@ -527,6 +539,15 @@ binding (see `keymap-set'.)"
 (defvar-keymap hud-smerge-map
   :name "smerge"
   :doc "Smerge commands under C-x g m (hud-mode).")
+
+(keymap-set hud-smerge-map "n" #'smerge-vc-next-conflict)
+(keymap-set hud-smerge-map "k" #'smerge-kill-current)
+(keymap-set hud-smerge-map "s" #'smerge-start-session)
+(keymap-set hud-smerge-map "t" #'smerge-keep-current)
+
+(make-read-extended-command-for-prefix "smerge"
+  :bind-map hud-smerge-map
+  :bind-key "x")
 
 (defvar-keymap hud-robot-gptel-map
   :name "gptel"
@@ -551,6 +572,9 @@ binding (see `keymap-set'.)"
   :name "gptel-set-default-model"
   :doc "GPtel model selection under C-c r g m (hud-mode).")
 
+(keymap-set hud-robot-gptel-map "m" (cons "gptel-set-default-model" hud-robot-gptel-set-default-model-map))
+
+
 (defvar-keymap hud-robot-ollama-map
   :name "ollama"
   :doc "Ollama commands under C-c r o (hud-mode).")
@@ -565,6 +589,7 @@ binding (see `keymap-set'.)"
 (keymap-set hud-robot-ollama-map "k" #'ollama-check-server)
 (keymap-set hud-robot-ollama-map "r" #'ollama-status-refresh)
 
+
 (make-read-extended-command-for-prefix "ollama"
   :bind-key "x"
   :bind-map hud-robot-ollama-map)
@@ -572,6 +597,8 @@ binding (see `keymap-set'.)"
 (defvar-keymap hud-robot-ollama-tailnet-map
   :name "ollama-tailnet"
   :doc "Ollama tailnet orchestration under C-c r o t (hud-mode).")
+
+(keymap-set hud-robot-ollama-map "t" (cons "tailnet" hud-robot-ollama-tailnet-map))
 
 (keymap-set hud-robot-ollama-tailnet-map "s" #'ollama-tailnet-status)
 (keymap-set hud-robot-ollama-tailnet-map "d" #'ollama-tailnet-discover-hosts)
@@ -590,12 +617,28 @@ binding (see `keymap-set'.)"
   :name "network"
   :doc "Tailscale network control under C-c r n (hud-mode).")
 
+(keymap-set hud-robot-map "n" (cons "network" hud-robot-network-map))
+(keymap-set hud-robot-network-map "s" #'tailscale-status)
+(keymap-set hud-robot-network-map "c" #'tailscale-connect)
+(keymap-set hud-robot-network-map "d" #'tailscale-disconnect)
+(keymap-set hud-robot-network-map "y" #'tailscale-copy-ip)
+(keymap-set hud-robot-network-map "f" #'tailscale-file-send)
+
+(make-read-extended-command-for-prefix "tailscale"
+  :bind-map hud-robot-network-map
+  :bind-key "x")
+
 ;; the mode's own container map -- populated below
 (defvar-keymap hud-mode-map
   :name "hud"
   :doc "Global keybindings for hud-mode.")
 
 (hud-bind-deferred-keymap hud-mode-map "C-c C-d" 'dape 'dape-global-map "dape")
+(keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
+(keymap-set hud-mode-map "C-x x a" #'revbufs)
+(keymap-set hud-mode-map "C-c '" #'popper-toggle)
+(keymap-set hud-mode-map "C-c \\" #'popper-cycle)
+(keymap-set hud-mode-map "C-c C-'" #'popper-kill-latest-popup)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -605,18 +648,6 @@ binding (see `keymap-set'.)"
 (make-read-extended-command-for-prefix "clipboard"
   :bind-map hud-mode-map
   :bind-key "C-x x c")
-
-(make-read-extended-command-for-prefix "tailscale"
-  :bind-map hud-robot-network-map
-  :bind-key "x")
-
-(make-read-extended-command-for-prefix "smerge"
-  :bind-map hud-smerge-map
-  :bind-key "x")
-
-(make-read-extended-command-for-prefix "docker"
-  :bind-key "x"
-  :bind-map hud-docker-map)
 
 (create-toggle-functions
  hud-modeline-icons
@@ -632,47 +663,10 @@ binding (see `keymap-set'.)"
 (create-toggle-functions electric-pair-inhibition)
 (create-toggle-functions electric-pair-eagerness)
 
-
-(keymap-set hud-mode-map "C-c C-w" #'whitespace-cleanup)
-(keymap-set hud-mode-map "C-x x a" #'revbufs)
-(keymap-set hud-mode-map "C-c '" #'popper-toggle)
-(keymap-set hud-mode-map "C-c \\" #'popper-cycle)
-(keymap-set hud-mode-map "C-c C-'" #'popper-kill-latest-popup)
-
 (keymap-set hud-blogging-map "m" #'hud-insert-date)
-(keymap-set hud-display-map "o" (cons "opacity" hud-display-opacity-map))
 (keymap-set hud-buffer-control-map "k" #'kill-this-buffer)
-(keymap-set hud-display-opacity-map "=" #'hud-opacity-increase)
-(keymap-set hud-display-opacity-map "-" #'hud-opacity-decrease)
-(keymap-set hud-display-opacity-map "0" #'hud-opacity-reset)
-(keymap-set hud-docs-map "h" #'help)
 
-(keymap-set hud-core-map "b" (cons "blogging" hud-blogging-map))
-(keymap-set hud-core-map "t" (cons "theme" hud-theme-map))
-(keymap-set hud-core-map "w" (cons "whitespace" hud-whitespace-map))
-
-
-(keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
-(keymap-set hud-shell-map "e" (cons "shell-eat" hud-shell-eat-map))
-(keymap-set hud-robot-map "s" (cons "agent-shell" hud-robot-agent-shell-map))
-(keymap-set hud-robot-agent-shell-map "s" (cons "send" hud-robot-agent-shell-send-map))
-(keymap-set hud-robot-map "g" (cons "gptel" hud-robot-gptel-map))
-(keymap-set hud-robot-gptel-map "m" (cons "gptel-set-default-model" hud-robot-gptel-set-default-model-map))
-(keymap-set hud-robot-map "o" (cons "ollama" hud-robot-ollama-map))
-(keymap-set hud-robot-ollama-map "t" (cons "tailnet" hud-robot-ollama-tailnet-map))
-(keymap-set hud-robot-map "p" (cons "workflows" #'agent-shell-workflow-select))
-(keymap-set hud-robot-map "m" (cons "workflow-menu" #'agent-shell-workflow-dispatch-menu))
-(keymap-set hud-robot-map "n" (cons "network" hud-robot-network-map))
-(keymap-set hud-robot-network-map "s" #'tailscale-status)
-(keymap-set hud-robot-network-map "c" #'tailscale-connect)
-(keymap-set hud-robot-network-map "d" #'tailscale-disconnect)
-(keymap-set hud-robot-network-map "y" #'tailscale-copy-ip)
-(keymap-set hud-robot-network-map "f" #'tailscale-file-send)
-
-(keymap-set hud-smerge-map "n" #'smerge-vc-next-conflict)
-(keymap-set hud-smerge-map "k" #'smerge-kill-current)
-(keymap-set hud-smerge-map "s" #'smerge-start-session)
-(keymap-set hud-smerge-map "t" #'smerge-keep-current)
+(keymap-set hud-display-map "o" (cons "opacity" hud-display-opacity-map))
 
 (keymap-set hud-mode-map "C-c t" (cons "core" hud-core-map))
 (keymap-set hud-mode-map "C-c f" (cons "display" hud-display-map))
@@ -685,8 +679,19 @@ binding (see `keymap-set'.)"
 (keymap-set hud-mode-map "C-x g" (cons "magit" hud-magit-map))
 (keymap-set hud-mode-map "C-x d" (cons "docker" hud-docker-map))
 (keymap-set hud-mode-map "C-c m" (cons "mail" hud-mail-map))
-(keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
 (keymap-set hud-mode-map "C-c p" (cons "projectile" 'projectile-command-map))
+(keymap-set hud-mode-map "C-x C-b" (cons "buffer-control" hud-buffer-control-map))
+(keymap-set hud-core-map "t" (cons "theme" hud-theme-map))
+
+(keymap-set hud-robot-map "s" (cons "agent-shell" hud-robot-agent-shell-map))
+(keymap-set hud-robot-map "g" (cons "gptel" hud-robot-gptel-map))
+(keymap-set hud-robot-map "o" (cons "ollama" hud-robot-ollama-map))
+(keymap-set hud-robot-map "p" (cons "workflows" #'agent-shell-workflow-select))
+(keymap-set hud-robot-map "m" (cons "workflow-menu" #'agent-shell-workflow-dispatch-menu))
+
+(keymap-set hud-magit-map "m" (cons "smerge" hud-smerge-map))
+
+(keymap-set hud-robot-agent-shell-map "s" (cons "send" hud-robot-agent-shell-send-map))
 
 (keymap-set hud-mode-map "M-." #'xref-find-definitions)
 
