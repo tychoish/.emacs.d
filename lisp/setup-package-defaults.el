@@ -124,7 +124,16 @@ removes autoload feature provisions, and eliminates extraneous whitespace."
     (cl-letf (((symbol-function 'byte-compile-file)
                (lambda (file)
                  (bootstrap-optimize-quickstart-file file)
-                 (funcall real-byte-compile file)
+                 (with-temp-buffer
+                   (let ((byte-compile-log-buffer (buffer-name))
+                         (display-buffer-alist
+                          (cons (cons (regexp-quote (buffer-name))
+                                      '(display-buffer-no-window))
+                                display-buffer-alist))
+                         (warning-inhibit-types (cons '(bytecomp) warning-inhibit-types))
+                         (inhibit-message t)
+                         (message-log-max nil))
+                     (funcall real-byte-compile file)))
                  file)))
       (apply orig-fn args))))
 
@@ -151,7 +160,9 @@ When FORCE is nil, do nothing unless quickstart file is stale."
   (interactive "P")
   (setq bootstrap--package-quickstart-refresh-timer nil)
   (when (or force (bootstrap-package-quickstart-stale-p))
-    (message "[bootstrap] package-quickstart-file is stale relative to package-user-dir; refreshing")
+    (message "[bootstrap] %s; refreshing package quickstart"
+             (if force "Package changes detected or refresh requested"
+               "Package quickstart is stale"))
     (require 'package)
     (bootstrap-sync-package-load-paths)
     (package-quickstart-refresh)))
@@ -214,8 +225,17 @@ ON-COMPLETE with `ok', or `error' when git fails (output is in the
 (add-hook 'async-pkg-install-after-hook #'ad:refresh-package-quickstart)
 (add-hook 'kill-emacs-hook #'bootstrap-flush-package-quickstart)
 
+(defun bootstrap-refresh-quickstart-after-elpaish (results _action)
+  "Schedule a quickstart refresh when RESULTS include package changes."
+  (when (seq-some (lambda (result)
+                    (memq (plist-get result :status) '(:installed :upgraded)))
+                  results)
+    (ad:refresh-package-quickstart)))
+
 (with-eval-after-load 'elpaish-install
-  (require 'setup-packages))
+  (require 'setup-packages)
+  (add-hook 'elpaish-install-bootstrap-finished-functions
+            #'bootstrap-refresh-quickstart-after-elpaish))
 
 ;;;; use-package packaging extensions
 
