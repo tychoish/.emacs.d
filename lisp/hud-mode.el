@@ -31,6 +31,7 @@
 
 (require 'seq)
 (require 'subr-x)
+(require 'xtd-macro)
 (eval-when-compile
   (require 'cl-lib))
 
@@ -125,15 +126,17 @@ HOOK may be a symbol, a list of symbols, or the sentinel
 		  (seq-remove #'string-empty-p))
 		"-"))))
 
-(cl-defmacro add-lazy-init (&key name operation (delay 1))
-  "Execute OPERATION in an idle timer DELAY seconds after Emacs becomes idle."
-  (unless (and name operation)
-    (user-error "add-lazy-init requires :name and :operation"))
+(cl-defmacro add-lazy-init (&key name operation form (delay 1))
+  "Run FORM or OPERATION on an idle timer after DELAY seconds.
+NAME identifies the operation in slow-operation reports.  FORM takes
+precedence over OPERATION when both are supplied."
+  (unless (and name (or form operation))
+    (user-error "add-lazy-init requires :name and :form or :operation"))
   `(run-with-idle-timer
     ,delay nil
     (lambda ()
       (hud-with-slow-op-timer ,name
-	(funcall ,operation)))))
+        ,(or form `(funcall ,operation))))))
 
 (cl-defmacro add-one-shot-hook
     (&key name hook function result body form operation
