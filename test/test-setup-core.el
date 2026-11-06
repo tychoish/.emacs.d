@@ -123,23 +123,29 @@ correctly and reads from the minibuffer using the candidate's command."
 ;;; tychoish-mail account definition and immediate activation
 
 (ert-deftest tychoish-core/mail-account-definition-activates-default ()
-  "Test that `tychoish-define-mail-account' activates a default account immediately upon definition."
+  "Test that `tychoish-define-mail-account' activates a default account in an idle timer after definition."
   (require 'setup-mail)
   (let ((hud-mail-map (make-sparse-keymap))
         (tychoish-mail-accounts-table (make-hash-table :test #'equal))
         (tychoish-mail-account-current nil)
         (user-mail-address nil)
-        (user-full-name nil))
+        (user-full-name nil)
+        (tychoish-mail-activation-delay 0.0))
     (setq mu4e-get-mail-command nil)
     (cl-letf (((symbol-function 'mu4e) (lambda (&rest _args) nil)))
-      (tychoish-define-mail-account
-       :name "Test User"
-       :id "test-acc"
-       :address "test@example.com"
-       :key "x"
-       :maildir "/tmp/test-mail"
-       :default t
-       :command "true")
+      (let ((before (copy-sequence timer-idle-list)))
+        (tychoish-define-mail-account
+         :name "Test User"
+         :id "test-acc"
+         :address "test@example.com"
+         :key "x"
+         :maildir "/tmp/test-mail"
+         :default t
+         :command "true")
+        (should-not tychoish-mail-account-current)
+        (thread-last timer-idle-list
+                     (seq-remove (lambda (tm) (memq tm before)))
+                     (seq-do #'timer-event-handler)))
       (should (equal tychoish-mail-account-current "tychoish-mail-test-acc"))
       (should (equal user-mail-address "test@example.com"))
       (should (equal user-full-name "Test User"))

@@ -118,6 +118,7 @@
    protobuf-mode
    revbufs
    slime
+   telega
    tempel-collection
    toc-org
    tracking

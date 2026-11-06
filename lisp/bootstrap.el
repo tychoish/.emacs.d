@@ -58,6 +58,11 @@
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
 (autoload 'eglox-mode "eglox")
+(autoload 'telegax-mode "telegax" "Global minor mode managing Telega lifecycle integrations." t)
+(autoload 'telegax-global-mode "telegax" "Global minor mode anchoring the Telega prefix keys." t)
+(autoload 'telegax-switch-to-root "telegax" nil t)
+(autoload 'telegax-force-kill "telegax" nil t)
+(autoload 'telegax-disconnect "telegax" nil t)
 
 (autoload 'hud-dispatch "hud" nil t)
 (autoload 'hud-select "hud" nil t)
@@ -402,15 +407,13 @@ If :sync is non-nil or running noninteractively, load and start synchronously."
   (let ((name (cond
                ((symbolp fn) (symbol-name fn))
                ((byte-code-function-p fn) "<bytecode>")
-               (t "<function>"))))
+               (t "<function>")))
+	(nargs (length (help-function-arglist fn))))
     (with-slow-op-timer (format "<bootstrap> [modes] %s" name)
-      (condition-case err
-          (condition-case nil
-              (funcall fn 1)
-            (wrong-number-of-arguments
-             (funcall fn)))
-        (error
-         (message "[bootstrap] error enabling mode %s: %s" name (error-message-string err)))))))
+      (cond
+       ((eq nargs 0) (funcall fn))
+       ((eq nargs 1) (funcall fn 1))
+       (:else (error "[bootstrap] error enabling mode %s(%d): %s" name nargs (error-message-string err)))))))
 
 (defun bootstrap--resolve-hook-functions (hook)
   "Return a flat list of callable functions from HOOK symbol or list."
@@ -473,7 +476,8 @@ Returns a cancellation function that halts pending iterations."
     which-key-mode
     eglox-global-mode
     minaid-mode
-    bootstrap-init-early-instance)
+    telegax-global-mode
+    bootstrap-set-up-emacs-instance-persistence)
   "Hook run during early bootstrap to enable core UI and editing modes."
   :type 'hook
   :group 'bootstrap)
@@ -482,10 +486,6 @@ Returns a cancellation function that halts pending iterations."
   "Initialize early fringe and default font."
   (set-fringe-mode '(4 . 4))
   (bootstrap-ensure-default-font))
-
-(defun bootstrap-init-early-instance ()
-  "Set up instance persistence."
-  (bootstrap-set-up-emacs-instance-persistence))
 
 (defun bootstrap-init-early-modes (&optional on-done)
   "Initialize core editor UI, display modes, font, and instance persistence."
@@ -506,10 +506,13 @@ Returns a cancellation function that halts pending iterations."
     chex-global-mode
     agent-shell-queue-global-mode
     nerd-icons-completion-mode
-    orgx-global-mode)
+    orgx-global-mode
+    global-auto-revert-mode
+    bootstrap-init-mcp-services)
   "Hook run during late bootstrap to enable tool and integration modes."
   :type 'hook
   :group 'bootstrap)
+
 
 (defun bootstrap-init-project ()
   "Load project management, projectile, and grepx modules."
@@ -539,11 +542,6 @@ Returns a cancellation function that halts pending iterations."
  :name "<bootstrap> [early] ui & modes"
  :operation #'bootstrap-init-early-modes
  :delay 0.1)
-
-(add-lazy-init
- :name "<bootstrap> [services] mcpkit"
- :operation #'bootstrap-init-mcp-services
- :delay 0.5)
 
 (add-lazy-init
  :name "<bootstrap> [late] integrations"
@@ -603,11 +601,6 @@ Returns a cancellation function that halts pending iterations."
  :form (setq custom-file (sprite-state-path "custom.el"))
  ;; Depth below 0: must run before `package--save-selected-packages'.
  :depth -90)
-
-(add-one-shot-hook
- :name "<bootstrap> auto-revert after first file"
- :hook 'find-file-hook
- :form (global-auto-revert-mode 1))
 
 (add-one-shot-hook
  :name "ssh-agent"

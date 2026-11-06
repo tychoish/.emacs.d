@@ -445,6 +445,13 @@ live in MAILDIR's tools/signatures directory."
 
       (message "mail: configured address [%s]" address))))
 
+(declare-function sprite-instance-name "sprite")
+
+(defcustom tychoish-mail-activation-delay 0.5
+  "Idle seconds to wait before activating an account at startup."
+  :type 'number
+  :group 'mail)
+
 ;;;###autoload
 (cl-defun tychoish-define-mail-account
     (&key name address key id
@@ -482,21 +489,18 @@ Returns the symbol of the generated activation command.
       (format "Switch mu4e to the %s <%s> account." name address))
 
     (when (or default
-	      (not (and (null systems) (null instances))))
-      (let ((activate-form
-             `(when (or ,default
-                        (and
-                         (or (member (sprite-instance-name) ',instances)
-                             (null ',instances))
-                         (or (member (system-name) ',systems)
-                             (null ',systems))))
-                (,configure-account-symbol))))
-        (eval activate-form t)
-        (when (daemonp)
-          (add-one-shot-hook
-           :name (format "%s-frame-setup" account-name)
-           :form activate-form
-           :hook 'after-first-frame-created))))
+              (not (and (null systems) (null instances))))
+      (add-lazy-init
+       :name (format "%s-activate" account-name)
+       :delay tychoish-mail-activation-delay
+       :operation (lambda ()
+                    (when (or default
+                              (and
+                               (or (member (sprite-instance-name) instances)
+                                   (null instances))
+                               (or (member (system-name) systems)
+                                   (null systems))))
+                      (funcall configure-account-symbol)))))
 
     configure-account-symbol))
 
