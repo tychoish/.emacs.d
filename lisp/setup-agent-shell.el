@@ -127,17 +127,18 @@
      nil)))
 
 (defun tychoish/agent-shell--config-installed-p (config)
-  "Return non-nil if CONFIG's executable exists on `exec-path'."
-  (when-let* ((cm (map-elt config :client-maker))
+  "Return non-nil if CONFIG is Antigravity or its executable is available."
+  (or (eq (map-elt config :identifier) 'antigravity)
+      (when-let* ((cm (map-elt config :client-maker))
               (client (ignore-errors (funcall cm (current-buffer))))
               (cmd-spec (map-elt client :command))
               (cmd (if (consp cmd-spec) (car cmd-spec) cmd-spec))
               ((stringp cmd))
               ((not (string-empty-p cmd))))
-    (executable-find cmd t)))
+        (executable-find cmd t))))
 
 (defun tychoish/agent-shell-installed-configs ()
-  "Return default agent configs whose executable exists on `exec-path'."
+  "Return available default agent configs, including bootstrappable Antigravity."
   (seq-filter #'tychoish/agent-shell--config-installed-p
               (mapcar (lambda (e) (if (functionp e) (funcall e) e))
                       (agent-shell-default-agent-config-makers))))
@@ -166,14 +167,8 @@
 
 (defun agent-shell-mcpkit-active-url ()
   "Return HTTP URL for active MCP server, or nil."
-  (when-let* ((port (or (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
-                        (and (fboundp 'bootstrap-init-mcp-services)
-                             (progn (bootstrap-init-mcp-services :sync t) (mcpkit-active-port)))
-                        (and (fboundp 'mcpkit-start-all-services)
-                             (mcpkit-start-all-services (or (and (boundp 'mcpkit-default-port) mcpkit-default-port)
-                                                            (and (fboundp 'bootstrap-mcpkit-instance-port)
-                                                                 (bootstrap-mcpkit-instance-port))
-                                                            8765))))))
+  (when-let* ((port (or (mcpkit-active-port)
+                        (progn (mcpkit-init-services-sync) (mcpkit-active-port)))))
     (if (and (fboundp 'mcpkit-proxy-active-port)
              (mcpkit-proxy-active-port)
              (bound-and-true-p sprite-instance-id))
@@ -199,14 +194,8 @@
 
 (defun agent-shell-mcpkit-environment-variables ()
   "Return environment variables exposing MCPKit connection info."
-  (when-let* ((port (or (ignore-errors (and (fboundp 'mcpkit-active-port) (mcpkit-active-port)))
-                        (and (fboundp 'bootstrap-init-mcp-services)
-                             (progn (bootstrap-init-mcp-services :sync t) (mcpkit-active-port)))
-                        (and (fboundp 'mcpkit-start-all-services)
-                             (mcpkit-start-all-services (or (and (boundp 'mcpkit-default-port) mcpkit-default-port)
-                                                            (and (fboundp 'bootstrap-mcpkit-instance-port)
-                                                                 (bootstrap-mcpkit-instance-port))
-                                                            8765))))))
+  (when-let* ((port (or (mcpkit-active-port)
+                        (progn (mcpkit-init-services-sync) (mcpkit-active-port)))))
     (list (format "MCPKIT_PORT=%d" port)
           (format "EMACS_MCP_PORT=%d" port)
           (format "EMACS_MCP_URL=http://127.0.0.1:%d/mcp" port)
@@ -231,6 +220,9 @@
 
 (defvar tychoish/agent-shell-antigravity--future nil
   "In-flight `sprite-future' for Antigravity bootstrap, or nil.")
+
+(defvar tychoish/agent-shell-antigravity--startup-requested nil
+  "Non-nil once bootstrap has been requested during shell startup.")
 
 (defun tychoish/agent-shell-antigravity--do-bootstrap (install-dir platform-sym bin-path)
   "Download and extract Antigravity ACP server to INSTALL-DIR."
@@ -358,7 +350,18 @@ FORCE re-downloads; SYNC waits synchronously."
 (defun tychoish/agent-shell-antigravity-ensure-binary (&rest _)
   "Ensure Antigravity binary is installed before agent starts."
   (require 'agent-shell)
-  (tychoish/agent-shell-antigravity-bootstrap nil :sync))
+  (unless (tychoish/agent-shell-antigravity-bootstrap nil :sync)
+    (user-error "Antigravity bootstrap failed; see *Messages*")))
+
+(defun tychoish/agent-shell-antigravity--on-start (&rest args)
+  "Start bootstrap on the first shell and wait if ARGS select Antigravity."
+  (if (eq (map-elt (plist-get args :config) :identifier) 'antigravity)
+      (progn
+        (tychoish/agent-shell-antigravity-ensure-binary)
+        (setq tychoish/agent-shell-antigravity--startup-requested t))
+    (unless tychoish/agent-shell-antigravity--startup-requested
+      (setq tychoish/agent-shell-antigravity--startup-requested t)
+      (run-with-idle-timer 0 nil #'tychoish/agent-shell-antigravity-bootstrap))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Primary Agent-Shell Configuration
@@ -395,8 +398,9 @@ FORCE re-downloads; SYNC waits synchronously."
             :around #'ad:agent-shell--mcp-servers-filter-nil)
 (advice-add 'agent-shell--make-acp-client
             :around #'ad:agent-shell--make-acp-client-inject-mcpkit-env)
-(advice-add 'agent-shell-antigravity-start-agent
-            :before #'tychoish/agent-shell-antigravity-ensure-binary)
+(advice-remove 'agent-shell-antigravity-start-agent
+               #'tychoish/agent-shell-antigravity-ensure-binary)
+(advice-add 'agent-shell--start :before #'tychoish/agent-shell-antigravity--on-start)
 
 (keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
 (keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
