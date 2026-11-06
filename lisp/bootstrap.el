@@ -57,6 +57,10 @@
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
+
+(defun bootstrap-check-package-quickstart ()
+  "Refresh the package quickstart if it is stale."
+  (bootstrap-refresh-package-quickstart))
 (autoload 'eglox-mode "eglox")
 (autoload 'telegax-mode "telegax" "Global minor mode managing Telega lifecycle integrations." t)
 (autoload 'telegax-global-mode "telegax" "Global minor mode anchoring the Telega prefix keys." t)
@@ -100,7 +104,6 @@
 (defvar request-storage-directory)
 (defvar url-configuration-directory)
 (defvar denote-sync-cache-directory)
-(defvar mcpkit-default-port)
 (defvar org-directory)
 (defvar org-agenda-files)
 (defvar org-annotate-file-storage-file)
@@ -248,23 +251,24 @@ triggered directly by a keypress, still prompts normally.")
                  "^/home.+go/pkg/mod\\|"
                  "^/home.+\\.cargo"))))
 
-(defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
-  "Cache mapping file names to files' mtime to avoid re-importing files.")
-(unless (hash-table-p bootstrap-abbrev-files-cache)
-  (setq bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
 
-(defun should-read-abbrev-file-p (path)
-  (or (not (map-contains-key bootstrap-abbrev-files-cache path))
-      (time-less-p (map-elt bootstrap-abbrev-files-cache path)
-                   (file-attribute-modification-time (file-attributes path)))))
+(defun bootstrap-ensure-packages-installed ()
+  (elpaish-install-packages :async t))
 
-(defun bootstrap-load-abbrev-files ()
-  (thread-last
-    (directory-files (file-name-concat user-emacs-directory "abbrev") t ".el*" :nosort)
-    (seq-filter #'should-read-abbrev-file-p)
-    (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
-    (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
-                             (file-attribute-modification-time (file-attributes it)))))))
+(defmacro bootstrap-require-package (pkg)
+  "Define `bootstrap-require-pkg-PKG', a startup operation that requires PKG.
+PKG is a feature symbol, given bare or quoted.  The defined function signals
+an error if requiring PKG does not leave it `featurep'.  Return the function
+symbol, so the form can be evaluated where the symbol is wanted."
+  (declare (indent 0))
+  (let ((feature (if (eq (car-safe pkg) 'quote) (cadr pkg) pkg)))
+    (unless (and feature (symbolp feature))
+      (error "bootstrap-require-package: expected a feature symbol, got %S" pkg))
+    `(defun ,(intern (format "bootstrap-require-pkg-%s" feature)) ()
+       ,(format "Require `%s' as a startup operation." feature)
+       (require ',feature)
+       (unless (featurep ',feature)
+         (error "Feature `%s' not provided after require" ',feature)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -279,171 +283,39 @@ triggered directly by a keypress, still prompts normally.")
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
-(defvar bootstrap-mcp-packages
-  '(mcpkit
-    mcpkit-emacs
-    mcpkit-editing
-    denote-mcp
-    agent-shell-queue-mcp
-    builder-mcp
-    hitl-mcp)
-  "List of MCP package and feature symbols to require during bootstrap.")
-
-(defun bootstrap-port-available-p (port)
-  "Return non-nil if local TCP PORT is available to bind."
-  (condition-case nil
-      (let ((proc (make-network-process
-                   :name " mcpkit-port-probe"
-                   :server t
-                   :host 'local
-                   :service port
-                   :noquery t
-                   :family 'ipv4)))
-        (delete-process proc)
-        t)
-    (file-error nil)))
-
-(defun bootstrap-find-available-port (base-port &optional max-tries)
-  "Find an available port starting at BASE-PORT, probing up to MAX-TRIES."
-  (let ((port base-port)
-        (tries (or max-tries 50)))
-    (while (and (> tries 0) (not (bootstrap-port-available-p port)))
-      (setq port (1+ port))
-      (setq tries (1- tries)))
-    (if (> tries 0)
-        port
-      (if (fboundp 'mcpkit-allocate-free-port)
-          (mcpkit-allocate-free-port)
-        (+ base-port (random 1000))))))
-
-(defun bootstrap-mcpkit-instance-port ()
-  "Return a TCP port derived from `sprite-instance-name', stable across restarts.
-For named instances, the port is deterministic based on the instance name.
-For \"solo\" instances (or if the preferred port is already bound by another
-process), sequential probing starting at the base port assigns distinct,
-deterministic ports (base, base+1, base+2, ...) so concurrent instances
-never collide or fail to start."
-  (let* ((name (or (ignore-errors (sprite-instance-name))
-                   (bound-and-true-p sprite-instance-id)
-                   (system-name)
-                   "solo"))
-         (base-port (+ 20000 (mod (abs (sxhash-equal name)) 10000))))
-    (bootstrap-find-available-port base-port 50)))
-
-(defvar mcpkit-default-port nil
-  "Default TCP port for MCPKit server.
-Computed dynamically on demand by `bootstrap-mcpkit-instance-port'.")
-
-(defun bootstrap-load-mcp-services (&rest args)
-  "Require all packages in `bootstrap-mcp-packages' incrementally with `gen.el'.
-Wraps each load operation in `with-slow-op-timer' and emits individual
-registration messages without batch logging. Calls ON-DONE when complete.
-Keyword arguments: :on-done, :delay."
-  (interactive)
-  (let ((on-done (plist-get args :on-done))
-        (delay (or (plist-get args :delay) 0.01)))
-    (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-      (gen-run-async
-       (lambda (pkg done-cb)
-         (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
-           (require pkg nil t))
-         (funcall done-cb))
-       bootstrap-mcp-packages
-         :concurrency 1
-         :delay (or delay 0.01)
-         :on-done (lambda ()
-                    (with-slow-op-timer "<bootstrap> [mcpkit] post-load"
-                      (when (and (fboundp 'mcpkit-editing-register-tools)
-                                 (fboundp 'mcpkit-get-service)
-                                 (mcpkit-get-service 'emacs))
-                        (mcpkit-editing-register-tools 'emacs)))
-                    (when on-done (funcall on-done)))
-         :on-error (lambda (err)
-                    (message "[mcpkit]: load error: %S" err)))
-    ;; Synchronous fallback
-    (dolist (pkg bootstrap-mcp-packages)
-      (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
-        (require pkg nil t)))
-    (with-slow-op-timer "<bootstrap> [mcpkit] post-load"
-      (when (and (fboundp 'mcpkit-editing-register-tools)
-                 (fboundp 'mcpkit-get-service)
-                 (mcpkit-get-service 'emacs))
-        (mcpkit-editing-register-tools 'emacs)))
-    (when on-done (funcall on-done)))))
-
-(defun bootstrap-start-mcp-services ()
-  "Start all MCP services on this instance's stable port."
-  (with-slow-op-timer "<bootstrap> [mcpkit] start-services"
-    (let ((port (or (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
-                    mcpkit-default-port
-                    (setq mcpkit-default-port (bootstrap-mcpkit-instance-port)))))
-      (when (fboundp 'mcpkit-start-all-services)
-        (mcpkit-start-all-services port)))))
-
-(defun bootstrap-init-mcp-services (&rest args)
-  "Initialize and start MCPKit services configured in `bootstrap-mcp-packages'.
-If :sync is non-nil or running noninteractively, load and start synchronously."
-  (interactive)
-  (let ((sync (plist-get args :sync)))
-    (unless (and (fboundp 'mcpkit-active-port) (mcpkit-active-port))
-      (if (or sync noninteractive)
-        (progn
-          (dolist (pkg bootstrap-mcp-packages)
-            (with-slow-op-timer (format "<bootstrap> [mcpkit] load %s" pkg)
-              (require pkg nil t)))
-          (with-slow-op-timer "<bootstrap> [mcpkit] post-load"
-            (when (and (fboundp 'mcpkit-editing-register-tools)
-                       (fboundp 'mcpkit-get-service)
-                       (mcpkit-get-service 'emacs))
-              (mcpkit-editing-register-tools 'emacs)))
-          (bootstrap-start-mcp-services))
-      (bootstrap-load-mcp-services
-       :on-done #'bootstrap-start-mcp-services)))))
+(declare-function sprite-instance-name "sprite")
+(defvar mcpkit-instance-name-function)
+(setq mcpkit-instance-name-function #'sprite-instance-name)
 
 (declare-function orgx-global-mode "orgx")
 
-(defun bootstrap--execute-mode-function (fn)
-  "Execute mode or setup function FN idempotently with slow-op reporting."
-  (let ((name (cond
-               ((symbolp fn) (symbol-name fn))
-               ((byte-code-function-p fn) "<bytecode>")
-               (t "<function>")))
-	(nargs (length (help-function-arglist fn))))
-    (with-slow-op-timer (format "<bootstrap> [modes] %s" name)
-      (cond
-       ((eq nargs 0) (funcall fn))
-       ((eq nargs 1) (funcall fn 1))
-       (:else (error "[bootstrap] error enabling mode %s(%d): %s" name nargs (error-message-string err)))))))
+(defun bootstrap--execute-startup-operation (fn &optional frame)
+  "Execute startup operation FN in FRAME, reporting failures."
+  (condition-case err
+      (when (or (null frame) (frame-live-p frame))
+        (with-selected-frame (or frame (selected-frame))
+          (with-slow-op-timer (format "<bootstrap> [startup] %s" fn)
+            (if (equal (cdr (func-arity fn)) 0)
+                (funcall fn)
+              (funcall fn 1)))))
+    (error (message "[bootstrap] %s failed: %s" fn (error-message-string err)))))
 
-(defun bootstrap--resolve-hook-functions (hook)
-  "Return a flat list of callable functions from HOOK symbol or list."
-  (let ((val (cond
-              ((functionp hook) (list hook))
-              ((and (symbolp hook) (boundp hook)) (symbol-value hook))
-              ((listp hook) hook)
-              (t nil))))
-    (seq-filter (lambda (fn) (and fn (not (eq fn t))))
-                (flatten-tree (if (listp val) val (list val))))))
-
-(defun bootstrap-run-enable-modes-hook (hook &rest args)
-  "Run HOOK functions non-blockingly, yielding to the event loop between each.
-In interactive sessions, yields execution between functions via idle timers of
-DELAY seconds (default 0.05), giving the Emacs event loop time to process input and redraw.
-In `noninteractive' sessions, drains synchronously.
-Calls ON-DONE when iteration completes.
-Returns a cancellation function that halts pending iterations."
-  (interactive (list 'bootstrap-late-enable-modes-hook))
-  (let* ((delay (or (plist-get args :delay) 0.05))
-         (on-done (plist-get args :on-done))
-         (remaining (bootstrap--resolve-hook-functions hook))
-         (timer nil))
+(defun bootstrap-run-startup-operations (operations &rest args)
+  "Run OPERATIONS in order, yielding between them in interactive sessions.
+DELAY defaults to 0.1 seconds.  FRAME selects the frame for operations.
+Call ON-DONE after the last operation.  Return a cancellation function."
+  (let ((delay (or (plist-get args :delay) 0.1))
+        (on-done (plist-get args :on-done))
+        (frame (plist-get args :frame))
+        (remaining (copy-sequence operations))
+        (timer nil))
     (cond
      ((null remaining)
       (when on-done (funcall on-done))
       #'ignore)
      (noninteractive
-      (dolist (fn remaining)
-        (bootstrap--execute-mode-function fn))
+      (seq-do (lambda (fn) (bootstrap--execute-startup-operation fn frame))
+              remaining)
       (when on-done (funcall on-done))
       #'ignore)
      (t
@@ -451,7 +323,7 @@ Returns a cancellation function that halts pending iterations."
                 (lambda ()
                   (setq timer nil)
                   (when remaining
-                    (bootstrap--execute-mode-function (pop remaining))
+                    (bootstrap--execute-startup-operation (pop remaining) frame)
                     (if remaining
                         (setq timer (run-with-idle-timer delay nil step))
                       (when on-done (funcall on-done)))))))
@@ -462,9 +334,15 @@ Returns a cancellation function that halts pending iterations."
             (cancel-timer timer)
             (setq timer nil))))))))
 
-(defcustom bootstrap-early-enable-modes-hook
-  '(bootstrap-init-early-ui
-    bootstrap-global-show-whitespace-mode
+(bootstrap-require-package 'setup-project)
+(bootstrap-require-package 'setup-packages)
+
+(defun bootstrap-set-up-fringe-mode ()
+  (set-fringe-mode '(4 . 4)))
+
+(defcustom bootstrap-early-startup-operations
+  '(bootstrap-set-up-fringe-mode
+    bootstrap-trailing-whitespace-mode
     column-number-mode
     delete-selection-mode
     winner-mode
@@ -478,25 +356,12 @@ Returns a cancellation function that halts pending iterations."
     minaid-mode
     telegax-global-mode
     bootstrap-set-up-emacs-instance-persistence)
-  "Hook run during early bootstrap to enable core UI and editing modes."
-  :type 'hook
+  "UI, key binding, and persistence operations started early in bootstrap."
+  :type '(repeat function)
   :group 'bootstrap)
 
-(defun bootstrap-init-early-ui ()
-  "Initialize early fringe and default font."
-  (set-fringe-mode '(4 . 4))
-  (bootstrap-ensure-default-font))
-
-(defun bootstrap-init-early-modes (&optional on-done)
-  "Initialize core editor UI, display modes, font, and instance persistence."
-  (interactive)
-  (bootstrap-run-enable-modes-hook
-   'bootstrap-early-enable-modes-hook
-   :delay 0.01
-   :on-done on-done))
-
-(defcustom bootstrap-late-enable-modes-hook
-  '(bootstrap-init-project
+(defcustom bootstrap-late-startup-operations
+  '(bootstrap-require-pkg-setup-project
     popper-mode
     grepx-mode
     denote-dash-global-mode
@@ -508,77 +373,52 @@ Returns a cancellation function that halts pending iterations."
     nerd-icons-completion-mode
     orgx-global-mode
     global-auto-revert-mode
-    bootstrap-init-mcp-services)
-  "Hook run during late bootstrap to enable tool and integration modes."
-  :type 'hook
+    orgx-capture-setup-standard-templates
+    mcpkit-init-services
+    bootstrap-desktop-read-init)
+  "Behavior, integration, and session restore operations started later."
+  :type '(repeat function)
   :group 'bootstrap)
 
+(defcustom bootstrap-after-first-frame-operations
+  '(bootstrap-ensure-default-font
+    bootstrap-ensure-frame-alpha
+    disable-all-themes
+    bootstrap-default-theme
+    hud-modeline-mode)
+  "Appearance and modeline operations started after the first frame."
+  :type '(repeat function)
+  :group 'bootstrap)
 
-(defun bootstrap-init-project ()
-  "Load project management, projectile, and grepx modules."
-  (require 'setup-project)
-  (require 'projectile)
-  (require 'grepx))
-
-(defun bootstrap-init-integrations (&optional on-done)
-  "Initialize secondary tool integrations and modes via `bootstrap-late-enable-modes-hook'."
-  (interactive)
-  (bootstrap-run-enable-modes-hook
-   'bootstrap-late-enable-modes-hook
-   :delay 0.05
-   :on-done on-done))
-
-(defun bootstrap-init-late-services ()
-  "Initialize secondary tool integrations, services, and background maintenance synchronously."
-  (interactive)
-  (bootstrap-init-integrations)
-  (bootstrap-desktop-read-init)
-  (bootstrap-init-mcp-services :sync t)
-  (require 'setup-packages)
-  (elpaish-install-packages :async t)
-  (bootstrap-refresh-package-quickstart))
+(defcustom bootstrap-post-late-startup-operations
+  '(bootstrap-require-pkg-setup-packages
+    bootstrap-ensure-packages-installed
+    bootstrap-check-package-quickstart
+    builder-emacs-conf-native-compile-all)
+  "Package setup and maintenance operations started after late startup."
+  :type '(repeat function)
+  :group 'bootstrap)
 
 (add-lazy-init
- :name "<bootstrap> [early] ui & modes"
- :operation #'bootstrap-init-early-modes
- :delay 0.1)
-
-(add-lazy-init
- :name "<bootstrap> [late] integrations"
- :operation #'bootstrap-init-integrations
- :delay 0.8)
-
-(add-lazy-init
- :name "<bootstrap> [desktop] restore"
- :operation #'bootstrap-desktop-read-init
- :delay 1.8)
-
-(add-lazy-init
- :name "<bootstrap> [packages] elpaish ensure"
- :operation (lambda ()
-              (require 'setup-packages)
-              (elpaish-install-packages :async t))
- :delay 6.0)
-
-(add-lazy-init
- :name "<bootstrap> [packages] quickstart check"
- :operation #'bootstrap-refresh-package-quickstart
- :delay 10.0)
+ :name "<bootstrap> startup"
+ :delay 0.1
+ :form (bootstrap-run-startup-operations
+        (append bootstrap-early-startup-operations
+                bootstrap-late-startup-operations
+                bootstrap-post-late-startup-operations)))
 
 (add-one-shot-hook
  :name "<bootstrap> first-frame setup"
  :hook 'after-first-frame-created
- :form (progn
-	 (with-slow-op-timer "<bootstrap> [hook] enable hud-modeline"
-           (hud-modeline-mode 1))
-	 (with-slow-op-timer "<bootstrap> [hook] enable light theme"
-           (bootstrap-ensure-light-theme))))
+ :form (bootstrap-run-startup-operations
+	bootstrap-after-first-frame-operations
+        :frame (selected-frame)))
 
-(defvar tychoish/startup-complete-time nil
+(defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
 
-(defun tychoish/startup-report-timing ()
-  (let ((startup-time (float-time (time-subtract tychoish/startup-complete-time before-init-time)))
+(defun bootstrap-report-startup-timing ()
+  (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))
 	(init-time (float-time (time-subtract after-init-time before-init-time)))
 	(wall-time (float-time (time-since before-init-time))))
     (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
@@ -588,29 +428,16 @@ Returns a cancellation function that halts pending iterations."
       (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
 	     :title (format "emacs-%s" sprite-instance-id)))))
 
-(defun tychoish/startup-mark-complete ()
-  (unless tychoish/startup-complete-time
-    (setq tychoish/startup-complete-time (current-time))))
+(defun bootstrap-startup-mark-complete ()
+  (unless bootstrap-startup-complete-time
+    (setq bootstrap-startup-complete-time (current-time))))
 
-(add-hook 'emacs-startup-hook #'tychoish/startup-mark-complete 99)
-(add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'tychoish/startup-report-timing 100)
+(defun bootstrap-setup-custom-file ()
+  (setq custom-file (sprite-state-path "custom.el")))
 
-(add-one-shot-hook
- :name "<bootstrap> set-custom-file"
- :hook 'after-init-hook
- :form (setq custom-file (sprite-state-path "custom.el"))
- ;; Depth below 0: must run before `package--save-selected-packages'.
- :depth -90)
-
-(add-one-shot-hook
- :name "ssh-agent"
- :form (bootstrap-set-up-ssh-agent)
- :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
-
-(add-lazy-init
- :name "native-compile-async"
- :delay 60
- :operation #'builder-emacs-conf-native-compile-all)
+(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
+(add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
+(add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'bootstrap-report-startup-timing 100)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -704,30 +531,27 @@ Returns a cancellation function that halts pending iterations."
       (set-frame-font new-font-name nil t)))
   (assoc 'font default-frame-alist))
 
-(defun bootstrap-ensure-font (font-face-name size)
-  (unless (assoc 'font default-frame-alist)
-    (bootstrap-setup-font font-face-name size)))
+(defvar bootstrap-trailing-whitespace-mode)
 
-(defun bootstrap-ensure-default-font ()
-  (bootstrap-ensure-font "Source Code Pro" 13))
+(defun bootstrap--set-trailing-whitespace ()
+  "Apply `bootstrap-trailing-whitespace-mode' in the current buffer."
+  (setq-local show-trailing-whitespace bootstrap-trailing-whitespace-mode))
 
-(define-minor-mode bootstrap-show-whitespace-mode
-  "Buffer-local minor mode to show trailing whitespace."
-  :lighter ""
-  (setq-local show-trailing-whitespace (if bootstrap-show-whitespace-mode t nil)))
-
-(defun bootstrap-set-up-show-whitespace ()
-  "Enable whitespace visualization in current buffer."
-  (interactive)
-  (bootstrap-show-whitespace-mode 1)
-  t)
-
-(define-globalized-minor-mode bootstrap-global-show-whitespace-mode
-  bootstrap-show-whitespace-mode
-  (lambda ()
-    (when (derived-mode-p 'prog-mode 'text-mode)
-      (bootstrap-show-whitespace-mode 1)))
-  :group 'bootstrap)
+(define-minor-mode bootstrap-trailing-whitespace-mode
+  "Show trailing whitespace in programming and text buffers."
+  :global t
+  :group 'bootstrap
+  (if bootstrap-trailing-whitespace-mode
+      (progn
+        (add-hook 'prog-mode-hook #'bootstrap--set-trailing-whitespace)
+        (add-hook 'text-mode-hook #'bootstrap--set-trailing-whitespace))
+    (remove-hook 'prog-mode-hook #'bootstrap--set-trailing-whitespace)
+    (remove-hook 'text-mode-hook #'bootstrap--set-trailing-whitespace))
+  (seq-do (lambda (buffer)
+            (with-current-buffer buffer
+              (when (derived-mode-p 'prog-mode 'text-mode)
+                (bootstrap--set-trailing-whitespace))))
+          (buffer-list)))
 
 (setq modus-themes-deuteranopia t)
 (setq modus-themes-common-palette-overrides
@@ -739,31 +563,24 @@ Returns a cancellation function that halts pending iterations."
   (interactive)
   (mapc #'disable-theme custom-enabled-themes))
 
-(defun bootstrap-load-light-theme ()
+(defun bootstrap-ensure-font (font-face-name size)
+  (unless (assoc 'font default-frame-alist)
+    (bootstrap-setup-font font-face-name size)))
+
+(defun bootstrap-ensure-default-font ()
+  (bootstrap-ensure-font "Source Code Pro" 13))
+
+(defun bootstrap-ensure-frame-alpha ()
+  "Default frame opacity to 95 percent, including the selected frame."
+  (unless (map-elt default-frame-alist 'alpha)
+    (add-to-list 'default-frame-alist '(alpha . 95)))
+  (when (and (display-graphic-p) (not (frame-parameter nil 'alpha)))
+    (set-frame-parameter nil 'alpha (map-elt default-frame-alist 'alpha))))
+
+(defun bootstrap-default-theme ()
   (interactive)
-  (disable-all-themes)
   (when (load-theme 'modus-operandi t t)
-    (enable-theme 'modus-operandi))
-  (unless (map-elt default-frame-alist 'alpha)
-    (add-to-list 'default-frame-alist '(alpha . 95))))
-
-(defun bootstrap-ensure-light-theme ()
-  (unless custom-enabled-themes
-    (with-slow-op-timer "<bootstrap> [theme] load light theme"
-      (bootstrap-load-light-theme))))
-
-(defun bootstrap-load-dark-theme ()
-  (interactive)
-  (disable-all-themes)
-  (when (load-theme 'modus-vivendi t t)
-    (enable-theme 'modus-vivendi))
-  (unless (map-elt default-frame-alist 'alpha)
-    (add-to-list 'default-frame-alist '(alpha . 95))))
-
-(defun bootstrap-ensure-dark-theme ()
-  (unless custom-enabled-themes
-    (with-slow-op-timer "<bootstrap> [theme] load dark theme"
-      (bootstrap-load-dark-theme))))
+    (enable-theme 'modus-operandi)))
 
 (defun tk-faces-setup (&rest _)
   (when (featurep 'modus-themes)
@@ -781,6 +598,11 @@ Returns a cancellation function that halts pending iterations."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
+
+(add-one-shot-hook
+ :name "ssh-agent"
+ :form (bootstrap-set-up-ssh-agent)
+ :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (defun find-ssh-agent-socket-candidates ()
   (thread-last

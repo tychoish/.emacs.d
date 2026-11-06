@@ -931,31 +931,38 @@
       (should (or (null result) (stringp result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-set-up-show-whitespace
+;;; bootstrap-trailing-whitespace-mode
 
-(ert-deftest bootstrap/show-whitespace-enables ()
-  "Sets `show-trailing-whitespace' to t in the current buffer."
-  (with-temp-buffer
-    (setq-local show-trailing-whitespace nil)
-    (bootstrap-set-up-show-whitespace)
-    (should show-trailing-whitespace)))
-
-(ert-deftest bootstrap/show-whitespace-is-buffer-local ()
-  "Setting does not affect other buffers."
-  (let ((other (get-buffer-create " *bootstrap-wspc-test*")))
+(ert-deftest bootstrap/show-whitespace-global-mode ()
+  "Enable existing and future programming/text buffers, and disable them."
+  (let ((prog-mode-hook nil)
+        (text-mode-hook nil)
+        (bootstrap-trailing-whitespace-mode nil)
+        (code (generate-new-buffer " *bootstrap-whitespace-code*"))
+        (text (generate-new-buffer " *bootstrap-whitespace-text*"))
+        (other (generate-new-buffer " *bootstrap-whitespace-other*")))
     (unwind-protect
         (progn
-          (with-current-buffer other
-            (setq-local show-trailing-whitespace nil))
-          (with-temp-buffer
-            (bootstrap-set-up-show-whitespace))
-          (should-not (buffer-local-value 'show-trailing-whitespace other)))
+          (with-current-buffer code (prog-mode))
+          (with-current-buffer other (fundamental-mode))
+          (cl-letf (((symbol-function 'buffer-list) (lambda (&rest _) (list code text other))))
+            (bootstrap-trailing-whitespace-mode 1)
+            (should (buffer-local-value 'show-trailing-whitespace code))
+            (should-not (buffer-local-value 'show-trailing-whitespace other))
+            (with-current-buffer text (text-mode))
+            (should (buffer-local-value 'show-trailing-whitespace text))
+            (bootstrap-trailing-whitespace-mode -1)
+            (should-not (buffer-local-value 'show-trailing-whitespace code))
+            (should-not (buffer-local-value 'show-trailing-whitespace text))
+            (should-not (memq #'bootstrap--set-trailing-whitespace prog-mode-hook))
+            (should-not (memq #'bootstrap--set-trailing-whitespace text-mode-hook))))
+      (kill-buffer code)
+      (kill-buffer text)
       (kill-buffer other))))
 
-(ert-deftest bootstrap/show-whitespace-returns-t ()
-  "Return value is t."
-  (with-temp-buffer
-    (should (eq t (bootstrap-set-up-show-whitespace)))))
+(ert-deftest bootstrap/show-whitespace-mode-starts-early ()
+  "The global mode is included in the early startup operations."
+  (should (memq 'bootstrap-trailing-whitespace-mode bootstrap-early-startup-operations)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-buffers-visiting-missing-files
@@ -1157,11 +1164,11 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-run-enable-modes-hook (generator iterator)
+;;; bootstrap-run-startup-operations (generator iterator)
 
 (ert-deftest bootstrap/chex-mode-available-to-startup-hook ()
   "The late startup hook can invoke Chex before it has been loaded."
-  (should (memq 'chex-global-mode bootstrap-late-enable-modes-hook))
+  (should (memq 'chex-global-mode bootstrap-late-startup-operations))
   (should (fboundp 'chex-global-mode)))
 
 (ert-deftest bootstrap/run-enable-modes-hook-noninteractive ()
@@ -1172,9 +1179,41 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (test-hook (list (lambda (arg) (push (cons 'f1 arg) order))
                           (lambda () (push 'f2 order))
                           (lambda (arg) (push (cons 'f3 arg) order)))))
-    (bootstrap-run-enable-modes-hook test-hook :on-done (lambda () (setq done t)))
+    (bootstrap-run-startup-operations test-hook :on-done (lambda () (setq done t)))
     (should (equal '((f1 . 1) f2 (f3 . 1)) (nreverse order)))
     (should (eq t done))))
+
+(ert-deftest bootstrap/startup-operation-uses-actual-arity ()
+  "Enable optional-argument modes and call zero-argument operations without arguments."
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'help-function-arglist)
+               (lambda (&rest _) '(&rest args))))
+      (bootstrap--execute-startup-operation (lambda () (push 'zero calls)))
+      (bootstrap--execute-startup-operation (lambda (&optional arg) (push arg calls)))
+      (should (equal (reverse calls) '(zero 1))))))
+
+(defvar bootstrap--test-autoload-result nil)
+
+(ert-deftest bootstrap/startup-operation-resolves-autoload-arity ()
+  "Resolve unloaded autoloads before choosing the operation argument."
+  (let ((file (make-temp-file "bootstrap-autoload-" nil ".el"))
+        (bootstrap--test-autoload-result nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun bootstrap--test-autoload-zero () "
+                    "(setq bootstrap--test-autoload-result 'zero))\n"
+                    "(defun bootstrap--test-autoload-mode (&optional arg) "
+                    "(setq bootstrap--test-autoload-result arg))\n"))
+          (autoload 'bootstrap--test-autoload-zero file)
+          (autoload 'bootstrap--test-autoload-mode file)
+          (bootstrap--execute-startup-operation 'bootstrap--test-autoload-zero)
+          (should (eq bootstrap--test-autoload-result 'zero))
+          (bootstrap--execute-startup-operation 'bootstrap--test-autoload-mode)
+          (should (eq bootstrap--test-autoload-result 1)))
+      (fmakunbound 'bootstrap--test-autoload-zero)
+      (fmakunbound 'bootstrap--test-autoload-mode)
+      (delete-file file))))
 
 (ert-deftest bootstrap/run-enable-modes-hook-catches-errors ()
   "Errors in individual hook functions are caught and iteration continues."
@@ -1184,9 +1223,71 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (test-hook (list (lambda (arg) (push 'f1 order))
                           (lambda () (error "simulated mode failure"))
                           (lambda (arg) (push 'f3 order)))))
-    (bootstrap-run-enable-modes-hook test-hook :on-done (lambda () (setq done t)))
+    (bootstrap-run-startup-operations test-hook :on-done (lambda () (setq done t)))
     (should (equal '(f1 f3) (nreverse order)))
     (should (eq t done))))
+
+(ert-deftest bootstrap/startup-mcp-operation-passes-no-mode-argument ()
+  "The MCP initializer is a startup operation and receives no mode argument."
+  (let ((called nil)
+        (noninteractive t))
+    (should (memq 'mcpkit-init-services bootstrap-late-startup-operations))
+    (cl-letf (((symbol-function 'mcpkit-init-services)
+               (lambda () (setq called t))))
+      (bootstrap-run-startup-operations '(mcpkit-init-services))
+      (should called))))
+
+(ert-deftest bootstrap/require-package-defines-startup-operation ()
+  "Bare and quoted feature symbols define a zero-argument requiring function."
+  (should (eq 'bootstrap-require-pkg-subr-x
+              (bootstrap-require-package subr-x)))
+  (should (eq 'bootstrap-require-pkg-seq
+              (bootstrap-require-package 'seq)))
+  (should (eq 0 (car (func-arity 'bootstrap-require-pkg-seq))))
+  (should (null (bootstrap-require-pkg-seq)))
+  (should (memq 'bootstrap-require-pkg-setup-project
+                bootstrap-late-startup-operations))
+  (should (fboundp 'bootstrap-require-pkg-setup-project)))
+
+(ert-deftest bootstrap/require-package-validates-feature-provided ()
+  "The defined function errors when requiring does not provide the feature."
+  (bootstrap-require-package bootstrap-test-never-provided)
+  (cl-letf (((symbol-function 'require) (lambda (&rest _) nil)))
+    (should-error (bootstrap-require-pkg-bootstrap-test-never-provided))))
+
+(ert-deftest bootstrap/require-package-rejects-non-symbols ()
+  "Non-symbol arguments fail at macro-expansion time."
+  (should-error (macroexpand '(bootstrap-require-package "seq")))
+  (should-error (macroexpand '(bootstrap-require-package nil))))
+
+(ert-deftest bootstrap/post-late-startup-runs-package-operations-in-order ()
+  "Start installation asynchronously and continue with package maintenance."
+  (let ((order nil)
+        (noninteractive t))
+    (cl-letf (((symbol-function 'bootstrap-require-pkg-setup-packages)
+               (lambda () (push 'require order)))
+              ((symbol-function 'elpaish-install-packages)
+               (lambda (&rest args)
+                 (should (plist-get args :async))
+                 (push 'install order)))
+              ((symbol-function 'bootstrap-check-package-quickstart)
+               (lambda () (push 'refresh order)))
+              ((symbol-function 'builder-emacs-conf-native-compile-all)
+               (lambda () (push 'compile order))))
+      (bootstrap-run-startup-operations bootstrap-post-late-startup-operations)
+      (should (equal (reverse order) '(require install refresh compile))))))
+
+(ert-deftest bootstrap/frame-alpha-preserves-configured-default ()
+  "Apply an existing default opacity to a frame without an explicit value."
+  (let ((default-frame-alist '((alpha . 87)))
+        (applied nil))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+              ((symbol-function 'frame-parameter) (lambda (&rest _) nil))
+              ((symbol-function 'set-frame-parameter)
+               (lambda (_frame parameter value) (setq applied (cons parameter value)))))
+      (bootstrap-ensure-frame-alpha)
+      (should (equal applied '(alpha . 87)))
+      (should (equal default-frame-alist '((alpha . 87)))))))
 
 (ert-deftest bootstrap/run-enable-modes-hook-cancel ()
   "Cancellation function halts pending execution in interactive mode."
@@ -1194,7 +1295,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (noninteractive nil)
          (test-hook (list (lambda (arg) (push 'f1 order))
                           (lambda (arg) (push 'f2 order))))
-         (cancel-fn (bootstrap-run-enable-modes-hook test-hook :delay 10.0)))
+         (cancel-fn (bootstrap-run-startup-operations test-hook :delay 10.0)))
     (funcall cancel-fn)
     (should (null order))))
 
@@ -1255,6 +1356,24 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (when (file-exists-p tmp-file)
         (delete-file tmp-file)))))
 
+(ert-deftest bootstrap/quickstart-compilation-is-silent-on-errors ()
+  "Compiler errors during quickstart refresh do not display or log warnings."
+  (require 'bytecomp)
+  (let ((file (make-temp-file "quickstart-error-" nil ".el"))
+        (byte-compile-log-buffer " *quickstart-test-compile-log*")
+        (warning-inhibit-types nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file (insert ";;; -*- lexical-binding: t; -*-\n(\n"))
+          (ad:package-quickstart-refresh--optimize
+           (lambda () (byte-compile-file file)))
+          (when-let* ((buffer (get-buffer byte-compile-log-buffer)))
+            (with-current-buffer buffer
+              (should-not (string-match-p "Error:" (buffer-string))))))
+      (when-let* ((buffer (get-buffer byte-compile-log-buffer)))
+        (kill-buffer buffer))
+      (delete-file file))))
+
 (ert-deftest bootstrap/package-quickstart-stale-p-detects-missing-elc ()
   "Test that stale-p returns non-nil when the .elc file is missing."
   (let* ((tmp-el (make-temp-file "test-qs-" nil ".el"))
@@ -1262,6 +1381,34 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
     (unwind-protect
         (should (bootstrap-package-quickstart-stale-p))
       (when (file-exists-p tmp-el) (delete-file tmp-el)))))
+
+(ert-deftest bootstrap/startup-refreshes-quickstart-only-when-stale ()
+  "Startup checks freshness before refreshing the quickstart."
+  (let ((stale nil)
+        (refreshes 0))
+    (cl-letf (((symbol-function 'bootstrap-package-quickstart-stale-p)
+               (lambda () stale))
+              ((symbol-function 'bootstrap-sync-package-load-paths) #'ignore)
+              ((symbol-function 'package-quickstart-refresh)
+               (lambda () (setq refreshes (1+ refreshes)))))
+      (should (memq 'bootstrap-check-package-quickstart
+                    bootstrap-post-late-startup-operations))
+      (bootstrap--execute-startup-operation 'bootstrap-check-package-quickstart)
+      (should (= refreshes 0))
+      (setq stale t)
+      (bootstrap--execute-startup-operation 'bootstrap-check-package-quickstart)
+      (should (= refreshes 1)))))
+
+(ert-deftest bootstrap/elpaish-refreshes-quickstart-after-changes ()
+  "Only successful package changes schedule a quickstart refresh."
+  (let ((refreshes 0))
+    (cl-letf (((symbol-function 'ad:refresh-package-quickstart)
+               (lambda (&rest _) (setq refreshes (1+ refreshes)))))
+      (bootstrap-refresh-quickstart-after-elpaish '((:status :failed) (:status :up-to-date)) 'install)
+      (should (= refreshes 0))
+      (bootstrap-refresh-quickstart-after-elpaish '((:status :installed)) 'install)
+      (bootstrap-refresh-quickstart-after-elpaish '((:status :upgraded)) 'upgrade)
+      (should (= refreshes 2)))))
 
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here

@@ -14,7 +14,6 @@
 (autoload 'hud-mode "hud-mode" nil t)
 
 (autoload 'hud-transient-insert-suffix-once "hud")
-(autoload 'bootstrap-load-abbrev-files "bootstrap")
 (autoload 'bootstrap-set-up-auto-save "bootstrap")
 (autoload 'font-lock-width-keyword "hud-mode")
 (autoload 'font-lock-show-tabs "hud-mode")
@@ -64,44 +63,10 @@
 (add-hook 'isearch-mode-hook #'anzu-mode)
 (setq anzu-cons-mode-line-p nil)
 
-(autoload 'tychoish/agent-shell-antigravity-bootstrap "setup-agent-shell")
-
-(add-lazy-init
- :name "<bootstrap> agent-shell antigravity"
- :delay 20
- :operation (lambda ()
-              (require 'agent-shell)
-              (tychoish/agent-shell-antigravity-bootstrap)))
-
-(add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
 (add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
 (add-hook 'org-mode-hook #'orgx-mode-turn-on)
 (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
-
-(defun tempel-setup-capf ()
-  (setq-local completion-at-point-functions
-              (cons #'tempel-complete completion-at-point-functions)))
-
-(defun tempel-open-custom-file ()
-  (interactive)
-  (find-file (expand-file-name "templates" user-emacs-directory)))
-
-(add-hook 'conf-mode-hook #'tempel-setup-capf)
-(add-hook 'prog-mode-hook #'tempel-setup-capf)
-(add-hook 'text-mode-hook #'tempel-setup-capf)
-
-(with-eval-after-load 'tempel
-  (setq tempel-path (expand-file-name "templates" user-emacs-directory)))
-
-(with-eval-after-load 'marginalia
-  (add-to-list 'marginalia-command-categories '(consult-completion-in-region . imenu)))
-
-(add-lazy-init
- :name "<bootstrap> [orgx] capture templates"
- :operation #'orgx-capture-setup-standard-templates
- :delay 0.05)
-
 
 (with-eval-after-load 'arch
   (defun arch-alert-after-install (pkg)
@@ -214,11 +179,29 @@
 
   (add-hook 'comint-mode-hook 'ansi-color-for-comint-mode-on)
   (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
-  (add-hook 'shell-mode-hook #'minaid-corfu-prog-mode-setup)
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
   (keymap-set comint-mode-map "M-p" #'comint-previous-input)
   (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
   (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
+
+(with-eval-after-load 'abbev
+  (defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
+    "Cache mapping file names to files' mtime to avoid re-importing files.")
+
+  (defun should-read-abbrev-file-p (path)
+    (or (not (map-contains-key bootstrap-abbrev-files-cache path))
+	(time-less-p (map-elt bootstrap-abbrev-files-cache path)
+                     (file-attribute-modification-time (file-attributes path)))))
+
+  (defun bootstrap-load-abbrev-files ()
+    (thread-last
+      (directory-files (file-name-concat user-emacs-directory "abbrev") t ".el*" :nosort)
+      (seq-filter #'should-read-abbrev-file-p)
+      (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
+      (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
+                               (file-attribute-modification-time (file-attributes it)))))))
+
+  (add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files))
 
 (with-eval-after-load 'dabbrev
   (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
@@ -243,8 +226,6 @@
           newline-mark)))
 
 (with-eval-after-load 'nerd-icons
-  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
-
   (add-to-list 'nerd-icons-mode-icon-alist
                '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))
 
@@ -694,7 +675,6 @@ clipboard."
   (delight 'cursor-sensor-mode nil 'cursor-sensor)
   (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications)
   (delight 'terraform-mode "tf" 'terraform-mode))
-
 
 (provide 'setup-hooks)
 ;;; setup-hooks.el ends here
