@@ -61,7 +61,7 @@
 (setq use-short-answers t)
 (setq ollama-tailnet-fallback-strategy :auto-local)
 (setq load-prefer-newer t)
-(setq indent-tabs-mode nil) ; (setq tab-width 4)
+(setq-default indent-tabs-mode nil) ; (setq tab-width 4)
 (setq shell-command-dont-erase-buffer 'end-last-out)
 (setq undo-auto-current-boundary-timer t)
 (setq comment-auto-fill-only-comments t)
