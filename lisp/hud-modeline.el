@@ -29,6 +29,7 @@
 (require 'map)
 (require 'seq)
 (require 'cl-lib)
+(require 'xtd-macro)
 
 (declare-function anzu--reset-status "anzu")
 (declare-function flycheck-count-errors "flycheck")
@@ -54,6 +55,8 @@
   :type 'boolean
   :group 'hud-modeline)
 
+(create-toggle-functions hud-modeline-icons)
+
 (defcustom hud-modeline-mode-max-length 12
   "Maximum characters for major mode name before truncation."
   :type 'integer
@@ -63,6 +66,8 @@
   "Show total buffer size (chars) in the mode line."
   :type 'boolean
   :group 'hud-modeline)
+
+(create-toggle-functions hud-modeline-show-buffer-size)
 
 (defcustom hud-modeline-box-style nil
   "Mode-line box style as a list of features to enable (or nil for no box).
