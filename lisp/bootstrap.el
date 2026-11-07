@@ -37,15 +37,19 @@
 
 (require 'sprite)
 (require 'sprite-state)
-(require 'xtd-macro)
 (require 'cmdr-macros)
 (require 'cmdr-mode)
+(require 'cmdr-ops)
+(require 'cmdr-frame)
 
 (defvar local-notes-directory nil
   "Directory where notes are stored.")
 
 (defvar user-org-directories nil
   "Extra directories containing org files.")
+
+(defvar bootstrap-startup-complete-time nil
+  "Timestamp when startup finished.")
 
 (autoload 'overmark-global-mode "overmark" "Highlight annotations in text buffers." t)
 (autoload 'eglox-global-mode "eglox" "Global minor mode managing Eglot LSP lifecycle." t)
@@ -104,8 +108,10 @@
     winner-mode
     electric-pair-mode
     pixel-scroll-precision-mode
+    xterm-mouse-mode
     repeat-mode
     cmdr-mode
+    cmdr-frame-mode
     sprite-mode
     which-key-mode
     eglox-global-mode
@@ -137,36 +143,44 @@
 
 (setq sprite-first-frame-operations
   '(bootstrap-ensure-default-font
-    bootstrap-ensure-frame-alpha
+    ensure-frame-opacity
     disable-all-themes
     bootstrap-default-theme
     hud-modeline-mode))
-
-(add-one-shot-hook
- :name "<bootstrap> first-frame setup"
- :hook 'after-first-frame-created
- :form (sprite-run-startup-operations
-        sprite-first-frame-operations
-        :frame (selected-frame)))
 
 (add-hook 'emacs-startup-hook #'sprite-run-startup-operations)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
-(add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'bootstrap-report-startup-timing 100)
+(add-hook 'window-setup-hook #'bootstrap-after-first-frame)
+(add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
 
 (defun bootstrap-require-setup-project () (require 'setup-project))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
-(defun bootstrap-silent-savehist () (with-silence (savehist-mode 1)))
-(defun bootstrap-silent-recentf () (with-silence (recentf-mode 1)))
+(defun bootstrap-silent-savehist () (let ((inhibit-message t) (message-log-max nil)) (savehist-mode 1)))
+(defun bootstrap-silent-recentf () (let ((inhibit-message t) (message-log-max nil)) (recentf-mode 1)))
 (defun bootstrap-package-quickstart () (bootstrap-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
+(defun bootstrap-after-first-frame () (sprite-run-startup-operations sprite-first-frame-operations :frame (selected-frame)))
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
+(defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
+(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 
-(defvar bootstrap-startup-complete-time nil
-  "Timestamp when startup finished.")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; functions -- initialization
+
+(defun bootstrap-load-user-local-config ()
+  "Load all .el files in PATH."
+  (let ((path (expand-file-name "user" user-emacs-directory)))
+    (add-to-list 'load-path path)
+
+    (dolist (file (directory-files path :full "\\.el$") nil)
+      (let ((name (file-name-sans-extension (file-name-nondirectory file))))
+	(with-sprite-slow-op-timer (format "<init> [user] %s" name)
+	  (require (intern name)))))))
 
 (defun bootstrap-report-startup-timing ()
   (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))
@@ -178,17 +192,6 @@
     (when (fboundp 'alert)
       (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
 	     :title (format "emacs-%s" sprite-instance-id)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; bootstrap load user files
-
-(defun bootstrap-set-up-user-local-config (path)
-  "Load all .el files in PATH."
-  (dolist (file (directory-files path :full "\\.el$") nil)
-    (let ((name (file-name-sans-extension (file-name-nondirectory file))))
-      (with-slow-op-timer (format "<init> [user] %s" name)
-	(require (intern name))))))
 
 (defun bootstrap-set-notes-directory (&optional path)
   "Set notes directory to PATH and update note paths."
@@ -212,37 +215,6 @@
   (setq deft-directory (file-name-concat local-notes-directory "deft"))
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; frame/window -- setup and manage frames and windows
-;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
-
-(defun bootstrap-setup-font (font-face-name size)
-  (interactive "sName: \nNSize: ")
-  (let ((new-font-name (concat font-face-name "-" (number-to-string size)))
-	(font-cell (assoc 'font default-frame-alist)))
-    (if font-cell
-	(setcdr font-cell new-font-name)
-      (add-to-list 'default-frame-alist (cons 'font new-font-name)))
-    (when (display-graphic-p)
-      (set-frame-font new-font-name nil t)))
-  (map-elt default-frame-alist 'font))
-
-(defun bootstrap-ensure-font (font-face-name size)
-  (unless (map-elt default-frame-alist 'font)
-    (bootstrap-setup-font font-face-name size)))
-
-(defun bootstrap-ensure-frame-alpha ()
-  "Ensure frame opacity defaults to 95%."
-  (unless (map-elt default-frame-alist 'alpha)
-    (add-to-list 'default-frame-alist '(alpha . 95)))
-  (when (and (display-graphic-p) (not (frame-parameter nil 'alpha)))
-    (set-frame-parameter nil 'alpha (map-elt default-frame-alist 'alpha))))
-
-(defun disable-all-themes () (interactive) (mapc #'disable-theme custom-enabled-themes))
-(defun bootstrap-ensure-default-font () (bootstrap-ensure-font "Source Code Pro" 13))
-(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

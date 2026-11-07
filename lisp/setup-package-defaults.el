@@ -30,6 +30,22 @@
                                    ("gnu" . 25)
                                    ("jcs-elpa" . 10)))
 
+(setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
+
+(defun bootstrap-initialize-packages ()
+  "Initialize packages from quickstart file, or perform cold bootstrap."
+  (let ((quickstart-target (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
+                             (if (file-exists-p elc) elc package-quickstart-file))))
+    (if (file-exists-p quickstart-target)
+        (load quickstart-target t t t t)
+      (require 'package)
+      (package-activate-all)
+      (unless (package-installed-p 'elpaish)
+        (package-install 'elpaish))
+      (require 'setup-packages)
+      (elpaish-install-packages :sync t)
+      (bootstrap-refresh-package-quickstart t))))
+
 (defvar bootstrap--package-quickstart-refresh-timer nil
   "Timer used to debounce calls to `package-quickstart-refresh'.")
 

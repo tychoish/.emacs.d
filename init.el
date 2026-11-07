@@ -15,61 +15,36 @@
   (setq initial-major-mode 'fundamental-mode)
   (setq initial-scratch-message nil)
   (setq inhibit-startup-message t)
-  ;; (setq use-package-compute-statistics t)
   (setq user-emacs-directory (expand-file-name user-emacs-directory))
   (setq server-use-tcp t)
   ;; (setq server-host "127.0.0.1")
   ;; (setq server-port 2286)
 
-  (with-slow-op-timer "<init> package all"
+  (with-slow-op-timer "<init> [local] all"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
-    (with-slow-op-timer "<init> [local] require clix"
+    (with-slow-op-timer "<init> [local] [feature] require clix"
       (require 'clix))
 
-    (with-slow-op-timer "<init> [local] require setup-package-defaults.el"
+    (with-slow-op-timer "<init> [local] [packaging] require setup-package-defaults.el"
       (require 'setup-package-defaults))
 
-    (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
+    (with-slow-op-timer "<init> [local] [packaging] initialize"
+      (bootstrap-initialize-packages))
 
-    (let ((quickstart-target (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
-                               (if (file-exists-p elc) elc package-quickstart-file))))
-      (if (file-exists-p quickstart-target)
-          (with-slow-op-timer "<init> [warm] package quickstart"
-            (load quickstart-target t t t t))
-        (with-slow-op-timer "<init> [cold] bootstrap packages"
-          (with-slow-op-timer "<init> package activation"
-            (require 'package)
-            (package-activate-all))
-          (with-slow-op-timer "<init> [cold] install elpaish"
-            (unless (package-installed-p 'elpaish)
-              (package-install 'elpaish)))
-          (with-slow-op-timer "<init> [cold] setup packages"
-            (require 'setup-packages))
-          (with-slow-op-timer "<init> [cold] install all configured packages"
-            (elpaish-install-packages :sync t))
-          (with-slow-op-timer "<init> [cold] generate package quickstart"
-            (bootstrap-refresh-package-quickstart t)))))
-
-    (with-slow-op-timer "<init> [local] require all"
-      (with-slow-op-timer "<init> [local] [feature] require bootstrap.el"
+    (with-slow-op-timer "<init> [local] [config] all"
+      (with-slow-op-timer "<init> [local] [config] require bootstrap.el"
         (require 'bootstrap))
 
       (with-slow-op-timer "<init> [local] [config] require setup-defaults.el"
         (require 'setup-defaults))
 
-      (with-slow-op-timer "<init> [local] [config] require setup-hooks.el"
-        (require 'setup-hooks))
-
-      ;; remaining use-package declarations.
       (with-slow-op-timer "<init> [local] [config] require setup-core.el"
         (require 'setup-core))))
 
   ;; load the user/*.el files
-  (with-slow-op-timer "<init> [user] load all"
-    (let ((user-libs-dir (expand-file-name "user" user-emacs-directory)))
-      (add-to-list 'load-path user-libs-dir)
-      (bootstrap-set-up-user-local-config user-libs-dir)))))
+  (with-slow-op-timer "<init> [user] all"
+    (bootstrap-load-user-local-config))))
 
 (provide 'init)
 ;;; init.el ends here

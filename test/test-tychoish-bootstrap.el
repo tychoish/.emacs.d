@@ -6,6 +6,7 @@
 ;;   (ert "^bootstrap/")
 
 (require 'ert)
+(require 'test-helper)
 (require 'overmark)
 (require 'cl-lib)
 (require 'bootstrap)
@@ -584,52 +585,20 @@
     (should-not (unfill-region (point-min) (point-max)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-setup-font
-
-(ert-deftest bootstrap/setup-font-adds-entry ()
-  "Adds a font entry to `default-frame-alist' when absent."
-  (let ((default-frame-alist nil))
-    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
-      (bootstrap-setup-font "Monospace" 12)
-      (should (assoc 'font default-frame-alist)))))
-
-(ert-deftest bootstrap/setup-font-name-size-format ()
-  "Font value is \"NAME-SIZE\"."
-  (let ((default-frame-alist nil))
-    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
-      (bootstrap-setup-font "Monospace" 12)
-      (should (equal "Monospace-12" (cdr (assoc 'font default-frame-alist)))))))
-
-(ert-deftest bootstrap/setup-font-updates-existing-in-place ()
-  "Updates an existing font entry without creating a duplicate."
-  (let ((default-frame-alist (list (cons 'font "OldFont-10"))))
-    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
-      (bootstrap-setup-font "NewFont" 14)
-      (should (= 1 (length (seq-filter (lambda (it) (eq (car it) 'font)) default-frame-alist))))
-      (should (equal "NewFont-14" (cdr (assoc 'font default-frame-alist)))))))
-
-(ert-deftest bootstrap/setup-font-returns-alist-entry ()
-  "Returns the configured font string."
-  (let ((default-frame-alist nil))
-    (cl-letf (((symbol-function 'set-frame-font) #'ignore))
-      (let ((result (bootstrap-setup-font "Mono" 11)))
-        (should (equal "Mono-11" result))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-ensure-font
+;;; ensure-frame-font
 
 (ert-deftest bootstrap/ensure-font-sets-when-absent ()
   "Sets font when no font entry exists in `default-frame-alist'."
   (let ((default-frame-alist nil))
     (cl-letf (((symbol-function 'set-frame-font) #'ignore))
-      (bootstrap-ensure-font "Mono" 12)
+      (ensure-frame-font "Mono" 12)
       (should (assoc 'font default-frame-alist)))))
 
 (ert-deftest bootstrap/ensure-font-noop-when-present ()
   "Does nothing when a font entry already exists."
   (let ((default-frame-alist (list (cons 'font "Existing-10"))))
     (cl-letf (((symbol-function 'set-frame-font) #'ignore))
-      (bootstrap-ensure-font "Other" 14)
+      (ensure-frame-font "Other" 14)
       (should (equal "Existing-10" (cdr (assoc 'font default-frame-alist)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1052,47 +1021,36 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (sprite-run-startup-operations '(mcpkit-init-services))
       (should called))))
 
-(ert-deftest bootstrap/require-package-defines-startup-operation ()
-  "Bare and quoted feature symbols define a zero-argument requiring function."
-  (should (eq 'bootstrap-require-pkg-subr-x
-              (bootstrap-require-package subr-x)))
-  (should (eq 'bootstrap-require-pkg-seq
-              (bootstrap-require-package 'seq)))
-  (should (eq 0 (car (func-arity 'bootstrap-require-pkg-seq))))
-  (should (null (bootstrap-require-pkg-seq)))
-  (should (memq 'bootstrap-require-pkg-setup-project
-                sprite-startup-operations))
-  (should (fboundp 'bootstrap-require-pkg-setup-project)))
+(ert-deftest bootstrap/require-setup-project-is-startup-operation ()
+  "Setup project requirement is registered as a startup operation."
+  (should (memq 'bootstrap-require-setup-project sprite-startup-operations))
+  (should (fboundp 'bootstrap-require-setup-project))
+  (should (eq 0 (car (func-arity 'bootstrap-require-setup-project)))))
 
-(ert-deftest bootstrap/require-package-validates-feature-provided ()
-  "The defined function errors when requiring does not provide the feature."
-  (bootstrap-require-package bootstrap-test-never-provided)
-  (cl-letf (((symbol-function 'require) (lambda (&rest _) nil)))
-    (should-error (bootstrap-require-pkg-bootstrap-test-never-provided))))
-
-(ert-deftest bootstrap/require-package-rejects-non-symbols ()
-  "Non-symbol arguments fail at macro-expansion time."
-  (should-error (macroexpand '(bootstrap-require-package "seq")))
-  (should-error (macroexpand '(bootstrap-require-package nil))))
+(ert-deftest bootstrap/require-setup-packages-is-startup-operation ()
+  "Setup packages requirement is registered as a startup operation."
+  (should (memq 'bootstrap-require-setup-packages sprite-startup-operations))
+  (should (fboundp 'bootstrap-require-setup-packages))
+  (should (eq 0 (car (func-arity 'bootstrap-require-setup-packages)))))
 
 (ert-deftest bootstrap/post-late-startup-runs-package-operations-in-order ()
   "Start installation asynchronously and continue with package maintenance."
   (let* ((order nil)
          (noninteractive t)
-         (expected-ops '(bootstrap-require-pkg-setup-packages
+         (expected-ops '(bootstrap-require-setup-packages
                          bootstrap-ensure-packages-installed
-                         bootstrap-refresh-package-quickstart
+                         bootstrap-package-quickstart
                          builder-emacs-conf-native-compile-all))
          (package-ops (seq-filter (lambda (op) (memq op expected-ops))
                                   sprite-startup-operations)))
     (should (equal package-ops expected-ops))
-    (cl-letf (((symbol-function 'bootstrap-require-pkg-setup-packages)
+    (cl-letf (((symbol-function 'bootstrap-require-setup-packages)
                (lambda () (push 'require order)))
               ((symbol-function 'elpaish-install-packages)
                (lambda (&rest args)
                  (should (plist-get args :async))
                  (push 'install order)))
-              ((symbol-function 'bootstrap-refresh-package-quickstart)
+              ((symbol-function 'bootstrap-package-quickstart)
                (lambda () (push 'refresh order)))
               ((symbol-function 'builder-emacs-conf-native-compile-all)
                (lambda () (push 'compile order))))
@@ -1107,7 +1065,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
               ((symbol-function 'frame-parameter) (lambda (&rest _) nil))
               ((symbol-function 'set-frame-parameter)
                (lambda (_frame parameter value) (setq applied (cons parameter value)))))
-      (bootstrap-ensure-frame-alpha)
+      (ensure-frame-opacity)
       (should (equal applied '(alpha . 87)))
       (should (equal default-frame-alist '((alpha . 87)))))))
 
@@ -1220,12 +1178,12 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
               ((symbol-function 'bootstrap-sync-package-load-paths) #'ignore)
               ((symbol-function 'package-quickstart-refresh)
                (lambda () (setq refreshes (1+ refreshes)))))
-      (should (memq 'bootstrap-refresh-package-quickstart
+      (should (memq 'bootstrap-package-quickstart
                     sprite-startup-operations))
-      (sprite--execute-startup-operation 'bootstrap-refresh-package-quickstart)
+      (sprite--execute-startup-operation 'bootstrap-package-quickstart)
       (should (= refreshes 0))
       (setq stale t)
-      (sprite--execute-startup-operation 'bootstrap-refresh-package-quickstart)
+      (sprite--execute-startup-operation 'bootstrap-package-quickstart)
       (should (= refreshes 1)))))
 
 (ert-deftest bootstrap/elpaish-refreshes-quickstart-after-changes ()
@@ -1238,6 +1196,22 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (bootstrap-refresh-quickstart-after-elpaish '((:status :installed)) 'install)
       (bootstrap-refresh-quickstart-after-elpaish '((:status :upgraded)) 'upgrade)
       (should (= refreshes 2)))))
+
+(ert-deftest bootstrap/set-frame-font-interactive-uses-annotated-completing-read ()
+  "Interactively calling `set-frame-font' uses `annotated-completing-read-font-name'."
+  (let ((acr-called nil)
+        (orig-called nil))
+    (cl-letf (((symbol-function 'annotated-completing-read-font-name)
+               (lambda (&rest _) (setq acr-called t) "Monospace"))
+              ((symbol-function 'set-frame-font)
+               (lambda (font &rest _) (setq orig-called font))))
+      (advice-add 'set-frame-font :around #'cmdr-set-frame-font-interactive)
+      (unwind-protect
+          (progn
+            (call-interactively #'set-frame-font)
+            (should acr-called)
+            (should (equal "Monospace" orig-called)))
+        (advice-remove 'set-frame-font #'cmdr-set-frame-font-interactive)))))
 
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here

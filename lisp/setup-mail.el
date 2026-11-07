@@ -58,7 +58,7 @@
 (defvar tychoish-mail-account-current nil)
 
 (with-eval-after-load 'mu4e
-  (seq-do (lambda (hook) (add-hook hook #'tychoish--record-home-frame))
+  (seq-do (lambda (hook) (add-hook hook #'cmdr-frame-record-home-frame))
           '(mu4e-main-mode-hook
             mu4e-headers-mode-hook
             mu4e-view-mode-hook

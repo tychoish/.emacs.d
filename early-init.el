@@ -72,6 +72,7 @@ call in the main synchronous init path would go unmeasured.")
 (push '(tool-bar-lines . 0) default-frame-alist)
 (push '(menu-bar-lines . 0) default-frame-alist)
 (push '(vertical-scroll-bars . nil) default-frame-alist)
+(push '(alpha . 95) default-frame-alist)
 
 (when (string-match "NATIVE_COMP" system-configuration-features)
   (setcar native-comp-eln-load-path (expand-file-name "~/.cache/emacs/eln/"))

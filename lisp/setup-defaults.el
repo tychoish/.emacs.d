@@ -10,6 +10,8 @@
 (require 'seq)
 (require 'sprite)
 (require 'cmdr-keys)
+(require 'cmdr-ops)
+(require 'cmdr-frame)
 
 (defvar modus-themes-deuteranopia)
 (defvar modus-themes-common-palette-overrides)
@@ -82,7 +84,6 @@
 (setq switch-to-prev-buffer-skip 'visible)
 (setq split-height-threshold 100)
 (setq window-sides-vertical t)
-(setq ad-redefinition-action 'accept)
 
 (setq checkdoc-force-docstrings-flag nil)
 (setq checkdoc-spellcheck-documentation-flag t)
@@ -130,7 +131,6 @@
         suspicious
         unresolved))
 
-(add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
 
 (add-hook 'dired-mode-hook 'dired-async-mode)
 (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
@@ -236,126 +236,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Frame & buffer display policies
 
-(defvar-local tychoish--buffer-home-frame nil
-  "Frame where this buffer was first shown; nil means no frame restriction.")
+(defun tychoish--kill-new-reject-empty (string &optional _replace)
+  "Prevent empty STRING from being added to the kill ring."
+  (not (string-empty-p string)))
 
-(defun tychoish--record-home-frame ()
-  "Record the selected frame as this buffer's home frame (first visit only)."
-  (unless tychoish--buffer-home-frame
-    (setq-local tychoish--buffer-home-frame (selected-frame))))
-
-(defun tychoish--frame-buffer-predicate (buf)
-  "Unified predicate controlling next-buffer and switch-to-buffer candidates."
-  (let* ((current (current-buffer))
-         (current-file (buffer-file-name current))
-         (current-readonly (buffer-local-value 'buffer-read-only current)))
-    (with-current-buffer buf
-      (and
-       ;; Rule 1: frame-sticky buffers stay on their home frame
-       (or (null tychoish--buffer-home-frame)
-           (eq tychoish--buffer-home-frame (selected-frame)))
-       ;; Rules 2 & 3: file-based navigation restrictions
-       (cond
-        ;; Not in a file buffer — no restriction
-        ((null current-file) t)
-        ;; In a read-only file (reference buffer) — only writable files
-        (current-readonly (and (buffer-file-name) (not buffer-read-only)))
-        ;; In a writable file — only file buffers (any)
-        (t (buffer-file-name)))))))
-
-(defun tychoish--install-buffer-predicate (frame)
-  "Install the unified buffer predicate on FRAME."
-  (set-frame-parameter frame 'buffer-predicate
-                       #'tychoish--frame-buffer-predicate))
-
-(defalias 'hud--record-home-frame #'tychoish--record-home-frame)
-(defalias 'hud--frame-buffer-predicate #'tychoish--frame-buffer-predicate)
-(defalias 'hud--install-buffer-predicate #'tychoish--install-buffer-predicate)
-
-(defun tychoish-run-current-major-mode-hooks (&optional buffer)
-  "Run all mode-hooks for the current major mode."
-  (interactive)
-  (with-current-buffer (or (when (bufferp buffer) buffer)
-                           (when (and (stringp buffer) (get-buffer buffer)) buffer)
-                           (current-buffer))
-    (apply #'run-mode-hooks (seq-keep (lambda (it) (intern-soft (format "%s-hook" it))) (derived-mode-all-parents major-mode)))))
-
-(defalias 'hud-run-current-major-mode-hooks #'tychoish-run-current-major-mode-hooks)
-
-;; display-buffer: reference (read-only file) buffers reuse an existing
-;; read-only window rather than displacing a writable project-file window
-(defun tychoish--readonly-file-buffer-p (buf _action)
-  "Return non-nil if BUF is a read-only file-visiting buffer."
-  (with-current-buffer buf
-    (and buffer-read-only (buffer-file-name))))
-
-(defun tychoish--reuse-readonly-file-window (buffer _alist)
-  "Action: display BUFFER in an existing read-only file window if one exists."
-  (when-let* ((win (seq-find
-                    (lambda (w)
-                      (and (not (eq w (selected-window)))
-                           (with-current-buffer (window-buffer w)
-                             (and buffer-read-only (buffer-file-name)))))
-                    (window-list nil 'nomini))))
-    (set-window-buffer win buffer)
-    win))
-
-(defconst tychoish--readonly-display-buffer-entry
-  '(tychoish--readonly-file-buffer-p
-    (tychoish--reuse-readonly-file-window
-     display-buffer-use-some-window))
-  "`display-buffer-alist' entry for read-only file buffers.")
-
-(add-to-list 'display-buffer-alist tychoish--readonly-display-buffer-entry)
+(advice-add 'kill-new :before-while #'tychoish--kill-new-reject-empty)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; TTY and display settings
 
-
-(defun contextual-menubar (&optional frame)
-  "Display the menubar in FRAME (default: selected frame) if graphical, hide if TTY."
-  (interactive)
-  (set-frame-parameter frame 'menu-bar-lines (if (display-graphic-p frame) 1 0)))
-
-(defun frame-unset-background-for-tty (frame)
-  "Unset default face background and foreground on TTY frame FRAME."
-  (unless (display-graphic-p frame)
-    (set-face-background 'default "unspecified-bg" frame)
-    (set-face-foreground 'default "unspecified-fg" frame)))
-
-(defun current-frame-unset-background-for-tty ()
-  "Reset the background on the current frame, but only if its a TTY frame."
-  (interactive)
-  (frame-unset-background-for-tty (selected-frame)))
-
-(defun ad:unset-background-for-tty-frames-after-theme-enable (&rest _theme)
-  "Re-apply the TTY background unset to all TTY frames after a theme is enabled."
-  (seq-do #'frame-unset-background-for-tty (frame-list)))
-
-(defun frame-enable-xterm-mouse-for-tty (frame)
-  "Enable `xterm-mouse-mode' when FRAME is a tty frame."
-  (unless (display-graphic-p frame)
-    (xterm-mouse-mode 1)))
-
-(defun current-frame-enable-xterm-mouse-for-tty ()
-  "Enable `xterm-mouse-mode' if the current frame is a tty."
-  (frame-enable-xterm-mouse-for-tty (selected-frame)))
-
-(defun ad:kill-new-reject-empty (string &optional _replace)
-  "Prevent empty STRING from being added to the kill ring."
-  (not (string-empty-p string)))
-
-(advice-add 'kill-new :before-while #'ad:kill-new-reject-empty)
-
-;; Hook installations
-(add-hook 'after-make-frame-functions #'frame-unset-background-for-tty)
-(add-hook 'after-make-frame-functions #'tychoish--install-buffer-predicate)
-(add-hook 'after-make-frame-functions #'frame-enable-xterm-mouse-for-tty)
-(add-hook 'server-after-make-frame-hook #'current-frame-unset-background-for-tty)
-(add-hook 'server-after-make-frame-hook #'current-frame-enable-xterm-mouse-for-tty)
-(add-hook 'window-setup-hook #'current-frame-unset-background-for-tty)
-(add-hook 'window-setup-hook #'current-frame-enable-xterm-mouse-for-tty)
-(add-hook 'enable-theme-functions #'ad:unset-background-for-tty-frames-after-theme-enable)
+(advice-add 'set-frame-font :around #'cmdr-set-frame-font-interactive)
 
 (provide 'setup-defaults)
 ;;; setup-defaults.el ends here
