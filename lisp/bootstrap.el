@@ -162,7 +162,7 @@
     sprite-state-global-mode
     bootstrap-require-setup-packages
     bootstrap-ensure-packages-installed
-    bootstrap-refresh-package-quickstart
+    bootstrap-package-quickstart
     builder-emacs-conf-native-compile-all))
 
 (setq sprite-first-frame-operations
@@ -189,6 +189,7 @@
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-silent-savehist () (with-silence (savehist-mode 1)))
 (defun bootstrap-silent-recentf () (with-silence (recentf-mode 1)))
+(defun bootstrap-package-quickstart () (bootstrap-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
