@@ -492,7 +492,8 @@ Returns the symbol of the generated activation command.
       (add-lazy-init
        :name (format "%s-activate" account-name)
        :delay tychoish-mail-activation-delay
-       :form (with-slow-op-timer (format "%s-activate" account-name)
+       :form (progn
+	       (format "%s-activate" account-name)
                (when (or default
                          (and
                           (or (member (sprite-instance-name) instances)

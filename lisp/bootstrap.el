@@ -349,19 +349,17 @@ Call ON-DONE after the last operation.  Return a cancellation function."
 (add-lazy-init
  :name "<bootstrap> startup"
  :delay 0.1
- :form (with-slow-op-timer "<bootstrap> startup"
-         (bootstrap-run-startup-operations
-          (append bootstrap-early-startup-operations
-                  bootstrap-late-startup-operations
-                  bootstrap-post-late-startup-operations))))
+ :form (bootstrap-run-startup-operations
+        (append bootstrap-early-startup-operations
+                bootstrap-late-startup-operations
+                bootstrap-post-late-startup-operations)))
 
 (add-one-shot-hook
  :name "<bootstrap> first-frame setup"
  :hook 'after-first-frame-created
- :form (with-slow-op-timer "<one-shot-hook> <bootstrap> first-frame setup"
-         (bootstrap-run-startup-operations
-          bootstrap-after-first-frame-operations
-          :frame (selected-frame))))
+ :form (bootstrap-run-startup-operations
+        bootstrap-after-first-frame-operations
+        :frame (selected-frame)))
 
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
@@ -491,8 +489,7 @@ Call ON-DONE after the last operation.  Return a cancellation function."
 
 (add-one-shot-hook
  :name "ssh-agent"
- :form (with-slow-op-timer "<one-shot-hook> ssh-agent"
-         (bootstrap-set-up-ssh-agent))
+ :operation 'bootstrap-set-up-ssh-agent
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (defun find-ssh-agent-socket-candidates ()
