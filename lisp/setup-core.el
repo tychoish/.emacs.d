@@ -27,59 +27,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; writing (english) configuration
-
-(use-package denote
-  :ensure t
-  :defer t
-  :commands (denote-dired denote-directories)
-  :config
-
-  ;; site configuration (paths)
-  (when (default-boundp 'denote-directory)
-    (setq denote-directory '()))
-  (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
-  (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal"))
-  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
-
-  ;; configuration/settings
-  (setq denote-dash-default-filter '(not "journal"))
-  (setq denote-review-insert-after "date")
-  (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "migration" "agent" "plan" "singing"))
-  (setq denote-file-type 'org)
-  (setq denote-infer-keywords t)
-  (setq denote-sort-keywords t)
-  (setq denote-save-buffers t)
-  (setq denote-prompts '(title keywords file-type))
-  (setq denote-journal-title-format nil)
-  (setq denote-sequence-scheme 'alphanumeric)
-  (setq denote-explore-network-format "graphviz")
-  (setq denote-explore-network-graphviz-filetype "svg")
-  (add-to-list 'display-buffer-alist
-               '("\\`\\*denote-sequence-hierarchy "
-                 (display-buffer-reuse-window display-buffer-pop-up-window)))
-  (with-eval-after-load 'savehist
-    (add-to-list 'savehist-additional-variables 'denote--title-history)
-    (add-to-list 'savehist-additional-variables 'denote--keywords-history))
-
-  (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
-
-  (denote-rename-buffer-mode 1)
-
-  (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
-    "Only call FN in `org-mode' buffers.
-`denote-link-ol-store' calls this unconditionally, even from
-`markdown-mode' buffers, which makes `org-get-heading' warn via
-`org-element-at-point' about running outside an Org buffer."
-    (when (derived-mode-p 'org-mode)
-      (apply fn args)))
-  (advice-add 'denote-link-ol-get-heading :around
-              #'ad:denote-link-ol-get-heading--org-only)
-
-  (setq denote-link-description-format #'denote-dash-link-description-format))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; ROBOTS (AI) Integration
 
 (use-package gptel

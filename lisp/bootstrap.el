@@ -186,9 +186,7 @@ triggered directly by a keypress, still prompts normally.")
   (annotated-completing-read-setup-history)
   (add-to-list 'savehist-additional-variables 'compile-history)
 
-  (with-silence
-    (recentf-mode 1)
-    (savehist-mode 1)))
+    (bootstrap-set-up-named-instance-file-locks)))
 
 (defun bootstrap-desktop-save ()
   "Save desktop... sometimes"
@@ -356,6 +354,7 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     eglox-global-mode
     minaid-mode
     telegax-global-mode
+    bootstrap-noisy-modes
     bootstrap-set-up-emacs-instance-persistence)
   "UI, key binding, and persistence operations started early in bootstrap."
   :type '(repeat function)
@@ -436,6 +435,16 @@ Call ON-DONE after the last operation.  Return a cancellation function."
 
 (defun bootstrap-setup-custom-file ()
   (setq custom-file (sprite-state-path "custom.el")))
+
+(defun bootstrap-noisy-modes ()
+  (with-silence
+    (recentf-mode 1)
+    (setq recentf-save-file (sprite-state-path "recentf.el"))
+
+    (savehist-mode 1)
+    (setq savehist-file (sprite-state-path "history.el"))
+    (setq savehist-coding-system 'utf-8-emacs)
+    (add-to-list 'savehist-additional-variables 'compile-history)))
 
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
