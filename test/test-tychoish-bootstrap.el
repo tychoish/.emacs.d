@@ -836,7 +836,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (ert-deftest bootstrap/show-whitespace-mode-starts-early ()
   "The global mode is included in the early startup operations."
-  (should (memq 'overmark-global-mode bootstrap-startup-operations)))
+  (should (memq 'overmark-global-mode sprite-startup-operations)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-buffers-visiting-missing-files
@@ -1005,11 +1005,11 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-run-startup-operations (generator iterator)
+;;; sprite-run-startup-operations (generator iterator)
 
 (ert-deftest bootstrap/chex-mode-available-to-startup-hook ()
   "The late startup hook can invoke Chex before it has been loaded."
-  (should (memq 'chex-global-mode bootstrap-startup-operations))
+  (should (memq 'chex-global-mode sprite-startup-operations))
   (should (fboundp 'chex-global-mode)))
 
 (ert-deftest bootstrap/run-enable-modes-hook-noninteractive ()
@@ -1020,7 +1020,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (test-hook (list (lambda (arg) (push (cons 'f1 arg) order))
                           (lambda () (push 'f2 order))
                           (lambda (arg) (push (cons 'f3 arg) order)))))
-    (bootstrap-run-startup-operations test-hook :on-done (lambda () (setq done t)))
+    (sprite-run-startup-operations test-hook :on-done (lambda () (setq done t)))
     (should (equal '((f1 . 1) f2 (f3 . 1)) (nreverse order)))
     (should (eq t done))))
 
@@ -1029,8 +1029,8 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (let ((calls nil))
     (cl-letf (((symbol-function 'help-function-arglist)
                (lambda (&rest _) '(&rest args))))
-      (bootstrap--execute-startup-operation (lambda () (push 'zero calls)))
-      (bootstrap--execute-startup-operation (lambda (&optional arg) (push arg calls)))
+      (sprite--execute-startup-operation (lambda () (push 'zero calls)))
+      (sprite--execute-startup-operation (lambda (&optional arg) (push arg calls)))
       (should (equal (reverse calls) '(zero 1))))))
 
 (defvar bootstrap--test-autoload-result nil)
@@ -1048,9 +1048,9 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                     "(setq bootstrap--test-autoload-result arg))\n"))
           (autoload 'bootstrap--test-autoload-zero file)
           (autoload 'bootstrap--test-autoload-mode file)
-          (bootstrap--execute-startup-operation 'bootstrap--test-autoload-zero)
+          (sprite--execute-startup-operation 'bootstrap--test-autoload-zero)
           (should (eq bootstrap--test-autoload-result 'zero))
-          (bootstrap--execute-startup-operation 'bootstrap--test-autoload-mode)
+          (sprite--execute-startup-operation 'bootstrap--test-autoload-mode)
           (should (eq bootstrap--test-autoload-result 1)))
       (fmakunbound 'bootstrap--test-autoload-zero)
       (fmakunbound 'bootstrap--test-autoload-mode)
@@ -1064,7 +1064,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (test-hook (list (lambda (arg) (push 'f1 order))
                           (lambda () (error "simulated mode failure"))
                           (lambda (arg) (push 'f3 order)))))
-    (bootstrap-run-startup-operations test-hook :on-done (lambda () (setq done t)))
+    (sprite-run-startup-operations test-hook :on-done (lambda () (setq done t)))
     (should (equal '(f1 f3) (nreverse order)))
     (should (eq t done))))
 
@@ -1072,10 +1072,10 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   "The MCP initializer is a startup operation and receives no mode argument."
   (let ((called nil)
         (noninteractive t))
-    (should (memq 'mcpkit-init-services bootstrap-startup-operations))
+    (should (memq 'mcpkit-init-services sprite-startup-operations))
     (cl-letf (((symbol-function 'mcpkit-init-services)
                (lambda () (setq called t))))
-      (bootstrap-run-startup-operations '(mcpkit-init-services))
+      (sprite-run-startup-operations '(mcpkit-init-services))
       (should called))))
 
 (ert-deftest bootstrap/require-package-defines-startup-operation ()
@@ -1087,7 +1087,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (should (eq 0 (car (func-arity 'bootstrap-require-pkg-seq))))
   (should (null (bootstrap-require-pkg-seq)))
   (should (memq 'bootstrap-require-pkg-setup-project
-                bootstrap-startup-operations))
+                sprite-startup-operations))
   (should (fboundp 'bootstrap-require-pkg-setup-project)))
 
 (ert-deftest bootstrap/require-package-validates-feature-provided ()
@@ -1110,7 +1110,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                          bootstrap-check-package-quickstart
                          builder-emacs-conf-native-compile-all))
          (package-ops (seq-filter (lambda (op) (memq op expected-ops))
-                                  bootstrap-startup-operations)))
+                                  sprite-startup-operations)))
     (should (equal package-ops expected-ops))
     (cl-letf (((symbol-function 'bootstrap-require-pkg-setup-packages)
                (lambda () (push 'require order)))
@@ -1122,7 +1122,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                (lambda () (push 'refresh order)))
               ((symbol-function 'builder-emacs-conf-native-compile-all)
                (lambda () (push 'compile order))))
-      (bootstrap-run-startup-operations package-ops)
+      (sprite-run-startup-operations package-ops)
       (should (equal (reverse order) '(require install refresh compile))))))
 
 (ert-deftest bootstrap/frame-alpha-preserves-configured-default ()
@@ -1143,7 +1143,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (noninteractive nil)
          (test-hook (list (lambda (arg) (push 'f1 order))
                           (lambda (arg) (push 'f2 order))))
-         (cancel-fn (bootstrap-run-startup-operations test-hook :delay 10.0)))
+         (cancel-fn (sprite-run-startup-operations test-hook :delay 10.0)))
     (funcall cancel-fn)
     (should (null order))))
 
@@ -1247,11 +1247,11 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
               ((symbol-function 'package-quickstart-refresh)
                (lambda () (setq refreshes (1+ refreshes)))))
       (should (memq 'bootstrap-check-package-quickstart
-                    bootstrap-startup-operations))
-      (bootstrap--execute-startup-operation 'bootstrap-check-package-quickstart)
+                    sprite-startup-operations))
+      (sprite--execute-startup-operation 'bootstrap-check-package-quickstart)
       (should (= refreshes 0))
       (setq stale t)
-      (bootstrap--execute-startup-operation 'bootstrap-check-package-quickstart)
+      (sprite--execute-startup-operation 'bootstrap-check-package-quickstart)
       (should (= refreshes 1)))))
 
 (ert-deftest bootstrap/elpaish-refreshes-quickstart-after-changes ()

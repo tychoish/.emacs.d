@@ -156,41 +156,7 @@
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
-(defun bootstrap--execute-startup-operation (fn &optional frame)
-  "Run startup operation FN in FRAME."
-  (condition-case err
-      (when (or (null frame) (frame-live-p frame))
-        (with-selected-frame (or frame (selected-frame))
-          (with-slow-op-timer (format "<bootstrap> [startup] %s" fn)
-            (if (equal (cdr (func-arity fn)) 0)
-                (funcall fn)
-              (funcall fn 1)))))
-    (error (message "[bootstrap] %s failed: %s" fn (error-message-string err)))))
-
-(cl-defun bootstrap-run-startup-operations (operations &key (delay 0.1) on-done frame)
-  "Run OPERATIONS in order, yielding DELAY seconds between each."
-  (if (or noninteractive (null operations))
-      (progn
-        (dolist (op operations)
-          (bootstrap--execute-startup-operation op frame))
-        (when on-done (funcall on-done))
-        #'ignore)
-    (let* ((queue (copy-sequence operations))
-           (timer nil)
-           (step nil))
-      (setq step (lambda ()
-                   (when queue
-                     (bootstrap--execute-startup-operation (pop queue) frame)
-                     (if queue
-                         (setq timer (run-with-idle-timer delay nil step))
-                       (when on-done (funcall on-done))))))
-      (setq timer (run-with-idle-timer delay nil step))
-      (lambda ()
-        (setq queue nil)
-        (when (timerp timer)
-          (cancel-timer timer))))))
-
-(defcustom bootstrap-startup-operations
+(setq sprite-startup-operations
   '(bootstrap-set-up-fringe-mode
     overmark-global-mode
     column-number-mode
@@ -227,32 +193,26 @@
     bootstrap-require-pkg-setup-packages
     bootstrap-ensure-packages-installed
     bootstrap-check-package-quickstart
-    builder-emacs-conf-native-compile-all)
-  "Operations run in sequence during startup."
-  :type '(repeat function)
-  :group 'bootstrap)
+    builder-emacs-conf-native-compile-all))
 
-(defcustom bootstrap-after-first-frame-operations
+(setq sprite-first-frame-operations
   '(bootstrap-ensure-default-font
     bootstrap-ensure-frame-alpha
     disable-all-themes
     bootstrap-default-theme
-    hud-modeline-mode)
-  "Operations run after the first frame is created."
-  :type '(repeat function)
-  :group 'bootstrap)
+    hud-modeline-mode))
 
 (unless after-init-time
   (add-lazy-init
    :name "<bootstrap> startup"
    :delay 0.1
-   :form (bootstrap-run-startup-operations bootstrap-startup-operations)))
+   :form (sprite-run-startup-operations)))
 
 (add-one-shot-hook
  :name "<bootstrap> first-frame setup"
  :hook 'after-first-frame-created
- :form (bootstrap-run-startup-operations
-        bootstrap-after-first-frame-operations
+ :form (sprite-run-startup-operations
+        sprite-first-frame-operations
         :frame (selected-frame)))
 
 
