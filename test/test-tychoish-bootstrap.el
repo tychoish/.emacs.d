@@ -1196,13 +1196,17 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (when (file-exists-p tmp-file)
         (delete-file tmp-file)))))
 
+(defvar warning-inhibit-types nil)
+
 (ert-deftest bootstrap/quickstart-compilation-is-silent-on-errors ()
   "Compiler errors during quickstart refresh do not display or log warnings."
   (require 'bytecomp)
   (require 'warnings)
   (let ((file (make-temp-file "quickstart-error-" nil ".el"))
         (byte-compile-log-buffer " *quickstart-test-compile-log*")
-        (warning-inhibit-types nil))
+        (warning-inhibit-types nil)
+        (warning-suppress-types nil)
+        (warning-suppress-log-types nil))
     (unwind-protect
         (progn
           (with-temp-file file (insert ";;; -*- lexical-binding: t; -*-\n(\n"))

@@ -12,6 +12,9 @@
 
 (defvar autoload-compute-prefixes)
 (defvar sprite-instance-id)
+(defvar warning-inhibit-types nil)
+(defvar warning-suppress-types nil)
+(defvar warning-suppress-log-types nil)
 
 (setq autoload-compute-prefixes nil)
 
@@ -130,7 +133,9 @@ removes autoload feature provisions, and eliminates extraneous whitespace."
                           (cons (cons (regexp-quote (buffer-name))
                                       '(display-buffer-no-window))
                                 display-buffer-alist))
-                         (warning-inhibit-types (cons '(bytecomp) warning-inhibit-types))
+                         (warning-inhibit-types (cons '(bytecomp) (and (boundp 'warning-inhibit-types) warning-inhibit-types)))
+                         (warning-suppress-types (cons '(bytecomp) (and (boundp 'warning-suppress-types) warning-suppress-types)))
+                         (warning-suppress-log-types (cons '(bytecomp) (and (boundp 'warning-suppress-log-types) warning-suppress-log-types)))
                          (inhibit-message t)
                          (message-log-max nil))
                      (funcall real-byte-compile file)))
