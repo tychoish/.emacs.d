@@ -54,6 +54,7 @@
 (autoload 'grepx-mode "grepx" "Minor mode for persistent grepx search buffers." t)
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
+(autoload 'daemons-dash "daemons-dash" "Dashboard for systemd, docker, and sprite daemons." t)
 
 (autoload 'tychoish-mail-select-account "setup-mail" nil t)
 (autoload 'tychoish-define-mail-account "setup-mail")
