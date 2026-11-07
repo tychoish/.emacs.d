@@ -33,13 +33,10 @@
 
 ;;; Code:
 
-(require 'cl-lib)
-
 (require 'sprite)
 (require 'sprite-state)
 (require 'cmdr-macros)
 (require 'cmdr-mode)
-(require 'cmdr-ops)
 (require 'cmdr-frame)
 
 (defvar local-notes-directory nil
@@ -139,22 +136,25 @@
     bootstrap-require-setup-packages
     bootstrap-ensure-packages-installed
     bootstrap-package-quickstart
-    builder-emacs-conf-native-compile-all))
+    builder-emacs-conf-native-compile-all
+    bootstrap-startup-timing))
 
 (setq sprite-first-frame-operations
   '(bootstrap-ensure-default-font
     ensure-frame-opacity
     disable-all-themes
     bootstrap-default-theme
-    hud-modeline-mode))
+    hud-modeline-mode
+    bootstrap-frame-startup-timing))
 
-(add-hook 'emacs-startup-hook #'sprite-run-startup-operations)
-(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
+(add-hook 'emacs-startup-hook #'bootstrap-run-startup)
+(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
 (add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
 
+(defun bootstrap-run-startup () (sprite-run-startup-operations :delay 0.1))
 (defun bootstrap-require-setup-project () (require 'setup-project))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-silent-savehist () (let ((inhibit-message t) (message-log-max nil)) (savehist-mode 1)))
@@ -167,6 +167,8 @@
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
 (defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
 (defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
+(defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
+(defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

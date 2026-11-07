@@ -71,27 +71,26 @@
 (autoload 'toggle-hud-modeline-show-buffer-size "hud-modeline" nil t)
 (autoload 'tychoish/agent-shell-toggle-terse-output "setup-agent-shell" nil t)
 
-(with-eval-after-load 'cmdr-spec
-  (cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
-  (cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
-  (cmdr-keys-set cmdr-mode-map "C-c t t i" #'toggle-hud-modeline-icons)
-  (cmdr-keys-set cmdr-mode-map "C-c t t s" #'toggle-hud-modeline-show-buffer-size)
-  (cmdr-keys-set cmdr-mode-map "C-c t p" #'toggle-electric-pair-inhibition)
-  (cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
-  (cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
-  (cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish/agent-shell-toggle-terse-output)
-  (cmdr-keys-set cmdr-mode-map "C-c m a" #'tychoish-mail-select-account)
-  (cmdr-keys-set cmdr-mode-map "C-x g m r" #'smerge-kill-and-vc-next-conflict)
-  (cmdr-keys-set cmdr-mode-map "C-x C-b s" #'projectile-save-project-buffers-picker)
+(cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
+(cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
+(cmdr-keys-set cmdr-mode-map "C-c t t i" #'toggle-hud-modeline-icons)
+(cmdr-keys-set cmdr-mode-map "C-c t t s" #'toggle-hud-modeline-show-buffer-size)
+(cmdr-keys-set cmdr-mode-map "C-c t p" #'toggle-electric-pair-inhibition)
+(cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
+(cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
+(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish/agent-shell-toggle-terse-output)
+(cmdr-keys-set cmdr-mode-map "C-c m a" #'tychoish-mail-select-account)
+(cmdr-keys-set cmdr-mode-map "C-x g m r" #'smerge-kill-and-vc-next-conflict)
+(cmdr-keys-set cmdr-mode-map "C-x C-b s" #'projectile-save-project-buffers-picker)
 
-  (cmdr-register-spec
-    :name mail-accounts
-    :probe tychoish-mail-select-account
-    :commands ((cmdr-spec-command :category mu4e
-                                  :command tychoish-mail-select-account
-                                  :display-name "mail-select-account"
-                                  :description "select mail account"
-                                  :transient-key "ma"))))
+(cmdr-register-spec
+  :name mail-accounts
+  :probe tychoish-mail-select-account
+  :commands ((cmdr-spec-command :category mu4e
+                                :command tychoish-mail-select-account
+                                :display-name "mail-select-account"
+                                :description "select mail account"
+                                :transient-key "ma")))
 
 ;;; Search / isearch / anzu
 (keymap-set isearch-mode-map "C-o" #'isearch-occur)
@@ -553,20 +552,19 @@ resets point to column 0 outside of definition-list context."
     (setq rustic-rustfmt-args "+nightly"))
 
   (with-eval-after-load 'compile
-  (require 'rust-compile nil t)
-  (defun tychoish-compile-project-super-lint ()
-    (interactive)
-    (let* ((project-directory (projectile-project-root))
-           (options (list "VALIDATE_YAML=true"
-                          "VALIDATE_OPENAPI=true"
-                          "VALIDATE_MD=true"
-                          "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
-                          "VALIDATE_ALL_CODEBASE=true"
-                          "LINTER_RULES_PATH=."
-                          "RUN_LOCAL=true"))
-           (optstr (format "-e %s" (string-join options " -e ")))
-           (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
-      (builder-compile-project "super-lint" command-string)))))
+    (defun tychoish-compile-project-super-lint ()
+      (interactive)
+      (let* ((project-directory (projectile-project-root))
+             (options (list "VALIDATE_YAML=true"
+                            "VALIDATE_OPENAPI=true"
+                            "VALIDATE_MD=true"
+                            "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
+                            "VALIDATE_ALL_CODEBASE=true"
+                            "LINTER_RULES_PATH=."
+                            "RUN_LOCAL=true"))
+             (optstr (format "-e %s" (string-join options " -e ")))
+             (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
+	(builder-compile-project "super-lint" command-string)))))
 
 (with-eval-after-load 'python
   (defun tychoish/python-setup ()
@@ -715,7 +713,6 @@ clipboard."
   (delight 'nerd-icons-dired-mode nil 'nerd-icons-dired)
   (delight 'nerd-icons-xref-mode nil 'nerd-icons-xref)
   (delight 'nerd-icons-completion-mode nil 'nerd-icons-completion)
-  (delight 'nerd-icons-dired-mode "")
   (delight 'builder-mode "")
   (delight 'projectile-mode nil 'projectile)
   (delight 'eglot--managed-mode nil 'eglot)

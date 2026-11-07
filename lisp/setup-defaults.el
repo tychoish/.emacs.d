@@ -6,11 +6,8 @@
 
 ;;; Code:
 
-(require 'cl-lib)
-(require 'seq)
 (require 'sprite)
 (require 'cmdr-keys)
-(require 'cmdr-ops)
 (require 'cmdr-frame)
 
 (defvar modus-themes-deuteranopia)

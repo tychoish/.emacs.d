@@ -7,7 +7,6 @@
 ;;; Code:
 
 (require 'seq)
-(require 'map)
 (require 'cl-lib)
 
 (defvar autoload-compute-prefixes)
