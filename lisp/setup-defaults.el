@@ -11,6 +11,9 @@
 (require 'sprite)
 (require 'cmdr-keys)
 
+(defvar modus-themes-deuteranopia)
+(defvar modus-themes-common-palette-overrides)
+
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
@@ -38,8 +41,10 @@
 (setq which-key-lighter "")
 
 (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
+
 (defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
   "The cmdr core prefix map under C-c t.")
+
 (setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
 
 (setq create-lockfiles nil)
@@ -86,12 +91,20 @@
 (setq ediff-window-setup-function 'ediff-setup-windows-plain)
 (setq ediff-split-window-function 'split-window-horizontally)
 
+(setq modus-themes-deuteranopia t)
+(setq modus-themes-common-palette-overrides
+      '((border-mode-line-active bg-mode-line-active)
+        (border-mode-line-inactive bg-mode-line-inactive)
+        (message-separator bg-main)))
+
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
 (put 'list-timers 'disabled nil)
 (put 'list-threads 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
+
+(add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
 
 (setq byte-compile-warnings
       ;; OMIT: free-vars docstrings-wide
@@ -113,10 +126,6 @@
         redefine
         suspicious
         unresolved))
-
-(defvar bootstrap-fallback-buffer-name "*scratch*"
-  "Buffer name used as a last-resort fallback when no other buffer is available.
-Override in user/*.el to customize per machine or instance.")
 
 (add-hook 'which-key-mode-hook #'which-key-setup-side-window-bottom)
 
@@ -239,7 +248,6 @@ Override in user/*.el to customize per machine or instance.")
   (setq x-super-keysym 'super))
 
 (setq system-uses-terminfo t)
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Frame & buffer display policies

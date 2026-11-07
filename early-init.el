@@ -48,6 +48,8 @@ call in the main synchronous init path would go unmeasured.")
   "Minimum duration in seconds for `with-slow-op-timer' to emit a log message.")
 
 (setq use-package-compute-statistics slow-op-reporting)
+(setq sprite-slow-op-reporting slow-op-reporting)
+(setq sprite-slow-op-threshold slow-op-threshold)
 
 (defmacro with-slow-op-timer (name &rest body)
   "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."

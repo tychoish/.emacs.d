@@ -53,14 +53,11 @@
 (autoload 'grepx-mode "grepx" "Minor mode for persistent grepx search buffers." t)
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
-(autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
 
-(defun bootstrap-check-package-quickstart ()
-  "Refresh package quickstart if stale."
-  (bootstrap-refresh-package-quickstart))
+(autoload 'tychoish-mail-select-account "setup-mail" nil t)
+(autoload 'tychoish-define-mail-account "setup-mail")
+(autoload 'tychoish-mail-add-refile-rule "setup-mail")
 
-(defvar savehist-coding-system)
-(defvar savehist-additional-variables)
 (defvar bookmark-save-flag)
 (defvar org-directory)
 (defvar org-agenda-files)
@@ -69,15 +66,11 @@
 (defvar org-archive-location)
 (defvar deft-directory)
 (defvar denote-directory)
-(defvar modus-themes-deuteranopia)
-(defvar modus-themes-common-palette-overrides)
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
 
-(defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map)
-
 (defvar tychoish--suppress-supersession-prompt nil
-  "Non-nil when supersession prompts should be auto-confirmed noninteractively.")
+  "Non-nil when supersession prompts should be auto-confirmed.")
 
 (with-eval-after-load 'server
   (advice-add 'server-eval-and-print :around
@@ -100,10 +93,8 @@
 
 ;; id-state -- emacs daemon/instance identification for state config
 
-(defun gui-p ()
-  "Return non-nil when the session is or may be GUI."
-  (when (or (daemonp) (window-system))
-    t))
+(defun display-startup-echo-area-message () "No-op override for startup echo area." nil)
+(defun gui-p () "Return non-nil when may have GUI frames." (when (or (daemonp) (window-system)) t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -131,27 +122,6 @@
 (setq mcpkit-instance-name-function #'sprite-instance-name)
 (setq cmdr-opt-in-specs '(defaults))
 
-(defmacro bootstrap-require-package (pkg)
-  "Define startup operation `bootstrap-require-pkg-PKG' requiring PKG."
-  (declare (indent 0))
-  (let ((feature (if (eq (car-safe pkg) 'quote) (cadr pkg) pkg)))
-    (unless (and feature (symbolp feature))
-      (error "bootstrap-require-package: expected a feature symbol, got %S" pkg))
-    `(defun ,(intern (format "bootstrap-require-pkg-%s" feature)) ()
-       ,(format "Require feature %s." feature)
-       (require ',feature)
-       (unless (featurep ',feature)
-         (error "Feature `%s' not provided after require" ',feature)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; silent startup -- avoid printing or using the Messages buffer
-
-(defun display-startup-echo-area-message ()
-  "No-op to inhibit startup echo area message."  nil)
-
-(add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
@@ -174,7 +144,7 @@
     sprite-state-configure
     bootstrap-silent-savehist
     bootstrap-silent-recentf
-    bootstrap-require-pkg-setup-project
+    bootstrap-require-setup-project
     popper-mode
     grepx-mode
     denote-dash-global-mode
@@ -190,9 +160,9 @@
     annotated-completing-read-setup-history
     mcpkit-init-services
     sprite-state-global-mode
-    bootstrap-require-pkg-setup-packages
+    bootstrap-require-setup-packages
     bootstrap-ensure-packages-installed
-    bootstrap-check-package-quickstart
+    bootstrap-refresh-package-quickstart
     builder-emacs-conf-native-compile-all))
 
 (setq sprite-first-frame-operations
@@ -202,12 +172,6 @@
     bootstrap-default-theme
     hud-modeline-mode))
 
-(unless after-init-time
-  (add-lazy-init
-   :name "<bootstrap> startup"
-   :delay 0.1
-   :form (sprite-run-startup-operations)))
-
 (add-one-shot-hook
  :name "<bootstrap> first-frame setup"
  :hook 'after-first-frame-created
@@ -215,15 +179,14 @@
         sprite-first-frame-operations
         :frame (selected-frame)))
 
-
+(add-hook 'emacs-startup-hook #'sprite-run-startup-operations)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'bootstrap-report-startup-timing 100)
 
-(bootstrap-require-package 'setup-project)
-(bootstrap-require-package 'setup-packages)
-
+(defun bootstrap-require-setup-project () (require 'setup-project))
+(defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-silent-savehist () (with-silence (savehist-mode 1)))
 (defun bootstrap-silent-recentf () (with-silence (recentf-mode 1)))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
@@ -296,16 +259,6 @@
       (set-frame-font new-font-name nil t)))
   (map-elt default-frame-alist 'font))
 
-(setq modus-themes-deuteranopia t)
-(setq modus-themes-common-palette-overrides
-      '((border-mode-line-active bg-mode-line-active)
-        (border-mode-line-inactive bg-mode-line-inactive)
-        (message-separator bg-main)))
-
-(defun disable-all-themes () (interactive) (mapc #'disable-theme custom-enabled-themes))
-(defun bootstrap-ensure-default-font () (bootstrap-ensure-font "Source Code Pro" 13))
-(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
-
 (defun bootstrap-ensure-font (font-face-name size)
   (unless (map-elt default-frame-alist 'font)
     (bootstrap-setup-font font-face-name size)))
@@ -316,6 +269,10 @@
     (add-to-list 'default-frame-alist '(alpha . 95)))
   (when (and (display-graphic-p) (not (frame-parameter nil 'alpha)))
     (set-frame-parameter nil 'alpha (map-elt default-frame-alist 'alpha))))
+
+(defun disable-all-themes () (interactive) (mapc #'disable-theme custom-enabled-themes))
+(defun bootstrap-ensure-default-font () (bootstrap-ensure-font "Source Code Pro" 13))
+(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

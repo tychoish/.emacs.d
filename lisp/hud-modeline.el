@@ -40,7 +40,12 @@
 (declare-function projectile-project-name "projectile")
 (declare-function projectile-project-root "projectile")
 (declare-function projectile-dispatch "projectile")
+(declare-function mouse-menu-major-mode-map "mouse")
 (declare-function mouse-major-mode-menu "mouse")
+
+(unless (fboundp 'mouse-major-mode-menu)
+  (defalias 'mouse-major-mode-menu #'mouse-menu-major-mode-map))
+
 (declare-function mouse-buffer-menu "mouse")
 (declare-function annotated-completing-read "annotated-completing-read")
 
@@ -415,9 +420,13 @@ is not present in FROM-VAR."
                (if (stringp major)
                    (propertize major
                                'local-map (let ((map (make-sparse-keymap)))
-					    (define-key map [mode-line mouse-1] #'mouse-major-mode-menu)
+					    (define-key map [mode-line mouse-1] (if (fboundp 'mouse-menu-major-mode-map)
+									   #'mouse-menu-major-mode-map
+									 #'mouse-major-mode-menu))
 					    (define-key map [mode-line mouse-2] #'describe-mode)
-					    (define-key map [mode-line mouse-3] #'mouse-major-mode-menu)
+					    (define-key map [mode-line mouse-3] (if (fboundp 'mouse-menu-major-mode-map)
+									   #'mouse-menu-major-mode-map
+									 #'mouse-major-mode-menu))
 					    map)
                                'mouse-face 'mode-line-highlight
                                'help-echo "mouse-1: mode menu\nmouse-2: describe mode")

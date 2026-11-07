@@ -1107,7 +1107,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (noninteractive t)
          (expected-ops '(bootstrap-require-pkg-setup-packages
                          bootstrap-ensure-packages-installed
-                         bootstrap-check-package-quickstart
+                         bootstrap-refresh-package-quickstart
                          builder-emacs-conf-native-compile-all))
          (package-ops (seq-filter (lambda (op) (memq op expected-ops))
                                   sprite-startup-operations)))
@@ -1118,7 +1118,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                (lambda (&rest args)
                  (should (plist-get args :async))
                  (push 'install order)))
-              ((symbol-function 'bootstrap-check-package-quickstart)
+              ((symbol-function 'bootstrap-refresh-package-quickstart)
                (lambda () (push 'refresh order)))
               ((symbol-function 'builder-emacs-conf-native-compile-all)
                (lambda () (push 'compile order))))
@@ -1246,12 +1246,12 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
               ((symbol-function 'bootstrap-sync-package-load-paths) #'ignore)
               ((symbol-function 'package-quickstart-refresh)
                (lambda () (setq refreshes (1+ refreshes)))))
-      (should (memq 'bootstrap-check-package-quickstart
+      (should (memq 'bootstrap-refresh-package-quickstart
                     sprite-startup-operations))
-      (sprite--execute-startup-operation 'bootstrap-check-package-quickstart)
+      (sprite--execute-startup-operation 'bootstrap-refresh-package-quickstart)
       (should (= refreshes 0))
       (setq stale t)
-      (sprite--execute-startup-operation 'bootstrap-check-package-quickstart)
+      (sprite--execute-startup-operation 'bootstrap-refresh-package-quickstart)
       (should (= refreshes 1)))))
 
 (ert-deftest bootstrap/elpaish-refreshes-quickstart-after-changes ()
