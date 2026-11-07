@@ -10,8 +10,8 @@
 (require 'cl-lib)
 (require 'eglot)
 (require 'eglox)
+(require 'cmdr-macros nil t)
 (require 'projectile nil t)
-(require 'hud-mode nil t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Test Helpers
@@ -419,7 +419,7 @@ transient project and cleans both up afterward."
 (ert-deftest eglox/deferred-keymap-resolves ()
   "Test deferred keymap lookup and resolution."
   (let ((map (make-sparse-keymap)))
-    (hud-bind-deferred-keymap map "l" 'eglox 'eglox-global-map "eglot")
+    (cmdr-bind-deferred-keymap map "l" 'eglox 'eglox-global-map "eglot")
     (let ((cmd (keymap-lookup map "l")))
       (funcall cmd)
       (should (eq (keymap-lookup map "l") eglox-global-map)))))
@@ -730,7 +730,8 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
          (py (generate-new-buffer "eglox-unmanaged-py"))
          (txt (generate-new-buffer "eglox-unmanaged-txt")))
     (unwind-protect
-        (cl-letf (((symbol-function 'eglot-ensure) #'ignore))
+        (cl-letf (((symbol-function 'eglot-ensure) #'ignore)
+                  ((symbol-function 'buffer-list) (lambda (&optional _) (list py txt))))
           (with-current-buffer py
             (insert "x = 1\n")
             (set-buffer-modified-p nil)
@@ -791,4 +792,3 @@ Otherwise `eglot--on-shutdown' auto-reconnects, creating an infinite reconnect l
 
 (provide 'test-egloxtra)
 ;;; test-egloxtra.el ends here
-

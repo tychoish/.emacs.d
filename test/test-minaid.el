@@ -239,6 +239,7 @@
 
 (ert-deftest minaid-test/minibuffer-and-isearch-bindings ()
   "Test that minaid binds built-in minibuffer-local-map and isearch-mode-map at top level."
+  (minaid-mode 1)
   (should (eq (lookup-key minibuffer-local-map (kbd "M-s")) #'consult-history))
   (should (eq (lookup-key minibuffer-local-map (kbd "M-r")) #'consult-history))
   (should (eq (lookup-key minibuffer-local-map (kbd "C-c a")) #'marginalia-cycle))
@@ -247,14 +248,14 @@
   (should (eq (lookup-key isearch-mode-map (kbd "M-s l")) #'consult-line))
   (should (eq (lookup-key isearch-mode-map (kbd "M-s L")) #'consult-line-multi)))
 
-(ert-deftest minaid-test/hud-docs-map-bindings-in-hud-mode ()
-  "Test that hud-docs-map in hud-mode binds documentation commands when hud-mode is present."
-  (if (require 'hud-mode nil t)
-      (progn
-        (should (eq (lookup-key hud-docs-map "i") #'consult-info))
-        (should (eq (lookup-key hud-docs-map "m") #'consult-man))
-        (should (eq (lookup-key hud-docs-map "a") #'consult-eglot-symbols)))
-    (ert-skip "hud-mode not available in load-path")))
+(ert-deftest minaid-test/cmdr-documentation-bindings ()
+  "The cmdr ecosystem plugin exposes the Consult documentation commands."
+  (require 'cmdr-ecosystem)
+  (let ((cmdr-mode-map (make-sparse-keymap)))
+    (cmdr-ecosystem-install)
+    (should (eq (keymap-lookup cmdr-mode-map "C-c h i") #'consult-info))
+    (should (eq (keymap-lookup cmdr-mode-map "C-c h m") #'consult-man))
+    (should (eq (keymap-lookup cmdr-mode-map "C-c h a") #'consult-eglot-symbols))))
 
 (provide 'test-minaid)
 ;;; test-minaid.el ends here

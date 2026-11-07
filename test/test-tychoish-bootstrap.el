@@ -533,38 +533,6 @@
       (kill-buffer other))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; hud-set-tab-width (macro)
-
-(ert-deftest bootstrap/set-tab-width-macro-defines-function ()
-  "Macro defines a function with the expected name."
-  (hud-set-tab-width 4)
-  (should (fboundp 'hud-set-local-tab-width-4)))
-
-(ert-deftest bootstrap/set-tab-width-macro-generated-fn-works ()
-  "Generated function sets `tab-width' buffer-locally."
-  (hud-set-tab-width 6)
-  (with-temp-buffer
-    (hud-set-local-tab-width-6)
-    (should (= 6 tab-width))))
-
-(ert-deftest bootstrap/set-tab-width-macro-rejects-non-integer ()
-  "Macro signals `wrong-type-argument' for a non-integer argument."
-  (should-error (eval '(hud-set-tab-width "four") t)
-                :type 'wrong-type-argument))
-
-(ert-deftest bootstrap/set-tab-width-macro-rejects-float ()
-  "Macro signals `wrong-type-argument' for a float argument."
-  (should-error (eval '(hud-set-tab-width 4.0) t)
-                :type 'wrong-type-argument))
-
-(ert-deftest bootstrap/set-tab-width-macro-large-warns ()
-  "Macro calls `warn' for a tab width >= 32."
-  (let ((warned nil))
-    (cl-letf (((symbol-function 'warn) (lambda (&rest _) (setq warned t))))
-      (eval '(hud-set-tab-width 32) t))
-    (should warned)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; toggle-word-wrap
 
 (ert-deftest bootstrap/toggle-word-wrap-rejects-non-nil-arg ()
@@ -919,38 +887,9 @@
       (should (or (null result) (stringp result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-trailing-whitespace-mode
-
-(ert-deftest bootstrap/show-whitespace-global-mode ()
-  "Enable existing and future programming/text buffers, and disable them."
-  (let ((prog-mode-hook nil)
-        (text-mode-hook nil)
-        (bootstrap-trailing-whitespace-mode nil)
-        (code (generate-new-buffer " *bootstrap-whitespace-code*"))
-        (text (generate-new-buffer " *bootstrap-whitespace-text*"))
-        (other (generate-new-buffer " *bootstrap-whitespace-other*")))
-    (unwind-protect
-        (progn
-          (with-current-buffer code (prog-mode))
-          (with-current-buffer other (fundamental-mode))
-          (cl-letf (((symbol-function 'buffer-list) (lambda (&rest _) (list code text other))))
-            (bootstrap-trailing-whitespace-mode 1)
-            (should (buffer-local-value 'show-trailing-whitespace code))
-            (should-not (buffer-local-value 'show-trailing-whitespace other))
-            (with-current-buffer text (text-mode))
-            (should (buffer-local-value 'show-trailing-whitespace text))
-            (bootstrap-trailing-whitespace-mode -1)
-            (should-not (buffer-local-value 'show-trailing-whitespace code))
-            (should-not (buffer-local-value 'show-trailing-whitespace text))
-            (should-not (memq #'bootstrap--set-trailing-whitespace prog-mode-hook))
-            (should-not (memq #'bootstrap--set-trailing-whitespace text-mode-hook))))
-      (kill-buffer code)
-      (kill-buffer text)
-      (kill-buffer other))))
-
 (ert-deftest bootstrap/show-whitespace-mode-starts-early ()
   "The global mode is included in the early startup operations."
-  (should (memq 'bootstrap-trailing-whitespace-mode bootstrap-early-startup-operations)))
+  (should (memq 'overmark-global-mode bootstrap-early-startup-operations)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-buffers-visiting-missing-files
@@ -1003,12 +942,12 @@
 
 (ert-deftest bootstrap/kill-missing-file-buffers-empty ()
   "Returns nil when there are no missing-file buffers."
-  (cl-letf (((symbol-function 'buffer-list) (lambda () nil)))
+  (cl-letf (((symbol-function 'buffer-list) (lambda (&optional _frame) nil)))
     (should-not (kill-buffers-visiting-missing-files))))
 
 (ert-deftest bootstrap/kill-missing-file-buffers-returns-list ()
   "Return value is always a list."
-  (cl-letf (((symbol-function 'buffer-list) (lambda () nil)))
+  (cl-letf (((symbol-function 'buffer-list) (lambda (&optional _frame) nil)))
     (should (listp (kill-buffers-visiting-missing-files)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1125,13 +1064,13 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
         (should (equal '(skipped (:ensure-lazy t)) result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; hud-transient-insert-suffix-once
+;;; cmdr-transient-insert-suffix-once
 
 (ert-deftest bootstrap/transient-insert-suffix-once-idempotent ()
-  "hud-transient-insert-suffix-once inserts only once and handles missing layouts."
+  "cmdr-transient-insert-suffix-once inserts only once and handles missing layouts."
   (require 'transient)
   ;; 1. No-op without error when prefix has no layout
-  (should (null (hud-transient-insert-suffix-once
+  (should (null (cmdr-transient-insert-suffix-once
                  'bootstrap--test-nonexistent-menu
                  '(-1 0)
                  '("x" "test command" ignore))))
@@ -1139,13 +1078,13 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (transient-define-prefix bootstrap--test-ert-menu ()
     ["Test"
      ("a" "Action A" ignore)])
-  (should (hud-transient-insert-suffix-once
+  (should (cmdr-transient-insert-suffix-once
            'bootstrap--test-ert-menu
            '(-1 0)
            '("x" "test command" ignore)))
   (should (ignore-errors (transient-get-suffix 'bootstrap--test-ert-menu "x")))
   ;; 3. Second call is idempotent (no-ops and does not duplicate or error)
-  (should (null (hud-transient-insert-suffix-once
+  (should (null (cmdr-transient-insert-suffix-once
                  'bootstrap--test-ert-menu
                  '(-1 0)
                  '("x" "test command" ignore))))

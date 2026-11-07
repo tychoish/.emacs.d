@@ -8,6 +8,39 @@
 (require 'ert)
 (require 'overmark)
 
+(ert-deftest overmark-test/global-mode-manages-trailing-whitespace ()
+  "Manage whitespace in existing and future text and programming buffers."
+  (let ((prog-mode-hook nil)
+        (text-mode-hook nil)
+        (enable-theme-functions nil)
+        (overmark-global-mode nil)
+        (code (generate-new-buffer " *overmark-whitespace-code*"))
+        (text (generate-new-buffer " *overmark-whitespace-text*"))
+        (other (generate-new-buffer " *overmark-whitespace-other*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer code (prog-mode))
+          (cl-letf (((symbol-function 'buffer-list)
+                     (lambda (&rest _) (list code text other))))
+            (unwind-protect
+                (progn
+                  (overmark-global-mode 1)
+                  (should (buffer-local-value 'show-trailing-whitespace code))
+                  (should-not (buffer-local-value 'show-trailing-whitespace other))
+                  (with-current-buffer text (text-mode))
+                  (should (buffer-local-value 'show-trailing-whitespace text))
+                  (should (buffer-local-value 'overmark-mode text))
+                  (overmark-global-mode -1)
+                  (should-not (buffer-local-value 'show-trailing-whitespace code))
+                  (should-not (buffer-local-value 'show-trailing-whitespace text))
+                  (should-not (buffer-local-value 'overmark-mode text))
+                  (should-not (memq #'overmark--set-trailing-whitespace prog-mode-hook))
+                  (should-not (memq #'overmark--set-trailing-whitespace text-mode-hook)))
+              (overmark-global-mode -1))))
+      (kill-buffer code)
+      (kill-buffer text)
+      (kill-buffer other))))
+
 (ert-deftest overmark-test/annotations-toggle ()
   (with-temp-buffer
     (text-mode)
@@ -77,6 +110,8 @@
             (overmark-global-mode -1)
             (should-not (memq #'overmark--setup-faces enable-theme-functions))))
       (overmark-global-mode -1))))
+
+(defvar features)
 
 (ert-deftest overmark-test/theme-faces-ignore-unspecified-colors ()
   (let ((features (cons 'modus-themes features))

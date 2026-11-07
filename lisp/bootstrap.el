@@ -36,7 +36,13 @@
 (require 'sprite)
 (require 'sprite-state)
 (require 'xtd-macro)
-(require 'hud-mode)
+(require 'cmdr-mode)
+
+(defvar local-notes-directory nil
+  "Directory where notes (org, roam, deft, etc.) are stored.")
+
+(defvar user-org-directories nil
+  "Additional directories that may contain org files.")
 
 (eval-and-compile
   (unless (fboundp 'with-gc-suppressed)
@@ -63,15 +69,13 @@
 (defun bootstrap-check-package-quickstart ()
   "Refresh the package quickstart if it is stale."
   (bootstrap-refresh-package-quickstart))
+
 (autoload 'eglox-mode "eglox")
 (autoload 'telegax-mode "telegax" "Global minor mode managing Telega lifecycle integrations." t)
 (autoload 'telegax-global-mode "telegax" "Global minor mode anchoring the Telega prefix keys." t)
 (autoload 'telegax-switch-to-root "telegax" nil t)
 (autoload 'telegax-force-kill "telegax" nil t)
 (autoload 'telegax-disconnect "telegax" nil t)
-
-(autoload 'hud-dispatch "hud" nil t)
-(autoload 'hud-select "hud" nil t)
 
 (autoload 'tychoish-mail-select-account "setup-mail" nil t)
 (autoload 'tychoish-define-mail-account "setup-mail")
@@ -92,6 +96,7 @@
 (defvar desktop-modes-not-to-save)
 (defvar desktop-buffers-not-to-save)
 (defvar desktop-files-not-to-save)
+
 
 (defvar project-list-file)
 (defvar savehist-file)
@@ -277,22 +282,16 @@ Call ON-DONE after the last operation.  Return a cancellation function."
             (cancel-timer timer)
             (setq timer nil))))))))
 
-(bootstrap-require-package 'setup-project)
-(bootstrap-require-package 'setup-packages)
-
-(defun bootstrap-set-up-fringe-mode ()
-  (set-fringe-mode '(4 . 4)))
-
 (defcustom bootstrap-early-startup-operations
   '(bootstrap-set-up-fringe-mode
-    bootstrap-trailing-whitespace-mode
+    overmark-global-mode
     column-number-mode
     delete-selection-mode
     winner-mode
     electric-pair-mode
     pixel-scroll-precision-mode
     repeat-mode
-    hud-mode
+    cmdr-mode
     sprite-mode
     which-key-mode
     eglox-global-mode
@@ -313,7 +312,6 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     magit-dash-global-mode
     builder-mode
     chex-global-mode
-    overmark-global-mode
     agent-shell-queue-global-mode
     nerd-icons-completion-mode
     orgx-global-mode
@@ -349,17 +347,19 @@ Call ON-DONE after the last operation.  Return a cancellation function."
 (add-lazy-init
  :name "<bootstrap> startup"
  :delay 0.1
- :form (bootstrap-run-startup-operations
-        (append bootstrap-early-startup-operations
-                bootstrap-late-startup-operations
-                bootstrap-post-late-startup-operations)))
+ :form (with-slow-op-timer "<bootstrap> startup"
+         (bootstrap-run-startup-operations
+          (append bootstrap-early-startup-operations
+                  bootstrap-late-startup-operations
+                  bootstrap-post-late-startup-operations))))
 
 (add-one-shot-hook
  :name "<bootstrap> first-frame setup"
  :hook 'after-first-frame-created
- :form (bootstrap-run-startup-operations
-	bootstrap-after-first-frame-operations
-        :frame (selected-frame)))
+ :form (with-slow-op-timer "<one-shot-hook> <bootstrap> first-frame setup"
+         (bootstrap-run-startup-operations
+          bootstrap-after-first-frame-operations
+          :frame (selected-frame))))
 
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
@@ -375,13 +375,6 @@ Call ON-DONE after the last operation.  Return a cancellation function."
       (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
 	     :title (format "emacs-%s" sprite-instance-id)))))
 
-(defun bootstrap-startup-mark-complete ()
-  (unless bootstrap-startup-complete-time
-    (setq bootstrap-startup-complete-time (current-time))))
-
-(defun bootstrap-setup-custom-file ()
-  (setq custom-file (sprite-state-path "custom.el")))
-
 (defun bootstrap-noisy-modes ()
   (with-silence
     (recentf-mode 1)
@@ -389,6 +382,14 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     (savehist-mode 1)
     (setq savehist-coding-system 'utf-8-emacs)
     (add-to-list 'savehist-additional-variables 'compile-history)))
+
+(bootstrap-require-package 'setup-project)
+(bootstrap-require-package 'setup-packages)
+
+(defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
+(defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
+(defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
+(defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
 
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
@@ -398,15 +399,12 @@ Call ON-DONE after the last operation.  Return a cancellation function."
 
 ;; bootstrap load user files
 
-(defun bootstrap--load-user-file (name)
-  (with-slow-op-timer (format "<init> [user] %s.el" name)
-    (require (intern name))))
-
 (defun bootstrap-set-up-user-local-config (path)
   "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
   (dolist (file (directory-files path :full "\\.el$") nil)
-    (bootstrap--load-user-file
-     (file-name-sans-extension (file-name-nondirectory file)))))
+    (let ((name (file-name-sans-extension (file-name-nondirectory file))))
+      (with-slow-op-timer (format "<init> [user] %s" name)
+	(require (intern name))))))
 
 (defvar local-notes-directory nil
   "Directory where notes (org, roam, deft, etc.) are stored.")
@@ -461,29 +459,7 @@ Call ON-DONE after the last operation.  Return a cancellation function."
       (add-to-list 'default-frame-alist (cons 'font new-font-name)))
     (when (display-graphic-p)
       (set-frame-font new-font-name nil t)))
-  (assoc 'font default-frame-alist))
-
-(defvar bootstrap-trailing-whitespace-mode)
-
-(defun bootstrap--set-trailing-whitespace ()
-  "Apply `bootstrap-trailing-whitespace-mode' in the current buffer."
-  (setq-local show-trailing-whitespace bootstrap-trailing-whitespace-mode))
-
-(define-minor-mode bootstrap-trailing-whitespace-mode
-  "Show trailing whitespace in programming and text buffers."
-  :global t
-  :group 'bootstrap
-  (if bootstrap-trailing-whitespace-mode
-      (progn
-        (add-hook 'prog-mode-hook #'bootstrap--set-trailing-whitespace)
-        (add-hook 'text-mode-hook #'bootstrap--set-trailing-whitespace))
-    (remove-hook 'prog-mode-hook #'bootstrap--set-trailing-whitespace)
-    (remove-hook 'text-mode-hook #'bootstrap--set-trailing-whitespace))
-  (seq-do (lambda (buffer)
-            (with-current-buffer buffer
-              (when (derived-mode-p 'prog-mode 'text-mode)
-                (bootstrap--set-trailing-whitespace))))
-          (buffer-list)))
+  (map-elt default-frame-alist 'font))
 
 (setq modus-themes-deuteranopia t)
 (setq modus-themes-common-palette-overrides
@@ -491,16 +467,13 @@ Call ON-DONE after the last operation.  Return a cancellation function."
         (border-mode-line-inactive bg-mode-line-inactive)
         (message-separator bg-main)))
 
-(defun disable-all-themes ()
-  (interactive)
-  (mapc #'disable-theme custom-enabled-themes))
+(defun disable-all-themes () (interactive) (mapc #'disable-theme custom-enabled-themes))
+(defun bootstrap-ensure-default-font () (bootstrap-ensure-font "Source Code Pro" 13))
+(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 
 (defun bootstrap-ensure-font (font-face-name size)
-  (unless (assoc 'font default-frame-alist)
+  (unless (map-elt default-frame-alist 'font)
     (bootstrap-setup-font font-face-name size)))
-
-(defun bootstrap-ensure-default-font ()
-  (bootstrap-ensure-font "Source Code Pro" 13))
 
 (defun bootstrap-ensure-frame-alpha ()
   "Default frame opacity to 95 percent, including the selected frame."
@@ -509,18 +482,14 @@ Call ON-DONE after the last operation.  Return a cancellation function."
   (when (and (display-graphic-p) (not (frame-parameter nil 'alpha)))
     (set-frame-parameter nil 'alpha (map-elt default-frame-alist 'alpha))))
 
-(defun bootstrap-default-theme ()
-  (interactive)
-  (when (load-theme 'modus-operandi t t)
-    (enable-theme 'modus-operandi)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 
 (add-one-shot-hook
  :name "ssh-agent"
- :form (bootstrap-set-up-ssh-agent)
+ :form (with-slow-op-timer "<one-shot-hook> ssh-agent"
+         (bootstrap-set-up-ssh-agent))
  :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
 
 (defun find-ssh-agent-socket-candidates ()

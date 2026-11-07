@@ -48,6 +48,10 @@
   (when (derived-mode-p 'text-mode)
     (overmark-mode 1)))
 
+(defun overmark--set-trailing-whitespace ()
+  "Apply the global mode's trailing whitespace setting to this buffer."
+  (setq-local show-trailing-whitespace overmark-global-mode))
+
 (defun overmark--setup-faces (&rest _)
   "Set annotation faces from the current Modus theme."
   (when (featurep 'modus-themes)
@@ -71,21 +75,30 @@
 
 ;;;###autoload
 (define-minor-mode overmark-global-mode
-  "Enable `overmark-mode' in text buffers."
+  "Highlight annotations in text and trailing whitespace in text and code."
   :global t :group 'font-lock
   (if overmark-global-mode
       (progn
         (add-hook 'text-mode-hook #'overmark--turn-on)
+        (add-hook 'text-mode-hook #'overmark--set-trailing-whitespace)
+        (add-hook 'prog-mode-hook #'overmark--set-trailing-whitespace)
         (add-hook 'enable-theme-functions #'overmark--setup-faces)
         (overmark--setup-faces)
         (seq-do (lambda (buffer)
-                  (with-current-buffer buffer (overmark--turn-on)))
+                  (with-current-buffer buffer
+                    (overmark--turn-on)
+                    (when (derived-mode-p 'prog-mode 'text-mode)
+                      (overmark--set-trailing-whitespace))))
                 (buffer-list)))
     (remove-hook 'text-mode-hook #'overmark--turn-on)
+    (remove-hook 'text-mode-hook #'overmark--set-trailing-whitespace)
+    (remove-hook 'prog-mode-hook #'overmark--set-trailing-whitespace)
     (remove-hook 'enable-theme-functions #'overmark--setup-faces)
     (seq-do (lambda (buffer)
               (with-current-buffer buffer
-                (when overmark-mode (overmark-mode -1))))
+                (when overmark-mode (overmark-mode -1))
+                (when (derived-mode-p 'prog-mode 'text-mode)
+                  (overmark--set-trailing-whitespace))))
             (buffer-list))))
 
 (provide 'overmark)

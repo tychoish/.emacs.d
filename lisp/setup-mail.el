@@ -6,10 +6,10 @@
 ;;; Code:
 
 
-(eval-when-compile
-  (require 'xtd-macro))
-
-(require 'hud-mode)
+(require 'cmdr-macros)
+(require 'cmdr-keys)
+(require 'setup-cmdr)
+(require 'setup-defaults)
 (require 'map)
 (require 'mu4e-autoloads nil t)
 
@@ -60,7 +60,7 @@
 (defvar tychoish-mail-account-current nil)
 
 (with-eval-after-load 'mu4e
-  (seq-do (lambda (hook) (add-hook hook #'hud--record-home-frame))
+  (seq-do (lambda (hook) (add-hook hook #'tychoish--record-home-frame))
           '(mu4e-main-mode-hook
             mu4e-headers-mode-hook
             mu4e-view-mode-hook
@@ -358,7 +358,7 @@ live in MAILDIR's tools/signatures directory."
    :type 'string)
   (keybinding
    "m"
-   :documentation "keybinding in the hud-mail-map keymap"
+   :documentation "keybinding in the setup-cmdr-mail-map keymap"
    :type 'char)
   (fetchmail
    mu4e-get-mail-command
@@ -460,7 +460,7 @@ live in MAILDIR's tools/signatures directory."
 	  (instances '())
 	  (systems '())
 	  default)
-  "Register a mail account and bind KEY in `hud-mail-map' to activate it.
+  "Register a mail account and bind KEY in `setup-cmdr-mail-map' to activate it.
 Returns the symbol of the generated activation command.
 
 \\(fn &key NAME ADDRESS KEY ID [COMMAND] [MAILDIR] [INSTANCES] [SYSTEMS] DEFAULT)"
@@ -471,7 +471,9 @@ Returns the symbol of the generated activation command.
          (configure-account-symbol (intern account-name))
 	 (maildir (expand-file-name maildir)))
 
-    (keymap-set hud-mail-map key configure-account-symbol)
+    (keymap-set setup-cmdr-mail-map key configure-account-symbol)
+    (cmdr-keys-prefix cmdr-mode-map "C-c m" "mail")
+    (cmdr-keys-set cmdr-mode-map (concat "C-c m " key) configure-account-symbol)
 
     (setf (map-elt tychoish-mail-accounts-table account-name)
           (tychoish-mail-make-account
@@ -493,14 +495,14 @@ Returns the symbol of the generated activation command.
       (add-lazy-init
        :name (format "%s-activate" account-name)
        :delay tychoish-mail-activation-delay
-       :operation (lambda ()
-                    (when (or default
-                              (and
-                               (or (member (sprite-instance-name) instances)
-                                   (null instances))
-                               (or (member (system-name) systems)
-                                   (null systems))))
-                      (funcall configure-account-symbol)))))
+       :form (with-slow-op-timer (format "%s-activate" account-name)
+               (when (or default
+                         (and
+                          (or (member (sprite-instance-name) instances)
+                              (null instances))
+                          (or (member (system-name) systems)
+                              (null systems))))
+                 (funcall configure-account-symbol)))))
 
     configure-account-symbol))
 

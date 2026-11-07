@@ -8,7 +8,7 @@
 (require 'ert)
 (require 'test-helper)
 (require 'cl-lib)
-(require 'hud-mode)
+(require 'setup-cmdr)
 (defvar hud-mode-map (make-sparse-keymap))
 (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
 (require 'setup-hooks)
@@ -126,6 +126,7 @@ correctly and reads from the minibuffer using the candidate's command."
   "Test that `tychoish-define-mail-account' activates a default account in an idle timer after definition."
   (require 'setup-mail)
   (let ((hud-mail-map (make-sparse-keymap))
+        (cmdr-mode-map (make-sparse-keymap))
         (tychoish-mail-accounts-table (make-hash-table :test #'equal))
         (tychoish-mail-account-current nil)
         (user-mail-address nil)
@@ -142,6 +143,8 @@ correctly and reads from the minibuffer using the candidate's command."
          :maildir "/tmp/test-mail"
          :default t
          :command "true")
+        (should (eq (keymap-lookup cmdr-mode-map "C-c m x")
+                    #'tychoish-mail-test-acc))
         (should-not tychoish-mail-account-current)
         (thread-last timer-idle-list
                      (seq-remove (lambda (tm) (memq tm before)))
@@ -157,7 +160,7 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/projectile-enable-all-buffers-yielding ()
   "Test that `projectile-enable-all-buffers` enables projectile-mode in live buffers."
-  (require 'hud-mode nil t)
+  (require 'setup-cmdr nil t)
   (defvar hud-mode-map (make-sparse-keymap))
   (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
   (require 'projectile)
@@ -185,7 +188,7 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/projectile-disable-all-buffers-yielding ()
   "Test that `projectile-disable-all-buffers` disables projectile-mode in live buffers."
-  (require 'hud-mode nil t)
+  (require 'setup-cmdr nil t)
   (defvar hud-mode-map (make-sparse-keymap))
   (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
   (require 'projectile)
@@ -213,7 +216,7 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/projectile-load-project-buffers-yielding ()
   "Test that `projectile-load-project-buffers` loads project files incrementally."
-  (require 'hud-mode nil t)
+  (require 'setup-cmdr nil t)
   (defvar hud-mode-map (make-sparse-keymap))
   (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
   (require 'projectile)
@@ -350,6 +353,21 @@ correctly and reads from the minibuffer using the candidate's command."
       (should (= (length gptel-tools) 1))
       (should (equal (gptel-tool-name (car gptel-tools)) "core_test_tool")))))
 
+(ert-deftest tychoish-core/gptel-registers-cmdr-model-key ()
+  "Generated default model commands also appear in the cmdr map."
+  (require 'gptel)
+  (let ((cmdr-mode-map (make-sparse-keymap))
+        (hud-robot-gptel-set-default-model-map (make-sparse-keymap))
+        (gptel-mode-map (make-sparse-keymap)))
+    (unwind-protect
+        (progn
+          (make-gptel-set-up-backend-functions
+           :name "test-cmdr-model" :key "q" :model 'test-model :backend nil)
+          (should (eq (keymap-lookup cmdr-mode-map "C-c r g m q")
+                      #'gptel-set-backend-default-test-cmdr-model)))
+      (fmakunbound 'gptel-set-backend-test-cmdr-model)
+      (fmakunbound 'gptel-set-backend-default-test-cmdr-model))))
+
 (ert-deftest tychoish-core/agent-shell-queue-menu-bindings ()
   "Test that `agent-shell-queue' configures `agent-shell-menu' mode keys without error."
   (require 'agent-shell)
@@ -359,6 +377,18 @@ correctly and reads from the minibuffer using the candidate's command."
                  'agent-shell-menu-output-key-m))
   (should (equal (lookup-key agent-shell-mode-map (kbd "?"))
                  'agent-shell-menu-output-key-?)))
+
+(ert-deftest tychoish-core/annotated-agent-shell-prefix-bindings ()
+  (require 'setup-agent-shell)
+  (require 'agent-shell-queue)
+  (should (eq (keymap-lookup agent-shell-mode-map "C-c j") hud-robot-agent-shell-map))
+  (should (eq (keymap-lookup agent-shell-queue-mode-map "C-c j") hud-robot-agent-shell-map)))
+
+(ert-deftest tychoish-core/annotated-magit-prefix-bindings ()
+  (require 'magit)
+  (should (eq (keymap-lookup magit-mode-map "/") magit-command-mode-map))
+  (should (eq (keymap-lookup magit-command-mode-map "x") #'execute-extended-magit-command))
+  (should (eq (keymap-lookup magit-command-mode-map "m") #'execute-extended-magit-command)))
 
 (provide 'test-setup-core)
 ;;; test-setup-core.el ends here

@@ -16,14 +16,7 @@
 
 ;; INTERNAL
 
-(eval-when-compile
-  (require 'xtd-macro))
-
-(defvar local-notes-directory nil
-  "Directory where notes (org, roam, deft, etc.) are stored.")
-
-(defvar user-org-directories nil
-  "Additional directories that may contain org files.")
+(declare-function setup-cmdr-register-commands "setup-cmdr")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -32,7 +25,6 @@
 (use-package gptel
   :ensure t
   :defer t
-  :functions (gptel-make-anthropic gptel-make-gh-copilot gptel-make-gemini)
   :config
   (defvar gemini-api-key nil)
   (defvar anthropic-api-key nil)
@@ -67,7 +59,9 @@
 
       (keymap-set gptel-mode-map (format "C-c r a m %s" (upcase key)) default-function-symbol)
       (keymap-set gptel-mode-map (format "C-c r a m %s" (downcase key)) local-function-symbol)
-      (keymap-set hud-robot-gptel-set-default-model-map (downcase key) default-function-symbol)))
+      (keymap-set hud-robot-gptel-set-default-model-map (downcase key) default-function-symbol)
+      (when (boundp 'cmdr-mode-map)
+        (keymap-set cmdr-mode-map (format "C-c r g m %s" (downcase key)) default-function-symbol))))
 
   (keymap-set gptel-mode-map "C-c m" #'gptel-menu)
 
@@ -102,6 +96,12 @@
   (gptel-set-backend-default-gemini-flash)
   (require 'gptel-integrations)
   (gptel-mcp-mode 1))
+
+(use-package cmdr
+  :config
+  (require 'setup-cmdr)
+  (setup-cmdr-register-commands)
+  :commands (cmdr-menu cmdr-dispatch))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here

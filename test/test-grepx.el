@@ -5,7 +5,6 @@
 (require 'cl-lib)
 (require 'deadgrep)
 (require 'consult nil t)
-(require 'hud-mode)
 (require 'grepx)
 (require 'minaid)
 

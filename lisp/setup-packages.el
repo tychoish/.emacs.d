@@ -26,6 +26,7 @@
    arch
    builder
    cape
+   cmdr
    cond-let
    consult
    corfu

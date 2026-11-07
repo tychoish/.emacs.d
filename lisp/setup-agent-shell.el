@@ -7,10 +7,9 @@
 
 (require 'cl-lib)
 (require 'sprite)
-(require 'hud-mode)
+(require 'setup-cmdr)
 
 (eval-when-compile
-  (require 'xtd-macro)
   (require 'agent-shell nil t))
 
 (defvar which-key-replacement-alist)
@@ -407,7 +406,7 @@ FORCE re-downloads; SYNC waits synchronously."
 (keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
 (keymap-set agent-shell-mode-map "C-c C-a" #'agent-shell-menu-select-action)
 (keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
-(keymap-set agent-shell-mode-map "C-c j" '(hud-robot-agent-shell-map . "robot-agent-shell"))
+(keymap-set agent-shell-mode-map "C-c j" (cons "robot-agent-shell" setup-cmdr-robot-agent-shell-map))
 (keymap-set agent-shell-mode-map "C-c m" #'agent-shell-menu-select-action)
 (keymap-set agent-shell-mode-map "C-c x" #'agent-shell-menu-select-command)
 (keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
@@ -441,7 +440,7 @@ FORCE re-downloads; SYNC waits synchronously."
   (setq agent-shell-queue-stall-timeout 600)
   (agent-shell-queue-overload-mode 1)
 
-  (keymap-set agent-shell-queue-mode-map "C-c j" '(hud-robot-agent-shell-map . "robot-agent-shell"))
+  (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" setup-cmdr-robot-agent-shell-map))
   (keymap-unset agent-shell-mode-map "<spc>")
   (keymap-unset agent-shell-mode-map "SPC")
 
@@ -459,6 +458,8 @@ FORCE re-downloads; SYNC waits synchronously."
   (agent-shell-menu-mode-key " " agent-shell-set-session-mode)
   (agent-shell-menu-mode-key "TAB" agent-shell-ui-toggle-fragment)
   (agent-shell-menu-mode-key "q" agent-shell-queue-buffer-open)
+  (agent-shell-menu-mode-key "s" agent-shell-prompt-steer)
+  (agent-shell-menu-mode-key "r" agent-shell-menu-restart)
 
   (defun agent-shell-queue-capture-corfu-setup ()
     "Configure Corfu and dabbrev for queue capture/edit buffers."

@@ -9,11 +9,11 @@
 (require 'cl-lib)
 (require 'sprite)
 (require 'xtd-macro)
-(defvar hud-smerge-map)
-(defvar hud-ide-map)
-(autoload 'hud-mode "hud-mode" nil t)
+(require 'cmdr-macros)
+(defvar setup-cmdr-smerge-map)
+(defvaralias 'hud-smerge-map 'setup-cmdr-smerge-map)
 
-(autoload 'hud-transient-insert-suffix-once "hud")
+(autoload 'cmdr-transient-insert-suffix-once "cmdr")
 (autoload 'bootstrap-set-up-auto-save "bootstrap")
 (autoload 'overmark-font-lock-width-keyword "overmark")
 (autoload 'overmark-font-lock-show-tabs "overmark")
@@ -286,7 +286,7 @@ completion candidate outlives its buffer."
       "")))
 
 (with-eval-after-load 'smerge-mode
-  (keymap-set hud-smerge-map "r" #'smerge-kill-and-vc-next-conflict)
+  (keymap-set setup-cmdr-smerge-map "r" #'smerge-kill-and-vc-next-conflict)
 
   (defun smerge-kill-and-vc-next-conflict ()
     "Kill the current conflict option and move to the next conflict."
@@ -296,7 +296,7 @@ completion candidate outlives its buffer."
 
 (with-eval-after-load 'docker
   (setq docker-terminal-backend 'eat)
-  (hud-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
+  (cmdr-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
 (with-eval-after-load 'denote-dash
   (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree)
@@ -337,19 +337,15 @@ completion candidate outlives its buffer."
       (unintern 'tychoish/darwin-alert-config-for-server obarray))))
 
 (with-eval-after-load 'slime
-  (make-read-extended-command-for-prefix "slime"
-    :key-alias "slime-commands"
-    :bind-map hud-ide-map
-    :bind-key "s")
   (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
 
 (with-eval-after-load 'ollama-tailnet
   (ollama-tailnet-setup-laptop-presets)
-  (hud-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
+  (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
 
 (with-eval-after-load 'elpaish
-  (hud-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
+  (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 (with-eval-after-load 'treesit
   (add-hook 'js-ts-mode-hook (make-run-hooks-function-for js-mode))
@@ -646,11 +642,11 @@ clipboard."
   (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
 
   (defvar-keymap magit-command-mode-map) ;; "/"
-  (keymap-set magit-mode-map "/" '(magit-command-mode-map . "magit-command"))
+  (keymap-set magit-mode-map "/" (cons "magit-command" magit-command-mode-map))
   (keymap-set magit-status-mode-map "C-n" #'next-line)
   (keymap-set magit-status-mode-map "C-p" #'previous-line)
-  (keymap-set magit-command-mode-map "x" '(execute-extended-magit-command . "magit-commands"))
-  (keymap-set magit-command-mode-map "m" '(execute-extended-magit-command . "(s)merge-commands"))
+  (keymap-set magit-command-mode-map "x" (cons "magit-commands" #'execute-extended-magit-command))
+  (keymap-set magit-command-mode-map "m" (cons "(s)merge-commands" #'execute-extended-magit-command))
 
   (when (fboundp 'hud-modeline-set-segment-action)
     (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
