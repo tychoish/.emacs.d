@@ -52,12 +52,6 @@
             (bootstrap-refresh-package-quickstart t)))))
 
     (with-slow-op-timer "<init> [local] require all"
-      (with-slow-op-timer "<init> [local] [feature] require setup-cmdr"
-	(require 'setup-cmdr)
-	(setup-cmdr-install-bindings)
-	(setup-cmdr-register-commands)
-	(cmdr-mode 1))
-
       (with-slow-op-timer "<init> [local] [feature] require bootstrap.el"
         (require 'bootstrap))
 
