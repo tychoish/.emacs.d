@@ -267,6 +267,36 @@
    :default-model "github_copilot/claude-sonnet-4.5"
    :weak-model "github_copilot/claude-haiku-4.5"))
 
+(cl-defun make-gptel-set-up-backend-functions (&key name model backend key api-key)
+  "Register buffer-local and session-default backend switchers for MODEL as NAME."
+  (declare (indent defun))
+  (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
+        (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
+    (defalias local-function-symbol
+      (lambda ()
+        (interactive)
+        (setq-local gptel-model model)
+        (when api-key
+          (setq-local gptel-api-key (if (functionp api-key) api-key (lambda () api-key))))
+        (setq-local gptel-backend backend)
+        (message "[gptel] set backend to %s for the local buffer" name))
+      (format "Set LLM backend for the current buffer to `%s'" model))
+
+    (defalias default-function-symbol
+      (lambda ()
+        (interactive)
+        (setq-default gptel-model model)
+        (when api-key
+          (setq-default gptel-api-key (if (functionp api-key) api-key (lambda () api-key))))
+        (setq-default gptel-backend backend)
+        (message "[gptel] set default backend to %s" name))
+      (format "Set the default LLM backend for the current session to `%s'" model))
+
+    (keymap-set gptel-mode-map (format "C-c r a m %s" (upcase key)) default-function-symbol)
+    (keymap-set gptel-mode-map (format "C-c r a m %s" (downcase key)) local-function-symbol)
+    (keymap-set hud-robot-gptel-set-default-model-map (downcase key) default-function-symbol)))
+
+
 (defun tychoish/get-anthropic-api-key ()
   (or (when (boundp 'anthropic-api-key) anthropic-api-key)
       (when-let* ((key (getenv "ANTHROPIC_API_KEY")))
