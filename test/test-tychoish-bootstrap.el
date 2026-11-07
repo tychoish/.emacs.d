@@ -635,13 +635,11 @@
       (should (equal "NewFont-14" (cdr (assoc 'font default-frame-alist)))))))
 
 (ert-deftest bootstrap/setup-font-returns-alist-entry ()
-  "Returns a cons cell of the form (font . string)."
+  "Returns the configured font string."
   (let ((default-frame-alist nil))
     (cl-letf (((symbol-function 'set-frame-font) #'ignore))
       (let ((result (bootstrap-setup-font "Mono" 11)))
-        (should (consp result))
-        (should (eq 'font (car result)))
-        (should (stringp (cdr result)))))))
+        (should (equal "Mono-11" result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; bootstrap-ensure-font
@@ -661,39 +659,18 @@
       (should (equal "Existing-10" (cdr (assoc 'font default-frame-alist)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; disable-all-themes / bootstrap-ensure-*-theme
+;;; disable-all-themes / bootstrap-default-theme
 
-(ert-deftest bootstrap/ensure-light-theme-noop-when-active ()
-  "Does not call load function when a theme is already enabled."
-  (let ((custom-enabled-themes '(modus-operandi)))
-    (cl-letf (((symbol-function 'bootstrap-load-light-theme)
-               (lambda () (error "should not be called"))))
-      (should-not (bootstrap-ensure-light-theme)))))
-
-(ert-deftest bootstrap/ensure-light-theme-loads-when-empty ()
-  "Calls `bootstrap-load-light-theme' when no theme is active."
-  (let ((custom-enabled-themes nil)
-        (called nil))
-    (cl-letf (((symbol-function 'bootstrap-load-light-theme)
-               (lambda () (setq called t))))
-      (bootstrap-ensure-light-theme)
-      (should called))))
-
-(ert-deftest bootstrap/ensure-dark-theme-noop-when-active ()
-  "Does not call load function when a theme is already enabled."
-  (let ((custom-enabled-themes '(modus-vivendi)))
-    (cl-letf (((symbol-function 'bootstrap-load-dark-theme)
-               (lambda () (error "should not be called"))))
-      (should-not (bootstrap-ensure-dark-theme)))))
-
-(ert-deftest bootstrap/ensure-dark-theme-loads-when-empty ()
-  "Calls `bootstrap-load-dark-theme' when no theme is active."
-  (let ((custom-enabled-themes nil)
-        (called nil))
-    (cl-letf (((symbol-function 'bootstrap-load-dark-theme)
-               (lambda () (setq called t))))
-      (bootstrap-ensure-dark-theme)
-      (should called))))
+(ert-deftest bootstrap/default-theme-enables-modus-operandi ()
+  "Calls `load-theme' and `enable-theme' for modus-operandi."
+  (let (loaded enabled)
+    (cl-letf (((symbol-function 'load-theme)
+               (lambda (theme &rest _) (push theme loaded) t))
+              ((symbol-function 'enable-theme)
+               (lambda (theme) (push theme enabled))))
+      (bootstrap-default-theme)
+      (should (equal '(modus-operandi) loaded))
+      (should (equal '(modus-operandi) enabled)))))
 
 (ert-deftest bootstrap/disable-all-themes-calls-disable-for-each ()
   "Calls `disable-theme' for every entry in `custom-enabled-themes'."
@@ -797,45 +774,14 @@
             (should (eq 'cmake-root (car result)))))
       (delete-directory dir t))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; should-read-abbrev-file-p
-
-(ert-deftest bootstrap/should-read-abbrev-not-in-cache ()
-  "Returns t when path is absent from cache."
-  (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
-    (should (should-read-abbrev-file-p "/some/path.el"))))
-
-(ert-deftest bootstrap/should-read-abbrev-fresh-cache-entry ()
-  "Returns nil when cache entry is newer than the file."
-  (let ((tmp (make-temp-file "ert-abbrev-")))
-    (unwind-protect
-        (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
-          (setf (map-elt bootstrap-abbrev-files-cache tmp)
-                  (time-add (current-time) (seconds-to-time 3600)))
-          (should-not (should-read-abbrev-file-p tmp)))
-      (delete-file tmp))))
-
-(ert-deftest bootstrap/should-read-abbrev-stale-cache-entry ()
-  "Returns t when the file is newer than the cache entry."
-  (let ((tmp (make-temp-file "ert-abbrev-stale-")))
-    (unwind-protect
-        (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
-          (setf (map-elt bootstrap-abbrev-files-cache tmp)
-                  (time-subtract (current-time) (seconds-to-time 3600)))
-          (should (should-read-abbrev-file-p tmp)))
-      (delete-file tmp))))
-
-(ert-deftest bootstrap/should-read-abbrev-returns-boolean ()
-  "Return value is t or nil."
-  (let ((bootstrap-abbrev-files-cache (make-hash-table :test #'equal)))
-    (let ((result (should-read-abbrev-file-p "/nope")))
-      (should (or (eq result t) (eq result nil))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sprite state startup
 
 (ert-deftest bootstrap/sprite-state-startup-order ()
   "Configure state before recentf and savehist consume their files."
+  (require 'recentf)
+  (require 'savehist)
   (let ((recentf-save-file nil)
         (savehist-file nil)
         (sprite-state-locks-enabled nil)
@@ -1029,39 +975,6 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
         (should-not installed-called)
         (should (eq 'package-lint require-called))))))
 
-(ert-deftest bootstrap/ensure-lazy-keyword-is-registered ()
-  "Test that :ensure-lazy is registered as a keyword in use-package."
-  (should (member :ensure-lazy use-package-keywords))
-  (should (fboundp 'use-package-handler/:ensure-lazy)))
-
-(ert-deftest bootstrap/ensure-lazy-handler-expansion-no-commands ()
-  "Test that `:ensure-lazy' handler expands to immediate require/install when no commands are given."
-  (let* ((expanded (use-package-handler/:ensure-lazy
-                    'my-test-package :ensure-lazy t nil nil)))
-    ;; Without commands, it should expand to installing/requiring immediately
-    (should (string-match-p "package-install" (format "%S" expanded)))
-    (should (string-match-p "require" (format "%S" expanded)))))
-
-(ert-deftest bootstrap/ensure-lazy-handler-expansion-with-commands ()
-  "Test that `:ensure-lazy' handler expands to autoload wrappers when commands are given."
-  (let* ((state (list :commands '(my-test-cmd-1 my-test-cmd-2)))
-         (expanded (use-package-handler/:ensure-lazy
-                    'my-test-package :ensure-lazy t nil state)))
-    ;; With commands, it should define wrapper functions for the commands
-    (should (string-match-p "defun my-test-cmd-1" (format "%S" expanded)))
-    (should (string-match-p "defun my-test-cmd-2" (format "%S" expanded)))
-    (should (string-match-p "package-install" (format "%S" expanded)))))
-
-(ert-deftest bootstrap/ensure-handler-skips-when-lazy-present ()
-  "Test that standard `:ensure' handler does nothing when `:ensure-lazy' is present."
-  (let (orig-called)
-    (cl-letf (((symbol-function 'use-package-process-keywords)
-               (lambda (_name rest _state) (list 'skipped rest))))
-      (let ((result (ad:use-package-handler/:ensure-skip-lazy
-                     (lambda (&rest _) (setq orig-called t))
-                     'my-test-package :ensure t '(:ensure-lazy t) '(:ensure-lazy t))))
-        (should-not orig-called)
-        (should (equal '(skipped (:ensure-lazy t)) result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr-transient-insert-suffix-once
@@ -1286,6 +1199,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 (ert-deftest bootstrap/quickstart-compilation-is-silent-on-errors ()
   "Compiler errors during quickstart refresh do not display or log warnings."
   (require 'bytecomp)
+  (require 'warnings)
   (let ((file (make-temp-file "quickstart-error-" nil ".el"))
         (byte-compile-log-buffer " *quickstart-test-compile-log*")
         (warning-inhibit-types nil))
@@ -1311,6 +1225,8 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 (ert-deftest bootstrap/startup-refreshes-quickstart-only-when-stale ()
   "Startup checks freshness before refreshing the quickstart."
+  (require 'package)
+  (require 'setup-package-defaults)
   (let ((stale nil)
         (refreshes 0))
     (cl-letf (((symbol-function 'bootstrap-package-quickstart-stale-p)

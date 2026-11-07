@@ -252,7 +252,8 @@
   "The cmdr ecosystem plugin exposes the Consult documentation commands."
   (require 'cmdr-ecosystem)
   (let ((cmdr-mode-map (make-sparse-keymap)))
-    (cmdr-ecosystem-install)
+    (cmdr-spec-install 'consult)
+    (cmdr-spec-install 'consult-eglot)
     (should (eq (keymap-lookup cmdr-mode-map "C-c h i") #'consult-info))
     (should (eq (keymap-lookup cmdr-mode-map "C-c h m") #'consult-man))
     (should (eq (keymap-lookup cmdr-mode-map "C-c h a") #'consult-eglot-symbols))))

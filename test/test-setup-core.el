@@ -112,7 +112,7 @@ correctly and reads from the minibuffer using the candidate's command."
     (cl-letf (((symbol-function 'builder--read-command)
                (lambda (_cmd) mock-results))
               ((symbol-function 'read-from-minibuffer)
-               (lambda (prompt val)
+               (lambda (prompt val &rest _rest)
                  (should (equal "edit command => " prompt))
                  (should (equal "make -j8" val))
                  val)))

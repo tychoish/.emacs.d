@@ -13,9 +13,12 @@
 
 (ert-deftest eglox-ide/loads-standalone ()
   (should (featurep 'eglox))
-  (should-not (featurep 'hud-mode))
-  (should-not (featurep 'cmdr))
-  (should-not (featurep 'xtd-macro)))
+  (should (= 0 (call-process (concat invocation-directory invocation-name)
+                             nil nil nil
+                             "--batch" "-Q"
+                             "-L" (expand-file-name "lisp" user-emacs-directory)
+                             "--eval"
+                             "(progn (require 'eglox) (when (or (featurep 'cmdr) (featurep 'xtd-macro) (featurep 'hud-mode)) (kill-emacs 1)))"))))
 
 (ert-deftest eglox-ide/map-lookup-every-key ()
   (seq-do (lambda (pair)
