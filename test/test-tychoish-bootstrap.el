@@ -864,37 +864,24 @@
       (should (or (eq result t) (eq result nil))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bootstrap-desktop-save
+;;; sprite state startup
 
-(ert-deftest bootstrap/desktop-save-skips-solo-instance ()
-  "Does not call `desktop-save' when instance-id is \"solo\"."
-  (let ((sprite-instance-id "solo")
-        (called nil))
-    (cl-letf (((symbol-function 'desktop-save) (lambda (&rest _) (setq called t))))
-      (bootstrap-desktop-save)
-      (should-not called))))
-
-(ert-deftest bootstrap/desktop-save-runs-for-named-instance ()
-  "Calls `desktop-save' for a named instance when time threshold is exceeded."
-  (let ((sprite-instance-id "work")
-        (desktop/last-save-time (time-subtract (current-time) (seconds-to-time 300)))
-        (desktop-dirname "/tmp")
-        (called nil))
-    (cl-letf (((symbol-function 'desktop-save) (lambda (&rest _) (setq called t)))
-              ((symbol-function 'random) (lambda (_) 0)))
-      (bootstrap-desktop-save)
-      (should called))))
-
-(ert-deftest bootstrap/desktop-save-updates-last-save-time ()
-  "Updates `desktop/last-save-time' after saving."
-  (let ((sprite-instance-id "work")
-        (desktop/last-save-time (time-subtract (current-time) (seconds-to-time 300)))
-        (desktop-dirname "/tmp"))
-    (cl-letf (((symbol-function 'desktop-save) #'ignore)
-              ((symbol-function 'random) (lambda (_) 0)))
-      (let ((before desktop/last-save-time))
-        (bootstrap-desktop-save)
-        (should (time-less-p before desktop/last-save-time))))))
+(ert-deftest bootstrap/sprite-state-startup-order ()
+  "Configure state before recentf and savehist consume their files."
+  (let ((recentf-save-file nil)
+        (savehist-file nil)
+        (sprite-state-locks-enabled nil)
+        (sprite-state-mappings '((recentf-save-file . "recentf.el")
+                                 (savehist-file . "history.el")))
+        (seen nil))
+    (sprite-state-configure)
+    (cl-letf (((symbol-function 'recentf-mode)
+               (lambda (&rest _) (push (cons 'recentf recentf-save-file) seen)))
+              ((symbol-function 'savehist-mode)
+               (lambda (&rest _) (push (cons 'savehist savehist-file) seen))))
+      (bootstrap-noisy-modes))
+    (should (equal (alist-get 'recentf seen) (sprite-state-path "recentf.el")))
+    (should (equal (alist-get 'savehist seen) (sprite-state-path "history.el")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; bootstrap-set-up-ssh-agent

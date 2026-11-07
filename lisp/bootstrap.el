@@ -34,6 +34,7 @@
 ;;; Code:
 
 (require 'sprite)
+(require 'sprite-state)
 (require 'xtd-macro)
 (require 'hud-mode)
 
@@ -91,8 +92,6 @@
 (defvar desktop-modes-not-to-save)
 (defvar desktop-buffers-not-to-save)
 (defvar desktop-files-not-to-save)
-(declare-function desktop-save "desktop")
-(declare-function desktop-read "desktop")
 
 (defvar project-list-file)
 (defvar savehist-file)
@@ -158,76 +157,25 @@ triggered directly by a keypress, still prompts normally.")
 
 ;; state -- setup desktop/bookmarks/savehist
 
-(defvar desktop/last-save-time nil)
-(defvar desktop-dirname nil)
+(setq sprite-state-mappings
+      '((project-list-file . "projects.el")
+        (bookmark-default-file . "bookmarks.el")
+        (tramp-persistency-file-name . "tramp.el")
+        (transient-history-file . "transient-history.el")
+        (auto-save-list-file-prefix . "auto-save-list/")
+        (request-storage-directory . "request/")
+        (url-configuration-directory . "url/")
+        (denote-sync-cache-directory . "denote-sync/")
+        (recentf-save-file . "recentf.el")
+        (savehist-file . "history.el"))
+      sprite-state-locks-enabled t
+      sprite-state-desktop-enabled t
+      bookmark-save-flag 1)
 
-(defun bootstrap-set-up-emacs-instance-persistence ()
-  ;; `package-quickstart-file'/`package-quickstart' are set in init.el,
-  ;; before `package-activate-all' runs -- this is deliberately shared
-  ;; across instances, not per-instance state, so it does not belong here.
-  (setq project-list-file (sprite-state-path "projects.el"))
-  (setq savehist-file (sprite-state-path "history.el"))
-  (setq bookmark-default-file (sprite-state-path "bookmarks.el"))
-  (setq tramp-persistency-file-name (sprite-state-path "tramp.el"))
-  (setq transient-history-file (sprite-state-path "transient-history.el"))
-
-  (setq auto-save-list-file-prefix (sprite-state-path "auto-save-list/"))
-  (setq request-storage-directory (sprite-state-path "request/"))
-  (setq url-configuration-directory (sprite-state-path "url/"))
-  (setq denote-sync-cache-directory (sprite-state-path "denote-sync/"))
-
-  (setq bookmark-save-flag 1)
-  (setq savehist-coding-system 'utf-8-emacs)
-
-  (if (equal "solo" sprite-instance-id)
-      (bootstrap-set-up-ephemeral-instance-file-locks)
-    (bootstrap-set-up-named-instance-file-locks))
-
-  (annotated-completing-read-setup-history)
-  (add-to-list 'savehist-additional-variables 'compile-history)
-
-    (bootstrap-set-up-named-instance-file-locks)))
-
-(defun bootstrap-desktop-save ()
-  "Save desktop... sometimes"
-  (interactive)
-  (unless (equal "solo" sprite-instance-id)
-    (when (or (> 40 (random 100))
-              (< 150 (float-time (time-since desktop/last-save-time))))
-      (desktop-save desktop-dirname)
-      (setq desktop/last-save-time (current-time)))))
-
-(defun bootstrap-desktop-read-init ()
-  ;; only read the desktop if we're not in the "solo" (no ID) emacs
-  ;; instance.
+(defun bootstrap-desktop-policy ()
+  "Configure personal desktop save policy after restoration."
+  (require 'desktop)
   (with-gc-suppressed
-   (require 'desktop)
-   (unless (equal "solo" sprite-instance-id)
-     (setq desktop-dirname (file-name-concat user-emacs-directory sprite--conf-state-directory))
-     (setq desktop-base-file-name (sprite-state-file-prefix "desktop.el"))
-     (setq desktop-base-lock-name (sprite-state-file-prefix (format "desktop-%d.lock" (emacs-pid))))
-     (setq desktop-path (list desktop-dirname user-emacs-directory (expand-file-name "~/")))
-
-     (setq desktop-save t)
-     (setq desktop/last-save-time (current-time))
-     (setq desktop-restore-frames nil)
-     (setq desktop-restore-in-current-display nil)
-
-     ;; Fully eager everywhere, daemon or not. Lazy restore
-     ;; (`desktop-idle-create-buffers') runs on an idle timer that competes
-     ;; with everything else, including agent-shell/ACP's own message
-     ;; draining, for minutes after every restart, since Emacs is
-     ;; single-threaded. A slower, blocking startup beats that contention.
-     (setq desktop-restore-eager t)
-     (if (daemonp)
-         (setq desktop-load-locked-desktop t)
-       (setq desktop-load-locked-desktop nil))
-
-     (when (file-exists-p (file-name-concat desktop-dirname desktop-base-file-name))
-       (with-silence (desktop-read)))
-
-     (run-with-idle-timer 120 t #'bootstrap-desktop-save))
-
    (add-to-list 'desktop-globals-to-save 'register-alist)
    (add-to-list 'desktop-globals-to-save 'file-name-history)
    (add-to-list 'desktop-modes-not-to-save 'dired-mode)
@@ -249,10 +197,6 @@ triggered directly by a keypress, still prompts normally.")
                  "^/usr/lib/rustlib/.*\\|"
                  "^/home.+go/pkg/mod\\|"
                  "^/home.+\\.cargo"))))
-
-
-(defun bootstrap-ensure-packages-installed ()
-  (elpaish-install-packages :async t))
 
 (defmacro bootstrap-require-package (pkg)
   "Define `bootstrap-require-pkg-PKG', a startup operation that requires PKG.
@@ -354,8 +298,8 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     eglox-global-mode
     minaid-mode
     telegax-global-mode
-    bootstrap-noisy-modes
-    bootstrap-set-up-emacs-instance-persistence)
+    sprite-state-configure
+    bootstrap-noisy-modes)
   "UI, key binding, and persistence operations started early in bootstrap."
   :type '(repeat function)
   :group 'bootstrap)
@@ -375,8 +319,10 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     orgx-global-mode
     global-auto-revert-mode
     orgx-capture-setup-standard-templates
+    annotated-completing-read-setup-history
     mcpkit-init-services
-    bootstrap-desktop-read-init)
+    sprite-state-global-mode
+    bootstrap-desktop-policy)
   "Behavior, integration, and session restore operations started later."
   :type '(repeat function)
   :group 'bootstrap)
@@ -439,10 +385,8 @@ Call ON-DONE after the last operation.  Return a cancellation function."
 (defun bootstrap-noisy-modes ()
   (with-silence
     (recentf-mode 1)
-    (setq recentf-save-file (sprite-state-path "recentf.el"))
 
     (savehist-mode 1)
-    (setq savehist-file (sprite-state-path "history.el"))
     (setq savehist-coding-system 'utf-8-emacs)
     (add-to-list 'savehist-additional-variables 'compile-history)))
 
@@ -501,29 +445,6 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     (unless (file-exists-p path)
       (make-directory path t))
     (chmod path #o700)))
-
-(defun bootstrap-set-up-named-instance-file-locks ()
-  (let ((path (sprite-state-path "locks/")))
-    (setq lock-file-name-transforms
-          `(("\\`/.*/\\([^/]+\\)\\'" ,(concat path "\\1") t)))
-
-    (unless (file-exists-p path)
-      (make-directory path t))
-    (chmod path #o700)))
-
-(defun bootstrap-set-up-ephemeral-instance-file-locks ()
-  (let* ((path (car (thread-last (list (format "/run/user/%d" (user-uid))
-				       "/var/tmp"
-				       (temporary-file-directory))
-				 (seq-filter #'file-exists-p))))
-	 (solo-lock-path (file-name-concat path (format "emacs-%d" (emacs-pid)))))
-
-    (setq lock-file-name-transforms
-          `(("\\`/.*/\\([^/]+\\)\\'" ,(concat solo-lock-path "\\1") t)))
-
-    (unless (file-exists-p solo-lock-path)
-      (make-directory solo-lock-path t))
-    (chmod solo-lock-path #o700)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
