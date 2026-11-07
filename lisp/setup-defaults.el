@@ -138,12 +138,11 @@
 (add-hook 'LaTeX-mode-hook #'visual-line-mode)
 (add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
 
-(add-to-list 'auto-mode-alist '("\\.xml$'" . nxml-mode))
+(add-to-list 'auto-mode-alist '("\\.xml\\'" . nxml-mode))
 (add-to-list 'auto-mode-alist '("\\.rst\\'" . rst-mode))
 (add-to-list 'auto-mode-alist '("\\(?:^\\|/\\)[Mm]akefile\\'" . makefile-mode))
 (add-to-list 'auto-mode-alist '("\\.mk\\'" . makefile-mode))
 (add-to-list 'auto-mode-alist '("\\.tex\\'" . LaTeX-mode))
-
 (add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.timer\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.target\\'" . conf-unix-mode))
@@ -153,47 +152,28 @@
 (add-to-list 'auto-mode-alist '("\\.socket\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
 (add-to-list 'auto-mode-alist '("\\.conf\\'" . conf-unix-mode))
-
 (add-to-list 'auto-mode-alist '("\\.mdwn\\'" . markdown-mode))
 (add-to-list 'auto-mode-alist '("\\.md\\'" . markdown-mode))
 (add-to-list 'auto-mode-alist '("\\.markdown\\'" . markdown-mode))
 (add-to-list 'auto-mode-alist '("\\.txt\\'" . markdown-mode))
-
-
 (add-to-list 'auto-mode-alist '("PKGBUILD\\'" . pkgbuild-mode))
 (add-to-list 'auto-mode-alist '("\\.proto\\'" . protobuf-mode))
 (add-to-list 'auto-mode-alist '("\\.ninja\\'" . ninja-mode))
-
 (add-to-list 'auto-mode-alist '("\\.tf\\'" . terraform-mode))
 (add-to-list 'auto-mode-alist '("\\.tfvars\\'" . terraform-mode))
 (add-to-list 'auto-mode-alist '("\\.tfvars\\.example\\'" . terraform-mode))
-
 (add-to-list 'auto-mode-alist '("\\.sh\\'" . bash-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.bashrc\\'" . bash-ts-mode))
 (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
-
-(add-to-list 'auto-mode-alist '("\\.lisp'" . lisp-mode))
-
-;; -- yaml
+(add-to-list 'auto-mode-alist '("\\.lisp\\'" . lisp-mode))
 (add-to-list 'auto-mode-alist '("\\.ya?ml\\'" . yaml-mode))
-(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
-
-;; -- go
 (add-to-list 'auto-mode-alist '("\\.go\\'" . go-ts-mode))
 (add-to-list 'auto-mode-alist '("/go\\.work\\'" . go-mod-ts-mode))
 (add-to-list 'auto-mode-alist '("/go\\.mod\\'" . go-mod-ts-mode))
-(add-to-list 'major-mode-remap-alist '(go-mode . go-ts-mode))
-(add-to-list 'major-mode-remap-alist '(go-mod-mode . go-mod-ts-mode))
-
-;; -- rust
 (add-to-list 'auto-mode-alist '("\\.rs\\'" . rustic-mode))
 (add-to-list 'auto-mode-alist '("/Cargo\\.lock\\'" . toml-ts-mode))
-
-;; -- python
 (add-to-list 'auto-mode-alist '("\\.py\\'" . python-ts-mode))
-
-;; -- js/web
 (add-to-list 'auto-mode-alist '("\\.html\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.htm\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.as[cp]x\\'" . web-mode))
@@ -209,7 +189,6 @@
 (add-to-list 'auto-mode-alist '("\\.css\\'" . css-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.toml\\'" . toml-ts-mode))
-;; -- c/c++
 (add-to-list 'auto-mode-alist '("CMakeLists.txt" . cmake-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.h\\'" . c-or-c++-mode))
 (add-to-list 'auto-mode-alist '("\\.c\\'" . c-ts-mode))
@@ -217,9 +196,11 @@
 (add-to-list 'auto-mode-alist '("\\.cc\\'" . c++-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.hh\\'" . c++-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-ts-mode))
-;; -- jvm
 (add-to-list 'auto-mode-alist '("\\.java\\'" . java-ts-mode))
 
+(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
+(add-to-list 'major-mode-remap-alist '(go-mode . go-ts-mode))
+(add-to-list 'major-mode-remap-alist '(go-mod-mode . go-mod-ts-mode))
 (add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
 (add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
 (add-to-list 'major-mode-remap-alist '(java-mode . java-ts-mode))
