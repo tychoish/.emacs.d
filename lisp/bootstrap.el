@@ -69,33 +69,6 @@
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
 
-(defvar tychoish--suppress-supersession-prompt nil
-  "Non-nil when supersession prompts should be auto-confirmed.")
-
-(with-eval-after-load 'server
-  (advice-add 'server-eval-and-print :around
-              (lambda (orig-fn expr proc)
-                (let ((tychoish--suppress-supersession-prompt t))
-                  (funcall orig-fn expr proc)))))
-
-(advice-add 'timer-event-handler :around
-            (lambda (orig-fn timer)
-              (let ((tychoish--suppress-supersession-prompt t))
-                (funcall orig-fn timer))))
-
-(advice-add 'ask-user-about-supersession-threat :around
-            (lambda (orig-fn filename)
-              (if tychoish--suppress-supersession-prompt
-                  (message "%s changed on disk, editing file anyway" filename)
-                (funcall orig-fn filename))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; id-state -- emacs daemon/instance identification for state config
-
-(defun display-startup-echo-area-message () "No-op override for startup echo area." nil)
-(defun gui-p () "Return non-nil when may have GUI frames." (when (or (daemonp) (window-system)) t))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; state -- setup desktop/bookmarks/savehist

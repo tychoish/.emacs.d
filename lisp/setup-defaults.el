@@ -106,6 +106,9 @@
 
 (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
 
+(advice-add 'display-startup-echo-area-message :override #'ignore)
+(advice-add 'ask-user-about-supersession-threat :override #'ignore)
+
 (setq byte-compile-warnings
       ;; OMIT: free-vars docstrings-wide
       '(callargs
@@ -326,6 +329,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; TTY and display settings
+
+(defun gui-p () "Return non-nil when may have GUI frames." (when (or (daemonp) (window-system)) t))
 
 (defun contextual-menubar (&optional frame)
   "Display the menubar in FRAME (default: selected frame) if graphical, hide if TTY."
