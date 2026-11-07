@@ -13,11 +13,8 @@
 (require 'cmdr-keys)
 (require 'cmdr-spec)
 
-(autoload 'cmdr-transient-insert-suffix-once "cmdr")
-(autoload 'bootstrap-set-up-auto-save "bootstrap")
 (autoload 'overmark-font-lock-width-keyword "overmark")
 (autoload 'overmark-font-lock-show-tabs "overmark")
-(autoload 'orgx-capture-setup-standard-templates "orgx-capture")
 
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
@@ -95,7 +92,6 @@
 (add-hook 'isearch-mode-hook #'anzu-mode)
 (setq anzu-cons-mode-line-p nil)
 
-(add-hook 'auto-save-mode-hook #'bootstrap-set-up-auto-save)
 (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
 (add-hook 'org-mode-hook #'orgx-mode-turn-on)
 (add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
@@ -160,8 +156,32 @@
   (setq electric-pair-inhibit-predicate #'setup-electric-pair-inhibition)
   (add-to-list 'electric-pair-pairs '(?< . ?>)))
 
-(with-eval-after-load 'transient
-  (setq transient-values-file (file-name-concat user-emacs-directory sprite--conf-state-directory (sprite-state-file-prefix "transient-values.el"))))
+(with-eval-after-load 'savehist
+  (setq savehist-coding-system 'utf-8-emacs)
+  (add-to-list 'savehist-additional-variables 'compile-history))
+
+(with-eval-after-load 'desktop
+  (add-to-list 'desktop-globals-to-save 'register-alist)
+  (add-to-list 'desktop-globals-to-save 'file-name-history)
+  (add-to-list 'desktop-modes-not-to-save 'dired-mode)
+  (add-to-list 'desktop-modes-not-to-save 'Info-mode)
+  (add-to-list 'desktop-modes-not-to-save 'org-mode)
+  (add-to-list 'desktop-modes-not-to-save 'eww-mode)
+  (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
+  (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
+
+  (setq desktop-buffers-not-to-save
+        (concat "\\("
+                "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
+                "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
+                "\\)$"))
+
+  (setq desktop-files-not-to-save
+        (concat "\\(\\`/[^/:]*:\\|(ftp)\'\\)"
+                "^/usr/lib/go/.*\\|"
+                "^/usr/lib/rustlib/.*\\|"
+                "^/home.+go/pkg/mod\\|"
+                "^/home.+\\.cargo")))
 
 (with-eval-after-load 'denote
   ;; site configuration (paths)
@@ -228,15 +248,7 @@
 (with-eval-after-load 'agent-shell
   (require 'setup-agent-shell))
 
-(with-eval-after-load 'shell-maker
-  (defalias 'shell-maker-map 'shell-maker-major-mode-map)
-  (setq shell-maker-root-path (sprite-state-path "shell-maker")))
-
 (with-eval-after-load 'eshell
-  (setq eshell-history-file-name (file-name-concat
-				  user-emacs-directory
-				  sprite--conf-state-directory
-				  (sprite-state-file-prefix "eshell")))
   (with-eval-after-load "em-cmpl"
     (add-hook 'eshell-mode 'eshell-cmpl-initialize)))
 

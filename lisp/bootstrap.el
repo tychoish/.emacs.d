@@ -33,6 +33,8 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
 (require 'sprite)
 (require 'sprite-state)
 (require 'xtd-macro)
@@ -40,76 +42,26 @@
 (require 'cmdr-mode)
 
 (defvar local-notes-directory nil
-  "Directory where notes (org, roam, deft, etc.) are stored.")
+  "Directory where notes are stored.")
 
 (defvar user-org-directories nil
-  "Additional directories that may contain org files.")
+  "Extra directories containing org files.")
 
-(eval-and-compile
-  (unless (fboundp 'with-gc-suppressed)
-    (defmacro with-gc-suppressed (&rest body)
-      "Execute BODY with garbage collection temporarily suppressed."
-      (declare (indent 0) (debug t))
-      `(let ((gc-cons-threshold 800000000000000)
-             (gc-cons-percentage 1.0))
-         (prog1
-             (progn ,@body)
-           (if (fboundp 'bootstrap-schedule-idle-gc)
-               (bootstrap-schedule-idle-gc 5)
-             (unless noninteractive
-               (run-with-idle-timer 5 nil #'garbage-collect))))))))
-
-(autoload 'minaid-mode "minaid" "Global minor mode coordinating the consolidated Minad completion suite." t)
 (autoload 'overmark-global-mode "overmark" "Highlight annotations in text buffers." t)
 (autoload 'eglox-global-mode "eglox" "Global minor mode managing Eglot LSP lifecycle." t)
+(autoload 'telegax-global-mode "telegax" "Global minor mode anchoring the Telega prefix keys." t)
 (autoload 'grepx-mode "grepx" "Minor mode for persistent grepx search buffers." t)
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'bootstrap-refresh-package-quickstart "setup-package-defaults")
 
 (defun bootstrap-check-package-quickstart ()
-  "Refresh the package quickstart if it is stale."
+  "Refresh package quickstart if stale."
   (bootstrap-refresh-package-quickstart))
 
-(autoload 'eglox-mode "eglox")
-(autoload 'telegax-mode "telegax" "Global minor mode managing Telega lifecycle integrations." t)
-(autoload 'telegax-global-mode "telegax" "Global minor mode anchoring the Telega prefix keys." t)
-(autoload 'telegax-switch-to-root "telegax" nil t)
-(autoload 'telegax-force-kill "telegax" nil t)
-(autoload 'telegax-disconnect "telegax" nil t)
-
-(autoload 'tychoish-mail-select-account "setup-mail" nil t)
-(autoload 'tychoish-define-mail-account "setup-mail")
-(autoload 'tychoish-mail-add-refile-rule "setup-mail")
-
-(autoload 'daemons-dash "daemons-dash" nil t)
-(autoload 'daemons-dash-dispatch "daemons-dash" nil t)
-
-(defvar desktop-base-file-name)
-(defvar desktop-base-lock-name)
-(defvar desktop-path)
-(defvar desktop-save)
-(defvar desktop-restore-frames)
-(defvar desktop-restore-in-current-display)
-(defvar desktop-restore-eager)
-(defvar desktop-load-locked-desktop)
-(defvar desktop-globals-to-save)
-(defvar desktop-modes-not-to-save)
-(defvar desktop-buffers-not-to-save)
-(defvar desktop-files-not-to-save)
-
-
-(defvar project-list-file)
-(defvar savehist-file)
 (defvar savehist-coding-system)
 (defvar savehist-additional-variables)
-(defvar bookmark-default-file)
 (defvar bookmark-save-flag)
-(defvar tramp-persistency-file-name)
-(defvar transient-history-file)
-(defvar request-storage-directory)
-(defvar url-configuration-directory)
-(defvar denote-sync-cache-directory)
 (defvar org-directory)
 (defvar org-agenda-files)
 (defvar org-annotate-file-storage-file)
@@ -119,19 +71,13 @@
 (defvar denote-directory)
 (defvar modus-themes-deuteranopia)
 (defvar modus-themes-common-palette-overrides)
-
-(declare-function modus-themes-get-color-value "modus-themes")
+(defvar mcpkit-instance-name-function)
+(defvar cmdr-opt-in-specs)
 
 (defalias 'mouse-major-mode-menu 'mouse-menu-major-mode-map)
 
 (defvar tychoish--suppress-supersession-prompt nil
-  "Non-nil while handling an `emacsclient --eval' request or a timer callback.
-Bound by advice on `server-eval-and-print' and `timer-event-handler' --
-between them, every path with no human watching to answer
-`ask-user-about-supersession-threat' (which would otherwise hang the
-daemon indefinitely, e.g. an idle-timer-driven desktop/abbrev autosave
-racing a file an agent just rewrote on disk). A live interactive save,
-triggered directly by a keypress, still prompts normally.")
+  "Non-nil when supersession prompts should be auto-confirmed noninteractively.")
 
 (with-eval-after-load 'server
   (advice-add 'server-eval-and-print :around
@@ -155,7 +101,7 @@ triggered directly by a keypress, still prompts normally.")
 ;; id-state -- emacs daemon/instance identification for state config
 
 (defun gui-p ()
-  "Return t when the current session is or may be a GUI session."
+  "Return non-nil when the session is or may be GUI."
   (when (or (daemonp) (window-system))
     t))
 
@@ -168,53 +114,31 @@ triggered directly by a keypress, still prompts normally.")
         (bookmark-default-file . "bookmarks.el")
         (tramp-persistency-file-name . "tramp.el")
         (transient-history-file . "transient-history.el")
+        (transient-values-file . "transient-values.el")
+        (eshell-history-file-name . "eshell")
+        (shell-maker-root-path . "shell-maker")
         (auto-save-list-file-prefix . "auto-save-list/")
         (request-storage-directory . "request/")
         (url-configuration-directory . "url/")
         (denote-sync-cache-directory . "denote-sync/")
         (recentf-save-file . "recentf.el")
-        (savehist-file . "history.el"))
-      sprite-state-locks-enabled t
-      sprite-state-desktop-enabled t
-      bookmark-save-flag 1)
+        (savehist-file . "history.el")))
 
-(defun bootstrap-desktop-policy ()
-  "Configure personal desktop save policy after restoration."
-  (require 'desktop)
-  (with-gc-suppressed
-   (add-to-list 'desktop-globals-to-save 'register-alist)
-   (add-to-list 'desktop-globals-to-save 'file-name-history)
-   (add-to-list 'desktop-modes-not-to-save 'dired-mode)
-   (add-to-list 'desktop-modes-not-to-save 'Info-mode)
-   (add-to-list 'desktop-modes-not-to-save 'org-mode)
-   (add-to-list 'desktop-modes-not-to-save 'eww-mode)
-   (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
-   (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
-
-   (setq desktop-buffers-not-to-save
-         (concat "\\("
-                 "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
-                 "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
-                 "\\)$"))
-
-   (setq desktop-files-not-to-save
-         (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)" ;; default
-                 "^/usr/lib/go/.*\\|"
-                 "^/usr/lib/rustlib/.*\\|"
-                 "^/home.+go/pkg/mod\\|"
-                 "^/home.+\\.cargo"))))
+(setq sprite-state-locks-enabled t)
+(setq sprite-state-auto-save-enabled t)
+(setq sprite-state-desktop-enabled t)
+(setq bookmark-save-flag 1)
+(setq mcpkit-instance-name-function #'sprite-instance-name)
+(setq cmdr-opt-in-specs '(defaults))
 
 (defmacro bootstrap-require-package (pkg)
-  "Define `bootstrap-require-pkg-PKG', a startup operation that requires PKG.
-PKG is a feature symbol, given bare or quoted.  The defined function signals
-an error if requiring PKG does not leave it `featurep'.  Return the function
-symbol, so the form can be evaluated where the symbol is wanted."
+  "Define startup operation `bootstrap-require-pkg-PKG' requiring PKG."
   (declare (indent 0))
   (let ((feature (if (eq (car-safe pkg) 'quote) (cadr pkg) pkg)))
     (unless (and feature (symbolp feature))
       (error "bootstrap-require-package: expected a feature symbol, got %S" pkg))
     `(defun ,(intern (format "bootstrap-require-pkg-%s" feature)) ()
-       ,(format "Require `%s' as a startup operation." feature)
+       ,(format "Require feature %s." feature)
        (require ',feature)
        (unless (featurep ',feature)
          (error "Feature `%s' not provided after require" ',feature)))))
@@ -224,7 +148,7 @@ symbol, so the form can be evaluated where the symbol is wanted."
 ;; silent startup -- avoid printing or using the Messages buffer
 
 (defun display-startup-echo-area-message ()
-  "Called during setup, intentially a noop, which omit the message."  nil)
+  "No-op to inhibit startup echo area message."  nil)
 
 (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
 
@@ -232,15 +156,8 @@ symbol, so the form can be evaluated where the symbol is wanted."
 
 ;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
-(declare-function sprite-instance-name "sprite")
-(defvar mcpkit-instance-name-function)
-(setq mcpkit-instance-name-function #'sprite-instance-name)
-(setq cmdr-opt-in-specs '(defaults))
-
-(declare-function orgx-global-mode "orgx")
-
 (defun bootstrap--execute-startup-operation (fn &optional frame)
-  "Execute startup operation FN in FRAME, reporting failures."
+  "Run startup operation FN in FRAME."
   (condition-case err
       (when (or (null frame) (frame-live-p frame))
         (with-selected-frame (or frame (selected-frame))
@@ -250,41 +167,30 @@ symbol, so the form can be evaluated where the symbol is wanted."
               (funcall fn 1)))))
     (error (message "[bootstrap] %s failed: %s" fn (error-message-string err)))))
 
-(defun bootstrap-run-startup-operations (operations &rest args)
-  "Run OPERATIONS in order, yielding between them in interactive sessions.
-DELAY defaults to 0.1 seconds.  FRAME selects the frame for operations.
-Call ON-DONE after the last operation.  Return a cancellation function."
-  (let ((delay (or (plist-get args :delay) 0.1))
-        (on-done (plist-get args :on-done))
-        (frame (plist-get args :frame))
-        (remaining (copy-sequence operations))
-        (timer nil))
-    (cond
-     ((null remaining)
-      (when on-done (funcall on-done))
-      #'ignore)
-     (noninteractive
-      (seq-do (lambda (fn) (bootstrap--execute-startup-operation fn frame))
-              remaining)
-      (when on-done (funcall on-done))
-      #'ignore)
-     (t
-      (letrec ((step
-                (lambda ()
-                  (setq timer nil)
-                  (when remaining
-                    (bootstrap--execute-startup-operation (pop remaining) frame)
-                    (if remaining
-                        (setq timer (run-with-idle-timer delay nil step))
-                      (when on-done (funcall on-done)))))))
-        (setq timer (run-with-idle-timer delay nil step))
-        (lambda ()
-          (setq remaining nil)
-          (when (timerp timer)
-            (cancel-timer timer)
-            (setq timer nil))))))))
+(cl-defun bootstrap-run-startup-operations (operations &key (delay 0.1) on-done frame)
+  "Run OPERATIONS in order, yielding DELAY seconds between each."
+  (if (or noninteractive (null operations))
+      (progn
+        (dolist (op operations)
+          (bootstrap--execute-startup-operation op frame))
+        (when on-done (funcall on-done))
+        #'ignore)
+    (let* ((queue (copy-sequence operations))
+           (timer nil)
+           (step nil))
+      (setq step (lambda ()
+                   (when queue
+                     (bootstrap--execute-startup-operation (pop queue) frame)
+                     (if queue
+                         (setq timer (run-with-idle-timer delay nil step))
+                       (when on-done (funcall on-done))))))
+      (setq timer (run-with-idle-timer delay nil step))
+      (lambda ()
+        (setq queue nil)
+        (when (timerp timer)
+          (cancel-timer timer))))))
 
-(defcustom bootstrap-early-startup-operations
+(defcustom bootstrap-startup-operations
   '(bootstrap-set-up-fringe-mode
     overmark-global-mode
     column-number-mode
@@ -300,13 +206,9 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     minaid-mode
     telegax-global-mode
     sprite-state-configure
-    bootstrap-noisy-modes)
-  "UI, key binding, and persistence operations started early in bootstrap."
-  :type '(repeat function)
-  :group 'bootstrap)
-
-(defcustom bootstrap-late-startup-operations
-  '(bootstrap-require-pkg-setup-project
+    bootstrap-silent-savehist
+    bootstrap-silent-recentf
+    bootstrap-require-pkg-setup-project
     popper-mode
     grepx-mode
     denote-dash-global-mode
@@ -322,8 +224,11 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     annotated-completing-read-setup-history
     mcpkit-init-services
     sprite-state-global-mode
-    bootstrap-desktop-policy)
-  "Behavior, integration, and session restore operations started later."
+    bootstrap-require-pkg-setup-packages
+    bootstrap-ensure-packages-installed
+    bootstrap-check-package-quickstart
+    builder-emacs-conf-native-compile-all)
+  "Operations run in sequence during startup."
   :type '(repeat function)
   :group 'bootstrap)
 
@@ -333,26 +238,15 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     disable-all-themes
     bootstrap-default-theme
     hud-modeline-mode)
-  "Appearance and modeline operations started after the first frame."
+  "Operations run after the first frame is created."
   :type '(repeat function)
   :group 'bootstrap)
 
-(defcustom bootstrap-post-late-startup-operations
-  '(bootstrap-require-pkg-setup-packages
-    bootstrap-ensure-packages-installed
-    bootstrap-check-package-quickstart
-    builder-emacs-conf-native-compile-all)
-  "Package setup and maintenance operations started after late startup."
-  :type '(repeat function)
-  :group 'bootstrap)
-
-(add-lazy-init
- :name "<bootstrap> startup"
- :delay 0.1
- :form (bootstrap-run-startup-operations
-        (append bootstrap-early-startup-operations
-                bootstrap-late-startup-operations
-                bootstrap-post-late-startup-operations)))
+(unless after-init-time
+  (add-lazy-init
+   :name "<bootstrap> startup"
+   :delay 0.1
+   :form (bootstrap-run-startup-operations bootstrap-startup-operations)))
 
 (add-one-shot-hook
  :name "<bootstrap> first-frame setup"
@@ -360,6 +254,22 @@ Call ON-DONE after the last operation.  Return a cancellation function."
  :form (bootstrap-run-startup-operations
         bootstrap-after-first-frame-operations
         :frame (selected-frame)))
+
+
+(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
+(add-hook 'after-init-hook #'cmdr-spec-discover)
+(add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
+(add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'bootstrap-report-startup-timing 100)
+
+(bootstrap-require-package 'setup-project)
+(bootstrap-require-package 'setup-packages)
+
+(defun bootstrap-silent-savehist () (with-silence (savehist-mode 1)))
+(defun bootstrap-silent-recentf () (with-silence (recentf-mode 1)))
+(defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
+(defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
+(defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
+(defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
 
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
@@ -375,46 +285,19 @@ Call ON-DONE after the last operation.  Return a cancellation function."
       (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
 	     :title (format "emacs-%s" sprite-instance-id)))))
 
-(defun bootstrap-noisy-modes ()
-  (with-silence
-    (recentf-mode 1)
-
-    (savehist-mode 1)
-    (setq savehist-coding-system 'utf-8-emacs)
-    (add-to-list 'savehist-additional-variables 'compile-history)))
-
-(bootstrap-require-package 'setup-project)
-(bootstrap-require-package 'setup-packages)
-
-(defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
-(defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
-(defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
-(defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
-
-(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
-(add-hook 'after-init-hook #'cmdr-spec-discover)
-(add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
-(add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'bootstrap-report-startup-timing 100)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; bootstrap load user files
 
 (defun bootstrap-set-up-user-local-config (path)
-  "Ensure that all config files in the `user-emacs-directory' + '/user' path are loaded."
+  "Load all .el files in PATH."
   (dolist (file (directory-files path :full "\\.el$") nil)
     (let ((name (file-name-sans-extension (file-name-nondirectory file))))
       (with-slow-op-timer (format "<init> [user] %s" name)
 	(require (intern name))))))
 
-(defvar local-notes-directory nil
-  "Directory where notes (org, roam, deft, etc.) are stored.")
-
-(defvar user-org-directories nil
-  "Additional directories that may contain org files.")
-
 (defun bootstrap-set-notes-directory (&optional path)
-  "Set the notes directory to PATH and update note and org-mode paths."
+  "Set notes directory to PATH and update note paths."
   (interactive
    (list (read-directory-name "Notes directory: " (or local-notes-directory "~/notes"))))
   (when path
@@ -435,15 +318,6 @@ Call ON-DONE after the last operation.  Return a cancellation function."
   (setq deft-directory (file-name-concat local-notes-directory "deft"))
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
-
-(defun bootstrap-set-up-auto-save ()
-  (let ((path (sprite-state-path "backup/")))
-    (setq auto-save-file-name-transforms `((".*" ,path t)))
-    (add-to-list 'backup-directory-alist (cons "." path))
-
-    (unless (file-exists-p path)
-      (make-directory path t))
-    (chmod path #o700)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -477,7 +351,7 @@ Call ON-DONE after the last operation.  Return a cancellation function."
     (bootstrap-setup-font font-face-name size)))
 
 (defun bootstrap-ensure-frame-alpha ()
-  "Default frame opacity to 95 percent, including the selected frame."
+  "Ensure frame opacity defaults to 95%."
   (unless (map-elt default-frame-alist 'alpha)
     (add-to-list 'default-frame-alist '(alpha . 95)))
   (when (and (display-graphic-p) (not (frame-parameter nil 'alpha)))

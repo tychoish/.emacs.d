@@ -793,7 +793,8 @@
                (lambda (&rest _) (push (cons 'recentf recentf-save-file) seen)))
               ((symbol-function 'savehist-mode)
                (lambda (&rest _) (push (cons 'savehist savehist-file) seen))))
-      (bootstrap-noisy-modes))
+      (bootstrap-silent-savehist)
+      (bootstrap-silent-recentf))
     (should (equal (alist-get 'recentf seen) (sprite-state-path "recentf.el")))
     (should (equal (alist-get 'savehist seen) (sprite-state-path "history.el")))))
 
@@ -835,7 +836,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (ert-deftest bootstrap/show-whitespace-mode-starts-early ()
   "The global mode is included in the early startup operations."
-  (should (memq 'overmark-global-mode bootstrap-early-startup-operations)))
+  (should (memq 'overmark-global-mode bootstrap-startup-operations)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-buffers-visiting-missing-files
@@ -1008,7 +1009,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 (ert-deftest bootstrap/chex-mode-available-to-startup-hook ()
   "The late startup hook can invoke Chex before it has been loaded."
-  (should (memq 'chex-global-mode bootstrap-late-startup-operations))
+  (should (memq 'chex-global-mode bootstrap-startup-operations))
   (should (fboundp 'chex-global-mode)))
 
 (ert-deftest bootstrap/run-enable-modes-hook-noninteractive ()
@@ -1071,7 +1072,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   "The MCP initializer is a startup operation and receives no mode argument."
   (let ((called nil)
         (noninteractive t))
-    (should (memq 'mcpkit-init-services bootstrap-late-startup-operations))
+    (should (memq 'mcpkit-init-services bootstrap-startup-operations))
     (cl-letf (((symbol-function 'mcpkit-init-services)
                (lambda () (setq called t))))
       (bootstrap-run-startup-operations '(mcpkit-init-services))
@@ -1086,7 +1087,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (should (eq 0 (car (func-arity 'bootstrap-require-pkg-seq))))
   (should (null (bootstrap-require-pkg-seq)))
   (should (memq 'bootstrap-require-pkg-setup-project
-                bootstrap-late-startup-operations))
+                bootstrap-startup-operations))
   (should (fboundp 'bootstrap-require-pkg-setup-project)))
 
 (ert-deftest bootstrap/require-package-validates-feature-provided ()
@@ -1102,8 +1103,15 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 (ert-deftest bootstrap/post-late-startup-runs-package-operations-in-order ()
   "Start installation asynchronously and continue with package maintenance."
-  (let ((order nil)
-        (noninteractive t))
+  (let* ((order nil)
+         (noninteractive t)
+         (expected-ops '(bootstrap-require-pkg-setup-packages
+                         bootstrap-ensure-packages-installed
+                         bootstrap-check-package-quickstart
+                         builder-emacs-conf-native-compile-all))
+         (package-ops (seq-filter (lambda (op) (memq op expected-ops))
+                                  bootstrap-startup-operations)))
+    (should (equal package-ops expected-ops))
     (cl-letf (((symbol-function 'bootstrap-require-pkg-setup-packages)
                (lambda () (push 'require order)))
               ((symbol-function 'elpaish-install-packages)
@@ -1114,7 +1122,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                (lambda () (push 'refresh order)))
               ((symbol-function 'builder-emacs-conf-native-compile-all)
                (lambda () (push 'compile order))))
-      (bootstrap-run-startup-operations bootstrap-post-late-startup-operations)
+      (bootstrap-run-startup-operations package-ops)
       (should (equal (reverse order) '(require install refresh compile))))))
 
 (ert-deftest bootstrap/frame-alpha-preserves-configured-default ()
@@ -1239,7 +1247,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
               ((symbol-function 'package-quickstart-refresh)
                (lambda () (setq refreshes (1+ refreshes)))))
       (should (memq 'bootstrap-check-package-quickstart
-                    bootstrap-post-late-startup-operations))
+                    bootstrap-startup-operations))
       (bootstrap--execute-startup-operation 'bootstrap-check-package-quickstart)
       (should (= refreshes 0))
       (setq stale t)
