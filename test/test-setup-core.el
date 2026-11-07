@@ -10,7 +10,6 @@
 (require 'cl-lib)
 (require 'cmdr-keys)
 (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
-(require 'setup-hooks)
 (require 'setup-core)
 (require 'setup-project)
 (require 'builder)

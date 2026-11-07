@@ -13,13 +13,9 @@
 (require 'setup-defaults)
 (require 'setup-package-defaults)
 (require 'setup-project)
-(require 'setup-hooks)
-
 (require 'setup-core)
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sprite-resolve-instance-id
