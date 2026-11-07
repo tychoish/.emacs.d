@@ -7,7 +7,7 @@
 
 (require 'cl-lib)
 (require 'sprite)
-(require 'setup-cmdr)
+(require 'cmdr-keys)
 
 (eval-when-compile
   (require 'agent-shell nil t))
@@ -406,7 +406,7 @@ FORCE re-downloads; SYNC waits synchronously."
 (keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
 (keymap-set agent-shell-mode-map "C-c C-a" #'agent-shell-menu-select-action)
 (keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
-(keymap-set agent-shell-mode-map "C-c j" (cons "robot-agent-shell" setup-cmdr-robot-agent-shell-map))
+(keymap-set agent-shell-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
 (keymap-set agent-shell-mode-map "C-c m" #'agent-shell-menu-select-action)
 (keymap-set agent-shell-mode-map "C-c x" #'agent-shell-menu-select-command)
 (keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
@@ -440,7 +440,7 @@ FORCE re-downloads; SYNC waits synchronously."
   (setq agent-shell-queue-stall-timeout 600)
   (agent-shell-queue-overload-mode 1)
 
-  (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" setup-cmdr-robot-agent-shell-map))
+  (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
   (keymap-unset agent-shell-mode-map "<spc>")
   (keymap-unset agent-shell-mode-map "SPC")
 

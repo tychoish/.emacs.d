@@ -8,8 +8,7 @@
 (require 'ert)
 (require 'test-helper)
 (require 'cl-lib)
-(require 'setup-cmdr)
-(defvar hud-mode-map (make-sparse-keymap))
+(require 'cmdr-keys)
 (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
 (require 'setup-hooks)
 (require 'setup-core)
@@ -125,8 +124,7 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/mail-account-definition-activates-default ()
   "Test that `tychoish-define-mail-account' activates a default account in an idle timer after definition."
   (require 'setup-mail)
-  (let ((hud-mail-map (make-sparse-keymap))
-        (cmdr-mode-map (make-sparse-keymap))
+  (let ((cmdr-mode-map (make-sparse-keymap))
         (tychoish-mail-accounts-table (make-hash-table :test #'equal))
         (tychoish-mail-account-current nil)
         (user-mail-address nil)
@@ -160,8 +158,6 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/projectile-enable-all-buffers-yielding ()
   "Test that `projectile-enable-all-buffers` enables projectile-mode in live buffers."
-  (require 'setup-cmdr nil t)
-  (defvar hud-mode-map (make-sparse-keymap))
   (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
   (require 'projectile)
   (require 'gen)
@@ -188,8 +184,6 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/projectile-disable-all-buffers-yielding ()
   "Test that `projectile-disable-all-buffers` disables projectile-mode in live buffers."
-  (require 'setup-cmdr nil t)
-  (defvar hud-mode-map (make-sparse-keymap))
   (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
   (require 'projectile)
   (require 'gen)
@@ -216,8 +210,6 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/projectile-load-project-buffers-yielding ()
   "Test that `projectile-load-project-buffers` loads project files incrementally."
-  (require 'setup-cmdr nil t)
-  (defvar hud-mode-map (make-sparse-keymap))
   (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
   (require 'projectile)
   (require 'gen)
@@ -357,7 +349,6 @@ correctly and reads from the minibuffer using the candidate's command."
   "Generated default model commands also appear in the cmdr map."
   (require 'gptel)
   (let ((cmdr-mode-map (make-sparse-keymap))
-        (hud-robot-gptel-set-default-model-map (make-sparse-keymap))
         (gptel-mode-map (make-sparse-keymap)))
     (unwind-protect
         (progn
@@ -381,8 +372,9 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/annotated-agent-shell-prefix-bindings ()
   (require 'setup-agent-shell)
   (require 'agent-shell-queue)
-  (should (eq (keymap-lookup agent-shell-mode-map "C-c j") hud-robot-agent-shell-map))
-  (should (eq (keymap-lookup agent-shell-queue-mode-map "C-c j") hud-robot-agent-shell-map)))
+  (let ((agent-shell-map (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
+    (should (eq (keymap-lookup agent-shell-mode-map "C-c j") agent-shell-map))
+    (should (eq (keymap-lookup agent-shell-queue-mode-map "C-c j") agent-shell-map))))
 
 (ert-deftest tychoish-core/annotated-magit-prefix-bindings ()
   (require 'magit)

@@ -8,10 +8,8 @@
 
 (require 'cmdr-macros)
 (require 'cmdr-keys)
-(require 'setup-cmdr)
 (require 'setup-defaults)
 (require 'map)
-(require 'mu4e-autoloads nil t)
 
 (autoload 'mu4e-update-index "mu4e")
 (autoload 'mu4e-update-mail-and-index "mu4e")
@@ -358,7 +356,7 @@ live in MAILDIR's tools/signatures directory."
    :type 'string)
   (keybinding
    "m"
-   :documentation "keybinding in the setup-cmdr-mail-map keymap"
+   :documentation "keybinding under the C-c m prefix"
    :type 'char)
   (fetchmail
    mu4e-get-mail-command
@@ -460,7 +458,7 @@ live in MAILDIR's tools/signatures directory."
 	  (instances '())
 	  (systems '())
 	  default)
-  "Register a mail account and bind KEY in `setup-cmdr-mail-map' to activate it.
+  "Register a mail account and bind KEY under C-c m to activate it.
 Returns the symbol of the generated activation command.
 
 \\(fn &key NAME ADDRESS KEY ID [COMMAND] [MAILDIR] [INSTANCES] [SYSTEMS] DEFAULT)"
@@ -471,7 +469,6 @@ Returns the symbol of the generated activation command.
          (configure-account-symbol (intern account-name))
 	 (maildir (expand-file-name maildir)))
 
-    (keymap-set setup-cmdr-mail-map key configure-account-symbol)
     (cmdr-keys-prefix cmdr-mode-map "C-c m" "mail")
     (cmdr-keys-set cmdr-mode-map (concat "C-c m " key) configure-account-symbol)
 
