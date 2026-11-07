@@ -16,7 +16,7 @@
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
 (setq jit-lock-stealth-load 100)
-(setq indicate-empty-lines t)
+(setq-default indicate-empty-lines t)
 (setq tooltip-resize-echo-area t)
 
 (setq backup-by-copying t)
@@ -51,12 +51,12 @@
 (setq enable-recursive-minibuffers t)
 (setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
 
-(setq cursor-in-non-selected-windows nil)
+(setq-default cursor-in-non-selected-windows nil)
 (setq scroll-conservatively 25)
 (setq scroll-preserve-screen-position t)
 
 (setq ring-bell-function #'ignore)
-(setq truncate-lines t)
+(setq-default truncate-lines t)
 (setq use-dialog-box nil)
 (setq use-short-answers t)
 (setq ollama-tailnet-fallback-strategy :auto-local)
