@@ -10,8 +10,8 @@
 (require 'sprite)
 (require 'xtd-macro)
 (require 'cmdr-macros)
-(defvar setup-cmdr-smerge-map)
-(defvaralias 'hud-smerge-map 'setup-cmdr-smerge-map)
+(require 'cmdr-keys)
+(require 'cmdr-spec)
 
 (autoload 'cmdr-transient-insert-suffix-once "cmdr")
 (autoload 'bootstrap-set-up-auto-save "bootstrap")
@@ -51,12 +51,44 @@
 (defvar electric-pair-inhibition nil)
 (defvar electric-pair-eagerness t)
 
+(create-toggle-functions electric-pair-inhibition)
+(create-toggle-functions electric-pair-eagerness)
+
 (defun setup-electric-pair-inhibition (char)
   (if electric-pair-inhibition
       nil
     (if electric-pair-eagerness
         (electric-pair-default-inhibit char)
       (electric-pair-conservative-inhibit char))))
+
+;;; cmdr bindings for config-specific commands
+
+(autoload 'eglox-describe-symbol-dwim "eglox" nil t)
+(autoload 'toggle-hud-modeline-icons "hud-modeline" nil t)
+(autoload 'toggle-hud-modeline-show-buffer-size "hud-modeline" nil t)
+(autoload 'tychoish/agent-shell-toggle-terse-output "setup-agent-shell" nil t)
+
+(with-eval-after-load 'cmdr-spec
+  (cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
+  (cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
+  (cmdr-keys-set cmdr-mode-map "C-c t t i" #'toggle-hud-modeline-icons)
+  (cmdr-keys-set cmdr-mode-map "C-c t t s" #'toggle-hud-modeline-show-buffer-size)
+  (cmdr-keys-set cmdr-mode-map "C-c t p" #'toggle-electric-pair-inhibition)
+  (cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
+  (cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
+  (cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish/agent-shell-toggle-terse-output)
+  (cmdr-keys-set cmdr-mode-map "C-c m a" #'tychoish-mail-select-account)
+  (cmdr-keys-set cmdr-mode-map "C-x g m r" #'smerge-kill-and-vc-next-conflict)
+  (cmdr-keys-set cmdr-mode-map "C-x C-b s" #'projectile-save-project-buffers-picker)
+
+  (cmdr-register-spec
+    :name mail-accounts
+    :probe tychoish-mail-select-account
+    :commands ((cmdr-spec-command :category mu4e
+                                  :command tychoish-mail-select-account
+                                  :display-name "mail-select-account"
+                                  :description "select mail account"
+                                  :transient-key "ma"))))
 
 ;;; Search / isearch / anzu
 (keymap-set isearch-mode-map "C-o" #'isearch-occur)
@@ -286,8 +318,6 @@ completion candidate outlives its buffer."
       "")))
 
 (with-eval-after-load 'smerge-mode
-  (keymap-set setup-cmdr-smerge-map "r" #'smerge-kill-and-vc-next-conflict)
-
   (defun smerge-kill-and-vc-next-conflict ()
     "Kill the current conflict option and move to the next conflict."
     (interactive)

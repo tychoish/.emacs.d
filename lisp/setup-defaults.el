@@ -9,6 +9,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'sprite)
+(require 'cmdr-keys)
 
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
@@ -37,7 +38,9 @@
 (setq which-key-lighter "")
 
 (setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
-(setq sprite-mode-map-prefix (cons "z" 'setup-cmdr-core-map))
+(defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
+  "The cmdr core prefix map under C-c t.")
+(setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
 
 (setq create-lockfiles nil)
 

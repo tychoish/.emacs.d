@@ -36,6 +36,7 @@
 (require 'sprite)
 (require 'sprite-state)
 (require 'xtd-macro)
+(require 'cmdr-macros)
 (require 'cmdr-mode)
 
 (defvar local-notes-directory nil
@@ -234,6 +235,7 @@ symbol, so the form can be evaluated where the symbol is wanted."
 (declare-function sprite-instance-name "sprite")
 (defvar mcpkit-instance-name-function)
 (setq mcpkit-instance-name-function #'sprite-instance-name)
+(setq cmdr-opt-in-specs '(defaults))
 
 (declare-function orgx-global-mode "orgx")
 
@@ -392,6 +394,7 @@ Call ON-DONE after the last operation.  Return a cancellation function."
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
 
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
+(add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook (if (daemonp) 'emacs-startup-hook 'window-setup-hook) #'bootstrap-report-startup-timing 100)
 
