@@ -271,7 +271,7 @@
   (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
   (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
 
-(with-eval-after-load 'abbev
+(with-eval-after-load 'abbrev
   (defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
     "Cache mapping file names to files' mtime to avoid re-importing files.")
 
