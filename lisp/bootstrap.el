@@ -72,6 +72,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; state -- setup desktop/bookmarks/savehist
+;; hooks -- these run incrementally and lazily by sprite in `after-init-hook'
+
+(setq sprite-state-locks-enabled t)
+(setq sprite-state-auto-save-enabled t)
+(setq sprite-state-desktop-enabled t)
+(setq bookmark-save-flag 1)
+(setq mcpkit-instance-name-function #'sprite-instance-name)
+(setq cmdr-opt-in-specs '(defaults))
 
 (setq sprite-state-mappings
       '((project-list-file . "projects.el")
@@ -87,17 +95,6 @@
         (denote-sync-cache-directory . "denote-sync/")
         (recentf-save-file . "recentf.el")
         (savehist-file . "history.el")))
-
-(setq sprite-state-locks-enabled t)
-(setq sprite-state-auto-save-enabled t)
-(setq sprite-state-desktop-enabled t)
-(setq bookmark-save-flag 1)
-(setq mcpkit-instance-name-function #'sprite-instance-name)
-(setq cmdr-opt-in-specs '(defaults))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; hooks -- functions that run in hooks configured in 'bootstrap-core
 
 (setq sprite-startup-operations
   '(bootstrap-set-up-fringe-mode
@@ -219,7 +216,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; frame/window -- setup and manage frames and windows
-
 ;; display -- manage fonts, rendering, themes, for (mostly) gui emacs
 
 (defun bootstrap-setup-font (font-face-name size)
