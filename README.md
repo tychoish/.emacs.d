@@ -351,7 +351,7 @@ the following configuration:
 - Setup different fonts on different machines:
 
 ```emacs
-(when (gui-p)
+(when (display-graphic-p)
  (let ((sys (system-name)))
    (cond
     ((equal "deleuze" sys) (bootstrap-setup-font "Source Code Pro" 11))
@@ -364,13 +364,13 @@ the following configuration:
   somewhere:
 
 ```emacs
-(when (gui-p)
+(when (display-graphic-p)
    (bootstrap-setup-font "Source Code Pro" 10))
 
-(when (gui-p)
+(when (display-graphic-p)
    (bootstrap-setup-font "Inconsolata-g" 11))
 
-(when (gui-p)
+(when (display-graphic-p)
    (bootstrap-setup-font "Consolas" 11))
 ```
 

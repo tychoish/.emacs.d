@@ -19,32 +19,6 @@
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; gui-p
-
-(ert-deftest bootstrap/gui-p-daemon ()
-  "gui-p returns t when daemonp is non-nil."
-  (cl-letf (((symbol-function 'daemonp) (lambda () t))
-            ((symbol-function 'window-system) (lambda () nil)))
-    (should (eq t (gui-p)))))
-
-(ert-deftest bootstrap/gui-p-window-system ()
-  "gui-p returns t when window-system is non-nil."
-  (cl-letf (((symbol-function 'daemonp) (lambda () nil))
-            ((symbol-function 'window-system) (lambda () 'x)))
-    (should (eq t (gui-p)))))
-
-(ert-deftest bootstrap/gui-p-terminal ()
-  "gui-p returns nil in a pure terminal session."
-  (cl-letf (((symbol-function 'daemonp) (lambda () nil))
-            ((symbol-function 'window-system) (lambda () nil)))
-    (should-not (gui-p))))
-
-(ert-deftest bootstrap/gui-p-named-daemon ()
-  "gui-p returns t when daemonp returns a name string."
-  (cl-letf (((symbol-function 'daemonp) (lambda () "work"))
-            ((symbol-function 'window-system) (lambda () nil)))
-    (should (gui-p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sprite-resolve-instance-id

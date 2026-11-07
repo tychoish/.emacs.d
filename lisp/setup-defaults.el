@@ -330,7 +330,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; TTY and display settings
 
-(defun gui-p () "Return non-nil when may have GUI frames." (when (or (daemonp) (window-system)) t))
 
 (defun contextual-menubar (&optional frame)
   "Display the menubar in FRAME (default: selected frame) if graphical, hide if TTY."
