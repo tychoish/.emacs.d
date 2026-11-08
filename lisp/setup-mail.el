@@ -11,9 +11,10 @@
 (require 'setup-defaults)
 (require 'map)
 
-(autoload 'mu4e-update-index "mu4e")
-(autoload 'mu4e-update-mail-and-index "mu4e")
-(autoload 'mu4e-quit "mu4e")
+(autoload 'mu4e "mu4e" nil t)
+(autoload 'mu4e-update-index "mu4e" nil t)
+(autoload 'mu4e-update-mail-and-index "mu4e" nil t)
+(autoload 'mu4e-quit "mu4e" nil t)
 (autoload 'annotated-completing-read "annotated-completing-read")
 (autoload 'annotated-completing-read-directory "annotated-completing-read")
 
@@ -332,6 +333,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 (cl-defstruct (tychoish-mail-account
                (:constructor tychoish-mail-make-account
                              (&key id maildir name address keybinding (fetchmail mu4e-get-mail-command)
+                                   instances systems default
 				   &aux (maildir (if (stringp maildir)
 						      (expand-file-name maildir)
 						    (user-error "maildir must be a string"))))))
@@ -361,7 +363,10 @@ live in MAILDIR's tools/signatures directory."
   (fetchmail
    mu4e-get-mail-command
    :documentation "external command to run to fetch mail."
-   :type 'string))
+   :type 'string)
+  (instances nil :type 'list)
+  (systems nil :type 'list)
+  (default nil :type 'boolean))
 
 ;;;###autoload
 (defun tychoish-mail-select-account (account-id)
@@ -479,7 +484,10 @@ Returns the symbol of the generated activation command.
            :keybinding key
            :maildir maildir
            :fetchmail command
-           :id id))
+           :id id
+           :instances instances
+           :systems systems
+           :default default))
 
     (defalias configure-account-symbol
       (lambda ()
@@ -489,20 +497,35 @@ Returns the symbol of the generated activation command.
 
     (when (or default
               (not (and (null systems) (null instances))))
-      (add-lazy-init
-       :name (format "%s-activate" account-name)
-       :delay tychoish-mail-activation-delay
-       :form (progn
-	       (format "%s-activate" account-name)
-               (when (or default
-                         (and
-                          (or (member (sprite-instance-name) instances)
-                              (null instances))
-                          (or (member (system-name) systems)
-                              (null systems))))
-                 (funcall configure-account-symbol)))))
+      (run-with-idle-timer tychoish-mail-activation-delay nil
+        (lambda ()
+          (when (or default
+                    (and
+                     (or (member (sprite-instance-name) instances)
+                         (null instances))
+                     (or (member (system-name) systems)
+                         (null systems))))
+            (funcall configure-account-symbol)))))
 
     configure-account-symbol))
+
+
+(defun tychoish-mail-ensure-account-active (&rest _args)
+  "Ensure a matching account for this instance/system is active."
+  (unless tychoish-mail-account-current
+    (map-do (lambda (name conf)
+              (when (and (not tychoish-mail-account-current)
+                         (or (tychoish-mail-account-default conf)
+                             (and (or (member (sprite-instance-name) (tychoish-mail-account-instances conf))
+                                      (null (tychoish-mail-account-instances conf)))
+                                  (or (member (system-name) (tychoish-mail-account-systems conf))
+                                      (null (tychoish-mail-account-systems conf))))))
+                (tychoish-mail--activate-account name)))
+            tychoish-mail-accounts-table)))
+
+(advice-add 'mu4e-update-index :before #'tychoish-mail-ensure-account-active)
+(advice-add 'mu4e-update-mail-and-index :before #'tychoish-mail-ensure-account-active)
+(advice-add 'mu4e :before #'tychoish-mail-ensure-account-active)
 
 (provide 'setup-mail)
 ;;; setup-mail.el ends here
