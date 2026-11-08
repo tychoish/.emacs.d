@@ -29,6 +29,7 @@
    cmdr
    clix
    cond-let
+   daemons-dash
    consult
    corfu
    denote

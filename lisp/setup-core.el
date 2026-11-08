@@ -56,6 +56,9 @@
 (create-toggle-functions electric-pair-inhibition)
 (create-toggle-functions electric-pair-eagerness)
 
+(defun tychoish-set-local-fill-column-100 () (setq-local fill-column 100))
+(defun tychoish-set-local-tab-width-4 () (setq-local tab-width 4))
+
 (defun setup-electric-pair-inhibition (char)
   (if electric-pair-inhibition
       nil
@@ -85,6 +88,7 @@
 ;;; cmdr bindings for config-specific commands
 
 (autoload 'eglox-describe-symbol-dwim "eglox" nil t)
+(autoload 'daemons-dash "daemons-dash" nil t)
 (autoload 'toggle-hud-modeline-icons "hud-modeline" nil t)
 (autoload 'toggle-hud-modeline-show-buffer-size "hud-modeline" nil t)
 (autoload 'tychoish/agent-shell-toggle-terse-output "setup-agent-shell" nil t)
@@ -195,7 +199,7 @@
   ;; configuration/settings
   (setq denote-dash-default-filter '(not "journal"))
   (setq denote-review-insert-after "date")
-  (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "migration" "agent" "plan" "singing"))
+  (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
   (setq denote-file-type 'org)
   (setq denote-infer-keywords t)
   (setq denote-sort-keywords t)
@@ -206,7 +210,7 @@
   (setq denote-explore-network-format "graphviz")
   (setq denote-explore-network-graphviz-filetype "svg")
   (add-to-list 'display-buffer-alist
-	       '("\\`\\*denote-sequence-hierarchy "
+	       '("\\`\\*denote-sequence-hierarchy " 
                  (display-buffer-reuse-window display-buffer-pop-up-window)))
   (with-eval-after-load 'savehist
     (add-to-list 'savehist-additional-variables 'denote--title-history)
@@ -455,39 +459,11 @@ resets point to column 0 outside of definition-list context."
   (add-hook 'yaml-mode-hook #'tychoish-yaml-set-tab-width))
 
 (with-eval-after-load 'go-ts-mode
+  (defun tychoish-go-mode-setup () (setq-local compilation-error-screen-columns nil))
   (keymap-set go-ts-mode-map "C-c C-t c" #'builder-go-coverage-and-convert)
-
-  (defun tychoish/go-mode-setup ()
-    (setq-local tab-width 8)
-    (setq-local fill-column 100)
-    (setq-local compilation-error-screen-columns nil)
-    (when (fboundp 'cov-mode)
-      (cov-mode 1)))
-
-  (defun tychoish/go-mode-setup-for-buffer (buf)
-    (with-current-buffer buf
-      (tychoish/go-mode-setup)))
-
-  (defun go-mode-set-up-all-buffers ()
-    (interactive)
-    (thread-last (buffer-list)
-		 (seq-filter (lambda (buf) (with-current-buffer buf
-					     (or (derived-mode-p 'go-ts-mode)
-						 (derived-mode-p 'go-mode)))))
-		 (mapc #'tychoish/go-mode-setup-for-buffer)))
-
-  (add-hook 'go-ts-mode-hook #'tychoish/go-mode-setup)
-  (add-hook 'go-mode-hook #'tychoish/go-mode-setup)
-
-  (setenv "GOSUMDB" "sum.golang.org")
-  (let ((current-path (getenv "PATH"))
-	(gopath (getenv "GOPATH")))
-    (unless gopath
-      (setq gopath (setenv "GOPATH" (expand-file-name "~/go"))))
-    (let ((local-go-bin (expand-file-name (concat gopath "/bin"))))
-      (add-to-list 'exec-path local-go-bin)
-      (unless (string-search local-go-bin current-path)
-        (setenv "PATH" (format "%s:%s" current-path local-go-bin))))))
+  (add-hook 'go-ts-mode-hook #'cov-mode)
+  (add-hook 'go-ts-mode-hook #'tychoish-set-local-fill-column-100)
+  (add-hook 'go-ts-mode-hook #'tychoish-go-mode-setup))
 
 (with-eval-after-load 'rustic
   (defun rustic-mode-auto-save-hook ()
@@ -504,61 +480,16 @@ resets point to column 0 outside of definition-list context."
   (setq rustic-clippy-arguments "--all --all-features -- --deny warnings")
 
   (when (executable-find "rustup")
-    (setq rustic-rustfmt-args "+nightly"))
-
-  (with-eval-after-load 'compile
-    (defun tychoish-compile-project-super-lint ()
-      (interactive)
-      (let* ((project-directory (projectile-project-root))
-             (options (list "VALIDATE_YAML=true"
-                            "VALIDATE_OPENAPI=true"
-                            "VALIDATE_MD=true"
-                            "MARKDOWN_CONFIG_FILE=.markdownlint.yml"
-                            "VALIDATE_ALL_CODEBASE=true"
-                            "LINTER_RULES_PATH=."
-                            "RUN_LOCAL=true"))
-             (optstr (format "-e %s" (string-join options " -e ")))
-             (command-string (format "docker run %s -v %s:/tmp/lint github/super-linter" optstr project-directory)))
-	(builder-compile-project "super-lint" command-string)))))
+    (setq rustic-rustfmt-args "+nightly")))
 
 (with-eval-after-load 'python
-  (defun tychoish/python-setup ()
-    (setq-local python-indent-offset 4)
-    (setq-local tab-width 4)
-    (setq-local fill-column 100))
-  (add-hook 'python-ts-mode-hook #'tychoish/python-setup)
+  (add-hook 'python-ts-mode-hook #'tychoish-set-local-fill-column-100)
+  (add-hook 'python-ts-mode-hook #'tychoish-set-local-tab-width-4)
 
-  (declare-function python-indent-shift-left "python")
-  (declare-function python-indent-shift-right "python")
+  (keymap-set python-base-mode-map "M-<left>" #'python-indent-shift-left)
+  (keymap-set python-base-mode-map "M-<right>" #'python-indent-shift-right)
 
-  (defun balle-python-shift-left ()
-    (interactive)
-    (let (start end bds)
-      (if (and transient-mark-mode
-	       mark-active)
-	  (setq start (region-beginning) end (region-end))
-	(progn
-	  (setq bds (bounds-of-thing-at-point 'line))
-	  (setq start (car bds) end (cdr bds))))
-      (python-indent-shift-left start end))
-    (setq deactivate-mark nil))
-
-  (defun balle-python-shift-right ()
-    (interactive)
-    (let (start end bds)
-      (if (and transient-mark-mode
-	       mark-active)
-	  (setq start (region-beginning) end (region-end))
-	(progn
-	  (setq bds (bounds-of-thing-at-point 'line))
-	  (setq start (car bds) end (cdr bds))))
-      (python-indent-shift-right start end))
-    (setq deactivate-mark nil))
-
-  (keymap-set python-ts-mode-map "M-<left>" #'balle-python-shift-left)
-  (keymap-set python-ts-mode-map "M-<right>" #'balle-python-shift-right)
-  (when (fboundp 'overmark-font-lock-show-tabs)
-    (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-show-tabs))))
+  (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-show-tabs)))
 
 (with-eval-after-load 'anzu
   (seq-do #'make-variable-buffer-local
