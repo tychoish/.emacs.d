@@ -37,6 +37,7 @@
    denote-sync
    denote-tree
    eglot-test-at-point
+   eglox
    elpaish
    elpaish-keyring
    flycheck
