@@ -105,16 +105,16 @@ operation in progress messages.  Calls ON-DONE with the handled count."
         (count 0)
         (processed 0))
     (gen-run-async
-     (lambda (item done-cb)
+     (lambda (item)
        (when (funcall fn item)
          (setq count (1+ count)))
        (setq processed (1+ processed))
        (when (and progress-interval
                   (or (= processed total)
                       (zerop (mod processed progress-interval))))
-         (message "%s [%d/%d]..." label processed total))
-       (funcall done-cb))
+         (message "%s [%d/%d]..." label processed total)))
      items
+     :name label
      :delay (or delay 0.0)
      :on-done (lambda ()
                 (message "%s: handled %d of %d." label count total)
