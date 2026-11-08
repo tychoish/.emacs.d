@@ -35,7 +35,9 @@
                   (should-not (buffer-local-value 'show-trailing-whitespace text))
                   (should-not (buffer-local-value 'overmark-mode text))
                   (should-not (memq #'overmark--set-trailing-whitespace prog-mode-hook))
-                  (should-not (memq #'overmark--set-trailing-whitespace text-mode-hook)))
+                  (should-not (memq #'overmark--set-trailing-whitespace text-mode-hook))
+                  (should-not (memq #'overmark--turn-on-width prog-mode-hook))
+                  (should-not (memq #'overmark--turn-on-width text-mode-hook)))
               (overmark-global-mode -1))))
       (kill-buffer code)
       (kill-buffer text)
@@ -154,6 +156,98 @@
     (seq-do (lambda (cell)
               (should (equal (cdr cell) (symbol-value (car cell)))))
             snapshot)))
+
+(ert-deftest overmark-test/dynamic-width-overflow ()
+  "Dynamic width overflow fontification and reconfiguration."
+  (with-temp-buffer
+    (prog-mode)
+    (setq-local overmark-max-width 5)
+    (insert "1234567\n123\n")
+    (font-lock-mode 1)
+    (font-lock-add-keywords nil overmark--width-font-lock-keywords)
+    (font-lock-ensure)
+    (should (eq (get-text-property 6 'face) 'font-lock-warning-face))
+    (should-not (get-text-property 5 'face))
+    (should-not (get-text-property 9 'face))
+    ;; Dynamically increase to 8
+    (overmark-set-width 8)
+    (font-lock-ensure)
+    (should-not (get-text-property 6 'face))
+    ;; Disable
+    (overmark-set-width 0)
+    (font-lock-ensure)
+    (should-not (get-text-property 6 'face))))
+
+(ert-deftest overmark-test/set-width-prefix-arg ()
+  "overmark-set-width handles prefix argument forms."
+  (with-temp-buffer
+    (insert "1234567890")
+    ;; C-u as argument means use current column
+    (goto-char 5)
+    (overmark-set-width '(4))
+    (should (= overmark-max-width (current-column)))
+    ;; Numeric prefix sets directly
+    (overmark-set-width 72)
+    (should (= overmark-max-width 72))))
+
+(ert-deftest overmark-test/global-mode-manages-width-keywords ()
+  "Ensure overmark-global-mode installs and removes width keywords."
+  (let ((prog-mode-hook nil)
+        (text-mode-hook nil)
+        (enable-theme-functions nil)
+        (overmark-global-mode nil)
+        (code (generate-new-buffer " *overmark-width-code*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer code
+            (prog-mode)
+            (insert "123456789012345")
+            (setq-local overmark-max-width 10))
+          (cl-letf (((symbol-function 'buffer-list)
+                     (lambda (&rest _) (list code))))
+            (unwind-protect
+                (progn
+                  (overmark-global-mode 1)
+                  (should (memq #'overmark--turn-on-width prog-mode-hook))
+                  (should (memq #'overmark--turn-on-width text-mode-hook))
+                  (with-current-buffer code
+                    (font-lock-mode 1)
+                    (overmark-width-mode 1)
+                    (font-lock-ensure)
+                    (should (eq (get-text-property 11 'face) 'font-lock-warning-face)))
+                  (overmark-global-mode -1)
+                  (should-not (memq #'overmark--turn-on-width prog-mode-hook))
+                  (should-not (memq #'overmark--turn-on-width text-mode-hook)))
+              (overmark-global-mode -1))))
+      (kill-buffer code))))
+
+(ert-deftest overmark-test/disable-only-width-guides ()
+  "Disable ONLY line-length guides while leaving TODO/TK annotations active."
+  (with-temp-buffer
+    (text-mode)
+    (setq-local overmark-max-width 10)
+    (insert "TK(hello) 123456789012345")
+    (font-lock-mode 1)
+    (overmark-mode 1)
+    (overmark-width-mode 1)
+    (font-lock-ensure)
+    ;; Both annotations and width overflow are highlighted
+    (should (eq (get-text-property 1 'face) 'overmark-delimiter-face))
+    (should (eq (get-text-property 22 'face) 'font-lock-warning-face))
+    ;; Disable ONLY width guides
+    (overmark-width-mode -1)
+    (font-lock-ensure)
+    ;; Annotation remains active!
+    (should (eq (get-text-property 1 'face) 'overmark-delimiter-face))
+    (should overmark-mode)
+    ;; Width overflow is disabled!
+    (should-not (get-text-property 22 'face))
+    (should-not overmark-width-mode)
+    ;; Toggle width guides back on
+    (overmark-toggle-width)
+    (font-lock-ensure)
+    (should (eq (get-text-property 1 'face) 'overmark-delimiter-face))
+    (should (eq (get-text-property 22 'face) 'font-lock-warning-face))))
 
 (provide 'test-overmark)
 ;;; test-overmark.el ends here

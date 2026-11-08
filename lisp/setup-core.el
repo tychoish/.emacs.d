@@ -19,7 +19,6 @@
 
 (declare-function sprite-state-path "sprite-state")
 
-(autoload 'overmark-font-lock-width-keyword "overmark")
 (autoload 'overmark-font-lock-show-tabs "overmark")
 
 (declare-function electric-pair-default-inhibit "elec-pair")
@@ -388,12 +387,6 @@
 (with-eval-after-load 'elpaish
   (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
-(with-eval-after-load 'treesit
-  (font-lock-add-keywords 'c-mode (overmark-font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c++-mode (overmark-font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c-ts-mode (overmark-font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c++-ts-mode (overmark-font-lock-width-keyword 100)))
-
 (with-eval-after-load 'terraform-mode
   (setq terraform-format-on-save t)
   (setq terraform-indent-level 2))
@@ -565,9 +558,7 @@ resets point to column 0 outside of definition-list context."
   (keymap-set python-ts-mode-map "M-<left>" #'balle-python-shift-left)
   (keymap-set python-ts-mode-map "M-<right>" #'balle-python-shift-right)
   (when (fboundp 'overmark-font-lock-show-tabs)
-    (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-show-tabs)))
-  (when (fboundp 'overmark-font-lock-width-keyword)
-    (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-width-keyword 100))))
+    (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-show-tabs))))
 
 (with-eval-after-load 'anzu
   (seq-do #'make-variable-buffer-local
