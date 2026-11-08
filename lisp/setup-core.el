@@ -147,7 +147,6 @@
                         magit-dash-gh-actions-log-mode)))
 
   (add-hook 'magit-status-mode-hook #'magit-dash--lazy-prefetch-gh)
-  (keymap-set magit-mode-map "C-c C-d" #'magit-dash-open-other-window)
 
   (with-eval-after-load 'nerd-icons
     (setq nerd-icons-mode-icon-alist
