@@ -139,8 +139,8 @@
 (defun tychoish/agent-shell-installed-configs ()
   "Return available default agent configs, including bootstrappable Antigravity."
   (seq-filter #'tychoish/agent-shell--config-installed-p
-              (mapcar (lambda (e) (if (functionp e) (funcall e) e))
-                      (agent-shell-default-agent-config-makers))))
+              (seq-map (lambda (e) (if (functionp e) (funcall e) e))
+                       (agent-shell-default-agent-config-makers))))
 
 (defun ad:agent-shell-insert-to-shell-buffer-advance-point (orig-fn &rest args)
   "Advance point and window-point to `point-max' after insertion."
@@ -224,8 +224,6 @@
 (setq agent-shell-agent-configs #'tychoish/agent-shell-installed-configs)
 (setq agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec))))
 
-(setq agent-shell-buffer-name-format #'agent-shell-menu-format-buffer-name)
-
 (advice-add 'agent-shell-experimental--on-session-push-end :around #'ad:agent-shell-recover-stuck-push-end)
 (advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered)
 (advice-add 'acp--route-incoming-message :around #'ad:acp-route-incoming-message-isolate-errors)
@@ -262,6 +260,51 @@
 
 (tychoish/agent-shell--apply-environment)
 
+(defun tychoish--agent-shell-queue-state-file ()
+  "Queue state file under agent-shell state directory."
+  (let ((ext (cond
+              ((eq (bound-and-true-p agent-shell-queue-serialization-format) 'json) "json")
+              ((eq (bound-and-true-p agent-shell-queue-serialization-format) 'yaml) "yaml")
+              ((eq (bound-and-true-p agent-shell-queue-serialization-format) 'org) "org")
+              (t "el"))))
+    (expand-file-name (concat "queue." ext)
+                      (sprite-state-path "agent-shell"))))
+
+(defun tychoish--agent-shell-queue-archive-file ()
+  "Archive file under agent-shell state directory."
+  (expand-file-name "queue-archive.jsonl"
+                    (sprite-state-path "agent-shell")))
+
+(defvar alert-fade-time)
+(declare-function agent-shell-queue-setup-capture-completion "agent-shell-queue-ui")
+
+(defun tychoish/agent-shell-notifications-alert-send (plist)
+  "Send agent-shell notification PLIST through `alert'."
+  (let* ((title (plist-get plist :title))
+         (body (plist-get plist :body))
+         (icon (plist-get plist :app-icon))
+         (timeout (plist-get plist :timeout))
+         (buf-name (plist-get plist :shell-buffer-name))
+         (alert-fade-time (if (and (numberp timeout) (> timeout 0))
+                              timeout
+                            alert-fade-time)))
+    (alert (or body title "")
+           :title (if (and buf-name (not (string-empty-p buf-name)))
+                      (format "%s <%s>" (or title "agent-shell") buf-name)
+                    (or title "agent-shell"))
+           :icon icon
+           :category 'agent-shell
+           :severity 'normal))
+  nil)
+
+(defun tychoish/agent-shell-notifications-alert-close (_id)
+  "No-op close function for alert notifications." nil)
+
+(defun tychoish/agent-shell-notifications--add-buffer-name (orig type shell-buffer event)
+  "Add `:shell-buffer-name' to alert payload plist."
+  (append (funcall orig type shell-buffer event)
+          (list :shell-buffer-name (buffer-name shell-buffer))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; agent-shell-queue Integration
 
@@ -274,116 +317,20 @@
 
   (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
 
-  (require 'agent-shell-menu)
-  (agent-shell-menu-mode-key "m" agent-shell-menu-dispatch)
-  (agent-shell-menu-mode-key "?" agent-shell-menu-dispatch)
-  (agent-shell-menu-mode-key "p" agent-shell-menu-resolve-permission)
-  (agent-shell-menu-mode-key "/" agent-shell-prompt-queue)
-  (agent-shell-menu-mode-key "a" agent-shell-menu-select-action)
-  (agent-shell-menu-mode-key "b" agent-shell-switch-buffer)
-  (agent-shell-menu-mode-key "x" execute-extended-agent-shell-command)
-  (agent-shell-menu-mode-key "f" agent-shell-menu-select-collapse)
-  (agent-shell-menu-mode-key "c" agent-shell-menu-select-command)
-  (agent-shell-menu-mode-key "t" agent-shell-set-session-thought-level)
-  (agent-shell-menu-mode-key " " agent-shell-set-session-mode)
-  (agent-shell-menu-mode-key "TAB" agent-shell-ui-toggle-fragment)
-  (agent-shell-menu-mode-key "q" agent-shell-queue-buffer-open)
-  (agent-shell-menu-mode-key "s" agent-shell-prompt-steer)
-  (agent-shell-menu-mode-key "r" agent-shell-menu-restart)
-
-  (defun agent-shell-queue-capture-corfu-setup ()
-    "Configure Corfu and dabbrev for queue capture/edit buffers."
-    (corfu-mode +1)
-    (setq-local corfu-auto-prefix 2)
-    (setq-local completion-at-point-functions
-                (append '(cape-dabbrev agent-shell-queue-capture--slash-command-capf)
-                        (remq t completion-at-point-functions))))
-
-  (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-capture-corfu-setup)
-  (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-capture-corfu-setup)
-
-  (defun agent-shell-queue-capture--slash-command-capf ()
-    "Complete slash commands after / in queue capture buffers."
-    (when-let* ((shell-buf (and (boundp 'agent-shell-queue--capture-target)
-                                (buffer-live-p agent-shell-queue--capture-target)
-                                agent-shell-queue--capture-target))
-                (commands (with-current-buffer shell-buf
-                            (map-elt agent-shell--state :available-commands)))
-                ((not (seq-empty-p commands))))
-      (save-excursion
-        (let ((end (point)))
-          (when (re-search-backward "/" (line-beginning-position) t)
-            (list (1+ (point)) end
-                  (seq-map (lambda (c) (map-elt c 'name)) commands)
-                  :annotation-function
-                  (lambda (name)
-                    (let ((cmd (seq-find (lambda (c) (equal (map-elt c 'name) name)) commands)))
-                      (concat "  " (or (and cmd (map-elt cmd 'description)) ""))))
-                  :exclusive 'no))))))
-
-  (defun tychoish--agent-shell-queue-state-file ()
-    "Queue state file under agent-shell state directory."
-    (let ((ext (cond
-                ((eq agent-shell-queue-serialization-format 'json) "json")
-                ((eq agent-shell-queue-serialization-format 'yaml) "yaml")
-                ((eq agent-shell-queue-serialization-format 'org) "org")
-                (t "el"))))
-      (expand-file-name (concat "queue." ext)
-                        (sprite-state-path "agent-shell"))))
-
-  (defun tychoish--agent-shell-queue-archive-file ()
-    "Archive file under agent-shell state directory."
-    (expand-file-name "queue-archive.jsonl"
-                      (sprite-state-path "agent-shell")))
+  (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-setup-capture-completion)
+  (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-setup-capture-completion)
 
   (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
   (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
   (setq agent-shell-queue-archive-enabled t)
   (setq agent-shell-queue-safe-save t)
   (setq agent-shell-queue-safe-save-max-files 50)
-  (setq agent-shell-queue-pick-buffer-function #'agent-shell-menu--pick-buffer)
-  (setq agent-shell-queue-show-ordinal-column nil)
+  (setq agent-shell-queue-show-ordinal-column nil))
 
-  (with-eval-after-load 'nerd-icons
-    (seq-do (lambda (entry)
-              (add-to-list 'nerd-icons-mode-icon-alist entry))
-            '((agent-shell-queue-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-purple)
-              (agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-preview" :face nerd-icons-purple)
-              (agent-shell-queue-edit-mode nerd-icons-codicon "nf-cod-edit" :face nerd-icons-purple)
-              (agent-shell-queue-capture-mode nerd-icons-codicon "nf-cod-record" :face nerd-icons-purple)
-              (agent-shell-queue-raw-edit-mode nerd-icons-codicon "nf-cod-file_code" :face nerd-icons-purple)
-              (agent-shell-queue-interjection-mode nerd-icons-codicon "nf-cod-comment_discussion" :face nerd-icons-purple)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; agent-shell-notifications Integration
 
 (with-eval-after-load 'agent-shell-notifications
-  (defun tychoish/agent-shell-notifications-alert-send (plist)
-    "Send agent-shell notification PLIST through `alert'."
-    (let* ((title (plist-get plist :title))
-           (body (plist-get plist :body))
-           (icon (plist-get plist :app-icon))
-           (timeout (plist-get plist :timeout))
-           (buf-name (plist-get plist :shell-buffer-name))
-           (alert-fade-time (if (and (numberp timeout) (> timeout 0))
-                                timeout
-                              alert-fade-time)))
-      (alert (or body title "")
-             :title (if (and buf-name (not (string-empty-p buf-name)))
-                        (format "%s <%s>" (or title "agent-shell") buf-name)
-                      (or title "agent-shell"))
-             :icon icon
-             :category 'agent-shell
-             :severity 'normal))
-    nil)
-
-  (defun tychoish/agent-shell-notifications-alert-close (_id)
-    "No-op close function for alert notifications." nil)
-
-  (defun tychoish/agent-shell-notifications--add-buffer-name (orig type shell-buffer event)
-    "Add `:shell-buffer-name' to alert payload plist."
-    (append (funcall orig type shell-buffer event)
-            (list :shell-buffer-name (buffer-name shell-buffer))))
-
   (advice-add 'agent-shell-notifications--make-notification-plist
               :around #'tychoish/agent-shell-notifications--add-buffer-name)
 
