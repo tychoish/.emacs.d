@@ -8,8 +8,7 @@
 ;;; Code:
 
 (require 'seq)
-
-(defvaralias 'setup-modes-alist 'setup-modes-auto-mode-alist)
+(require 'subr-x)
 
 (defvar setup-modes-auto-mode-alist
   '(("\\.xml\\'" . nxml-mode)
@@ -73,22 +72,19 @@
     ("\\.java\\'" . java-ts-mode))
   "List of (REGEXP . MODE) associations to merge into `auto-mode-alist'.")
 
-(defvar setup-modes-major-mode-remap-alist
-  '((yaml-ts-mode . yaml-mode))
-  "List of (ORIGINAL-MODE . NEW-MODE) pairs to merge into `major-mode-remap-alist'.")
+;;; Direct major mode remaps
+(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
-(defvar setup-modes-term-file-aliases
-  '(("alacritty" . "xterm")
-    ("ghostty" . "xterm-ghostty"))
-  "List of (TERMINAL-NAME . ALIAS) pairs to merge into `term-file-aliases'.")
+;;; Direct terminal file aliases
+(add-to-list 'term-file-aliases '("alacritty" . "xterm"))
+(add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
-(defvar setup-modes-hooks
-  '((dired-mode-hook . dired-async-mode)
-    (sqlite-mode-hook . sqlite-extras-minor-mode)
-    (LaTeX-mode-hook . turn-on-reftex)
-    (LaTeX-mode-hook . visual-line-mode)
-    (LaTeX-mode-hook . turn-off-auto-fill))
-  "Alist of (HOOK . FUNCTION) pairs to register during `setup-modes-initialize'.")
+;;; Direct mode hooks
+(add-hook 'dired-mode-hook #'dired-async-mode)
+(add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
+(add-hook 'LaTeX-mode-hook #'turn-on-reftex)
+(add-hook 'LaTeX-mode-hook #'visual-line-mode)
+(add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
 
 (defun setup-modes-merge-alist (current new-entries)
   "Merge NEW-ENTRIES into CURRENT alist, overriding existing keys."
@@ -98,17 +94,10 @@
     seq-uniq))
 
 (defun setup-modes-initialize ()
-  "Apply mode associations, terminal aliases, and major mode hooks.
-Merges `setup-modes-auto-mode-alist' into `auto-mode-alist', overriding
-any existing entries from earlier in the session, and registers mode hooks."
+  "Merge `setup-modes-auto-mode-alist' into `auto-mode-alist', overriding
+any existing entries from earlier in the session."
   (setq auto-mode-alist
-        (setup-modes-merge-alist auto-mode-alist setup-modes-auto-mode-alist))
-  (setq major-mode-remap-alist
-        (setup-modes-merge-alist major-mode-remap-alist setup-modes-major-mode-remap-alist))
-  (setq term-file-aliases
-        (setup-modes-merge-alist term-file-aliases setup-modes-term-file-aliases))
-  (dolist (hook-spec setup-modes-hooks)
-    (add-hook (car hook-spec) (cdr hook-spec))))
+        (setup-modes-merge-alist auto-mode-alist setup-modes-auto-mode-alist)))
 
 (add-hook 'after-init-hook #'setup-modes-initialize -80)
 

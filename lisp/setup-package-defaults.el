@@ -50,13 +50,6 @@
       (elpaish-install-packages :sync t)
       (elpaish-install-refresh-package-quickstart t))))
 
-;; Backward-compatibility wrappers for bootstrap and test suites
-(defalias 'bootstrap-optimize-quickstart-file #'elpaish-install-optimize-quickstart-file)
-(defalias 'ad:package-quickstart-refresh--optimize #'elpaish-install--package-quickstart-refresh-optimize)
-(defalias 'bootstrap-sync-package-load-paths #'elpaish-install-sync-package-load-paths)
-(defalias 'bootstrap-flush-package-quickstart #'elpaish-install-flush-package-quickstart)
-(defalias 'bootstrap-force-refresh-package-quickstart #'elpaish-install-refresh-package-quickstart)
-
 (defun bootstrap-package-quickstart-stale-p ()
   "Return non-nil when quickstart file or its .elc is missing or stale."
   (elpaish-install-package-quickstart-stale-p))
@@ -67,7 +60,7 @@ When FORCE is nil, do nothing unless quickstart file is stale."
   (interactive "P")
   (when (or force (bootstrap-package-quickstart-stale-p))
     (require 'package)
-    (bootstrap-sync-package-load-paths)
+    (elpaish-install-sync-package-load-paths)
     (package-quickstart-refresh)))
 
 (defun ad:refresh-package-quickstart (&rest _)

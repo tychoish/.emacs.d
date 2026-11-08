@@ -8,10 +8,16 @@
 (defvar sqlite-mode-hook)
 (defvar LaTeX-mode-hook)
 
-(ert-deftest setup-modes/alias-points-to-auto-mode-alist ()
-  "Ensure `setup-modes-alist' is an alias for `setup-modes-auto-mode-alist'."
-  (should (equal setup-modes-alist setup-modes-auto-mode-alist))
-  (should (consp setup-modes-auto-mode-alist)))
+(ert-deftest setup-modes/direct-settings-configured ()
+  "Ensure major-mode-remap-alist, term-file-aliases, and hooks are set directly."
+  (should (eq (cdr (assoc 'yaml-ts-mode major-mode-remap-alist)) 'yaml-mode))
+  (should (equal (cdr (assoc "alacritty" term-file-aliases)) "xterm"))
+  (should (equal (cdr (assoc "ghostty" term-file-aliases)) "xterm-ghostty"))
+  (should (memq 'dired-async-mode dired-mode-hook))
+  (should (memq 'sqlite-extras-minor-mode sqlite-mode-hook))
+  (should (memq 'turn-on-reftex LaTeX-mode-hook))
+  (should (memq 'visual-line-mode LaTeX-mode-hook))
+  (should (memq 'turn-off-auto-fill LaTeX-mode-hook)))
 
 (ert-deftest setup-modes/merge-alist-overrides-existing ()
   "Ensure `setup-modes-merge-alist' overrides existing keys and preserves distinct keys."
@@ -41,22 +47,11 @@
          (merged (setup-modes-merge-alist current new)))
     (should (equal (mapcar #'car (seq-take merged 2)) '("c" "d")))))
 
-(ert-deftest setup-modes/initialize-merges-and-adds-hooks ()
-  "Ensure `setup-modes-initialize' applies associations, remaps, aliases, and hooks."
-  (let ((auto-mode-alist '(("\\.txt\\'" . text-mode)))
-        (major-mode-remap-alist nil)
-        (term-file-aliases nil)
-        (dired-mode-hook nil)
-        (sqlite-mode-hook nil)
-        (LaTeX-mode-hook nil))
+(ert-deftest setup-modes/initialize-merges-auto-mode-alist ()
+  "Ensure `setup-modes-initialize' merges `setup-modes-auto-mode-alist' into `auto-mode-alist'."
+  (let ((auto-mode-alist '(("\\.txt\\'" . text-mode))))
     (setup-modes-initialize)
-    (should (eq (cdr (assoc "\\.txt\\'" auto-mode-alist)) 'markdown-mode))
-    (should (eq (cdr (assoc 'yaml-ts-mode major-mode-remap-alist)) 'yaml-mode))
-    (should (equal (cdr (assoc "alacritty" term-file-aliases)) "xterm"))
-    (should (equal (cdr (assoc "ghostty" term-file-aliases)) "xterm-ghostty"))
-    (should (memq 'dired-async-mode dired-mode-hook))
-    (should (memq 'sqlite-extras-minor-mode sqlite-mode-hook))
-    (should (memq 'turn-on-reftex LaTeX-mode-hook))))
+    (should (eq (cdr (assoc "\\.txt\\'" auto-mode-alist)) 'markdown-mode))))
 
 (ert-deftest setup-modes/registered-in-after-init-hook ()
   "Ensure `setup-modes-initialize' is registered on `after-init-hook'."

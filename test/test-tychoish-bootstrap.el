@@ -1013,7 +1013,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 
 (ert-deftest bootstrap/optimize-quickstart-transforms-correctly ()
-  "Test that bootstrap-optimize-quickstart-file streamlines quickstart contents."
+  "Test that elpaish-install-optimize-quickstart-file streamlines quickstart contents."
   (let ((tmp-file (make-temp-file "test-quickstart-" nil ".el")))
     (unwind-protect
         (progn
@@ -1024,7 +1024,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
             (insert "  (register-definition-prefixes \"pkg\" '(\"pkg-\" \"pkg/\"))\n")
             (insert "  (autoload 'pkg-fn \"pkg\" \"This is a docstring\" t)\n")
             (insert "  (provide 'pkg-autoloads)\n)\n\x0c\n"))
-          (bootstrap-optimize-quickstart-file tmp-file)
+          (elpaish-install-optimize-quickstart-file tmp-file)
           (with-temp-buffer
             (insert-file-contents tmp-file)
             (let ((content (buffer-string)))
@@ -1053,7 +1053,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
     (unwind-protect
         (progn
           (with-temp-file file (insert ";;; -*- lexical-binding: t; -*-\n(\n"))
-          (ad:package-quickstart-refresh--optimize
+          (elpaish-install--package-quickstart-refresh-optimize
            (lambda () (byte-compile-file file)))
           (when-let* ((buffer (get-buffer byte-compile-log-buffer)))
             (with-current-buffer buffer
@@ -1078,7 +1078,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
         (refreshes 0))
     (cl-letf (((symbol-function 'bootstrap-package-quickstart-stale-p)
                (lambda () stale))
-              ((symbol-function 'bootstrap-sync-package-load-paths) #'ignore)
+              ((symbol-function 'elpaish-install-sync-package-load-paths) #'ignore)
               ((symbol-function 'package-quickstart-refresh)
                (lambda () (setq refreshes (1+ refreshes)))))
       (bootstrap-package-quickstart)
