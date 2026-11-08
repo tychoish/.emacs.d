@@ -29,7 +29,6 @@
 (require 'map)
 (require 'seq)
 (require 'cl-lib)
-(require 'xtd-macro)
 
 (declare-function anzu--reset-status "anzu")
 (declare-function flycheck-count-errors "flycheck")
@@ -60,7 +59,20 @@
   :type 'boolean
   :group 'hud-modeline)
 
-(create-toggle-functions hud-modeline-icons)
+(defun turn-on-hud-modeline-icons ()
+  "Enable `hud-modeline-icons'."
+  (interactive)
+  (setq hud-modeline-icons t))
+
+(defun turn-off-hud-modeline-icons ()
+  "Disable `hud-modeline-icons'."
+  (interactive)
+  (setq hud-modeline-icons nil))
+
+(defun toggle-hud-modeline-icons ()
+  "Toggle `hud-modeline-icons'."
+  (interactive)
+  (setq hud-modeline-icons (not hud-modeline-icons)))
 
 (defcustom hud-modeline-mode-max-length 12
   "Maximum characters for major mode name before truncation."
@@ -72,7 +84,20 @@
   :type 'boolean
   :group 'hud-modeline)
 
-(create-toggle-functions hud-modeline-show-buffer-size)
+(defun turn-on-hud-modeline-show-buffer-size ()
+  "Enable `hud-modeline-show-buffer-size'."
+  (interactive)
+  (setq hud-modeline-show-buffer-size t))
+
+(defun turn-off-hud-modeline-show-buffer-size ()
+  "Disable `hud-modeline-show-buffer-size'."
+  (interactive)
+  (setq hud-modeline-show-buffer-size nil))
+
+(defun toggle-hud-modeline-show-buffer-size ()
+  "Toggle `hud-modeline-show-buffer-size'."
+  (interactive)
+  (setq hud-modeline-show-buffer-size (not hud-modeline-show-buffer-size)))
 
 (defcustom hud-modeline-box-style nil
   "Mode-line box style as a list of features to enable (or nil for no box).
