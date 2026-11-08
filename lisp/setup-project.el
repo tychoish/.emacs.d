@@ -34,27 +34,6 @@
 (advice-add 'projectile-serialize :around #'projectile-serialize-silent-fallback)
 (advice-add 'projectile-purge-file-from-cache :around #'projectile-purge-file-from-cache-debounced)
 
-(add-hook 'project-find-functions #'project-find-go-module)
-(add-hook 'project-find-functions #'project-find-cmake-project)
-
-(cl-defmethod project-root ((project (head cmake-root))) (cdr project))
-(cl-defmethod project-root ((project (head go-module))) (cdr project))
-
-(defun project-find-cmake-project (dir)
-  (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
-    (cons 'cmake-root root)))
-
-(defun project-find-go-module (dir)
-  (when-let* ((root (or (locate-dominating-file dir "go.work")
-                        (locate-dominating-file dir "go.mod"))))
-    (cons 'go-module root)))
-
-;;;###autoload
-(defun turn-on-projectile-mode ()
-  "Enable projectile-mode with project.el integration."
-  (interactive)
-  (projectile-mode 1))
-
 ;;;###autoload
 (defun projectile-save-buffers-in-directory (dir)
   "Save all buffers visiting files within DIR using projectile."

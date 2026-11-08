@@ -55,11 +55,6 @@
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'daemons-dash "daemons-dash" "Dashboard for systemd, docker, and sprite daemons." t)
-(autoload 'turn-on-projectile-mode "setup-project" "Enable projectile-mode with project.el integration." t)
-
-(add-hook 'prog-mode-hook #'turn-on-projectile-mode)
-(add-hook 'text-mode-hook #'turn-on-projectile-mode)
-(add-hook 'dired-mode-hook #'turn-on-projectile-mode)
 
 (autoload 'tychoish-mail-select-account "setup-mail" nil t)
 (autoload 'tychoish-define-mail-account "setup-mail")
@@ -130,6 +125,7 @@
     bootstrap-silent-recentf
     popper-mode
     grepx-mode
+    projectile-mode
     denote-dash-global-mode
     denote-tree-mode
     magit-dash-global-mode
