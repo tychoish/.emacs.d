@@ -90,18 +90,13 @@
 ;;; python-ts-mode buffer-local setup hook
 
 (ert-deftest tychoish-core/python-ts-mode-setup-runs-on-hook ()
-  "`tychoish/python-setup' must be registered on the actual mode hook.
+  "Python setup hooks must be registered on `python-ts-mode-hook'.
 
-Regression test: this was previously wired to the symbol `python-ts-mode'
-\(the mode function itself, which is never a hook variable\) instead of
-`python-ts-mode-hook', so the setup never ran.  Also previously the
-use-package block was named `python-ts-mode', but that symbol is never
-`provide'd -- `python-ts-mode' is defined inside python.el, which only
-provides the feature `python' -- so `with-eval-after-load' never fired
-from a plain `require'.  The block is now named `python' to match the
-feature it actually depends on, so a plain `require' triggers it."
+Regression test: verifies that buffer-local setup hooks are attached to
+`python-ts-mode-hook' when `python' is loaded."
   (require 'python)
-  (should (memq 'tychoish/python-setup python-ts-mode-hook)))
+  (should (memq #'tychoish-set-local-fill-column-100 python-ts-mode-hook))
+  (should (memq #'tychoish-set-local-tab-width-4 python-ts-mode-hook)))
 
 (ert-deftest tychoish-core/compilation-read-command ()
   "Test that `builder-compilation-read-command' processes `builder--read-command'

@@ -55,13 +55,14 @@
     (should-not (seq-intersection upgrades installs))))
 
 (ert-deftest setup-packages/no-local-packages-in-catalogs ()
-  "Ensure packages local to .emacs.d/lisp are not registered with elpaish."
+  "Ensure configuration modules local to .emacs.d/lisp are not registered with elpaish."
   (let ((upgrades (test-setup-packages--get-upgrade-list))
         (installs (test-setup-packages--get-install-list))
-        (local-pkgs '(eglox grepx hud-modeline)))
-    (dolist (pkg local-pkgs)
-      (should-not (memq pkg upgrades))
-      (should-not (memq pkg installs)))))
+        (local-modules '(bootstrap setup-core setup-defaults setup-package-defaults
+                         setup-packages setup-mail setup-project setup-agent-shell)))
+    (dolist (mod local-modules)
+      (should-not (memq mod upgrades))
+      (should-not (memq mod installs)))))
 
 (ert-deftest setup-packages/registration-integration ()
   "Ensure loading `setup-packages' registers all packages in elpaish."
