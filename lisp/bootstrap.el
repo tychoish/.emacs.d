@@ -125,6 +125,7 @@
     bootstrap-silent-recentf
     popper-mode
     grepx-mode
+    bootstrap-require-setup-project
     projectile-mode
     denote-dash-global-mode
     denote-tree-mode
