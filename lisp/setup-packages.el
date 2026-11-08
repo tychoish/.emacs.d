@@ -8,9 +8,8 @@
 ;; all upgrade packages are also present in `elpaish-install-packages-list',
 ;; so no manual synchronization or superset maintenance is needed.
 ;;
-;; Packages local to .emacs.d/lisp (such as `eglox', `grepx', and `hud-modeline')
-;; are loaded directly from the local directory and must not be registered with
-;; elpaish.
+;; Standalone packages extracted from .emacs.d/lisp are registered with
+;; elpaish and kept continuously upgraded.
 
 ;;; Code:
 
@@ -53,6 +52,7 @@
    gptel-pup
    grepx
    hitl
+   hud-modeline
    magit
    magit-dash
    marginalia
