@@ -142,6 +142,7 @@
     annotated-completing-read-setup-history
     mcpkit-init-services
     sprite-state-global-mode
+    bootstrap-run-maintenance
     bootstrap-startup-timing))
 
 (setq sprite-first-frame-operations
@@ -156,11 +157,10 @@
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook 'emacs-startup-hook #'bootstrap-run-startup)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
-(add-hook 'emacs-startup-hook #'bootstrap-run-maintenance)
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
 (add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
 
-(defun bootstrap-run-startup () (sprite-run-startup-operations :delay 0.1))
+(defun bootstrap-run-startup () (sprite-run-startup-operations :delay 0.05))
 (defun bootstrap-require-setup-project () (require 'setup-project))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-silent-savehist () (let ((inhibit-message t) (message-log-max nil)) (savehist-mode 1)))
@@ -169,6 +169,13 @@
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
+(defun bootstrap-after-first-frame () (sprite-run-startup-operations sprite-first-frame-operations :frame (selected-frame)))
+(defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
+(defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
+(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
+(defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
+(defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
+
 (defun bootstrap-run-maintenance ()
   "Run deferred background package and native-comp maintenance on idle timer."
   (run-with-idle-timer 300 nil
@@ -178,12 +185,6 @@
       (bootstrap-package-quickstart)
       (when (fboundp 'builder-emacs-conf-native-compile-all)
         (builder-emacs-conf-native-compile-all)))))
-(defun bootstrap-after-first-frame () (sprite-run-startup-operations sprite-first-frame-operations :frame (selected-frame)))
-(defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
-(defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
-(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
-(defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
-(defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -232,7 +233,6 @@
   (setq deft-directory (file-name-concat local-notes-directory "deft"))
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
