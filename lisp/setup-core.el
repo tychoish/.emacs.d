@@ -65,6 +65,25 @@
         (electric-pair-default-inhibit char)
       (electric-pair-conservative-inhibit char))))
 
+(eval-when-compile
+  (require 'clix))
+
+(register-clix-flag slow-op-timing
+  :flag "--with-slow-op-timing" :doc "Enable slow operation timing." :consume nil
+  :handler (message "[op]: enabling time reporting"))
+
+(register-clix-flag org-exec
+  :flag "--org-exec" :doc "Execute an Org file's Babel blocks."
+  :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
+                 (builder-org-babel-execute-file clix-arg-org-exec))
+  :final t)
+
+(register-clix-flag org-exec-dir
+  :flag "--org-exec-dir" :doc "Execute Org Babel blocks in a directory."
+  :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
+                 (builder-org-babel-execute-directory clix-arg-org-exec-dir))
+  :final t)
+
 ;;; cmdr bindings for config-specific commands
 
 (autoload 'eglox-describe-symbol-dwim "eglox" nil t)
