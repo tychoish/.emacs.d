@@ -69,6 +69,7 @@
    sprite
    tailscale
    telega-bot
+   telegax
    tempel
    transient
    treesit-auto
