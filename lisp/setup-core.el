@@ -48,6 +48,10 @@
 (defvar rustic-rustfmt-args)
 (defvar anzu-cons-mode-line-p)
 (defvar sprite-mode-map-prefix)
+(defvar alert-default-style)
+(defvar alert-fade-time)
+(defvar alert-libnotify-command)
+(defvar alert-log-messages)
 
 (defvar electric-pair-inhibition nil)
 (defvar electric-pair-eagerness t)
@@ -348,24 +352,31 @@
   (require 'denote-sync-notion)
   (require 'denote-sync-gdocs))
 
-(with-eval-after-load 'alert
-  (setq alert-log-messages nil)
-  (setq alert-fade-time 15)
-
+(defun tychoish-alert-default-style ()
+  "Determine the preferred `alert' style for the current environment."
   (cond
    ((eq system-type 'darwin)
-    (if (daemonp)
-        (progn
-          (setq alert-default-style 'notifier)
-          (add-one-shot-hook :hook 'server-after-make-frame-hook
-            :form (when (window-system)
-                    (setq-default alert-default-style 'osx-notifier))))
-      (setq-default alert-default-style (if (window-system) 'osx-notifier 'notifier))))
-   ((and (eql system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
-    (setq-default alert-default-style 'notifications))
+    (if (display-graphic-p) 'osx-notifier 'notifier))
+   ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
+    'notifications)
    (alert-libnotify-command
-    (setq-default alert-default-style 'libnotify))
-   (t (setq-default alert-default-style 'message))))
+    'libnotify)
+   (t
+    'message)))
+
+(defun tychoish-alert-darwin-server-init ()
+  "Switch `alert-default-style' to `osx-notifier' on first GUI client frame."
+  (when (display-graphic-p)
+    (setq alert-default-style 'osx-notifier)
+    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
+
+(with-eval-after-load 'alert
+  (setq alert-log-messages nil
+        alert-fade-time 15
+        alert-default-style (tychoish-alert-default-style))
+
+  (when (and (eq system-type 'darwin) (daemonp))
+    (add-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
 
 (with-eval-after-load 'which-key
   (setq which-key-idle-delay 0.25
