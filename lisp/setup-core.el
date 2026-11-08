@@ -130,31 +130,11 @@
 
 (with-eval-after-load 'magit-dash
   (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune"))
-  (setq magit-dash-gh-prune-pr-limit 50)
-  (setq magit-dash-show-discovered-submodules nil)
-  (setq magit-dash-render-branch-name-as-basename t)
-  (setq magit-dash-which-key-abbreviate-commands 'strip)
 
   (defun magit-dash--lazy-prefetch-gh ()
     (run-with-idle-timer 3 nil #'magit-dash-gh-prune-prefetch))
 
-  (defun magit-dash--set-up-nerd-icons (entry)
-    (add-to-list 'nerd-icons-mode-icon-alist entry))
-
-  (defun magit-dash--clean-up-nerd-icons (entry)
-    (memq (car entry) '(magit-dash-mode
-                        magit-dash-gh-pr-dashboard-mode
-                        magit-dash-gh-actions-log-mode)))
-
-  (add-hook 'magit-status-mode-hook #'magit-dash--lazy-prefetch-gh)
-
-  (with-eval-after-load 'nerd-icons
-    (setq nerd-icons-mode-icon-alist
-          (seq-remove #'magit-dash--clean-up-nerd-icons nerd-icons-mode-icon-alist))
-    (seq-do #'magit-dash--set-up-nerd-icons
-	    '((magit-dash-mode nerd-icons-devicon "nf-dev-git" :face nerd-icons-orange)
-	      (magit-dash-gh-pr-dashboard-mode nerd-icons-octicon "nf-oct-git_pull_request" :face nerd-icons-orange)
-	      (magit-dash-gh-actions-log-mode nerd-icons-octicon "nf-oct-workflow" :face nerd-icons-orange)))))
+  (add-hook 'magit-status-mode-hook #'magit-dash--lazy-prefetch-gh))
 
 (with-eval-after-load 'elec-pair
   (setq electric-indent-chars '(?\n ?:))
