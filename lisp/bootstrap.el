@@ -39,6 +39,11 @@
 (require 'cmdr-mode)
 (require 'cmdr-frame)
 
+(declare-function sprite-batch-startup "sprite-batch")
+(declare-function sprite-run-batch "sprite-batch")
+
+(defvar treesit-auto-langs)
+
 (defvar local-notes-directory nil
   "Directory where notes are stored.")
 
@@ -125,8 +130,10 @@
     bootstrap-silent-recentf
     popper-mode
     grepx-mode
+    bootstrap-require-treesit-auto
     bootstrap-treesit-auto
     bootstrap-require-setup-project
+    global-treesit-auto-mode
     projectile-mode
     denote-dash-global-mode
     denote-tree-mode
@@ -140,7 +147,7 @@
     annotated-completing-read-setup-history
     mcpkit-init-services
     sprite-state-global-mode
-    bootstrap-run-maintenance
+    bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
 (setq sprite-first-frame-operations
@@ -151,39 +158,38 @@
     hud-modeline-mode
     bootstrap-frame-startup-timing))
 
-(add-hook 'after-init-hook #'cmdr-spec-discover)
-(add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
-(add-hook 'emacs-startup-hook #'bootstrap-run-startup)
-(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
-(add-hook 'window-setup-hook #'bootstrap-after-first-frame)
-(add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
+(defvar bootstrap-package-maintenance
+  '(bootstrap-require-setup-packages
+    bootstrap-ensure-packages-installed
+    bootstrap-package-quickstart
+    builder-emacs-conf-native-compile-all)
+  "Operations to run after startup to maintain")
 
-(defun bootstrap-run-startup () (sprite-run-startup-operations :delay 0.05))
+(defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
+(defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
 (defun bootstrap-require-setup-project () (require 'setup-project))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
+(defun bootstrap-require-treesit-auto () (require 'treesit-auto))
 (defun bootstrap-silent-savehist () (let ((inhibit-message t) (message-log-max nil)) (savehist-mode 1)))
 (defun bootstrap-silent-recentf () (let ((inhibit-message t) (message-log-max nil)) (recentf-mode 1)))
 (defun bootstrap-package-quickstart () (bootstrap-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
-(defun bootstrap-after-first-frame () (sprite-run-startup-operations sprite-first-frame-operations :frame (selected-frame)))
+(defun bootstrap-after-first-frame () (sprite-batch-startup sprite-first-frame-operations :frame (selected-frame)))
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
 (defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
 (defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
-(defun bootstrap-treesit-auto () (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)) (global-treesit-auto-mode))
+(defun bootstrap-treesit-auto () (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 
-(defun bootstrap-run-maintenance ()
-  "Run deferred background package and native-comp maintenance on idle timer."
-  (run-with-idle-timer 300 nil
-    (lambda ()
-      (require 'setup-packages)
-      (bootstrap-ensure-packages-installed)
-      (bootstrap-package-quickstart)
-      (when (fboundp 'builder-emacs-conf-native-compile-all)
-        (builder-emacs-conf-native-compile-all)))))
+(add-hook 'after-init-hook #'cmdr-spec-discover)
+(add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
+(add-hook 'emacs-startup-hook #'bootstrap-run-startup)
+(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
+(add-hook 'window-setup-hook #'bootstrap-after-first-frame)
+(add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -252,10 +258,10 @@
   (thread-last
     (directory-files temporary-file-directory t ".*ssh-.*/agent.*" :nosort)
     (append (list (format "/run/user/%d/ssh-agent.socket" (user-uid))))
-    (seq-sort #'string-lessp)
-    (seq-uniq)
     (seq-remove #'null)
+    (seq-uniq)
     (seq-filter #'file-writable-p)
+    (seq-sort #'string-lessp)
     (nreverse)))
 
 (defun bootstrap-set-up-ssh-agent ()
