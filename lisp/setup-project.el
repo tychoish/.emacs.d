@@ -48,6 +48,9 @@
 (add-hook 'text-mode-hook #'turn-on-projectile-mode)
 (add-hook 'dired-mode-hook #'turn-on-projectile-mode)
 
+(with-eval-after-load 'popper
+  (setq popper-group-function #'popper-group-by-projectile))
+
 ;;;###autoload
 (defun projectile-save-buffers-in-directory (dir)
   "Save all buffers visiting files within DIR using projectile."
