@@ -59,6 +59,7 @@
    orderless
    org-docsgen
    orgx
+   overmark
    shell-maker
    sprite
    tailscale
