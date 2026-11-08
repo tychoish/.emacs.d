@@ -13,7 +13,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'xtd-macro)
 (require 'cmdr-macros)
 (require 'cmdr-keys)
 (require 'cmdr-spec)
@@ -390,45 +389,10 @@
   (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 (with-eval-after-load 'treesit
-  (add-hook 'js-ts-mode-hook (make-run-hooks-function-for js-mode))
-  (add-hook 'c-ts-mode-hook (make-run-hooks-function-for c-mode))
-  (add-hook 'c++-ts-mode-hook (make-run-hooks-function-for c++-mode))
-
   (font-lock-add-keywords 'c-mode (overmark-font-lock-width-keyword 100))
   (font-lock-add-keywords 'c++-mode (overmark-font-lock-width-keyword 100))
-
   (font-lock-add-keywords 'c-ts-mode (overmark-font-lock-width-keyword 100))
-  (font-lock-add-keywords 'c++-ts-mode (overmark-font-lock-width-keyword 100))
-
-  (setq treesit-language-source-alist
-	'((bash "https://github.com/tree-sitter/tree-sitter-bash")
-	  (cmake "https://github.com/uyha/tree-sitter-cmake")
-	  (c "https://github.com/tree-sitter/tree-sitter-c")
-	  (css "https://github.com/tree-sitter/tree-sitter-css")
-	  (cpp "https://github.com/tree-sitter/tree-sitter-cpp")
-	  (go "https://github.com/tree-sitter/tree-sitter-go")
-	  (html "https://github.com/tree-sitter/tree-sitter-html")
-	  (java "https://github.com/tree-sitter/tree-sitter-java")
-	  (dockerfile "https://github.com/camdencheek/tree-sitter-dockerfile")
-	  (javascript "https://github.com/tree-sitter/tree-sitter-javascript" "master" "src")
-	  (json "https://github.com/tree-sitter/tree-sitter-json")
-	  (python "https://github.com/tree-sitter/tree-sitter-python")
-	  (ruby "https://github.com/tree-sitter/tree-sitter-ruby")
-	  (rust "https://github.com/tree-sitter/tree-sitter-rust")
-	  (toml "https://github.com/tree-sitter/tree-sitter-toml")
-	  (gomod "https://github.com/camdencheek/tree-sitter-go-mod")
-	  (tsx "https://github.com/tree-sitter/tree-sitter-typescript" "master" "tsx/src")
-	  (yaml "https://github.com/ikatyang/tree-sitter-yaml")
-	  (typescript "https://github.com/tree-sitter/tree-sitter-typescript" "master" "typescript/src")))
-
-  (defun tychoish-background-rebuild-treesit-bindings ()
-    (interactive)
-    (async-start
-     `(lambda ()
-	,(async-inject-variables "treesit-language-source-alist")
-	(mapc #'treesit-install-language-grammar (seq-map #'car treesit-language-source-alist)))
-     (lambda (result)
-       (message "rebuilt treesit grammars for %s" result)))))
+  (font-lock-add-keywords 'c++-ts-mode (overmark-font-lock-width-keyword 100)))
 
 (with-eval-after-load 'terraform-mode
   (setq terraform-format-on-save t)

@@ -65,6 +65,7 @@
    telega-bot
    tempel
    transient
+   treesit-auto
    vertico
    xtdlib))
 

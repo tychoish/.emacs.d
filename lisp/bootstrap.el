@@ -125,6 +125,7 @@
     bootstrap-silent-recentf
     popper-mode
     grepx-mode
+    bootstrap-treesit-auto
     bootstrap-require-setup-project
     projectile-mode
     denote-dash-global-mode
@@ -172,6 +173,7 @@
 (defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
+(defun bootstrap-treesit-auto () (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)) (global-treesit-auto-mode))
 
 (defun bootstrap-run-maintenance ()
   "Run deferred background package and native-comp maintenance on idle timer."

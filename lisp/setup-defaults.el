@@ -195,16 +195,6 @@
 (add-to-list 'auto-mode-alist '("\\.java\\'" . java-ts-mode))
 
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
-(add-to-list 'major-mode-remap-alist '(go-mode . go-ts-mode))
-(add-to-list 'major-mode-remap-alist '(go-mod-mode . go-mod-ts-mode))
-(add-to-list 'major-mode-remap-alist '(js-mode . js-ts-mode))
-(add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
-(add-to-list 'major-mode-remap-alist '(java-mode . java-ts-mode))
-(add-to-list 'major-mode-remap-alist '(css-mode . css-ts-mode))
-(add-to-list 'major-mode-remap-alist '(js-json-mode . json-ts-mode))
-(add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
-(add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
-(add-to-list 'major-mode-remap-alist '(c-or-c++-mode . c-or-c++-ts-mode))
 
 (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
 (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
