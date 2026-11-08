@@ -60,13 +60,12 @@
 (setq use-dialog-box nil)
 (setq use-short-answers t)
 (setq ollama-tailnet-fallback-strategy :auto-local)
-(setq load-prefer-newer t)
 (setq-default indent-tabs-mode nil) ; (setq tab-width 4)
 (setq shell-command-dont-erase-buffer 'end-last-out)
-(setq undo-auto-current-boundary-timer t)
 (setq comment-auto-fill-only-comments t)
 (setq select-enable-clipboard nil) ;; select-enable-primary already defaults to nil.
-(setq lpr-add-switches "-T ''")
+(setq lpr-switches '("-T" "''"))
+(setq lpr-add-switches t)
 (setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
 
 (setq save-abbrevs t)
@@ -219,16 +218,12 @@
   (setq ns-function-modifier 'hyper)
   (setq mac-command-modifier 'meta)
   (setq mac-option-modifier 'super)
-  (setq ns-use-srgb-colorspace nil)
-  (setq display-highres t)
   (add-hook 'after-make-frame-functions #'contextual-menubar))
 
 (when (eq system-type 'gnu/linux)
   (setq read-process-output-max (* 1024 1024))
   (setq x-alt-keysym 'meta)
   (setq x-super-keysym 'super))
-
-(setq system-uses-terminfo t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Frame & buffer display policies

@@ -13,11 +13,12 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'sprite)
 (require 'xtd-macro)
 (require 'cmdr-macros)
 (require 'cmdr-keys)
 (require 'cmdr-spec)
+
+(declare-function sprite-state-path "sprite-state")
 
 (autoload 'overmark-font-lock-width-keyword "overmark")
 (autoload 'overmark-font-lock-show-tabs "overmark")
@@ -751,8 +752,6 @@ clipboard."
   (defvar gemini-api-key nil)
   (defvar anthropic-api-key nil)
   (defvar openai-api-key nil)
-
-  (require 'cl-lib)
 
   (cl-defun make-gptel-set-up-backend-functions (&key name model backend key api-key)
     "Register buffer-local and session-default backend switchers for MODEL as NAME."

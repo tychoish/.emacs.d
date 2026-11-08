@@ -52,9 +52,9 @@
 (defun projectile-save-buffers-in-directory (dir)
   "Save all buffers visiting files within DIR using projectile."
   (let ((default-directory (expand-file-name dir)))
-    (when (require 'alert nil t)
-      (alert (projectile-save-project-buffers)
-	     :title (format "emacs<%s> (%s)" (or (bound-and-true-p sprite-instance-id) "primary") dir)))))
+    (require 'alert)
+    (alert (projectile-save-project-buffers)
+	     :title (format "emacs<%s> (%s)" (or (bound-and-true-p sprite-instance-id) "primary") dir))))
 
 ;;;###autoload
 (defun projectile-save-project-buffers-picker ()
