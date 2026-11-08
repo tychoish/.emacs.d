@@ -3,7 +3,7 @@
 ;; Author: tychoish
 ;; Maintainer: tychoish
 ;; Version: 1.0-pre
-;; Package-Requires: ((emacs "24.4") (xtdlib "0.1"))
+;; Package-Requires: ((emacs "24.4"))
 ;; Keywords: internal maint emacs startup dotemacs config
 ;; Homepage: https://github.com/bootstrap-.eamcs.d
 
@@ -228,14 +228,21 @@
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 
-(add-one-shot-hook
- :name "ssh-agent"
- :operation 'bootstrap-set-up-ssh-agent
- :hook '(eat-mode-hook magit-mode-hook telega-root-mode-hook))
+(defun bootstrap-ensure-ssh-agent ()
+  "Ensure SSH agent is configured and remove hooks."
+  (bootstrap-set-up-ssh-agent)
+  (remove-hook 'eat-mode-hook #'bootstrap-ensure-ssh-agent)
+  (remove-hook 'magit-mode-hook #'bootstrap-ensure-ssh-agent)
+  (remove-hook 'telega-root-mode-hook #'bootstrap-ensure-ssh-agent))
+
+(add-hook 'eat-mode-hook #'bootstrap-ensure-ssh-agent)
+(add-hook 'magit-mode-hook #'bootstrap-ensure-ssh-agent)
+(add-hook 'telega-root-mode-hook #'bootstrap-ensure-ssh-agent)
 
 (defun find-ssh-agent-socket-candidates ()
   (thread-last
