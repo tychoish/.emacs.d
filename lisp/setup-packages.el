@@ -49,6 +49,7 @@
    gptel-aibo
    gptel-mcp
    gptel-pup
+   grepx
    hitl
    magit
    magit-dash
