@@ -174,5 +174,95 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
                (lambda (&rest _) (setq warned t))))
       (projectile-serialize '("test") bad-file)
       (should-not warned))))
+;; ---------------------------------------------------------------------------
+;; incremental helpers
+
+(defun project-test--wait (pred)
+  "Spin the event loop until PRED is non-nil or 3s elapse."
+  (let ((start (float-time)))
+    (while (and (not (funcall pred)) (< (- (float-time) start) 3.0))
+      (sit-for 0.01))))
+
+(ert-deftest project-projectile/run-incrementally-counts-handled-items ()
+  "on-done receives the number of items for which FN returned non-nil."
+  (let ((done nil)
+        (seen nil))
+    (cl-letf (((symbol-function 'message) #'ignore))
+      (projectile--run-incrementally
+       (lambda (item) (push item seen) (cl-oddp item))
+       '(1 2 3 4 5)
+       :label "test" :on-done (lambda (n) (setq done n)))
+      (project-test--wait (lambda () done)))
+    (should (equal done 3))
+    (should (equal (nreverse seen) '(1 2 3 4 5)))))
+
+(ert-deftest project-projectile/enable-all-buffers-skips-dead-buffers ()
+  "Killed buffers are not counted and do not abort the run."
+  (let ((live (generate-new-buffer " *pp-live*"))
+        (dead (generate-new-buffer " *pp-dead*"))
+        (done nil))
+    (kill-buffer dead)
+    (unwind-protect
+        (cl-letf (((symbol-function 'message) #'ignore)
+                  ((symbol-function 'buffer-list) (lambda (&optional _) (list live dead))))
+          (projectile-enable-all-buffers :on-done (lambda (n) (setq done n)))
+          (project-test--wait (lambda () done))
+          (should (equal done 1))
+          (with-current-buffer live (should projectile-mode)))
+      (kill-buffer live))))
+
+(ert-deftest project-projectile/load-project-buffers-errors ()
+  "Signal `user-error' with no root, or with no files."
+  (cl-letf (((symbol-function 'projectile-project-root) (lambda (&optional _) nil)))
+    (should-error (projectile-load-project-buffers) :type 'user-error))
+  (cl-letf (((symbol-function 'projectile-project-files) (lambda (_) nil)))
+    (should-error (projectile-load-project-buffers "/tmp/") :type 'user-error)))
+
+(ert-deftest project-projectile/session-restore-async-recreates-buffers ()
+  "Each saved buffer is recreated and the window state is restored once."
+  (let ((done nil)
+        (recreated nil)
+        (window-put nil))
+    (cl-letf (((symbol-function 'message) #'ignore)
+              ((symbol-function 'projectile-session--read)
+               (lambda (_) (list :buffers '(a b) :window-state 'ws)))
+              ((symbol-function 'projectile-session--recreate-buffer)
+               (lambda (saved) (push saved recreated) (current-buffer)))
+              ((symbol-function 'projectile-session--sanitize-window-state) #'identity)
+              ((symbol-function 'window-state-put) (lambda (&rest args) (setq window-put args))))
+      (projectile-session-restore-async "/fake/" :on-done (lambda (n) (setq done n)))
+      (project-test--wait (lambda () done)))
+    (should (equal done 2))
+    (should (equal (nreverse recreated) '(a b)))
+    (should (eq (car window-put) 'ws))))
+
+(ert-deftest project-projectile/session-restore-async-no-session ()
+  "Without saved data, noninteractive calls are silent no-ops."
+  (cl-letf (((symbol-function 'projectile-session--read) (lambda (_) nil)))
+    (should-not (projectile-session-restore-async "/fake/"))))
+
+;; ---------------------------------------------------------------------------
+;; cache fallback
+
+(ert-deftest project-projectile/cache-fallback-file-is-stable-and-in-fallback-dir ()
+  (let ((projectile-cache-fallback-directory (make-temp-file "pp-cache-" t)))
+    (unwind-protect
+        (let ((f (projectile-cache--fallback-file "/some/where/")))
+          (should (equal f (projectile-cache--fallback-file "/some/where")))
+          (should (string-prefix-p projectile-cache-fallback-directory f))
+          (should (string-match-p "\\`where-[0-9a-f]+\\.eld\\'" (file-name-nondirectory f))))
+      (delete-directory projectile-cache-fallback-directory t))))
+
+(ert-deftest project-projectile/cache-file-uses-fallback-when-unwritable ()
+  (let ((projectile-cache-fallback-directory (make-temp-file "pp-cache-" t)))
+    (unwind-protect
+        (progn
+          (should (equal "/x/.cache" (cl-letf (((symbol-function 'file-writable-p) (lambda (_) t)))
+                                       (projectile-project-cache-file-fallback (lambda (_) "/x/.cache") "/x/"))))
+          (should (string-prefix-p projectile-cache-fallback-directory
+                                   (cl-letf (((symbol-function 'file-writable-p) (lambda (_) nil)))
+                                     (projectile-project-cache-file-fallback (lambda (_) "/x/.cache") "/x/")))))
+      (delete-directory projectile-cache-fallback-directory t))))
+
 (provide 'project-projectile-integration-test)
 ;;; project-projectile-integration-test.el ends here

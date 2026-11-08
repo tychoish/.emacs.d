@@ -6,13 +6,11 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'generator)
 (require 'seq)
 (require 'subr-x)
 (require 'project)
-
 (require 'projectile)
-
+(require 'gen)
 (require 'sprite)
 (require 'annotated-completing-read)
 
@@ -41,7 +39,6 @@
 (defun turn-on-projectile-mode ()
   "Enable projectile-mode with project.el integration."
   (interactive)
-  (require 'project)
   (projectile-mode 1))
 
 (add-hook 'prog-mode-hook #'turn-on-projectile-mode)
@@ -57,7 +54,7 @@
   (let ((default-directory (expand-file-name dir)))
     (require 'alert)
     (alert (projectile-save-project-buffers)
-	     :title (format "emacs<%s> (%s)" (or (bound-and-true-p sprite-instance-id) "primary") dir))))
+	     :title (format "emacs<%s> (%s)" (or sprite-instance-id "primary") dir))))
 
 ;;;###autoload
 (defun projectile-save-project-buffers-picker ()
@@ -87,29 +84,19 @@
 
 (defun projectile-cache--fallback-file (name-source)
   "Return the fallback cache file path for NAME-SOURCE, ensuring dir exists."
-  (let* ((cache-dir (file-name-as-directory (expand-file-name projectile-cache-fallback-directory)))
-         (norm (directory-file-name (expand-file-name name-source)))
-         (slug (concat (file-name-nondirectory norm)
-                       "-"
-                       (md5 norm)
-                       ".eld")))
-    (unless (file-directory-p cache-dir)
-      (ignore-errors (make-directory cache-dir t)))
-    (expand-file-name slug cache-dir)))
+  (let ((norm (directory-file-name (expand-file-name name-source))))
+    (make-directory projectile-cache-fallback-directory t)
+    (expand-file-name (concat (file-name-nondirectory norm) "-" (md5 norm) ".eld")
+                      projectile-cache-fallback-directory)))
 
 (defun projectile-project-cache-file-fallback (orig-fn &optional project-root)
   "Return cache file for PROJECT-ROOT using fallback dir when non-writable."
-  (let* ((root (or project-root (projectile-project-root)))
-         (in-tree (and root (funcall orig-fn root))))
-    (if (or (null root) (null in-tree))
-        in-tree
-      (let* ((norm-root (directory-file-name (expand-file-name root)))
-             (in-tree-writable (if (file-exists-p in-tree)
-                                   (file-writable-p in-tree)
-                                 (file-writable-p norm-root))))
-        (if in-tree-writable
-            in-tree
-          (projectile-cache--fallback-file norm-root))))))
+  (when-let* ((root (or project-root (projectile-project-root)))
+              (in-tree (funcall orig-fn root)))
+    (let ((norm-root (directory-file-name (expand-file-name root))))
+      (if (file-writable-p (if (file-exists-p in-tree) in-tree norm-root))
+          in-tree
+        (projectile-cache--fallback-file norm-root)))))
 
 (advice-add 'projectile-project-cache-file :around #'projectile-project-cache-file-fallback)
 
@@ -124,173 +111,101 @@
 
 (advice-add 'projectile-serialize :around #'projectile-serialize-silent-fallback)
 
-;;;###autoload
-(defun projectile-mode-enable-for-buffer (buf)
-  "Enable `projectile-mode' in buffer BUF."
-  (with-current-buffer buf
-    (projectile-mode 1)))
+(cl-defun projectile--run-incrementally (fn items &key label delay on-done (progress-interval 10))
+  "Call FN on each of ITEMS cooperatively via `gen-run-async'.
+FN returns non-nil when the item counted as handled.  LABEL names the
+operation in progress messages.  Calls ON-DONE with the handled count."
+  (let ((total (length items))
+        (count 0)
+        (processed 0))
+    (gen-run-async
+     (lambda (item done-cb)
+       (when (funcall fn item)
+         (setq count (1+ count)))
+       (setq processed (1+ processed))
+       (when (and progress-interval
+                  (or (= processed total)
+                      (zerop (mod processed progress-interval))))
+         (message "%s [%d/%d]..." label processed total))
+       (funcall done-cb))
+     items
+     :delay (or delay 0.0)
+     :on-done (lambda ()
+                (message "%s: handled %d of %d." label count total)
+                (when on-done
+                  (funcall on-done count)))
+     :on-error (lambda (err)
+                 (message "%s: error %S" label err)))))
 
-;;;###autoload
-(defun projectile-mode-disable-for-buffer (buf)
-  "Disable `projectile-mode' in buffer BUF."
-  (with-current-buffer buf
-    (projectile-mode -1)))
-
-(cl-defun projectile--toggle-all-buffers (enable &key delay on-done (progress-interval 10))
-  "Enable or disable `projectile-mode' in all live buffers incrementally.
-When ENABLE is non-nil, enable; otherwise disable.  Uses `gen.el' yielding
-generator iterators to toggle `projectile-mode' cooperatively."
-  (let* ((verb-active (if enable "Enabling" "Disabling"))
-         (verb-past (if enable "Enabled" "Disabled"))
-         (action-fn (if enable #'projectile-mode-enable-for-buffer #'projectile-mode-disable-for-buffer))
-         (bufs (buffer-list))
-         (total (length bufs))
-         (count 0)
-         (processed 0)
-         (del (or delay 0.0)))
-    (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-        (progn
-          (when (called-interactively-p 'any)
-            (message "%s projectile-mode across %d buffers..." verb-active total))
-          (gen-run-async
-           (lambda (buf done-cb)
-             (when (buffer-live-p buf)
-               (funcall action-fn buf)
-               (setq count (1+ count)))
-             (setq processed (1+ processed))
-             (when (and progress-interval
-                        (or (= processed total)
-                            (zerop (mod processed progress-interval))))
-               (message "%s projectile-mode [%d/%d]..." verb-active processed total))
-             (funcall done-cb))
-           bufs
-           :concurrency 1
-           :delay del
-           :on-done (lambda ()
-                      (when (called-interactively-p 'any)
-                        (message "%s projectile-mode in %d buffer%s (scanned %d)."
-                                 verb-past count (if (= count 1) "" "s") total))
-                      (when on-done (funcall on-done count)))
-           :on-error (lambda (err)
-                       (message "Error %s projectile-mode: %S" (downcase verb-active) err))))
-      ;; Synchronous fallback
-      (seq-do action-fn bufs)
-      (when (called-interactively-p 'any)
-        (message "%s projectile-mode in %d buffer%s."
-                 verb-past total (if (= total 1) "" "s")))
-      (when on-done (funcall on-done total)))))
+(defun projectile--set-mode-in-buffer (arg buf)
+  "Call `projectile-mode' with ARG in live buffer BUF; return non-nil if it ran."
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (projectile-mode arg))
+    t))
 
 ;;;###autoload
 (cl-defun projectile-enable-all-buffers (&key delay on-done (progress-interval 10))
-  "Enable `projectile-mode' in all live buffers incrementally.
-Uses `gen.el' yielding generator iterators to enable `projectile-mode'
-cooperatively without blocking the Emacs event loop."
+  "Enable `projectile-mode' in all live buffers without blocking."
   (interactive)
-  (projectile--toggle-all-buffers t :delay delay :on-done on-done :progress-interval progress-interval))
+  (projectile--run-incrementally
+   (apply-partially #'projectile--set-mode-in-buffer 1) (buffer-list)
+   :label "Enabling projectile-mode" :delay delay :on-done on-done
+   :progress-interval progress-interval))
 
 ;;;###autoload
 (cl-defun projectile-disable-all-buffers (&key delay on-done (progress-interval 10))
-  "Disable `projectile-mode' in all live buffers incrementally.
-Uses `gen.el' yielding generator iterators to disable `projectile-mode'
-cooperatively without blocking the Emacs event loop."
+  "Disable `projectile-mode' in all live buffers without blocking."
   (interactive)
-  (projectile--toggle-all-buffers nil :delay delay :on-done on-done :progress-interval progress-interval))
+  (projectile--run-incrementally
+   (apply-partially #'projectile--set-mode-in-buffer -1) (buffer-list)
+   :label "Disabling projectile-mode" :delay delay :on-done on-done
+   :progress-interval progress-interval))
 
 ;;;###autoload
 (cl-defun projectile-load-project-buffers (&optional project &key delay on-done (progress-interval 5))
-  "Load project files into buffers incrementally without blocking.
-PROJECT defaults to the current project's root.  Uses `gen.el' yielding
-generator iterators to open files sequentially with cooperative delays."
+  "Visit the files of PROJECT (default: current root) without blocking."
   (interactive)
-  (let* ((root (or project (projectile-project-root)))
-         (files (and root (projectile-project-files root))))
+  (let ((root (or project (projectile-project-root))))
     (unless root
       (user-error "Not in a project"))
-    (unless files
-      (user-error "No files found in project %s" root))
-    (let* ((total (length files))
-           (loaded 0)
-           (processed 0)
-           (del (or delay 0.0)))
-      (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-          (progn
-            (message "Loading %d buffers for project %s..." total (projectile-project-name))
-            (gen-run-async
-             (lambda (file done-cb)
-               (let ((fpath (expand-file-name file root)))
-                 (when (and (file-regular-p fpath)
-                            (not (find-buffer-visiting fpath)))
-                   (find-file-noselect fpath)
-                   (setq loaded (1+ loaded))))
-               (setq processed (1+ processed))
-               (when (and progress-interval
-                          (or (= processed total)
-                              (zerop (mod processed progress-interval))))
-                 (message "Loading project buffers [%d/%d]..." processed total))
-               (funcall done-cb))
-             files
-             :concurrency 1
-             :delay del
-             :on-done (lambda ()
-                        (message "Loaded %d new buffer%s for project %s (scanned %d)."
-                                 loaded (if (= loaded 1) "" "s")
-                                 (projectile-project-name) total)
-                        (when on-done (funcall on-done loaded)))
-             :on-error (lambda (err)
-                         (message "Error loading project buffers: %S" err))))
-        ;; Fallback
-        (seq-do
-         (lambda (file)
-           (let ((fpath (expand-file-name file root)))
-             (when (and (file-regular-p fpath)
-                        (not (find-buffer-visiting fpath)))
-               (find-file-noselect fpath)
-               (setq loaded (1+ loaded)))))
-         files)
-        (message "Loaded %d new buffer%s for project %s."
-                 loaded (if (= loaded 1) "" "s") (projectile-project-name))
-        (when on-done (funcall on-done loaded))))))
+    (let ((files (projectile-project-files root)))
+      (unless files
+        (user-error "No files found in project %s" root))
+      (projectile--run-incrementally
+       (lambda (file)
+         (let ((path (expand-file-name file root)))
+           (when (and (file-regular-p path)
+                      (not (find-buffer-visiting path)))
+             (find-file-noselect path)
+             t)))
+       files
+       :label (format "Loading buffers for %s" (projectile-project-name))
+       :delay delay :on-done on-done :progress-interval progress-interval))))
 
 ;;;###autoload
 (cl-defun projectile-session-restore-async (&optional project &key delay on-done)
-  "Restore PROJECT's saved session buffers incrementally without blocking.
-PROJECT defaults to the current project's root.  Uses `gen.el' yielding
-generator iterators to recreate buffers cooperatively."
+  "Restore PROJECT's (default: current) saved session buffers without blocking."
   (interactive)
   (let* ((root (or project (projectile-project-root)))
-         (data (and root (fboundp 'projectile-session--read) (projectile-session--read root))))
+         (data (and root (projectile-session--read root))))
     (cond
      (data
-      (let* ((saved-bufs (plist-get data :buffers))
-             (total (length saved-bufs))
-             (recreated 0)
-             (processed 0)
-             (del (or delay 0.0)))
-        (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-            (progn
-              (message "Restoring %d session buffers for %s incrementally..." total root)
-              (gen-run-async
-               (lambda (saved done-cb)
-                 (when (ignore-errors (buffer-live-p (projectile-session--recreate-buffer saved)))
-                   (setq recreated (1+ recreated)))
-                 (setq processed (1+ processed))
-                 (funcall done-cb))
-               saved-bufs
-               :concurrency 1
-               :delay del
-               :on-done (lambda ()
-                          (when-let* ((state (plist-get data :window-state)))
-                            (condition-case err
-                                (window-state-put (projectile-session--sanitize-window-state state)
-                                                  (frame-root-window) 'safe)
-                              (error
-                               (message "projectile-session: could not restore window layout: %S" err))))
-                          (message "Restored %d session buffer%s for %s."
-                                   recreated (if (= recreated 1) "" "s") root)
-                          (when on-done (funcall on-done recreated)))))
-          ;; Synchronous fallback
-          (projectile-session-restore root)
-          (when on-done (funcall on-done t)))))
+      (projectile--run-incrementally
+       (lambda (saved)
+         (buffer-live-p (ignore-errors (projectile-session--recreate-buffer saved))))
+       (plist-get data :buffers)
+       :label (format "Restoring session for %s" root)
+       :delay delay :progress-interval nil
+       :on-done (lambda (count)
+                  (when-let* ((state (plist-get data :window-state)))
+                    (condition-case err
+                        (window-state-put (projectile-session--sanitize-window-state state)
+                                          (frame-root-window) 'safe)
+                      (error
+                       (message "projectile-session: could not restore window layout: %S" err))))
+                  (when on-done
+                    (funcall on-done count)))))
      ((called-interactively-p 'any)
       (user-error "No saved session for %s" (or root "current project"))))))
 
