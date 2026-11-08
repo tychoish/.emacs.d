@@ -131,7 +131,7 @@
   (let ((test-hook nil) (command-line-functions nil) (exits nil) (ran nil))
     (register-clix-flag test-final :flag "--test-final" :consume nil
       :hook 'test-hook :action (setq ran t) :final ran)
-    (cl-letf (((symbol-function 'kill-emacs) (lambda (code) (push code exits))))
+    (cl-letf (((symbol-function 'kill-emacs) (lambda (code &rest _) (push code exits))))
       (run-hooks 'test-hook)
       (should-not ran)
       (let ((argi "--test-final")) (should (cli/test-final)))
@@ -148,7 +148,7 @@
 " output))
     (should (string-match-p (regexp-quote "--org-exec VALUE") output)))
   (let ((argi "help") (called nil))
-    (cl-letf (((symbol-function 'kill-emacs) (lambda (_) (setq called t))))
+    (cl-letf (((symbol-function 'kill-emacs) (lambda (&rest _) (setq called t))))
       (with-output-to-string (should (cli/help-command)))
       (should called))))
 

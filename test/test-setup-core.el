@@ -216,7 +216,7 @@ correctly and reads from the minibuffer using the candidate's command."
          (done-loaded nil))
     (cl-letf (((symbol-function 'projectile-project-root) (lambda (&optional _) "/fake/project/"))
               ((symbol-function 'projectile-project-files) (lambda (_r) (list "a.txt" "b.txt")))
-              ((symbol-function 'projectile-project-name) (lambda () "fake"))
+              ((symbol-function 'projectile-project-name) (lambda (&optional _) "fake"))
               ((symbol-function 'file-regular-p) (lambda (_) t))
               ((symbol-function 'find-buffer-visiting) (lambda (_) nil))
               ((symbol-function 'find-file-noselect) (lambda (f) (push f loaded-files) (generate-new-buffer " *dummy*"))))
