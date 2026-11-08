@@ -126,7 +126,6 @@
     magit-dash-global-mode
     builder-mode
     chex-global-mode
-    agent-shell-queue-global-mode
     nerd-icons-completion-mode
     orgx-global-mode
     global-auto-revert-mode

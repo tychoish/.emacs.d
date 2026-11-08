@@ -224,7 +224,6 @@
 (setq agent-shell-agent-configs #'tychoish/agent-shell-installed-configs)
 (setq agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec))))
 
-(require 'agent-shell-menu)
 (setq agent-shell-buffer-name-format #'agent-shell-menu-format-buffer-name)
 
 (advice-add 'agent-shell-experimental--on-session-push-end :around #'ad:agent-shell-recover-stuck-push-end)
@@ -393,6 +392,7 @@
   (setq agent-shell-notifications-close-function #'tychoish/agent-shell-notifications-alert-close)
   (setq agent-shell-notifications-timeout 30))
 
+(add-hook 'agent-shell-mode-hook #'agent-shell-queue-global-mode)
 (add-hook 'agent-shell-mode-hook #'agent-shell-notifications-mode)
 (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-mode)
 (add-hook 'agent-shell-viewport-edit-view-hook #'agent-shell-notifications-mode)
