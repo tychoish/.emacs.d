@@ -35,9 +35,6 @@
 
 (require 'sprite)
 (require 'sprite-state)
-(require 'cmdr-macros)
-(require 'cmdr-mode)
-(require 'cmdr-frame)
 
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
