@@ -28,6 +28,7 @@
    cape
    chex
    cmdr
+   clix
    cond-let
    consult
    corfu
