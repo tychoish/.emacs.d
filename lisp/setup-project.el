@@ -81,17 +81,8 @@
 (setq projectile-enable-caching 'persistent)
 (setq projectile-require-project-root nil)
 
-(defun projectile-state-path (name)
-  "Return path for state file NAME, delegating to `sprite-state-path' if available."
-  (if (fboundp 'sprite-state-path)
-      (sprite-state-path name)
-    (expand-file-name name user-emacs-directory)))
-
-(setq projectile-known-projects-file (projectile-state-path "projectile-bookmarks.el"))
-(setq projectile-frecency-file (projectile-state-path "projectile-frecency.el"))
-
 (defvar projectile-cache-fallback-directory
-  (projectile-state-path "projectile-cache")
+  (sprite-state-path "projectile-cache")
   "Directory used for projectile caches when project root is not writable.")
 
 (defun projectile-cache--fallback-file (name-source)
@@ -145,13 +136,14 @@
   (with-current-buffer buf
     (projectile-mode -1)))
 
-;;;###autoload
-(cl-defun projectile-enable-all-buffers (&key delay on-done (progress-interval 10))
-  "Enable `projectile-mode' in all live buffers incrementally.
-Uses `gen.el' yielding generator iterators to enable `projectile-mode'
-cooperatively without blocking the Emacs event loop."
-  (interactive)
-  (let* ((bufs (buffer-list))
+(cl-defun projectile--toggle-all-buffers (enable &key delay on-done (progress-interval 10))
+  "Enable or disable `projectile-mode' in all live buffers incrementally.
+When ENABLE is non-nil, enable; otherwise disable.  Uses `gen.el' yielding
+generator iterators to toggle `projectile-mode' cooperatively."
+  (let* ((verb-active (if enable "Enabling" "Disabling"))
+         (verb-past (if enable "Enabled" "Disabled"))
+         (action-fn (if enable #'projectile-mode-enable-for-buffer #'projectile-mode-disable-for-buffer))
+         (bufs (buffer-list))
          (total (length bufs))
          (count 0)
          (processed 0)
@@ -159,34 +151,42 @@ cooperatively without blocking the Emacs event loop."
     (if (and (require 'gen nil t) (fboundp 'gen-run-async))
         (progn
           (when (called-interactively-p 'any)
-            (message "Enabling projectile-mode across %d buffers..." total))
+            (message "%s projectile-mode across %d buffers..." verb-active total))
           (gen-run-async
            (lambda (buf done-cb)
              (when (buffer-live-p buf)
-               (projectile-mode-enable-for-buffer buf)
-               (cl-incf count))
-             (cl-incf processed)
+               (funcall action-fn buf)
+               (setq count (1+ count)))
+             (setq processed (1+ processed))
              (when (and progress-interval
                         (or (= processed total)
                             (zerop (mod processed progress-interval))))
-               (message "Enabling projectile-mode [%d/%d]..." processed total))
+               (message "%s projectile-mode [%d/%d]..." verb-active processed total))
              (funcall done-cb))
            bufs
            :concurrency 1
            :delay del
            :on-done (lambda ()
                       (when (called-interactively-p 'any)
-                        (message "Enabled projectile-mode in %d buffer%s (scanned %d)."
-                                 count (if (= count 1) "" "s") total))
+                        (message "%s projectile-mode in %d buffer%s (scanned %d)."
+                                 verb-past count (if (= count 1) "" "s") total))
                       (when on-done (funcall on-done count)))
            :on-error (lambda (err)
-                       (message "Error enabling projectile-mode: %S" err))))
+                       (message "Error %s projectile-mode: %S" (downcase verb-active) err))))
       ;; Synchronous fallback
-      (seq-do #'projectile-mode-enable-for-buffer bufs)
+      (seq-do action-fn bufs)
       (when (called-interactively-p 'any)
-        (message "Enabled projectile-mode in %d buffer%s."
-                 total (if (= total 1) "" "s")))
+        (message "%s projectile-mode in %d buffer%s."
+                 verb-past total (if (= total 1) "" "s")))
       (when on-done (funcall on-done total)))))
+
+;;;###autoload
+(cl-defun projectile-enable-all-buffers (&key delay on-done (progress-interval 10))
+  "Enable `projectile-mode' in all live buffers incrementally.
+Uses `gen.el' yielding generator iterators to enable `projectile-mode'
+cooperatively without blocking the Emacs event loop."
+  (interactive)
+  (projectile--toggle-all-buffers t :delay delay :on-done on-done :progress-interval progress-interval))
 
 ;;;###autoload
 (cl-defun projectile-disable-all-buffers (&key delay on-done (progress-interval 10))
@@ -194,42 +194,7 @@ cooperatively without blocking the Emacs event loop."
 Uses `gen.el' yielding generator iterators to disable `projectile-mode'
 cooperatively without blocking the Emacs event loop."
   (interactive)
-  (let* ((bufs (buffer-list))
-         (total (length bufs))
-         (count 0)
-         (processed 0)
-         (del (or delay 0.0)))
-    (if (and (require 'gen nil t) (fboundp 'gen-run-async))
-        (progn
-          (when (called-interactively-p 'any)
-            (message "Disabling projectile-mode across %d buffers..." total))
-          (gen-run-async
-           (lambda (buf done-cb)
-             (when (buffer-live-p buf)
-               (projectile-mode-disable-for-buffer buf)
-               (cl-incf count))
-             (cl-incf processed)
-             (when (and progress-interval
-                        (or (= processed total)
-                            (zerop (mod processed progress-interval))))
-               (message "Disabling projectile-mode [%d/%d]..." processed total))
-             (funcall done-cb))
-           bufs
-           :concurrency 1
-           :delay del
-           :on-done (lambda ()
-                      (when (called-interactively-p 'any)
-                        (message "Disabled projectile-mode in %d buffer%s (scanned %d)."
-                                 count (if (= count 1) "" "s") total))
-                      (when on-done (funcall on-done count)))
-           :on-error (lambda (err)
-                       (message "Error disabling projectile-mode: %S" err))))
-      ;; Synchronous fallback
-      (seq-do #'projectile-mode-disable-for-buffer bufs)
-      (when (called-interactively-p 'any)
-        (message "Disabled projectile-mode in %d buffer%s."
-                 total (if (= total 1) "" "s")))
-      (when on-done (funcall on-done total)))))
+  (projectile--toggle-all-buffers nil :delay delay :on-done on-done :progress-interval progress-interval))
 
 ;;;###autoload
 (cl-defun projectile-load-project-buffers (&optional project &key delay on-done (progress-interval 5))
@@ -256,8 +221,8 @@ generator iterators to open files sequentially with cooperative delays."
                  (when (and (file-regular-p fpath)
                             (not (find-buffer-visiting fpath)))
                    (find-file-noselect fpath)
-                   (cl-incf loaded)))
-               (cl-incf processed)
+                   (setq loaded (1+ loaded))))
+               (setq processed (1+ processed))
                (when (and progress-interval
                           (or (= processed total)
                               (zerop (mod processed progress-interval))))
@@ -274,12 +239,14 @@ generator iterators to open files sequentially with cooperative delays."
              :on-error (lambda (err)
                          (message "Error loading project buffers: %S" err))))
         ;; Fallback
-        (dolist (file files)
-          (let ((fpath (expand-file-name file root)))
-            (when (and (file-regular-p fpath)
-                       (not (find-buffer-visiting fpath)))
-              (find-file-noselect fpath)
-              (cl-incf loaded))))
+        (seq-do
+         (lambda (file)
+           (let ((fpath (expand-file-name file root)))
+             (when (and (file-regular-p fpath)
+                        (not (find-buffer-visiting fpath)))
+               (find-file-noselect fpath)
+               (setq loaded (1+ loaded)))))
+         files)
         (message "Loaded %d new buffer%s for project %s."
                  loaded (if (= loaded 1) "" "s") (projectile-project-name))
         (when on-done (funcall on-done loaded))))))
@@ -305,8 +272,8 @@ generator iterators to recreate buffers cooperatively."
               (gen-run-async
                (lambda (saved done-cb)
                  (when (ignore-errors (buffer-live-p (projectile-session--recreate-buffer saved)))
-                   (cl-incf recreated))
-                 (cl-incf processed)
+                   (setq recreated (1+ recreated)))
+                 (setq processed (1+ processed))
                  (funcall done-cb))
                saved-bufs
                :concurrency 1

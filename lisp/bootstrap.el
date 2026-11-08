@@ -104,7 +104,9 @@
         (url-configuration-directory . "url/")
         (denote-sync-cache-directory . "denote-sync/")
         (recentf-save-file . "recentf.el")
-        (savehist-file . "history.el")))
+        (savehist-file . "history.el")
+        (projectile-known-projects-file . "projectile-bookmarks.eld")
+        (projectile-frecency-file . "projectile-frecency.eld")))
 
 (setq sprite-startup-operations
   '(bootstrap-set-up-fringe-mode
