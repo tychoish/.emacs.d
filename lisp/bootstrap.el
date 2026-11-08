@@ -55,6 +55,11 @@
 (autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
 (autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
 (autoload 'daemons-dash "daemons-dash" "Dashboard for systemd, docker, and sprite daemons." t)
+(autoload 'turn-on-projectile-mode "setup-project" "Enable projectile-mode with project.el integration." t)
+
+(add-hook 'prog-mode-hook #'turn-on-projectile-mode)
+(add-hook 'text-mode-hook #'turn-on-projectile-mode)
+(add-hook 'dired-mode-hook #'turn-on-projectile-mode)
 
 (autoload 'tychoish-mail-select-account "setup-mail" nil t)
 (autoload 'tychoish-define-mail-account "setup-mail")
@@ -118,7 +123,6 @@
     sprite-state-configure
     bootstrap-silent-savehist
     bootstrap-silent-recentf
-    bootstrap-require-setup-project
     popper-mode
     grepx-mode
     denote-dash-global-mode
@@ -133,10 +137,6 @@
     annotated-completing-read-setup-history
     mcpkit-init-services
     sprite-state-global-mode
-    bootstrap-require-setup-packages
-    bootstrap-ensure-packages-installed
-    bootstrap-package-quickstart
-    builder-emacs-conf-native-compile-all
     bootstrap-startup-timing))
 
 (setq sprite-first-frame-operations
@@ -151,6 +151,7 @@
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook 'emacs-startup-hook #'bootstrap-run-startup)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
+(add-hook 'emacs-startup-hook #'bootstrap-run-maintenance)
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
 (add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
 
@@ -163,6 +164,15 @@
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
+(defun bootstrap-run-maintenance ()
+  "Run deferred background package and native-comp maintenance on idle timer."
+  (run-with-idle-timer 300 nil
+    (lambda ()
+      (require 'setup-packages)
+      (bootstrap-ensure-packages-installed)
+      (bootstrap-package-quickstart)
+      (when (fboundp 'builder-emacs-conf-native-compile-all)
+        (builder-emacs-conf-native-compile-all)))))
 (defun bootstrap-after-first-frame () (sprite-run-startup-operations sprite-first-frame-operations :frame (selected-frame)))
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
 (defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
