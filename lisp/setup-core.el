@@ -98,7 +98,6 @@
 (cmdr-keys-set cmdr-mode-map "C-c t p" #'toggle-electric-pair-inhibition)
 (cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
 (cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
-(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish/agent-shell-toggle-terse-output)
 (cmdr-keys-set cmdr-mode-map "C-c m a" #'tychoish-mail-select-account)
 (cmdr-keys-set cmdr-mode-map "C-x g m r" #'smerge-kill-and-vc-next-conflict)
 (cmdr-keys-set cmdr-mode-map "C-x C-b s" #'projectile-save-project-buffers-picker)

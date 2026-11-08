@@ -75,7 +75,7 @@
   (when (or (eq (map-nested-elt agent-shell--state '(:agent-config :identifier)) 'antigravity)
             (equal mode-name "Antigravity"))
     (setq mode-name "agy")))
-(setq agent-shell-antigravity-acp-command '("agy" "acp" "--dangerously-skip-permissions"))
+
 (defun tychoish--agent-shell-buffer-p (buffer _action)
   "Return non-nil if BUFFER derives from `agent-shell-mode'."
   (with-current-buffer buffer
@@ -213,14 +213,15 @@
 ;; Primary Agent-Shell Configuration
 
 (setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
+(setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
+(setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
+(setq agent-shell-antigravity-acp-command '("agy" "acp" "--dangerously-skip-permissions"))
 (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
 (setq agent-shell-header-style 'text)
 (setq agent-shell-activity-group-expand-by-default t)
 (setq agent-shell-thought-process-expand-by-default t)
 (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
 (setq agent-shell-anthropic-default-session-mode-id "auto")
-(setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
-(setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
 (setq agent-shell-agent-configs #'tychoish/agent-shell-installed-configs)
 (setq agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec))))
 
@@ -243,6 +244,8 @@
 (keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
 (keymap-set agent-shell-mode-map "C-TAB" #'agent-shell-next-item)
 (keymap-set agent-shell-mode-map "M-SPC" #'agent-shell-menu-select-session-mode)
+
+(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish/agent-shell-toggle-terse-output)
 
 (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
 (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
