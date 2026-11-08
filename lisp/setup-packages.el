@@ -26,6 +26,7 @@
    arch
    builder
    cape
+   chex
    cmdr
    cond-let
    consult
