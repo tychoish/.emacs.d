@@ -342,6 +342,7 @@ correctly and reads from the minibuffer using the candidate's command."
   (require 'agent-shell)
   (require 'agent-shell-queue)
   (require 'agent-shell-menu)
+  (agent-shell-menu-install)
   (should (fboundp 'agent-shell-menu-dispatch))
   (should (equal (lookup-key agent-shell-mode-map (kbd "m"))
                  'agent-shell-menu-output-key-m))
@@ -379,9 +380,17 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/alert-default-style-linux-dbus ()
   "On Linux with a DBus session bus, alert defaults to notifications."
   (cl-letf (((symbol-value 'system-type) 'gnu/linux)
+            (alert-libnotify-command nil)
             ((symbol-function 'getenv)
              (lambda (var) (when (equal var "DBUS_SESSION_BUS_ADDRESS") "unix:path=/tmp/dbus"))))
     (should (eq (tychoish-alert-default-style) 'notifications))))
+
+(ert-deftest tychoish-core/alert-default-style-prefers-libnotify ()
+  "Prefer libnotify when both it and the DBus session bus are available."
+  (cl-letf (((symbol-value 'system-type) 'gnu/linux)
+            (alert-libnotify-command "/usr/bin/notify-send")
+            ((symbol-function 'getenv) (lambda (_) "unix:path=/tmp/dbus")))
+    (should (eq (tychoish-alert-default-style) 'libnotify))))
 
 (ert-deftest tychoish-core/alert-default-style-linux-libnotify ()
   "On Linux without DBus but with alert-libnotify-command, alert defaults to libnotify."

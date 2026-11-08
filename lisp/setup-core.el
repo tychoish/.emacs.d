@@ -196,10 +196,10 @@
   (cond
    ((eq system-type 'darwin)
     (if (display-graphic-p) 'osx-notifier 'notifier))
-   ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
-    'notifications)
    (alert-libnotify-command
     'libnotify)
+   ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
+    'notifications)
    (t
     'message)))
 

@@ -9,9 +9,6 @@
 
 (with-gc-suppressed
  (with-file-name-handler-disabled
-  (eval-when-compile
-    (require 'subr-x))
-
   (setq initial-major-mode 'fundamental-mode)
   (setq initial-scratch-message nil)
   (setq inhibit-startup-message t)
