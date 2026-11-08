@@ -39,6 +39,9 @@
       (with-slow-op-timer "<init> [local] [config] require setup-defaults.el"
         (require 'setup-defaults))
 
+      (with-slow-op-timer "<init> [local] [config] require setup-modes.el"
+        (require 'setup-modes))
+
       (with-slow-op-timer "<init> [local] [config] require setup-core.el"
         (require 'setup-core))))
 

@@ -18,8 +18,7 @@
 (require 'cmdr-spec)
 
 (declare-function sprite-state-path "sprite-state")
-
-(autoload 'overmark-font-lock-show-tabs "overmark")
+(declare-function cmdr-set-frame-font-interactive "cmdr-ops")
 
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
@@ -31,7 +30,6 @@
 
 (defvar denote-directory)
 (defvar python-ts-mode-map)
-(defvar revbufs-mode-map)
 (defvar magit-mode-map)
 (defvar magit-status-mode-map)
 (defvar magit-module-sections-nested)
@@ -49,12 +47,12 @@
 (defvar rustic-clippy-arguments)
 (defvar rustic-rustfmt-args)
 (defvar anzu-cons-mode-line-p)
+(defvar sprite-mode-map-prefix)
 
 (defvar electric-pair-inhibition nil)
 (defvar electric-pair-eagerness t)
 
 (create-toggle-functions electric-pair-inhibition)
-(create-toggle-functions electric-pair-eagerness)
 
 (defun tychoish-set-local-fill-column-100 () (setq-local fill-column 100))
 (defun tychoish-set-local-tab-width-4 () (setq-local tab-width 4))
@@ -88,10 +86,14 @@
 ;;; cmdr bindings for config-specific commands
 
 (autoload 'eglox-describe-symbol-dwim "eglox" nil t)
-(autoload 'daemons-dash "daemons-dash" nil t)
-(autoload 'toggle-hud-modeline-icons "hud-modeline" nil t)
-(autoload 'toggle-hud-modeline-show-buffer-size "hud-modeline" nil t)
-(autoload 'tychoish/agent-shell-toggle-terse-output "setup-agent-shell" nil t)
+(autoload 'projectile-save-project-buffers-picker "setup-project" nil t)
+
+(defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
+  "The cmdr core prefix map under C-c t.")
+
+(setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
+
+(advice-add 'set-frame-font :around #'cmdr-set-frame-font-interactive)
 
 (cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
 (cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
@@ -233,11 +235,13 @@
   (setq denote-link-description-format #'denote-dash-link-description-format))
 
 (with-eval-after-load 'dired
+  (setq ls-lisp-dirs-first t)
   (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
   (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
 
 (with-eval-after-load 'warnings
-  (add-to-list 'warning-suppress-log-types '(frameset)))
+  (add-to-list 'warning-suppress-log-types '(frameset))
+  (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
 
 (with-eval-after-load 'emojify
   (setq emojify-emoji-styles '(ascii unicode github))
@@ -255,17 +259,9 @@
 
 (with-eval-after-load 'eshell
   (with-eval-after-load "em-cmpl"
-    (add-hook 'eshell-mode 'eshell-cmpl-initialize)))
+    (add-hook 'eshell-mode-hook #'eshell-cmpl-initialize)))
 
 (with-eval-after-load 'comint
-  (defun colorize-shell ()
-    "Apply ANSI colors to the agent-shell buffer."
-    (interactive)
-    (let ((inhibit-read-only t))
-      (ansi-color-apply-on-region (point-min) (point-max))))
-
-  (add-hook 'comint-mode-hook 'ansi-color-for-comint-mode-on)
-  (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
   (keymap-set comint-mode-map "M-p" #'comint-previous-input)
   (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
@@ -357,34 +353,37 @@
   (setq alert-fade-time 15)
 
   (cond
-   ((and (eq system-type 'darwin))
-    (cond
-     ((window-system)
-      (setq-default alert-default-style 'osx-notifier))
-     ((daemonp)
-      (setq alert-default-style 'notifier)
-      (add-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server))
-     (t
-      (setq-default alert-default-style 'notifier))))
+   ((eq system-type 'darwin)
+    (if (daemonp)
+        (progn
+          (setq alert-default-style 'notifier)
+          (add-one-shot-hook :hook 'server-after-make-frame-hook
+            :form (when (window-system)
+                    (setq-default alert-default-style 'osx-notifier))))
+      (setq-default alert-default-style (if (window-system) 'osx-notifier 'notifier))))
    ((and (eql system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
     (setq-default alert-default-style 'notifications))
    (alert-libnotify-command
     (setq-default alert-default-style 'libnotify))
-   (t (setq-default alert-default-style 'message)))
+   (t (setq-default alert-default-style 'message))))
 
-  (defun tychoish/darwin-alert-config-for-server ()
-    (if (and (window-system)
-	     (eq system-type 'darwin)
-	     (not (eq alert-default-style 'osx-notifier)))
-	(setq-default alert-default-style 'osx-notifier)
-      (remove-hook 'server-after-make-frame-hook 'tychoish/darwin-alert-config-for-server)
-      (unintern 'tychoish/darwin-alert-config-for-server obarray))))
+(with-eval-after-load 'which-key
+  (setq which-key-idle-delay 0.25
+        which-key-idle-secondary-delay 0.125
+        which-key-lighter ""))
+
+(with-eval-after-load 'modus-themes
+  (setq modus-themes-deuteranopia t
+        modus-themes-common-palette-overrides
+        '((border-mode-line-active bg-mode-line-active)
+          (border-mode-line-inactive bg-mode-line-inactive)
+          (message-separator bg-main))))
 
 (with-eval-after-load 'slime
-  (setq ls-lisp-dirs-first t)
   (setq inferior-lisp-program "sbcl"))
 
 (with-eval-after-load 'ollama-tailnet
+  (setq ollama-tailnet-fallback-strategy :auto-local)
   (ollama-tailnet-setup-laptop-presets)
   (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
 
@@ -405,7 +404,6 @@
   (setq web-mode-enable-css-colorization t))
 
 (with-eval-after-load 'markdown-mode
-  (defalias 'markdown-indent-code (kmacro "SPC SPC SPC SPC SPC C-a C-n"))
   (add-hook 'markdown-mode-hook #'turn-off-auto-fill)
   (defun tychoish/markdown-setup-imenu ()
     (setq imenu-generic-expression markdown-imenu-generic-expression))
@@ -465,6 +463,9 @@ resets point to column 0 outside of definition-list context."
   (add-hook 'go-ts-mode-hook #'tychoish-set-local-fill-column-100)
   (add-hook 'go-ts-mode-hook #'tychoish-go-mode-setup))
 
+(with-eval-after-load 'rust-mode
+  (setq rust-mode-treesitter-derive t))
+
 (with-eval-after-load 'rustic
   (defun rustic-mode-auto-save-hook ()
     "Enable auto-saving in rustic-mode buffers."
@@ -472,7 +473,6 @@ resets point to column 0 outside of definition-list context."
       (setq-local compilation-ask-about-save nil)))
   (add-hook 'rustic-mode-hook #'rustic-mode-auto-save-hook)
 
-  (setq rust-mode-treesitter-derive t)
   (setq rustic-lsp-client 'eglot)
   (setq rustic-format-trigger 'on-save)
   (setq rustic-cargo-clippy-trigger-fix 'on-compile)
@@ -496,12 +496,6 @@ resets point to column 0 outside of definition-list context."
           '(anzu--total-matched anzu--current-position anzu--state
             anzu--cached-count anzu--cached-positions anzu--last-command
             anzu--last-isearch-string anzu--overflow-p)))
-
-;;; revbufs
-(with-eval-after-load 'revbufs
-  (defalias 'revbufs-kill (kmacro "C-f C-f C-f C-k"))
-  (keymap-set revbufs-mode-map "C-k" #'revbufs-kill)
-  (keymap-set revbufs-mode-map "q" #'bury-buffer))
 
 ;;; popper
 (with-eval-after-load 'popper
@@ -581,54 +575,6 @@ clipboard."
     (transient-append-suffix 'magit-gh '(-1)
       ["magit-dash"
        ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
-
-(with-eval-after-load 'delight
-  (delight 'fundamental-mode "fun" 'simple)
-  (delight 'abbrev-mode "abb")
-  (delight 'emacs-lisp-mode '("el" (lexical-binding ":l" ":d")) 'elisp-mode)
-  (delight 'lisp-interaction-mode "lisp" 'elisp-mode)
-  (delight 'sh-mode "sh" 'sh-script)
-  (delight 'org-mode "org" 'org-mode)
-  (delight 'org-agenda-mode "agenda" 'org-agenda)
-  (delight 'rst-mode "rst" 'rst-mode)
-  (delight 'markdown-mode "mdwn")
-  (delight 'emojify-mode)
-  (delight 'nerd-icons-dired-mode nil 'nerd-icons-dired)
-  (delight 'nerd-icons-xref-mode nil 'nerd-icons-xref)
-  (delight 'nerd-icons-completion-mode nil 'nerd-icons-completion)
-  (delight 'builder-mode "")
-  (delight 'projectile-mode nil 'projectile)
-  (delight 'eglot--managed-mode nil 'eglot)
-  (delight 'eldoc-mode nil 'eldoc)
-  (delight 'telega-chat-auto-fill-mode nil)
-  (delight 'anzu-mode " az" 'anzu)
-  (delight 'flyspell-mode " fs" 'flyspell)
-  (delight 'flycheck-mode " fc" 'flycheck)
-  (delight 'visual-line-mode " wr" 'simple)
-  (delight 'auto-fill-function " afm" 'simple)
-  (delight 'overwrite-mode " om" 'simple)
-  (delight 'refill-mode " rf" 'refill)
-  (delight 'auto-revert-mode nil 'autorevert)
-  (delight 'async-bytecomp-package-mode "" 'async-bytecomp)
-  (delight 'dired-async-mode "" 'dired-async)
-  (delight 'agent-shell-completion-mode nil 'agent-shell-completion)
-  (delight 'agent-shell-ui-mode nil 'agent-shell-ui)
-  (delight 'go-ts-mode "go.ts")
-  (delight 'go-mod-ts-mode "go.mod.ts")
-  (delight 'go-mode "go")
-  (delight 'rust-mode "rs")
-  (delight 'rustic-mode "rs(x)")
-  (delight 'python-ts-mode "py.ts")
-  (delight 'python-mode "py")
-  (delight 'lisp-mode "lisp")
-  (delight 'slime-mode "sl")
-  (delight 'slime-autodoc-mode nil)
-  (delight 'minaid-mode nil 'minaid)
-  (delight 'denote-sequence-hierarchy-mode "Hierarchy" 'denote-sequence)
-  (delight 'outline-minor-mode nil 'outline)
-  (delight 'cursor-sensor-mode nil 'cursor-sensor)
-  (delight 'agent-shell-notifications-mode nil 'agent-shell-notifications)
-  (delight 'terraform-mode "tf" 'terraform-mode))
 
 (with-eval-after-load 'gptel
   (defvar gemini-api-key nil)

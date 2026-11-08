@@ -6,12 +6,7 @@
 
 ;;; Code:
 
-(require 'sprite)
-(require 'cmdr-keys)
-(require 'cmdr-frame)
-
-(defvar modus-themes-deuteranopia)
-(defvar modus-themes-common-palette-overrides)
+(defvar sprite-instance-id)
 
 (setq jit-lock-defer-time 0.2)
 (setq jit-lock-stealth-nice 0.2)
@@ -35,16 +30,7 @@
 (setq recentf-keep '(file-remote-p file-readable-p))
 (setq recentf-max-menu-items 100)
 
-(setq which-key-idle-delay .25)
-(setq which-key-idle-secondary-delay 0.125)
-(setq which-key-lighter "")
-
-(setq frame-title-format '(:eval (format "%s:%s" sprite-instance-id (buffer-name))))
-
-(defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
-  "The cmdr core prefix map under C-c t.")
-
-(setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
+(setq frame-title-format '(:eval (format "%s:%s" (or (bound-and-true-p sprite-instance-id) "emacs") (buffer-name))))
 
 (setq create-lockfiles nil)
 
@@ -59,16 +45,11 @@
 (setq-default truncate-lines t)
 (setq use-dialog-box nil)
 (setq use-short-answers t)
-(setq ollama-tailnet-fallback-strategy :auto-local)
 (setq-default indent-tabs-mode nil) ; (setq tab-width 4)
 (setq shell-command-dont-erase-buffer 'end-last-out)
 (setq comment-auto-fill-only-comments t)
 (setq select-enable-clipboard nil) ;; select-enable-primary already defaults to nil.
-(setq lpr-switches '("-T" "''"))
-(setq lpr-add-switches t)
-(setq tex-dvi-view-command "(f=*; pdflatex \"${f%.dvi}.tex\" && open \"${f%.dvi}.pdf\")")
 
-(setq save-abbrevs t)
 (setq text-mode-ispell-word-completion nil)
 (setq completion-cycle-threshold 2)
 (setq read-buffer-completion-ignore-case t)
@@ -88,20 +69,12 @@
 (setq ediff-window-setup-function 'ediff-setup-windows-plain)
 (setq ediff-split-window-function 'split-window-horizontally)
 
-(setq modus-themes-deuteranopia t)
-(setq modus-themes-common-palette-overrides
-      '((border-mode-line-active bg-mode-line-active)
-        (border-mode-line-inactive bg-mode-line-inactive)
-        (message-separator bg-main)))
-
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
 (put 'list-timers 'disabled nil)
 (put 'list-threads 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
-
-(add-to-list 'warning-suppress-types '(files missing-lexbind-cookie))
 
 (advice-add 'display-startup-echo-area-message :override #'ignore)
 (advice-add 'ask-user-about-supersession-threat :override #'ignore)
@@ -127,93 +100,17 @@
         suspicious
         unresolved))
 
-
-(add-hook 'dired-mode-hook 'dired-async-mode)
-(add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
-(add-hook 'LaTeX-mode-hook #'turn-on-reftex)
-(add-hook 'LaTeX-mode-hook #'visual-line-mode)
-(add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
-
-(add-to-list 'auto-mode-alist '("\\.xml\\'" . nxml-mode))
-(add-to-list 'auto-mode-alist '("\\.rst\\'" . rst-mode))
-(add-to-list 'auto-mode-alist '("\\(?:^\\|/\\)[Mm]akefile\\'" . makefile-mode))
-(add-to-list 'auto-mode-alist '("\\.mk\\'" . makefile-mode))
-(add-to-list 'auto-mode-alist '("\\.tex\\'" . LaTeX-mode))
-(add-to-list 'auto-mode-alist '("\\.service\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.timer\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.target\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.mount\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.automount\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.slice\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.socket\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.path\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.conf\\'" . conf-unix-mode))
-(add-to-list 'auto-mode-alist '("\\.mdwn\\'" . markdown-mode))
-(add-to-list 'auto-mode-alist '("\\.md\\'" . markdown-mode))
-(add-to-list 'auto-mode-alist '("\\.markdown\\'" . markdown-mode))
-(add-to-list 'auto-mode-alist '("\\.txt\\'" . markdown-mode))
-(add-to-list 'auto-mode-alist '("PKGBUILD\\'" . pkgbuild-mode))
-(add-to-list 'auto-mode-alist '("\\.proto\\'" . protobuf-mode))
-(add-to-list 'auto-mode-alist '("\\.ninja\\'" . ninja-mode))
-(add-to-list 'auto-mode-alist '("\\.tf\\'" . terraform-mode))
-(add-to-list 'auto-mode-alist '("\\.tfvars\\'" . terraform-mode))
-(add-to-list 'auto-mode-alist '("\\.tfvars\\.example\\'" . terraform-mode))
-(add-to-list 'auto-mode-alist '("\\.sh\\'" . bash-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.bashrc\\'" . bash-ts-mode))
-(add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.lisp\\'" . lisp-mode))
-(add-to-list 'auto-mode-alist '("\\.ya?ml\\'" . yaml-mode))
-(add-to-list 'auto-mode-alist '("\\.go\\'" . go-ts-mode))
-(add-to-list 'auto-mode-alist '("/go\\.work\\'" . go-mod-ts-mode))
-(add-to-list 'auto-mode-alist '("/go\\.mod\\'" . go-mod-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.rs\\'" . rustic-mode))
-(add-to-list 'auto-mode-alist '("/Cargo\\.lock\\'" . toml-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.py\\'" . python-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.html\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.htm\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.as[cp]x\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.djhtml\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.jsp\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.tpl\\.php\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.js\\'" . js-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.css\\'" . css-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.toml\\'" . toml-ts-mode))
-(add-to-list 'auto-mode-alist '("CMakeLists.txt" . cmake-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.h\\'" . c-or-c++-mode))
-(add-to-list 'auto-mode-alist '("\\.c\\'" . c-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.cpp\\'" . c++-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.cc\\'" . c++-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.hh\\'" . c++-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.cxx\\'" . c++-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.java\\'" . java-ts-mode))
-
-(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
-
-(add-to-list 'term-file-aliases '("alacritty" . "xterm"))
-(add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; system -- darwin or linux specific settings
 
 (when (eq system-type 'darwin)
   (setq read-process-output-max (* 64 1024))
   (setq ns-function-modifier 'hyper)
   (setq mac-command-modifier 'meta)
-  (setq mac-option-modifier 'super)
-  (add-hook 'after-make-frame-functions #'contextual-menubar))
+  (setq mac-option-modifier 'super))
 
 (when (eq system-type 'gnu/linux)
-  (setq read-process-output-max (* 1024 1024))
-  (setq x-alt-keysym 'meta)
-  (setq x-super-keysym 'super))
+  (setq read-process-output-max (* 1024 1024)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Frame & buffer display policies
@@ -223,11 +120,6 @@
   (not (string-empty-p string)))
 
 (advice-add 'kill-new :before-while #'tychoish--kill-new-reject-empty)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TTY and display settings
-
-(advice-add 'set-frame-font :around #'cmdr-set-frame-font-interactive)
 
 (provide 'setup-defaults)
 ;;; setup-defaults.el ends here

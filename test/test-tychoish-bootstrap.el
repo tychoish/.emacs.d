@@ -15,6 +15,8 @@
 (require 'setup-project)
 (require 'setup-core)
 
+(defvar denote-directory)
+
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -756,8 +758,8 @@
   "Run BODY after ensuring delight lighters are applied."
   (declare (indent 0))
   `(progn
+     (require 'hud-modeline)
      (require 'delight)
-     ;; don't need to set up lighters here because they're loaded from use-package
      ,@body))
 
 (ert-deftest bootstrap/delight-fundamental-mode-name ()
