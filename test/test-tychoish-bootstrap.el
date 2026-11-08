@@ -759,7 +759,7 @@
   (declare (indent 0))
   `(progn
      (require 'hud-modeline)
-     (require 'delight)
+     (hud-modeline-mode 1)
      ,@body))
 
 (ert-deftest bootstrap/delight-fundamental-mode-name ()
@@ -1076,27 +1076,15 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   (require 'setup-package-defaults)
   (let ((stale nil)
         (refreshes 0))
-    (cl-letf (((symbol-function 'bootstrap-package-quickstart-stale-p)
-               (lambda () stale))
-              ((symbol-function 'elpaish-install-sync-package-load-paths) #'ignore)
-              ((symbol-function 'package-quickstart-refresh)
-               (lambda () (setq refreshes (1+ refreshes)))))
+    (cl-letf (((symbol-function 'elpaish-install-refresh-package-quickstart)
+               (lambda (&optional force)
+                 (when (or force stale)
+                   (setq refreshes (1+ refreshes))))))
       (bootstrap-package-quickstart)
       (should (= refreshes 0))
       (setq stale t)
       (bootstrap-package-quickstart)
       (should (= refreshes 1)))))
-
-(ert-deftest bootstrap/elpaish-refreshes-quickstart-after-changes ()
-  "Only successful package changes schedule a quickstart refresh."
-  (let ((refreshes 0))
-    (cl-letf (((symbol-function 'ad:refresh-package-quickstart)
-               (lambda (&rest _) (setq refreshes (1+ refreshes)))))
-      (bootstrap-refresh-quickstart-after-elpaish '((:status :failed) (:status :up-to-date)) 'install)
-      (should (= refreshes 0))
-      (bootstrap-refresh-quickstart-after-elpaish '((:status :installed)) 'install)
-      (bootstrap-refresh-quickstart-after-elpaish '((:status :upgraded)) 'upgrade)
-      (should (= refreshes 2)))))
 
 (ert-deftest bootstrap/set-frame-font-interactive-uses-annotated-completing-read ()
   "Interactively calling `set-frame-font' uses `annotated-completing-read-font-name'."

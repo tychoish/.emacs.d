@@ -528,10 +528,7 @@ resets point to column 0 outside of definition-list context."
 ;;; git-link
 (with-eval-after-load 'git-link
   (defun ad:git-link--new-copy-to-clipboard (link)
-    "Also copy LINK to the system clipboard.
-`select-enable-clipboard' is nil, so `kill-new' (called by
-`git-link--new') only reaches the Emacs kill-ring, not the OS
-clipboard."
+    "Also copy LINK to the system clipboard."
     (with-temp-buffer
       (insert link)
       (clipboard-kill-ring-save (point-min) (point-max))))
@@ -580,12 +577,9 @@ clipboard."
     (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
 
 (with-eval-after-load 'magit-gh
-  (unless (condition-case nil
-              (transient-get-suffix 'magit-gh "g")
-            (error nil))
-    (transient-append-suffix 'magit-gh '(-1)
-      ["magit-dash"
-       ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)])))
+  (cmdr-transient-insert-suffix-once 'magit-gh '(-1)
+    ["magit-dash"
+     ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
 
 (with-eval-after-load 'gptel
   (defvar gemini-api-key nil)

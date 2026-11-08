@@ -26,15 +26,9 @@
 
 (setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
 
-(autoload 'elpaish-install-packages "elpaish-install")
-(autoload 'elpaish-install-refresh-package-quickstart "elpaish-install")
-(autoload 'elpaish-install-package-quickstart-stale-p "elpaish-install")
-(autoload 'elpaish-install-optimize-quickstart-file "elpaish-install")
-(autoload 'elpaish-install-schedule-quickstart-refresh "elpaish-install")
-(autoload 'elpaish-install-flush-package-quickstart "elpaish-install")
-(autoload 'elpaish-install-sync-package-load-paths "elpaish-install")
-(autoload 'elpaish-install--package-quickstart-refresh-optimize "elpaish-install")
-(autoload 'elpaish-install--on-bootstrap-finished "elpaish-install")
+(declare-function elpaish-install-packages "elpaish-install")
+(declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
+(declare-function elpaish-install-package-quickstart-stale-p "elpaish-install")
 
 (defun bootstrap-initialize-packages ()
   "Initialize packages from quickstart file, or perform cold bootstrap."
@@ -58,21 +52,7 @@
   "Regenerate `package-quickstart-file' and clear the debounce timer.
 When FORCE is nil, do nothing unless quickstart file is stale."
   (interactive "P")
-  (when (or force (bootstrap-package-quickstart-stale-p))
-    (require 'package)
-    (elpaish-install-sync-package-load-paths)
-    (package-quickstart-refresh)))
-
-(defun ad:refresh-package-quickstart (&rest _)
-  "Debounce regeneration of `package-quickstart-file' after package operations."
-  (elpaish-install-schedule-quickstart-refresh))
-
-(defun bootstrap-refresh-quickstart-after-elpaish (results _action)
-  "Schedule quickstart refresh when RESULTS include changes."
-  (when (seq-some (lambda (result)
-                    (memq (plist-get result :status) '(:installed :upgraded)))
-                  results)
-    (ad:refresh-package-quickstart)))
+  (elpaish-install-refresh-package-quickstart force))
 
 (provide 'setup-package-defaults)
 ;;; setup-package-defaults.el ends here
