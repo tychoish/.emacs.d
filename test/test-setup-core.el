@@ -234,22 +234,6 @@ correctly and reads from the minibuffer using the candidate's command."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell MCPKit session integration
 
-(ert-deftest tychoish-core/antigravity-bootstrap-starts-on-first-shell ()
-  "Start bootstrap once on shell startup, and wait for Antigravity."
-  (require 'agent-shell)
-  (let ((tychoish/agent-shell-antigravity--startup-requested nil)
-        (calls nil))
-    (cl-letf (((symbol-function 'tychoish/agent-shell-antigravity-bootstrap)
-               (lambda (&rest args) (push args calls)))
-              ((symbol-function 'run-with-idle-timer)
-               (lambda (_delay _repeat function &rest args)
-                 (push (cons function args) calls))))
-      (tychoish/agent-shell-antigravity--on-start :config '((:identifier . other)))
-      (tychoish/agent-shell-antigravity--on-start :config '((:identifier . other)))
-      (tychoish/agent-shell-antigravity--on-start :config '((:identifier . antigravity)))
-      (should (equal (reverse calls)
-                     '((tychoish/agent-shell-antigravity-bootstrap) (nil :sync)))))))
-
 (ert-deftest tychoish-core/antigravity-config-available-before-install ()
   "Allow selecting Antigravity before its executable has been installed."
   (require 'agent-shell)
@@ -362,6 +346,7 @@ correctly and reads from the minibuffer using the candidate's command."
   "Test that `agent-shell-queue' configures `agent-shell-menu' mode keys without error."
   (require 'agent-shell)
   (require 'agent-shell-queue)
+  (require 'agent-shell-menu)
   (should (fboundp 'agent-shell-menu-dispatch))
   (should (equal (lookup-key agent-shell-mode-map (kbd "m"))
                  'agent-shell-menu-output-key-m))

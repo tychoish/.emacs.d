@@ -1017,31 +1017,14 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (sprite-run-startup-operations '(mcpkit-init-services))
       (should called))))
 
-(ert-deftest bootstrap/require-setup-project-is-startup-operation ()
-  "Setup project requirement is registered as a startup operation."
-  (should (memq 'bootstrap-require-setup-project sprite-startup-operations))
-  (should (fboundp 'bootstrap-require-setup-project))
-  (should (eq 0 (car (func-arity 'bootstrap-require-setup-project)))))
-
-(ert-deftest bootstrap/require-setup-packages-is-startup-operation ()
-  "Setup packages requirement is registered as a startup operation."
-  (should (memq 'bootstrap-require-setup-packages sprite-startup-operations))
-  (should (fboundp 'bootstrap-require-setup-packages))
-  (should (eq 0 (car (func-arity 'bootstrap-require-setup-packages)))))
-
 (ert-deftest bootstrap/post-late-startup-runs-package-operations-in-order ()
-  "Start installation asynchronously and continue with package maintenance."
-  (let* ((order nil)
-         (noninteractive t)
-         (expected-ops '(bootstrap-require-setup-packages
-                         bootstrap-ensure-packages-installed
-                         bootstrap-package-quickstart
-                         builder-emacs-conf-native-compile-all))
-         (package-ops (seq-filter (lambda (op) (memq op expected-ops))
-                                  sprite-startup-operations)))
-    (should (equal package-ops expected-ops))
-    (cl-letf (((symbol-function 'bootstrap-require-setup-packages)
-               (lambda () (push 'require order)))
+  "Maintenance runs package operations in order from an idle timer."
+  (require 'setup-packages)
+  (require 'elpaish)
+  (let ((order nil)
+        (timer-fn nil))
+    (cl-letf (((symbol-function 'run-with-idle-timer)
+               (lambda (_secs _repeat fn &rest _) (setq timer-fn fn)))
               ((symbol-function 'elpaish-install-packages)
                (lambda (&rest args)
                  (should (plist-get args :async))
@@ -1050,8 +1033,11 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                (lambda () (push 'refresh order)))
               ((symbol-function 'builder-emacs-conf-native-compile-all)
                (lambda () (push 'compile order))))
-      (sprite-run-startup-operations package-ops)
-      (should (equal (reverse order) '(require install refresh compile))))))
+      (bootstrap-run-maintenance)
+      (should (functionp timer-fn))
+      (should-not order)
+      (funcall timer-fn)
+      (should (equal (reverse order) '(install refresh compile))))))
 
 (ert-deftest bootstrap/frame-alpha-preserves-configured-default ()
   "Apply an existing default opacity to a frame without an explicit value."
@@ -1174,12 +1160,10 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
               ((symbol-function 'bootstrap-sync-package-load-paths) #'ignore)
               ((symbol-function 'package-quickstart-refresh)
                (lambda () (setq refreshes (1+ refreshes)))))
-      (should (memq 'bootstrap-package-quickstart
-                    sprite-startup-operations))
-      (sprite--execute-startup-operation 'bootstrap-package-quickstart)
+      (bootstrap-package-quickstart)
       (should (= refreshes 0))
       (setq stale t)
-      (sprite--execute-startup-operation 'bootstrap-package-quickstart)
+      (bootstrap-package-quickstart)
       (should (= refreshes 1)))))
 
 (ert-deftest bootstrap/elpaish-refreshes-quickstart-after-changes ()
