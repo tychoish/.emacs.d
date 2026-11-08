@@ -15,25 +15,39 @@
 (require 'annotated-completing-read)
 
 (defvar compilation-save-buffers-predicate)
+(defvar popper-group-function)
+(declare-function popper-group-by-projectile "popper")
+
+(defvar projectile-cache-fallback-directory
+  (sprite-state-path "projectile-cache")
+  "Directory used for projectile caches when project root is not writable.")
+
+(with-eval-after-load 'popper
+  (setq popper-group-function #'popper-group-by-projectile))
+
+(setq compilation-save-buffers-predicate #'projectile-project-root)
+(setq projectile-use-git-grep t)
+(setq projectile-enable-caching 'persistent)
+(setq projectile-require-project-root nil)
+
+(advice-add 'projectile-project-cache-file :around #'projectile-project-cache-file-fallback)
+(advice-add 'projectile-serialize :around #'projectile-serialize-silent-fallback)
+(advice-add 'projectile-purge-file-from-cache :around #'projectile-purge-file-from-cache-debounced)
+
+(add-hook 'project-find-functions #'project-find-go-module)
+(add-hook 'project-find-functions #'project-find-cmake-project)
 
 (cl-defmethod project-root ((project (head cmake-root))) (cdr project))
+(cl-defmethod project-root ((project (head go-module))) (cdr project))
 
 (defun project-find-cmake-project (dir)
   (when-let* ((root (locate-dominating-file dir "CMakeLists.txt")))
     (cons 'cmake-root root)))
 
-(add-hook 'project-find-functions #'project-find-cmake-project)
-
-(cl-defmethod project-root ((project (head go-module))) (cdr project))
-
 (defun project-find-go-module (dir)
   (when-let* ((root (or (locate-dominating-file dir "go.work")
                         (locate-dominating-file dir "go.mod"))))
     (cons 'go-module root)))
-
-(add-hook 'project-find-functions #'project-find-go-module)
-
-(setq compilation-save-buffers-predicate #'projectile-project-root)
 
 ;;;###autoload
 (defun turn-on-projectile-mode ()
@@ -41,20 +55,12 @@
   (interactive)
   (projectile-mode 1))
 
-(add-hook 'prog-mode-hook #'turn-on-projectile-mode)
-(add-hook 'text-mode-hook #'turn-on-projectile-mode)
-(add-hook 'dired-mode-hook #'turn-on-projectile-mode)
-
-(with-eval-after-load 'popper
-  (setq popper-group-function #'popper-group-by-projectile))
-
 ;;;###autoload
 (defun projectile-save-buffers-in-directory (dir)
   "Save all buffers visiting files within DIR using projectile."
   (let ((default-directory (expand-file-name dir)))
-    (require 'alert)
     (alert (projectile-save-project-buffers)
-	     :title (format "emacs<%s> (%s)" (or sprite-instance-id "primary") dir))))
+	   :title (format "emacs<%s> (%s)" (or sprite-instance-id "primary") dir))))
 
 ;;;###autoload
 (defun projectile-save-project-buffers-picker ()
@@ -64,23 +70,13 @@
    (annotated-completing-read
     (thread-last
       (buffer-list)
-      (seq-map #'buffer-file-name)
-      (seq-filter 'identity)
-      (seq-sort #'string<)
-      (seq-map #'projectile-project-root)
+      (seq-keep #'buffer-file-name)
+      (seq-keep #'projectile-project-root)
       (seq-uniq)
-      (seq-filter 'identity)
+      (seq-sort #'string<)
       (seq-map (lambda (dir) (cons dir nil))))
     :prompt "directories =>"
     :category 'file)))
-
-(setq projectile-use-git-grep t)
-(setq projectile-enable-caching 'persistent)
-(setq projectile-require-project-root nil)
-
-(defvar projectile-cache-fallback-directory
-  (sprite-state-path "projectile-cache")
-  "Directory used for projectile caches when project root is not writable.")
 
 (defun projectile-cache--fallback-file (name-source)
   "Return the fallback cache file path for NAME-SOURCE, ensuring dir exists."
@@ -98,8 +94,6 @@
           in-tree
         (projectile-cache--fallback-file norm-root)))))
 
-(advice-add 'projectile-project-cache-file :around #'projectile-project-cache-file-fallback)
-
 (defun projectile-serialize-silent-fallback (orig-fn data filename)
   "Silently serialize DATA to fallback file when FILENAME is not writable."
   (if (file-writable-p filename)
@@ -109,7 +103,6 @@
         (with-temp-file fallback-file
           (insert (let (print-length) (prin1-to-string data))))))))
 
-(advice-add 'projectile-serialize :around #'projectile-serialize-silent-fallback)
 
 (cl-defun projectile--run-incrementally (fn items &key label delay on-done (progress-interval 10))
   "Call FN on each of ITEMS cooperatively via `gen-run-async'.
