@@ -35,6 +35,9 @@
 
 (require 'sprite)
 (require 'sprite-state)
+(require 'seq)
+(require 'map)
+(require 'subr-x)
 
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
@@ -191,6 +194,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; functions -- initialization
+
+(defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
+  "Cache mapping file names to files' mtime to avoid re-importing files.")
+
+(defun should-read-abbrev-file-p (path)
+  "Return non-nil if abbrev file at PATH needs to be (re-)loaded."
+  (or (not (map-contains-key bootstrap-abbrev-files-cache path))
+      (time-less-p (map-elt bootstrap-abbrev-files-cache path)
+                   (file-attribute-modification-time (file-attributes path)))))
+
+(defun bootstrap-load-abbrev-files ()
+  "Load all abbrev definitions from ~/.emacs.d/abbrev/*.el*."
+  (thread-last
+    (directory-files (file-name-concat user-emacs-directory "abbrev") t ".el*" :nosort)
+    (seq-filter #'should-read-abbrev-file-p)
+    (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
+    (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
+                             (file-attribute-modification-time (file-attributes it)))))))
 
 (defun bootstrap-load-user-local-config ()
   "Load all .el files in PATH."

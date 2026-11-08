@@ -10,6 +10,19 @@
 (require 'seq)
 (require 'subr-x)
 
+(declare-function bootstrap-load-abbrev-files "bootstrap")
+(declare-function dired-async-mode "dired-async")
+(declare-function nerd-icons-dired-mode "nerd-icons-dired")
+(declare-function sqlite-extras-minor-mode "sqlite-extras")
+(declare-function anzu-mode "anzu")
+(declare-function nerd-icons-xref-mode "nerd-icons-completion")
+(declare-function orgx-mode-turn-on "orgx")
+(declare-function orgx-agenda-minor-mode-turn-on "orgx")
+(declare-function popper-echo-mode "popper")
+(declare-function magit-dash-gh-prune-lazy-prefetch "magit-dash-gh")
+(declare-function yaml-pro-mode "yaml-pro")
+(declare-function cov-mode "cov")
+
 (defvar setup-modes-auto-mode-alist
   '(("\\.xml\\'" . nxml-mode)
     ("\\.rst\\'" . rst-mode)
@@ -79,12 +92,75 @@
 (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
 (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
+;;; Direct mode setup helpers
+
+(defvar markdown-imenu-generic-expression
+  '(("title"  "^\\(.*\\)[\n]=+$" 1)
+    ("h2-"    "^\\(.*\\)[\n]-+$" 1)
+    ("h1"     "^# \\(.*\\)$" 1)
+    ("h2"     "^## \\(.*\\)$" 1)
+    ("h3"     "^### \\(.*\\)$" 1)
+    ("h4"     "^#### \\(.*\\)$" 1)
+    ("h5"     "^##### \\(.*\\)$" 1)
+    ("h6"     "^###### \\(.*\\)$" 1)
+    ("fn"     "^\\[^\\(.*\\)\\]" 1))
+  "Generic expression for `imenu' in markdown buffers.")
+
+(defun tychoish-set-local-fill-column-100 ()
+  "Set `fill-column' to 100 in the current buffer."
+  (setq-local fill-column 100))
+
+(defun tychoish-set-local-tab-width-4 ()
+  "Set `tab-width' to 4 in the current buffer."
+  (setq-local tab-width 4))
+
+(defun tychoish-yaml-set-tab-width ()
+  "Set `tab-width' to 2 in the current buffer."
+  (setq-local tab-width 2))
+
+(defun tychoish-go-mode-setup ()
+  "Buffer-local setup for Go buffers."
+  (setq-local compilation-error-screen-columns nil))
+
+(defun tychoish/markdown-setup-imenu ()
+  "Configure `imenu-generic-expression' for markdown buffers."
+  (setq imenu-generic-expression markdown-imenu-generic-expression))
+
+(defun tychoish/markdown-disable-colon-electric-indent ()
+  "Prevent `:' from triggering `markdown-indent-line', which
+resets point to column 0 outside of definition-list context."
+  (setq-local electric-indent-chars (remq ?: electric-indent-chars)))
+
+(defun rustic-mode-auto-save-hook ()
+  "Enable auto-saving in rustic-mode buffers."
+  (when buffer-file-name
+    (setq-local compilation-ask-about-save nil)))
+
 ;;; Direct mode hooks
 (add-hook 'dired-mode-hook #'dired-async-mode)
+(add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
 (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
 (add-hook 'LaTeX-mode-hook #'turn-on-reftex)
 (add-hook 'LaTeX-mode-hook #'visual-line-mode)
 (add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
+(add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
+(add-hook 'isearch-mode-hook #'anzu-mode)
+(add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
+(add-hook 'org-mode-hook #'orgx-mode-turn-on)
+(add-hook 'org-agenda-mode-hook #'orgx-agenda-minor-mode-turn-on)
+(add-hook 'popper-mode-hook #'popper-echo-mode)
+(add-hook 'magit-status-mode-hook #'magit-dash-gh-prune-lazy-prefetch)
+(add-hook 'markdown-mode-hook #'turn-off-auto-fill)
+(add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)
+(add-hook 'markdown-mode-hook #'tychoish/markdown-disable-colon-electric-indent)
+(add-hook 'yaml-mode-hook #'yaml-pro-mode)
+(add-hook 'yaml-mode-hook #'tychoish-yaml-set-tab-width)
+(add-hook 'go-ts-mode-hook #'cov-mode)
+(add-hook 'go-ts-mode-hook #'tychoish-set-local-fill-column-100)
+(add-hook 'go-ts-mode-hook #'tychoish-go-mode-setup)
+(add-hook 'python-ts-mode-hook #'tychoish-set-local-fill-column-100)
+(add-hook 'python-ts-mode-hook #'tychoish-set-local-tab-width-4)
+(add-hook 'rustic-mode-hook #'rustic-mode-auto-save-hook)
 
 (defun setup-modes-merge-alist (current new-entries)
   "Merge NEW-ENTRIES into CURRENT alist, overriding existing keys."
