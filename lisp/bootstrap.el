@@ -62,12 +62,6 @@
 (defvar cmdr-opt-in-specs)
 (defvar bookmark-save-flag)
 (defvar treesit-auto-langs)
-
-;; Org and note paths populated by `bootstrap-set-local-notes-directory'
-(defvar local-notes-directory nil
-  "Directory where notes are stored.")
-(defvar user-org-directories nil
-  "Extra directories containing org files.")
 (defvar org-directory)
 (defvar org-agenda-files)
 (defvar org-annotate-file-storage-file)
@@ -75,6 +69,12 @@
 (defvar org-archive-location)
 (defvar deft-directory)
 (defvar denote-directory)
+
+;; Org and note paths populated by `bootstrap-set-local-notes-directory'
+(defvar local-notes-directory nil
+  "Directory where notes are stored.")
+(defvar user-org-directories nil
+  "Extra directories containing org files.")
 
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
@@ -221,24 +221,6 @@
 
 ;; functions -- initialization
 
-(defvar bootstrap-abbrev-files-cache (make-hash-table :test #'equal)
-  "Cache mapping file names to files' mtime to avoid re-importing files.")
-
-(defun should-read-abbrev-file-p (path)
-  "Return non-nil if abbrev file at PATH needs to be (re-)loaded."
-  (or (not (map-contains-key bootstrap-abbrev-files-cache path))
-      (time-less-p (map-elt bootstrap-abbrev-files-cache path)
-                   (file-attribute-modification-time (file-attributes path)))))
-
-(defun bootstrap-load-abbrev-files ()
-  "Load all abbrev definitions from ~/.emacs.d/abbrev/*.el*."
-  (thread-last
-    (directory-files (file-name-concat user-emacs-directory "abbrev") t ".el*" :nosort)
-    (seq-filter #'should-read-abbrev-file-p)
-    (seq-map (lambda (path) (let ((quietly t)) (read-abbrev-file path quietly) path)))
-    (mapc (lambda (it) (setf (map-elt bootstrap-abbrev-files-cache it)
-                             (file-attribute-modification-time (file-attributes it)))))))
-
 (defun bootstrap-load-user-local-config ()
   "Load all .el files in PATH."
   (let ((path (expand-file-name "user" user-emacs-directory)))
@@ -258,6 +240,10 @@
     (when (fboundp 'alert)
       (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
 	     :title (format "emacs-%s" sprite-instance-id)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; higher order functions -- probably belong somewhere else, but here for now
 
 (defun bootstrap-set-notes-directory (&optional path)
   "Set notes directory to PATH and update note paths."
@@ -282,10 +268,7 @@
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
   local-notes-directory)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
-
 (defun bootstrap-ensure-ssh-agent ()
   "Ensure SSH agent is configured and remove hooks."
   (bootstrap-set-up-ssh-agent)

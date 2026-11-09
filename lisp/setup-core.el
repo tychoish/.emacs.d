@@ -278,13 +278,6 @@
   (setq ls-lisp-dirs-first t)
   (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
 
-(with-eval-after-load 'dabbrev
-  (add-to-list 'dabbrev-ignored-buffer-regexps "\\` ")
-  (add-to-list 'dabbrev-ignored-buffer-modes 'authinfo-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'doc-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'pdf-view-mode)
-  (add-to-list 'dabbrev-ignored-buffer-modes 'tags-table-mode))
-
 (with-eval-after-load 'anzu
   (setq anzu-cons-mode-line-p nil)
   (seq-do #'make-variable-buffer-local

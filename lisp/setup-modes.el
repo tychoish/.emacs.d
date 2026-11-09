@@ -10,7 +10,6 @@
 (require 'seq)
 (require 'subr-x)
 
-(declare-function bootstrap-load-abbrev-files "bootstrap")
 (declare-function dired-async-mode "dired-async")
 (declare-function nerd-icons-dired-mode "nerd-icons-dired")
 (declare-function sqlite-extras-minor-mode "sqlite-extras")
@@ -144,7 +143,6 @@ resets point to column 0 outside of definition-list context."
 (add-hook 'LaTeX-mode-hook #'turn-on-reftex)
 (add-hook 'LaTeX-mode-hook #'visual-line-mode)
 (add-hook 'LaTeX-mode-hook #'turn-off-auto-fill)
-(add-hook 'abbrev-mode-hook #'bootstrap-load-abbrev-files)
 (add-hook 'isearch-mode-hook #'anzu-mode)
 (add-hook 'nerd-icons-completion-mode-hook #'nerd-icons-xref-mode)
 (add-hook 'org-mode-hook #'orgx-mode-turn-on)

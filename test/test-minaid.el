@@ -100,6 +100,7 @@
             (should (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
             (should (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))
             (should (memq #'minaid-corfu-agent-shell-setup agent-shell-mode-hook))
+            (should (memq #'minaid-load-abbrev-files abbrev-mode-hook))
             (should (eq (lookup-key minaid-mode-map (kbd "C-.")) #'embark-act))
 
             ;; Disable mode
@@ -114,6 +115,7 @@
             (should-not (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
             (should-not (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))
             (should-not (memq #'minaid-corfu-agent-shell-setup agent-shell-mode-hook))
+            (should-not (memq #'minaid-load-abbrev-files abbrev-mode-hook))
             (should-not (memq #'corfu-history-mode corfu-mode-hook))
             (should-not (memq #'corfu-indexed-mode corfu-mode-hook))
             (should-not (memq #'corfu-popupinfo-mode corfu-mode-hook))))
@@ -130,6 +132,37 @@
 
 (defun test--dummy-inner ()
   'test-result)
+
+(ert-deftest minaid-test/dabbrev-settings-lifecycle ()
+  "Test that minaid configures dabbrev ignore filters symmetrically."
+  (require 'dabbrev)
+  (let ((orig-regexps (copy-sequence dabbrev-ignored-buffer-regexps))
+        (orig-modes (copy-sequence dabbrev-ignored-buffer-modes))
+        (minaid--saved-dabbrev-settings nil))
+    (minaid--configure-dabbrev)
+    (should (member "\\` " dabbrev-ignored-buffer-regexps))
+    (should (memq 'authinfo-mode dabbrev-ignored-buffer-modes))
+    (should (memq 'doc-view-mode dabbrev-ignored-buffer-modes))
+    (should (memq 'pdf-view-mode dabbrev-ignored-buffer-modes))
+    (should (memq 'tags-table-mode dabbrev-ignored-buffer-modes))
+    (minaid--restore-dabbrev)
+    (should (equal dabbrev-ignored-buffer-regexps orig-regexps))
+    (should (equal dabbrev-ignored-buffer-modes orig-modes))))
+
+(ert-deftest minaid-test/abbrev-files-cache-and-load ()
+  "Test that `minaid-load-abbrev-files' caches and reads definitions."
+  (let* ((tmp-dir (make-temp-file "minaid-abbrev-" t))
+         (abbrev-file (file-name-concat tmp-dir "test-abbrev.el"))
+         (minaid-abbrev-files-cache (make-hash-table :test #'equal)))
+    (unwind-protect
+        (progn
+          (with-temp-file abbrev-file
+            (insert ";; test abbrev\n"))
+          (should (minaid-should-read-abbrev-file-p abbrev-file))
+          (minaid-load-abbrev-files tmp-dir)
+          (should (map-contains-key minaid-abbrev-files-cache abbrev-file))
+          (should-not (minaid-should-read-abbrev-file-p abbrev-file)))
+      (delete-directory tmp-dir t))))
 
 (ert-deftest minaid-test/minaid-cape-capf-wrapper ()
   "Test that minaid-cape-capf-wrapper wraps the inner function cleanly without macro expansion."
