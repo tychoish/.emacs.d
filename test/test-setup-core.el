@@ -323,19 +323,18 @@ correctly and reads from the minibuffer using the candidate's command."
       (should (= (length gptel-tools) 1))
       (should (equal (gptel-tool-name (car gptel-tools)) "core_test_tool")))))
 
-(ert-deftest tychoish-core/gptel-registers-cmdr-model-key ()
-  "Generated default model commands also appear in the cmdr map."
+(ert-deftest tychoish-core/gptel-default-and-buffer-isolation ()
+  "The configured default is OAuth and buffer selections remain independent."
   (require 'gptel)
-  (let ((cmdr-mode-map (make-sparse-keymap))
-        (gptel-mode-map (make-sparse-keymap)))
-    (unwind-protect
-        (progn
-          (make-gptel-set-up-backend-functions
-           :name "test-cmdr-model" :key "q" :model 'test-model :backend nil)
-          (should (eq (keymap-lookup cmdr-mode-map "C-c r g m q")
-                      #'gptel-set-backend-default-test-cmdr-model)))
-      (fmakunbound 'gptel-set-backend-test-cmdr-model)
-      (fmakunbound 'gptel-set-backend-default-test-cmdr-model))))
+  (should (gptel-openai-oauth-p (default-value 'gptel-backend)))
+  (should (eq (default-value 'gptel-model) 'gpt-6.1-terra))
+  (should (gptel-get-backend "Copilot"))
+  (should (memq 'gpt-6.1-terra (gptel-backend-models (default-value 'gptel-backend))))
+  (with-temp-buffer
+    (setq-local gptel-model 'local-test-model)
+    (with-temp-buffer
+      (should (eq gptel-model 'gpt-6.1-terra)))
+    (should (eq gptel-model 'local-test-model))))
 
 (ert-deftest tychoish-core/agent-shell-queue-menu-bindings ()
   "Test that `agent-shell-queue' configures `agent-shell-menu' mode keys without error."

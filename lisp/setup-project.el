@@ -16,6 +16,8 @@
 (require 'sprite)
 (require 'annotated-completing-read)
 
+(declare-function popper-group-by-projectile "popper")
+
 (defvar compilation-save-buffers-predicate)
 
 (defvar projectile-cache-fallback-directory (sprite-state-path "projectile-cache")

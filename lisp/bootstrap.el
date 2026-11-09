@@ -173,6 +173,7 @@
     orgx-capture-setup-standard-templates
     annotated-completing-read-setup-history
     mcpkit-init-services
+    gptel-mcp-mode
     sprite-state-global-mode
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))

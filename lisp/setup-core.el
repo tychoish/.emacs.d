@@ -391,10 +391,6 @@
     :bind-map denote-dash-global-map
     :bind-key "x"))
 
-(with-eval-after-load 'denote-sync
-  (require 'denote-sync-notion)
-  (require 'denote-sync-gdocs))
-
 (with-eval-after-load 'consult-notes
   (consult-notes-denote-mode 1)
 
@@ -450,73 +446,11 @@
   (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
 
 (with-eval-after-load 'gptel
-  (defvar gemini-api-key nil)
-  (defvar anthropic-api-key nil)
-  (defvar openai-api-key nil)
-
-  (cl-defun make-gptel-set-up-backend-functions (&key name model backend key api-key)
-    "Register buffer-local and session-default backend switchers for MODEL as NAME."
-    (declare (indent defun))
-    (let ((local-function-symbol (intern (format "gptel-set-backend-%s" name)))
-          (default-function-symbol (intern (format "gptel-set-backend-default-%s" name))))
-      (defalias local-function-symbol
-        (lambda ()
-          (interactive)
-          (setq-local gptel-model model)
-          (when api-key
-            (setq-local gptel-api-key (if (functionp api-key) api-key (lambda () api-key))))
-          (setq-local gptel-backend backend)
-          (message "[gptel] set backend to %s for the local buffer" name))
-        (format "Set LLM backend for the current buffer to `%s'" model))
-
-      (defalias default-function-symbol
-        (lambda ()
-          (interactive)
-          (setq-default gptel-model model)
-          (when api-key
-            (setq-default gptel-api-key (if (functionp api-key) api-key (lambda () api-key))))
-          (setq-default gptel-backend backend)
-          (message "[gptel] set default backend to %s" name))
-        (format "Set the default LLM backend for the current session to `%s'" model))
-
-      (keymap-set gptel-mode-map (format "C-c r a m %s" (upcase key)) default-function-symbol)
-      (keymap-set gptel-mode-map (format "C-c r a m %s" (downcase key)) local-function-symbol)
-      (cmdr-keys-prefix cmdr-mode-map "C-c r g m" "gptel-set-default-model")
-      (cmdr-keys-set cmdr-mode-map (format "C-c r g m %s" (downcase key)) default-function-symbol)))
-
   (keymap-set gptel-mode-map "C-c m" #'gptel-menu)
-
   (setq gptel-include-reasoning 'ignore)
-
-  (make-gptel-set-up-backend-functions
-   :name "sonnet-5"
-   :key "s"
-   :model 'claude-sonnet-5
-   :backend (gptel-make-anthropic "claude-sonnet" :key anthropic-api-key :stream t)
-   :api-key anthropic-api-key)
-
-  (make-gptel-set-up-backend-functions
-   :name "gemini-flash"
-   :key "f"
-   :model 'gemini-flash-latest
-   :backend (gptel-make-gemini "gemini" :key gemini-api-key :stream t))
-
-  (make-gptel-set-up-backend-functions
-   :name "copilot"
-   :key "c"
-   :model 'gpt-5-mini
-   :backend (gptel-make-gh-copilot "copilot"))
-
-  (make-gptel-set-up-backend-functions
-   :name "gpt-5.6-terra"
-   :key "m"
-   :backend (gptel-make-openai "openai" :key openai-api-key)
-   :model 'gpt-5.6-terra
-   :api-key openai-api-key)
-
-  (gptel-set-backend-default-gemini-flash)
-  (require 'gptel-integrations)
-  (gptel-mcp-mode 1))
+  (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
+  (setq-default gptel-model 'gpt-6.1-terra)
+  (gptel-make-gh-copilot "gh-copilot"))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
