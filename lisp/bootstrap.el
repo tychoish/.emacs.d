@@ -37,6 +37,9 @@
 (require 'map)
 (require 'subr-x)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Forward Declarations
+
 (declare-function package-activate-all "package")
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
@@ -46,6 +49,8 @@
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
 (declare-function elpaish-install-package-quickstart-stale-p "elpaish-install")
 
+;; Dynamic variables configured here or populated by other packages
+(defvar package-quickstart-file)
 (defvar sprite-state-locks-enabled)
 (defvar sprite-state-auto-save-enabled)
 (defvar sprite-state-desktop-enabled)
@@ -55,7 +60,37 @@
 (defvar sprite-instance-id)
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
-(defvar package-quickstart-file)
+(defvar bookmark-save-flag)
+(defvar treesit-auto-langs)
+
+;; Org and note paths populated by `bootstrap-set-local-notes-directory'
+(defvar local-notes-directory nil
+  "Directory where notes are stored.")
+(defvar user-org-directories nil
+  "Extra directories containing org files.")
+(defvar org-directory)
+(defvar org-agenda-files)
+(defvar org-annotate-file-storage-file)
+(defvar org-default-notes-file)
+(defvar org-archive-location)
+(defvar deft-directory)
+(defvar denote-directory)
+
+(defvar bootstrap-startup-complete-time nil
+  "Timestamp when startup finished.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Deferred Module Autoloads
+
+(autoload 'tychoish-mail-select-account "setup-mail" nil t)
+(autoload 'tychoish-define-mail-account "setup-mail")
+(autoload 'tychoish-mail-add-refile-rule "setup-mail")
+(autoload 'mu4e "setup-mail" nil t)
+(autoload 'mu4e-update-index "setup-mail" nil t)
+(autoload 'mu4e-update-mail-and-index "setup-mail" nil t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Package Bootstrap
 
 (defun bootstrap-initialize-packages ()
   "Initialize packages from quickstart file, or perform cold bootstrap."
@@ -69,35 +104,6 @@
       (package-activate-all)
       (when (elpaish-install-package-quickstart-stale-p)
         (elpaish-install-packages 'core))))))
-
-(defvar treesit-auto-langs)
-
-(defvar local-notes-directory nil
-  "Directory where notes are stored.")
-
-(defvar user-org-directories nil
-  "Extra directories containing org files.")
-
-(defvar bootstrap-startup-complete-time nil
-  "Timestamp when startup finished.")
-
-(autoload 'tychoish-mail-select-account "setup-mail" nil t)
-(autoload 'tychoish-define-mail-account "setup-mail")
-(autoload 'tychoish-mail-add-refile-rule "setup-mail")
-(autoload 'mu4e "setup-mail" nil t)
-(autoload 'mu4e-update-index "setup-mail" nil t)
-(autoload 'mu4e-update-mail-and-index "setup-mail" nil t)
-
-(defvar bookmark-save-flag)
-(defvar org-directory)
-(defvar org-agenda-files)
-(defvar org-annotate-file-storage-file)
-(defvar org-default-notes-file)
-(defvar org-archive-location)
-(defvar deft-directory)
-(defvar denote-directory)
-(defvar mcpkit-instance-name-function)
-(defvar cmdr-opt-in-specs)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -240,8 +246,7 @@
 
     (dolist (file (directory-files path :full "\\.el$") nil)
       (let ((name (file-name-sans-extension (file-name-nondirectory file))))
-	(with-slow-op-timer (format "<init> [user] %s" name)
-	  (require (intern name)))))))
+	(require (intern name))))))
 
 (defun bootstrap-report-startup-timing ()
   (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))

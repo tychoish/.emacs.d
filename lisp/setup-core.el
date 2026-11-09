@@ -48,8 +48,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; CLI flags
 
-(eval-when-compile
-  (require 'clix))
+(require 'clix)
 
 (register-clix-flag slow-op-timing
   :flag "--with-slow-op-timing" :doc "Enable slow operation timing." :consume nil

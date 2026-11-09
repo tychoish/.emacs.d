@@ -29,9 +29,6 @@
     (with-slow-op-timer "<init> [local] [packaging] initialize"
       (bootstrap-initialize-packages))
 
-    (with-slow-op-timer "<init> [local] [feature] require clix"
-      (require 'clix))
-
     (with-slow-op-timer "<init> [local] [config] all"
       (with-slow-op-timer "<init> [local] [config] require setup-modes.el"
         (require 'setup-modes))
