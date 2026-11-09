@@ -22,6 +22,7 @@
 (declare-function magit-dash-gh-prune-lazy-prefetch "magit-dash-gh")
 (declare-function yaml-pro-mode "yaml-pro")
 (declare-function cov-mode "cov")
+(declare-function builder-elisp-mode "builder-elisp")
 
 (defvar setup-modes-auto-mode-alist
   '(("\\.xml\\'" . nxml-mode)
@@ -161,6 +162,7 @@ resets point to column 0 outside of definition-list context."
 (add-hook 'python-ts-mode-hook #'tychoish-set-local-fill-column-100)
 (add-hook 'python-ts-mode-hook #'tychoish-set-local-tab-width-4)
 (add-hook 'rustic-mode-hook #'rustic-mode-auto-save-hook)
+(add-hook 'emacs-lisp-mode-hook #'builder-elisp-mode)
 
 (defun setup-modes-merge-alist (current new-entries)
   "Merge NEW-ENTRIES into CURRENT alist, overriding existing keys."

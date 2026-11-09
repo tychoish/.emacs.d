@@ -34,9 +34,6 @@
 
 (setq create-lockfiles nil)
 
-(setq enable-recursive-minibuffers t)
-(setq minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt))
-
 (setq-default cursor-in-non-selected-windows nil)
 (setq scroll-conservatively 25)
 (setq scroll-preserve-screen-position t)
@@ -49,21 +46,11 @@
 (setq shell-command-dont-erase-buffer 'end-last-out)
 (setq comment-auto-fill-only-comments t)
 (setq select-enable-clipboard nil) ;; select-enable-primary already defaults to nil.
-
-(setq text-mode-ispell-word-completion nil)
-(setq completion-cycle-threshold 2)
-(setq read-buffer-completion-ignore-case t)
-(setq completion-ignore-case t)
-(setq read-file-name-completion-ignore-case t)
-(setq read-extended-command-predicate #'command-completion-default-include-p)
 (setq makefile-electric-keys t)
 
 (setq switch-to-prev-buffer-skip 'visible)
 (setq split-height-threshold 100)
 (setq window-sides-vertical t)
-
-(setq checkdoc-force-docstrings-flag nil)
-(setq checkdoc-spellcheck-documentation-flag t)
 
 (setq show-paren-delay 0.25)
 (setq ediff-window-setup-function 'ediff-setup-windows-plain)
@@ -79,27 +66,6 @@
 (advice-add 'display-startup-echo-area-message :override #'ignore)
 (advice-add 'ask-user-about-supersession-threat :override #'ignore)
 
-(setq byte-compile-warnings
-      ;; OMIT: free-vars docstrings-wide
-      '(callargs
-        constants
-        docstrings
-        docstrings-non-ascii-quotes
-        docstrings-control-chars
-        empty-body
-        ignored-return-value
-        interactive-only
-        lexical
-        lexical-dynamic
-        make-local
-        mutate-constant
-        noruntime
-        not-unused
-        obsolete
-        redefine
-        suspicious
-        unresolved))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; system -- darwin or linux specific settings
 
@@ -111,15 +77,6 @@
 
 (when (eq system-type 'gnu/linux)
   (setq read-process-output-max (* 1024 1024)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Frame & buffer display policies
-
-(defun tychoish--kill-new-reject-empty (string &optional _replace)
-  "Prevent empty STRING from being added to the kill ring."
-  (not (string-empty-p string)))
-
-(advice-add 'kill-new :before-while #'tychoish--kill-new-reject-empty)
 
 (provide 'setup-defaults)
 ;;; setup-defaults.el ends here

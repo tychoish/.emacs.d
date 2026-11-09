@@ -258,5 +258,58 @@
     (should (eq (keymap-lookup cmdr-mode-map "C-c h m") #'consult-man))
     (should (eq (keymap-lookup cmdr-mode-map "C-c h a") #'consult-eglot-symbols))))
 
+(ert-deftest minaid-test/kill-transform-rejects-empty ()
+  "Empty strings should be rejected by `minaid--kill-transform-reject-empty'."
+  (should-not (minaid--kill-transform-reject-empty ""))
+  (should (equal (minaid--kill-transform-reject-empty "hello") "hello")))
+
+(ert-deftest minaid-test/minibuffer-and-completion-settings-lifecycle ()
+  "Settings managed by `minaid-mode' are applied on enable and restored on teardown."
+  (let ((saved-recursive enable-recursive-minibuffers)
+        (saved-cycle completion-cycle-threshold)
+        (saved-ignore completion-ignore-case)
+        (saved-buf-ignore read-buffer-completion-ignore-case)
+        (saved-file-ignore read-file-name-completion-ignore-case)
+        (saved-pred read-extended-command-predicate)
+        (saved-ispell text-mode-ispell-word-completion)
+        (saved-props minibuffer-prompt-properties)
+        (saved-kill-transform (and (boundp 'kill-transform-function) kill-transform-function)))
+    (unwind-protect
+        (progn
+          (minaid--configure-minibuffer)
+          (should (eq enable-recursive-minibuffers t))
+          (should (equal minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt)))
+          (should (eq text-mode-ispell-word-completion nil))
+          (should (= completion-cycle-threshold 2))
+          (should (eq completion-ignore-case t))
+          (should (eq read-buffer-completion-ignore-case t))
+          (should (eq read-file-name-completion-ignore-case t))
+          (should (eq read-extended-command-predicate #'command-completion-default-include-p))
+          (should (functionp kill-transform-function))
+          (should-not (funcall kill-transform-function ""))
+          (should (equal (funcall kill-transform-function "valid") "valid"))
+          (minaid--restore-minibuffer)
+          (should (eq enable-recursive-minibuffers saved-recursive))
+          (should (eq completion-cycle-threshold saved-cycle))
+          (should (eq completion-ignore-case saved-ignore))
+          (should (eq read-buffer-completion-ignore-case saved-buf-ignore))
+          (should (eq read-file-name-completion-ignore-case saved-file-ignore))
+          (should (eq read-extended-command-predicate saved-pred))
+          (should (eq text-mode-ispell-word-completion saved-ispell))
+          (should (equal minibuffer-prompt-properties saved-props))
+          (should (eq (and (boundp 'kill-transform-function) kill-transform-function)
+                      saved-kill-transform)))
+      ;; Safety cleanup
+      (setq enable-recursive-minibuffers saved-recursive
+            completion-cycle-threshold saved-cycle
+            completion-ignore-case saved-ignore
+            read-buffer-completion-ignore-case saved-buf-ignore
+            read-file-name-completion-ignore-case saved-file-ignore
+            read-extended-command-predicate saved-pred
+            text-mode-ispell-word-completion saved-ispell
+            minibuffer-prompt-properties saved-props
+            kill-transform-function saved-kill-transform)
+      (setq minaid--saved-minibuffer-settings nil))))
+
 (provide 'test-minaid)
 ;;; test-minaid.el ends here
