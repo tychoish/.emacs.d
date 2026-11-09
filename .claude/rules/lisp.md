@@ -16,6 +16,10 @@ Rules for writing and editing Emacs Lisp in this configuration.
 
 ## Style
 
+### `setq` expressions
+
+Prefer one variable-value pair per `setq` expression.
+
 ### Elisp formatting: no alignment padding
 
 Never use extra spaces to align let-binding RHS values or any other
