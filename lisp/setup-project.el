@@ -17,16 +17,11 @@
 (require 'annotated-completing-read)
 
 (defvar compilation-save-buffers-predicate)
-(defvar popper-group-function)
-(declare-function popper-group-by-projectile "popper")
 
 (defvar projectile-cache-fallback-directory (sprite-state-path "projectile-cache")
   "Directory used for projectile caches when project root is not writable.")
 
-(with-eval-after-load 'popper
-  (setq popper-group-function #'popper-group-by-projectile))
-
-(setq compilation-save-buffers-predicate #'projectile-project-root)
+(setq compilation-save-buffers-predicate #'project-current)
 (setq projectile-use-git-grep t)
 (setq projectile-enable-caching 'persistent)
 (setq projectile-require-project-root nil)
@@ -51,7 +46,9 @@
     (thread-last
       (buffer-list)
       (seq-keep #'buffer-file-name)
-      (seq-keep #'projectile-project-root)
+      (seq-keep (lambda (f)
+                  (when-let* ((proj (project-current nil (file-name-directory f))))
+                    (project-root proj))))
       (seq-uniq)
       (seq-sort #'string<)
       (seq-map (lambda (dir) (cons dir nil))))

@@ -131,6 +131,7 @@
         (denote-sync-cache-directory . "denote-sync/")
         (recentf-save-file . "recentf.el")
         (savehist-file . "history.el")
+        (dape-default-breakpoints-file . "dape-breakpoints.el")
         (projectile-known-projects-file . "projectile-bookmarks.eld")
         (projectile-frecency-file . "projectile-frecency.eld")))
 

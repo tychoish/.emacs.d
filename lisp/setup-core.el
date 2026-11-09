@@ -22,6 +22,7 @@
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
 (declare-function arch-enable-desktop-notifications "arch")
+(declare-function popper-group-by-project "popper")
 
 (defvar denote-directory)
 (defvar magit-mode-map)
@@ -30,12 +31,10 @@
 (defvar popper-reference-buffers)
 (defvar popper-echo-dispatch-keys)
 (defvar popper-display-control)
+(defvar popper-group-function)
 (defvar cov-coverage-mode)
 (defvar cov-lcov-file-name)
 (defvar cov-coverage-file-paths)
-(defvar dape-key-prefix)
-(defvar dape-buffer-window-arrangement)
-(defvar dape-cwd-function)
 (defvar rustic-use-rust-save-some-buffers)
 (defvar rustic-clippy-arguments)
 (defvar rustic-rustfmt-args)
@@ -161,6 +160,7 @@
           "\\*Flymake diagnostics.*\\*"
           help-mode
           compilation-mode))
+  (setq popper-group-function #'popper-group-by-project)
   (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
   (setq popper-display-control nil))
 
@@ -309,13 +309,6 @@
   (setq cov-coverage-mode 'both
         cov-lcov-file-name "coverage/lcov.info"
         cov-coverage-file-paths '("cover" "coverage" ".")))
-
-(with-eval-after-load 'dape
-  (add-hook 'kill-emacs-hook #'dape-breakpoint-save)
-  (add-hook 'dape-start-hook #'save-all-buffers)
-  (setq dape-key-prefix (kbd "C-c C-d")
-        dape-buffer-window-arrangement 'right
-        dape-cwd-function #'projectile-project-root))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Git & VCS
