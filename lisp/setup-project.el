@@ -21,6 +21,7 @@
 (defvar projectile-cache-fallback-directory (sprite-state-path "projectile-cache")
   "Directory used for projectile caches when project root is not writable.")
 
+(setq popper-group-function #'popper-group-by-projectile)
 (setq compilation-save-buffers-predicate #'project-current)
 (setq projectile-use-git-grep t)
 (setq projectile-enable-caching 'persistent)

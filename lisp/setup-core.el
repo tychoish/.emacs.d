@@ -160,7 +160,6 @@
           "\\*Flymake diagnostics.*\\*"
           help-mode
           compilation-mode))
-  (setq popper-group-function #'popper-group-by-project)
   (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
   (setq popper-display-control nil))
 
