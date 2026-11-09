@@ -55,6 +55,10 @@
   :flag "--with-slow-op-timing" :doc "Enable slow operation timing." :consume nil
   :handler (message "[op]: enabling time reporting"))
 
+(register-clix-flag sprite-id
+  :flag "--id" :doc "Specify Emacs instance ID for sprite."
+  :var sprite-cli-instance-id)
+
 (register-clix-flag org-exec
   :flag "--org-exec" :doc "Execute an Org file's Babel blocks."
   :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
@@ -196,10 +200,10 @@
   (cond
    ((eq system-type 'darwin)
     (if (display-graphic-p) 'osx-notifier 'notifier))
-   (alert-libnotify-command
-    'libnotify)
    ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
     'notifications)
+   (alert-libnotify-command
+    'libnotify)
    (t
     'message)))
 

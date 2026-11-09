@@ -380,17 +380,9 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/alert-default-style-linux-dbus ()
   "On Linux with a DBus session bus, alert defaults to notifications."
   (cl-letf (((symbol-value 'system-type) 'gnu/linux)
-            (alert-libnotify-command nil)
             ((symbol-function 'getenv)
              (lambda (var) (when (equal var "DBUS_SESSION_BUS_ADDRESS") "unix:path=/tmp/dbus"))))
     (should (eq (tychoish-alert-default-style) 'notifications))))
-
-(ert-deftest tychoish-core/alert-default-style-prefers-libnotify ()
-  "Prefer libnotify when both it and the DBus session bus are available."
-  (cl-letf (((symbol-value 'system-type) 'gnu/linux)
-            (alert-libnotify-command "/usr/bin/notify-send")
-            ((symbol-function 'getenv) (lambda (_) "unix:path=/tmp/dbus")))
-    (should (eq (tychoish-alert-default-style) 'libnotify))))
 
 (ert-deftest tychoish-core/alert-default-style-linux-libnotify ()
   "On Linux without DBus but with alert-libnotify-command, alert defaults to libnotify."
@@ -420,6 +412,21 @@ correctly and reads from the minibuffer using the candidate's command."
       (tychoish-alert-darwin-server-init)
       (should (eq alert-default-style 'osx-notifier))
       (should-not (memq #'tychoish-alert-darwin-server-init server-after-make-frame-hook)))))
+
+(defvar argi)
+
+(ert-deftest tychoish-core/clix-sprite-id-flag ()
+  "The --id CLI flag sets `sprite-cli-instance-id'."
+  (let ((sprite-cli-instance-id nil)
+        (argi "--id=my-instance"))
+    (should (cli/sprite-id))
+    (should (equal sprite-cli-instance-id "my-instance")))
+  (let ((sprite-cli-instance-id nil)
+        (argi "--id")
+        (command-line-args-left '("other-instance")))
+    (should (cli/sprite-id))
+    (should (equal sprite-cli-instance-id "other-instance"))
+    (should (null command-line-args-left))))
 
 (provide 'test-setup-core)
 ;;; test-setup-core.el ends here
