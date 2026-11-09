@@ -32,9 +32,6 @@
 (defvar popper-echo-dispatch-keys)
 (defvar popper-display-control)
 (defvar popper-group-function)
-(defvar cov-coverage-mode)
-(defvar cov-lcov-file-name)
-(defvar cov-coverage-file-paths)
 (defvar rustic-use-rust-save-some-buffers)
 (defvar rustic-clippy-arguments)
 (defvar rustic-rustfmt-args)
@@ -72,7 +69,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
 
-(autoload 'eglox-describe-symbol-dwim "eglox" nil t)
 (autoload 'projectile-save-project-buffers-picker "setup-project" nil t)
 
 (defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
@@ -123,6 +119,8 @@
 
 (with-eval-after-load 'savehist
   (setq savehist-coding-system 'utf-8-emacs)
+  (add-to-list 'savehist-additional-variables 'denote--title-history)
+  (add-to-list 'savehist-additional-variables 'denote--keywords-history)
   (add-to-list 'savehist-additional-variables 'compile-history))
 
 (with-eval-after-load 'desktop
@@ -208,8 +206,8 @@
 (defun tychoish-alert-darwin-server-init ()
   "Switch `alert-default-style' to `osx-notifier' on first GUI client frame."
   (when (display-graphic-p)
-    (setq alert-default-style 'osx-notifier)
-    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
+    (setq alert-default-style 'osx-notifier))
+    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init))
 
 (with-eval-after-load 'alert
   (setq alert-log-messages nil
@@ -222,42 +220,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Icons & display
 
-(with-eval-after-load 'nerd-icons
-  (add-to-list 'nerd-icons-mode-icon-alist
-               '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))
-
-  (defun ad:nerd-icons-icon-for-buffer-safe (orig &rest args)
-    "Return empty string instead of signaling for an unresolvable buffer icon."
-    (condition-case nil
-	(apply orig args)
-      (error "")))
-
-  (advice-add 'nerd-icons-icon-for-buffer :around #'ad:nerd-icons-icon-for-buffer-safe))
-
-(with-eval-after-load 'nerd-icons-completion
-  (cl-defmethod nerd-icons-completion-get-icon :around (cand (_cat (eql buffer)))
-    "Skip icon lookup when CAND names a killed buffer."
-    (if (buffer-live-p (get-buffer cand))
-        (cl-call-next-method)
-      "")))
-
 (with-eval-after-load 'emojify
-  (setq emojify-emoji-styles '(ascii unicode github)
-        emojify-display-style 'unicode
-        emojify-point-entered-behaviour 'echo))
+  (setq emojify-emoji-styles '(ascii unicode github))
+  (setq emojify-display-style 'unicode)
+  (setq emojify-point-entered-behaviour 'echo))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Shells & communication
+
+(autoload 'eshell-cmpl-initialize "em-cmpl")
+
+(with-eval-after-load 'eshell
+  (add-hook 'eshell-mode-hook #'eshell-cmpl-initialize))
 
 (with-eval-after-load 'comint
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
   (keymap-set comint-mode-map "M-p" #'comint-previous-input)
   (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
   (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
-
-(with-eval-after-load 'eshell
-  (with-eval-after-load "em-cmpl"
-    (add-hook 'eshell-mode-hook #'eshell-cmpl-initialize)))
 
 (with-eval-after-load 'agent-shell
   (require 'setup-agent-shell))
@@ -276,13 +256,6 @@
 (with-eval-after-load 'dired
   (setq ls-lisp-dirs-first t)
   (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
-
-(with-eval-after-load 'anzu
-  (setq anzu-cons-mode-line-p nil)
-  (seq-do #'make-variable-buffer-local
-          '(anzu--total-matched anzu--current-position anzu--state
-            anzu--cached-count anzu--cached-positions anzu--last-command
-            anzu--last-isearch-string anzu--overflow-p)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Build & system tools
@@ -303,11 +276,6 @@
 
 (with-eval-after-load 'slime
   (setq inferior-lisp-program "sbcl"))
-
-(with-eval-after-load 'cov
-  (setq cov-coverage-mode 'both
-        cov-lcov-file-name "coverage/lcov.info"
-        cov-coverage-file-paths '("cover" "coverage" ".")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Git & VCS
@@ -351,6 +319,8 @@
 (with-eval-after-load 'denote
   (when (default-boundp 'denote-directory)
     (setq denote-directory '()))
+
+  (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window)))
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal")
         denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore")
@@ -366,12 +336,6 @@
         denote-sequence-scheme 'alphanumeric
         denote-explore-network-format "graphviz"
         denote-explore-network-graphviz-filetype "svg")
-  (add-to-list 'display-buffer-alist
-	       '("\\`\\*denote-sequence-hierarchy " 
-                 (display-buffer-reuse-window display-buffer-pop-up-window)))
-  (with-eval-after-load 'savehist
-    (add-to-list 'savehist-additional-variables 'denote--title-history)
-    (add-to-list 'savehist-additional-variables 'denote--keywords-history))
 
   (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
   (denote-rename-buffer-mode 1)
@@ -413,20 +377,17 @@
   (setq rust-mode-treesitter-derive t))
 
 (with-eval-after-load 'rustic
-  (setq rustic-lsp-client 'eglot
-        rustic-format-trigger 'on-save
-        rustic-cargo-clippy-trigger-fix 'on-compile
-        rustic-use-rust-save-some-buffers t
-        rustic-clippy-arguments "--all --all-features -- --deny warnings")
+  (setq rustic-lsp-client 'eglot)
+  (setq rustic-format-trigger 'on-save)
+  (setq rustic-cargo-clippy-trigger-fix 'on-compile)
+  (setq rustic-use-rust-save-some-buffers t)
+  (setq rustic-clippy-arguments "--all --all-features -- --deny warnings")
   (when (executable-find "rustup")
     (setq rustic-rustfmt-args "+nightly")))
 
-(with-eval-after-load 'go-ts-mode
-  (keymap-set go-ts-mode-map "C-c C-t c" #'builder-go-coverage-and-convert))
-
 (with-eval-after-load 'terraform-mode
-  (setq terraform-format-on-save t
-        terraform-indent-level 2))
+  (setq terraform-format-on-save t)
+  (setq terraform-indent-level 2))
 
 (with-eval-after-load 'web-mode
   (setq web-mode-markup-indent-offset 2

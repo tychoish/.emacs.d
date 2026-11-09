@@ -71,6 +71,7 @@
 
 (ert-deftest tychoish-core/nerd-icons-registered-modes-resolve ()
   "Every mode we register in nerd-icons-mode-icon-alist resolves without error."
+  (require 'setup-agent-shell)
   (require 'nerd-icons)
   (seq-do (lambda (mode)
             (should-not
@@ -80,7 +81,7 @@
           tychoish-core-test--registered-modes))
 
 (ert-deftest tychoish-core/nerd-icons-icon-for-buffer-degrades-gracefully ()
-  "The safe advice returns a string even when given an unregistered mode."
+  "Icon lookup returns a string even when given an unregistered mode."
   (require 'nerd-icons)
   (with-temp-buffer
     (setq major-mode 'tychoish-core-test--nonexistent-mode-xyz)

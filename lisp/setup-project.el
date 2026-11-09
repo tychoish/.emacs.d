@@ -30,7 +30,6 @@
 (setq projectile-require-project-root nil)
 
 (advice-add 'projectile-project-cache-file :around #'projectile-project-cache-file-fallback)
-(advice-remove 'projectile-serialize 'projectile-serialize-silent-fallback)
 (advice-add 'projectile-purge-file-from-cache :around #'projectile-purge-file-from-cache-debounced)
 
 ;;;###autoload

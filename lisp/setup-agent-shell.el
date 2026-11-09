@@ -15,6 +15,11 @@
 (defvar which-key-replacement-alist)
 (defvar nerd-icons-mode-icon-alist)
 
+(with-eval-after-load 'nerd-icons
+  (unless (assq 'agent-shell-queue-item-view-mode nerd-icons-mode-icon-alist)
+    (add-to-list 'nerd-icons-mode-icon-alist
+                 '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Terse Persona & Environment
 
