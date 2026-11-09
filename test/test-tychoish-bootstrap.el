@@ -11,7 +11,6 @@
 (require 'cl-lib)
 (require 'bootstrap)
 (require 'setup-defaults)
-(require 'setup-package-defaults)
 (require 'setup-project)
 (require 'setup-core)
 
@@ -636,6 +635,7 @@
   "Configure state before recentf and savehist consume their files."
   (require 'recentf)
   (require 'savehist)
+  (require 'sprite-state)
   (let ((recentf-save-file nil)
         (savehist-file nil)
         (sprite-state-locks-enabled nil)
@@ -1079,7 +1079,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 (ert-deftest bootstrap/startup-refreshes-quickstart-only-when-stale ()
   "Startup checks freshness before refreshing the quickstart."
   (require 'package)
-  (require 'setup-package-defaults)
+  (require 'setup-defaults)
   (let ((stale nil)
         (refreshes 0))
     (cl-letf (((symbol-function 'elpaish-install-refresh-package-quickstart)

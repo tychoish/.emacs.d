@@ -33,16 +33,45 @@
 
 ;;; Code:
 
-(require 'sprite)
-(require 'sprite-state)
 (require 'seq)
 (require 'map)
 (require 'subr-x)
 
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
+(declare-function sprite-state-path "sprite")
+(declare-function sprite-instance-name "sprite")
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
+(declare-function elpaish-install-package-quickstart-stale-p "elpaish-install")
+
+(defvar sprite-state-locks-enabled)
+(defvar sprite-state-auto-save-enabled)
+(defvar sprite-state-desktop-enabled)
+(defvar sprite-state-mappings)
+(defvar sprite-startup-operations)
+(defvar sprite-first-frame-operations)
+(defvar sprite-instance-id)
+(defvar mcpkit-instance-name-function)
+(defvar cmdr-opt-in-specs)
+(defvar package-quickstart-file)
+
+(defun bootstrap-initialize-packages ()
+  "Initialize packages from quickstart file, or perform cold bootstrap."
+  (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
+    (cond
+     ((file-exists-p elc)
+      (load elc t t t t))
+     ((file-exists-p package-quickstart-file)
+      (load package-quickstart-file t t t t))
+     (t
+      (require 'package)
+      (package-activate-all)
+      (require 'elpaish-install)
+      (when (elpaish-install-package-quickstart-stale-p)
+        (elpaish-install-packages 'core)))))
+  (require 'sprite)
+  (require 'sprite-state))
 
 (defvar treesit-auto-langs)
 
@@ -214,7 +243,7 @@
 
     (dolist (file (directory-files path :full "\\.el$") nil)
       (let ((name (file-name-sans-extension (file-name-nondirectory file))))
-	(with-sprite-slow-op-timer (format "<init> [user] %s" name)
+	(with-slow-op-timer (format "<init> [user] %s" name)
 	  (require (intern name)))))))
 
 (defun bootstrap-report-startup-timing ()

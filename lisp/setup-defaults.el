@@ -78,5 +78,22 @@
 (when (eq system-type 'gnu/linux)
   (setq read-process-output-max (* 1024 1024)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; package management
+
+(setq package-archives
+      '(("melpa" . "https://melpa.org/packages/")
+        ("elpaish" . "https://tychoish.github.io/elpaish/snapshot/")
+        ("nongnu" . "https://elpa.nongnu.org/nongnu/")
+        ("gnu" . "https://elpa.gnu.org/packages/")
+        ("jcs-elpa" . "https://jcs-emacs.github.io/jcs-elpa/packages/")))
+
+(setq package-archive-priorities '(("melpa" . 100)
+                                   ("nongnu" . 50)
+                                   ("gnu" . 25)
+                                   ("jcs-elpa" . 10)))
+
+(setq package-quickstart-file (file-name-concat user-emacs-directory "state/package-quickstart.el"))
+
 (provide 'setup-defaults)
 ;;; setup-defaults.el ends here

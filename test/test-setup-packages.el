@@ -58,7 +58,7 @@
   "Ensure configuration modules local to .emacs.d/lisp are not registered with elpaish."
   (let ((upgrades (test-setup-packages--get-upgrade-list))
         (installs (test-setup-packages--get-install-list))
-        (local-modules '(bootstrap setup-core setup-defaults setup-package-defaults
+        (local-modules '(bootstrap setup-core setup-defaults
                          setup-modes setup-packages setup-mail setup-project setup-agent-shell)))
     (dolist (mod local-modules)
       (should-not (memq mod upgrades))

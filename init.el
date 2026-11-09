@@ -20,8 +20,11 @@
   (with-slow-op-timer "<init> [local] all"
     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
 
-    (with-slow-op-timer "<init> [local] [packaging] require setup-package-defaults.el"
-      (require 'setup-package-defaults))
+    (with-slow-op-timer "<init> [local] [config] require setup-defaults.el"
+      (require 'setup-defaults))
+
+    (with-slow-op-timer "<init> [local] [config] require bootstrap.el"
+      (require 'bootstrap))
 
     (with-slow-op-timer "<init> [local] [packaging] initialize"
       (bootstrap-initialize-packages))
@@ -30,12 +33,6 @@
       (require 'clix))
 
     (with-slow-op-timer "<init> [local] [config] all"
-      (with-slow-op-timer "<init> [local] [config] require bootstrap.el"
-        (require 'bootstrap))
-
-      (with-slow-op-timer "<init> [local] [config] require setup-defaults.el"
-        (require 'setup-defaults))
-
       (with-slow-op-timer "<init> [local] [config] require setup-modes.el"
         (require 'setup-modes))
 
