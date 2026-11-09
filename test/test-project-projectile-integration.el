@@ -45,11 +45,13 @@
 
 (ert-deftest project-projectile/project-current-uses-projectile-when-mode-on ()
   "Enabling projectile-mode adds project-projectile to project-find-functions."
-  (unwind-protect
-      (progn
-        (projectile-mode 1)
-        (should (member #'project-projectile project-find-functions)))
-    (projectile-mode -1)))
+  (let ((was-on (bound-and-true-p projectile-mode)))
+    (unwind-protect
+        (progn
+          (unless was-on (projectile-mode 1))
+          (should (member #'project-projectile project-find-functions)))
+      (unless was-on
+        (projectile-mode -1)))))
 
 ;; ---------------------------------------------------------------------------
 ;; project-root delegates to projectile

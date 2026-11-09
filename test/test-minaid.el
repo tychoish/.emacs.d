@@ -62,54 +62,65 @@
   (should (fboundp 'corfu-quick-jump))
   (should (fboundp 'corfu-quick-complete))
   (should (fboundp 'corfu-quick-insert))
-  (minaid-mode 1)
-  (unwind-protect
-      (progn
-        (should (eq (keymap-lookup corfu-map "C-j") #'corfu-quick-jump))
-        (should (eq (keymap-lookup corfu-map "C-<tab>") #'corfu-quick-complete))
-        (should (eq (keymap-lookup corfu-map "C-<return>") #'corfu-quick-insert)))
-    (minaid-mode -1)))
+  (let ((was-on minaid-mode))
+    (unwind-protect
+        (progn
+          (unless was-on (minaid-mode 1))
+          (should (eq (keymap-lookup corfu-map "C-j") #'corfu-quick-jump))
+          (should (eq (keymap-lookup corfu-map "C-<tab>") #'corfu-quick-complete))
+          (should (eq (keymap-lookup corfu-map "C-<return>") #'corfu-quick-insert)))
+      (unless was-on
+        (minaid-mode -1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Mode Lifecycle Tests
 
 (ert-deftest minaid-test/lifecycle-toggle ()
   "Test that enabling and disabling minaid-mode toggles settings symmetrically."
-  (let ((orig-styles completion-styles)
-        (orig-overrides completion-category-overrides)
-        (orig-xref-xrefs xref-show-xrefs-function)
-        (orig-xref-defs xref-show-definitions-function)
-        (orig-marginalia-hooks (copy-sequence marginalia-mode-hook))
-        (orig-corfu-hooks (copy-sequence corfu-mode-hook)))
-    ;; Enable mode
-    (minaid-mode 1)
-    (should minaid-mode)
-    (should global-corfu-mode)
-    (should (equal completion-styles '(orderless basic)))
-    (should (assq 'file completion-category-overrides))
-    (should (eq xref-show-xrefs-function 'consult-xref))
-    (should (eq xref-show-definitions-function 'consult-xref))
-    (should (memq #'minaid-elisp-capf-setup emacs-lisp-mode-hook))
-    (should (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
-    (should (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))
-    (should (memq #'minaid-corfu-agent-shell-setup agent-shell-mode-hook))
-    (should (eq (lookup-key minaid-mode-map (kbd "C-.")) #'embark-act))
+  (let ((was-on minaid-mode))
+    (unwind-protect
+        (progn
+          (when was-on
+            (minaid-mode -1))
+          (let ((orig-styles completion-styles)
+                (orig-overrides completion-category-overrides)
+                (orig-xref-xrefs (and (boundp 'xref-show-xrefs-function) xref-show-xrefs-function))
+                (orig-xref-defs (and (boundp 'xref-show-definitions-function) xref-show-definitions-function))
+                (orig-marginalia-hooks (copy-sequence marginalia-mode-hook))
+                (orig-corfu-hooks (copy-sequence corfu-mode-hook)))
+            ;; Enable mode
+            (minaid-mode 1)
+            (should minaid-mode)
+            (should global-corfu-mode)
+            (should (equal completion-styles '(orderless basic)))
+            (should (assq 'file completion-category-overrides))
+            (should (eq xref-show-xrefs-function 'consult-xref))
+            (should (eq xref-show-definitions-function 'consult-xref))
+            (should (memq #'minaid-elisp-capf-setup emacs-lisp-mode-hook))
+            (should (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
+            (should (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))
+            (should (memq #'minaid-corfu-agent-shell-setup agent-shell-mode-hook))
+            (should (eq (lookup-key minaid-mode-map (kbd "C-.")) #'embark-act))
 
-    ;; Disable mode
-    (minaid-mode -1)
-    (should-not minaid-mode)
-    (should-not global-corfu-mode)
-    (should (equal completion-styles orig-styles))
-    (should (equal completion-category-overrides orig-overrides))
-    (should (eq xref-show-xrefs-function orig-xref-xrefs))
-    (should (eq xref-show-definitions-function orig-xref-defs))
-    (should-not (memq #'minaid-elisp-capf-setup emacs-lisp-mode-hook))
-    (should-not (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
-    (should-not (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))
-    (should-not (memq #'minaid-corfu-agent-shell-setup agent-shell-mode-hook))
-    (should-not (memq #'corfu-history-mode corfu-mode-hook))
-    (should-not (memq #'corfu-indexed-mode corfu-mode-hook))
-    (should-not (memq #'corfu-popupinfo-mode corfu-mode-hook))))
+            ;; Disable mode
+            (minaid-mode -1)
+            (should-not minaid-mode)
+            (should-not global-corfu-mode)
+            (should (equal completion-styles orig-styles))
+            (should (equal completion-category-overrides orig-overrides))
+            (should (eq xref-show-xrefs-function orig-xref-xrefs))
+            (should (eq xref-show-definitions-function orig-xref-defs))
+            (should-not (memq #'minaid-elisp-capf-setup emacs-lisp-mode-hook))
+            (should-not (memq #'minaid-corfu-prog-mode-setup prog-mode-hook))
+            (should-not (memq #'minaid-corfu-prog-mode-setup comint-mode-hook))
+            (should-not (memq #'minaid-corfu-agent-shell-setup agent-shell-mode-hook))
+            (should-not (memq #'corfu-history-mode corfu-mode-hook))
+            (should-not (memq #'corfu-indexed-mode corfu-mode-hook))
+            (should-not (memq #'corfu-popupinfo-mode corfu-mode-hook))))
+      (if was-on
+          (minaid-mode 1)
+        (when minaid-mode
+          (minaid-mode -1))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Capf Configuration & Dispatch Tests
@@ -203,17 +214,20 @@
 
 (ert-deftest minaid-test/corfu-enabled-in-all-buffers ()
   "Test that minaid-mode enables corfu in text, prog, fundamental, comint buffers."
-  (let ((noninteractive nil))
-    (minaid-mode 1)
+  (let ((noninteractive nil)
+        (was-on minaid-mode))
     (unwind-protect
-        (dolist (mode '(fundamental-mode text-mode prog-mode comint-mode))
-          (let ((buf (generate-new-buffer (format "test-corfu-%s" mode))))
-            (unwind-protect
-                (with-current-buffer buf
-                  (funcall mode)
-                  (should corfu-mode))
-              (kill-buffer buf))))
-      (minaid-mode -1))))
+        (progn
+          (unless was-on (minaid-mode 1))
+          (dolist (mode '(fundamental-mode text-mode prog-mode comint-mode))
+            (let ((buf (generate-new-buffer (format "test-corfu-%s" mode))))
+              (unwind-protect
+                  (with-current-buffer buf
+                    (funcall mode)
+                    (should corfu-mode))
+                (kill-buffer buf)))))
+      (unless was-on
+        (minaid-mode -1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Completion In-Region Wrapper Tests
@@ -239,14 +253,19 @@
 
 (ert-deftest minaid-test/minibuffer-and-isearch-bindings ()
   "Test that minaid binds built-in minibuffer-local-map and isearch-mode-map at top level."
-  (minaid-mode 1)
-  (should (eq (lookup-key minibuffer-local-map (kbd "M-s")) #'consult-history))
-  (should (eq (lookup-key minibuffer-local-map (kbd "M-r")) #'consult-history))
-  (should (eq (lookup-key minibuffer-local-map (kbd "C-c a")) #'marginalia-cycle))
-  (should (eq (lookup-key isearch-mode-map (kbd "M-e")) #'consult-isearch-history))
-  (should (eq (lookup-key isearch-mode-map (kbd "M-s e")) #'consult-isearch-history))
-  (should (eq (lookup-key isearch-mode-map (kbd "M-s l")) #'consult-line))
-  (should (eq (lookup-key isearch-mode-map (kbd "M-s L")) #'consult-line-multi)))
+  (let ((was-on minaid-mode))
+    (unwind-protect
+        (progn
+          (unless was-on (minaid-mode 1))
+          (should (eq (lookup-key minibuffer-local-map (kbd "M-s")) #'consult-history))
+          (should (eq (lookup-key minibuffer-local-map (kbd "M-r")) #'consult-history))
+          (should (eq (lookup-key minibuffer-local-map (kbd "C-c a")) #'marginalia-cycle))
+          (should (eq (lookup-key isearch-mode-map (kbd "M-e")) #'consult-isearch-history))
+          (should (eq (lookup-key isearch-mode-map (kbd "M-s e")) #'consult-isearch-history))
+          (should (eq (lookup-key isearch-mode-map (kbd "M-s l")) #'consult-line))
+          (should (eq (lookup-key isearch-mode-map (kbd "M-s L")) #'consult-line-multi)))
+      (unless was-on
+        (minaid-mode -1)))))
 
 (ert-deftest minaid-test/cmdr-documentation-bindings ()
   "The cmdr ecosystem plugin exposes the Consult documentation commands."
@@ -265,51 +284,47 @@
 
 (ert-deftest minaid-test/minibuffer-and-completion-settings-lifecycle ()
   "Settings managed by `minaid-mode' are applied on enable and restored on teardown."
-  (let ((saved-recursive enable-recursive-minibuffers)
-        (saved-cycle completion-cycle-threshold)
-        (saved-ignore completion-ignore-case)
-        (saved-buf-ignore read-buffer-completion-ignore-case)
-        (saved-file-ignore read-file-name-completion-ignore-case)
-        (saved-pred read-extended-command-predicate)
-        (saved-ispell text-mode-ispell-word-completion)
-        (saved-props minibuffer-prompt-properties)
-        (saved-kill-transform (and (boundp 'kill-transform-function) kill-transform-function)))
+  (let ((was-on minaid-mode))
     (unwind-protect
         (progn
-          (minaid--configure-minibuffer)
-          (should (eq enable-recursive-minibuffers t))
-          (should (equal minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt)))
-          (should (eq text-mode-ispell-word-completion nil))
-          (should (= completion-cycle-threshold 2))
-          (should (eq completion-ignore-case t))
-          (should (eq read-buffer-completion-ignore-case t))
-          (should (eq read-file-name-completion-ignore-case t))
-          (should (eq read-extended-command-predicate #'command-completion-default-include-p))
-          (should (functionp kill-transform-function))
-          (should-not (funcall kill-transform-function ""))
-          (should (equal (funcall kill-transform-function "valid") "valid"))
-          (minaid--restore-minibuffer)
-          (should (eq enable-recursive-minibuffers saved-recursive))
-          (should (eq completion-cycle-threshold saved-cycle))
-          (should (eq completion-ignore-case saved-ignore))
-          (should (eq read-buffer-completion-ignore-case saved-buf-ignore))
-          (should (eq read-file-name-completion-ignore-case saved-file-ignore))
-          (should (eq read-extended-command-predicate saved-pred))
-          (should (eq text-mode-ispell-word-completion saved-ispell))
-          (should (equal minibuffer-prompt-properties saved-props))
-          (should (eq (and (boundp 'kill-transform-function) kill-transform-function)
-                      saved-kill-transform)))
-      ;; Safety cleanup
-      (setq enable-recursive-minibuffers saved-recursive
-            completion-cycle-threshold saved-cycle
-            completion-ignore-case saved-ignore
-            read-buffer-completion-ignore-case saved-buf-ignore
-            read-file-name-completion-ignore-case saved-file-ignore
-            read-extended-command-predicate saved-pred
-            text-mode-ispell-word-completion saved-ispell
-            minibuffer-prompt-properties saved-props
-            kill-transform-function saved-kill-transform)
-      (setq minaid--saved-minibuffer-settings nil))))
+          (when was-on
+            (minaid-mode -1))
+          (let ((saved-recursive enable-recursive-minibuffers)
+                (saved-cycle completion-cycle-threshold)
+                (saved-ignore completion-ignore-case)
+                (saved-buf-ignore read-buffer-completion-ignore-case)
+                (saved-file-ignore read-file-name-completion-ignore-case)
+                (saved-pred read-extended-command-predicate)
+                (saved-ispell text-mode-ispell-word-completion)
+                (saved-props minibuffer-prompt-properties)
+                (saved-kill-transform (and (boundp 'kill-transform-function) kill-transform-function)))
+            (minaid--configure-minibuffer)
+            (should (eq enable-recursive-minibuffers t))
+            (should (equal minibuffer-prompt-properties '(read-only t cursor-intangible t face minibuffer-prompt)))
+            (should (eq text-mode-ispell-word-completion nil))
+            (should (= completion-cycle-threshold 2))
+            (should (eq completion-ignore-case t))
+            (should (eq read-buffer-completion-ignore-case t))
+            (should (eq read-file-name-completion-ignore-case t))
+            (should (eq read-extended-command-predicate #'command-completion-default-include-p))
+            (should (functionp kill-transform-function))
+            (should-not (funcall kill-transform-function ""))
+            (should (equal (funcall kill-transform-function "valid") "valid"))
+            (minaid--restore-minibuffer)
+            (should (eq enable-recursive-minibuffers saved-recursive))
+            (should (eq completion-cycle-threshold saved-cycle))
+            (should (eq completion-ignore-case saved-ignore))
+            (should (eq read-buffer-completion-ignore-case saved-buf-ignore))
+            (should (eq read-file-name-completion-ignore-case saved-file-ignore))
+            (should (eq read-extended-command-predicate saved-pred))
+            (should (eq text-mode-ispell-word-completion saved-ispell))
+            (should (equal minibuffer-prompt-properties saved-props))
+            (should (eq (and (boundp 'kill-transform-function) kill-transform-function)
+                        saved-kill-transform))))
+      (if was-on
+          (minaid-mode 1)
+        (when minaid-mode
+          (minaid-mode -1))))))
 
 (provide 'test-minaid)
 ;;; test-minaid.el ends here

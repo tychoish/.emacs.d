@@ -755,12 +755,17 @@
 ;;; delight mode lighters
 
 (defmacro bootstrap-test/with-delight-applied (&rest body)
-  "Run BODY after ensuring delight lighters are applied."
+  "Run BODY after ensuring delight lighters are applied, restoring previous mode state."
   (declare (indent 0))
-  `(progn
-     (require 'hud-modeline)
-     (hud-modeline-mode 1)
-     ,@body))
+  `(let ((was-on (bound-and-true-p hud-modeline-mode)))
+     (unwind-protect
+         (progn
+           (require 'hud-modeline)
+           (unless was-on (hud-modeline-mode 1))
+           ,@body)
+       (unless was-on
+         (when (bound-and-true-p hud-modeline-mode)
+           (hud-modeline-mode -1))))))
 
 (ert-deftest bootstrap/delight-fundamental-mode-name ()
   "fundamental-mode sets mode-name lighter to \"fun\" after delight runs.
