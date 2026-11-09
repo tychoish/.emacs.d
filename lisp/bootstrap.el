@@ -37,6 +37,7 @@
 (require 'map)
 (require 'subr-x)
 
+(declare-function package-activate-all "package")
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
 (declare-function sprite-state-path "sprite")
@@ -65,13 +66,9 @@
      ((file-exists-p package-quickstart-file)
       (load package-quickstart-file t t t t))
      (t
-      (require 'package)
       (package-activate-all)
-      (require 'elpaish-install)
       (when (elpaish-install-package-quickstart-stale-p)
-        (elpaish-install-packages 'core)))))
-  (require 'sprite)
-  (require 'sprite-state))
+        (elpaish-install-packages 'core))))))
 
 (defvar treesit-auto-langs)
 
