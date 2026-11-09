@@ -328,7 +328,7 @@ correctly and reads from the minibuffer using the candidate's command."
   (require 'gptel)
   (should (gptel-openai-oauth-p (default-value 'gptel-backend)))
   (should (eq (default-value 'gptel-model) 'gpt-6.1-terra))
-  (should (gptel-get-backend "Copilot"))
+  (should (gptel-get-backend "gh-copilot"))
   (should (memq 'gpt-6.1-terra (gptel-backend-models (default-value 'gptel-backend))))
   (with-temp-buffer
     (setq-local gptel-model 'local-test-model)
@@ -377,10 +377,18 @@ correctly and reads from the minibuffer using the candidate's command."
     (should (eq (tychoish-alert-default-style) 'notifier))))
 
 (ert-deftest tychoish-core/alert-default-style-linux-dbus ()
-  "On Linux with a DBus session bus, alert defaults to notifications."
+  "On Linux, prefer libnotify even when a DBus session bus exists."
   (cl-letf (((symbol-value 'system-type) 'gnu/linux)
+            (alert-libnotify-command "/usr/bin/notify-send")
             ((symbol-function 'getenv)
              (lambda (var) (when (equal var "DBUS_SESSION_BUS_ADDRESS") "unix:path=/tmp/dbus"))))
+    (should (eq (tychoish-alert-default-style) 'libnotify))))
+
+(ert-deftest tychoish-core/alert-default-style-linux-dbus-fallback ()
+  "Use DBus notifications when notify-send is unavailable."
+  (cl-letf (((symbol-value 'system-type) 'gnu/linux)
+            (alert-libnotify-command nil)
+            ((symbol-function 'getenv) (lambda (_) "unix:path=/tmp/dbus")))
     (should (eq (tychoish-alert-default-style) 'notifications))))
 
 (ert-deftest tychoish-core/alert-default-style-linux-libnotify ()
