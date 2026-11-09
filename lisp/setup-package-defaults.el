@@ -8,10 +8,6 @@
 
 (require 'seq)
 
-(defvar autoload-compute-prefixes)
-
-(setq autoload-compute-prefixes nil)
-
 (setq package-archives
       '(("melpa" . "https://melpa.org/packages/")
         ("elpaish" . "https://tychoish.github.io/elpaish/snapshot/")
@@ -32,27 +28,16 @@
 
 (defun bootstrap-initialize-packages ()
   "Initialize packages from quickstart file, or perform cold bootstrap."
-  (let ((quickstart-target (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
-                             (if (file-exists-p elc) elc package-quickstart-file))))
-    (if (file-exists-p quickstart-target)
-        (load quickstart-target t t t t)
+  (let* ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc"))
+         (target (cond ((file-exists-p elc) elc)
+                       ((file-exists-p package-quickstart-file) package-quickstart-file))))
+    (if target
+        (load target t t t t)
       (require 'package)
       (package-activate-all)
-      (unless (package-installed-p 'elpaish)
-        (package-install 'elpaish))
-      (require 'setup-packages)
-      (elpaish-install-packages :sync t)
-      (elpaish-install-refresh-package-quickstart t))))
-
-(defun bootstrap-package-quickstart-stale-p ()
-  "Return non-nil when quickstart file or its .elc is missing or stale."
-  (elpaish-install-package-quickstart-stale-p))
-
-(defun bootstrap-refresh-package-quickstart (&optional force)
-  "Regenerate `package-quickstart-file' and clear the debounce timer.
-When FORCE is nil, do nothing unless quickstart file is stale."
-  (interactive "P")
-  (elpaish-install-refresh-package-quickstart force))
+      (require 'elpaish-install)
+      (when (elpaish-install-package-quickstart-stale-p)
+        (elpaish-install-packages 'core)))))
 
 (provide 'setup-package-defaults)
 ;;; setup-package-defaults.el ends here

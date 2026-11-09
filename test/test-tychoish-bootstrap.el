@@ -1064,10 +1064,11 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 (ert-deftest bootstrap/package-quickstart-stale-p-detects-missing-elc ()
   "Test that stale-p returns non-nil when the .elc file is missing."
+  (require 'elpaish-install)
   (let* ((tmp-el (make-temp-file "test-qs-" nil ".el"))
          (package-quickstart-file tmp-el))
     (unwind-protect
-        (should (bootstrap-package-quickstart-stale-p))
+        (should (elpaish-install-package-quickstart-stale-p))
       (when (file-exists-p tmp-el) (delete-file tmp-el)))))
 
 (ert-deftest bootstrap/startup-refreshes-quickstart-only-when-stale ()

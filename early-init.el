@@ -67,7 +67,6 @@ call in the main synchronous init path would go unmeasured.")
 (setq package-quickstart t)
 (setq package-enable-at-startup nil)
 (setq use-package-expand-minimally t)
-(setq autoload-compute-prefixes nil)
 (setq load-prefer-newer t)
 
 (push '(tool-bar-lines . 0) default-frame-alist)

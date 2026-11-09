@@ -41,6 +41,8 @@
 
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
+(declare-function elpaish-install-packages "elpaish-install")
+(declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
 
 (defvar treesit-auto-langs)
 
@@ -172,7 +174,7 @@
 (defun bootstrap-require-treesit-auto () (require 'treesit-auto))
 (defun bootstrap-silent-savehist () (let ((inhibit-message t) (message-log-max nil)) (savehist-mode 1)))
 (defun bootstrap-silent-recentf () (let ((inhibit-message t) (message-log-max nil)) (recentf-mode 1)))
-(defun bootstrap-package-quickstart () (bootstrap-refresh-package-quickstart nil))
+(defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
