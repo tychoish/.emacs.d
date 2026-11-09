@@ -30,7 +30,7 @@
 (setq projectile-require-project-root nil)
 
 (advice-add 'projectile-project-cache-file :around #'projectile-project-cache-file-fallback)
-(advice-add 'projectile-serialize :around #'projectile-serialize-silent-fallback)
+(advice-remove 'projectile-serialize 'projectile-serialize-silent-fallback)
 (advice-add 'projectile-purge-file-from-cache :around #'projectile-purge-file-from-cache-debounced)
 
 ;;;###autoload
@@ -74,15 +74,6 @@
           in-tree
         (projectile-cache--fallback-file norm-root)))))
 
-(defun projectile-serialize-silent-fallback (orig-fn data filename)
-  "Silently serialize DATA to fallback file when FILENAME is not writable."
-  (if (file-writable-p filename)
-      (funcall orig-fn data filename)
-    (let ((fallback-file (projectile-cache--fallback-file filename)))
-      (when (file-writable-p fallback-file)
-        (with-temp-file fallback-file
-          (insert (let (print-length) (prin1-to-string data))))))))
-
 (defun projectile-purge-file-from-cache-debounced (_orig-fn file)
   "Purge FILE from cache with debounced idle flush.
 Replaces synchronous serialization with `projectile--schedule-cache-flush'."
@@ -100,10 +91,13 @@ Replaces synchronous serialization with `projectile--schedule-cache-flush'."
 (cl-defun projectile--run-incrementally (fn items &key label delay on-done (progress-interval 10))
   "Call FN on each of ITEMS cooperatively via `gen-run-async'.
 FN returns non-nil when the item counted as handled.  LABEL names the
-operation in progress messages.  Calls ON-DONE with the handled count."
+operation in progress messages.  Calls ON-DONE with the handled count,
+or nil if an item fails.  Returns a `gen-run-async' handle for
+cancellation, pausing, and progress queries."
   (let ((total (length items))
         (count 0)
-        (processed 0))
+        (processed 0)
+        (failed nil))
     (gen-run-async
      (lambda (item)
        (when (funcall fn item)
@@ -116,11 +110,15 @@ operation in progress messages.  Calls ON-DONE with the handled count."
      items
      :name label
      :delay (or delay 0.0)
+     :run-after (or delay 0.0)
      :on-done (lambda ()
-                (message "%s: handled %d of %d." label count total)
+                (if failed
+                    (message "%s: failed after handling %d of %d." label count total)
+                  (message "%s: handled %d of %d." label count total))
                 (when on-done
-                  (funcall on-done count)))
+                  (funcall on-done (unless failed count))))
      :on-error (lambda (err)
+                 (setq failed t)
                  (message "%s: error %S" label err)))))
 
 (defun projectile--set-mode-in-buffer (arg buf)
@@ -174,7 +172,8 @@ operation in progress messages.  Calls ON-DONE with the handled count."
 (cl-defun projectile-session-restore-async (&optional project &key delay on-done)
   "Restore PROJECT's (default: current) saved session buffers without blocking."
   (interactive)
-  (let* ((root (or project (projectile-project-root)))
+  (let* ((frame (selected-frame))
+         (root (or project (projectile-project-root)))
          (data (and root (projectile-session--read root))))
     (cond
      (data
@@ -185,10 +184,12 @@ operation in progress messages.  Calls ON-DONE with the handled count."
        :label (format "Restoring session for %s" root)
        :delay delay :progress-interval nil
        :on-done (lambda (count)
-                  (when-let* ((state (plist-get data :window-state)))
+                  (when-let* ((count)
+                              ((frame-live-p frame))
+                              (state (plist-get data :window-state)))
                     (condition-case err
                         (window-state-put (projectile-session--sanitize-window-state state)
-                                          (frame-root-window) 'safe)
+                                          (frame-root-window frame) 'safe)
                       (error
                        (message "projectile-session: could not restore window layout: %S" err))))
                   (when on-done
@@ -203,14 +204,15 @@ operation in progress messages.  Calls ON-DONE with the handled count."
   "Remove paths matching PRED from PROJECT's cache without blocking.
 Calls PRED on each cached path.  When PRED returns non-nil, the path is purged.
 LABEL names the operation in progress messages.  ON-DONE is called with
-the count of purged files."
+the count of purged files, or nil if the purge could not be committed."
   (let* ((root (or project (projectile-project-root)))
          (cache (and root (map-elt projectile-projects-cache root))))
     (unless root
       (user-error "Not in a project"))
     (unless cache
       (user-error "No cache found for project %s" root))
-    (let* ((chunks (seq-partition cache (max 1 chunk-size)))
+    (let* ((snapshot (copy-sequence cache))
+           (chunks (seq-partition snapshot (max 1 chunk-size)))
            (kept-chunks nil)
            (purged-count 0))
       (projectile--run-incrementally
@@ -223,21 +225,29 @@ the count of purged files."
        :label (or label (format "Purging cache for %s" (projectile-project-name root)))
        :delay delay
        :progress-interval progress-interval
-       :on-done (lambda (_count)
-                  (if (zerop purged-count)
-                      (when on-done (funcall on-done 0))
+       :on-done (lambda (count)
+                  (cond
+                   ((or (null count)
+                        (not (equal snapshot (map-elt projectile-projects-cache root))))
+                    (message "Cache purge for %s aborted: %s" root
+                             (if count "cache changed during purge" "an item failed"))
+                    (when on-done (funcall on-done nil)))
+                   ((zerop purged-count)
+                    (when on-done (funcall on-done 0)))
+                   (t
                     (let ((new-cache (apply #'nconc (nreverse kept-chunks))))
                       (setf (map-elt projectile-projects-cache root) new-cache)
                       (when (projectile-persistent-cache-p)
                         (projectile--schedule-cache-flush root))
                       (projectile--maybe-watch-project root new-cache)
                       (when on-done
-                        (funcall on-done purged-count)))))))))
+                        (funcall on-done purged-count))))))))))
 
 ;;;###autoload
 (cl-defun projectile-purge-dir-from-cache (dir &key delay on-done (chunk-size 1000) (progress-interval 1))
-  "Purge DIR from the cache of the current project cooperatively without blocking.
-Optionally accepts DELAY, ON-DONE callback, CHUNK-SIZE, and PROGRESS-INTERVAL."
+  "Purge DIR from the current project's cache cooperatively.
+ON-DONE receives the purge count, or nil if the operation fails.
+Return a `gen-run-async' handle."
   (interactive
    (list (projectile-completing-read
           "Remove directory from cache: "
@@ -250,29 +260,32 @@ Optionally accepts DELAY, ON-DONE callback, CHUNK-SIZE, and PROGRESS-INTERVAL."
      :label (format "Purging %s from %s" dir (projectile-project-name root))
      :delay delay :chunk-size chunk-size :progress-interval progress-interval
      :on-done (lambda (count)
-                (message "Purged %s from %s (%d files removed)."
-                         dir (projectile-project-name root) count)
+                (when count
+                  (message "Purged %s from %s (%d files removed)."
+                           dir (projectile-project-name root) count))
                 (when on-done
                   (funcall on-done count))))))
 
 ;;;###autoload
 (cl-defun projectile-purge-files-from-cache (files &optional project &key delay on-done (chunk-size 1000) (progress-interval 1))
-  "Purge FILES from PROJECT's cache cooperatively without blocking."
+  "Purge FILES from PROJECT's cache cooperatively.
+ON-DONE receives the purge count, or nil if the operation fails.
+Return a `gen-run-async' handle."
   (interactive
    (list (completing-read-multiple
           "Remove files from cache (comma-separated): "
           (projectile-current-project-files))))
   (let* ((root (or project (projectile-project-root)))
          (file-set (make-hash-table :test #'equal)))
-    (dolist (f files)
-      (setf (map-elt file-set f) t))
+    (seq-do (lambda (file) (setf (map-elt file-set file) t)) files)
     (projectile--filter-cache-incrementally
      (lambda (f) (map-elt file-set f))
      root
      :label (format "Purging files from %s" (projectile-project-name root))
      :delay delay :chunk-size chunk-size :progress-interval progress-interval
      :on-done (lambda (count)
-                (message "Purged %d files from %s." count (projectile-project-name root))
+                (when count
+                  (message "Purged %d files from %s." count (projectile-project-name root)))
                 (when on-done
                   (funcall on-done count))))))
 

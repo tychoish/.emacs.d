@@ -168,14 +168,14 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
       (when (file-exists-p cache-file)
         (delete-file cache-file)))))
 
-(ert-deftest project-projectile/serialize-silent-on-non-writable ()
-  "projectile-serialize silently writes to fallback if passed a non-writable path directly."
+(ert-deftest project-projectile/serialize-warns-on-non-writable ()
+  "Unwritable non-cache data is not silently redirected to an unread path."
   (let* ((bad-file "/usr/lib/go/src/.unwritable-test-cache.eld")
          (warned nil))
     (cl-letf (((symbol-function 'display-warning)
                (lambda (&rest _) (setq warned t))))
       (projectile-serialize '("test") bad-file)
-      (should-not warned))))
+      (should warned))))
 ;; ---------------------------------------------------------------------------
 ;; incremental helpers
 
@@ -224,7 +224,8 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
   "Each saved buffer is recreated and the window state is restored once."
   (let ((done nil)
         (recreated nil)
-        (window-put nil))
+        (window-put nil)
+        (original-window (frame-root-window (selected-frame))))
     (cl-letf (((symbol-function 'message) #'ignore)
               ((symbol-function 'projectile-session--read)
                (lambda (_) (list :buffers '(a b) :window-state 'ws)))
@@ -236,7 +237,8 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
       (project-test--wait (lambda () done)))
     (should (equal done 2))
     (should (equal (nreverse recreated) '(a b)))
-    (should (eq (car window-put) 'ws))))
+    (should (eq (car window-put) 'ws))
+    (should (eq (cadr window-put) original-window))))
 
 (ert-deftest project-projectile/session-restore-async-no-session ()
   "Without saved data, noninteractive calls are silent no-ops."
