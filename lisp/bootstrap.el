@@ -55,14 +55,6 @@
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
 
-(autoload 'overmark-global-mode "overmark" "Highlight annotations in text buffers." t)
-(autoload 'eglox-global-mode "eglox" "Global minor mode managing Eglot LSP lifecycle." t)
-(autoload 'telegax-global-mode "telegax" "Global minor mode anchoring the Telega prefix keys." t)
-(autoload 'grepx-mode "grepx" "Minor mode for persistent grepx search buffers." t)
-(autoload 'chex-global-mode "chex" "Global checking and spelling mode." t)
-(autoload 'hud-modeline-mode "hud-modeline" "Minor mode for lightweight HUD modeline." t)
-(autoload 'daemons-dash "daemons-dash" "Dashboard for systemd, docker, and sprite daemons." t)
-
 (autoload 'tychoish-mail-select-account "setup-mail" nil t)
 (autoload 'tychoish-define-mail-account "setup-mail")
 (autoload 'tychoish-mail-add-refile-rule "setup-mail")
