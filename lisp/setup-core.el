@@ -103,7 +103,7 @@
 (with-eval-after-load 'elec-pair
   (add-to-list 'electric-pair-pairs '(?< . ?>))
   (add-to-list 'electric-pair-pairs '(?{ . ?}))
-  (add-to-list 'electric-pair-pairs '(?[ . ?])))
+  (add-to-list 'electric-pair-pairs '(?\[ . ?\])))
 
 (with-eval-after-load 'savehist
   (setq savehist-coding-system 'utf-8-emacs)
@@ -163,10 +163,10 @@
 
 (with-eval-after-load 'modus-themes
   (setq modus-themes-deuteranopia t)
-  (setq modus-themes-common-palette-overrides)
-  (setq '((border-mode-line-active bg-mode-line-active)
+  (setq modus-themes-common-palette-overrides
+        '((border-mode-line-active bg-mode-line-active)
           (border-mode-line-inactive bg-mode-line-inactive)
-          (message-separator bg-main)))
+          (message-separator bg-main))))
 
 (defun tychoish-alert-default-style ()
   "Determine the preferred `alert' style for the current environment."
@@ -189,7 +189,7 @@
 (with-eval-after-load 'alert
   (setq alert-log-messages nil)
   (setq alert-fade-time 15)
-  (setq alert-default-style (tychoish-alert-default-style)))
+  (setq alert-default-style (tychoish-alert-default-style))
 
   (when (and (eq system-type 'darwin) (daemonp))
     (add-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
@@ -199,8 +199,7 @@
 
 (with-eval-after-load 'emojify
   (setq emojify-emoji-styles '(ascii unicode github))
-  (setq emojify-display-style 'unicode)
-  (setq emojify-point-entered-behaviour 'echo))
+  (setq emojify-display-style 'unicode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Shells & communication
@@ -231,7 +230,6 @@
 (keymap-set isearch-mode-map "C-o" #'isearch-occur)
 
 (with-eval-after-load 'dired
-  (setq ls-lisp-dirs-first t)
   (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -376,7 +374,6 @@
 
 (with-eval-after-load 'ollama-tailnet
   (setq ollama-tailnet-fallback-strategy :auto-local)
-  (ollama-tailnet-setup-laptop-presets)
   (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
 
 (with-eval-after-load 'gptel
