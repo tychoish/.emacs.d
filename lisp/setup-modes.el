@@ -10,7 +10,6 @@
 (require 'seq)
 (require 'subr-x)
 
-(declare-function dired-async-mode "dired-async")
 (declare-function nerd-icons-dired-mode "nerd-icons-dired")
 (declare-function sqlite-extras-minor-mode "sqlite-extras")
 (declare-function orgx-mode-turn-on "orgx")
@@ -134,7 +133,6 @@ resets point to column 0 outside of definition-list context."
     (setq-local compilation-ask-about-save nil)))
 
 ;;; Direct mode hooks
-(add-hook 'dired-mode-hook #'dired-async-mode)
 (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
 (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
 (add-hook 'LaTeX-mode-hook #'turn-on-reftex)
