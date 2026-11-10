@@ -100,22 +100,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Core & UI systems
 
-(defvar electric-pair-inhibition nil)
-(defvar electric-pair-eagerness t)
-
-(create-toggle-functions electric-pair-inhibition)
-
-(defun setup-electric-pair-inhibition (char)
-  (if electric-pair-inhibition
-      nil
-    (if electric-pair-eagerness
-        (electric-pair-default-inhibit char)
-      (electric-pair-conservative-inhibit char))))
-
 (with-eval-after-load 'elec-pair
-  (setq electric-indent-chars '(?\n ?:))
-  (setq electric-pair-inhibit-predicate #'setup-electric-pair-inhibition)
-  (add-to-list 'electric-pair-pairs '(?< . ?>)))
+  (add-to-list 'electric-pair-pairs '(?< . ?>))
+  (add-to-list 'electric-pair-pairs '(?{ . ?}))
+  (add-to-list 'electric-pair-pairs '(?[ . ?])))
 
 (with-eval-after-load 'savehist
   (setq savehist-coding-system 'utf-8-emacs)
@@ -162,34 +150,23 @@
   (setq popper-display-control nil))
 
 (with-eval-after-load 'whitespace
-  (setq whitespace-style
-        '(face
-          trailing
-          tabs
-          spaces
-          lines
-          newline
-          missing-newline-at-eof
-          empty
-          space-mark
-          tab-mark
-          newline-mark)))
+  (setq whitespace-style '(face trailing tabs spaces lines newline missing-newline-at-eof empty space-mark tab-mark newline-mark)))
 
 (with-eval-after-load 'warnings
   (add-to-list 'warning-suppress-log-types '(frameset))
   (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
 
 (with-eval-after-load 'which-key
-  (setq which-key-idle-delay 0.25
-        which-key-idle-secondary-delay 0.125
-        which-key-lighter ""))
+  (setq which-key-idle-delay 0.25)
+  (setq which-key-idle-secondary-delay 0.125)
+  (setq which-key-lighter "")))
 
 (with-eval-after-load 'modus-themes
-  (setq modus-themes-deuteranopia t
-        modus-themes-common-palette-overrides
-        '((border-mode-line-active bg-mode-line-active)
+  (setq modus-themes-deuteranopia t)
+  (setq modus-themes-common-palette-overrides)
+  (setq '((border-mode-line-active bg-mode-line-active)
           (border-mode-line-inactive bg-mode-line-inactive)
-          (message-separator bg-main))))
+          (message-separator bg-main)))
 
 (defun tychoish-alert-default-style ()
   "Determine the preferred `alert' style for the current environment."
@@ -210,9 +187,9 @@
     (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init))
 
 (with-eval-after-load 'alert
-  (setq alert-log-messages nil
-        alert-fade-time 15
-        alert-default-style (tychoish-alert-default-style))
+  (setq alert-log-messages nil)
+  (setq alert-fade-time 15)
+  (setq alert-default-style (tychoish-alert-default-style)))
 
   (when (and (eq system-type 'darwin) (daemonp))
     (add-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
@@ -390,13 +367,13 @@
   (setq terraform-indent-level 2))
 
 (with-eval-after-load 'web-mode
-  (setq web-mode-markup-indent-offset 2
-        web-mode-code-indent-offset 2
-        web-mode-css-indent-offset 2
-        js-indent-level 2
-        web-mode-enable-auto-pairing t
-        web-mode-enable-auto-expanding t
-        web-mode-enable-css-colorization t))
+  (setq web-mode-markup-indent-offset 2)
+  (setq web-mode-code-indent-offset 2)
+  (setq web-mode-css-indent-offset 2)
+  (setq js-indent-level 2)
+  (setq web-mode-enable-auto-pairing t)
+  (setq web-mode-enable-auto-expanding t)
+  (setq web-mode-enable-css-colorization t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; AI & LLM integration
