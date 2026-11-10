@@ -28,6 +28,7 @@
    chex
    cmdr
    clix
+   code-review
    cond-let
    daemons-dash
    consult
