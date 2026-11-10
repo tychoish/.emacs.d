@@ -96,7 +96,8 @@
         ("nongnu" . "https://elpa.nongnu.org/nongnu/")
         ("gnu" . "https://elpa.gnu.org/packages/")))
 
-(setq package-archive-priorities '(("melpa" . 100)
+(setq package-archive-priorities '(("elpaish" . 100)
+                                   ("melpa" . 99)
                                    ("nongnu" . 50)
                                    ("gnu" . 25)))
 
