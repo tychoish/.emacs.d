@@ -159,7 +159,7 @@
 (with-eval-after-load 'which-key
   (setq which-key-idle-delay 0.25)
   (setq which-key-idle-secondary-delay 0.125)
-  (setq which-key-lighter "")))
+  (setq which-key-lighter ""))
 
 (with-eval-after-load 'modus-themes
   (setq modus-themes-deuteranopia t)
