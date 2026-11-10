@@ -90,18 +90,6 @@
 
 ;;; Direct mode setup helpers
 
-(defvar markdown-imenu-generic-expression
-  '(("title"  "^\\(.*\\)[\n]=+$" 1)
-    ("h2-"    "^\\(.*\\)[\n]-+$" 1)
-    ("h1"     "^# \\(.*\\)$" 1)
-    ("h2"     "^## \\(.*\\)$" 1)
-    ("h3"     "^### \\(.*\\)$" 1)
-    ("h4"     "^#### \\(.*\\)$" 1)
-    ("h5"     "^##### \\(.*\\)$" 1)
-    ("h6"     "^###### \\(.*\\)$" 1)
-    ("fn"     "^\\[^\\(.*\\)\\]" 1))
-  "Generic expression for `imenu' in markdown buffers.")
-
 (defun tychoish-set-local-fill-column-100 ()
   "Set `fill-column' to 100 in the current buffer."
   (setq-local fill-column 100))
@@ -117,15 +105,6 @@
 (defun tychoish-go-mode-setup ()
   "Buffer-local setup for Go buffers."
   (setq-local compilation-error-screen-columns nil))
-
-(defun tychoish/markdown-setup-imenu ()
-  "Configure `imenu-generic-expression' for markdown buffers."
-  (setq imenu-generic-expression markdown-imenu-generic-expression))
-
-(defun tychoish/markdown-disable-colon-electric-indent ()
-  "Prevent `:' from triggering `markdown-indent-line', which
-resets point to column 0 outside of definition-list context."
-  (setq-local electric-indent-chars (remq ?: electric-indent-chars)))
 
 (defun rustic-mode-auto-save-hook ()
   "Enable auto-saving in rustic-mode buffers."
@@ -143,8 +122,6 @@ resets point to column 0 outside of definition-list context."
 (add-hook 'popper-mode-hook #'popper-echo-mode)
 (add-hook 'magit-status-mode-hook #'magit-dash-gh-prune-lazy-prefetch)
 (add-hook 'markdown-mode-hook #'turn-off-auto-fill)
-(add-hook 'markdown-mode-hook #'tychoish/markdown-setup-imenu)
-(add-hook 'markdown-mode-hook #'tychoish/markdown-disable-colon-electric-indent)
 (add-hook 'yaml-mode-hook #'yaml-pro-mode)
 (add-hook 'yaml-mode-hook #'tychoish-yaml-set-tab-width)
 (add-hook 'go-ts-mode-hook #'tychoish-set-local-fill-column-100)

@@ -299,20 +299,16 @@
 
   (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window)))
   (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
-  (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal")
-        denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore")
-        denote-dash-default-filter '(not "journal")
-        denote-review-insert-after "date"
-        denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan")
-        denote-file-type 'org
-        denote-infer-keywords t
-        denote-sort-keywords t
-        denote-save-buffers t
-        denote-prompts '(title keywords file-type)
-        denote-journal-title-format nil
-        denote-sequence-scheme 'alphanumeric
-        denote-explore-network-format "graphviz"
-        denote-explore-network-graphviz-filetype "svg")
+  (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal"))
+  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
+  (setq denote-dash-default-filter '(not "journal"))
+  (setq denote-review-insert-after "date")
+  (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
+  (setq denote-save-buffers t)
+  (setq denote-prompts '(title keywords file-type))
+  (setq denote-journal-title-format nil)
+  (setq denote-sequence-scheme 'alphanumeric)
+  (setq denote-explore-network-format "graphviz")
 
   (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
   (denote-rename-buffer-mode 1)
