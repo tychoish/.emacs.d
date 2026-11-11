@@ -22,7 +22,6 @@
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
 (declare-function arch-enable-desktop-notifications "arch")
-(declare-function popper-group-by-project "popper")
 
 (defvar denote-directory)
 (defvar magit-mode-map)
@@ -101,8 +100,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
 
-(autoload 'projectile-save-project-buffers-picker "eglox-project" nil t)
-
 (defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
   "The cmdr core prefix map under C-c t.")
 
@@ -114,7 +111,6 @@
 (cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
 (cmdr-keys-set cmdr-mode-map "C-c t t i" #'toggle-hud-modeline-icons)
 (cmdr-keys-set cmdr-mode-map "C-c t t s" #'toggle-hud-modeline-show-buffer-size)
-(cmdr-keys-set cmdr-mode-map "C-c t p" #'toggle-electric-pair-inhibition)
 (cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
 (cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
 (cmdr-keys-set cmdr-mode-map "C-c m a" #'tychoish-mail-select-account)
