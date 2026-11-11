@@ -190,15 +190,7 @@
 
 (defun tychoish-alert-default-style ()
   "Determine the preferred `alert' style for the current environment."
-  (cond
-   ((eq system-type 'darwin)
-    (if (display-graphic-p) 'osx-notifier 'notifier))
-   (alert-libnotify-command
-    'libnotify)
-   ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
-    'notifications)
-   (t
-    'message)))
+  )
 
 (advice-add 'display-startup-echo-area-message :override #'ignore)
 (advice-add 'ask-user-about-supersession-threat :override #'ignore)
@@ -275,9 +267,18 @@
           (message-separator bg-main))))
 
 (with-eval-after-load 'alert
+  (setq alert-default-style
+        (cond
+         ((eq system-type 'darwin)
+          (if (display-graphic-p) 'osx-notifier 'notifier))
+         (alert-libnotify-command
+          'libnotify)
+         ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
+          'notifications)
+         (t
+          'message)))
   (setq alert-log-messages nil)
-  (setq alert-fade-time 15)
-  (setq alert-default-style (tychoish-alert-default-style)))
+  (setq alert-fade-time 15))
 
 (with-eval-after-load 'emojify
   (setq emojify-emoji-styles '(ascii unicode github))

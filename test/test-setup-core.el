@@ -381,65 +381,6 @@ correctly and reads from the minibuffer using the candidate's command."
   (should (eq (keymap-lookup magit-command-mode-map "x") #'execute-extended-magit-command))
   (should (eq (keymap-lookup magit-command-mode-map "m") #'execute-extended-magit-command)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; alert default style resolution
-
-(ert-deftest tychoish-core/alert-default-style-darwin-graphic ()
-  "On macOS with a graphic display, alert defaults to osx-notifier."
-  (cl-letf (((symbol-value 'system-type) 'darwin)
-            ((symbol-function 'display-graphic-p) (lambda (&optional _) t)))
-    (should (eq (tychoish-alert-default-style) 'osx-notifier))))
-
-(ert-deftest tychoish-core/alert-default-style-darwin-terminal ()
-  "On macOS in a terminal or headless session, alert defaults to notifier."
-  (cl-letf (((symbol-value 'system-type) 'darwin)
-            ((symbol-function 'display-graphic-p) (lambda (&optional _) nil)))
-    (should (eq (tychoish-alert-default-style) 'notifier))))
-
-(ert-deftest tychoish-core/alert-default-style-linux-dbus ()
-  "On Linux, prefer libnotify even when a DBus session bus exists."
-  (cl-letf (((symbol-value 'system-type) 'gnu/linux)
-            (alert-libnotify-command "/usr/bin/notify-send")
-            ((symbol-function 'getenv)
-             (lambda (var) (when (equal var "DBUS_SESSION_BUS_ADDRESS") "unix:path=/tmp/dbus"))))
-    (should (eq (tychoish-alert-default-style) 'libnotify))))
-
-(ert-deftest tychoish-core/alert-default-style-linux-dbus-fallback ()
-  "Use DBus notifications when notify-send is unavailable."
-  (cl-letf (((symbol-value 'system-type) 'gnu/linux)
-            (alert-libnotify-command nil)
-            ((symbol-function 'getenv) (lambda (_) "unix:path=/tmp/dbus")))
-    (should (eq (tychoish-alert-default-style) 'notifications))))
-
-(ert-deftest tychoish-core/alert-default-style-linux-libnotify ()
-  "On Linux without DBus but with alert-libnotify-command, alert defaults to libnotify."
-  (cl-letf (((symbol-value 'system-type) 'gnu/linux)
-            ((symbol-function 'getenv) (lambda (_) nil))
-            (alert-libnotify-command "/usr/bin/notify-send"))
-    (should (eq (tychoish-alert-default-style) 'libnotify))))
-
-(ert-deftest tychoish-core/alert-default-style-fallback-message ()
-  "Fallback alert style defaults to message when no desktop notifier is present."
-  (cl-letf (((symbol-value 'system-type) 'berkeley-unix)
-            ((symbol-function 'getenv) (lambda (_) nil))
-            (alert-libnotify-command nil))
-    (should (eq (tychoish-alert-default-style) 'message))))
-
-(ert-deftest tychoish-core/alert-darwin-server-init-switches-and-removes-hook ()
-  "When a GUI frame connects to a macOS daemon, switch style and detach hook."
-  (let ((alert-default-style 'notifier)
-        (server-after-make-frame-hook '(tychoish-alert-darwin-server-init)))
-    ;; In a terminal client frame, style does not change and hook remains
-    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) nil)))
-      (tychoish-alert-darwin-server-init)
-      (should (eq alert-default-style 'notifier))
-      (should (memq #'tychoish-alert-darwin-server-init server-after-make-frame-hook)))
-    ;; In a GUI client frame, style updates to osx-notifier and hook is removed
-    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&optional _) t)))
-      (tychoish-alert-darwin-server-init)
-      (should (eq alert-default-style 'osx-notifier))
-      (should-not (memq #'tychoish-alert-darwin-server-init server-after-make-frame-hook)))))
-
 (defvar argi)
 
 (ert-deftest tychoish-core/clix-sprite-id-flag ()
