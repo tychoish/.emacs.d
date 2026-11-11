@@ -13,12 +13,12 @@
 ;;; Code:
 
 (require 'cl-lib)
+
 (require 'cmdr-macros)
 (require 'cmdr-keys)
 (require 'cmdr-spec)
-(require 'setup-modes)
+(require 'sprite-state)
 
-(declare-function sprite-state-path "sprite-state")
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
 (declare-function arch-enable-desktop-notifications "arch")
@@ -63,6 +63,42 @@
   :final t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; sprite-state -- hooks and configuration
+
+;;; Auto-mode associations managed by `sprite-state-global-mode'
+(sprite-state-register-auto-modes
+ '(("\\.xml\\'" . nxml-mode)
+   ("\\.rst\\'" . rst-mode)
+   ("\\.tex\\'" . LaTeX-mode)
+   ("\\.service\\'" . conf-unix-mode)
+   ("\\.timer\\'" . conf-unix-mode)
+   ("\\.target\\'" . conf-unix-mode)
+   ("\\.mount\\'" . conf-unix-mode)
+   ("\\.automount\\'" . conf-unix-mode)
+   ("\\.slice\\'" . conf-unix-mode)
+   ("\\.socket\\'" . conf-unix-mode)
+   ("\\.path\\'" . conf-unix-mode)
+   ("\\.conf\\'" . conf-unix-mode)
+   ("\\.mdwn\\'" . markdown-mode)
+   ("\\.md\\'" . markdown-mode)
+   ("\\.markdown\\'" . markdown-mode)
+   ("\\.txt\\'" . markdown-mode)))
+
+;;; Mode hooks managed by `sprite-state-global-mode'
+(sprite-state-register-mode-hooks
+ '((dired-mode-hook . nerd-icons-dired-mode)
+   (sqlite-mode-hook . sqlite-extras-minor-mode)
+   (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
+   (org-mode-hook . orgx-mode-turn-on)
+   (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
+   (popper-mode-hook . popper-echo-mode)
+   (magit-status-mode-hook . magit-dash-gh-prune-lazy-prefetch)
+   (markdown-mode-hook . turn-off-auto-fill)))
+
+;;; Direct major mode remaps
+(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
 
 (autoload 'projectile-save-project-buffers-picker "eglox-project" nil t)
@@ -92,6 +128,89 @@
                                 :display-name "mail-select-account"
                                 :description "select mail account"
                                 :transient-key "ma")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; core emacs -- global settings and options
+
+(setq initial-major-mode 'fundamental-mode)
+(setq initial-scratch-message nil)
+(setq inhibit-startup-message t)
+
+(setq jit-lock-defer-time 0.2)
+(setq jit-lock-stealth-nice 0.2)
+(setq jit-lock-stealth-load 100)
+
+(setq confirm-kill-processes nil)
+(setq confirm-nonexistent-file-or-buffer nil)
+(setq select-enable-clipboard nil)
+
+(setq auto-revert-verbose nil)
+(setq auto-revert-avoid-polling t)
+(setq auto-revert-interval 60)
+(setq backup-by-copying t)
+(setq delete-old-versions t)
+
+(setq vc-follow-symlinks t)
+(setq version-control t)
+(setq ediff-window-setup-function 'ediff-setup-windows-plain)
+(setq ediff-split-window-function 'split-window-horizontally)
+
+(setq-default cursor-in-non-selected-windows nil)
+(setq scroll-conservatively 25)
+(setq scroll-preserve-screen-position t)
+
+(setq ring-bell-function #'ignore)
+(setq-default indicate-empty-lines t)
+(setq-default truncate-lines t)
+(setq-default indent-tabs-mode nil) ; (setq tab-width 4)
+(setq shell-command-dont-erase-buffer 'end-last-out)
+
+(setq switch-to-prev-buffer-skip 'visible)
+(setq split-height-threshold 100)
+(setq window-sides-vertical t)
+
+(put 'downcase-region 'disabled nil)
+(put 'narrow-to-region 'disabled nil)
+(put 'upcase-region 'disabled nil)
+(put 'list-timers 'disabled nil)
+(put 'list-threads 'disabled nil)
+(put 'dired-find-alternate-file 'disabled nil)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; platform/os -- system configuration and integration
+
+;;; Direct terminal file aliases
+(add-to-list 'term-file-aliases '("alacritty" . "xterm"))
+(add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
+
+(when (eq system-type 'darwin)
+  (setq read-process-output-max (* 64 1024))
+  (setq ns-function-modifier 'hyper)
+  (setq mac-command-modifier 'meta)
+  (setq mac-option-modifier 'super))
+
+(when (eq system-type 'gnu/linux)
+  (setq read-process-output-max (* 1024 1024)))
+
+(defun tychoish-alert-default-style ()
+  "Determine the preferred `alert' style for the current environment."
+  (cond
+   ((eq system-type 'darwin)
+    (if (display-graphic-p) 'osx-notifier 'notifier))
+   (alert-libnotify-command
+    'libnotify)
+   ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
+    'notifications)
+   (t
+    'message)))
+
+(defun tychoish-alert-darwin-server-init ()
+  "Switch `alert-default-style' to `osx-notifier' on first GUI client frame."
+  (when (display-graphic-p)
+    (setq alert-default-style 'osx-notifier)
+    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
+(advice-add 'display-startup-echo-area-message :override #'ignore)
+(advice-add 'ask-user-about-supersession-threat :override #'ignore)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Core & UI systems
@@ -164,24 +283,6 @@
           (border-mode-line-inactive bg-mode-line-inactive)
           (message-separator bg-main))))
 
-(defun tychoish-alert-default-style ()
-  "Determine the preferred `alert' style for the current environment."
-  (cond
-   ((eq system-type 'darwin)
-    (if (display-graphic-p) 'osx-notifier 'notifier))
-   (alert-libnotify-command
-    'libnotify)
-   ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
-    'notifications)
-   (t
-    'message)))
-
-(defun tychoish-alert-darwin-server-init ()
-  "Switch `alert-default-style' to `osx-notifier' on first GUI client frame."
-  (when (display-graphic-p)
-    (setq alert-default-style 'osx-notifier)
-    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
-
 (with-eval-after-load 'alert
   (setq alert-log-messages nil)
   (setq alert-fade-time 15)
@@ -189,9 +290,6 @@
 
   (when (and (eq system-type 'darwin) (daemonp))
     (add-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Icons & display
 
 (with-eval-after-load 'emojify
   (setq emojify-emoji-styles '(ascii unicode github))

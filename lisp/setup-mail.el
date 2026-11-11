@@ -8,15 +8,12 @@
 
 (require 'cmdr-macros)
 (require 'cmdr-keys)
-(require 'setup-defaults)
 (require 'map)
 
 (autoload 'mu4e "mu4e" nil t)
 (autoload 'mu4e-update-index "mu4e" nil t)
 (autoload 'mu4e-update-mail-and-index "mu4e" nil t)
 (autoload 'mu4e-quit "mu4e" nil t)
-(autoload 'annotated-completing-read "annotated-completing-read")
-(autoload 'annotated-completing-read-directory "annotated-completing-read")
 
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-reply "mu4e-compose")

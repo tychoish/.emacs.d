@@ -20,67 +20,77 @@
    agent-shell
    agent-shell-notifications
    agent-shell-queue
-   agent-shell-workflow
+   agent-shell-workflow))
+
+(elpaish-install-register-upgrade-package
+ '(sprite
    annotated-completing-read
-   arch
-   builder
-   cape
-   chex
-   cmdr
+   overmark
    clix
-   code-review
-   cond-let
+   gen
+   hitl
+   hud-modeline
+   mcpkit
+   xtdlib))
+
+(elpaish-install-register-upgrade-package
+ '(orgx
+   grepx
+   cmdr
+   minaid
+   eglox
+   chex
+   telegax))
+
+e(elpaish-install-register-upgrade-package
+ '(arch
+   builder
    daemons-dash
-   consult
-   corfu
-   denote
+   magit-dash
+   tailscale
+   telega-bot
+   ollama-tailnet
+   org-docsgen))
+
+(elpaish-install-register-upgrade-package
+ '(gptel-mcp
+   gptel-pup
    denote-convert
    denote-dash
    denote-mcp
    denote-sync
-   denote-tree
-   eglot-test-at-point
-   eglox
-   elpaish
-   elpaish-keyring
+   denote-tree))
+
+(elpaish-install-register-upgrade-package
+ '(cape
+   orderless
+   marginalia
+   consult
+   corfu
    flycheck
    flycheck-aspell
    flycheck-vale
-   gen
-   gptel
-   gptel-agent
-   gptel-aibo
-   gptel-mcp
-   gptel-pup
-   grepx
-   hitl
-   hud-modeline
-   magit
-   magit-dash
-   marginalia
-   mcpkit
-   minaid
-   modus-themes
-   ollama-tailnet
-   orderless
-   org-docsgen
-   orgx
-   overmark
-   shell-maker
-   sprite
-   tailscale
-   telega-bot
-   telegax
    tempel
-   transient
-   treesit-auto
-   vertico
-   xtdlib))
+   vertico))
+
+(elpaish-install-register-upgrade-package
+ '(gptel
+   magit
+   code-review
+   denote))
+
+(elpaish-install-register-upgrade-package
+ '(gptel-agent
+   gptel-aibo
+   eglot-test-at-point
+   shell-maker
+   modus-themes))
 
 (elpaish-install-register-package
  '(alert
    anzu
    async
+   cond-let
    consult-denote
    consult-eglot
    consult-flycheck
@@ -132,6 +142,8 @@
    tempel-collection
    toc-org
    tracking
+   transient
+   treesit-auto
    undercover
    wgrep
    yaml-pro))

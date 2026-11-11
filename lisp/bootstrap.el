@@ -145,26 +145,27 @@
   '(sprite-mode
     cmdr-mode
     cmdr-frame-mode
-    orgx-global-mode
+    sprite-state-configure
+    sprite-state-global-mode
     which-key-mode
     minaid-mode
     nerd-icons-completion-mode
-    sprite-state-configure
+    orgx-global-mode
     eglox-global-mode
-    sprite-state-global-mode
-    annotated-completing-read-setup-history
-    sprite-state-start-desktop
-    magit-dash-global-mode
     orgx-capture-setup-standard-templates
-    denote-dash-global-mode
-    grepx-mode
-    column-number-mode
+    annotated-completing-read-setup-history
     bootstrap-set-up-fringe-mode
+    xterm-mouse-mode
+    grepx-mode
+    magit-dash-global-mode
+    denote-dash-global-mode
+    denote-tree-mode
+    sprite-state-start-desktop
+    column-number-mode
     delete-selection-mode
     electric-pair-mode
     pixel-scroll-precision-mode
     winner-mode
-    xterm-mouse-mode
     ; repeat-mode
     overmark-global-mode
     telegax-global-mode
@@ -172,7 +173,6 @@
     bootstrap-require-treesit-auto
     bootstrap-treesit-auto
     global-treesit-auto-mode
-    denote-tree-mode
     builder-mode
     chex-global-mode
     global-auto-revert-mode
