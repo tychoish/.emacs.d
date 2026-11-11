@@ -109,6 +109,25 @@
       (when (elpaish-install-package-quickstart-stale-p)
         (elpaish-install-packages 'core))))))
 
+(defun bootstrap-load-user-local-config ()
+  "Load all .el files in PATH."
+  (let ((path (expand-file-name "user" user-emacs-directory)))
+    (add-to-list 'load-path path)
+
+    (dolist (file (directory-files path :full "\\.el$") nil)
+      (let ((name (file-name-sans-extension (file-name-nondirectory file))))
+	(require (intern name))))))
+
+(defun bootstrap-report-startup-timing ()
+  (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))
+	(init-time (float-time (time-subtract after-init-time before-init-time)))
+	(wall-time (float-time (time-since before-init-time))))
+    (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
+    (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
+    (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
+    (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
+	   :title (format "emacs-%s" sprite-instance-id))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; state -- setup desktop/bookmarks/savehist
@@ -137,9 +156,49 @@
         (denote-sync-cache-directory . "denote-sync/")
         (recentf-save-file . "recentf.el")
         (savehist-file . "history.el")
+        (magit-dash-gh-prune-cache-dir . "magit-dash-gh-prune/")
         (dape-default-breakpoints-file . "dape-breakpoints.el")
         (projectile-known-projects-file . "projectile-bookmarks.eld")
         (projectile-frecency-file . "projectile-frecency.eld")))
+
+(setq sprite-state-mode-hooks
+      '((dired-mode-hook . nerd-icons-dired-mode)
+        (sqlite-mode-hook . sqlite-extras-minor-mode)
+        (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
+        (org-mode-hook . orgx-mode-turn-on)
+        (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
+        (popper-mode-hook . popper-echo-mode)
+        (magit-status-mode-hook . magit-dash-gh-prune-lazy-prefetch)
+        (markdown-mode-hook . turn-off-auto-fill)
+        (erc-mode-hook . bootstrap-require-tracking)
+        (eat-mode-hook . bootstrap-ensure-ssh-agent)
+        (magit-mode-hook . bootstrap-ensure-ssh-agent)))
+
+(setq sprite-state-auto-mode-alist
+      '(("\\.xml\\'" . nxml-mode)
+        ("\\.rst\\'" . rst-mode)
+        ("\\.tex\\'" . LaTeX-mode)
+        ("\\.service\\'" . conf-unix-mode)
+        ("\\.timer\\'" . conf-unix-mode)
+        ("\\.target\\'" . conf-unix-mode)
+        ("\\.mount\\'" . conf-unix-mode)
+        ("\\.automount\\'" . conf-unix-mode)
+        ("\\.slice\\'" . conf-unix-mode)
+        ("\\.socket\\'" . conf-unix-mode)
+        ("\\.path\\'" . conf-unix-mode)
+        ("\\.conf\\'" . conf-unix-mode)
+        ("\\.mdwn\\'" . markdown-mode)
+        ("\\.md\\'" . markdown-mode)
+        ("\\.markdown\\'" . markdown-mode)
+        ("\\.txt\\'" . markdown-mode)))
+
+(setq sprite-first-frame-operations
+  '(bootstrap-ensure-default-font
+    ensure-frame-opacity
+    disable-all-themes
+    bootstrap-default-theme
+    hud-modeline-mode
+    bootstrap-frame-startup-timing))
 
 (setq sprite-startup-operations
   '(sprite-mode
@@ -182,14 +241,6 @@
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
-(setq sprite-first-frame-operations
-  '(bootstrap-ensure-default-font
-    ensure-frame-opacity
-    disable-all-themes
-    bootstrap-default-theme
-    hud-modeline-mode
-    bootstrap-frame-startup-timing))
-
 (defvar bootstrap-package-maintenance
   '(bootstrap-require-setup-packages
     bootstrap-ensure-packages-installed
@@ -202,6 +253,7 @@
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-require-treesit-auto () (require 'treesit-auto))
 (defun bootstrap-require-builder-tasks () (require 'builder-tasks))
+(defun bootstrap-require-tracking () (require 'tracking))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
@@ -221,29 +273,7 @@
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
 (add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; functions -- initialization
-
-(defun bootstrap-load-user-local-config ()
-  "Load all .el files in PATH."
-  (let ((path (expand-file-name "user" user-emacs-directory)))
-    (add-to-list 'load-path path)
-
-    (dolist (file (directory-files path :full "\\.el$") nil)
-      (let ((name (file-name-sans-extension (file-name-nondirectory file))))
-	(require (intern name))))))
-
-(defun bootstrap-report-startup-timing ()
-  (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))
-	(init-time (float-time (time-subtract after-init-time before-init-time)))
-	(wall-time (float-time (time-since before-init-time))))
-    (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
-    (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
-    (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
-    (when (fboundp 'alert)
-      (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
-	     :title (format "emacs-%s" sprite-instance-id)))))
+(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -277,32 +307,22 @@
   "Ensure SSH agent is configured and remove hooks."
   (bootstrap-set-up-ssh-agent)
   (remove-hook 'eat-mode-hook #'bootstrap-ensure-ssh-agent)
-  (remove-hook 'magit-mode-hook #'bootstrap-ensure-ssh-agent)
-  (remove-hook 'telega-root-mode-hook #'bootstrap-ensure-ssh-agent))
-
-(add-hook 'eat-mode-hook #'bootstrap-ensure-ssh-agent)
-(add-hook 'magit-mode-hook #'bootstrap-ensure-ssh-agent)
-(add-hook 'telega-root-mode-hook #'bootstrap-ensure-ssh-agent)
-
-(defun find-ssh-agent-socket-candidates ()
-  (thread-last
-    (directory-files temporary-file-directory t ".*ssh-.*/agent.*" :nosort)
-    (append (list (format "/run/user/%d/ssh-agent.socket" (user-uid))))
-    (seq-remove #'null)
-    (seq-uniq)
-    (seq-filter #'file-writable-p)
-    (seq-sort #'string-lessp)
-    (nreverse)))
+  (remove-hook 'magit-mode-hook #'bootstrap-ensure-ssh-agent))
 
 (defun bootstrap-set-up-ssh-agent ()
   (interactive)
   (let (env-value sockets)
     (unless (setq env-value (getenv "SSH_AUTH_SOCK"))
-      (setq sockets (find-ssh-agent-socket-candidates))
-      (when (and sockets
-		 (<= 1 (length sockets)))
-	(setq env-value (setenv "SSH_AUTH_SOCK" (car sockets)))))
-    env-value))
+      (setq sockets (thread-last
+                      (directory-files temporary-file-directory t ".*ssh-.*/agent.*" :nosort)
+                      (append (list (format "/run/user/%d/ssh-agent.socket" (user-uid))))
+                      (seq-remove #'null)
+                      (seq-uniq)
+                      (seq-filter #'file-writable-p)
+                      (seq-sort #'string-greaterp))))
+    (when (length> sockets 0)
+      (setq env-value (setenv "SSH_AUTH_SOCK" (car sockets))))
+      env-value))
 
 (provide 'bootstrap)
 ;;; bootstrap.el ends here

@@ -17,7 +17,6 @@
 (require 'cmdr-macros)
 (require 'cmdr-keys)
 (require 'cmdr-spec)
-(require 'sprite-state)
 
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
@@ -62,42 +61,6 @@
   :final t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; sprite-state -- hooks and configuration
-
-;;; Auto-mode associations managed by `sprite-state-global-mode'
-(sprite-state-register-auto-modes
- '(("\\.xml\\'" . nxml-mode)
-   ("\\.rst\\'" . rst-mode)
-   ("\\.tex\\'" . LaTeX-mode)
-   ("\\.service\\'" . conf-unix-mode)
-   ("\\.timer\\'" . conf-unix-mode)
-   ("\\.target\\'" . conf-unix-mode)
-   ("\\.mount\\'" . conf-unix-mode)
-   ("\\.automount\\'" . conf-unix-mode)
-   ("\\.slice\\'" . conf-unix-mode)
-   ("\\.socket\\'" . conf-unix-mode)
-   ("\\.path\\'" . conf-unix-mode)
-   ("\\.conf\\'" . conf-unix-mode)
-   ("\\.mdwn\\'" . markdown-mode)
-   ("\\.md\\'" . markdown-mode)
-   ("\\.markdown\\'" . markdown-mode)
-   ("\\.txt\\'" . markdown-mode)))
-
-;;; Mode hooks managed by `sprite-state-global-mode'
-(sprite-state-register-mode-hooks
- '((dired-mode-hook . nerd-icons-dired-mode)
-   (sqlite-mode-hook . sqlite-extras-minor-mode)
-   (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
-   (org-mode-hook . orgx-mode-turn-on)
-   (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
-   (popper-mode-hook . popper-echo-mode)
-   (magit-status-mode-hook . magit-dash-gh-prune-lazy-prefetch)
-   (markdown-mode-hook . turn-off-auto-fill)))
-
-;;; Direct major mode remaps
-(add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
 
 (defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
@@ -105,6 +68,8 @@
 
 (setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
 
+;; TODO should this move to cmdr-mode? seems like mode-configuration
+;; that should be handled in the scope of a mode
 (advice-add 'set-frame-font :around #'cmdr-set-frame-font-interactive)
 
 (cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
@@ -315,9 +280,10 @@
 ;;; Build & system tools
 
 (with-eval-after-load 'arch
-  (arch-enable-desktop-notifications)
-  (run-with-idle-timer 2 nil #'arch--populate-cache))
+  (arch-enable-desktop-notifications) ;; TODO make this run (on by default, customizeable when list is enabled)
+  (run-with-idle-timer 2 nil #'arch--populate-cache)) ;; TODO this can run in bootstrap-package-maintenance package maintenance
 
+;; TODO why don't elpaish/docker configs run in cmdr-ecosystem which should be loaded on its own?
 (with-eval-after-load 'elpaish
   (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
@@ -346,9 +312,6 @@
 
   (when (fboundp 'hud-modeline-set-segment-action)
     (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
-
-(with-eval-after-load 'magit-dash
-  (setq magit-dash-gh-prune-cache-dir (sprite-state-path "magit-dash-gh-prune")))
 
 (with-eval-after-load 'magit-gh
   (cmdr-transient-insert-suffix-once 'magit-gh '(-1)
