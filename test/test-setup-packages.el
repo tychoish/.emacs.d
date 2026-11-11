@@ -16,23 +16,21 @@
             (push (read (current-buffer)) forms))
         (end-of-file (nreverse forms))))))
 
+(defun test-setup-packages--registered-packages (function)
+  "Extract package symbols from all registration forms calling FUNCTION."
+  (seq-reduce (lambda (packages form)
+                (if (and (consp form) (eq (car form) function))
+                    (append packages (cadr (cadr form)))
+                  packages))
+              (test-setup-packages--read-forms) nil))
+
 (defun test-setup-packages--get-upgrade-list ()
-  "Extract package symbols from the upgrade registration form."
-  (let* ((forms (test-setup-packages--read-forms))
-         (form (seq-find (lambda (f)
-                           (and (consp f)
-                                (eq (car f) 'elpaish-install-register-upgrade-package)))
-                         forms)))
-    (cadr (cadr form))))
+  "Extract package symbols from all upgrade registration forms."
+  (test-setup-packages--registered-packages 'elpaish-install-register-upgrade-package))
 
 (defun test-setup-packages--get-install-list ()
-  "Extract package symbols from the install registration form."
-  (let* ((forms (test-setup-packages--read-forms))
-         (form (seq-find (lambda (f)
-                           (and (consp f)
-                                (eq (car f) 'elpaish-install-register-package)))
-                         forms)))
-    (cadr (cadr form))))
+  "Extract package symbols from all install registration forms."
+  (test-setup-packages--registered-packages 'elpaish-install-register-package))
 
 (ert-deftest setup-packages/no-duplicates-in-upgrade-list ()
   "Ensure the upgrade packages catalog has no duplicate package symbols."

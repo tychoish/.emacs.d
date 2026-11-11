@@ -15,6 +15,7 @@
 (require 'setup-core)
 
 (defvar denote-directory)
+(defvar deft-directory)
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 

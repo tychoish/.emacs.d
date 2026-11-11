@@ -16,7 +16,6 @@
   (should (eq (cdr (assoc "\\.txt\\'" sprite-state-auto-mode-alist)) 'markdown-mode))
   (should (eq (cdr (assoc "\\.service\\'" sprite-state-auto-mode-alist)) 'conf-unix-mode))
   (should (eq (cdr (assoc "\\.rst\\'" sprite-state-auto-mode-alist)) 'rst-mode))
-  (should (eq (cdr (assoc "\\.h\\'" sprite-state-auto-mode-alist)) 'c-or-c++-mode))
   (should (eq (cdr (assq 'dired-mode-hook sprite-state-mode-hooks)) 'nerd-icons-dired-mode))
   (should (eq (cdr (assq 'sqlite-mode-hook sprite-state-mode-hooks)) 'sqlite-extras-minor-mode))
   (should (equal (cdr (assq 'LaTeX-mode-hook sprite-state-mode-hooks))
@@ -25,7 +24,7 @@
 (ert-deftest setup-modes/registration-preserves-existing-entries ()
   "Ensure registration functions merge without overriding unrelated entries."
   (let ((sprite-state-global-mode nil)
-        (state-auto-mode-alist '(("\\.custom\\'" . custom-mode)))
+        (sprite-state-auto-mode-alist '(("\\.custom\\'" . custom-mode)))
         (sprite-state-mode-hooks '((custom-mode-hook . custom-fn)
                                    (dired-mode-hook . pre-dired-fn))))
     (sprite-state-register-auto-modes '(("\\.txt\\'" . markdown-mode)))

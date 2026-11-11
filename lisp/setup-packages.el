@@ -42,7 +42,7 @@
    chex
    telegax))
 
-e(elpaish-install-register-upgrade-package
+(elpaish-install-register-upgrade-package
  '(arch
    builder
    daemons-dash
