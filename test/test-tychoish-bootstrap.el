@@ -7,11 +7,12 @@
 
 (require 'ert)
 (require 'test-helper)
+(require 'sprite)
 (require 'overmark)
 (require 'cl-lib)
 (require 'bootstrap)
 (require 'setup-defaults)
-(require 'setup-project)
+(require 'eglox-project)
 (require 'setup-core)
 
 (defvar denote-directory)
@@ -631,26 +632,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sprite state startup
 
+(ert-deftest bootstrap/programming-startup-configures-state-first ()
+  "Project consumers see instance paths before Eglox starts."
+  (should (memq 'sprite-state-configure sprite-startup-operations))
+  (should (memq 'eglox-global-mode sprite-startup-operations))
+  (should (< (seq-position sprite-startup-operations 'sprite-state-configure)
+             (seq-position sprite-startup-operations 'eglox-global-mode))))
+
 (ert-deftest bootstrap/sprite-state-startup-order ()
-  "Configure state before recentf and savehist consume their files."
-  (require 'recentf)
-  (require 'savehist)
-  (require 'sprite-state)
-  (let ((recentf-save-file nil)
-        (savehist-file nil)
-        (sprite-state-locks-enabled nil)
-        (sprite-state-mappings '((recentf-save-file . "recentf.el")
-                                 (savehist-file . "history.el")))
-        (seen nil))
-    (sprite-state-configure)
-    (cl-letf (((symbol-function 'recentf-mode)
-               (lambda (&rest _) (push (cons 'recentf recentf-save-file) seen)))
-              ((symbol-function 'savehist-mode)
-               (lambda (&rest _) (push (cons 'savehist savehist-file) seen))))
-      (bootstrap-silent-savehist)
-      (bootstrap-silent-recentf))
-    (should (equal (alist-get 'recentf seen) (sprite-state-path "recentf.el")))
-    (should (equal (alist-get 'savehist seen) (sprite-state-path "history.el")))))
+  "State mode starts after configuration and defers desktop restoration."
+  (should (memq 'sprite-state-global-mode sprite-startup-operations))
+  (should (memq 'sprite-state-start-desktop sprite-startup-operations))
+  (should (< (seq-position sprite-startup-operations 'sprite-state-global-mode)
+             (seq-position sprite-startup-operations 'sprite-state-start-desktop)))
+  (should sprite-state-savehist-enabled)
+  (should sprite-state-recentf-enabled)
+  (should sprite-state-desktop-deferred))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; bootstrap-set-up-ssh-agent
@@ -1107,6 +1104,106 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
             (should acr-called)
             (should (equal "Monospace" orig-called)))
         (advice-remove 'set-frame-font #'cmdr-set-frame-font-interactive)))))
+
+(defvar bootstrap--test-shared-setting nil)
+
+(ert-deftest bootstrap/cross-package-settings-defcustom-lists ()
+  "Each package exposes a `*-settings' defcustom alist and restores prior values."
+  (require 'eglox)
+  (require 'eglox-project)
+  (require 'minaid)
+  (require 'hud-modeline)
+  (require 'sprite-state)
+  (should (listp eglox-settings))
+  (should (listp eglox-project-settings))
+  (should (listp minaid-settings))
+  (should (listp hud-modeline-settings))
+  (should (listp sprite-state-settings))
+  (set-default 'bootstrap--test-shared-setting 'baseline)
+  (let ((eglox--saved-settings nil)
+        (eglox-settings '((bootstrap--test-shared-setting . updated))))
+    (unwind-protect
+        (progn
+          (eglox--apply-settings)
+          (should (eq (default-value 'bootstrap--test-shared-setting) 'updated))
+          (eglox--restore-settings)
+          (should (eq (default-value 'bootstrap--test-shared-setting) 'baseline)))
+      (eglox--restore-settings)
+      (set-default 'bootstrap--test-shared-setting nil))))
+
+(ert-deftest bootstrap/cross-package-lifecycle-and-disabled-eglot-minaid-flows ()
+  "Exercise recentf, central project cache, and HUD frame title with Eglot and Minaid disabled."
+  (require 'sprite-state)
+  (require 'eglox-project)
+  (require 'eglox)
+  (require 'minaid)
+  (require 'hud-modeline)
+  (let* ((tmp-root (file-name-as-directory (make-temp-file "cross-pkg-test-" t)))
+         (cache-dir (file-name-as-directory (expand-file-name "cache" tmp-root)))
+         (proj-dir (file-name-as-directory (expand-file-name "proj" tmp-root)))
+         (proj-file (expand-file-name "main.py" proj-dir))
+         (eglox-project-cache-directory cache-dir)
+         (eglox-lsp-enabled nil)
+         (sprite-state-desktop-enabled nil)
+         (sprite-state-savehist-enabled nil)
+         (sprite-state-recentf-enabled t)
+         (sprite-state-locks-enabled nil)
+         (sprite-state-auto-save-enabled nil)
+         (was-state (bound-and-true-p sprite-state-global-mode))
+         (was-eglox (bound-and-true-p eglox-global-mode))
+         (was-proj (bound-and-true-p eglox-project-mode))
+         (was-minaid (bound-and-true-p minaid-mode))
+         (was-hud (bound-and-true-p hud-modeline-mode)))
+    (unwind-protect
+        (progn
+          (make-directory cache-dir t)
+          (make-directory proj-dir t)
+          (write-region "" nil (expand-file-name ".projectile" proj-dir) nil 'silent)
+          (write-region "x = 1\n" nil proj-file nil 'silent)
+          (when was-minaid (minaid-mode -1))
+          (when was-eglox (eglox-global-mode -1))
+          (when was-proj (eglox-project-mode -1))
+          (when was-state (sprite-state-global-mode -1))
+          (when was-hud (hud-modeline-mode -1))
+          ;; Enable state, eglox (with LSP disabled), and HUD while Minaid remains off:
+          (sprite-state-global-mode 1)
+          (eglox-global-mode 1)
+          (hud-modeline-mode 1)
+          ;; Repeat enablement to verify no duplicate advice/hooks:
+          (sprite-state-global-mode 1)
+          (eglox-global-mode 1)
+          (hud-modeline-mode 1)
+          (should-not (bound-and-true-p minaid-mode))
+          (should (bound-and-true-p recentf-mode))
+          (should (bound-and-true-p eglox-project-mode))
+          (should (advice-member-p #'eglox-project--cache-file 'projectile-project-cache-file))
+          ;; Exercise file visit -> recentf + central projectile cache:
+          (let ((buf (find-file-noselect proj-file)))
+            (unwind-protect
+                (with-current-buffer buf
+                  (recentf-add-file proj-file)
+                  (should (member (expand-file-name proj-file)
+                                  (seq-map #'expand-file-name recentf-list)))
+                  (let ((cfile (projectile-project-cache-file proj-dir)))
+                    (should (string-prefix-p cache-dir cfile))
+                    (projectile-serialize '("main.py") cfile)
+                    (should (file-exists-p cfile))
+                    (should-not (file-exists-p (expand-file-name ".projectile-cache.eld" proj-dir)))))
+              (kill-buffer buf)))
+          ;; Exercise HUD frame title with Sprite identity:
+          (let ((sprite-instance-id "test-inst"))
+            (should (string-match-p "test-inst" (hud-modeline--frame-title))))
+          ;; Teardown all modes cleanly:
+          (hud-modeline-mode -1)
+          (eglox-global-mode -1)
+          (sprite-state-global-mode -1)
+          (should-not (advice-member-p #'eglox-project--cache-file 'projectile-project-cache-file)))
+      (when was-state (sprite-state-global-mode 1))
+      (when was-proj (eglox-project-mode 1))
+      (when was-eglox (eglox-global-mode 1))
+      (when was-minaid (minaid-mode 1))
+      (when was-hud (hud-modeline-mode 1))
+      (delete-directory tmp-root t))))
 
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here

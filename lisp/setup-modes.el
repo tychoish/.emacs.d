@@ -16,8 +16,6 @@
 (declare-function orgx-agenda-minor-mode-turn-on "orgx")
 (declare-function popper-echo-mode "popper")
 (declare-function magit-dash-gh-prune-lazy-prefetch "magit-dash-gh")
-(declare-function yaml-pro-mode "yaml-pro")
-(declare-function builder-elisp-mode "builder-elisp")
 
 (defvar setup-modes-auto-mode-alist
   '(("\\.xml\\'" . nxml-mode)
@@ -90,27 +88,6 @@
 
 ;;; Direct mode setup helpers
 
-(defun tychoish-set-local-fill-column-100 ()
-  "Set `fill-column' to 100 in the current buffer."
-  (setq-local fill-column 100))
-
-(defun tychoish-set-local-tab-width-4 ()
-  "Set `tab-width' to 4 in the current buffer."
-  (setq-local tab-width 4))
-
-(defun tychoish-yaml-set-tab-width ()
-  "Set `tab-width' to 2 in the current buffer."
-  (setq-local tab-width 2))
-
-(defun tychoish-go-mode-setup ()
-  "Buffer-local setup for Go buffers."
-  (setq-local compilation-error-screen-columns nil))
-
-(defun rustic-mode-auto-save-hook ()
-  "Enable auto-saving in rustic-mode buffers."
-  (when buffer-file-name
-    (setq-local compilation-ask-about-save nil)))
-
 ;;; Direct mode hooks
 (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
 (add-hook 'sqlite-mode-hook #'sqlite-extras-minor-mode)
@@ -122,14 +99,6 @@
 (add-hook 'popper-mode-hook #'popper-echo-mode)
 (add-hook 'magit-status-mode-hook #'magit-dash-gh-prune-lazy-prefetch)
 (add-hook 'markdown-mode-hook #'turn-off-auto-fill)
-(add-hook 'yaml-mode-hook #'yaml-pro-mode)
-(add-hook 'yaml-mode-hook #'tychoish-yaml-set-tab-width)
-(add-hook 'go-ts-mode-hook #'tychoish-set-local-fill-column-100)
-(add-hook 'go-ts-mode-hook #'tychoish-go-mode-setup)
-(add-hook 'python-ts-mode-hook #'tychoish-set-local-fill-column-100)
-(add-hook 'python-ts-mode-hook #'tychoish-set-local-tab-width-4)
-(add-hook 'rustic-mode-hook #'rustic-mode-auto-save-hook)
-(add-hook 'emacs-lisp-mode-hook #'builder-elisp-mode)
 
 (defun setup-modes-merge-alist (current new-entries)
   "Merge NEW-ENTRIES into CURRENT alist, overriding existing keys."

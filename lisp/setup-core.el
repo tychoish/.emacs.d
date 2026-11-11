@@ -31,10 +31,6 @@
 (defvar popper-reference-buffers)
 (defvar popper-echo-dispatch-keys)
 (defvar popper-display-control)
-(defvar popper-group-function)
-(defvar rustic-use-rust-save-some-buffers)
-(defvar rustic-clippy-arguments)
-(defvar rustic-rustfmt-args)
 (defvar sprite-mode-map-prefix)
 (defvar alert-default-style)
 (defvar alert-fade-time)
@@ -69,7 +65,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
 
-(autoload 'projectile-save-project-buffers-picker "setup-project" nil t)
+(autoload 'projectile-save-project-buffers-picker "eglox-project" nil t)
 
 (defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
   "The cmdr core prefix map under C-c t.")
@@ -183,8 +179,8 @@
 (defun tychoish-alert-darwin-server-init ()
   "Switch `alert-default-style' to `osx-notifier' on first GUI client frame."
   (when (display-graphic-p)
-    (setq alert-default-style 'osx-notifier))
-    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init))
+    (setq alert-default-style 'osx-notifier)
+    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
 
 (with-eval-after-load 'alert
   (setq alert-log-messages nil)
@@ -335,39 +331,6 @@
       (apply fn args)))
   (advice-add 'consult-notes :around #'ad:consult-notes--single-directory-string)
   (advice-add 'consult-notes-search-in-all-notes :around #'ad:consult-notes--single-directory-string))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Programming language modes
-
-(with-eval-after-load 'python
-  (keymap-set python-base-mode-map "M-<left>" #'python-indent-shift-left)
-  (keymap-set python-base-mode-map "M-<right>" #'python-indent-shift-right)
-  (font-lock-add-keywords 'python-ts-mode (overmark-font-lock-show-tabs)))
-
-(with-eval-after-load 'rust-mode
-  (setq rust-mode-treesitter-derive t))
-
-(with-eval-after-load 'rustic
-  (setq rustic-lsp-client 'eglot)
-  (setq rustic-format-trigger 'on-save)
-  (setq rustic-cargo-clippy-trigger-fix 'on-compile)
-  (setq rustic-use-rust-save-some-buffers t)
-  (setq rustic-clippy-arguments "--all --all-features -- --deny warnings")
-  (when (executable-find "rustup")
-    (setq rustic-rustfmt-args "+nightly")))
-
-(with-eval-after-load 'terraform-mode
-  (setq terraform-format-on-save t)
-  (setq terraform-indent-level 2))
-
-(with-eval-after-load 'web-mode
-  (setq web-mode-markup-indent-offset 2)
-  (setq web-mode-code-indent-offset 2)
-  (setq web-mode-css-indent-offset 2)
-  (setq js-indent-level 2)
-  (setq web-mode-enable-auto-pairing t)
-  (setq web-mode-enable-auto-expanding t)
-  (setq web-mode-enable-css-colorization t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; AI & LLM integration

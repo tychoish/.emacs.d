@@ -15,7 +15,7 @@
 (require 'ert)
 (require 'project)
 (require 'projectile)
-(require 'setup-project)
+(require 'eglox-project)
 
 (cl-defmethod project-name ((project (head projectile)))
   (projectile-project-name (project-root project)))
@@ -141,32 +141,16 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
 ;; ---------------------------------------------------------------------------
 ;; projectile cache fallback for non-writable locations
 
-(ert-deftest project-projectile/cache-file-in-tree-when-writable ()
-  "projectile-project-cache-file returns in-tree path when project root is writable."
-  (project-test--with-project-dir ".projectile"
-    (let ((cache-file (projectile-project-cache-file dir)))
-      (should (equal cache-file (expand-file-name ".projectile-cache.eld" dir))))))
-
-(ert-deftest project-projectile/cache-file-fallback-when-non-writable ()
-  "projectile-project-cache-file returns fallback state path when project root is not writable."
-  (let* ((non-writable-root "/usr/lib/go/src")
-         (cache-file (projectile-project-cache-file non-writable-root)))
-    (should (string-prefix-p (expand-file-name projectile-cache-fallback-directory) cache-file))
-    (should (string-match-p "src-" cache-file))
-    (should (string-suffix-p ".eld" cache-file))))
-
-(ert-deftest project-projectile/cache-project-and-load-on-non-writable-root ()
-  "Caching and loading on a non-writable root uses the fallback cache without warnings."
-  (let* ((non-writable-root "/usr/lib/go/src")
-         (dummy-files '("pkg/a.go" "pkg/b.go"))
-         (cache-file (projectile-project-cache-file non-writable-root)))
+(ert-deftest project-projectile/cache-file-is-central ()
+  "Writable and unwritable project roots both use the central cache."
+  (let ((eglox-project-cache-directory (make-temp-file "pp-cache-" t)))
     (unwind-protect
-        (progn
-          (projectile-cache-project non-writable-root dummy-files)
-          (should (file-exists-p cache-file))
-          (should (equal (projectile-load-project-cache non-writable-root) dummy-files)))
-      (when (file-exists-p cache-file)
-        (delete-file cache-file)))))
+        (project-test--with-project-dir ".projectile"
+          (let ((file (eglox-project--cache-file nil dir)))
+            (should (string-prefix-p eglox-project-cache-directory file))
+            (should-not (file-exists-p (expand-file-name ".projectile-cache.eld" dir)))
+            (should-not (equal file (eglox-project--cache-file nil "/usr/lib/go/src")))))
+      (delete-directory eglox-project-cache-directory t))))
 
 (ert-deftest project-projectile/serialize-warns-on-non-writable ()
   "Unwritable non-cache data is not silently redirected to an unread path."
@@ -199,18 +183,14 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
     (should (equal (nreverse seen) '(1 2 3 4 5)))))
 
 (ert-deftest project-projectile/enable-all-buffers-skips-dead-buffers ()
-  "Killed buffers are not counted and do not abort the run."
+  "Killed buffers are skipped without aborting the operation."
   (let ((live (generate-new-buffer " *pp-live*"))
-        (dead (generate-new-buffer " *pp-dead*"))
-        (done nil))
+        (dead (generate-new-buffer " *pp-dead*")))
     (kill-buffer dead)
     (unwind-protect
-        (cl-letf (((symbol-function 'message) #'ignore)
-                  ((symbol-function 'buffer-list) (lambda (&optional _) (list live dead))))
-          (projectile-enable-all-buffers :on-done (lambda (n) (setq done n)))
-          (project-test--wait (lambda () done))
-          (should (equal done 1))
-          (with-current-buffer live (should projectile-mode)))
+        (cl-letf (((symbol-function 'projectile-mode) #'ignore))
+          (should (projectile--set-mode-in-buffer 1 live))
+          (should-not (projectile--set-mode-in-buffer 1 dead)))
       (kill-buffer live))))
 
 (ert-deftest project-projectile/load-project-buffers-errors ()
@@ -244,29 +224,6 @@ This documents the gap: it ignores projectile-project-name / projectile-project-
   "Without saved data, noninteractive calls are silent no-ops."
   (cl-letf (((symbol-function 'projectile-session--read) (lambda (_) nil)))
     (should-not (projectile-session-restore-async "/fake/"))))
-
-;; ---------------------------------------------------------------------------
-;; cache fallback
-
-(ert-deftest project-projectile/cache-fallback-file-is-stable-and-in-fallback-dir ()
-  (let ((projectile-cache-fallback-directory (make-temp-file "pp-cache-" t)))
-    (unwind-protect
-        (let ((f (projectile-cache--fallback-file "/some/where/")))
-          (should (equal f (projectile-cache--fallback-file "/some/where")))
-          (should (string-prefix-p projectile-cache-fallback-directory f))
-          (should (string-match-p "\\`where-[0-9a-f]+\\.eld\\'" (file-name-nondirectory f))))
-      (delete-directory projectile-cache-fallback-directory t))))
-
-(ert-deftest project-projectile/cache-file-uses-fallback-when-unwritable ()
-  (let ((projectile-cache-fallback-directory (make-temp-file "pp-cache-" t)))
-    (unwind-protect
-        (progn
-          (should (equal "/x/.cache" (cl-letf (((symbol-function 'file-writable-p) (lambda (_) t)))
-                                       (projectile-project-cache-file-fallback (lambda (_) "/x/.cache") "/x/"))))
-          (should (string-prefix-p projectile-cache-fallback-directory
-                                   (cl-letf (((symbol-function 'file-writable-p) (lambda (_) nil)))
-                                     (projectile-project-cache-file-fallback (lambda (_) "/x/.cache") "/x/")))))
-      (delete-directory projectile-cache-fallback-directory t))))
 
 (provide 'project-projectile-integration-test)
 ;;; project-projectile-integration-test.el ends here

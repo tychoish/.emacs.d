@@ -13,7 +13,7 @@
   (should (eq (cdr (assoc 'yaml-ts-mode major-mode-remap-alist)) 'yaml-mode))
   (should (equal (cdr (assoc "alacritty" term-file-aliases)) "xterm"))
   (should (equal (cdr (assoc "ghostty" term-file-aliases)) "xterm-ghostty"))
-  (should (memq 'dired-async-mode dired-mode-hook))
+  (should (memq 'nerd-icons-dired-mode dired-mode-hook))
   (should (memq 'sqlite-extras-minor-mode sqlite-mode-hook))
   (should (memq 'turn-on-reftex LaTeX-mode-hook))
   (should (memq 'visual-line-mode LaTeX-mode-hook))

@@ -11,7 +11,7 @@
 (require 'cmdr-keys)
 (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
 (require 'setup-core)
-(require 'setup-project)
+(require 'eglox-project)
 (require 'builder)
 
 (defvar modus-themes-deuteranopia)
@@ -114,9 +114,9 @@
 
 Regression test: verifies that buffer-local setup hooks are attached to
 `python-ts-mode-hook' when `python' is loaded."
-  (require 'python)
-  (should (memq #'tychoish-set-local-fill-column-100 python-ts-mode-hook))
-  (should (memq #'tychoish-set-local-tab-width-4 python-ts-mode-hook)))
+  (require 'eglox)
+  (eglox-global-mode 1)
+  (should (memq #'eglox--python-setup python-ts-mode-hook)))
 
 (ert-deftest tychoish-core/compilation-read-command ()
   "Test that `builder-compilation-read-command' processes `builder--read-command'

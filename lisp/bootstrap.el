@@ -40,10 +40,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
+(declare-function eglox-global-mode "eglox")
 (declare-function package-activate-all "package")
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
 (declare-function sprite-state-path "sprite")
+(declare-function sprite-state-configure "sprite-state")
 (declare-function sprite-instance-name "sprite")
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
@@ -54,13 +56,15 @@
 (defvar sprite-state-locks-enabled)
 (defvar sprite-state-auto-save-enabled)
 (defvar sprite-state-desktop-enabled)
+(defvar sprite-state-desktop-deferred)
+(defvar sprite-state-savehist-enabled)
+(defvar sprite-state-recentf-enabled)
 (defvar sprite-state-mappings)
 (defvar sprite-startup-operations)
 (defvar sprite-first-frame-operations)
 (defvar sprite-instance-id)
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
-(defvar bookmark-save-flag)
 (defvar treesit-auto-langs)
 (defvar org-directory)
 (defvar org-agenda-files)
@@ -113,7 +117,9 @@
 (setq sprite-state-locks-enabled t)
 (setq sprite-state-auto-save-enabled t)
 (setq sprite-state-desktop-enabled t)
-(setq bookmark-save-flag 1)
+(setq sprite-state-desktop-deferred t)
+(setq sprite-state-savehist-enabled t)
+(setq sprite-state-recentf-enabled t)
 (setq mcpkit-instance-name-function #'sprite-instance-name)
 (setq cmdr-opt-in-specs '(defaults))
 
@@ -136,45 +142,42 @@
         (projectile-frecency-file . "projectile-frecency.eld")))
 
 (setq sprite-startup-operations
-  '(bootstrap-set-up-fringe-mode
-    overmark-global-mode
-    column-number-mode
-    delete-selection-mode
-    winner-mode
-    electric-pair-mode
-    pixel-scroll-precision-mode
-    xterm-mouse-mode
-    repeat-mode
+  '(sprite-mode
     cmdr-mode
     cmdr-frame-mode
-    sprite-mode
+    orgx-global-mode
     which-key-mode
-    eglox-global-mode
     minaid-mode
-    telegax-global-mode
+    nerd-icons-completion-mode
     sprite-state-configure
-    bootstrap-silent-savehist
-    bootstrap-silent-recentf
-    popper-mode
+    eglox-global-mode
+    sprite-state-global-mode
+    annotated-completing-read-setup-history
+    sprite-state-start-desktop
+    magit-dash-global-mode
+    orgx-capture-setup-standard-templates
+    denote-dash-global-mode
     grepx-mode
+    column-number-mode
+    bootstrap-set-up-fringe-mode
+    delete-selection-mode
+    electric-pair-mode
+    pixel-scroll-precision-mode
+    winner-mode
+    xterm-mouse-mode
+    ; repeat-mode
+    overmark-global-mode
+    telegax-global-mode
+    popper-mode
     bootstrap-require-treesit-auto
     bootstrap-treesit-auto
-    bootstrap-require-setup-project
     global-treesit-auto-mode
-    projectile-mode
-    denote-dash-global-mode
     denote-tree-mode
-    magit-dash-global-mode
     builder-mode
     chex-global-mode
-    nerd-icons-completion-mode
-    orgx-global-mode
     global-auto-revert-mode
-    orgx-capture-setup-standard-templates
-    annotated-completing-read-setup-history
-    mcpkit-init-services
     gptel-mcp-mode
-    sprite-state-global-mode
+    mcpkit-init-services
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
@@ -195,11 +198,8 @@
 
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
-(defun bootstrap-require-setup-project () (require 'setup-project))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-require-treesit-auto () (require 'treesit-auto))
-(defun bootstrap-silent-savehist () (let ((inhibit-message t) (message-log-max nil)) (savehist-mode 1)))
-(defun bootstrap-silent-recentf () (let ((inhibit-message t) (message-log-max nil)) (recentf-mode 1)))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
