@@ -188,10 +188,6 @@
 (when (eq system-type 'gnu/linux)
   (setq read-process-output-max (* 1024 1024)))
 
-(defun tychoish-alert-default-style ()
-  "Determine the preferred `alert' style for the current environment."
-  )
-
 (advice-add 'display-startup-echo-area-message :override #'ignore)
 (advice-add 'ask-user-about-supersession-threat :override #'ignore)
 
