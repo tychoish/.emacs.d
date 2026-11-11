@@ -174,6 +174,7 @@
     bootstrap-treesit-auto
     global-treesit-auto-mode
     builder-mode
+    bootstrap-require-builder-tasks
     chex-global-mode
     global-auto-revert-mode
     gptel-mcp-mode
@@ -200,6 +201,7 @@
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-require-treesit-auto () (require 'treesit-auto))
+(defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))

@@ -200,11 +200,6 @@
    (t
     'message)))
 
-(defun tychoish-alert-darwin-server-init ()
-  "Switch `alert-default-style' to `osx-notifier' on first GUI client frame."
-  (when (display-graphic-p)
-    (setq alert-default-style 'osx-notifier)
-    (remove-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
 (advice-add 'display-startup-echo-area-message :override #'ignore)
 (advice-add 'ask-user-about-supersession-threat :override #'ignore)
 
@@ -282,10 +277,7 @@
 (with-eval-after-load 'alert
   (setq alert-log-messages nil)
   (setq alert-fade-time 15)
-  (setq alert-default-style (tychoish-alert-default-style))
-
-  (when (and (eq system-type 'darwin) (daemonp))
-    (add-hook 'server-after-make-frame-hook #'tychoish-alert-darwin-server-init)))
+  (setq alert-default-style (tychoish-alert-default-style)))
 
 (with-eval-after-load 'emojify
   (setq emojify-emoji-styles '(ascii unicode github))
@@ -324,9 +316,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Build & system tools
-
-(with-eval-after-load 'builder-core
-  (require 'builder-tasks))
 
 (with-eval-after-load 'arch
   (arch-enable-desktop-notifications)
