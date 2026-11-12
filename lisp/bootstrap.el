@@ -118,6 +118,18 @@
       (let ((name (file-name-sans-extension (file-name-nondirectory file))))
 	(require (intern name))))))
 
+(defun bootstrap-alert ()
+  (setq alert-default-style
+        (cond
+         ((eq system-type 'darwin)
+          (if (display-graphic-p) 'osx-notifier 'notifier))
+         (alert-libnotify-command
+          'libnotify)
+         ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
+          'notifications)
+         (t
+          'message))))
+
 (defun bootstrap-report-startup-timing ()
   (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))
 	(init-time (float-time (time-subtract after-init-time before-init-time)))
@@ -198,6 +210,7 @@
     disable-all-themes
     bootstrap-default-theme
     hud-modeline-mode
+    bootstrap-alert
     bootstrap-frame-startup-timing))
 
 (setq sprite-startup-operations
@@ -206,37 +219,38 @@
     cmdr-frame-mode
     sprite-state-configure
     sprite-state-global-mode
-    which-key-mode
     minaid-mode
     nerd-icons-completion-mode
-    orgx-global-mode
-    agent-shell-queue-global-mode
-    eglox-global-mode
-    orgx-capture-setup-standard-templates
-    annotated-completing-read-setup-history
     bootstrap-set-up-fringe-mode
     xterm-mouse-mode
     grepx-mode
     magit-dash-global-mode
-    denote-dash-global-mode
-    consult-notes-denote-mode
-    denote-tree-mode
-    sprite-state-start-desktop
-    column-number-mode
-    delete-selection-mode
-    electric-pair-mode
-    pixel-scroll-precision-mode
-    winner-mode
-    ; repeat-mode
+    orgx-global-mode
+    eglox-global-mode
+    orgx-capture-setup-standard-templates
+    annotated-completing-read-setup-history
     overmark-global-mode
-    telegax-global-mode
-    popper-mode
     bootstrap-require-treesit-auto
     bootstrap-treesit-auto
     global-treesit-auto-mode
     builder-mode
     bootstrap-require-builder-tasks
     chex-global-mode
+    sprite-state-start-desktop
+    which-key-mode
+    denote-dash-global-mode
+    denote-rename-buffer-mode
+    denote-tree-mode
+    agent-shell-queue-global-mode
+    column-number-mode
+    delete-selection-mode
+    electric-pair-mode
+    pixel-scroll-precision-mode
+    winner-mode
+    ; repeat-mode
+    telegax-global-mode
+    popper-mode
+    consult-notes-denote-mode
     global-auto-revert-mode
     gptel-mcp-mode
     mcpkit-init-services
@@ -302,6 +316,8 @@
   (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
   (setq deft-directory (file-name-concat local-notes-directory "deft"))
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
+  (setq denote-journal-directory (file-name-concat denote-directory "journal"))
+  (setq denote-explore-network-directory (file-name-concat denote-directory "explore"))
   local-notes-directory)
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent

@@ -149,7 +149,7 @@
 (advice-add 'display-startup-echo-area-message :override #'ignore)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; third-party -- configuration 
+;;; third-party -- configuration
 
 (setq savehist-coding-system 'utf-8-emacs)
 (setq desktop-buffers-not-to-save
@@ -176,6 +176,7 @@
         "\\*Flymake diagnostics.*\\*"
         help-mode
         compilation-mode))
+
 (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
 (setq popper-display-control nil)
 
@@ -192,12 +193,25 @@
 (setq which-key-lighter "")
 
 (setq emojify-emoji-styles '(ascii unicode github))
-(setq emojify-display-style 'unicode))
+(setq emojify-display-style 'unicode)
 (setq modus-themes-deuteranopia t)
 (setq modus-themes-common-palette-overrides
         '((border-mode-line-active bg-mode-line-active)
           (border-mode-line-inactive bg-mode-line-inactive)
           (message-separator bg-main)))
+
+(setq ollama-tailnet-fallback-strategy :auto-local)
+
+(setq denote-dash-default-filter '(not "journal"))
+(setq denote-review-insert-after "date")
+(setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
+(setq denote-save-buffers t)
+(setq denote-prompts '(title keywords file-type))
+(setq denote-journal-title-format nil)
+(setq denote-sequence-scheme 'alphanumeric)
+(setq denote-explore-network-format "graphviz")
+(setq denote-link-description-format #'denote-dash-link-description-format)
+(setq denote-rename-buffer-function #'denote-dash-rename-buffer)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Core & UI systems
@@ -223,18 +237,6 @@
 (with-eval-after-load 'warnings
   (add-to-list 'warning-suppress-log-types '(frameset))
   (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
-
-(with-eval-after-load 'alert
-  (setq alert-default-style
-        (cond
-         ((eq system-type 'darwin)
-          (if (display-graphic-p) 'osx-notifier 'notifier))
-         (alert-libnotify-command
-          'libnotify)
-         ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
-          'notifications)
-         (t
-          'message))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Shells & communication
@@ -269,6 +271,12 @@
 (with-eval-after-load 'docker
   (cmdr-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 
+(with-eval-after-load 'ollama-tailnet
+  (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
+
+(with-eval-after-load 'magit-gh
+  (cmdr-transient-insert-suffix-once 'magit-gh '(-1) ["magit-dash" ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Git & VCS
 
@@ -288,11 +296,6 @@
   (when (fboundp 'hud-modeline-set-segment-action)
     (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
 
-(with-eval-after-load 'magit-gh
-  (cmdr-transient-insert-suffix-once 'magit-gh '(-1)
-    ["magit-dash"
-     ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
-
 (with-eval-after-load 'git-link
   (defun ad:git-link--new-copy-to-clipboard (link)
     "Also copy LINK to the system clipboard."
@@ -307,21 +310,6 @@
 
 (with-eval-after-load 'denote
   (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window)))
-  (setq denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
-  (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal"))
-  (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
-  (setq denote-dash-default-filter '(not "journal"))
-  (setq denote-review-insert-after "date")
-  (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
-  (setq denote-save-buffers t)
-  (setq denote-prompts '(title keywords file-type))
-  (setq denote-journal-title-format nil)
-  (setq denote-sequence-scheme 'alphanumeric)
-  (setq denote-explore-network-format "graphviz")
-  (setq denote-link-description-format #'denote-dash-link-description-format)
-  (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
-
-  (denote-rename-buffer-mode 1)
 
   (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
     "Only call FN in `org-mode' buffers."
@@ -338,10 +326,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; AI & LLM integration
-
-(with-eval-after-load 'ollama-tailnet
-  (setq ollama-tailnet-fallback-strategy :auto-local)
-  (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
 
 (with-eval-after-load 'gptel
   (keymap-set gptel-mode-map "C-c m" #'gptel-menu)
