@@ -337,18 +337,17 @@
   (setq denote-journal-title-format nil)
   (setq denote-sequence-scheme 'alphanumeric)
   (setq denote-explore-network-format "graphviz")
-
+  (setq denote-link-description-format #'denote-dash-link-description-format)
   (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
+
   (denote-rename-buffer-mode 1)
 
   (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
     "Only call FN in `org-mode' buffers."
     (when (derived-mode-p 'org-mode)
       (apply fn args)))
-  (advice-add 'denote-link-ol-get-heading :around
-	      #'ad:denote-link-ol-get-heading--org-only)
 
-  (setq denote-link-description-format #'denote-dash-link-description-format))
+  (advice-add 'denote-link-ol-get-heading :around #'ad:denote-link-ol-get-heading--org-only))
 
 (with-eval-after-load 'denote-dash
   (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree)
