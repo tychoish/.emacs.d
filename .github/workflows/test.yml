@@ -35,4 +35,4 @@ jobs:
       - run: apt-get install -y --no-install-recommends aspell aspell-en mu4e
       - run: ln -sf "$GITHUB_WORKSPACE" ~/.emacs.d
       - run: find "$GITHUB_WORKSPACE" -name "*.elc" -delete
-      - run: emacs --fg-daemon --eval '(builder-emacs-conf-run-ci-tests)'
+      - run: emacs --fg-daemon -L /usr/share/emacs/site-lisp/elpa-src/mu4e-* --eval '(builder-emacs-conf-run-ci-tests)'
