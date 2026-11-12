@@ -14,6 +14,8 @@
 
 (defvar which-key-replacement-alist)
 (defvar nerd-icons-mode-icon-alist)
+(declare-function agent-shell-interrupt-confirmed-p "agent-shell")
+(declare-function agent-shell-queue-format-file-extension "agent-shell-queue-persistence")
 
 (with-eval-after-load 'nerd-icons
   (unless (assq 'agent-shell-queue-item-view-mode nerd-icons-mode-icon-alist)
@@ -33,12 +35,16 @@
 (defun tychoish/agent-shell--apply-environment ()
   "Update agent environment variables from current toggle state."
   (setq agent-shell-anthropic-claude-environment
-        (agent-shell-make-environment-variables
-         "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona
-         "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS" "1"
-         "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS" "1"
-         "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
-         :inherit-env t))
+        (let ((process-environment
+               (seq-remove (lambda (entry) (string-prefix-p "CLAUDE_PERSONA=" entry))
+                           process-environment)))
+          (apply #'agent-shell-make-environment-variables
+                 (append (when tychoish/agent-shell-terse-output
+                           (list "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona))
+                         (list "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS" "1"
+                               "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS" "1"
+                               "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
+                               :inherit-env t)))))
   (setq agent-shell-omp-environment
         (agent-shell-make-environment-variables
          "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
@@ -115,20 +121,16 @@
 
 (defun ad:agent-shell-interrupt-recover-if-unanswered (orig-fn &rest args)
   "Arm a 5s fallback to recover stuck busy state after interrupt."
-  (let ((shell-buffer (current-buffer))
-        (request (car (map-elt agent-shell--state :active-requests))))
-    (apply orig-fn args)
-    (when (and request (map-nested-elt agent-shell--state '(:session :id)))
-      (run-with-timer 5 nil #'tychoish/agent-shell--force-clear-busy
-                       shell-buffer request))))
-
-(defun ad:acp-route-incoming-message-isolate-errors (orig-fn &rest args)
-  "Isolate errors from ACP response handling to avoid wedging drain loop."
-  (condition-case err
+  (if (or (not (derived-mode-p 'agent-shell-mode))
+          (not (map-nested-elt agent-shell--state '(:session :id))))
       (apply orig-fn args)
-    (error
-     (message "acp: error routing incoming message, isolated: %S" err)
-     nil)))
+    (when (or (car args) (agent-shell-interrupt-confirmed-p))
+      (let ((shell-buffer (current-buffer))
+            (request (car (map-elt agent-shell--state :active-requests))))
+        (prog1 (funcall orig-fn t)
+          (when request
+            (run-with-timer 5 nil #'tychoish/agent-shell--force-clear-busy
+                            shell-buffer request)))))))
 
 (defun tychoish/agent-shell--config-installed-p (config)
   "Return non-nil if CONFIG is Antigravity or its executable is available."
@@ -147,73 +149,6 @@
               (seq-map (lambda (e) (if (functionp e) (funcall e) e))
                        (agent-shell-default-agent-config-makers))))
 
-(defun ad:agent-shell-insert-to-shell-buffer-advance-point (orig-fn &rest args)
-  "Advance point and window-point to `point-max' after insertion."
-  (prog1 (apply orig-fn args)
-    (when-let* ((shell-buffer (plist-get args :shell-buffer))
-                ((buffer-live-p shell-buffer)))
-      (with-current-buffer shell-buffer
-        (goto-char (point-max))
-        (when-let* ((win (get-buffer-window shell-buffer t)))
-          (set-window-point win (point-max)))))))
-
-(defun ad:agent-shell--refresh-session-title (orig-fn &optional event)
-  "Preserve user session title for Claude sessions."
-  (unless (and-let* ((agent-name (map-nested-elt agent-shell--state '(:agent-config :mode-line-name)))
-                     ((equal agent-name "Claude"))
-                     (title (map-nested-elt agent-shell--state '(:session :title)))
-                     ((stringp title))
-                     ((not (string-empty-p title)))))
-    (funcall orig-fn event)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; MCPKit Session Integration
-
-(defun agent-shell-mcpkit-active-url ()
-  "Return HTTP URL for active MCP server, or nil."
-  (when-let* ((port (or (mcpkit-active-port)
-                        (progn (mcpkit-init-services-sync) (mcpkit-active-port)))))
-    (if (and (fboundp 'mcpkit-proxy-active-port)
-             (mcpkit-proxy-active-port)
-             (bound-and-true-p sprite-instance-id))
-        (format "http://127.0.0.1:%d/sprite/%s/mcp"
-                (mcpkit-proxy-active-port)
-                sprite-instance-id)
-      (format "http://127.0.0.1:%d/mcp" port))))
-
-(defun agent-shell-mcpkit-server-spec ()
-  "Return ACP McpServer specification for current session's MCPKit."
-  (when-let* ((url (agent-shell-mcpkit-active-url)))
-    `((name . "emacs")
-      (type . "http")
-      (url . ,url)
-      (headers . ()))))
-
-(defun ad:agent-shell--mcp-servers-filter-nil (orig-fn &rest args)
-  "Filter out nil server entries from dynamic resolvers."
-  (when-let* ((servers (apply orig-fn args)))
-    (let ((filtered (seq-filter (lambda (s) (map-elt s 'name)) servers)))
-      (when (> (length filtered) 0)
-        (apply #'vector (append filtered nil))))))
-
-(defun agent-shell-mcpkit-environment-variables ()
-  "Return environment variables exposing MCPKit connection info."
-  (when-let* ((port (or (mcpkit-active-port)
-                        (progn (mcpkit-init-services-sync) (mcpkit-active-port)))))
-    (list (format "MCPKIT_PORT=%d" port)
-          (format "EMACS_MCP_PORT=%d" port)
-          (format "EMACS_MCP_URL=http://127.0.0.1:%d/mcp" port)
-          (format "EMACS_SPRITE_ID=%s" (or (bound-and-true-p sprite-instance-id) (system-name)))
-          (format "EMACS_SERVER_NAME=%s" (or (bound-and-true-p server-name) "server")))))
-
-(defun ad:agent-shell--make-acp-client-inject-mcpkit-env (orig-fn &rest args)
-  "Inject MCPKit environment variables into ACP client."
-  (let* ((env (plist-get args :environment-variables))
-         (extra (agent-shell-mcpkit-environment-variables)))
-    (if extra
-        (apply orig-fn (plist-put (copy-sequence args) :environment-variables (append extra env)))
-      (apply orig-fn args))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Primary Agent-Shell Configuration
 
@@ -228,26 +163,20 @@
 (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-agent-configs #'tychoish/agent-shell-installed-configs)
-(setq agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec))))
+(require 'setup-agent-shell-mcpkit)
 
 (advice-add 'agent-shell-experimental--on-session-push-end :around #'ad:agent-shell-recover-stuck-push-end)
-(advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered)
-(advice-add 'acp--route-incoming-message :around #'ad:acp-route-incoming-message-isolate-errors)
-(advice-add 'agent-shell--insert-to-shell-buffer :around #'ad:agent-shell-insert-to-shell-buffer-advance-point)
-(advice-add 'agent-shell--refresh-session-title :around #'ad:agent-shell--refresh-session-title)
-(advice-add 'agent-shell--mcp-servers :around #'ad:agent-shell--mcp-servers-filter-nil)
-(advice-add 'agent-shell--make-acp-client :around #'ad:agent-shell--make-acp-client-inject-mcpkit-env)
+(advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered
+            '((depth . -100)))
 
 (keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
 (keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
 (keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
-(keymap-set agent-shell-mode-map "C-c C-a" #'agent-shell-menu-select-action)
 (keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
 (keymap-set agent-shell-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
 (keymap-set agent-shell-mode-map "C-c m" #'agent-shell-menu-select-action)
 (keymap-set agent-shell-mode-map "C-c x" #'agent-shell-menu-select-command)
 (keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
-(keymap-set agent-shell-mode-map "C-TAB" #'agent-shell-next-item)
 (keymap-set agent-shell-mode-map "M-SPC" #'agent-shell-menu-select-session-mode)
 
 (cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish/agent-shell-toggle-terse-output)
@@ -270,13 +199,9 @@
 
 (defun tychoish--agent-shell-queue-state-file ()
   "Queue state file under agent-shell state directory."
-  (let ((ext (cond
-              ((eq (bound-and-true-p agent-shell-queue-serialization-format) 'json) "json")
-              ((eq (bound-and-true-p agent-shell-queue-serialization-format) 'yaml) "yaml")
-              ((eq (bound-and-true-p agent-shell-queue-serialization-format) 'org) "org")
-              (t "el"))))
-    (expand-file-name (concat "queue." ext)
-                      (sprite-state-path "agent-shell"))))
+  (expand-file-name (concat "queue" (agent-shell-queue-format-file-extension
+                                     agent-shell-queue-serialization-format))
+                    (sprite-state-path "agent-shell")))
 
 (defun tychoish--agent-shell-queue-archive-file ()
   "Archive file under agent-shell state directory."
@@ -347,7 +272,6 @@
   (setq agent-shell-notifications-close-function #'tychoish/agent-shell-notifications-alert-close)
   (setq agent-shell-notifications-timeout 30))
 
-(add-hook 'agent-shell-mode-hook #'agent-shell-queue-global-mode)
 (add-hook 'agent-shell-mode-hook #'agent-shell-notifications-mode)
 (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-mode)
 (add-hook 'agent-shell-viewport-edit-view-hook #'agent-shell-notifications-mode)

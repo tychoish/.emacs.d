@@ -210,6 +210,7 @@
     minaid-mode
     nerd-icons-completion-mode
     orgx-global-mode
+    agent-shell-queue-global-mode
     eglox-global-mode
     orgx-capture-setup-standard-templates
     annotated-completing-read-setup-history
@@ -218,6 +219,7 @@
     grepx-mode
     magit-dash-global-mode
     denote-dash-global-mode
+    consult-notes-denote-mode
     denote-tree-mode
     sprite-state-start-desktop
     column-number-mode

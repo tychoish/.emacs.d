@@ -93,8 +93,6 @@
 (setq inhibit-startup-message t)
 
 (setq jit-lock-defer-time 0.2)
-(setq jit-lock-stealth-nice 0.2)
-(setq jit-lock-stealth-load 100)
 
 (setq confirm-kill-processes nil)
 (setq confirm-nonexistent-file-or-buffer nil)
@@ -149,7 +147,57 @@
   (setq read-process-output-max (* 1024 1024)))
 
 (advice-add 'display-startup-echo-area-message :override #'ignore)
-(advice-add 'ask-user-about-supersession-threat :override #'ignore)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; third-party -- configuration 
+
+(setq savehist-coding-system 'utf-8-emacs)
+(setq desktop-buffers-not-to-save
+      (concat "\\` \\|\\("
+              "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
+              "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
+              "\\)$"))
+
+(setq desktop-files-not-to-save
+      (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)\\|"
+              "^/usr/lib/go/.*\\|"
+              "^/usr/lib/rustlib/.*\\|"
+              "^/home.+go/pkg/mod\\|"
+              "^/home.+\\.cargo"))
+
+(setq popper-reference-buffers
+      '("\\*Messages\\*"
+        "\\*Warnings\\*"
+        "\\*Backtrace\\*"
+        "\\*Compile-Log\\*"
+        "\\*compilation\\*"
+        "\\*grep\\*"
+        "\\*xref\\*"
+        "\\*Flymake diagnostics.*\\*"
+        help-mode
+        compilation-mode))
+(setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
+(setq popper-display-control nil)
+
+(setq whitespace-style '(face trailing tabs spaces lines newline missing-newline-at-eof empty space-mark tab-mark newline-mark))
+
+(setq alert-log-messages nil)
+(setq alert-fade-time 15)
+(setq tracking-max-mode-line-entries 3)
+(setq docker-terminal-backend 'eat)
+(setq inferior-lisp-program "sbcl")
+
+(setq which-key-idle-delay 0.25)
+(setq which-key-idle-secondary-delay 0.125)
+(setq which-key-lighter "")
+
+(setq emojify-emoji-styles '(ascii unicode github))
+(setq emojify-display-style 'unicode))
+(setq modus-themes-deuteranopia t)
+(setq modus-themes-common-palette-overrides
+        '((border-mode-line-active bg-mode-line-active)
+          (border-mode-line-inactive bg-mode-line-inactive)
+          (message-separator bg-main)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Core & UI systems
@@ -160,67 +208,21 @@
   (add-to-list 'electric-pair-pairs '(?\[ . ?\])))
 
 (with-eval-after-load 'savehist
-  (setq savehist-coding-system 'utf-8-emacs)
   (add-to-list 'savehist-additional-variables 'denote--title-history)
   (add-to-list 'savehist-additional-variables 'denote--keywords-history)
   (add-to-list 'savehist-additional-variables 'compile-history))
 
 (with-eval-after-load 'desktop
-  (add-to-list 'desktop-globals-to-save 'register-alist)
-  (add-to-list 'desktop-globals-to-save 'file-name-history)
   (add-to-list 'desktop-modes-not-to-save 'dired-mode)
   (add-to-list 'desktop-modes-not-to-save 'Info-mode)
   (add-to-list 'desktop-modes-not-to-save 'org-mode)
   (add-to-list 'desktop-modes-not-to-save 'eww-mode)
   (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
-  (add-to-list 'desktop-modes-not-to-save 'fundamental-mode)
-
-  (setq desktop-buffers-not-to-save
-        (concat "\\("
-                "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
-                "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
-                "\\)$"))
-
-  (setq desktop-files-not-to-save
-        (concat "\\(\\`/[^/:]*:\\|(ftp)\'\\)"
-                "^/usr/lib/go/.*\\|"
-                "^/usr/lib/rustlib/.*\\|"
-                "^/home.+go/pkg/mod\\|"
-                "^/home.+\\.cargo")))
-
-(with-eval-after-load 'popper
-  (setq popper-reference-buffers
-        '("\\*Messages\\*"
-          "\\*Warnings\\*"
-          "\\*Backtrace\\*"
-          "\\*Compile-Log\\*"
-          "\\*compilation\\*"
-          "\\*grep\\*"
-          "\\*xref\\*"
-          "\\*Flymake diagnostics.*\\*"
-          help-mode
-          compilation-mode))
-  (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
-  (setq popper-display-control nil))
-
-(with-eval-after-load 'whitespace
-  (setq whitespace-style '(face trailing tabs spaces lines newline missing-newline-at-eof empty space-mark tab-mark newline-mark)))
+  (add-to-list 'desktop-modes-not-to-save 'fundamental-mode))
 
 (with-eval-after-load 'warnings
   (add-to-list 'warning-suppress-log-types '(frameset))
   (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
-
-(with-eval-after-load 'which-key
-  (setq which-key-idle-delay 0.25)
-  (setq which-key-idle-secondary-delay 0.125)
-  (setq which-key-lighter ""))
-
-(with-eval-after-load 'modus-themes
-  (setq modus-themes-deuteranopia t)
-  (setq modus-themes-common-palette-overrides
-        '((border-mode-line-active bg-mode-line-active)
-          (border-mode-line-inactive bg-mode-line-inactive)
-          (message-separator bg-main))))
 
 (with-eval-after-load 'alert
   (setq alert-default-style
@@ -232,21 +234,10 @@
          ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
           'notifications)
          (t
-          'message)))
-  (setq alert-log-messages nil)
-  (setq alert-fade-time 15))
-
-(with-eval-after-load 'emojify
-  (setq emojify-emoji-styles '(ascii unicode github))
-  (setq emojify-display-style 'unicode))
+          'message))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Shells & communication
-
-(autoload 'eshell-cmpl-initialize "em-cmpl")
-
-(with-eval-after-load 'eshell
-  (add-hook 'eshell-mode-hook #'eshell-cmpl-initialize))
 
 (with-eval-after-load 'comint
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
@@ -259,9 +250,6 @@
 
 (with-eval-after-load 'erc
   (require 'tracking))
-
-(with-eval-after-load 'tracking
-  (setq tracking-max-mode-line-entries 3))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Search & navigation
@@ -279,11 +267,7 @@
   (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 (with-eval-after-load 'docker
-  (setq docker-terminal-backend 'eat)
   (cmdr-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
-
-(with-eval-after-load 'slime
-  (setq inferior-lisp-program "sbcl"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Git & VCS
@@ -322,11 +306,8 @@
 ;;; Denote & notes
 
 (with-eval-after-load 'denote
-  (when (default-boundp 'denote-directory)
-    (setq denote-directory '()))
-
   (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window)))
-  (add-to-list 'denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
+  (setq denote-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote"))
   (setq denote-journal-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "denote" "journal"))
   (setq denote-explore-network-directory (file-name-concat (or local-notes-directory (expand-file-name "~/notes")) "explore"))
   (setq denote-dash-default-filter '(not "journal"))
@@ -354,16 +335,6 @@
   (make-read-extended-command-for-prefix "denote"
     :bind-map denote-dash-global-map
     :bind-key "x"))
-
-(with-eval-after-load 'consult-notes
-  (consult-notes-denote-mode 1)
-
-  (defun ad:consult-notes--single-directory-string (fn &rest args)
-    "Let-bind `denote-directory' to a single string for the duration of FN."
-    (let ((denote-directory (denote-directories-get-common-root)))
-      (apply fn args)))
-  (advice-add 'consult-notes :around #'ad:consult-notes--single-directory-string)
-  (advice-add 'consult-notes-search-in-all-notes :around #'ad:consult-notes--single-directory-string))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; AI & LLM integration
