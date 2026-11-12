@@ -523,13 +523,16 @@ correctly and reads from the minibuffer using the candidate's command."
         (tychoish-mail-account-current nil)
         selected)
     (setf (map-elt tychoish-mail-accounts-table "z-default")
-          (tychoish-mail-make-account :default t))
+          (tychoish-mail-make-account :maildir "/tmp/test-mail"
+                                      :fetchmail "true" :default t))
     (setf (map-elt tychoish-mail-accounts-table "unrestricted")
-          (tychoish-mail-make-account))
+          (tychoish-mail-make-account :maildir "/tmp/test-mail" :fetchmail "true"))
     (setf (map-elt tychoish-mail-accounts-table "a-specific")
-          (tychoish-mail-make-account :systems '("host")))
+          (tychoish-mail-make-account :maildir "/tmp/test-mail"
+                                      :fetchmail "true" :systems '("host")))
     (setf (map-elt tychoish-mail-accounts-table "z-specific")
-          (tychoish-mail-make-account :systems '("host")))
+          (tychoish-mail-make-account :maildir "/tmp/test-mail"
+                                      :fetchmail "true" :systems '("host")))
     (cl-letf (((symbol-function 'system-name) (lambda () "host"))
               ((symbol-function 'sprite-instance-name) (lambda () "work"))
               ((symbol-function 'tychoish-mail--activate-account)
