@@ -60,7 +60,8 @@
         (apply orig-fn (plist-put (copy-sequence args) :environment-variables (append extra env)))
       (apply orig-fn args))))
 
-(setq agent-shell-mcp-servers (list #'agent-shell-mcpkit-server-spec))
+;; Agent-shell evaluates lambda forms here, but treats symbols as server data.
+(setq agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec))))
 (advice-add 'agent-shell--mcp-servers :around #'ad:agent-shell--mcp-servers-filter-nil)
 (advice-add 'agent-shell--make-acp-client :around #'ad:agent-shell--make-acp-client-inject-mcpkit-env)
 

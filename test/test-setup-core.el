@@ -308,12 +308,12 @@ correctly and reads from the minibuffer using the candidate's command."
   ;; Active server returns normalized vector
   (cl-letf (((symbol-function 'agent-shell-mcpkit-server-spec)
              (lambda () '((name . "emacs") (type . "http") (url . "http://127.0.0.1:8765/mcp")))))
-    (let ((agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec)))))
+    (let ((agent-shell--state nil))
       (should (equal [((name . "emacs") (type . "http") (url . "http://127.0.0.1:8765/mcp") (headers . []))]
                      (agent-shell--mcp-servers)))))
   ;; Inactive server returns nil
   (cl-letf (((symbol-function 'agent-shell-mcpkit-server-spec) (lambda () nil)))
-    (let ((agent-shell-mcp-servers (list (lambda () (agent-shell-mcpkit-server-spec)))))
+    (let ((agent-shell--state nil))
       (should-not (agent-shell--mcp-servers)))))
 
 (ert-deftest tychoish-core/agent-shell-acp-client-injects-mcpkit-env ()
