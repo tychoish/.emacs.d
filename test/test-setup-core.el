@@ -16,22 +16,19 @@
 
 (defvar modus-themes-deuteranopia)
 (defvar modus-themes-common-palette-overrides)
+(defvar mu4e-get-mail-command)
+(defvar mu4e-mu-home)
+(defvar mu4e--started)
+(defvar mu4e--server-indexing)
+(defvar mu4e--update-buffer)
 
 (ert-deftest tychoish-core/modus-theme-configuration-loads ()
-  "Evaluate the deferred Modus configuration as on first theme load."
-  (let ((modus-themes-deuteranopia nil)
-        (modus-themes-common-palette-overrides nil))
-    (with-temp-buffer
-      (insert-file-contents (expand-file-name "lisp/setup-core.el" test-helper-root))
-      (goto-char (point-min))
-      (search-forward "(with-eval-after-load 'modus-themes")
-      (goto-char (match-beginning 0))
-      (eval `(progn ,@(cddr (read (current-buffer)))) t))
-    (should modus-themes-deuteranopia)
-    (should (equal modus-themes-common-palette-overrides
-                   '((border-mode-line-active bg-mode-line-active)
-                     (border-mode-line-inactive bg-mode-line-inactive)
-                     (message-separator bg-main))))))
+  "The loaded configuration sets the Modus palette options."
+  (should modus-themes-deuteranopia)
+  (should (equal modus-themes-common-palette-overrides
+                 '((border-mode-line-active bg-mode-line-active)
+                   (border-mode-line-inactive bg-mode-line-inactive)
+                   (message-separator bg-main)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-buffer-name-format lambda

@@ -664,23 +664,27 @@
 (ert-deftest bootstrap/ssh-agent-returns-nil-when-no-socket ()
   "Returns nil when env is unset and no socket candidates exist."
   (cl-letf (((symbol-function 'getenv) (lambda (_) nil))
-            ((symbol-function 'find-ssh-agent-socket-candidates) (lambda () nil)))
+            ((symbol-function 'directory-files) (lambda (&rest _) nil))
+            ((symbol-function 'file-writable-p) (lambda (_) nil)))
     (should-not (bootstrap-set-up-ssh-agent))))
 
 (ert-deftest bootstrap/ssh-agent-sets-env-from-candidate ()
   "Sets and returns SSH_AUTH_SOCK from first socket candidate."
-  (let ((socket "/tmp/ssh-abc/agent.123"))
+  (let ((socket "/tmp/ssh-abc/agent.123")
+        assigned)
     (cl-letf (((symbol-function 'getenv) (lambda (_) nil))
-              ((symbol-function 'find-ssh-agent-socket-candidates)
-               (lambda () (list socket)))
+              ((symbol-function 'directory-files) (lambda (&rest _) (list socket)))
+              ((symbol-function 'file-writable-p) (lambda (path) (equal path socket)))
               ((symbol-function 'setenv)
-               (lambda (_var val) val)))
-      (should (equal socket (bootstrap-set-up-ssh-agent))))))
+               (lambda (var val) (setq assigned (cons var val)) val)))
+      (should (equal socket (bootstrap-set-up-ssh-agent)))
+      (should (equal assigned (cons "SSH_AUTH_SOCK" socket))))))
 
 (ert-deftest bootstrap/ssh-agent-return-type ()
   "Return value is always a string or nil."
   (cl-letf (((symbol-function 'getenv) (lambda (_) nil))
-            ((symbol-function 'find-ssh-agent-socket-candidates) (lambda () nil)))
+            ((symbol-function 'directory-files) (lambda (&rest _) nil))
+            ((symbol-function 'file-writable-p) (lambda (_) nil)))
     (let ((result (bootstrap-set-up-ssh-agent)))
       (should (or (null result) (stringp result))))))
 
