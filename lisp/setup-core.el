@@ -20,7 +20,6 @@
 
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
-(declare-function arch-enable-desktop-notifications "arch")
 
 (defvar denote-directory)
 (defvar magit-mode-map)
@@ -67,10 +66,6 @@
   "The cmdr core prefix map under C-c t.")
 
 (setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
-
-;; TODO should this move to cmdr-mode? seems like mode-configuration
-;; that should be handled in the scope of a mode
-(advice-add 'set-frame-font :around #'cmdr-set-frame-font-interactive)
 
 (cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
 (cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
@@ -279,11 +274,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Build & system tools
 
-(with-eval-after-load 'arch
-  (arch-enable-desktop-notifications) ;; TODO make this run (on by default, customizeable when list is enabled)
-  (run-with-idle-timer 2 nil #'arch--populate-cache)) ;; TODO this can run in bootstrap-package-maintenance package maintenance
-
-;; TODO why don't elpaish/docker configs run in cmdr-ecosystem which should be loaded on its own?
+;; cmdr-ecosystem installs bindings; these configure package-specific menus.
 (with-eval-after-load 'elpaish
   (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
