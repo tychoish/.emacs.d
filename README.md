@@ -22,11 +22,12 @@ primary text-editing and software development toolkit.
 
 From a high level, the goals are:
 
-- **exceptionally fast start times**: on my (not very new) computers,
-  Emacs sessions readily start in about a second, and while I've
-  included systemd service files for managing daemons, being able to
-  start ephemeral sessions and have Emacs associated with opening
-  specific file types is useful.
+- **exceptionally fast start times**: a November 2026 measurement on my
+  machine put synchronous initialization at about 0.18 seconds. Deferred
+  startup operations continue after init; in that measurement reaching a
+  fully configured state took roughly five seconds. Timing depends on the
+  machine and configuration. Fast initial startup makes ephemeral sessions
+  useful alongside the included systemd daemon services.
 
 - **full support for console-mode Emacs**: while I mostly use Emacs in
   GUI mode, I've always been envious of vim user's ability to operate
@@ -64,10 +65,9 @@ From a high level, the goals are:
 
 This is not an exhaustive list:
 
-- compellingly fast load times. My goal is to keep 3-10 year old
-  computers starting emacs in well under 2 seconds. Current timing (on
-  my systems) is around 750ms (and often less,) for GUI sessions and
-  less than 400ms for terminal sessions.
+- compellingly fast load times. My goal is to keep Emacs responsive
+  during startup on older computers, with deferred configuration work
+  distinguished from synchronous initialization.
 
 - a compelling (and roughly equivalent) terminal experience _and_ GUI
   experience.

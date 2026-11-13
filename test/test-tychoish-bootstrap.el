@@ -14,6 +14,7 @@
 (require 'eglox-project)
 (require 'setup-core)
 
+(defvar org-directory)
 (defvar denote-directory)
 (defvar deft-directory)
 

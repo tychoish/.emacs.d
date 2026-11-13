@@ -35,14 +35,15 @@ Defers cleanup to an idle timer after execution completes."
 
 (defvar slow-op-reporting (and (member "--with-slow-op-timing" command-line-args) t)
   "When non-nil, `with-slow-op-timer' logs any operation that exceeds `slow-op-threshold'.
-Off by default; pass --with-slow-op-timing on the command line to enable it.
-Detected here against `command-line-args' -- rather than via
-`command-line-functions' in init.el, where the flag is normally handled --
-because `command-line-1' only dispatches `command-line-functions' after
-`after-init-hook' has already run.  By then init.el and every module it
-requires (bootstrap, setup-core, setup-mail, orgx, user/*.el)
-have already loaded once with reporting off, so every `with-slow-op-timer'
-call in the main synchronous init path would go unmeasured.")
+Off by default; pass --with-slow-op-timing on the command line to enable
+it.  Detected here against `command-line-args' -- rather than via
+`command-line-functions' in init.el, where the flag is normally handled
+-- because `command-line-1' only dispatches `command-line-functions'
+after `after-init-hook' has already run.  By then init.el and every
+module it requires (bootstrap, setup-core, user/*.el)
+have already loaded once with reporting off, so every
+`with-slow-op-timer' call in the main synchronous init path would go
+unmeasured.")
 
 (defvar slow-op-threshold 0.00001
   "Minimum duration in seconds for `with-slow-op-timer' to emit a log message.")

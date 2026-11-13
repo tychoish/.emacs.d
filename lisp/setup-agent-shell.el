@@ -16,6 +16,7 @@
 (defvar nerd-icons-mode-icon-alist)
 (declare-function agent-shell-interrupt-confirmed-p "agent-shell")
 (declare-function agent-shell-queue-format-file-extension "agent-shell-queue-persistence")
+(declare-function mcpkit-agent-shell-mode "mcpkit-agent-shell")
 
 (with-eval-after-load 'nerd-icons
   (unless (assq 'agent-shell-queue-item-view-mode nerd-icons-mode-icon-alist)
@@ -32,7 +33,7 @@
 (defvar tychoish/agent-shell-terse-output t
   "Non-nil to pass terse persona to agent sessions.")
 
-(defun tychoish/agent-shell--apply-environment ()
+(defun tychoish--agent-shell--apply-environment ()
   "Update agent environment variables from current toggle state."
   (setq agent-shell-anthropic-claude-environment
         (let ((process-environment
@@ -55,11 +56,11 @@
                                           "omp" "projects"))))
 
 ;;;###autoload
-(defun tychoish/agent-shell-toggle-terse-output ()
+(defun tychoish--agent-shell-toggle-terse-output ()
   "Toggle terse agent output."
   (interactive)
   (setq tychoish/agent-shell-terse-output (not tychoish/agent-shell-terse-output))
-  (tychoish/agent-shell--apply-environment)
+  (tychoish--agent-shell--apply-environment)
   (message "Agent terse output: %s"
            (if tychoish/agent-shell-terse-output "on" "off")))
 
@@ -81,7 +82,7 @@
   "Render submitted prompt text in bold."
   (face-remap-add-relative 'comint-highlight-input :weight 'bold))
 
-(defun tychoish/agent-shell-shorten-antigravity-modeline ()
+(defun tychoish--agent-shell-shorten-antigravity-modeline ()
   "Display \"agy\" in modeline for Antigravity sessions."
   (when (or (eq (map-nested-elt agent-shell--state '(:agent-config :identifier)) 'antigravity)
             (equal mode-name "Antigravity"))
@@ -106,7 +107,7 @@
     (when-let* ((on-finished (plist-get args :on-finished)))
       (funcall on-finished))))
 
-(defun tychoish/agent-shell--force-clear-busy (shell-buffer request)
+(defun tychoish--agent-shell--force-clear-busy (shell-buffer request)
   "Force SHELL-BUFFER ready if REQUEST never received a response."
   (when (buffer-live-p shell-buffer)
     (with-current-buffer shell-buffer
@@ -129,10 +130,10 @@
             (request (car (map-elt agent-shell--state :active-requests))))
         (prog1 (funcall orig-fn t)
           (when request
-            (run-with-timer 5 nil #'tychoish/agent-shell--force-clear-busy
+            (run-with-timer 5 nil #'tychoish--agent-shell--force-clear-busy
                             shell-buffer request)))))))
 
-(defun tychoish/agent-shell--config-installed-p (config)
+(defun tychoish--agent-shell--config-installed-p (config)
   "Return non-nil if CONFIG is Antigravity or its executable is available."
   (or (eq (map-elt config :identifier) 'antigravity)
       (when-let* ((cm (map-elt config :client-maker))
@@ -143,9 +144,9 @@
               ((not (string-empty-p cmd))))
         (executable-find cmd t))))
 
-(defun tychoish/agent-shell-installed-configs ()
+(defun tychoish--agent-shell-installed-configs ()
   "Return available default agent configs, including bootstrappable Antigravity."
-  (seq-filter #'tychoish/agent-shell--config-installed-p
+  (seq-filter #'tychoish--agent-shell--config-installed-p
               (seq-map (lambda (e) (if (functionp e) (funcall e) e))
                        (agent-shell-default-agent-config-makers))))
 
@@ -162,8 +163,7 @@
 (setq agent-shell-thought-process-expand-by-default t)
 (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
 (setq agent-shell-anthropic-default-session-mode-id "auto")
-(setq agent-shell-agent-configs #'tychoish/agent-shell-installed-configs)
-(require 'setup-agent-shell-mcpkit)
+(setq agent-shell-agent-configs #'tychoish--agent-shell-installed-configs)
 
 (advice-add 'agent-shell-experimental--on-session-push-end :around #'ad:agent-shell-recover-stuck-push-end)
 (advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered
@@ -179,12 +179,12 @@
 (keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
 (keymap-set agent-shell-mode-map "M-SPC" #'agent-shell-menu-select-session-mode)
 
-(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish/agent-shell-toggle-terse-output)
+(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish--agent-shell-toggle-terse-output)
 
 (add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
 (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
 (add-hook 'agent-shell-mode-hook #'ansi-color-for-comint-mode-on)
-(add-hook 'agent-shell-mode-hook #'tychoish/agent-shell-shorten-antigravity-modeline)
+(add-hook 'agent-shell-mode-hook #'tychoish--agent-shell-shorten-antigravity-modeline)
 
 (add-to-list 'display-buffer-alist
              '(tychoish--agent-shell-buffer-p
@@ -195,7 +195,7 @@
 (with-eval-after-load 'which-key
   (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
 
-(tychoish/agent-shell--apply-environment)
+(tychoish--agent-shell--apply-environment)
 
 (defun tychoish--agent-shell-queue-state-file ()
   "Queue state file under agent-shell state directory."
@@ -211,7 +211,7 @@
 (defvar alert-fade-time)
 (declare-function agent-shell-queue-setup-capture-completion "agent-shell-queue-ui")
 
-(defun tychoish/agent-shell-notifications-alert-send (plist)
+(defun tychoish--agent-shell-notifications-alert-send (plist)
   "Send agent-shell notification PLIST through `alert'."
   (let* ((title (plist-get plist :title))
          (body (plist-get plist :body))
@@ -230,10 +230,10 @@
            :severity 'normal))
   nil)
 
-(defun tychoish/agent-shell-notifications-alert-close (_id)
+(defun tychoish--agent-shell-notifications-alert-close (_id)
   "No-op close function for alert notifications." nil)
 
-(defun tychoish/agent-shell-notifications--add-buffer-name (orig type shell-buffer event)
+(defun tychoish--agent-shell-notifications--add-buffer-name (orig type shell-buffer event)
   "Add `:shell-buffer-name' to alert payload plist."
   (append (funcall orig type shell-buffer event)
           (list :shell-buffer-name (buffer-name shell-buffer))))
@@ -265,11 +265,11 @@
 
 (with-eval-after-load 'agent-shell-notifications
   (advice-add 'agent-shell-notifications--make-notification-plist
-              :around #'tychoish/agent-shell-notifications--add-buffer-name)
+              :around #'tychoish--agent-shell-notifications--add-buffer-name)
 
   (setq agent-shell-notifications-provider nil)
-  (setq agent-shell-notifications-send-function #'tychoish/agent-shell-notifications-alert-send)
-  (setq agent-shell-notifications-close-function #'tychoish/agent-shell-notifications-alert-close)
+  (setq agent-shell-notifications-send-function #'tychoish--agent-shell-notifications-alert-send)
+  (setq agent-shell-notifications-close-function #'tychoish--agent-shell-notifications-alert-close)
   (setq agent-shell-notifications-timeout 30))
 
 (add-hook 'agent-shell-mode-hook #'agent-shell-notifications-mode)

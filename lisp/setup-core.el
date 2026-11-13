@@ -1,4 +1,4 @@
-;;; setup-core.el -- contains all major use-package forms -*- lexical-binding: t; -*-
+;;; setup-core.el --- Core settings and package integration -*- lexical-binding: t; -*-
 
 ;; Package-Requires: ((emacs "30.1"))
 
@@ -18,6 +18,12 @@
 (require 'cmdr-keys)
 (require 'cmdr-spec)
 
+(declare-function tychoish-mail-select-account "setup-mail")
+(declare-function execute-extended-magit-command "cmdr-ecosystem")
+(declare-function execute-extended-denote-command "setup-core")
+(declare-function read-extended-command-for-denote-prefix-p "setup-core")
+(declare-function ad:git-link--new-copy-to-clipboard "setup-core")
+(declare-function ad:denote-link-ol-get-heading--org-only "setup-core")
 (declare-function electric-pair-default-inhibit "elec-pair")
 (declare-function electric-pair-conservative-inhibit "elec-pair")
 
@@ -152,6 +158,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; third-party -- configuration
 
+(setq savehist-coding-system 'utf-8-emacs)
+
 (setq desktop-buffers-not-to-save
       (concat "\\` \\|\\("
               "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
@@ -223,7 +231,6 @@
   (add-to-list 'electric-pair-pairs '(?{ . ?}))
   (add-to-list 'electric-pair-pairs '(?\[ . ?\])))
 
-(setq savehist-coding-system 'utf-8-emacs)
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'denote--title-history)
   (add-to-list 'savehist-additional-variables 'denote--keywords-history)

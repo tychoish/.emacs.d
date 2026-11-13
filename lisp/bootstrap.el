@@ -229,6 +229,7 @@
     orgx-global-mode
     eglox-global-mode
     orgx-capture-setup-standard-templates
+    bootstrap-add-notes-to-agenda
     annotated-completing-read-setup-history
     overmark-global-mode
     bootstrap-require-treesit-auto
@@ -253,6 +254,7 @@
     popper-mode
     consult-notes-denote-mode
     global-auto-revert-mode
+    mcpkit-agent-shell-mode
     gptel-mcp-mode
     mcpkit-init-services
     bootstrap-schedule-maintenance
@@ -329,10 +331,6 @@
                                 (bound-and-true-p denote-directory)
                                 (when (fboundp 'denote-directories) (denote-directories))
                                 user-org-directories)))))
-
-(add-hook 'after-init-hook #'bootstrap-add-notes-to-agenda)
-(with-eval-after-load 'denote
-  (bootstrap-add-notes-to-agenda))
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 (defun bootstrap-ensure-ssh-agent ()

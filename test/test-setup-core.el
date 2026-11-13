@@ -259,77 +259,12 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/antigravity-config-available-before-install ()
   "Allow selecting Antigravity before its executable has been installed."
   (require 'agent-shell)
-  (should (tychoish/agent-shell--config-installed-p '((:identifier . antigravity)))))
+  (should (tychoish--agent-shell--config-installed-p '((:identifier . antigravity)))))
 
-(ert-deftest tychoish-core/agent-shell-mcpkit-active-url ()
-  "Test active URL generation for direct and sprite-proxy MCP endpoints."
-  (require 'agent-shell)
-  (require 'server)
-  ;; Direct port
-  (cl-letf (((symbol-function 'mcpkit-active-port) (lambda () 8765))
-            ((symbol-function 'mcpkit-proxy-active-port) (lambda () nil)))
-    (let ((sprite-instance-id nil))
-      (should (equal "http://127.0.0.1:8765/mcp" (agent-shell-mcpkit-active-url)))))
-  ;; Proxy routing
-  (cl-letf (((symbol-function 'mcpkit-active-port) (lambda () 8765))
-            ((symbol-function 'mcpkit-proxy-active-port) (lambda () 8760)))
-    (let ((sprite-instance-id "work"))
-      (should (equal "http://127.0.0.1:8760/sprite/work/mcp" (agent-shell-mcpkit-active-url))))))
-
-(ert-deftest tychoish-core/agent-shell-mcpkit-server-spec ()
-  "Test ACP server spec construction."
-  (require 'agent-shell)
-  (require 'server)
-  (cl-letf (((symbol-function 'agent-shell-mcpkit-active-url) (lambda () "http://127.0.0.1:8765/mcp")))
-    (should (equal '((name . "emacs")
-                     (type . "http")
-                     (url . "http://127.0.0.1:8765/mcp")
-                     (headers . ()))
-                   (agent-shell-mcpkit-server-spec)))))
-
-(ert-deftest tychoish-core/agent-shell-mcpkit-environment-variables ()
-  "Test environment variable list generation."
-  (require 'agent-shell)
-  (require 'server)
-  (cl-letf (((symbol-function 'mcpkit-active-port) (lambda () 8765)))
-    (let ((sprite-instance-id "primary")
-          (server-name "test-server"))
-      (let ((env (agent-shell-mcpkit-environment-variables)))
-        (should (member "MCPKIT_PORT=8765" env))
-        (should (member "EMACS_MCP_PORT=8765" env))
-        (should (member "EMACS_MCP_URL=http://127.0.0.1:8765/mcp" env))
-        (should (member "EMACS_SPRITE_ID=primary" env))
-        (should (member "EMACS_SERVER_NAME=test-server" env))))))
-
-(ert-deftest tychoish-core/agent-shell-mcp-servers-dynamic-resolution ()
-  "Test that `agent-shell--mcp-servers' evaluates dynamically and filters nil."
-  (require 'agent-shell)
-  (require 'server)
-  ;; Active server returns normalized vector
-  (cl-letf (((symbol-function 'agent-shell-mcpkit-server-spec)
-             (lambda () '((name . "emacs") (type . "http") (url . "http://127.0.0.1:8765/mcp")))))
-    (let ((agent-shell--state nil))
-      (should (equal [((name . "emacs") (type . "http") (url . "http://127.0.0.1:8765/mcp") (headers . []))]
-                     (agent-shell--mcp-servers)))))
-  ;; Inactive server returns nil
-  (cl-letf (((symbol-function 'agent-shell-mcpkit-server-spec) (lambda () nil)))
-    (let ((agent-shell--state nil))
-      (should-not (agent-shell--mcp-servers)))))
-
-(ert-deftest tychoish-core/agent-shell-acp-client-injects-mcpkit-env ()
-  "Test that `agent-shell--make-acp-client' advice injects MCPKit env vars."
-  (require 'agent-shell)
-  (require 'server)
-  (cl-letf (((symbol-function 'agent-shell-mcpkit-environment-variables)
-             (lambda () '("MCPKIT_PORT=8765" "EMACS_MCP_URL=http://127.0.0.1:8765/mcp"))))
-    (let ((client (agent-shell--make-acp-client
-                   :command "echo"
-                   :command-params '("test")
-                   :environment-variables '("FOO=bar"))))
-      (let ((env (map-elt client :environment-variables)))
-        (should (member "MCPKIT_PORT=8765" env))
-        (should (member "EMACS_MCP_URL=http://127.0.0.1:8765/mcp" env))
-        (should (member "FOO=bar" env))))))
+(ert-deftest tychoish-core/agent-shell-mcpkit-bridge-startup ()
+  "The startup batch enables the MCPKit bridge."
+  (require 'bootstrap)
+  (should (memq 'mcpkit-agent-shell-mode sprite-startup-operations)))
 
 (ert-deftest tychoish-core/gptel-mcp-session-setup ()
   "Test that `gptel-mcp-setup-session` configures buffer-local MCPKit tools."
@@ -452,11 +387,11 @@ correctly and reads from the minibuffer using the candidate's command."
         (agent-shell-omp-environment nil)
         (process-environment '("CLAUDE_PERSONA=inherited"))
         (tychoish/agent-shell-terse-output t))
-    (tychoish/agent-shell--apply-environment)
+    (tychoish--agent-shell--apply-environment)
     (should (seq-some (lambda (e) (string-prefix-p "CLAUDE_PERSONA=" e))
                       agent-shell-anthropic-claude-environment))
     (setq tychoish/agent-shell-terse-output nil)
-    (tychoish/agent-shell--apply-environment)
+    (tychoish--agent-shell--apply-environment)
     (should-not (seq-some (lambda (e) (string-prefix-p "CLAUDE_PERSONA=" e))
                           agent-shell-anthropic-claude-environment))))
 
