@@ -543,6 +543,7 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/mail-switch-restarts-a-different-database ()
   "Switching databases stops the old server before starting the new one."
   (require 'setup-mail)
+  (skip-unless (or (featurep 'mu4e) (locate-library "mu4e")))
   (require 'mu4e)
   (let ((tychoish-mail-accounts-table (make-hash-table :test #'equal))
         (tychoish-mail-account-current "old")
@@ -598,6 +599,7 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/mail-switch-refuses-a-running-update ()
   "Do not stop an in-flight update while changing databases."
   (require 'setup-mail)
+  (skip-unless (or (featurep 'mu4e) (locate-library "mu4e")))
   (require 'mu4e)
   (with-temp-buffer
     (let ((tychoish-mail-accounts-table (make-hash-table :test #'equal))
@@ -637,6 +639,7 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/mail-header-separator-roundtrip ()
   "Compose and draft header delimiters use dashes and can be removed."
   (require 'setup-mail)
+  (skip-unless (or (featurep 'mu4e-draft) (locate-library "mu4e-draft")))
   (require 'mu4e-draft)
   (let ((expected "--------------------------"))
     (should (equal (substring-no-properties mail-header-separator) expected))
