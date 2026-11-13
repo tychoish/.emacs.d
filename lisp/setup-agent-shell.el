@@ -13,18 +13,12 @@
   (require 'agent-shell))
 
 (defvar which-key-replacement-alist)
-(defvar nerd-icons-mode-icon-alist)
+(defvar alert-fade-time)
+(defvar shell-maker--busy)
+(declare-function agent-shell-queue-setup-capture-completion "agent-shell-queue-ui")
 (declare-function agent-shell-interrupt-confirmed-p "agent-shell")
 (declare-function agent-shell-queue-format-file-extension "agent-shell-queue-persistence")
 (declare-function mcpkit-agent-shell-mode "mcpkit-agent-shell")
-
-(with-eval-after-load 'nerd-icons
-  (unless (assq 'agent-shell-queue-item-view-mode nerd-icons-mode-icon-alist)
-    (add-to-list 'nerd-icons-mode-icon-alist
-                 '(agent-shell-queue-item-view-mode nerd-icons-codicon "nf-cod-checklist" :face nerd-icons-green))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Terse Persona & Environment
 
 (defconst tychoish/agent-shell-terse-persona
   "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
@@ -32,6 +26,73 @@
 
 (defvar tychoish/agent-shell-terse-output t
   "Non-nil to pass terse persona to agent sessions.")
+
+(with-eval-after-load 'which-key
+  (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
+
+(with-eval-after-load 'agent-shell-queue
+  (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell"))))
+
+(add-to-list 'display-buffer-alist
+             '(tychoish--agent-shell-buffer-p (display-buffer-reuse-window display-buffer-use-some-window) (reusable-frames . t)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; settings
+
+(setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
+(setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
+(setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
+(setq agent-shell-antigravity-acp-command '("agy" "acp" "--dangerously-skip-permissions"))
+(setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
+(setq agent-shell-header-style 'text)
+(setq agent-shell-activity-group-expand-by-default t)
+(setq agent-shell-thought-process-expand-by-default t)
+(setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
+(setq agent-shell-anthropic-default-session-mode-id "auto")
+(setq agent-shell-agent-configs #'tychoish--agent-shell-installed-configs)
+
+(setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
+(setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
+(setq agent-shell-queue-archive-enabled t)
+(setq agent-shell-queue-safe-save t)
+(setq agent-shell-queue-safe-save-max-files 50)
+(setq agent-shell-queue-show-ordinal-column nil)
+(setq agent-shell-queue-write-log-enabled t)
+(setq agent-shell-queue-serialization-format 'org)
+(setq agent-shell-queue-stall-timeout 600)
+
+(advice-add 'agent-shell-experimental--on-session-push-end :around #'ad:agent-shell-recover-stuck-push-end)
+(advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered '((depth . -100)))
+
+(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish--agent-shell-toggle-terse-output)
+
+(keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
+(keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
+(keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
+(keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
+(keymap-set agent-shell-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
+(keymap-set agent-shell-mode-map "C-c m" #'agent-shell-menu-select-action)
+(keymap-set agent-shell-mode-map "C-c x" #'agent-shell-menu-select-command)
+(keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
+(keymap-set agent-shell-mode-map "M-SPC" #'agent-shell-menu-select-session-mode)
+
+(add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
+(add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
+(add-hook 'agent-shell-mode-hook #'ansi-color-for-comint-mode-on)
+(add-hook 'agent-shell-mode-hook #'tychoish--agent-shell-shorten-antigravity-modeline)
+
+(add-hook 'agent-shell-queue-mode #'bootstrap-require-agent-shell-queue-org)
+(add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-setup-capture-completion)
+(add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-setup-capture-completion)
+
+(add-hook 'agent-shell-mode-hook #'agent-shell-notifications-mode)
+(add-hook 'agent-shell-mode-hook #'agent-shell-queue-overload-mode)
+(add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-mode)
+(add-hook 'agent-shell-viewport-edit-view-hook #'agent-shell-notifications-mode)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Terse Persona & Environment
 
 (defun tychoish--agent-shell--apply-environment ()
   "Update agent environment variables from current toggle state."
@@ -64,6 +125,8 @@
   (message "Agent terse output: %s"
            (if tychoish/agent-shell-terse-output "on" "off")))
 
+(tychoish--agent-shell--apply-environment) ;; TODO is this needed
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Agent-shell Buffer Helpers & Hooks
 
@@ -95,8 +158,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Advice & Workarounds
-
-(defvar shell-maker--busy)
 
 (defun ad:agent-shell-recover-stuck-push-end (orig-fn &rest args)
   "Recover busy state if push end arrives without an active request."
@@ -153,50 +214,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Primary Agent-Shell Configuration
 
-(setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
-(setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
-(setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
-(setq agent-shell-antigravity-acp-command '("agy" "acp" "--dangerously-skip-permissions"))
-(setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
-(setq agent-shell-header-style 'text)
-(setq agent-shell-activity-group-expand-by-default t)
-(setq agent-shell-thought-process-expand-by-default t)
-(setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
-(setq agent-shell-anthropic-default-session-mode-id "auto")
-(setq agent-shell-agent-configs #'tychoish--agent-shell-installed-configs)
-
-(advice-add 'agent-shell-experimental--on-session-push-end :around #'ad:agent-shell-recover-stuck-push-end)
-(advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered
-            '((depth . -100)))
-
-(keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
-(keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
-(keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
-(keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
-(keymap-set agent-shell-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
-(keymap-set agent-shell-mode-map "C-c m" #'agent-shell-menu-select-action)
-(keymap-set agent-shell-mode-map "C-c x" #'agent-shell-menu-select-command)
-(keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
-(keymap-set agent-shell-mode-map "M-SPC" #'agent-shell-menu-select-session-mode)
-
-(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish--agent-shell-toggle-terse-output)
-
-(add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
-(add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
-(add-hook 'agent-shell-mode-hook #'ansi-color-for-comint-mode-on)
-(add-hook 'agent-shell-mode-hook #'tychoish--agent-shell-shorten-antigravity-modeline)
-
-(add-to-list 'display-buffer-alist
-             '(tychoish--agent-shell-buffer-p
-               (display-buffer-reuse-window
-                display-buffer-use-some-window)
-               (reusable-frames . t)))
-
-(with-eval-after-load 'which-key
-  (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
-
-(tychoish--agent-shell--apply-environment)
-
 (defun tychoish--agent-shell-queue-state-file ()
   "Queue state file under agent-shell state directory."
   (expand-file-name (concat "queue" (agent-shell-queue-format-file-extension
@@ -208,73 +225,7 @@
   (expand-file-name "queue-archive.jsonl"
                     (sprite-state-path "agent-shell")))
 
-(defvar alert-fade-time)
-(declare-function agent-shell-queue-setup-capture-completion "agent-shell-queue-ui")
-
-(defun tychoish--agent-shell-notifications-alert-send (plist)
-  "Send agent-shell notification PLIST through `alert'."
-  (let* ((title (plist-get plist :title))
-         (body (plist-get plist :body))
-         (icon (plist-get plist :app-icon))
-         (timeout (plist-get plist :timeout))
-         (buf-name (plist-get plist :shell-buffer-name))
-         (alert-fade-time (if (and (numberp timeout) (> timeout 0))
-                              timeout
-                            alert-fade-time)))
-    (alert (or body title "")
-           :title (if (and buf-name (not (string-empty-p buf-name)))
-                      (format "%s <%s>" (or title "agent-shell") buf-name)
-                    (or title "agent-shell"))
-           :icon icon
-           :category 'agent-shell
-           :severity 'normal))
-  nil)
-
-(defun tychoish--agent-shell-notifications-alert-close (_id)
-  "No-op close function for alert notifications." nil)
-
-(defun tychoish--agent-shell-notifications--add-buffer-name (orig type shell-buffer event)
-  "Add `:shell-buffer-name' to alert payload plist."
-  (append (funcall orig type shell-buffer event)
-          (list :shell-buffer-name (buffer-name shell-buffer))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; agent-shell-queue Integration
-
-(with-eval-after-load 'agent-shell-queue
-  (setq agent-shell-queue-write-log-enabled t)
-  (require 'agent-shell-queue-org)
-  (setq agent-shell-queue-serialization-format 'org)
-  (setq agent-shell-queue-stall-timeout 600)
-  (agent-shell-queue-overload-mode 1)
-
-  (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
-
-  (add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-setup-capture-completion)
-  (add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-setup-capture-completion)
-
-  (setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
-  (setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
-  (setq agent-shell-queue-archive-enabled t)
-  (setq agent-shell-queue-safe-save t)
-  (setq agent-shell-queue-safe-save-max-files 50)
-  (setq agent-shell-queue-show-ordinal-column nil))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; agent-shell-notifications Integration
-
-(with-eval-after-load 'agent-shell-notifications
-  (advice-add 'agent-shell-notifications--make-notification-plist
-              :around #'tychoish--agent-shell-notifications--add-buffer-name)
-
-  (setq agent-shell-notifications-provider nil)
-  (setq agent-shell-notifications-send-function #'tychoish--agent-shell-notifications-alert-send)
-  (setq agent-shell-notifications-close-function #'tychoish--agent-shell-notifications-alert-close)
-  (setq agent-shell-notifications-timeout 30))
-
-(add-hook 'agent-shell-mode-hook #'agent-shell-notifications-mode)
-(add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-mode)
-(add-hook 'agent-shell-viewport-edit-view-hook #'agent-shell-notifications-mode)
+(defun bootstrap-require-agent-shell-queue-org () (require 'agent-shell-queue-org))
 
 (provide 'setup-agent-shell)
 ;;; setup-agent-shell.el ends here
