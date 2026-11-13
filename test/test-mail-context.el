@@ -120,7 +120,8 @@
             (should (re-search-forward "^From: .*beta@example\\.org" nil t))
             (should (search-forward "Test signature" nil t))
             (should (equal message-sendmail-extra-arguments
-                           '("-a" "beta@example.org")))))
+                           '("-a" "beta@example.org")))
+            (set-buffer-modified-p nil)))
       (delete-directory maildir t))))
 
 (ert-deftest tychoish-mail-context/deterministic-precedence ()
@@ -288,14 +289,16 @@
     (setq major-mode 'mu4e-compose-mode)
     (insert "From: Alpha <alpha@example.org>\nTo: other@example.org\nSubject: test\n"
             mail-header-separator "\n\nBody\n")
-    (let ((user-mail-address "beta@example.org")
-          (message-sendmail-extra-arguments '("-a" "beta@example.org")))
-      (tychoish-mail-set-up-message-mode-buffer)
-      (should (memq #'tychoish-mail--guard-draft-identity message-send-hook))
-      (should-error (tychoish-mail--guard-draft-identity) :type 'user-error)
-      (setq-local user-mail-address "alpha@example.org")
-      (setq-local message-sendmail-extra-arguments '("-a" "alpha@example.org"))
-      (tychoish-mail--guard-draft-identity))))
+    (unwind-protect
+        (let ((user-mail-address "beta@example.org")
+              (message-sendmail-extra-arguments '("-a" "beta@example.org")))
+          (tychoish-mail-set-up-message-mode-buffer)
+          (should (memq #'tychoish-mail--guard-draft-identity message-send-hook))
+          (should-error (tychoish-mail--guard-draft-identity) :type 'user-error)
+          (setq-local user-mail-address "alpha@example.org")
+          (setq-local message-sendmail-extra-arguments '("-a" "alpha@example.org"))
+          (tychoish-mail--guard-draft-identity))
+      (set-buffer-modified-p nil))))
 
 (ert-deftest tychoish-mail-context/initial-start-records-server-home ()
   (let ((tychoish-mail--server-home nil)
