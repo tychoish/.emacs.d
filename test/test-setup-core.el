@@ -130,51 +130,6 @@ correctly and reads from the minibuffer using the candidate's command."
       (should (equal "make -j8" (builder-compilation-read-command "make"))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tychoish-mail account definition and immediate activation
-
-(ert-deftest tychoish-core/mail-account-definition-activates-default ()
-  "Test that `tychoish-define-mail-account' activates a default account in an idle timer after definition."
-  (require 'setup-mail)
-  (let ((cmdr-mode-map (make-sparse-keymap))
-        (tychoish-mail-accounts-table (make-hash-table :test #'equal))
-        (tychoish-mail-account-current nil)
-        (tychoish-mail--activation-timer nil)
-        (user-mail-address nil)
-        (user-full-name nil)
-        (mu4e-mu-home nil)
-        (message-directory nil)
-        (smtpmail-queue-dir nil)
-        (message-auto-save-directory nil)
-        (message-signature-directory nil)
-        (message-signature-file nil)
-        (message-signature nil)
-        (mail-host-address nil)
-        (message-sendmail-extra-arguments nil)
-        (mu4e-get-mail-command nil)
-        (tychoish-mail-activation-delay 0.0))
-    (cl-letf (((symbol-function 'mu4e) (lambda (&rest _args) nil)))
-      (let ((before (copy-sequence timer-idle-list)))
-        (tychoish-define-mail-account
-         :name "Test User"
-         :id "test-acc"
-         :address "test@example.com"
-         :key "x"
-         :maildir "/tmp/test-mail"
-         :default t
-         :command "true")
-        (should (eq (keymap-lookup cmdr-mode-map "C-c m x")
-                    #'tychoish-mail-test-acc))
-        (should-not tychoish-mail-account-current)
-        (thread-last timer-idle-list
-                     (seq-remove (lambda (tm) (memq tm before)))
-                     (seq-do #'timer-event-handler)))
-      (should (equal tychoish-mail-account-current "tychoish-mail-test-acc"))
-      (should (equal user-mail-address "test@example.com"))
-      (should (equal user-full-name "Test User"))
-      (should (equal mu4e-get-mail-command "true")))))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Projectile yielding / incremental operations
 
 (ert-deftest tychoish-core/projectile-enable-all-buffers-yielding ()
@@ -451,65 +406,6 @@ correctly and reads from the minibuffer using the candidate's command."
       (should (= (point) 1))
       (should (string-suffix-p "new" (buffer-string))))))
 
-(ert-deftest tychoish-core/mail-account-selection-is-deterministic ()
-  "Matching restrictions win over defaults and unrestricted accounts."
-  (require 'setup-mail)
-  (let ((tychoish-mail-accounts-table (make-hash-table :test #'equal))
-        (tychoish-mail-account-current nil)
-        selected)
-    (setf (map-elt tychoish-mail-accounts-table "z-default")
-          (tychoish-mail-make-account :maildir "/tmp/test-mail"
-                                      :fetchmail "true" :default t))
-    (setf (map-elt tychoish-mail-accounts-table "unrestricted")
-          (tychoish-mail-make-account :maildir "/tmp/test-mail" :fetchmail "true"))
-    (setf (map-elt tychoish-mail-accounts-table "a-specific")
-          (tychoish-mail-make-account :maildir "/tmp/test-mail"
-                                      :fetchmail "true" :systems '("host")))
-    (setf (map-elt tychoish-mail-accounts-table "z-specific")
-          (tychoish-mail-make-account :maildir "/tmp/test-mail"
-                                      :fetchmail "true" :systems '("host")))
-    (cl-letf (((symbol-function 'system-name) (lambda () "host"))
-              ((symbol-function 'sprite-instance-name) (lambda () "work"))
-              ((symbol-function 'tychoish-mail--activate-account)
-               (lambda (name) (setq selected name))))
-      (tychoish-mail-ensure-account-active)
-      (should (equal selected "a-specific")))))
-
-(ert-deftest tychoish-core/mail-switch-restarts-a-different-database ()
-  "Switching databases stops the old server before starting the new one."
-  (require 'setup-mail)
-  (skip-unless (or (featurep 'mu4e) (locate-library "mu4e")))
-  (require 'mu4e)
-  (let ((tychoish-mail-accounts-table (make-hash-table :test #'equal))
-        (tychoish-mail-account-current "old")
-        (mu4e--started nil)
-        (mu4e--server-indexing nil)
-        (mu4e--update-buffer nil)
-        (mu4e-mu-home "/tmp/old/.mu")
-        (user-mail-address nil)
-        (user-full-name nil)
-        (message-directory nil)
-        (smtpmail-queue-dir nil)
-        (message-auto-save-directory nil)
-        (message-signature-directory nil)
-        (message-signature-file nil)
-        (message-signature nil)
-        (mail-host-address nil)
-        (message-sendmail-extra-arguments nil)
-        (mu4e-get-mail-command nil)
-        (events nil))
-    (setf (map-elt tychoish-mail-accounts-table "new")
-          (tychoish-mail-make-account :id "new" :name "User"
-                                     :address "user@example.org" :maildir "/tmp/new"))
-    (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t))
-              ((symbol-function 'mu4e-quit)
-               (lambda (&rest _) (push (list 'stop mu4e-mu-home) events)))
-              ((symbol-function 'mu4e)
-               (lambda (&rest _) (push (list 'start mu4e-mu-home) events))))
-      (tychoish-mail--activate-account "new")
-      (should (equal (nreverse events)
-                     '((stop "/tmp/old/.mu") (start "/tmp/new/.mu")))))))
-
 (defvar tychoish-core-test--interrupt-before-called nil)
 
 (defun tychoish-core-test--interrupt-before (&rest _)
@@ -530,46 +426,6 @@ correctly and reads from the minibuffer using the candidate's command."
               (agent-shell-interrupt))
             (should-not tychoish-core-test--interrupt-before-called))
         (advice-remove 'agent-shell-interrupt #'tychoish-core-test--interrupt-before)))))
-
-(ert-deftest tychoish-core/mail-switch-refuses-a-running-update ()
-  "Do not stop an in-flight update while changing databases."
-  (require 'setup-mail)
-  (skip-unless (or (featurep 'mu4e) (locate-library "mu4e")))
-  (require 'mu4e)
-  (with-temp-buffer
-    (let ((tychoish-mail-accounts-table (make-hash-table :test #'equal))
-          (tychoish-mail-account-current "old")
-          (mu4e--started t)
-          (mu4e--server-indexing nil)
-          (mu4e--update-buffer (current-buffer))
-          (mu4e-mu-home "/tmp/old/.mu")
-          (user-mail-address nil)
-          (user-full-name nil)
-          (message-directory nil)
-          (smtpmail-queue-dir nil)
-          (message-auto-save-directory nil)
-          (message-signature-directory nil)
-          (message-signature-file nil)
-          (message-signature nil)
-          (mail-host-address nil)
-          (message-sendmail-extra-arguments nil)
-          (mu4e-get-mail-command nil)
-          stopped)
-      (setf (map-elt tychoish-mail-accounts-table "new")
-            (tychoish-mail-make-account :id "new" :name "User"
-                                       :address "user@example.org" :maildir "/tmp/new"))
-      (cl-letf (((symbol-function 'get-buffer-process) (lambda (_) 'fake-process))
-                ((symbol-function 'process-live-p) (lambda (_) t))
-                ((symbol-function 'mu4e-quit) (lambda (&rest _) (setq stopped t)))
-                ((symbol-function 'mu4e) #'ignore))
-        (should-error (tychoish-mail--activate-account "new") :type 'user-error)
-        (should-not stopped)
-        (should (equal tychoish-mail-account-current "old"))
-        (should (equal mu4e-mu-home "/tmp/old/.mu"))
-        (setq mu4e--update-buffer nil)
-        (setq mu4e--server-indexing t)
-        (should-error (tychoish-mail--activate-account "new") :type 'user-error)
-        (should-not stopped)))))
 
 (ert-deftest tychoish-core/mail-header-separator-roundtrip ()
   "Compose and draft header delimiters use dashes and can be removed."

@@ -18,6 +18,10 @@
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-reply "mu4e-compose")
 (declare-function mu4e-running-p "mu4e-server")
+(declare-function make-mu4e-context "mu4e-context")
+(declare-function mu4e-context-switch "mu4e-context")
+(declare-function mu4e-compose-context-switch "mu4e-compose")
+(declare-function mu4e-context-current "mu4e-context")
 (declare-function mu4e-headers-mark-for-read "mu4e-headers")
 (declare-function mu4e-headers-mark-for-unread "mu4e-headers")
 (declare-function mu4e-headers-mark-for-something "mu4e-headers")
@@ -46,18 +50,27 @@
 (defvar mu4e--header-separator)
 (defvar mu4e-search-include-related)
 (defvar mu4e-search-results-limit)
-(defvar mu4e-get-mail-command)
 (defvar mu4e-compose-parent-message)
 (defvar mu4e-mu-home)
 (defvar mu4e--started)
 (defvar mu4e--server-indexing)
 (defvar mu4e--update-buffer)
 (defvar mu4e-confirm-quit)
+(defvar mu4e-context-policy)
+(defvar mu4e-compose-context-policy)
+(defvar mu4e--server-process)
+(defvar mu4e-pong-func)
 
-(defconst tychoish-mail-id-template "tychoish-mail-%s")
-(defvar tychoish-mail-accounts-table (make-hash-table :test #'equal))
-(defvar tychoish-mail-account-current nil)
-(defvar tychoish-mail--activation-timer nil)
+(defvar tychoish-mail--server-home nil
+  "Database home of the current mu server, or nil when not running.")
+(defvar tychoish-mail--transitioning nil
+  "Non-nil while starting a replacement mu server.")
+(defvar tychoish-mail--switching-compose-context nil
+  "Non-nil inside `mu4e-compose-context-switch'.")
+
+(add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
+
+(add-to-list 'display-buffer-alist '(tychoish--mu4e-buffer-p (display-buffer-reuse-window) (reusable-frames . t)))
 
 (with-eval-after-load 'mu4e
   (seq-do (lambda (hook) (add-hook hook #'cmdr-frame-record-home-frame))
@@ -66,16 +79,8 @@
             mu4e-view-mode-hook
             mu4e-compose-mode-hook)))
 
-(add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
-
 (with-eval-after-load 'message
   (keymap-set message-mode-map "M-q" #'ignore)
-  (setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
-  (setq message-citation-line-function 'message-insert-formatted-citation-line)
-  (setq message-send-mail-function 'message-send-mail-with-sendmail)
-  (setq message-fill-column 80)
-  (setq message-cite-style message-cite-style-gmail)
-  (setq message-dont-reply-to-names t)
   (add-to-list 'mm-discouraged-alternatives "text/richtext")
   (add-to-list 'mm-discouraged-alternatives "text/html")
   (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
@@ -85,8 +90,7 @@
   (keymap-set mu4e-compose-minor-mode-map "r" #'mu4e-headers-mark-for-read))
 
 (with-eval-after-load 'mu4e-headers
-  (add-to-list 'mu4e-headers-actions
-               '("generate refile rule" . tychoish-mail-generate-refile-rule) t)
+  (add-to-list 'mu4e-headers-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t)
   (keymap-set mu4e-headers-mode-map "C-r" #'compose-reply-wide-or-not-please-ask)
   (keymap-set mu4e-headers-mode-map "R" #'compose-reply-wide-or-not-please-ask)
   (keymap-set mu4e-headers-mode-map "r" #'mu4e-headers-mark-for-read)
@@ -100,7 +104,15 @@
   (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish-mail-unsubscribe) t)
   (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t))
 
-(add-hook 'mu4e-compose-pre-hook #'tychoish-mail-auto-switch-for-reply)
+(with-eval-after-load 'mu4e-context
+  (advice-add 'mu4e-context-switch :around #'ad:tychoish-mail-context-switch))
+
+(with-eval-after-load 'mu4e-compose
+  (advice-add 'mu4e-compose-context-switch :around #'ad:tychoish-mail-compose-context-switch))
+
+(with-eval-after-load 'mu4e-draft
+  (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)))
+
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
 (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
 (add-hook 'mu4e-compose-mode-hook 'tychoish-mail-set-up-message-mode-buffer)
@@ -117,6 +129,67 @@
 (defvar tychoish-mail--refile-rules nil
   "Functions of one argument MSG, tried in order by `tychoish-mail-refile-folder'.")
 
+(setq mu4e-bookmarks
+      '((:name "primary queues to file"
+         :query "m:/inbox OR m:/prof"
+         :key ?f)
+        (:name "to read/process queue"
+	 :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
+	 :key ?q)
+        (:name "all unread message"
+	 :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
+	 :key ?a)
+        (:name "all sorted email"
+	 :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
+	 :key ?s)
+        (:name "messages with images"
+	 :query "mime:image/*"
+	 :key ?p)
+        (:name "mesages from today"
+	 :query "date:today..now"
+	 :key ?t)
+        (:name "messages from the last week"
+	 :query "date:7d..now"
+	 :key ?w)))
+
+(setq compose-mail-user-agent-warnings nil)
+(setq sendmail-program "msmtp")
+
+(setq mml-secure-openpgp-sign-with-sender t)
+
+(setq mail-specify-envelope-from t)
+(setq mail-user-agent 'mu4e-user-agent)
+(setq mail-header-separator "--------------------------")
+
+(setq mu4e-refile-folder #'tychoish-mail-refile-folder)
+(setq mu4e-compose-context-policy 'ask)
+
+(setq mail-imenu-generic-expression
+      '(("Subject"  "^Subject: *\\(.*\\)" 1)
+        ("Cc"       "^C[Cc]: *\\(.*\\)" 1)
+        ("Bcc"      "^B[Cc]: *\\(.*\\)" 1)
+        ("To"       "^To: *\\(.*\\)" 1)
+        ("From"     "^From: *\\(.*\\)" 1)))
+
+(setq mu4e-compose-complete-only-after "2015-01-01")
+(setq mu4e-search-include-related nil)
+(setq mu4e-search-results-limit 1000)
+
+(setq message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n")
+(setq message-citation-line-function 'message-insert-formatted-citation-line)
+(setq message-send-mail-function 'message-send-mail-with-sendmail)
+(setq message-fill-column 80)
+(setq message-cite-style message-cite-style-gmail)
+(setq message-dont-reply-to-names t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+(defun tychoish-mail-set-up-message-mode-buffer ()
+  "Configure local settings for mu4e composition."
+  (setq-local use-hard-newlines t)
+  (setq-local make-backup-files nil))
+
 ;;;###autoload
 (defun tychoish-mail-add-refile-rule (rule)
   "Register RULE, a function of one argument MSG, as a refile rule.
@@ -128,8 +201,6 @@ next registered rule."
   "Return refile folder for MSG by trying each registered rule."
   (or (seq-some (lambda (rule) (funcall rule msg)) tychoish-mail--refile-rules)
       "/archive"))
-
-(setq mu4e-refile-folder #'tychoish-mail-refile-folder)
 
 (defun tychoish-mail--field-display-value (msg field)
   "Return a human-readable string for FIELD value in MSG."
@@ -202,59 +273,6 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
                       (tychoish-mail-refile-folder msg))))
     (display-buffer buf)))
 
-(setq mu4e-bookmarks
-      '((:name "primary queues to file"
-         :query "m:/inbox OR m:/prof"
-         :key ?f)
-        (:name "to read/process queue"
-	 :query "m:/inbox OR flag:unread AND NOT (OR m:/sent OR flag:trashed OR m:/trash)"
-	 :key ?q)
-        (:name "all unread message"
-	 :query "m:/inbox OR flag:unread AND NOT (flag:trashed OR m:/sent OR m:/trash)"
-	 :key ?a)
-        (:name "all sorted email"
-	 :query "(NOT m:/inbox AND NOT m:/prof) AND flag:unread"
-	 :key ?s)
-        (:name "messages with images"
-	 :query "mime:image/*"
-	 :key ?p)
-        (:name "mesages from today"
-	 :query "date:today..now"
-	 :key ?t)
-        (:name "messages from the last week"
-	 :query "date:7d..now"
-	 :key ?w)))
-
-(setq compose-mail-user-agent-warnings nil)
-(setq sendmail-program "msmtp")
-
-(setq mml-secure-openpgp-sign-with-sender t)
-
-(setq mail-specify-envelope-from t)
-(setq mail-user-agent 'mu4e-user-agent)
-(setq mail-header-separator "--------------------------")
-
-(with-eval-after-load 'mu4e-draft
-  ;; Mu4e uses its own separator when saving and restoring drafts.
-  (setq mu4e--header-separator
-        (propertize mail-header-separator 'read-only t 'intangible t)))
-
-(setq mail-imenu-generic-expression
-      '(("Subject"  "^Subject: *\\(.*\\)" 1)
-        ("Cc"       "^C[Cc]: *\\(.*\\)" 1)
-        ("Bcc"      "^B[Cc]: *\\(.*\\)" 1)
-        ("To"       "^To: *\\(.*\\)" 1)
-        ("From"     "^From: *\\(.*\\)" 1)))
-
-(setq mu4e-compose-complete-only-after "2015-01-01")
-(setq mu4e-search-include-related nil)
-(setq mu4e-search-results-limit 1000)
-
-(defun tychoish-mail-set-up-message-mode-buffer ()
-  "Configure local settings for mu4e composition."
-  (setq-local use-hard-newlines t)
-  (setq-local make-backup-files nil))
-
 (defun compose-reply-wide-or-not-please-ask ()
   "Ask whether to reply-to-all or not."
   (interactive)
@@ -288,11 +306,6 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
        (t
         (user-error "Unrecognized URI scheme in List-Unsubscribe: %s" uri))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; display-buffer configuration
-;; Mark mu4e buffers as frame-sticky when first displayed
-
 ;; display-buffer: mu4e buffers prefer the frame they were first shown on
 (defun tychoish--mu4e-buffer-p (buf _action)
   "Return non-nil if BUF uses a mu4e major mode."
@@ -300,228 +313,162 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
     (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
                     'mu4e-view-mode 'mu4e-compose-mode)))
 
-(add-to-list 'display-buffer-alist
-             '(tychoish--mu4e-buffer-p
-               (display-buffer-reuse-window)
-               (reusable-frames . t)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; account configuration
+;; Contexts and database switching
 
-(cl-defstruct (tychoish-mail-account
-               (:constructor tychoish-mail-make-account
-                             (&key id maildir name address keybinding (fetchmail mu4e-get-mail-command)
-                                   instances systems default
-				   &aux (maildir (if (stringp maildir)
-						      (expand-file-name maildir)
-						    (user-error "maildir must be a string"))))))
-  "Track mail account configurations.
-Used internally by `tychoish-define-mail-account'.  Signatures always
-live in MAILDIR's tools/signatures directory."
-  (maildir
-   (expand-file-name "~/mail")
-   :documentation "path for maildirs"
-   :type 'string)
-  (id
-   ""
-   :documentation "symbol of function that activates this account"
-   :type 'symbol)
-  (address
-   user-mail-address
-   :documentation "email address"
-   :type 'string)
-  (name
-   (user-full-name) ;; from /etc/password
-   :documentation "(given) name, used to populate `USER-FULL-NAME'"
-   :type 'string)
-  (keybinding
-   "m"
-   :documentation "keybinding under the C-c m prefix"
-   :type 'char)
-  (fetchmail
-   mu4e-get-mail-command
-   :documentation "external command to run to fetch mail."
-   :type 'string)
-  (instances nil :type 'list)
-  (systems nil :type 'list)
-  (default nil :type 'boolean))
+(defun tychoish-mail-select-account ()
+  "Select a mu4e context, updating the current draft when appropriate."
+  (interactive)
+  (require 'mu4e-context)
+  (if (derived-mode-p 'mu4e-compose-mode)
+      (call-interactively #'mu4e-compose-context-switch)
+    (call-interactively #'mu4e-context-switch)))
 
-;;;###autoload
-(defun tychoish-mail-select-account (account-id)
-  "Use consult to select an account/mail configuration."
+(defun tychoish-mail-switch-context (name)
+  "Select the mu4e context NAME."
+  (require 'mu4e-context)
+  (if (derived-mode-p 'mu4e-compose-mode)
+      (mu4e-compose-context-switch nil name)
+    (mu4e-context-switch nil name)))
 
-  (interactive
-   (list (annotated-completing-read
-	  (thread-last
-	    tychoish-mail-accounts-table
-	    (map-apply (lambda (key value)
-			 (cons key (format
- 				    "%s <%s>%s"
- 				    (tychoish-mail-account-name value)
- 				    (tychoish-mail-account-address value)
- 				    (if (equal tychoish-mail-account-current key)
- 					(concat " " (propertize "[current]" 'face 'bold))
- 				      ""))) )))
-	  :prompt "mail-account => "
-	  :require-match nil)))
+(defun ad:tychoish-mail-context-switch (original &optional force name)
+  "Call ORIGINAL with FORCE and NAME, updating the current draft."
+  (if (and (derived-mode-p 'mu4e-compose-mode)
+           (not tychoish-mail--switching-compose-context))
+      (progn
+        (mu4e-compose-context-switch force name)
+        (mu4e-context-current))
+    (funcall original force name)))
 
-  (let ((select-account-operation (intern account-id)))
-    (funcall select-account-operation)))
+(defun ad:tychoish-mail-compose-context-switch (original &rest args)
+  "Call ORIGINAL with ARGS while allowing its nested context switch."
+  (let ((tychoish-mail--switching-compose-context t))
+    (apply original args)))
 
-(defun tychoish-mail-auto-switch-for-reply ()
-  "Auto-switch to the account the parent message was addressed to."
-  (when-let* ((msg mu4e-compose-parent-message)
-              (recipients (append (mu4e-message-field msg :to)
-                                  (mu4e-message-field msg :cc)))
-              (addrs (seq-filter #'identity
-                                 (seq-map (lambda (a)
-                                            (when-let* ((e (mu4e-contact-email a)))
-                                              (downcase e)))
-                                          recipients)))
-              (account-name (map-some
-                             (lambda (name conf)
-                               (when (member (downcase (tychoish-mail-account-address conf))
-                                             addrs)
-                                 name))
-                             tychoish-mail-accounts-table)))
-    (tychoish-mail-select-account account-name)))
-
-(defun tychoish-mail--activate-account (account-name)
-  "Configure mu4e/message state to send and receive as ACCOUNT-NAME."
-  (let* ((conf (map-elt tychoish-mail-accounts-table account-name))
-         (account-id (tychoish-mail-account-id conf))
-         (maildir (tychoish-mail-account-maildir conf))
-         (mu-home (file-name-concat maildir ".mu")))
-
-    (when (and (featurep 'mu4e) (or mu4e--started (mu4e-running-p))
-               (not (equal mu4e-mu-home mu-home)))
+(defun tychoish-mail--switch-database (home)
+  "Prepare the mu database at HOME before entering its context.
+Refuse transitions with open compose buffers, which retain their old paths."
+  (let* ((running (and (featurep 'mu4e) (mu4e-running-p)))
+         (old-home (if running
+                       (or tychoish-mail--server-home mu4e-mu-home)
+                     mu4e-mu-home)))
+    (when (not (equal old-home home))
       (when (or mu4e--server-indexing
                 (and (buffer-live-p mu4e--update-buffer)
                      (process-live-p (get-buffer-process mu4e--update-buffer))))
-        (user-error "Cannot switch mail accounts while an update is running"))
-      (let ((mu4e-confirm-quit nil))
-        (mu4e-quit)))
+        (user-error "Cannot switch mail databases while an update is running"))
+      ;; Mu4e marks the parent by message ID in the active database when
+      ;; sending.  A cross-database reply could mark an unrelated message.
+      (when (and mu4e-compose-parent-message
+                 (not (derived-mode-p 'mu4e-compose-mode)))
+        (user-error "Cannot reply across mail databases; select the account before opening the message"))
+      (seq-do
+       (lambda (draft)
+         (when (with-current-buffer draft (derived-mode-p 'mu4e-compose-mode))
+           (pop-to-buffer draft)
+           (when (buffer-modified-p draft)
+             (user-error "Save and close the open draft before switching mail databases"))
+           (unless (yes-or-no-p (format "Close saved draft %s? " (buffer-name draft)))
+             (user-error "Close the draft before switching mail databases"))
+           (unless (kill-buffer draft)
+             (user-error "Could not close the draft"))
+           (user-error "Draft closed; retry the mail database switch")))
+       (buffer-list))
+      (when running
+        (let ((mu4e-confirm-quit nil))
+          (mu4e-quit))
+        (when (mu4e-running-p)
+          (error "Failed to stop the previous mu server")))
+      (setq tychoish-mail--server-home nil)
+      (unless running
+        (setq mu4e--started nil)))
+    (setq mu4e-mu-home home)
+    (when (and running (not (equal old-home home)))
+      ;; Startup completes on pong, not when `mu4e' returns.
+      (condition-case err
+          (let ((mu4e-context-policy nil)
+                (tychoish-mail--transitioning t)
+                (ready nil)
+                (deadline (+ (float-time) 10)))
+            (mu4e 'background)
+            ;; `mu4e--pong-handler' sets `mu4e--started' before it checks
+            ;; requirements.  Only accept the pong after that handler returns.
+            (let* ((handler mu4e-pong-func)
+                   (wrapper (lambda (info)
+                              (funcall handler info)
+                              (setq ready t))))
+              (unwind-protect
+                  (progn
+                    (setq mu4e-pong-func wrapper)
+                    (seq-some (lambda (_attempt)
+                                (or ready
+                                    (not (mu4e-running-p))
+                                    (>= (float-time) deadline)
+                                    (progn (accept-process-output mu4e--server-process 0.1)
+                                           nil)))
+                              (number-sequence 1 100)))
+                (when (eq mu4e-pong-func wrapper)
+                  (setq mu4e-pong-func handler))))
+            (unless (and ready (mu4e-running-p))
+              (error "Mu server did not become ready for %s" home))
+            (setq tychoish-mail--server-home home))
+        ((error quit)
+         (unwind-protect
+             (when (mu4e-running-p)
+               (let ((mu4e-confirm-quit nil)) (mu4e-quit)))
+           (setq mu4e--started nil)
+           (if (mu4e-running-p)
+               (progn
+                 (setq tychoish-mail--server-home home)
+                 (setq mu4e-mu-home home))
+             (setq tychoish-mail--server-home nil)
+             (setq mu4e-mu-home old-home)))
+         (signal (car err) (cdr err)))))))
 
-    (setq tychoish-mail-account-current account-name)
-    (setq message-directory maildir)
-    (setq smtpmail-queue-dir (file-name-concat maildir "queue" "cur"))
-    (setq mu4e-mu-home mu-home)
-    (setq message-auto-save-directory (file-name-concat maildir "drafts"))
-    (let ((address (tychoish-mail-account-address conf))
-          (given-name (tychoish-mail-account-name conf)))
+(defun tychoish-mail--guard-context-switch (home)
+  "Refuse switches to HOME while another same-database draft is open."
+  (when-let* (((equal home (if (and (featurep 'mu4e) (mu4e-running-p))
+                               (or tychoish-mail--server-home mu4e-mu-home)
+                             mu4e-mu-home)))
+              (draft (seq-find
+                      (lambda (buffer)
+                        (and (not (eq buffer (current-buffer)))
+                             (with-current-buffer buffer
+                               (derived-mode-p 'mu4e-compose-mode))))
+                      (buffer-list))))
+    (pop-to-buffer draft)
+    (user-error "Close the other draft before switching mail contexts")))
 
-      (setq message-signature-directory (file-name-concat maildir "tools" "signatures"))
-      (setq message-signature-file (or address account-id account-name))
-      (setq message-signature t)
-
-      (setq user-mail-address address)
-      (setq user-full-name given-name)
-
-      (setq mail-host-address (replace-regexp-in-string ".*@" "" address))
-      (setq message-sendmail-extra-arguments (list "-a" address))
-
-      (when (eq major-mode 'mu4e-compose-mode)
-        (goto-char (point-min))
-        (let ((new-from (format "From: %s <%s>" given-name address)))
-          (while (re-search-forward "^From:.*$" nil t 1)
-            (replace-match new-from))))
-
-      (setq mu4e-get-mail-command (tychoish-mail-account-fetchmail conf))
-
-      (when (featurep 'mu4e)
-        (mu4e 'background))
-
-      (message "mail: configured address [%s]" address))))
-
-(declare-function sprite-instance-name "sprite")
-
-(defcustom tychoish-mail-activation-delay 0.5
-  "Idle seconds to wait before activating an account at startup."
-  :type 'number
-  :group 'mail)
-
-;;;###autoload
-(cl-defun tychoish-define-mail-account
-    (&key name address key id
-	  (command mu4e-get-mail-command)
-	  (maildir "~/mail")
-	  (instances '())
-	  (systems '())
-	  default)
-  "Register a mail account and bind KEY under C-c m to activate it.
-Returns the symbol of the generated activation command.
-
-\\(fn &key NAME ADDRESS KEY ID [COMMAND] [MAILDIR] [INSTANCES] [SYSTEMS] DEFAULT)"
-  (unless (and name address key id maildir)
-    (user-error "cannot define mail account without name, address, key and id %S" (list :name name :address address :key key :id id :maildir maildir)))
-
-  (let* ((account-name (format tychoish-mail-id-template id))
-         (configure-account-symbol (intern account-name))
-	 (maildir (expand-file-name maildir)))
-
-    (cmdr-keys-prefix cmdr-mode-map "C-c m" "mail")
-    (cmdr-keys-set cmdr-mode-map (concat "C-c m " key) configure-account-symbol)
-
-    (setf (map-elt tychoish-mail-accounts-table account-name)
-          (tychoish-mail-make-account
-           :name name
-           :address address
-           :keybinding key
-           :maildir maildir
-           :fetchmail command
-           :id id
-           :instances instances
-           :systems systems
-           :default default))
-
-    (defalias configure-account-symbol
-      (lambda ()
-        (interactive)
-        (tychoish-mail--activate-account account-name))
-      (format "Switch mu4e to the %s <%s> account." name address))
-
-    (when (timerp tychoish-mail--activation-timer)
-      (cancel-timer tychoish-mail--activation-timer))
-    (setq tychoish-mail--activation-timer
-          (run-with-idle-timer tychoish-mail-activation-delay nil
-                               #'tychoish-mail-ensure-account-active))
-
-    configure-account-symbol))
-
-
-(defun tychoish-mail-ensure-account-active (&rest _args)
-  "Ensure a matching account for this instance/system is active.
-Prefer matching restrictions, then defaults, then unrestricted accounts.
-Break ties by account name."
-  (unless tychoish-mail-account-current
-    (let ((best-name nil)
-          (best-rank 0))
-      (map-do (lambda (name conf)
-                (let* ((instances (tychoish-mail-account-instances conf))
-                       (systems (tychoish-mail-account-systems conf))
-                       (restricted (or instances systems))
-                       (matches (and (or (null instances)
-                                         (member (sprite-instance-name) instances))
-                                     (or (null systems)
-                                         (member (system-name) systems))))
-                       (rank (cond
-                              ((and restricted matches) 3)
-                              ((tychoish-mail-account-default conf) 2)
-                              ((and (not restricted) matches) 1)
-                              (t 0))))
-                  (when (or (> rank best-rank)
-                            (and (> rank 0) (= rank best-rank)
-                                 (string< name best-name)))
-                    (setq best-name name)
-                    (setq best-rank rank))))
-              tychoish-mail-accounts-table)
-      (when best-name
-        (tychoish-mail--activate-account best-name)))))
-
-(advice-add 'mu4e-update-index :before #'tychoish-mail-ensure-account-active)
-(advice-add 'mu4e-update-mail-and-index :before #'tychoish-mail-ensure-account-active)
-(advice-add 'mu4e :before #'tychoish-mail-ensure-account-active)
+(defun tychoish-mail-make-context (name full-name address maildir command)
+  "Build a mu4e context NAME for ADDRESS and FULL-NAME.
+MAILDIR is the account's mail root and COMMAND fetches its mail."
+  (let ((maildir (expand-file-name maildir)))
+    (make-mu4e-context
+     :name name
+     :enter-func (lambda ()
+                   (let ((home (file-name-concat maildir ".mu")))
+                     (tychoish-mail--guard-context-switch home)
+                     (tychoish-mail--switch-database home)))
+     :match-func
+     (lambda (msg)
+       (when msg
+         (seq-some (lambda (contact)
+                     (when-let* ((email (mu4e-contact-email contact)))
+                       (equal (downcase email) (downcase address))))
+                   (append (mu4e-message-field msg :to)
+                           (mu4e-message-field msg :cc)))))
+     :vars `((user-mail-address . ,address)
+             (user-full-name . ,full-name)
+             (message-directory . ,maildir)
+             (message-auto-save-directory . ,(file-name-concat maildir "drafts"))
+             (smtpmail-queue-dir . ,(file-name-concat maildir "queue" "cur"))
+             (message-signature-directory . ,(file-name-concat maildir "tools" "signatures"))
+             (message-signature-file . ,address)
+             (message-signature . t)
+             (mail-host-address . ,(replace-regexp-in-string ".*@" "" address))
+             (message-sendmail-extra-arguments . ,(list "-a" address))
+             (mu4e-get-mail-command . ,command)))))
 
 (provide 'setup-mail)
 ;;; setup-mail.el ends here

@@ -376,25 +376,10 @@ the following configuration:
 
   `set-up-frame-font` also works interactively.
 
-- For using `mu4e` to manage email, in a multi-account setup. I wrote
-  a function, `tychoish-define-mail-account` to add a new account.  I
-  have a few functions that I define here for changing my originating
-  email address/mu database, which are bound to keys, but the basics
-  are:
-
-```emacs
-(tychoish-define-mail-account
- :name "tycho"
- :address "garen@tychoish.com"
- :key "g"
- :id "tychoish"
- :instances '("hud")
- :command "fetchmail")
-```
-
-This binds `C-m g` to a function that changes the `mu4e` configuration
-to use this account. The `C-m a` opens a menu where you can select an
-account.
+- Mail accounts use mu4e contexts configured in `user/personal.el`. Use
+  `C-c m a` to select an account. Account-specific keybindings can select a
+  context directly; changing databases preserves open drafts and rejects
+  switching while mail is being updated.
 
 Enjoy! Happy hacking!
 
