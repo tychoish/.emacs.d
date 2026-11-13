@@ -9,6 +9,7 @@
 (require 'cmdr-macros)
 (require 'cmdr-keys)
 (require 'map)
+(require 'cl-lib)
 
 (autoload 'mu4e "mu4e" nil t)
 (autoload 'mu4e-update-index "mu4e" nil t)
@@ -60,6 +61,17 @@
 (defvar mu4e-compose-context-policy)
 (defvar mu4e--server-process)
 (defvar mu4e-pong-func)
+(defvar mu4e--context-current)
+(defvar mu4e-get-mail-command)
+(defvar smtpmail-queue-dir)
+(defvar message-signature-directory)
+(defvar message-signature-file)
+(defvar message-sendmail-extra-arguments)
+(defvar mail-host-address)
+(defvar tychoish-mail--composing nil
+  "Non-nil while mu4e creates a draft.")
+(defvar-local tychoish-mail--draft-home nil
+  "Database home owning this draft, or nil if ownership is unknown.")
 
 (defvar tychoish-mail--server-home nil
   "Database home of the current mu server, or nil when not running.")
@@ -104,6 +116,9 @@
   (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish-mail-unsubscribe) t)
   (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t))
 
+(with-eval-after-load 'mu4e-server
+  (advice-add 'mu4e--server-start :after #'tychoish-mail--record-server-home))
+
 (with-eval-after-load 'mu4e-context
   (advice-add 'mu4e-context-switch :around #'ad:tychoish-mail-context-switch))
 
@@ -111,6 +126,10 @@
   (advice-add 'mu4e-compose-context-switch :around #'ad:tychoish-mail-compose-context-switch))
 
 (with-eval-after-load 'mu4e-draft
+  (advice-add 'mu4e--draft :around #'ad:tychoish-mail-draft)
+  (advice-add 'mu4e--compose-before-save :before #'tychoish-mail--guard-draft-database)
+  (advice-add 'mu4e--compose-before-send :before #'tychoish-mail--guard-draft-database)
+  (advice-add 'mu4e--compose-before-send :before #'tychoish-mail--guard-draft-identity)
   (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)))
 
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
@@ -188,7 +207,15 @@
 (defun tychoish-mail-set-up-message-mode-buffer ()
   "Configure local settings for mu4e composition."
   (setq-local use-hard-newlines t)
-  (setq-local make-backup-files nil))
+  (setq-local make-backup-files nil)
+  (seq-do #'make-local-variable
+          '(mu4e--context-current user-mail-address user-full-name
+            message-directory message-auto-save-directory smtpmail-queue-dir
+            message-signature-directory message-signature-file message-signature
+            mail-host-address message-sendmail-extra-arguments mu4e-get-mail-command))
+  (add-hook 'before-save-hook #'tychoish-mail--guard-draft-database nil t)
+  (add-hook 'message-send-hook #'tychoish-mail--guard-draft-database nil t)
+  (add-hook 'message-send-hook #'tychoish-mail--guard-draft-identity nil t))
 
 ;;;###autoload
 (defun tychoish-mail-add-refile-rule (rule)
@@ -333,13 +360,72 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
     (mu4e-context-switch nil name)))
 
 (defun ad:tychoish-mail-context-switch (original &optional force name)
-  "Call ORIGINAL with FORCE and NAME, updating the current draft."
+  "Call ORIGINAL with FORCE and NAME, keeping draft storage unchanged."
   (if (and (derived-mode-p 'mu4e-compose-mode)
            (not tychoish-mail--switching-compose-context))
       (progn
         (mu4e-compose-context-switch force name)
         (mu4e-context-current))
-    (funcall original force name)))
+    (if (or tychoish-mail--composing (derived-mode-p 'mu4e-compose-mode))
+        (let ((directory message-directory)
+              (autosave message-auto-save-directory)
+              (queue smtpmail-queue-dir)
+              (fetch mu4e-get-mail-command))
+          (unwind-protect
+              (funcall original force name)
+            (setq message-directory directory)
+            (setq message-auto-save-directory autosave)
+            (setq smtpmail-queue-dir queue)
+            (setq mu4e-get-mail-command fetch)))
+      (funcall original force name))))
+
+(defun tychoish-mail--record-server-home (&rest _args)
+  "Remember the home used to start the running mu server."
+  (when (mu4e-running-p)
+    (setq tychoish-mail--server-home mu4e-mu-home)))
+
+(defun tychoish-mail--guard-draft-database (&rest _args)
+  "Refuse draft operations unless its owning database is active."
+  (unless (and tychoish-mail--draft-home
+               (mu4e-running-p)
+               (equal tychoish-mail--draft-home
+                      (or tychoish-mail--server-home mu4e-mu-home)))
+    (user-error "Switch to this draft's database before saving or sending")))
+
+(defun tychoish-mail--guard-draft-identity (&rest _args)
+  "Refuse sending when the From header disagrees with the selected identity."
+  (require 'mail-extr)
+  (let* ((from (message-field-value "From"))
+         (address (and from (cadr (mail-extract-address-components from)))))
+    (unless (and address user-mail-address
+                 (equal (downcase address) (downcase user-mail-address)))
+      (user-error "Select the context matching this draft's From before sending"))))
+
+(defun ad:tychoish-mail-draft (original &rest args)
+  "Call ORIGINAL with ARGS, isolating its identity and database ownership."
+  (let ((tychoish-mail--composing t)
+        (home (or tychoish-mail--server-home mu4e-mu-home))
+        (root (and mu4e-mu-home (file-name-directory (directory-file-name mu4e-mu-home))))
+        (mu4e--context-current mu4e--context-current)
+        (user-mail-address user-mail-address)
+        (user-full-name user-full-name)
+        (message-directory message-directory)
+        (message-auto-save-directory message-auto-save-directory)
+        (smtpmail-queue-dir smtpmail-queue-dir)
+        (message-signature-directory message-signature-directory)
+        (message-signature-file message-signature-file)
+        (message-signature message-signature)
+        (mail-host-address mail-host-address)
+        (message-sendmail-extra-arguments message-sendmail-extra-arguments)
+        (mu4e-get-mail-command mu4e-get-mail-command))
+    (let ((draft (apply original args)))
+      (when (buffer-live-p draft)
+        (with-current-buffer draft
+          (setq-local tychoish-mail--draft-home
+                      (and root buffer-file-name
+                           (file-in-directory-p buffer-file-name root)
+                           home))))
+      draft)))
 
 (defun ad:tychoish-mail-compose-context-switch (original &rest args)
   "Call ORIGINAL with ARGS while allowing its nested context switch."
@@ -348,7 +434,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 (defun tychoish-mail--switch-database (home)
   "Prepare the mu database at HOME before entering its context.
-Refuse transitions with open compose buffers, which retain their old paths."
+Open drafts keep their original paths and are guarded during save and send."
   (let* ((running (and (featurep 'mu4e) (mu4e-running-p)))
          (old-home (if running
                        (or tychoish-mail--server-home mu4e-mu-home)
@@ -358,23 +444,6 @@ Refuse transitions with open compose buffers, which retain their old paths."
                 (and (buffer-live-p mu4e--update-buffer)
                      (process-live-p (get-buffer-process mu4e--update-buffer))))
         (user-error "Cannot switch mail databases while an update is running"))
-      ;; Mu4e marks the parent by message ID in the active database when
-      ;; sending.  A cross-database reply could mark an unrelated message.
-      (when (and mu4e-compose-parent-message
-                 (not (derived-mode-p 'mu4e-compose-mode)))
-        (user-error "Cannot reply across mail databases; select the account before opening the message"))
-      (seq-do
-       (lambda (draft)
-         (when (with-current-buffer draft (derived-mode-p 'mu4e-compose-mode))
-           (pop-to-buffer draft)
-           (when (buffer-modified-p draft)
-             (user-error "Save and close the open draft before switching mail databases"))
-           (unless (yes-or-no-p (format "Close saved draft %s? " (buffer-name draft)))
-             (user-error "Close the draft before switching mail databases"))
-           (unless (kill-buffer draft)
-             (user-error "Could not close the draft"))
-           (user-error "Draft closed; retry the mail database switch")))
-       (buffer-list))
       (when running
         (let ((mu4e-confirm-quit nil))
           (mu4e-quit))
@@ -426,30 +495,17 @@ Refuse transitions with open compose buffers, which retain their old paths."
              (setq mu4e-mu-home old-home)))
          (signal (car err) (cdr err)))))))
 
-(defun tychoish-mail--guard-context-switch (home)
-  "Refuse switches to HOME while another same-database draft is open."
-  (when-let* (((equal home (if (and (featurep 'mu4e) (mu4e-running-p))
-                               (or tychoish-mail--server-home mu4e-mu-home)
-                             mu4e-mu-home)))
-              (draft (seq-find
-                      (lambda (buffer)
-                        (and (not (eq buffer (current-buffer)))
-                             (with-current-buffer buffer
-                               (derived-mode-p 'mu4e-compose-mode))))
-                      (buffer-list))))
-    (pop-to-buffer draft)
-    (user-error "Close the other draft before switching mail contexts")))
-
-(defun tychoish-mail-make-context (name full-name address maildir command)
+(cl-defun tychoish-mail-make-context (&key name full-name address maildir command)
   "Build a mu4e context NAME for ADDRESS and FULL-NAME.
 MAILDIR is the account's mail root and COMMAND fetches its mail."
   (let ((maildir (expand-file-name maildir)))
     (make-mu4e-context
      :name name
      :enter-func (lambda ()
-                   (let ((home (file-name-concat maildir ".mu")))
-                     (tychoish-mail--guard-context-switch home)
-                     (tychoish-mail--switch-database home)))
+                   (unless (or tychoish-mail--composing
+                               (derived-mode-p 'mu4e-compose-mode))
+                     (tychoish-mail--switch-database
+                      (file-name-concat maildir ".mu"))))
      :match-func
      (lambda (msg)
        (when msg
