@@ -1,5 +1,5 @@
 ;;;###autoload
-(cl-defun tychoish/org-capture-add-routine-templates
+(cl-defun tychoish--org-capture-add-routine-templates
     (&key name (key "") (path (concat (f-make-slug name) ".org")))
 
   (when (string-equal "r" key)

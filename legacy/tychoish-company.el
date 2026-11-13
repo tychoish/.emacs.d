@@ -44,8 +44,8 @@
 	 :map telega-chat-mode-map
 	 ("<tab>" . company-indent-or-complete-common))
   :hook ((telega-chat-mode . company-mode-on))
-  ;; (add-hook 'text-mode-hook 'tychoish/company-text-mode-hook)
-  ;; (add-hook 'prog-mode-hook 'tychoish/company-prog-mode-hook)
+  ;; (add-hook 'text-mode-hook 'tychoish--company-text-mode-hook)
+  ;; (add-hook 'prog-mode-hook 'tychoish--company-prog-mode-hook)
   :commands (company-mode company-complete global-company-mode)
   :defines (company-backends)
   :diminish (company-mode . "cm")
@@ -55,13 +55,13 @@
   (setq-default company-backends '((company-capf company-dabbrev company-keywords company-ispell company-wordfreq
 				    :with company-yasnippet company-emojify company-files)))
 
-  (defun tychoish/company-text-mode-hook ()
+  (defun tychoish--company-text-mode-hook ()
     (setq-local company-minimum-prefix-length 3)
     (setq-local company-idle-delay 0.05)
     (setq-local company-backends '((company-ispell company-wordfreq company-dabbrev company-capf
  				    :with company-yasnippet company-emojify))))
 
-  (defun tychoish/company-prog-mode-hook ()
+  (defun tychoish--company-prog-mode-hook ()
     (setq-local company-minimum-prefix-length 2)
     (setq-local company-idle-delay 0)
     (setq-local company-backends '((company-capf company-keywords company-dabbrev-code
@@ -91,10 +91,10 @@
   :ensure t
   :after (company)
   :hook ((company-mode . company-statistics-mode)
-	 (after-save . tychoish/save-company-statistics))
+	 (after-save . tychoish--save-company-statistics))
   :functions (company-statistics--maybe-save)
   :config
-  (defun tychoish/save-company-statistics ()
+  (defun tychoish--save-company-statistics ()
     (unless corfu-mode)
     (company-statistics--maybe-save))
 
@@ -107,20 +107,20 @@
   :ensure t
   :after (company modus-themes)
   :hook ((company-mode . company-quickhelp-mode)
-	 (company-mode . tychoish/theme-tweak-for-company-mode))
+	 (company-mode . tychoish--theme-tweak-for-company-mode))
   :bind (:map company-active-map
 	 ("C-?" . company-quickhelp-manual-begin))
   :defines (company-quickhelp-mode
 	    company-quickhelp-color-background
 	    company-quickhelp-color-foreground)
   :init
-  (defun tychoish/theme-tweak-for-company-mode (&optional theme-name)
+  (defun tychoish--theme-tweak-for-company-mode (&optional theme-name)
     (when (or (eq theme-name 'modus-operandi)
 	      (eq theme-name 'modus-vivendi))
       (setq company-quickhelp-color-background (modus-themes-color 'bg-completion-subtle))
       (setq company-quickhelp-color-foreground (modus-themes-color 'fg-main))))
   :config
-  (add-hook 'enable-theme-functions 'tychoish/theme-tweak-for-company-mode)
+  (add-hook 'enable-theme-functions 'tychoish--theme-tweak-for-company-mode)
   (setq company-quickhelp-delay 0.25))
 
 (use-package company-quickhelp-terminal
@@ -141,8 +141,8 @@
 
   (add-to-list 'desktop-modes-not-to-save 'company-posframe-mode)
 
-  (add-hook 'company-completion-started-hook 'tychoish/company-posframe-terminal-switch)
-  (add-hook 'company-completion-started-hook 'tychoish/company-quickhelp-terminal-switch)
+  (add-hook 'company-completion-started-hook 'tychoish--company-posframe-terminal-switch)
+  (add-hook 'company-completion-started-hook 'tychoish--company-quickhelp-terminal-switch)
 
   (bind-keys :map tychoish/company-ext-map
 	     :prefix "w"
@@ -153,7 +153,7 @@
 	     ("e" . enable-company-posframe)
 	     ("d" . disable-company-posframe))
 
-  (defun tychoish/company-posframe-terminal-switch (&optional manual-entry)
+  (defun tychoish--company-posframe-terminal-switch (&optional manual-entry)
     "Enables or disables `company-posframe-mode' and `company-quickhelp-mode'
 when switching between gui and terminal frames. For use in the `company-completion-started-hook'."
     (let ((toggle-state tychoish/use-company-posframe-when-possible))
@@ -163,7 +163,7 @@ when switching between gui and terminal frames. For use in the `company-completi
           (turn-off-company-posframe)))
       (setq tychoish/use-company-posframe-when-possible toggle-state)))
 
-  (defun tychoish/company-quickhelp-terminal-switch (manual-entry)
+  (defun tychoish--company-quickhelp-terminal-switch (manual-entry)
     "Enables or disables `company-quickhelp-terminal' mode, as needed based on
 the current frame."
     (when company-quickhelp-mode
@@ -217,9 +217,9 @@ the current frame."
   :ensure t
   :defer t
   :after (slime company)
-  :hook ((common-lisp-mode lisp-mode slime-mode) . tychoish/company-slime-setup)
+  :hook ((common-lisp-mode lisp-mode slime-mode) . tychoish--company-slime-setup)
   :init
-  (defun tychoish/company-slime-setup ()
+  (defun tychoish--company-slime-setup ()
     (setq-local company-backends
 		'((company-slime company-keywords company-capf company-dabbrev-code company-files
 				 :with company-yasnippet)))))
@@ -236,16 +236,16 @@ the current frame."
 (use-package company-solidity
   :ensure t
   :after (company solidity-mode)
-  :hook (solidity-mode . tychoish/company-solidity-backend)
+  :hook (solidity-mode . tychoish--company-solidity-backend)
   :init
   (with-eval-after-load 'solidity
     (with-eval-after-load 'cape
-      (defun tychoish/capf-solidity ()
+      (defun tychoish--capf-solidity ()
 	(cape-wrap-super #'cape-corp-solidity #'cape-keyword #'cape-dabbrev))
       (defun cape-corp-solidity ()
 	(cape-company-to-capf #'company-solidity))))
 
-  (defun tychoish/company-solidity-backend ()
+  (defun tychoish--company-solidity-backend ()
     (setq-local company-backends '((company-solidity company-capf company-dabbrev-code
 				       :with company-yasnippet)))))
 

@@ -161,7 +161,7 @@
   (setq aidermacs-default-chat-mode 'architect)
   (setq aidermacs-program "aider")
 
-  (with-toggle-once tychoish/aider-setup-state
+  (with-toggle-once tychoish--aider-setup-state
     (when (boundp 'anthropic-api-key)
       (setenv "ANTHROPIC_API_KEY" anthropic-api-key)
       (message "[robots]: set environment variable for anthropic"))
@@ -184,7 +184,7 @@
 	(setenv "PATH" (format "%s:%s" search-path uv-bin-path)))
 
       (add-to-list 'exec-path uv-bin-path)))
-  (tychoish/aider-setup-state)
+  (tychoish--aider-setup-state)
   (defvar aidermacs-model-settings-path (f-join user-emacs-directory "aider.model.settings.yml"))
 
   (mapc (make-add-to-list-fn aidermacs-extra-args :append t)
@@ -297,7 +297,7 @@
     (keymap-set hud-robot-gptel-set-default-model-map (downcase key) default-function-symbol)))
 
 
-(defun tychoish/get-anthropic-api-key ()
+(defun tychoish--get-anthropic-api-key ()
   (or (when (boundp 'anthropic-api-key) anthropic-api-key)
       (when-let* ((key (getenv "ANTHROPIC_API_KEY")))
 	(string-trim key))
@@ -307,4 +307,3 @@
 		  (secret (when auth-info (plist-get auth-info :secret)))
 		  (_ (and secret (functionp secret))))
 	(funcall secret))))
-

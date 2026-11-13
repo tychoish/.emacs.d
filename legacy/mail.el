@@ -6,7 +6,7 @@ lisp/(use-package consult-mu
   (setq consult-mu-mark-previewed-as-read nil)
   (setq consult-mu-mark-viewed-as-read t)
   (setq consult-mu-use-wide-reply t)
-  (setq consult-mu-headers-template 'tychoish/consult-mu-headers-template)
+  (setq consult-mu-headers-template 'tychoish--consult-mu-headers-template)
 
   (setq consult-mu-saved-searches-dynamics '("#flag:unread"))
   (setq consult-mu-saved-searches-async '("#flag:unread"))
@@ -45,7 +45,7 @@ lisp/(use-package consult-mu
     (setq consult-mu-embark-attach-file-key "C-a")
     (require 'consult-mu-compose-embark))
 
-  (defun tychoish/consult-mu-headers-template ()
+  (defun tychoish--consult-mu-headers-template ()
     (concat "%f" (number-to-string
 		  (floor (* (frame-width) 0.15)))
 	    "%s" (number-to-string (floor (* (frame-width) 0.5)))

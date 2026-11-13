@@ -53,22 +53,22 @@
   (setq solidity-comment-style 'slash)
 
   (with-eval-after-load 'cape
-    (defun tychoish/soliditiysolidity-capf-setup ()
+    (defun tychoish--soliditiysolidity-capf-setup ()
       (setq-local completion-at-point-functions
-                  (list #'tychoish/capf-solidity
-			#'tychoish/capf-line
+                  (list #'tychoish--capf-solidity
+			#'tychoish--capf-line
 			#'yasnippet-capf
 			#'cape-emoji
 			#'cape-file)))
 
-    (add-hook 'solidity-mode-hook #'tychoish/solidity-capf-setup)))
+    (add-hook 'solidity-mode-hook #'tychoish--solidity-capf-setup)))
 
 (use-package solidity-flycheck
   :ensure t
-  :hook (solidity-mode . tychoish/solidity-flycheck-setup)
+  :hook (solidity-mode . tychoish--solidity-flycheck-setup)
   :commands (solidity-flycheck)
   :config
-  (defun tychoish/solidity-flycheck-setup ()
+  (defun tychoish--solidity-flycheck-setup ()
     (setq-local solidity-flycheck-solc-checker-active t))
 
   (add-to-list 'flycheck-checkers 'solidity-flycheck))

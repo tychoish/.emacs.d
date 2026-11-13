@@ -24,7 +24,7 @@
   (add-hook 'emacs-lisp-mode-hook  'turn-on-ctags-auto-update-mode))
 
 
-(defun tychoish/go-test-filename-from-package (pkg)
+(defun tychoish--go-test-filename-from-package (pkg)
   "Convert go package path to full file path."
   (let ((gopath (getenv "GOPATH")))
     (when gopath
@@ -151,12 +151,12 @@
 (use-package flycheck-grammarly
   :ensure t
   :after (flycheck flycheck-aspell grammarly)
-  :commands (flycheck-grammarly-setup tychoish/flycheck-grammarly-enable tychoish/flycheck-grammarly-disable)
+  :commands (flycheck-grammarly-setup tychoish--flycheck-grammarly-enable tychoish--flycheck-grammarly-disable)
   :functions (flycheck-remove-next-checker flycheck-add-next-checker)
   :config
   (setq flycheck-grammarly-check-time 0.8)
 
-  (defun tychoish/flycheck-grammarly-enable ()
+  (defun tychoish--flycheck-grammarly-enable ()
     (interactive)
     (add-to-list 'flycheck-checkers 'grammarly)
     (add-to-list 'grammarly-on-open-function-list 'flycheck-grammarly--on-open)
@@ -165,7 +165,7 @@
     (flycheck-add-next-checker 'markdown-aspell-dynamic 'grammarly)
     (flycheck-add-next-checker 'mail-aspell-dynamic 'grammarly))
 
-  (defun tychoish/flycheck-grammarly-disable ()
+  (defun tychoish--flycheck-grammarly-disable ()
     (interactive)
     (flycheck-remove-next-checker 'markdown-aspell-dynamic 'grammarly)
     (flycheck-remove-next-checker 'mail-aspell-dynamic 'grammarly)
