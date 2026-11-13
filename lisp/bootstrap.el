@@ -40,6 +40,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
+(declare-function denote-directories "denote")
 (declare-function eglox-global-mode "eglox")
 (declare-function package-activate-all "package")
 (declare-function sprite-batch-startup "sprite-batch")
@@ -67,7 +68,7 @@
 (defvar cmdr-opt-in-specs)
 (defvar treesit-auto-langs)
 (defvar org-directory)
-(defvar org-agenda-files)
+(defvar org-agenda-files nil)
 (defvar org-annotate-file-storage-file)
 (defvar org-default-notes-file)
 (defvar org-archive-location)
@@ -304,13 +305,6 @@
   (unless local-notes-directory
     (error "Must define `local-notes-directory'"))
   (setq org-directory (file-name-concat local-notes-directory "org"))
-  (setq org-agenda-files (thread-last (list org-directory user-org-directories)
-                                      (flatten-tree)
-                                      (seq-map #'expand-file-name)
-                                      (seq-filter #'identity)
-                                      (seq-map #'string-trim)
-                                      (seq-remove #'string-empty-p)
-                                      (seq-uniq)))
   (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
   (setq org-default-notes-file (file-name-concat org-directory "records.org"))
   (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
@@ -319,6 +313,26 @@
   (setq denote-journal-directory (file-name-concat denote-directory "journal"))
   (setq denote-explore-network-directory (file-name-concat denote-directory "explore"))
   local-notes-directory)
+
+(defun bootstrap-add-notes-to-agenda ()
+  "Add configured Org and Denote directories to the agenda."
+  (if (stringp org-agenda-files)
+      (display-warning 'bootstrap "Cannot add note directories to an agenda file list" :warning)
+    (seq-do (lambda (directory)
+              (when (and (stringp directory) (not (string-empty-p (string-trim directory))))
+                (let ((path (directory-file-name (expand-file-name (string-trim directory)))))
+                  (unless (seq-some (lambda (entry)
+                                      (equal (directory-file-name (expand-file-name entry)) path))
+                                    org-agenda-files)
+                    (add-to-list 'org-agenda-files path t)))))
+            (flatten-tree (list (bound-and-true-p org-directory)
+                                (bound-and-true-p denote-directory)
+                                (when (fboundp 'denote-directories) (denote-directories))
+                                user-org-directories)))))
+
+(add-hook 'after-init-hook #'bootstrap-add-notes-to-agenda)
+(with-eval-after-load 'denote
+  (bootstrap-add-notes-to-agenda))
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 (defun bootstrap-ensure-ssh-agent ()
