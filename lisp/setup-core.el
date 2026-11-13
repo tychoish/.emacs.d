@@ -72,6 +72,7 @@
 (cmdr-keys-set cmdr-mode-map "C-c t t i" #'toggle-hud-modeline-icons)
 (cmdr-keys-set cmdr-mode-map "C-c t t s" #'toggle-hud-modeline-show-buffer-size)
 (cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
+(cmdr-keys-set cmdr-mode-map "M-o" #'orgx-capture-shell-toggle)
 (cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
 (cmdr-keys-set cmdr-mode-map "C-c m a" #'tychoish-mail-select-account)
 (cmdr-keys-set cmdr-mode-map "C-x C-b s" #'projectile-save-project-buffers-picker)
@@ -166,7 +167,8 @@
               "^/home.+\\.cargo"))
 
 (setq popper-reference-buffers
-      '("\\*Messages\\*"
+      '(orgx-capture-shell-mode
+        "\\*Messages\\*"
         "\\*Warnings\\*"
         "\\*Backtrace\\*"
         "\\*Compile-Log\\*"
