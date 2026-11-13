@@ -120,9 +120,6 @@
 
 (with-eval-after-load 'mu4e-draft
   (advice-add 'mu4e--draft :around #'ad:tychoish-mail-draft)
-  (advice-add 'mu4e--compose-before-save :before #'tychoish-mail--guard-draft-database)
-  (advice-add 'mu4e--compose-before-send :before #'tychoish-mail--guard-draft-database)
-  (advice-add 'mu4e--compose-before-send :before #'tychoish-mail--guard-draft-identity)
   (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)))
 
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
@@ -353,7 +350,9 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
     (user-error "Switch to this draft's database before saving or sending")))
 
 (defun ad:tychoish-mail-guard-save (&rest _args)
-  "Guard saving mu4e drafts before Emacs catches hook errors."
+  "Guard saving mu4e drafts.
+`before-save-hook' errors are demoted by `basic-save-buffer', so this
+must be advice to be able to abort the save."
   (when (derived-mode-p 'mu4e-compose-mode)
     (tychoish-mail--guard-draft-database)))
 
