@@ -89,7 +89,14 @@
   (keymap-set message-mode-map "M-q" #'ignore)
   (add-to-list 'mm-discouraged-alternatives "text/richtext")
   (add-to-list 'mm-discouraged-alternatives "text/html")
-  (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil)))
+  (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil))
+  ;; Gmail style minus its citation line, so `message-citation-line-format'
+  ;; applies to both mu4e replies and `message-yank-original'.
+  (setq message-cite-style
+        (seq-remove (lambda (binding)
+                      (memq (car binding) '(message-citation-line-function
+                                            message-citation-line-format)))
+                    message-cite-style-gmail)))
 
 (with-eval-after-load 'mu4e-compose
   (keymap-set mu4e-compose-minor-mode-map "R" #'compose-reply-wide-or-not-please-ask)
@@ -181,7 +188,6 @@
 (setq message-citation-line-function 'message-insert-formatted-citation-line)
 (setq message-send-mail-function 'message-send-mail-with-sendmail)
 (setq message-fill-column 80)
-(setq message-cite-style message-cite-style-gmail)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

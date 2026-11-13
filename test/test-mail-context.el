@@ -300,6 +300,13 @@
           (tychoish-mail--guard-draft-identity))
       (set-buffer-modified-p nil))))
 
+(ert-deftest tychoish-mail-context/cite-style-keeps-configured-citation-line ()
+  (require 'message)
+  (should (equal message-citation-line-format "On %A, %B %d %Y, %T, %N wrote:\n"))
+  (should (assq 'message-cite-reply-position message-cite-style))
+  (should-not (assq 'message-citation-line-format message-cite-style))
+  (should-not (assq 'message-citation-line-function message-cite-style)))
+
 (ert-deftest tychoish-mail-context/initial-start-records-server-home ()
   (let ((tychoish-mail--server-home nil)
         (mu4e-mu-home "/tmp/mail-a/.mu"))
