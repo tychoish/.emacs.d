@@ -69,6 +69,8 @@
 
 (defvar tychoish-mail--server-home nil
   "Database home of the current mu server, or nil when not running.")
+(defvar tychoish-mail--transitioning nil
+  "Non-nil while starting a replacement mu server.")
 (defvar tychoish-mail--switching-compose-context nil
   "Non-nil inside `mu4e-compose-context-switch'.")
 
@@ -447,7 +449,8 @@ Open drafts keep their original paths and are guarded during save and send."
     (when (and running (not (equal old-home home)))
       ;; Startup completes on pong, not when `mu4e' returns.
       (condition-case err
-          (let ((mu4e-context-policy nil))
+          (let ((mu4e-context-policy nil)
+                (tychoish-mail--transitioning t))
             (mu4e 'background)
             (tychoish-mail--await-server-ready)
             (setq tychoish-mail--server-home home))
