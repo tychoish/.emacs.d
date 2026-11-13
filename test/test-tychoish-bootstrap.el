@@ -1021,32 +1021,6 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
     (should (equal denote-directory (expand-file-name "/tmp/test-notes/denote")))))
 
 
-(ert-deftest bootstrap/add-notes-to-agenda-preserves-existing-entries ()
-  "Add configured note directories without replacing other agenda files."
-  (let ((org-directory "/tmp/notes/org")
-        (denote-directory "/tmp/notes/denote")
-        (user-org-directories '("/tmp/extra"))
-        (org-agenda-files '("/tmp/existing.org")))
-    (cl-letf (((symbol-function 'denote-directories) (lambda () nil)))
-      (bootstrap-add-notes-to-agenda)
-      (bootstrap-add-notes-to-agenda)
-      (should (equal (sort (copy-sequence org-agenda-files) #'string<)
-                     '("/tmp/existing.org" "/tmp/extra" "/tmp/notes/denote" "/tmp/notes/org"))))))
-
-(ert-deftest bootstrap/add-notes-to-agenda-handles-denote-directories-and-file-list ()
-  "Include Denote silos and preserve an agenda file-list configuration."
-  (let ((org-directory nil)
-        (denote-directory nil)
-        (user-org-directories nil)
-        (org-agenda-files nil))
-    (cl-letf (((symbol-function 'denote-directories) (lambda () '("/tmp/silo" "/tmp/silo/"))))
-      (bootstrap-add-notes-to-agenda)
-      (should (equal org-agenda-files '("/tmp/silo")))
-      (setq org-agenda-files "/tmp/agenda-list")
-      (cl-letf (((symbol-function 'display-warning) #'ignore))
-        (bootstrap-add-notes-to-agenda))
-      (should (equal org-agenda-files "/tmp/agenda-list")))))
-
 (ert-deftest bootstrap/optimize-quickstart-transforms-correctly ()
   "Test that elpaish-install-optimize-quickstart-file streamlines quickstart contents."
   (let ((tmp-file (make-temp-file "test-quickstart-" nil ".el")))

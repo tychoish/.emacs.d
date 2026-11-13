@@ -40,7 +40,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
-(declare-function denote-directories "denote")
 (declare-function eglox-global-mode "eglox")
 (declare-function package-activate-all "package")
 (declare-function sprite-batch-startup "sprite-batch")
@@ -228,7 +227,6 @@
     orgx-global-mode
     eglox-global-mode
     orgx-capture-setup-standard-templates
-    bootstrap-add-notes-to-agenda
     annotated-completing-read-setup-history
     overmark-global-mode
     bootstrap-require-treesit-auto
@@ -314,22 +312,6 @@
   (setq denote-journal-directory (file-name-concat denote-directory "journal"))
   (setq denote-explore-network-directory (file-name-concat denote-directory "explore"))
   local-notes-directory)
-
-(defun bootstrap-add-notes-to-agenda ()
-  "Add configured Org and Denote directories to the agenda."
-  (if (stringp org-agenda-files)
-      (display-warning 'bootstrap "Cannot add note directories to an agenda file list" :warning)
-    (seq-do (lambda (directory)
-              (when (and (stringp directory) (not (string-empty-p (string-trim directory))))
-                (let ((path (directory-file-name (expand-file-name (string-trim directory)))))
-                  (unless (seq-some (lambda (entry)
-                                      (equal (directory-file-name (expand-file-name entry)) path))
-                                    org-agenda-files)
-                    (add-to-list 'org-agenda-files path t)))))
-            (flatten-tree (list (bound-and-true-p org-directory)
-                                (bound-and-true-p denote-directory)
-                                (when (fboundp 'denote-directories) (denote-directories))
-                                user-org-directories)))))
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 (defun bootstrap-ensure-ssh-agent ()
