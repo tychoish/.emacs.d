@@ -16,6 +16,7 @@
 (autoload 'mu4e-update-mail-and-index "mu4e" nil t)
 (autoload 'mu4e-quit "mu4e" nil t)
 
+(declare-function message-field-value "message" (header &optional first))
 (declare-function mu4e "mu4e")
 (declare-function mu4e-compose-reply "mu4e-compose")
 (declare-function mu4e-running-p "mu4e-server")
@@ -115,6 +116,9 @@
 (with-eval-after-load 'mu4e-view
   (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish-mail-unsubscribe) t)
   (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t))
+
+(with-eval-after-load 'files
+  (advice-add 'basic-save-buffer :before #'ad:tychoish-mail-guard-save))
 
 (with-eval-after-load 'mu4e-server
   (advice-add 'mu4e--server-start :after #'tychoish-mail--record-server-home))
@@ -361,23 +365,23 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 (defun ad:tychoish-mail-context-switch (original &optional force name)
   "Call ORIGINAL with FORCE and NAME, keeping draft storage unchanged."
-  (if (and (derived-mode-p 'mu4e-compose-mode)
-           (not tychoish-mail--switching-compose-context))
-      (progn
-        (mu4e-compose-context-switch force name)
-        (mu4e-context-current))
-    (if (or tychoish-mail--composing (derived-mode-p 'mu4e-compose-mode))
-        (let ((directory message-directory)
-              (autosave message-auto-save-directory)
-              (queue smtpmail-queue-dir)
-              (fetch mu4e-get-mail-command))
-          (unwind-protect
-              (funcall original force name)
-            (setq message-directory directory)
-            (setq message-auto-save-directory autosave)
-            (setq smtpmail-queue-dir queue)
-            (setq mu4e-get-mail-command fetch)))
-      (funcall original force name))))
+  (cond
+   ((and (derived-mode-p 'mu4e-compose-mode)
+         (not tychoish-mail--switching-compose-context))
+    (mu4e-compose-context-switch force name)
+    (mu4e-context-current))
+   ((or tychoish-mail--composing (derived-mode-p 'mu4e-compose-mode))
+    (let ((directory message-directory)
+          (autosave message-auto-save-directory)
+          (queue smtpmail-queue-dir)
+          (fetch mu4e-get-mail-command))
+      (unwind-protect
+          (funcall original force name)
+        (setq message-directory directory)
+        (setq message-auto-save-directory autosave)
+        (setq smtpmail-queue-dir queue)
+        (setq mu4e-get-mail-command fetch))))
+   (t (funcall original force name))))
 
 (defun tychoish-mail--record-server-home (&rest _args)
   "Remember the home used to start the running mu server."
@@ -392,6 +396,11 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
                       (or tychoish-mail--server-home mu4e-mu-home)))
     (user-error "Switch to this draft's database before saving or sending")))
 
+(defun ad:tychoish-mail-guard-save (&rest _args)
+  "Guard saving mu4e drafts before Emacs catches hook errors."
+  (when (derived-mode-p 'mu4e-compose-mode)
+    (tychoish-mail--guard-draft-database)))
+
 (defun tychoish-mail--guard-draft-identity (&rest _args)
   "Refuse sending when the From header disagrees with the selected identity."
   (require 'mail-extr)
@@ -401,11 +410,38 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
                  (equal (downcase address) (downcase user-mail-address)))
       (user-error "Select the context matching this draft's From before sending"))))
 
+(defun tychoish-mail--await-server-ready ()
+  "Wait until the running mu server has completed its startup handler."
+  (unless mu4e--started
+    (let* ((ready nil)
+           (deadline (+ (float-time) 10))
+           (handler mu4e-pong-func)
+           (wrapper (lambda (info)
+                      (funcall handler info)
+                      (setq ready t))))
+      (unwind-protect
+          (progn
+            (setq mu4e-pong-func wrapper)
+            (seq-some (lambda (_attempt)
+                        (or ready
+                            (not (mu4e-running-p))
+                            (>= (float-time) deadline)
+                            (progn (accept-process-output mu4e--server-process 0.1)
+                                   nil)))
+                      (number-sequence 1 100)))
+        (when (eq mu4e-pong-func wrapper)
+          (setq mu4e-pong-func handler)))
+      (unless (and ready (mu4e-running-p))
+        (error "Mu server did not become ready for %s" mu4e-mu-home)))))
+
 (defun ad:tychoish-mail-draft (original &rest args)
   "Call ORIGINAL with ARGS, isolating its identity and database ownership."
+  ;; Start first so the instance's default context selects the database
+  ;; before compose-time identity selection is isolated.
+  (unless (mu4e-running-p)
+    (mu4e 'background))
+  (tychoish-mail--await-server-ready)
   (let ((tychoish-mail--composing t)
-        (home (or tychoish-mail--server-home mu4e-mu-home))
-        (root (and mu4e-mu-home (file-name-directory (directory-file-name mu4e-mu-home))))
         (mu4e--context-current mu4e--context-current)
         (user-mail-address user-mail-address)
         (user-full-name user-full-name)
@@ -418,7 +454,9 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
         (mail-host-address mail-host-address)
         (message-sendmail-extra-arguments message-sendmail-extra-arguments)
         (mu4e-get-mail-command mu4e-get-mail-command))
-    (let ((draft (apply original args)))
+    (let* ((draft (apply original args))
+           (home (or tychoish-mail--server-home mu4e-mu-home))
+           (root (and home (file-name-directory (directory-file-name home)))))
       (when (buffer-live-p draft)
         (with-current-buffer draft
           (setq-local tychoish-mail--draft-home
@@ -457,30 +495,9 @@ Open drafts keep their original paths and are guarded during save and send."
       ;; Startup completes on pong, not when `mu4e' returns.
       (condition-case err
           (let ((mu4e-context-policy nil)
-                (tychoish-mail--transitioning t)
-                (ready nil)
-                (deadline (+ (float-time) 10)))
+                (tychoish-mail--transitioning t))
             (mu4e 'background)
-            ;; `mu4e--pong-handler' sets `mu4e--started' before it checks
-            ;; requirements.  Only accept the pong after that handler returns.
-            (let* ((handler mu4e-pong-func)
-                   (wrapper (lambda (info)
-                              (funcall handler info)
-                              (setq ready t))))
-              (unwind-protect
-                  (progn
-                    (setq mu4e-pong-func wrapper)
-                    (seq-some (lambda (_attempt)
-                                (or ready
-                                    (not (mu4e-running-p))
-                                    (>= (float-time) deadline)
-                                    (progn (accept-process-output mu4e--server-process 0.1)
-                                           nil)))
-                              (number-sequence 1 100)))
-                (when (eq mu4e-pong-func wrapper)
-                  (setq mu4e-pong-func handler))))
-            (unless (and ready (mu4e-running-p))
-              (error "Mu server did not become ready for %s" home))
+            (tychoish-mail--await-server-ready)
             (setq tychoish-mail--server-home home))
         ((error quit)
          (unwind-protect

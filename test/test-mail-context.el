@@ -174,18 +174,20 @@
   (let* ((root (make-temp-file "mail-draft-root-" t))
          (mu4e-mu-home (expand-file-name ".mu" root))
          (tychoish-mail--server-home mu4e-mu-home)
+         (mu4e--started t)
          (user-mail-address "alpha@example.org")
          (draft (generate-new-buffer " *mail-created-draft*")))
     (unwind-protect
         (progn
-          (ad:tychoish-mail-draft
-           (lambda ()
+          (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t)))
+            (ad:tychoish-mail-draft
+             (lambda ()
              (setq user-mail-address "beta@example.org")
              (with-current-buffer draft
                (setq buffer-file-name (expand-file-name "drafts/message" root))
                (setq major-mode 'mu4e-compose-mode)
                (tychoish-mail-set-up-message-mode-buffer))
-             draft))
+             draft)))
           (should (equal user-mail-address "alpha@example.org"))
           (with-current-buffer draft
             (should (equal user-mail-address "beta@example.org"))
@@ -193,6 +195,51 @@
       (with-current-buffer draft (setq buffer-file-name nil))
       (kill-buffer draft)
       (delete-directory root t))))
+
+(ert-deftest tychoish-mail-context/draft-records-home-started-during-creation ()
+  (let* ((root (make-temp-file "mail-draft-start-" t))
+         (home (expand-file-name ".mu" root))
+         (mu4e-mu-home nil)
+         (tychoish-mail--server-home nil)
+         (mu4e--started t)
+         (draft (generate-new-buffer " *mail-started-draft*")))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t)))
+            (ad:tychoish-mail-draft
+             (lambda ()
+             (setq mu4e-mu-home home tychoish-mail--server-home home)
+             (with-current-buffer draft
+               (setq buffer-file-name (expand-file-name "drafts/message" root)))
+             draft)))
+          (with-current-buffer draft
+            (should (equal tychoish-mail--draft-home home))))
+      (with-current-buffer draft (setq buffer-file-name nil))
+      (kill-buffer draft)
+      (delete-directory root t))))
+
+(ert-deftest tychoish-mail-context/cold-draft-waits-for-server-readiness ()
+  (let ((mu4e--started nil)
+        (mu4e-pong-func nil)
+        (mu4e-mu-home "/tmp/mail-a/.mu")
+        (tychoish-mail--server-home nil)
+        running events)
+    (cl-letf (((symbol-function 'mu4e-running-p) (lambda () running))
+              ((symbol-function 'mu4e)
+               (lambda (&rest _)
+                 (push 'start events)
+                 (setq running t
+                       mu4e-pong-func (lambda (_) (setq mu4e--started t)))))
+              ((symbol-function 'accept-process-output)
+               (lambda (&rest _)
+                 (push 'pong events)
+                 (funcall mu4e-pong-func nil))))
+      (ad:tychoish-mail-draft
+       (lambda ()
+         (should mu4e--started)
+         (push 'compose events)
+         nil))
+      (should (equal (nreverse events) '(start pong compose))))))
 
 (ert-deftest tychoish-mail-context/draft-save-and-send-require-original-database ()
   (with-temp-buffer
@@ -208,6 +255,32 @@
         (should-error (run-hooks 'message-send-hook) :type 'user-error)
         (setq tychoish-mail--server-home "/tmp/mail-a/.mu")
         (tychoish-mail--guard-draft-database)))))
+
+(ert-deftest tychoish-mail-context/save-buffer-refuses-wrong-database ()
+  (let ((file (make-temp-file "mail-draft-save-"))
+        (tychoish-mail--server-home "/tmp/mail-b/.mu")
+        (mu4e-mu-home "/tmp/mail-b/.mu"))
+    (unwind-protect
+        (progn
+          (with-temp-file file (insert "original"))
+          (with-current-buffer (find-file-noselect file)
+            (unwind-protect
+                (progn
+                  (setq major-mode 'mu4e-compose-mode)
+                  (setq-local tychoish-mail--draft-home "/tmp/mail-a/.mu")
+                  (tychoish-mail-set-up-message-mode-buffer)
+                  (erase-buffer)
+                  (insert "changed")
+                  (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t)))
+                    (should-error (save-buffer) :type 'user-error))
+                  (should (buffer-modified-p))
+                  (should (equal (with-temp-buffer
+                                   (insert-file-contents file)
+                                   (buffer-string))
+                                 "original")))
+              (set-buffer-modified-p nil)
+              (kill-buffer (current-buffer)))))
+      (delete-file file))))
 
 (ert-deftest tychoish-mail-context/reopened-draft-refuses-mismatched-sender ()
   (with-temp-buffer
