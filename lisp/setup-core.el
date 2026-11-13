@@ -167,7 +167,8 @@
               "^/home.+\\.cargo"))
 
 (setq popper-reference-buffers
-      '(orgx-capture-shell-mode
+      '(arch-install-mode
+        orgx-capture-shell-mode
         "\\*Messages\\*"
         "\\*Warnings\\*"
         "\\*Backtrace\\*"
