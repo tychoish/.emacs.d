@@ -6,8 +6,6 @@
 ;;; Code:
 
 
-(require 'cmdr-macros)
-(require 'cmdr-keys)
 (require 'map)
 (require 'cl-lib)
 
@@ -26,7 +24,6 @@
 (declare-function mu4e-context-current "mu4e-context")
 (declare-function mu4e-headers-mark-for-read "mu4e-headers")
 (declare-function mu4e-headers-mark-for-unread "mu4e-headers")
-(declare-function mu4e-headers-mark-for-something "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
 (declare-function mu4e-message-field "mu4e-message")
 (declare-function mu4e-fetch-field "mu4e-message")
@@ -36,12 +33,10 @@
 
 (eval-when-compile
   (require 'message)
-  (require 'sendmail)
-  (require 'smtpmail))
+  (require 'sendmail))
 
 (defvar mm-discouraged-alternatives)
 (defvar mml-secure-openpgp-sign-with-sender)
-(defvar mail-imenu-generic-expression)
 (defvar mu4e-compose-minor-mode-map)
 (defvar mu4e-headers-actions)
 (defvar mu4e-headers-mode-map)
@@ -52,7 +47,6 @@
 (defvar mu4e--header-separator)
 (defvar mu4e-search-include-related)
 (defvar mu4e-search-results-limit)
-(defvar mu4e-compose-parent-message)
 (defvar mu4e-mu-home)
 (defvar mu4e--started)
 (defvar mu4e--server-indexing)
@@ -64,7 +58,6 @@
 (defvar mu4e-pong-func)
 (defvar mu4e--context-current)
 (defvar mu4e-get-mail-command)
-(defvar smtpmail-queue-dir)
 (defvar message-signature-directory)
 (defvar message-signature-file)
 (defvar message-sendmail-extra-arguments)
@@ -76,8 +69,6 @@
 
 (defvar tychoish-mail--server-home nil
   "Database home of the current mu server, or nil when not running.")
-(defvar tychoish-mail--transitioning nil
-  "Non-nil while starting a replacement mu server.")
 (defvar tychoish-mail--switching-compose-context nil
   "Non-nil inside `mu4e-compose-context-switch'.")
 
@@ -105,12 +96,8 @@
 (with-eval-after-load 'mu4e-headers
   (add-to-list 'mu4e-headers-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t)
   (keymap-set mu4e-headers-mode-map "C-r" #'compose-reply-wide-or-not-please-ask)
-  (keymap-set mu4e-headers-mode-map "R" #'compose-reply-wide-or-not-please-ask)
-  (keymap-set mu4e-headers-mode-map "r" #'mu4e-headers-mark-for-read)
   (keymap-set mu4e-headers-mode-map "o" #'mu4e-headers-mark-for-unread)
   (keymap-set mu4e-headers-mode-map "u" #'mu4e-headers-mark-for-unread)
-  (keymap-set mu4e-headers-mode-map "*" #'mu4e-headers-mark-for-something)
-  (keymap-set mu4e-headers-mode-map "#" #'mu4e-mark-resolve-deferred-marks)
   (keymap-set mu4e-headers-mode-map ";" #'mu4e-mark-resolve-deferred-marks))
 
 (with-eval-after-load 'mu4e-view
@@ -187,13 +174,6 @@
 (setq mu4e-refile-folder #'tychoish-mail-refile-folder)
 (setq mu4e-compose-context-policy 'ask)
 
-(setq mail-imenu-generic-expression
-      '(("Subject"  "^Subject: *\\(.*\\)" 1)
-        ("Cc"       "^C[Cc]: *\\(.*\\)" 1)
-        ("Bcc"      "^B[Cc]: *\\(.*\\)" 1)
-        ("To"       "^To: *\\(.*\\)" 1)
-        ("From"     "^From: *\\(.*\\)" 1)))
-
 (setq mu4e-compose-complete-only-after "2015-01-01")
 (setq mu4e-search-include-related nil)
 (setq mu4e-search-results-limit 1000)
@@ -203,7 +183,6 @@
 (setq message-send-mail-function 'message-send-mail-with-sendmail)
 (setq message-fill-column 80)
 (setq message-cite-style message-cite-style-gmail)
-(setq message-dont-reply-to-names t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -214,7 +193,7 @@
   (setq-local make-backup-files nil)
   (seq-do #'make-local-variable
           '(mu4e--context-current user-mail-address user-full-name
-            message-directory message-auto-save-directory smtpmail-queue-dir
+            message-directory message-auto-save-directory
             message-signature-directory message-signature-file message-signature
             mail-host-address message-sendmail-extra-arguments mu4e-get-mail-command))
   (add-hook 'before-save-hook #'tychoish-mail--guard-draft-database nil t)
@@ -280,29 +259,6 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
                      ,folder)))))
     (kill-new (pp-to-string `(tychoish-mail-add-refile-rule (lambda (msg) ,body))))
     (message "Refile rule copied to kill ring")))
-
-(defun tychoish-mail-test-refile-rules ()
-  "Test all refile rules on the current message and display results."
-  (interactive)
-  (let* ((msg (or (mu4e-message-at-point)
-                  (user-error "No message at point")))
-         (buf (get-buffer-create "*mu4e-refile-test*")))
-    (with-current-buffer buf
-      (erase-buffer)
-      (insert (format "Refile test for: %s\n\n"
-                      (or (mu4e-message-field msg :subject) "(no subject)")))
-      (if (null tychoish-mail--refile-rules)
-          (insert "No refile rules defined.\n")
-        (seq-map-indexed
-         (lambda (rule i)
-           (let ((result (condition-case err
-                             (funcall rule msg)
-                           (error (format "ERROR: %S" err)))))
-             (insert (format "Rule %d: %s\n" (1+ i) (or result "no match")))))
-         tychoish-mail--refile-rules))
-      (insert (format "\nFinal result: %s\n"
-                      (tychoish-mail-refile-folder msg))))
-    (display-buffer buf)))
 
 (defun compose-reply-wide-or-not-please-ask ()
   "Ask whether to reply-to-all or not."
@@ -373,13 +329,11 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
    ((or tychoish-mail--composing (derived-mode-p 'mu4e-compose-mode))
     (let ((directory message-directory)
           (autosave message-auto-save-directory)
-          (queue smtpmail-queue-dir)
           (fetch mu4e-get-mail-command))
       (unwind-protect
           (funcall original force name)
         (setq message-directory directory)
         (setq message-auto-save-directory autosave)
-        (setq smtpmail-queue-dir queue)
         (setq mu4e-get-mail-command fetch))))
    (t (funcall original force name))))
 
@@ -447,7 +401,6 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
         (user-full-name user-full-name)
         (message-directory message-directory)
         (message-auto-save-directory message-auto-save-directory)
-        (smtpmail-queue-dir smtpmail-queue-dir)
         (message-signature-directory message-signature-directory)
         (message-signature-file message-signature-file)
         (message-signature message-signature)
@@ -494,8 +447,7 @@ Open drafts keep their original paths and are guarded during save and send."
     (when (and running (not (equal old-home home)))
       ;; Startup completes on pong, not when `mu4e' returns.
       (condition-case err
-          (let ((mu4e-context-policy nil)
-                (tychoish-mail--transitioning t))
+          (let ((mu4e-context-policy nil))
             (mu4e 'background)
             (tychoish-mail--await-server-ready)
             (setq tychoish-mail--server-home home))
@@ -535,7 +487,6 @@ MAILDIR is the account's mail root and COMMAND fetches its mail."
              (user-full-name . ,full-name)
              (message-directory . ,maildir)
              (message-auto-save-directory . ,(file-name-concat maildir "drafts"))
-             (smtpmail-queue-dir . ,(file-name-concat maildir "queue" "cur"))
              (message-signature-directory . ,(file-name-concat maildir "tools" "signatures"))
              (message-signature-file . ,address)
              (message-signature . t)
