@@ -152,7 +152,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; third-party -- configuration
 
-(setq savehist-coding-system 'utf-8-emacs)
 (setq desktop-buffers-not-to-save
       (concat "\\` \\|\\("
               "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
@@ -224,6 +223,7 @@
   (add-to-list 'electric-pair-pairs '(?{ . ?}))
   (add-to-list 'electric-pair-pairs '(?\[ . ?\])))
 
+(setq savehist-coding-system 'utf-8-emacs)
 (with-eval-after-load 'savehist
   (add-to-list 'savehist-additional-variables 'denote--title-history)
   (add-to-list 'savehist-additional-variables 'denote--keywords-history)
