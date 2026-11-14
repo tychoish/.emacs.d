@@ -340,29 +340,5 @@
   (setq code-review-db-database-file (sprite-state-path "code-review/code-review-db-file.sqlite"))
   (setq code-review-log-file (sprite-state-path "code-review/code-review-error.log")))
 
-(with-eval-after-load 'ert
-  (declare-function ewoc-buffer "ewoc" (ewoc))
-
-  (defun tychoish--ert-results-update-stats-display-advice (orig-fn ewoc stats)
-    "Ensure `ert--results-update-stats-display' executes in the EWOC buffer."
-    (with-current-buffer (ewoc-buffer ewoc)
-      (funcall orig-fn ewoc stats)))
-  (advice-add 'ert--results-update-stats-display :around #'tychoish--ert-results-update-stats-display-advice)
-
-  (defun tychoish--ert-no-focus-advice (orig-fn &rest args)
-    "Run ERT without displaying its results buffer.
-ORIG-FN and ARGS identify the original ERT invocation."
-    (save-selected-window
-      (let ((original-pop (symbol-function 'pop-to-buffer)))
-        (cl-letf (((symbol-function 'pop-to-buffer)
-                   (lambda (buffer-or-name &optional action norecord)
-                     (if (and (get-buffer buffer-or-name)
-                              (with-current-buffer buffer-or-name
-                                (derived-mode-p 'ert-results-mode)))
-                         (get-buffer buffer-or-name)
-                       (funcall original-pop buffer-or-name action norecord)))))
-          (apply orig-fn args)))))
-  (advice-add 'ert-run-tests-interactively :around #'tychoish--ert-no-focus-advice))
-
 (provide 'setup-core)
 ;;; setup-core.el ends here
