@@ -174,6 +174,8 @@
         "\\*grep\\*"
         "\\*xref\\*"
         "\\*Flymake diagnostics.*\\*"
+        "\\*ert.*\\*"
+        ert-results-mode
         help-mode
         compilation-mode))
 
@@ -333,6 +335,32 @@
   (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
   (setq-default gptel-model 'gpt-6.1-terra)
   (gptel-make-gh-copilot "gh-copilot"))
+
+(with-eval-after-load 'code-review
+  (setq code-review-db-database-file (sprite-state-path "code-review/code-review-db-file.sqlite"))
+  (setq code-review-log-file (sprite-state-path "code-review/code-review-error.log")))
+
+(with-eval-after-load 'ert
+  (declare-function ewoc-buffer "ewoc" (ewoc))
+  (add-to-list 'display-buffer-alist '("\\`\\*ert" (display-buffer-reuse-window display-buffer-at-bottom) (inhibit-same-window . t)))
+
+  (defun tychoish--ert-results-update-stats-display-advice (orig-fn ewoc stats)
+    "Ensure `ert--results-update-stats-display' executes in the EWOC buffer."
+    (with-current-buffer (ewoc-buffer ewoc)
+      (funcall orig-fn ewoc stats)))
+  (advice-add 'ert--results-update-stats-display :around #'tychoish--ert-results-update-stats-display-advice)
+
+  (defun tychoish--ert-no-focus-advice (orig-fn &rest args)
+    "Run ERT without letting the results buffer or tests take focus."
+    (save-selected-window
+      (cl-letf (((symbol-function 'pop-to-buffer)
+                 (lambda (buffer-or-name &optional action _norecord)
+                   (display-buffer buffer-or-name action)
+                   (if (bufferp buffer-or-name)
+                       buffer-or-name
+                     (get-buffer buffer-or-name)))))
+        (apply orig-fn args))))
+  (advice-add 'ert-run-tests-interactively :around #'tychoish--ert-no-focus-advice))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
