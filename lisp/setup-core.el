@@ -19,9 +19,7 @@
 (require 'cmdr-spec)
 
 (declare-function tychoish-mail-select-account "setup-mail")
-(declare-function execute-extended-magit-command "cmdr-ecosystem")
 
-(defvar magit-mode-map)
 (defvar magit-status-mode-map)
 (defvar popper-reference-buffers)
 (defvar popper-echo-dispatch-keys)
@@ -63,6 +61,8 @@
 
 (setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
 
+(keymap-set isearch-mode-map "C-o" #'isearch-occur)
+
 (cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
 (cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
 (cmdr-keys-set cmdr-mode-map "C-c t t i" #'toggle-hud-modeline-icons)
@@ -82,6 +82,18 @@
                                 :description "select mail account"
                                 :transient-key "ma")))
 
+(with-eval-after-load 'elpaish
+  (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
+
+(with-eval-after-load 'docker
+  (cmdr-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
+
+(with-eval-after-load 'ollama-tailnet
+  (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
+
+(with-eval-after-load 'magit-gh
+  (cmdr-transient-insert-suffix-once 'magit-gh '(-1) ["magit-dash" ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; core emacs -- global settings and options
 
@@ -90,6 +102,7 @@
 (setq inhibit-startup-message t)
 
 (setq jit-lock-defer-time 0.2)
+(setq read-process-output-max 1048576) ;; 1MB
 
 (setq confirm-kill-processes nil)
 (setq confirm-nonexistent-file-or-buffer nil)
@@ -115,6 +128,9 @@
 (setq-default truncate-lines t)
 (setq-default indent-tabs-mode nil) ; (setq tab-width 4)
 (setq shell-command-dont-erase-buffer 'end-last-out)
+(setq ns-function-modifier 'hyper) ;; darwin
+(setq ns-command-modifier 'meta) ;; darwin
+(setq ns-option-modifier 'super) ;; darwin
 
 (setq switch-to-prev-buffer-skip 'visible)
 (setq split-height-threshold 100)
@@ -127,23 +143,10 @@
 (put 'list-threads 'disabled nil)
 (put 'dired-find-alternate-file 'disabled nil)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; platform/os -- system configuration and integration
+(advice-add 'display-startup-echo-area-message :override #'ignore)
 
-;;; Direct terminal file aliases
 (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
 (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
-
-(when (eq system-type 'darwin)
-  (setq read-process-output-max (* 64 1024))
-  (setq ns-function-modifier 'hyper)
-  (setq mac-command-modifier 'meta)
-  (setq mac-option-modifier 'super))
-
-(when (eq system-type 'gnu/linux)
-  (setq read-process-output-max (* 1024 1024)))
-
-(advice-add 'display-startup-echo-area-message :override #'ignore)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; third-party -- configuration
@@ -256,34 +259,12 @@
   (require 'tracking))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Search & navigation
-
-(keymap-set isearch-mode-map "C-o" #'isearch-occur)
+;;; Tools
 
 (with-eval-after-load 'dired
   (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Build & system tools
-
-;; cmdr-ecosystem installs bindings; these configure package-specific menus.
-(with-eval-after-load 'elpaish
-  (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
-
-(with-eval-after-load 'docker
-  (cmdr-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
-
-(with-eval-after-load 'ollama-tailnet
-  (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
-
-(with-eval-after-load 'magit-gh
-  (cmdr-transient-insert-suffix-once 'magit-gh '(-1) ["magit-dash" ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Git & VCS
-
 (with-eval-after-load 'magit
-  (setq magit-module-sections-nested t)
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
   (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
   (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
@@ -301,9 +282,6 @@
 
   (advice-add 'git-link--new :around #'ad:git-link--new-with-clipboard))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Denote & notes
-
 (with-eval-after-load 'denote
   (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window)))
 
@@ -316,9 +294,6 @@
 
 (with-eval-after-load 'denote-dash
   (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; AI & LLM integration
 
 (with-eval-after-load 'gptel
   (keymap-set gptel-mode-map "C-c m" #'gptel-menu)

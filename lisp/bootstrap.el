@@ -169,6 +169,8 @@
         (savehist-file . "history.el")
         (magit-dash-gh-prune-cache-dir . "magit-dash-gh-prune/")
         (dape-default-breakpoints-file . "dape-breakpoints.el")
+        (code-review-db-database-file . "code-review/db.sqlite")
+        (code-review-log-file . "code-review/error.log")
         (projectile-known-projects-file . "projectile-bookmarks.eld")
         (projectile-frecency-file . "projectile-frecency.eld")))
 
