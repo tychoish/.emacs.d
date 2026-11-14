@@ -342,7 +342,6 @@
 
 (with-eval-after-load 'ert
   (declare-function ewoc-buffer "ewoc" (ewoc))
-  (add-to-list 'display-buffer-alist '("\\`\\*ert" (display-buffer-reuse-window display-buffer-at-bottom) (inhibit-same-window . t)))
 
   (defun tychoish--ert-results-update-stats-display-advice (orig-fn ewoc stats)
     "Ensure `ert--results-update-stats-display' executes in the EWOC buffer."
@@ -351,15 +350,18 @@
   (advice-add 'ert--results-update-stats-display :around #'tychoish--ert-results-update-stats-display-advice)
 
   (defun tychoish--ert-no-focus-advice (orig-fn &rest args)
-    "Run ERT without letting the results buffer or tests take focus."
+    "Run ERT without displaying its results buffer.
+ORIG-FN and ARGS identify the original ERT invocation."
     (save-selected-window
-      (cl-letf (((symbol-function 'pop-to-buffer)
-                 (lambda (buffer-or-name &optional action _norecord)
-                   (display-buffer buffer-or-name action)
-                   (if (bufferp buffer-or-name)
-                       buffer-or-name
-                     (get-buffer buffer-or-name)))))
-        (apply orig-fn args))))
+      (let ((original-pop (symbol-function 'pop-to-buffer)))
+        (cl-letf (((symbol-function 'pop-to-buffer)
+                   (lambda (buffer-or-name &optional action norecord)
+                     (if (and (get-buffer buffer-or-name)
+                              (with-current-buffer buffer-or-name
+                                (derived-mode-p 'ert-results-mode)))
+                         (get-buffer buffer-or-name)
+                       (funcall original-pop buffer-or-name action norecord)))))
+          (apply orig-fn args)))))
   (advice-add 'ert-run-tests-interactively :around #'tychoish--ert-no-focus-advice))
 
 (provide 'setup-core)

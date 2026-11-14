@@ -18,6 +18,8 @@
 (declare-function agent-shell-interrupt-confirmed-p "agent-shell")
 (declare-function agent-shell-queue-format-file-extension "agent-shell-queue-persistence")
 (declare-function mcpkit-agent-shell-mode "mcpkit-agent-shell")
+(autoload 'agent-shell-menu-next-buffer "agent-shell-menu" nil t)
+(autoload 'agent-shell-menu-previous-buffer "agent-shell-menu" nil t)
 
 (defconst tychoish/agent-shell-terse-persona
   "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
@@ -69,6 +71,8 @@
 (keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
 (keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
 (keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
+(keymap-set agent-shell-mode-map "C-c ]" #'agent-shell-menu-next-buffer)
+(keymap-set agent-shell-mode-map "C-c [" #'agent-shell-menu-previous-buffer)
 (keymap-set agent-shell-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
 (keymap-set agent-shell-mode-map "C-c m" #'agent-shell-menu-select-action)
 (keymap-set agent-shell-mode-map "C-c x" #'agent-shell-menu-select-command)
