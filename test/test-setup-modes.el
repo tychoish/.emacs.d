@@ -20,7 +20,7 @@
   (should (eq (cdr (assq 'sqlite-mode-hook sprite-state-mode-hooks)) 'sqlite-extras-minor-mode))
   (should (equal (cdr (assq 'LaTeX-mode-hook sprite-state-mode-hooks))
                  '(turn-on-reftex visual-line-mode turn-off-auto-fill)))
-  (should (eq (cdr (assq 'emacs-lisp-mode-hook sprite-state-mode-hooks)) 'builder-elisp-minor-mode)))
+  (should (eq (cdr (assq 'emacs-lisp-mode-hook sprite-state-mode-hooks)) 'builder-elisp-mode)))
 
 (ert-deftest setup-modes/registration-preserves-existing-entries ()
   "Ensure registration functions merge without overriding unrelated entries."

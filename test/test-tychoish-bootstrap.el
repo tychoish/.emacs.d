@@ -1211,5 +1211,25 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (when was-hud (hud-modeline-mode 1))
       (delete-directory tmp-root t))))
 
+(ert-deftest bootstrap/defensive-reload-restores-modes-and-advice ()
+  "bootstrap-defensive-reload re-discovers specs, re-asserts disabled modes and enables advice."
+  (let ((discovered nil)
+        (advice-called nil)
+        (relabelled nil)
+        (fake-mode-turned-on nil))
+    (cl-letf (((symbol-function 'cmdr-spec-discover) (lambda () (setq discovered t)))
+              ((symbol-function 'builder-elisp-enable-ert-advice) (lambda () (setq advice-called t)))
+              ((symbol-function 'agent-shell-chat--relabel-all) (lambda () (setq relabelled t)))
+              ((symbol-function 'bootstrap-test-dummy-mode)
+               (lambda (arg) (when (= arg 1) (setq fake-mode-turned-on t)))))
+      (let ((bootstrap-essential-global-modes '(bootstrap-test-dummy-mode))
+            (bootstrap-test-dummy-mode nil))
+        (let ((summary (bootstrap-defensive-reload)))
+          (should discovered)
+          (should advice-called)
+          (should relabelled)
+          (should fake-mode-turned-on)
+          (should (equal (plist-get summary :restored-modes) '(bootstrap-test-dummy-mode))))))))
+
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here
