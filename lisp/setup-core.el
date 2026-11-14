@@ -20,24 +20,14 @@
 
 (declare-function tychoish-mail-select-account "setup-mail")
 (declare-function execute-extended-magit-command "cmdr-ecosystem")
-(declare-function execute-extended-denote-command "setup-core")
-(declare-function read-extended-command-for-denote-prefix-p "setup-core")
-(declare-function ad:git-link--new-copy-to-clipboard "setup-core")
-(declare-function ad:denote-link-ol-get-heading--org-only "setup-core")
-(declare-function electric-pair-default-inhibit "elec-pair")
-(declare-function electric-pair-conservative-inhibit "elec-pair")
 
-(defvar denote-directory)
 (defvar magit-mode-map)
 (defvar magit-status-mode-map)
-(defvar magit-module-sections-nested)
 (defvar popper-reference-buffers)
 (defvar popper-echo-dispatch-keys)
 (defvar popper-display-control)
 (defvar sprite-mode-map-prefix)
-(defvar alert-default-style)
 (defvar alert-fade-time)
-(defvar alert-libnotify-command)
 (defvar alert-log-messages)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -300,8 +290,8 @@
   (keymap-set magit-mode-map "/" (cons "magit-command" magit-command-mode-map))
   (keymap-set magit-status-mode-map "C-n" #'next-line)
   (keymap-set magit-status-mode-map "C-p" #'previous-line)
-  (keymap-set magit-command-mode-map "x" (cons "magit-commands" #'execute-extended-magit-command))
-  (keymap-set magit-command-mode-map "m" (cons "(s)merge-commands" #'execute-extended-magit-command))
+  (keymap-set magit-command-mode-map "x" (cons "magit-commands" 'execute-extended-magit-command))
+  (keymap-set magit-command-mode-map "m" (cons "(s)merge-commands" 'execute-extended-smerge-command))
 
   (when (fboundp 'hud-modeline-set-segment-action)
     (hud-modeline-set-segment-action 'vc #'magit-dispatch)))

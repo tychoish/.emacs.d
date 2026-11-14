@@ -13,7 +13,6 @@
   (require 'agent-shell))
 
 (defvar which-key-replacement-alist)
-(defvar alert-fade-time)
 (defvar shell-maker--busy)
 (declare-function agent-shell-queue-setup-capture-completion "agent-shell-queue-ui")
 (declare-function agent-shell-interrupt-confirmed-p "agent-shell")
@@ -35,7 +34,6 @@
 
 (add-to-list 'display-buffer-alist
              '(tychoish--agent-shell-buffer-p (display-buffer-reuse-window display-buffer-use-some-window) (reusable-frames . t)))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; settings
