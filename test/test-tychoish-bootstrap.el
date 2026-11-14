@@ -1211,6 +1211,8 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (when was-hud (hud-modeline-mode 1))
       (delete-directory tmp-root t))))
 
+(defvar bootstrap-test-dummy-mode nil)
+
 (ert-deftest bootstrap/defensive-reload-restores-modes-and-discovers-specs ()
   "bootstrap-defensive-reload audits sprite-startup-operations and discovers cmdr specs."
   (let ((discovered nil)
