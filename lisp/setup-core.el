@@ -309,6 +309,8 @@
 ;;; Denote & notes
 
 (with-eval-after-load 'denote
+  (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window)))
+
   (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
     "Only call FN in `org-mode' buffers."
     (when (derived-mode-p 'org-mode)
