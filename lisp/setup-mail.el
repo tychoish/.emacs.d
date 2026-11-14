@@ -76,8 +76,6 @@
 
 (add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
-(add-to-list 'display-buffer-alist '(tychoish--mu4e-buffer-p (display-buffer-reuse-window) (reusable-frames . t)))
-
 (with-eval-after-load 'mu4e
   (seq-do (lambda (hook) (add-hook hook #'cmdr-frame-record-home-frame))
           '(mu4e-main-mode-hook
@@ -297,13 +295,6 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
         (browse-url uri))
        (t
         (user-error "Unrecognized URI scheme in List-Unsubscribe: %s" uri))))))
-
-;; display-buffer: mu4e buffers prefer the frame they were first shown on
-(defun tychoish--mu4e-buffer-p (buf _action)
-  "Return non-nil if BUF uses a mu4e major mode."
-  (with-current-buffer buf
-    (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
-                    'mu4e-view-mode 'mu4e-compose-mode)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

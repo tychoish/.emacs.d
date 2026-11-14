@@ -32,9 +32,6 @@
 (with-eval-after-load 'agent-shell-queue
   (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell"))))
 
-(add-to-list 'display-buffer-alist
-             '(tychoish--agent-shell-buffer-p (display-buffer-reuse-window display-buffer-use-some-window) (reusable-frames . t)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; settings
 
@@ -148,11 +145,6 @@
   (when (or (eq (map-nested-elt agent-shell--state '(:agent-config :identifier)) 'antigravity)
             (equal mode-name "Antigravity"))
     (setq mode-name "agy")))
-
-(defun tychoish--agent-shell-buffer-p (buffer _action)
-  "Return non-nil if BUFFER derives from `agent-shell-mode'."
-  (with-current-buffer buffer
-    (derived-mode-p 'agent-shell-mode)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Advice & Workarounds
