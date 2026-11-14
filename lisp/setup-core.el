@@ -340,7 +340,5 @@
   (setq code-review-db-database-file (sprite-state-path "code-review/code-review-db-file.sqlite"))
   (setq code-review-log-file (sprite-state-path "code-review/code-review-error.log")))
 
-(add-hook 'emacs-lisp-mode-hook #'builder-elisp-minor-mode)
-
 (provide 'setup-core)
 ;;; setup-core.el ends here

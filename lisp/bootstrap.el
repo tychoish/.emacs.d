@@ -183,7 +183,8 @@
         (markdown-mode-hook . turn-off-auto-fill)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
-        (magit-mode-hook . bootstrap-ensure-ssh-agent)))
+        (magit-mode-hook . bootstrap-ensure-ssh-agent)
+        (emacs-lisp-mode-hook . builder-elisp-minor-mode)))
 
 (setq sprite-state-auto-mode-alist
       '(("\\.xml\\'" . nxml-mode)
