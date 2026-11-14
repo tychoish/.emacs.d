@@ -257,12 +257,12 @@
     mcpkit-agent-shell-mode
     gptel-mcp-mode
     mcpkit-init-services
+    bootstrap-require-setup-packages
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
 (defvar bootstrap-package-maintenance
-  '(bootstrap-require-setup-packages
-    bootstrap-ensure-packages-installed
+  '(bootstrap-ensure-packages-installed
     bootstrap-package-quickstart
     builder-emacs-conf-native-compile-all)
   "Operations to run after startup to maintain")
