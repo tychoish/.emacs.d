@@ -69,6 +69,7 @@
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
 (defvar treesit-auto-langs)
+(defvar treesit-auto-install-grammar)
 (defvar org-directory)
 (defvar org-agenda-files nil)
 (defvar org-annotate-file-storage-file)
@@ -310,7 +311,11 @@ Returns a list of re-enabled modes, if any."
 (defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
-(defun bootstrap-treesit-auto () (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
+(defun bootstrap-treesit-auto ()
+  (setq treesit-auto-langs (delete 'yaml treesit-auto-langs))
+  ;; Never prompt to install grammars in CI (Emacs 31+ asks via `y-or-n-p').
+  (when (getenv "CI")
+    (setq treesit-auto-install-grammar 'never)))
 
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
