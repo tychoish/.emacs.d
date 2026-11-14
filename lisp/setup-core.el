@@ -85,6 +85,12 @@
 (with-eval-after-load 'elpaish
   (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
+(with-eval-after-load 'elpaish-install
+  (add-hook 'elpaish-install-bootstrap-finished-functions
+            (lambda (&rest _)
+              (when (fboundp 'cmdr-spec-discover)
+                (cmdr-spec-discover)))))
+
 (with-eval-after-load 'docker
   (cmdr-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
 

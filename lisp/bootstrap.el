@@ -260,60 +260,31 @@
     mcpkit-agent-shell-mode
     gptel-mcp-mode
     mcpkit-init-services
-    bootstrap-defensive-reload
+    cmdr-spec-discover
     bootstrap-require-setup-packages
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
-(defvar bootstrap-essential-global-modes
-  '(cmdr-mode
-    cmdr-frame-mode
-    sprite-state-global-mode
-    agent-shell-queue-global-mode
-    builder-mode
-    popper-mode
-    magit-dash-global-mode
-    orgx-global-mode
-    eglox-global-mode
-    overmark-global-mode
-    which-key-mode
-    winner-mode)
-  "List of global minor modes that must remain active across package upgrades and reloads.")
-
 ;;;###autoload
 (defun bootstrap-defensive-reload ()
-  "Defensively re-synchronize and restore configuration, modes, and keybindings.
-Idempotent and safe to run in live sessions or after background package updates:
-1. Re-discovers specs into `cmdr-mode-map' via `cmdr-spec-discover'.
-2. Re-asserts all essential global minor modes in `bootstrap-essential-global-modes'.
-3. Enables `builder-elisp-enable-ert-advice' to prevent ERT window-focus stealing.
-4. Relabels all active `agent-shell' buffers if `agent-shell-chat-mode' is active.
-Returns a plist summarizing restored components."
+  "Defensively re-synchronize keymap specs and ensure startup modes are active.
+Audits `sprite-startup-operations' for any inactive minor modes and re-asserts them,
+then re-discovers specs into `cmdr-mode-map' via `cmdr-spec-discover'.
+Returns a list of re-enabled modes, if any."
   (interactive)
-  (let ((restored-modes nil))
-    ;; 1. Discover cmdr specs
+  (let ((restored nil))
+    (dolist (op sprite-startup-operations)
+      (when (and (fboundp op)
+                 (boundp op)
+                 (null (symbol-value op)))
+        (funcall op 1)
+        (push op restored)))
     (when (fboundp 'cmdr-spec-discover)
       (cmdr-spec-discover))
-    ;; 2. Re-assert essential global modes
-    (dolist (mode bootstrap-essential-global-modes)
-      (when (fboundp mode)
-        (unless (and (boundp mode) (symbol-value mode))
-          (funcall mode 1)
-          (push mode restored-modes))))
-    ;; 3. ERT focus-stealing advice
-    (when (fboundp 'builder-elisp-enable-ert-advice)
-      (builder-elisp-enable-ert-advice))
-    ;; 4. Re-label agent-shell chat buffers if loaded
-    (when (fboundp 'agent-shell-chat--relabel-all)
-      (agent-shell-chat--relabel-all))
-    (let ((summary (list :cmdr-specs (and (boundp 'cmdr-mode-map) t)
-                         :restored-modes (nreverse restored-modes)
-                         :ert-advice (fboundp 'builder-elisp-enable-ert-advice))))
-      (message "[bootstrap] Defensive reload complete: %s"
-               (if restored-modes
-                   (format "re-enabled modes %s" (mapconcat #'symbol-name restored-modes ", "))
-                 "all essential modes already active"))
-      summary)))
+    (when restored
+      (message "[bootstrap] Re-enabled inactive modes: %s"
+               (mapconcat #'symbol-name (reverse restored) ", ")))
+    (nreverse restored)))
 
 (defvar bootstrap-package-maintenance
   '(bootstrap-ensure-packages-installed
@@ -322,7 +293,8 @@ Returns a plist summarizing restored components."
     builder-emacs-conf-native-compile-all)
   "Operations to run after startup to maintain")
 
-(defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
+(defun bootstrap-run-startup ()
+  (sprite-batch-startup :delay 0.05 :on-done (and (fboundp 'cmdr-spec-discover) #'cmdr-spec-discover)))
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-require-treesit-auto () (require 'treesit-auto))
