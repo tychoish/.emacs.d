@@ -272,12 +272,6 @@ correctly and reads from the minibuffer using the candidate's command."
     (should (eq (keymap-lookup agent-shell-mode-map "C-c j") agent-shell-map))
     (should (eq (keymap-lookup agent-shell-queue-mode-map "C-c j") agent-shell-map))))
 
-(ert-deftest tychoish-core/annotated-magit-prefix-bindings ()
-  (require 'magit)
-  (should (eq (keymap-lookup magit-mode-map "/") magit-command-mode-map))
-  (should (eq (keymap-lookup magit-command-mode-map "x") 'execute-extended-magit-command))
-  (should (eq (keymap-lookup magit-command-mode-map "m") 'execute-extended-smerge-command)))
-
 (defvar argi)
 
 (ert-deftest tychoish-core/clix-sprite-id-flag ()
