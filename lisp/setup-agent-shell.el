@@ -45,7 +45,7 @@
 (setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
 (setq agent-shell-header-style 'text)
 (setq agent-shell-activity-group-expand-by-default t)
-(setq agent-shell-thought-process-expand-by-default t)
+(setq agent-shell-thought-process-expand-by-default nil)
 (setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-agent-configs #'tychoish--agent-shell-installed-configs)
