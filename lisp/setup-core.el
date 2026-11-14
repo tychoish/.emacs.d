@@ -288,24 +288,18 @@
   (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
   (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
 
-  (defvar-keymap magit-command-mode-map) ;; "/"
-  (keymap-set magit-mode-map "/" (cons "magit-command" magit-command-mode-map))
   (keymap-set magit-status-mode-map "C-n" #'next-line)
   (keymap-set magit-status-mode-map "C-p" #'previous-line)
-  (keymap-set magit-command-mode-map "x" (cons "magit-commands" 'execute-extended-magit-command))
-  (keymap-set magit-command-mode-map "m" (cons "(s)merge-commands" 'execute-extended-smerge-command))
 
-  (when (fboundp 'hud-modeline-set-segment-action)
-    (hud-modeline-set-segment-action 'vc #'magit-dispatch)))
+  (hud-modeline-set-segment-action 'vc #'magit-dispatch))
 
 (with-eval-after-load 'git-link
-  (defun ad:git-link--new-copy-to-clipboard (link)
-    "Also copy LINK to the system clipboard."
-    (with-temp-buffer
-      (insert link)
-      (clipboard-kill-ring-save (point-min) (point-max))))
+  (defun ad:git-link--new-with-clipboard (orig-fn &rest args)
+    "Ensure `select-enable-clipboard' is non-nil so the link reaches the OS clipboard."
+    (let ((select-enable-clipboard t))
+      (apply orig-fn args)))
 
-  (advice-add 'git-link--new :after #'ad:git-link--new-copy-to-clipboard))
+  (advice-add 'git-link--new :around #'ad:git-link--new-with-clipboard))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Denote & notes
@@ -321,10 +315,7 @@
   (advice-add 'denote-link-ol-get-heading :around #'ad:denote-link-ol-get-heading--org-only))
 
 (with-eval-after-load 'denote-dash
-  (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree)
-  (make-read-extended-command-for-prefix "denote"
-    :bind-map denote-dash-global-map
-    :bind-key "x"))
+  (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; AI & LLM integration
@@ -335,10 +326,6 @@
   (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
   (setq-default gptel-model 'gpt-6.1-terra)
   (gptel-make-gh-copilot "gh-copilot"))
-
-(with-eval-after-load 'code-review
-  (setq code-review-db-database-file (sprite-state-path "code-review/code-review-db-file.sqlite"))
-  (setq code-review-log-file (sprite-state-path "code-review/code-review-error.log")))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
