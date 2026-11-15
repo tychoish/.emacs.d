@@ -10,9 +10,6 @@
 (require 'cmdr-keys)
 (require 'agent-shell-queue)
 
-(eval-when-compile
-  (require 'agent-shell))
-
 (defvar which-key-replacement-alist)
 (declare-function agent-shell-menu-resolve-permission "agent-shell-menu")
 (autoload 'agent-shell-menu-next-buffer "agent-shell-menu" nil t)
@@ -70,7 +67,6 @@
 (keymap-set agent-shell-mode-map "C-c TAB" #'agent-shell-menu-select-collapse)
 (keymap-set agent-shell-mode-map "M-SPC" #'agent-shell-menu-select-session-mode)
 
-(add-hook 'agent-shell-mode-hook #'agent-shell-corfu-setup)
 (add-hook 'agent-shell-mode-hook #'agent-shell-bold-input-setup)
 (add-hook 'agent-shell-mode-hook #'ansi-color-for-comint-mode-on)
 (add-hook 'agent-shell-mode-hook #'tychoish--agent-shell-shorten-antigravity-modeline)
@@ -82,13 +78,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Agent-shell Buffer Helpers & Hooks
-
-(defun agent-shell-corfu-setup ()
-  "Configure Corfu auto-completion for agent-shell buffers."
-  (corfu-mode +1)
-  (setq-local corfu-auto-prefix 2)
-  (setq-local completion-at-point-functions
-              (cons #'cape-dabbrev (remq t completion-at-point-functions))))
 
 (defun agent-shell-bold-input-setup ()
   "Render submitted prompt text in bold."
