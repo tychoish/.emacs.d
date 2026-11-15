@@ -62,8 +62,6 @@
 (defvar mail-host-address)
 (defvar tychoish-mail--composing nil
   "Non-nil while mu4e creates a draft.")
-(defvar-local tychoish-mail--draft-home nil
-  "Database home owning this draft, or nil if ownership is unknown.")
 
 (add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
@@ -187,11 +185,6 @@
             message-directory message-auto-save-directory
             message-signature-directory message-signature-file message-signature
             mail-host-address message-sendmail-extra-arguments mu4e-get-mail-command))
-  (unless tychoish-mail--draft-home
-    (let* ((home (or tychoish-mail--server-home mu4e-mu-home))
-           (root (and home (file-name-directory (directory-file-name home)))))
-      (when (and root buffer-file-name (file-in-directory-p buffer-file-name root))
-        (setq-local tychoish-mail--draft-home home))))
   (add-hook 'message-send-hook #'tychoish-mail--guard-draft-database nil t)
   (add-hook 'message-send-hook #'tychoish-mail--guard-draft-identity nil t))
 
@@ -307,12 +300,12 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
     (call-interactively #'mu4e-context-switch)))
 
 (defun tychoish-mail--guard-draft-database (&rest _args)
-  "Refuse draft operations unless its owning database is active."
-  (unless (and tychoish-mail--draft-home
-               (mu4e-running-p)
-               (equal tychoish-mail--draft-home
-                      (or tychoish-mail--server-home mu4e-mu-home)))
-    (user-error "Switch to this draft's database before saving or sending")))
+  "Refuse draft operations outside the active mu database's mail root."
+  (let* ((home (or tychoish-mail--server-home mu4e-mu-home))
+         (root (and home (file-name-directory (directory-file-name home)))))
+    (unless (and root buffer-file-name (mu4e-running-p)
+                 (file-in-directory-p buffer-file-name root))
+      (user-error "Switch to this draft's database before saving or sending"))))
 
 (defun ad:tychoish-mail-guard-save (&rest _args)
   "Guard saving mu4e drafts.
@@ -332,6 +325,8 @@ must be advice to be able to abort the save."
 
 (defun ad:tychoish-mail-start-for-draft (&rest _args)
   "Start the default database and await its readiness before composing."
+  (when tychoish-mail--transitioning
+    (user-error "Wait for the mail database switch before composing"))
   (tychoish-mail-server-ensure-ready))
 
 (defun ad:tychoish-mail-draft (original &rest args)

@@ -92,7 +92,6 @@
               (should (equal user-mail-address "beta@example.org")))
             (with-temp-buffer (setq draft (mu4e-compose-edit)))
             (with-current-buffer draft
-              (should (equal tychoish-mail--draft-home home))
               (mu4e-compose-context-switch nil "beta")
               (should (equal user-mail-address "beta@example.org"))
               (should (equal message-directory maildir))
@@ -102,18 +101,24 @@
               (insert "Updated\n")
               (save-buffer))
             (with-temp-buffer
+              (should-error (mu4e-context-switch nil "beta") :type 'user-error)
+              (should (equal mu4e-mu-home home)))
+            ;; These are disposable test drafts.  Real drafts must be saved
+            ;; or discarded by the user before they are closed.
+            (dolist (buffer (list draft first-draft second-draft))
+              (when (buffer-live-p buffer)
+                (with-current-buffer buffer (set-buffer-modified-p nil))
+                (kill-buffer buffer)))
+            (with-temp-buffer
               (mu4e-context-switch nil "beta")
               (should (equal mu4e-mu-home other-home))
               (should (equal message-directory other-maildir))
               (should (equal mu4e-get-mail-command "fetch-beta")))
-            (with-current-buffer draft
-              (insert "Blocked\n")
-              (should-error (save-buffer) :type 'user-error)
+            (with-temp-buffer
+              (setq buffer-file-name file)
               (should-error (tychoish-mail--guard-draft-database) :type 'user-error))
             (with-temp-buffer (mu4e-context-switch nil "alpha"))
-            (with-current-buffer draft
-              (should (equal tychoish-mail--server-home home))
-              (save-buffer))))
+            (should (equal tychoish-mail--server-home home))))
       (dolist (buffer (list draft first-draft second-draft))
         (when (buffer-live-p buffer)
           (with-current-buffer buffer (set-buffer-modified-p nil))

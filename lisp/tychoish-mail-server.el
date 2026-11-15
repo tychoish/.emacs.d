@@ -96,21 +96,33 @@
     (setq tychoish-mail--server-home nil)
     (tychoish-mail--await-stopped-server)))
 
+(defun tychoish-mail-server--ensure-no-drafts ()
+  "Refuse a database change while any mu4e draft remains open."
+  (when-let* ((draft (seq-find (lambda (buffer)
+                                (with-current-buffer buffer
+                                  (derived-mode-p 'mu4e-compose-mode)))
+                              (buffer-list))))
+    (user-error "Save and close mail draft %s before switching databases"
+                (buffer-name draft))))
+
 (defun tychoish-mail-server-switch-database (home)
   "Prepare the mu database at HOME before entering its context.
 Open drafts keep their original paths and are guarded during save and send."
   (tychoish-mail--await-stopped-server)
-  (let* ((running (and (featurep 'mu4e) (mu4e-running-p)))
+  (let* ((tychoish-mail--transitioning t)
+         (running (and (featurep 'mu4e) (mu4e-running-p)))
          (old-home (if running
                        (or tychoish-mail--server-home mu4e-mu-home)
                      mu4e-mu-home)))
     (unless (equal old-home home)
+      (tychoish-mail-server--ensure-no-drafts)
       (when (or mu4e--server-indexing
                 (and (buffer-live-p mu4e--update-buffer)
                      (process-live-p (get-buffer-process mu4e--update-buffer))))
         (user-error "Cannot switch mail databases while an update is running"))
       (when running
-        (tychoish-mail--stop-server))
+        (tychoish-mail--stop-server)
+        (tychoish-mail-server--ensure-no-drafts))
       (setq tychoish-mail--server-home nil)
       (unless running
         (setq mu4e--started nil)))
@@ -118,8 +130,7 @@ Open drafts keep their original paths and are guarded during save and send."
     (when (and running (not (equal old-home home)))
       ;; Startup completes on pong, not when `mu4e' returns.
       (condition-case err
-          (let ((mu4e-context-policy nil)
-                (tychoish-mail--transitioning t))
+          (let ((mu4e-context-policy nil))
             (tychoish-mail-server-ensure-ready)
             (setq tychoish-mail--server-home home))
         ((error quit)
