@@ -29,13 +29,16 @@
          (mu4e-modeline-support nil)
          (tychoish-mail--server-home nil)
          (mu4e--context-current nil)
-         draft)
+         draft first-draft second-draft)
     (unwind-protect
         (progn
           (dolist (directory (list maildir other-maildir))
             (dolist (folder '("drafts" "sent" "trash"))
               (dolist (part '("cur" "new" "tmp"))
                 (make-directory (expand-file-name (concat folder "/" part) directory) t))))
+          (make-directory (expand-file-name "tools/signatures" maildir) t)
+          (with-temp-file (expand-file-name "tools/signatures/alpha@example.org" maildir)
+            (insert "Alpha signature\n"))
           (make-directory (expand-file-name "tools/signatures" other-maildir) t)
           (with-temp-file (expand-file-name "tools/signatures/beta@example.org" other-maildir)
             (insert "Beta signature\n"))
@@ -67,7 +70,27 @@
                     ((symbol-function 'mu4e-message-at-point)
                      (lambda (&rest _) (list :path file :flags '(draft)))))
             (mu4e-context-switch nil "alpha")
-            (setq draft (mu4e-compose-edit))
+            ;; Creating the first draft starts mu4e from a cold session and
+            ;; selects beta while the session's active identity is alpha.
+            (let ((mu4e-compose-context-policy 'ask))
+              (cl-letf (((symbol-function 'mu4e--context-ask-user)
+                         (lambda (&rest _) (cadr mu4e-contexts))))
+                (setq first-draft (mu4e-compose-new "one@example.org" "First"))))
+            (with-current-buffer first-draft
+              (should (equal user-mail-address "beta@example.org"))
+              (mu4e-compose-context-switch nil "alpha")
+              (mu4e-compose-context-switch nil "beta"))
+            (with-temp-buffer
+              (setq second-draft (mu4e-compose-new "two@example.org" "Second"))
+              (should (equal user-mail-address "alpha@example.org"))
+              (should (equal message-directory maildir))
+              (should (equal message-auto-save-directory (expand-file-name "drafts" maildir)))
+              (should (equal mu4e-get-mail-command "fetch-alpha")))
+            (with-current-buffer second-draft
+              (should (equal user-mail-address "alpha@example.org")))
+            (with-current-buffer first-draft
+              (should (equal user-mail-address "beta@example.org")))
+            (with-temp-buffer (setq draft (mu4e-compose-edit)))
             (with-current-buffer draft
               (should (equal tychoish-mail--draft-home home))
               (mu4e-compose-context-switch nil "beta")
@@ -91,12 +114,20 @@
             (with-current-buffer draft
               (should (equal tychoish-mail--server-home home))
               (save-buffer))))
-      (when (buffer-live-p draft)
-        (with-current-buffer draft (set-buffer-modified-p nil))
-        (kill-buffer draft))
+      (dolist (buffer (list draft first-draft second-draft))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer (set-buffer-modified-p nil))
+          (kill-buffer buffer)))
       (unwind-protect
           (when (mu4e-running-p)
-            (let ((mu4e-confirm-quit nil)) (mu4e-quit)))
+            (let ((process mu4e--server-process)
+                  (deadline (+ (float-time) 5))
+                  (mu4e-confirm-quit nil))
+              (mu4e-quit)
+              (while (and (process-live-p process) (< (float-time) deadline))
+                (accept-process-output process 0.1))
+              (when (process-live-p process)
+                (delete-process process))))
         (delete-directory root t)))))
 
 (provide 'test-mail-integration)
