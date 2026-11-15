@@ -80,6 +80,7 @@
 ;; Org and note paths populated by `bootstrap-set-local-notes-directory'
 (defvar local-notes-directory nil
   "Directory where notes are stored.")
+
 (defvar user-org-directories nil
   "Extra directories containing org files.")
 
@@ -189,6 +190,12 @@
         (popper-mode-hook . popper-echo-mode)
         (magit-status-mode-hook . magit-dash-gh-prune-lazy-prefetch)
         (markdown-mode-hook . turn-off-auto-fill)
+        (agent-shell-mode-hook . (agent-shell-bold-input-setup
+                                  ansi-color-for-comint-mode-on
+                                  agent-shell-notifications-mode
+                                  agent-shell-queue-overload-mode))
+        (agent-shell-viewport-edit-mode . agent-shell-notifications-viewport-edit-mode)
+        (agent-shell-viewport-view-mode . agent-shell-notifications-viewport-view-mode)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . bootstrap-ensure-ssh-agent)
@@ -315,6 +322,8 @@ Returns a list of re-enabled modes, if any."
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-treesit-auto () (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
+(defun bootstrap-agent-shell-state-path (path) (file-name-concat (sprite-state-path "agent-shell") path))
+(defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
 
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)

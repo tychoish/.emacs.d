@@ -91,6 +91,23 @@
                                 :description "select mail account"
                                 :transient-key "ma")))
 
+(cmdr-register-spec
+  :name agent-shell
+  :probe agent-shell
+  :prefixes (("C-c r" . "robot")
+             ("C-c r s" . "agent-shell")
+             ("C-c r s s" . "send"))
+  :bindings (("C-c r p" . agent-shell-workflow-select)
+             ;; ... cmdr-mode-map bindings ...
+             ("C-c r s x" . execute-extended-agent-shell-command))
+  :keymap-bindings
+  ((agent-shell agent-shell-mode-map
+    ("C-c j" . (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
+    ("C-c C-c" . agent-shell-submit)
+    ("C-c C-k" . agent-shell-interrupt))
+   (agent-shell-queue agent-shell-queue-mode-map
+    ("C-c j" . (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell"))))))
+
 (with-eval-after-load 'elpaish
   (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 -1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
@@ -212,6 +229,9 @@
 (setq which-key-idle-secondary-delay 0.125)
 (setq which-key-lighter "")
 
+(with-eval-after-load 'which-key
+  (add-to-list 'which-key-replacement-alist '((nil . "\\`agent-shell-\\(.*\\)") . (nil . "\\1"))))
+
 (setq emojify-emoji-styles '(ascii unicode github))
 (setq emojify-display-style 'unicode)
 (setq modus-themes-deuteranopia t)
@@ -232,6 +252,13 @@
 (setq denote-explore-network-format "graphviz")
 (setq denote-link-description-format #'denote-dash-link-description-format)
 (setq denote-rename-buffer-function #'denote-dash-rename-buffer)
+
+(setq agent-shell-dot-subdir-function 'bootstrap-agent-shell-state-path)
+(setq agent-shell-header-style 'text)
+(setq agent-shell-anthropic-default-session-mode-id "auto")
+(setq agent-shell-display-action
+      '((display-buffer-reuse-window display-buffer-use-some-window)
+        (reusable-frames . t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Core & UI systems
@@ -269,9 +296,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Tools
-
-(with-eval-after-load 'agent-shell
-  (require 'setup-agent-shell))
 
 (with-eval-after-load 'magit
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
