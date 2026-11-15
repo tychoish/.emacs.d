@@ -258,7 +258,7 @@
     consult-notes-denote-mode
     global-auto-revert-mode
     mcpkit-agent-shell-mode
-    gptel-mcp-mode
+    mcpkit-gptel-mode
     mcpkit-init-services
     cmdr-spec-discover
     bootstrap-require-setup-packages

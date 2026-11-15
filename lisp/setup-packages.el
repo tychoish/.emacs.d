@@ -53,8 +53,7 @@
    org-docsgen))
 
 (elpaish-install-register-upgrade-package
- '(gptel-mcp
-   gptel-pup
+ '(gptel-pup
    denote-convert
    denote-dash
    denote-mcp
