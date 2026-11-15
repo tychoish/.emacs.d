@@ -21,7 +21,7 @@
 (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
 (setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
 (setq agent-shell-antigravity-acp-command '("agy" "acp" "--dangerously-skip-permissions"))
-(setq agent-shell-dot-subdir-function (lambda (subdir) (file-name-concat (sprite-state-path "agent-shell") subdir)))
+(setq agent-shell-dot-subdir-function 'tychoish-agent-shell-state)
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-display-action
@@ -31,12 +31,8 @@
 (setq agent-shell-anthropic-claude-environment
       '("CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1"
         "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1"
-        "ENABLE_CLAUDEAI_MCP_SERVERS=false"))
-
-(setq agent-shell-omp-environment
-      '("ENABLE_CLAUDEAI_MCP_SERVERS=false"
-        "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1"
-        "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1"))
+        "ENABLE_CLAUDEAI_MCP_SERVERS=false")
+      agent-shell-omp-environment agent-shell-anthropic-claude-environment)
 
 (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
 
@@ -52,6 +48,8 @@
 (add-hook 'agent-shell-mode-hook #'agent-shell-queue-overload-mode)
 (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-viewport-edit-mode)
 (add-hook 'agent-shell-viewport-view-mode-hook #'agent-shell-notifications-viewport-view-mode)
+
+(defun tychoish-agent-shell-state (path) (file-name-concat (sprite-state-path "agent-shell") path))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Agent-shell Buffer Helpers & Hooks
