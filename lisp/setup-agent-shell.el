@@ -8,45 +8,49 @@
 (require 'cl-lib)
 (require 'sprite)
 (require 'cmdr-keys)
+(require 'agent-shell-queue)
 
 (eval-when-compile
   (require 'agent-shell))
 
 (defvar which-key-replacement-alist)
-(defvar shell-maker--busy)
+(declare-function shell-maker-busy "shell-maker")
+(declare-function shell-maker-finish-output "shell-maker")
 (declare-function agent-shell-interrupt-confirmed-p "agent-shell")
 (declare-function agent-shell-menu-resolve-permission "agent-shell-menu")
 (autoload 'agent-shell-menu-next-buffer "agent-shell-menu" nil t)
 (autoload 'agent-shell-menu-previous-buffer "agent-shell-menu" nil t)
 
-(defconst tychoish/agent-shell-terse-persona
-  "Be EXTREMELY concise. No preambles. No conversational filler. Provide direct answers, code, or commands immediately."
-  "Prompt requesting terse agent output.")
-
-(defvar tychoish/agent-shell-terse-output t
-  "Non-nil to pass terse persona to agent sessions.")
-
 (with-eval-after-load 'which-key
   (push '((nil . "^agent-shell-") . (nil . "")) which-key-replacement-alist))
-
-(with-eval-after-load 'agent-shell-queue
-  (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; settings
 
-(setq agent-shell-github-acp-command '("gh" "copilot" "--acp"))
 (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
 (setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
 (setq agent-shell-antigravity-acp-command '("agy" "acp" "--dangerously-skip-permissions"))
 (setq agent-shell-dot-subdir-function (lambda (subdir) (file-name-concat (sprite-state-path "agent-shell") subdir)))
 (setq agent-shell-header-style 'text)
-(setq agent-shell-activity-group-expand-by-default t)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-agent-configs #'tychoish--agent-shell-installed-configs)
 (setq agent-shell-display-action
       '((display-buffer-reuse-window display-buffer-use-some-window)
         (reusable-frames . t)))
+
+(setq agent-shell-anthropic-claude-environment
+      '("CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1"
+        "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1"
+        "ENABLE_CLAUDEAI_MCP_SERVERS=false"))
+
+(setq agent-shell-omp-environment
+      (list "ENABLE_CLAUDEAI_MCP_SERVERS=false"
+            "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1"
+            "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1"
+            (concat "OMP_DOCS_DIR="
+                    (file-name-concat (or (bound-and-true-p local-notes-directory)
+                                          (expand-file-name "~/notes"))
+                                      "omp" "projects"))))
 
 (setq agent-shell-queue-archive-enabled t)
 (setq agent-shell-queue-safe-save t)
@@ -58,7 +62,7 @@
 
 (advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered '((depth . -100)))
 
-(cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish--agent-shell-toggle-terse-output)
+(keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
 
 (keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
 (keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
@@ -81,43 +85,6 @@
 (add-hook 'agent-shell-mode-hook #'agent-shell-queue-overload-mode)
 (add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-viewport-edit-mode)
 (add-hook 'agent-shell-viewport-view-mode-hook #'agent-shell-notifications-viewport-view-mode)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Terse Persona & Environment
-
-(defun tychoish--agent-shell--apply-environment ()
-  "Update agent environment variables from current toggle state."
-  (setq agent-shell-anthropic-claude-environment
-        (let ((process-environment
-               (seq-remove (lambda (entry) (string-prefix-p "CLAUDE_PERSONA=" entry))
-                           process-environment)))
-          (apply #'agent-shell-make-environment-variables
-                 (append (when tychoish/agent-shell-terse-output
-                           (list "CLAUDE_PERSONA" tychoish/agent-shell-terse-persona))
-                         (list "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS" "1"
-                               "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS" "1"
-                               "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
-                               :inherit-env t)))))
-
-  (setq agent-shell-omp-environment
-        (agent-shell-make-environment-variables
-         "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
-         "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS" "1"
-         "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS" "1"
-         "OMP_DOCS_DIR" (file-name-concat (or (bound-and-true-p local-notes-directory)
-                                              (expand-file-name "~/notes"))
-                                          "omp" "projects"))))
-
-;;;###autoload
-(defun tychoish--agent-shell-toggle-terse-output ()
-  "Toggle terse agent output."
-  (interactive)
-  (setq tychoish/agent-shell-terse-output (not tychoish/agent-shell-terse-output))
-  (tychoish--agent-shell--apply-environment)
-  (message "Agent terse output: %s"
-           (if tychoish/agent-shell-terse-output "on" "off")))
-
-(tychoish--agent-shell--apply-environment)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Agent-shell Buffer Helpers & Hooks
@@ -146,13 +113,12 @@
   "Force SHELL-BUFFER ready if REQUEST never received a response."
   (when (buffer-live-p shell-buffer)
     (with-current-buffer shell-buffer
-      (when (and shell-maker--busy
+      (when (and (shell-maker-busy)
                  (member request (map-elt agent-shell--state :active-requests)))
         (message "agent-shell: forcing recovery after interrupt got no response")
         (map-put! agent-shell--state :active-requests
                   (seq-remove (lambda (r) (equal r request))
                               (map-elt agent-shell--state :active-requests)))
-        (setq shell-maker--busy nil)
         (shell-maker-finish-output :config shell-maker--config :success nil)))))
 
 (defun ad:agent-shell-interrupt-recover-if-unanswered (orig-fn &rest args)

@@ -329,20 +329,12 @@ correctly and reads from the minibuffer using the candidate's command."
   (should-not (string-match-p desktop-files-not-to-save "/home/user/src/file.go"))
   (should (string-match-p desktop-buffers-not-to-save " *temporary*")))
 
-(ert-deftest tychoish-core/agent-shell-terse-environment-follows-toggle ()
-  "The persona is supplied only when terse output is enabled."
-  (require 'agent-shell)
-  (let ((agent-shell-anthropic-claude-environment nil)
-        (agent-shell-omp-environment nil)
-        (process-environment '("CLAUDE_PERSONA=inherited"))
-        (tychoish/agent-shell-terse-output t))
-    (tychoish--agent-shell--apply-environment)
-    (should (seq-some (lambda (e) (string-prefix-p "CLAUDE_PERSONA=" e))
-                      agent-shell-anthropic-claude-environment))
-    (setq tychoish/agent-shell-terse-output nil)
-    (tychoish--agent-shell--apply-environment)
-    (should-not (seq-some (lambda (e) (string-prefix-p "CLAUDE_PERSONA=" e))
-                          agent-shell-anthropic-claude-environment))))
+(ert-deftest tychoish-core/agent-shell-environment-settings ()
+  "Claude and OMP agent environments are configured."
+  (require 'setup-agent-shell)
+  (should (member "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1" agent-shell-anthropic-claude-environment))
+  (should (member "ENABLE_CLAUDEAI_MCP_SERVERS=false" agent-shell-anthropic-claude-environment))
+  (should (seq-some (lambda (e) (string-prefix-p "OMP_DOCS_DIR=" e)) agent-shell-omp-environment)))
 
 (ert-deftest tychoish-core/interrupt-recovery-requires-confirmation ()
   "Declining interruption must not cancel a request or arm recovery."
