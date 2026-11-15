@@ -163,7 +163,7 @@
          (mu4e-context-changed-hook nil)
          (message-signature nil)
          (mu4e-mu-home "/tmp/mail-a/.mu")
-         (tychoish-mail--server-home "/tmp/mail-a/.mu")
+
          switched)
     (unwind-protect
         (progn
@@ -180,7 +180,6 @@
                        (lambda (&rest _) (setq switched t))))
               (mu4e-compose-context-switch nil "b"))
             (should-not switched)
-            (should (equal tychoish-mail--server-home "/tmp/mail-a/.mu"))
             (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))
             (goto-char (point-min))
             (should (re-search-forward "^From: .*beta@example\\.org" nil t))
@@ -215,7 +214,6 @@
           (message-signature-file "alpha@example.org")
           (message-sendmail-extra-arguments '("-a" "alpha@example.org"))
           (mu4e-mu-home "/tmp/mail-a/.mu")
-          (tychoish-mail--server-home "/tmp/mail-a/.mu")
           (first (generate-new-buffer " *draft-one*"))
           (second (generate-new-buffer " *draft-two*")))
       (unwind-protect
@@ -225,7 +223,7 @@
                 (setq major-mode 'mu4e-compose-mode)
                 (tychoish-mail-set-up-message-mode-buffer)))
             (cl-letf (((symbol-function 'tychoish-mail-server-switch-database)
-                       (lambda (home) (setq tychoish-mail--server-home home))))
+                       (lambda (home) (setq mu4e-mu-home home))))
               (with-temp-buffer (mu4e-context-switch nil "b")))
             (should (equal user-mail-address "beta@example.org"))
             (dolist (draft (list first second))
@@ -240,7 +238,6 @@
 (ert-deftest tychoish-mail-context/draft-creation-isolates-selected-identity ()
   (let* ((root (make-temp-file "mail-draft-root-" t))
          (mu4e-mu-home (expand-file-name ".mu" root))
-         (tychoish-mail--server-home mu4e-mu-home)
          (mu4e--started t)
          (user-mail-address "alpha@example.org")
          (draft (generate-new-buffer " *mail-created-draft*")))
@@ -274,7 +271,7 @@
   (let ((mu4e--started nil)
         (mu4e-pong-func nil)
         (mu4e-mu-home "/tmp/mail-a/.mu")
-        (tychoish-mail--server-home nil)
+
         running events)
     (cl-letf (((symbol-function 'mu4e-running-p) (lambda () running))
               ((symbol-function 'mu4e)
@@ -296,20 +293,18 @@
 
 (ert-deftest tychoish-mail-context/draft-save-and-send-require-original-database ()
   (with-temp-buffer
-    (let ((tychoish-mail--server-home "/tmp/mail-b/.mu")
-          (mu4e-mu-home "/tmp/mail-b/.mu"))
+    (let ((mu4e-mu-home "/tmp/mail-b/.mu"))
       (setq major-mode 'mu4e-compose-mode)
       (setq buffer-file-name "/tmp/mail-a/drafts/cur/message")
       (tychoish-mail-set-up-message-mode-buffer)
       (should (memq #'tychoish-mail--guard-draft-database message-send-hook))
       (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t)))
         (should-error (run-hooks 'message-send-hook) :type 'user-error)
-        (setq tychoish-mail--server-home "/tmp/mail-a/.mu")
+        (setq mu4e-mu-home "/tmp/mail-a/.mu")
         (tychoish-mail--guard-draft-database)))))
 
 (ert-deftest tychoish-mail-context/save-buffer-refuses-wrong-database ()
   (let ((file (make-temp-file "mail-draft-save-"))
-        (tychoish-mail--server-home "/tmp/mail-b/.mu")
         (mu4e-mu-home "/tmp/mail-b/.mu"))
     (unwind-protect
         (progn
@@ -338,8 +333,7 @@
         (dolist (account '("a" "b"))
           (let* ((directory (expand-file-name account root))
                  (file (expand-file-name "drafts/cur/message" directory))
-                 (mu4e-mu-home (expand-file-name ".mu" directory))
-                 (tychoish-mail--server-home mu4e-mu-home))
+                 (mu4e-mu-home (expand-file-name ".mu" directory)))
             (make-directory (file-name-directory file) t)
             (with-temp-file file (insert "original"))
             (with-current-buffer (find-file-noselect file)
@@ -351,7 +345,7 @@
                     (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t)))
                       (save-buffer)
                       (tychoish-mail--guard-draft-database)
-                      (setq tychoish-mail--server-home (expand-file-name "other/.mu" root))
+                      (setq mu4e-mu-home (expand-file-name "other/.mu" root))
                       (insert " blocked")
                       (should-error (save-buffer) :type 'user-error)
                       (should-error (tychoish-mail--guard-draft-database) :type 'user-error)))
@@ -360,8 +354,7 @@
       (delete-directory root t))))
 
 (ert-deftest tychoish-mail-context/unknown-draft-is-blocked ()
-  (let ((mu4e-mu-home "/tmp/mail-a/.mu")
-        (tychoish-mail--server-home "/tmp/mail-a/.mu"))
+  (let ((mu4e-mu-home "/tmp/mail-a/.mu"))
     (with-temp-buffer
       (setq major-mode 'mu4e-compose-mode)
       (setq buffer-file-name "/tmp/mail-b/drafts/cur/message")
@@ -409,7 +402,7 @@
   (tychoish-mail-test--with-accounts
     (let* ((old-context (car mu4e-contexts))
            (mu4e--context-current old-context)
-           (tychoish-mail--server-home "/tmp/mail-a/.mu")
+
            (mu4e-mu-home "/tmp/mail-a/.mu")
            (mu4e--started nil)
            (mu4e--server-indexing nil)

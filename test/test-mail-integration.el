@@ -27,7 +27,6 @@
          (mu4e-compose-context-policy nil)
          (mu4e-notification-support nil)
          (mu4e-modeline-support nil)
-         (tychoish-mail--server-home nil)
          (mu4e--context-current nil)
          draft first-draft second-draft)
     (unwind-protect
@@ -76,6 +75,10 @@
               (cl-letf (((symbol-function 'mu4e--context-ask-user)
                          (lambda (&rest _) (cadr mu4e-contexts))))
                 (setq first-draft (mu4e-compose-new "one@example.org" "First"))))
+            (let ((mu4e-mu-home other-home))
+              (should (equal (tychoish-mail-server-current-home) home))
+              (with-current-buffer first-draft
+                (tychoish-mail--guard-draft-database)))
             (with-current-buffer first-draft
               (should (equal user-mail-address "beta@example.org"))
               (mu4e-compose-context-switch nil "alpha")
@@ -118,7 +121,7 @@
               (setq buffer-file-name file)
               (should-error (tychoish-mail--guard-draft-database) :type 'user-error))
             (with-temp-buffer (mu4e-context-switch nil "alpha"))
-            (should (equal tychoish-mail--server-home home))))
+            (should (equal (tychoish-mail-server-current-home) home))))
       (dolist (buffer (list draft first-draft second-draft))
         (when (buffer-live-p buffer)
           (with-current-buffer buffer (set-buffer-modified-p nil))

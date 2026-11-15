@@ -301,7 +301,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 (defun tychoish-mail--guard-draft-database (&rest _args)
   "Refuse draft operations outside the active mu database's mail root."
-  (let* ((home (or tychoish-mail--server-home mu4e-mu-home))
+  (let* ((home (tychoish-mail-server-current-home))
          (root (and home (file-name-directory (directory-file-name home)))))
     (unless (and root buffer-file-name (mu4e-running-p)
                  (file-in-directory-p buffer-file-name root))

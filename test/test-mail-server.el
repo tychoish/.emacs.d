@@ -18,20 +18,28 @@
      (cl-letf (((symbol-function 'tychoish-mail-server--ensure-no-drafts) #'ignore))
        ,@body)))
 
-(ert-deftest tychoish-mail-server/initial-start-records-server-home ()
-  (let ((tychoish-mail--server-home nil)
-        (mu4e-mu-home "/tmp/mail-a/.mu"))
-    (should (advice-member-p #'tychoish-mail--record-server-home 'mu4e--server-start))
+(ert-deftest tychoish-mail-server/current-home-comes-from-running-process ()
+  (let ((mu4e-mu-home "/tmp/changed/.mu")
+        (mu4e--server-process 'fake-process))
+    (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t))
+              ((symbol-function 'processp) (lambda (_) t))
+              ((symbol-function 'process-command)
+               (lambda (_) '("mu" "server" "--muhome=/tmp/actual/.mu"))))
+      (should (equal (tychoish-mail-server-current-home) "/tmp/actual/.mu")))))
+
+(ert-deftest tychoish-mail-server/current-home-handles-default-and-stopped ()
+  (let ((mu4e-mu-home nil)
+        (mu4e--server-process 'fake-process))
+    (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t))
+              ((symbol-function 'processp) (lambda (_) t))
+              ((symbol-function 'process-command) (lambda (_) '("mu" "server"))))
+      (should-not (tychoish-mail-server-current-home)))
     (cl-letf (((symbol-function 'mu4e-running-p) (lambda () nil)))
-      (tychoish-mail--record-server-home)
-      (should-not tychoish-mail--server-home))
-    (cl-letf (((symbol-function 'mu4e-running-p) (lambda () t)))
-      (tychoish-mail--record-server-home)
-      (should (equal tychoish-mail--server-home "/tmp/mail-a/.mu")))))
+      (setq mu4e-mu-home "/tmp/configured/.mu")
+      (should (equal (tychoish-mail-server-current-home) "/tmp/configured/.mu")))))
 
 (ert-deftest tychoish-mail-server/open-draft-blocks-database-switch ()
   (let ((mu4e-mu-home "/tmp/mail-a/.mu")
-        (tychoish-mail--server-home "/tmp/mail-a/.mu")
         (tychoish-mail--stopping-process nil)
         (mu4e--server-indexing nil)
         (mu4e--update-buffer nil)
@@ -52,7 +60,6 @@
 
 (ert-deftest tychoish-mail-server/draft-opened-during-stop-blocks-switch ()
   (let ((mu4e-mu-home "/tmp/mail-a/.mu")
-        (tychoish-mail--server-home "/tmp/mail-a/.mu")
         (tychoish-mail--stopping-process nil)
         (mu4e--server-indexing nil)
         (mu4e--update-buffer nil)
@@ -81,8 +88,7 @@
 
 (ert-deftest tychoish-mail-server/same-home-does-not-restart ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-b/.mu")
-          (mu4e-mu-home "/tmp/mail-b/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-b/.mu")
           (mu4e--started t)
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
@@ -96,8 +102,7 @@
 
 (ert-deftest tychoish-mail-server/update-blocks-transition ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--started t)
           (mu4e--server-indexing t)
           (mu4e--update-buffer nil)
@@ -106,7 +111,7 @@
                 ((symbol-function 'mu4e-quit) (lambda (&rest _) (setq stopped t))))
         (should-error (tychoish-mail-server-switch-database "/tmp/mail-b/.mu") :type 'user-error)
         (should-not stopped)
-        (should (equal tychoish-mail--server-home "/tmp/mail-a/.mu"))))))
+        (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))))))
 
 (ert-deftest tychoish-mail-server/fetch-blocks-transition-with-server-stopped ()
   (tychoish-mail-server-test--isolated
@@ -123,8 +128,7 @@
 
 (ert-deftest tychoish-mail-server/start-failure-does-not-claim-active-home ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--started nil)
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
@@ -136,13 +140,11 @@
                 ((symbol-function 'mu4e-quit) (lambda (&rest _) (setq running nil)))
                 ((symbol-function 'mu4e) (lambda (&rest _) (error "startup failed"))))
         (should-error (tychoish-mail-server-switch-database "/tmp/mail-b/.mu"))
-        (should-not tychoish-mail--server-home)
         (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))))))
 
 (ert-deftest tychoish-mail-server/transition-flag-covers-stop-and-start ()
   (tychoish-mail-server-test--isolated
     (let ((mu4e-mu-home "/tmp/mail-a/.mu")
-          (tychoish-mail--server-home "/tmp/mail-a/.mu")
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
           (running t)
@@ -157,8 +159,7 @@
 
 (ert-deftest tychoish-mail-server/switch-waits-for-server-readiness ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--started nil)
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
@@ -176,18 +177,16 @@
                    (setq running t mu4e-pong-func (lambda (_info) t))))
                 ((symbol-function 'accept-process-output)
                  (lambda (&rest _)
-                   (should-not tychoish-mail--server-home)
                    (push 'ready events)
                    (setq mu4e--started t)
                    (funcall mu4e-pong-func nil))))
         (tychoish-mail-server-switch-database "/tmp/mail-b/.mu")
         (should (equal (nreverse events)
                        '(stop (start "/tmp/mail-b/.mu") ready)))
-        (should (equal tychoish-mail--server-home "/tmp/mail-b/.mu"))))))
+        (should (equal mu4e-mu-home "/tmp/mail-b/.mu"))))))
 
 (ert-deftest tychoish-mail-server/switch-waits-for-old-process-exit ()
-  (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-        (tychoish-mail--stopping-process nil)
+  (let ((tychoish-mail--stopping-process nil)
         (mu4e-mu-home "/tmp/mail-a/.mu")
         (mu4e--server-process 'old-process)
         (mu4e--server-indexing nil)
@@ -210,8 +209,7 @@
       (should (equal mu4e-mu-home "/tmp/mail-b/.mu")))))
 
 (ert-deftest tychoish-mail-server/shutdown-timeout-blocks-retry-until-exit ()
-  (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-        (tychoish-mail--stopping-process nil)
+  (let ((tychoish-mail--stopping-process nil)
         (mu4e-mu-home "/tmp/mail-a/.mu")
         (mu4e--server-process 'old-process)
         (mu4e--server-indexing nil)
@@ -249,8 +247,7 @@
       (should (eq tychoish-mail--stopping-process 'old-process)))))
 
 (ert-deftest tychoish-mail-server/interrupted-shutdown-blocks-restart ()
-  (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-        (tychoish-mail--stopping-process nil)
+  (let ((tychoish-mail--stopping-process nil)
         (mu4e-mu-home "/tmp/mail-a/.mu")
         (mu4e--server-process 'old-process)
         (mu4e--server-indexing nil)
@@ -268,8 +265,7 @@
       (should (equal mu4e-mu-home "/tmp/mail-a/.mu")))))
 
 (ert-deftest tychoish-mail-server/failed-start-cleanup-retains-detached-server ()
-  (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-        (tychoish-mail--stopping-process nil)
+  (let ((tychoish-mail--stopping-process nil)
         (mu4e-mu-home "/tmp/mail-a/.mu")
         (mu4e--server-process 'old-process)
         (mu4e--server-indexing nil)
@@ -285,14 +281,12 @@
                (lambda () (setq running t mu4e--server-process 'new-process) (error "startup failed"))))
       (should-error (tychoish-mail-server-switch-database "/tmp/mail-b/.mu"))
       (should (eq tychoish-mail--stopping-process 'new-process))
-      (should-not tychoish-mail--server-home)
       (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))
       (should-error (tychoish-mail--await-stopped-server)))))
 
 (ert-deftest tychoish-mail-server/stop-failure-preserves-home ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
           (mu4e-compose-parent-message nil)
@@ -303,13 +297,12 @@
                 ((symbol-function 'mu4e) (lambda (&rest _) (setq started t))))
         (should-error (tychoish-mail-server-switch-database "/tmp/mail-b/.mu"))
         (should-not started)
-        (should (equal tychoish-mail--server-home "/tmp/mail-a/.mu"))
+        (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))
         (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))))))
 
 (ert-deftest tychoish-mail-server/quit-during-start-cleans-up ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--started nil)
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
@@ -329,13 +322,11 @@
                       (quit 'quit))
                     'quit))
         (should-not running)
-        (should-not tychoish-mail--server-home)
         (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))))))
 
 (ert-deftest tychoish-mail-server/failed-pong-does-not-mark-ready ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--started nil)
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
@@ -358,13 +349,11 @@
         (should-error (tychoish-mail-server-switch-database "/tmp/mail-b/.mu"))
         (should (> pongs 0))
         (should-not running)
-        (should-not tychoish-mail--server-home)
         (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))))))
 
 (ert-deftest tychoish-mail-server/start-timeout-cleans-up ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--started nil)
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
@@ -382,13 +371,11 @@
         (should-error (tychoish-mail-server-switch-database "/tmp/mail-b/.mu"))
         (should (>= clock 10))
         (should-not running)
-        (should-not tychoish-mail--server-home)
         (should (equal mu4e-mu-home "/tmp/mail-a/.mu"))))))
 
 (ert-deftest tychoish-mail-server/failed-cleanup-records-running-home ()
   (tychoish-mail-server-test--isolated
-    (let ((tychoish-mail--server-home "/tmp/mail-a/.mu")
-          (mu4e-mu-home "/tmp/mail-a/.mu")
+    (let ((mu4e-mu-home "/tmp/mail-a/.mu")
           (mu4e--started nil)
           (mu4e--server-indexing nil)
           (mu4e--update-buffer nil)
@@ -407,7 +394,7 @@
         (should-error (tychoish-mail-server-switch-database "/tmp/mail-b/.mu"))
         (should (= stops 2))
         (should running)
-        (should (equal tychoish-mail--server-home "/tmp/mail-b/.mu"))
+        (should (equal mu4e-mu-home "/tmp/mail-b/.mu"))
         (should (equal mu4e-mu-home "/tmp/mail-b/.mu"))))))
 
 (provide 'test-mail-server)

@@ -20,9 +20,6 @@
 (defvar mu4e--server-process)
 (defvar mu4e-pong-func)
 
-(defvar tychoish-mail--server-home nil
-  "Database home of the current mu server, or nil when not running.")
-
 (defvar tychoish-mail--transitioning nil
   "Non-nil while starting a replacement mu server.")
 
@@ -30,12 +27,14 @@
   "Mu server process still exiting after mu4e detached from it.")
 
 (advice-add 'mu4e--server-start :before #'tychoish-mail--await-stopped-server)
-(advice-add 'mu4e--server-start :after #'tychoish-mail--record-server-home)
 
-(defun tychoish-mail--record-server-home (&rest _args)
-  "Remember the home used to start the running mu server."
-  (when (mu4e-running-p)
-    (setq tychoish-mail--server-home mu4e-mu-home)))
+(defun tychoish-mail-server-current-home ()
+  "Return the database home of the running server, or the configured home."
+  (if (and (mu4e-running-p) (processp mu4e--server-process))
+      (when-let* ((arg (seq-find (lambda (item) (string-prefix-p "--muhome=" item))
+                                 (process-command mu4e--server-process))))
+        (substring arg (length "--muhome=")))
+    mu4e-mu-home))
 
 (defun tychoish-mail--await-server-ready ()
   "Wait until the running mu server has completed its startup handler."
@@ -93,7 +92,6 @@
         (setq tychoish-mail--stopping-process nil)))
     (when (mu4e-running-p)
       (error "Failed to stop the previous mu server"))
-    (setq tychoish-mail--server-home nil)
     (tychoish-mail--await-stopped-server)))
 
 (defun tychoish-mail-server--ensure-no-drafts ()
@@ -111,9 +109,7 @@ Open drafts keep their original paths and are guarded during save and send."
   (tychoish-mail--await-stopped-server)
   (let* ((tychoish-mail--transitioning t)
          (running (and (featurep 'mu4e) (mu4e-running-p)))
-         (old-home (if running
-                       (or tychoish-mail--server-home mu4e-mu-home)
-                     mu4e-mu-home)))
+         (old-home (tychoish-mail-server-current-home)))
     (unless (equal old-home home)
       (tychoish-mail-server--ensure-no-drafts)
       (when (or mu4e--server-indexing
@@ -123,7 +119,6 @@ Open drafts keep their original paths and are guarded during save and send."
       (when running
         (tychoish-mail--stop-server)
         (tychoish-mail-server--ensure-no-drafts))
-      (setq tychoish-mail--server-home nil)
       (unless running
         (setq mu4e--started nil)))
     (setq mu4e-mu-home home)
@@ -131,18 +126,14 @@ Open drafts keep their original paths and are guarded during save and send."
       ;; Startup completes on pong, not when `mu4e' returns.
       (condition-case err
           (let ((mu4e-context-policy nil))
-            (tychoish-mail-server-ensure-ready)
-            (setq tychoish-mail--server-home home))
+            (tychoish-mail-server-ensure-ready))
         ((error quit)
          (unwind-protect
              (when (mu4e-running-p)
                (tychoish-mail--stop-server))
            (setq mu4e--started nil)
            (if (mu4e-running-p)
-               (progn
-                 (setq tychoish-mail--server-home home)
-                 (setq mu4e-mu-home home))
-             (setq tychoish-mail--server-home nil)
+               (setq mu4e-mu-home home)
              (setq mu4e-mu-home old-home)))
          (signal (car err) (cdr err)))))))
 
