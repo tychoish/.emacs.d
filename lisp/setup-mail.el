@@ -8,6 +8,7 @@
 
 (require 'map)
 (require 'cl-lib)
+(require 'tychoish-mail-server)
 
 (autoload 'mu4e "mu4e" nil t)
 (autoload 'mu4e-update-index "mu4e" nil t)
@@ -52,14 +53,7 @@
 (defvar mu4e-search-include-related)
 (defvar mu4e-search-results-limit)
 (defvar mu4e-mu-home)
-(defvar mu4e--started)
-(defvar mu4e--server-indexing)
-(defvar mu4e--update-buffer)
-(defvar mu4e-confirm-quit)
-(defvar mu4e-context-policy)
 (defvar mu4e-compose-context-policy)
-(defvar mu4e--server-process)
-(defvar mu4e-pong-func)
 (defvar mu4e--context-current)
 (defvar mu4e-get-mail-command)
 (defvar message-signature-directory)
@@ -70,12 +64,6 @@
   "Non-nil while mu4e creates a draft.")
 (defvar-local tychoish-mail--draft-home nil
   "Database home owning this draft, or nil if ownership is unknown.")
-
-(defvar tychoish-mail--server-home nil
-  "Database home of the current mu server, or nil when not running.")
-
-(defvar tychoish-mail--transitioning nil
-  "Non-nil while starting a replacement mu server.")
 
 (add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
@@ -119,7 +107,6 @@
   (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t))
 
 (advice-add 'basic-save-buffer :before #'ad:tychoish-mail-guard-save)
-(advice-add 'mu4e--server-start :after #'tychoish-mail--record-server-home)
 
 (advice-add 'mu4e--draft :around #'ad:tychoish-mail-draft)
 (advice-add 'mu4e--draft :before #'ad:tychoish-mail-start-for-draft '((depth . -50)))
@@ -319,11 +306,6 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
       (call-interactively #'mu4e-compose-context-switch)
     (call-interactively #'mu4e-context-switch)))
 
-(defun tychoish-mail--record-server-home (&rest _args)
-  "Remember the home used to start the running mu server."
-  (when (mu4e-running-p)
-    (setq tychoish-mail--server-home mu4e-mu-home)))
-
 (defun tychoish-mail--guard-draft-database (&rest _args)
   "Refuse draft operations unless its owning database is active."
   (unless (and tychoish-mail--draft-home
@@ -348,39 +330,9 @@ must be advice to be able to abort the save."
                  (equal (downcase address) (downcase user-mail-address)))
       (user-error "Select the context matching this draft's From before sending"))))
 
-(defun tychoish-mail--await-server-ready ()
-  "Wait until the running mu server has completed its startup handler."
-  (unless mu4e--started
-    (let* ((ready nil)
-           (deadline (+ (float-time) 10))
-           (handler mu4e-pong-func)
-           (wrapper (lambda (info)
-                      (funcall handler info)
-                      (setq ready t))))
-      (unwind-protect
-          (progn
-            (setq mu4e-pong-func wrapper)
-            (seq-some (lambda (_attempt)
-                        (or ready
-                            (not (mu4e-running-p))
-                            (>= (float-time) deadline)
-                            (progn (accept-process-output mu4e--server-process 0.1)
-                                   nil)))
-                      (number-sequence 1 100)))
-        (when (eq mu4e-pong-func wrapper)
-          (setq mu4e-pong-func handler)))
-      (unless (and ready (mu4e-running-p))
-        (error "Mu server did not become ready for %s" mu4e-mu-home)))))
-
-(defun tychoish-mail--ensure-server-ready ()
-  "Start the configured mu server if necessary and wait until it is ready."
-  (unless (mu4e-running-p)
-    (mu4e 'background))
-  (tychoish-mail--await-server-ready))
-
 (defun ad:tychoish-mail-start-for-draft (&rest _args)
   "Start the default database and await its readiness before composing."
-  (tychoish-mail--ensure-server-ready))
+  (tychoish-mail-server-ensure-ready))
 
 (defun ad:tychoish-mail-draft (original &rest args)
   "Call ORIGINAL with ARGS, isolating the draft's selected identity."
@@ -395,47 +347,6 @@ must be advice to be able to abort the save."
         (message-sendmail-extra-arguments message-sendmail-extra-arguments))
     (apply original args)))
 
-(defun tychoish-mail--switch-database (home)
-  "Prepare the mu database at HOME before entering its context.
-Open drafts keep their original paths and are guarded during save and send."
-  (let* ((running (and (featurep 'mu4e) (mu4e-running-p)))
-         (old-home (if running
-                       (or tychoish-mail--server-home mu4e-mu-home)
-                     mu4e-mu-home)))
-    (unless (equal old-home home)
-      (when (or mu4e--server-indexing
-                (and (buffer-live-p mu4e--update-buffer)
-                     (process-live-p (get-buffer-process mu4e--update-buffer))))
-        (user-error "Cannot switch mail databases while an update is running"))
-      (when running
-        (let ((mu4e-confirm-quit nil))
-          (mu4e-quit))
-        (when (mu4e-running-p)
-          (error "Failed to stop the previous mu server")))
-      (setq tychoish-mail--server-home nil)
-      (unless running
-        (setq mu4e--started nil)))
-    (setq mu4e-mu-home home)
-    (when (and running (not (equal old-home home)))
-      ;; Startup completes on pong, not when `mu4e' returns.
-      (condition-case err
-          (let ((mu4e-context-policy nil)
-                (tychoish-mail--transitioning t))
-            (tychoish-mail--ensure-server-ready)
-            (setq tychoish-mail--server-home home))
-        ((error quit)
-         (unwind-protect
-             (when (mu4e-running-p)
-               (let ((mu4e-confirm-quit nil)) (mu4e-quit)))
-           (setq mu4e--started nil)
-           (if (mu4e-running-p)
-               (progn
-                 (setq tychoish-mail--server-home home)
-                 (setq mu4e-mu-home home))
-             (setq tychoish-mail--server-home nil)
-             (setq mu4e-mu-home old-home)))
-         (signal (car err) (cdr err)))))))
-
 (cl-defun tychoish-mail-make-context (&key name full-name address maildir command)
   "Build a mu4e context NAME for ADDRESS and FULL-NAME.
 MAILDIR is the account's mail root and COMMAND fetches its mail."
@@ -445,7 +356,7 @@ MAILDIR is the account's mail root and COMMAND fetches its mail."
      :enter-func (lambda ()
                    (unless (or tychoish-mail--composing
                                (derived-mode-p 'mu4e-compose-mode))
-                     (tychoish-mail--switch-database
+                     (tychoish-mail-server-switch-database
                       (file-name-concat maildir ".mu"))
                      (setq message-directory maildir)
                      (setq message-auto-save-directory (file-name-concat maildir "drafts"))
