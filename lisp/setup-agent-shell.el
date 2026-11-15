@@ -14,9 +14,6 @@
   (require 'agent-shell))
 
 (defvar which-key-replacement-alist)
-(declare-function shell-maker-busy "shell-maker")
-(declare-function shell-maker-finish-output "shell-maker")
-(declare-function agent-shell-interrupt-confirmed-p "agent-shell")
 (declare-function agent-shell-menu-resolve-permission "agent-shell-menu")
 (autoload 'agent-shell-menu-next-buffer "agent-shell-menu" nil t)
 (autoload 'agent-shell-menu-previous-buffer "agent-shell-menu" nil t)
@@ -33,7 +30,6 @@
 (setq agent-shell-dot-subdir-function (lambda (subdir) (file-name-concat (sprite-state-path "agent-shell") subdir)))
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
-(setq agent-shell-agent-configs #'tychoish--agent-shell-installed-configs)
 (setq agent-shell-display-action
       '((display-buffer-reuse-window display-buffer-use-some-window)
         (reusable-frames . t)))
@@ -59,8 +55,6 @@
 (setq agent-shell-queue-write-log-enabled t)
 (setq agent-shell-queue-serialization-format 'org)
 (setq agent-shell-queue-stall-timeout 600)
-
-(advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered '((depth . -100)))
 
 (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
 
@@ -105,53 +99,6 @@
   (when (or (eq (map-nested-elt agent-shell--state '(:agent-config :identifier)) 'antigravity)
             (equal mode-name "Antigravity"))
     (setq mode-name "agy")))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Advice & Workarounds
-
-(defun tychoish--agent-shell--force-clear-busy (shell-buffer request)
-  "Force SHELL-BUFFER ready if REQUEST never received a response."
-  (when (buffer-live-p shell-buffer)
-    (with-current-buffer shell-buffer
-      (when (and (shell-maker-busy)
-                 (member request (map-elt agent-shell--state :active-requests)))
-        (message "agent-shell: forcing recovery after interrupt got no response")
-        (map-put! agent-shell--state :active-requests
-                  (seq-remove (lambda (r) (equal r request))
-                              (map-elt agent-shell--state :active-requests)))
-        (shell-maker-finish-output :config shell-maker--config :success nil)))))
-
-(defun ad:agent-shell-interrupt-recover-if-unanswered (orig-fn &rest args)
-  "Arm a 5s fallback to recover stuck busy state after interrupt."
-  (if (or (not (derived-mode-p 'agent-shell-mode))
-          (not (map-nested-elt agent-shell--state '(:session :id))))
-      (apply orig-fn args)
-    (when (or (car args) (agent-shell-interrupt-confirmed-p))
-      (let ((shell-buffer (current-buffer))
-            (request (car (map-elt agent-shell--state :active-requests))))
-        (prog1 (funcall orig-fn t)
-          (when request
-            (run-with-timer 5 nil #'tychoish--agent-shell--force-clear-busy
-                            shell-buffer request)))))))
-
-(defun tychoish--agent-shell--config-installed-p (config)
-  "Return non-nil if CONFIG executable is available on PATH."
-  (if-let* ((cm (map-elt config :client-maker))
-            (client (ignore-errors (funcall cm (current-buffer))))
-            (cmd-spec (map-elt client :command))
-            (cmd (if (consp cmd-spec) (car cmd-spec) cmd-spec))
-            ((stringp cmd))
-            ((not (string-empty-p cmd))))
-      (executable-find cmd t)
-    (when (eq (map-elt config :identifier) 'antigravity)
-      (executable-find "agy" t))))
-
-(defun tychoish--agent-shell-installed-configs ()
-  "Return available default agent configs whose executable is installed."
-  (seq-filter (lambda (maker)
-                (tychoish--agent-shell--config-installed-p
-                 (if (functionp maker) (funcall maker) maker)))
-              (agent-shell-default-agent-config-makers)))
 
 (provide 'setup-agent-shell)
 ;;; setup-agent-shell.el ends here

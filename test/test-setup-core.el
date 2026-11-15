@@ -211,10 +211,11 @@ correctly and reads from the minibuffer using the candidate's command."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell MCPKit session integration
 
-(ert-deftest tychoish-core/antigravity-config-available-before-install ()
-  "Allow selecting Antigravity before its executable has been installed."
+(ert-deftest tychoish-core/antigravity-config-available-in-installed ()
+  "Antigravity config maker is available in installed configs."
   (require 'agent-shell)
-  (should (tychoish--agent-shell--config-installed-p '((:identifier . antigravity)))))
+  (require 'agent-shell-menu)
+  (should (memq #'agent-shell-antigravity-make-agent-config (agent-shell-menu-installed-agent-configs))))
 
 (ert-deftest tychoish-core/agent-shell-mcpkit-bridge-startup ()
   "The startup batch enables the MCPKit bridge."
@@ -335,30 +336,6 @@ correctly and reads from the minibuffer using the candidate's command."
   (should (member "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1" agent-shell-anthropic-claude-environment))
   (should (member "ENABLE_CLAUDEAI_MCP_SERVERS=false" agent-shell-anthropic-claude-environment))
   (should (seq-some (lambda (e) (string-prefix-p "OMP_DOCS_DIR=" e)) agent-shell-omp-environment)))
-
-(ert-deftest tychoish-core/interrupt-recovery-requires-confirmation ()
-  "Declining interruption must not cancel a request or arm recovery."
-  (require 'agent-shell)
-  (with-temp-buffer
-    (setq major-mode 'agent-shell-mode)
-    (let ((agent-shell--state '((:session . ((:id . "session")))
-                                (:active-requests . (request))))
-          (confirmed nil)
-          (called nil)
-          (armed nil))
-      (cl-letf (((symbol-function 'agent-shell-interrupt-confirmed-p)
-                 (lambda () confirmed))
-                ((symbol-function 'run-with-timer)
-                 (lambda (&rest _) (setq armed t))))
-        (ad:agent-shell-interrupt-recover-if-unanswered
-         (lambda (&rest _) (setq called t)))
-        (should-not called)
-        (should-not armed)
-        (setq confirmed t)
-        (ad:agent-shell-interrupt-recover-if-unanswered
-         (lambda (&rest args) (setq called args)))
-        (should (equal called '(t)))
-        (should armed)))))
 
 (ert-deftest tychoish-core/mail-unsubscribe-decodes-mailto ()
   "The standard mailto handler decodes address, subject and body."
