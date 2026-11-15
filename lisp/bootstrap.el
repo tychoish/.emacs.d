@@ -220,10 +220,11 @@
 
 (setq sprite-startup-operations
   '(sprite-mode
-    cmdr-mode
-    cmdr-frame-mode
     sprite-state-configure
     sprite-state-global-mode
+    cmdr-mode
+    cmdr-frame-mode
+    cmdr-spec-discover
     minaid-mode
     nerd-icons-completion-mode
     bootstrap-set-up-fringe-mode
@@ -293,13 +294,13 @@ Returns a list of re-enabled modes, if any."
     builder-emacs-conf-native-compile-all)
   "Operations to run after startup to maintain")
 
-(defun bootstrap-run-startup ()
-  (sprite-batch-startup :delay 0.05 :on-done (and (fboundp 'cmdr-spec-discover) #'cmdr-spec-discover)))
+(defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-require-treesit-auto () (require 'treesit-auto))
 (defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-require-tracking () (require 'tracking))
+(defun bootstrap-require-setup-agent-shell () (require 'setup-agent-shell))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))

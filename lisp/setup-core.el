@@ -33,25 +33,34 @@
 
 (require 'clix)
 
-(register-clix-flag slow-op-timing
-  :flag "--with-slow-op-timing" :doc "Enable slow operation timing." :consume nil
-  :handler (message "[op]: enabling time reporting"))
+(register-clix-flag
+ slow-op-timing
+ :flag "--with-slow-op-timing"
+ :doc "Enable slow operation timing."
+ :consume nil
+ :handler (message "[op]: enabling time reporting"))
 
-(register-clix-flag sprite-id
-  :flag "--id" :doc "Specify Emacs instance ID for sprite."
-  :var sprite-cli-instance-id)
+(register-clix-flag
+ sprite-id
+ :flag "--id"
+ :doc "Specify Emacs instance ID for sprite."
+ :var sprite-cli-instance-id)
 
-(register-clix-flag org-exec
-  :flag "--org-exec" :doc "Execute an Org file's Babel blocks."
-  :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
-                 (builder-org-babel-execute-file clix-arg-org-exec))
-  :final t)
+(register-clix-flag
+ org-exec
+ :flag "--org-exec"
+ :doc "Execute an Org file's Babel blocks."
+ :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
+                (builder-org-babel-execute-file clix-arg-org-exec))
+ :final t)
 
-(register-clix-flag org-exec-dir
-  :flag "--org-exec-dir" :doc "Execute Org Babel blocks in a directory."
-  :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
-                 (builder-org-babel-execute-directory clix-arg-org-exec-dir))
-  :final t)
+(register-clix-flag
+ org-exec-dir
+ :flag "--org-exec-dir"
+ :doc "Execute Org Babel blocks in a directory."
+ :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
+                (builder-org-babel-execute-directory clix-arg-org-exec-dir))
+ :final t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
@@ -83,7 +92,7 @@
                                 :transient-key "ma")))
 
 (with-eval-after-load 'elpaish
-  (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
+  (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 -1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
 
 (with-eval-after-load 'elpaish-install
   (add-hook 'elpaish-install-bootstrap-finished-functions
@@ -245,12 +254,9 @@
   (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
   (add-to-list 'desktop-modes-not-to-save 'fundamental-mode))
 
-(with-eval-after-load 'warnings
+ (with-eval-after-load 'warnings
   (add-to-list 'warning-suppress-log-types '(frameset))
   (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Shells & communication
 
 (with-eval-after-load 'comint
   (keymap-set comint-mode-map "M-n" #'comint-next-input)
@@ -258,17 +264,14 @@
   (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
   (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
 
-(with-eval-after-load 'agent-shell
-  (require 'setup-agent-shell))
-
-(with-eval-after-load 'erc
-  (require 'tracking))
+(with-eval-after-load 'dired
+  (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Tools
 
-(with-eval-after-load 'dired
-  (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
+(with-eval-after-load 'agent-shell
+  (require 'setup-agent-shell))
 
 (with-eval-after-load 'magit
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
@@ -280,23 +283,8 @@
 
   (hud-modeline-set-segment-action 'vc #'magit-dispatch))
 
-(with-eval-after-load 'git-link
-  (defun ad:git-link--new-with-clipboard (orig-fn &rest args)
-    "Ensure `select-enable-clipboard' is non-nil so the link reaches the OS clipboard."
-    (let ((select-enable-clipboard t))
-      (apply orig-fn args)))
-
-  (advice-add 'git-link--new :around #'ad:git-link--new-with-clipboard))
-
 (with-eval-after-load 'denote
-  (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window)))
-
-  (defun ad:denote-link-ol-get-heading--org-only (fn &rest args)
-    "Only call FN in `org-mode' buffers."
-    (when (derived-mode-p 'org-mode)
-      (apply fn args)))
-
-  (advice-add 'denote-link-ol-get-heading :around #'ad:denote-link-ol-get-heading--org-only))
+  (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window))))
 
 (with-eval-after-load 'denote-dash
   (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree))
