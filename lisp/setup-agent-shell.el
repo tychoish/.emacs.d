@@ -14,10 +14,8 @@
 
 (defvar which-key-replacement-alist)
 (defvar shell-maker--busy)
-(declare-function agent-shell-queue-setup-capture-completion "agent-shell-queue-ui")
 (declare-function agent-shell-interrupt-confirmed-p "agent-shell")
-(declare-function agent-shell-queue-format-file-extension "agent-shell-queue-persistence")
-(declare-function mcpkit-agent-shell-mode "mcpkit-agent-shell")
+(declare-function agent-shell-menu-resolve-permission "agent-shell-menu")
 (autoload 'agent-shell-menu-next-buffer "agent-shell-menu" nil t)
 (autoload 'agent-shell-menu-previous-buffer "agent-shell-menu" nil t)
 
@@ -34,9 +32,6 @@
 (with-eval-after-load 'agent-shell-queue
   (keymap-set agent-shell-queue-mode-map "C-c j" (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell"))))
 
-(add-to-list 'display-buffer-alist
-             '(tychoish--agent-shell-buffer-p (display-buffer-reuse-window display-buffer-use-some-window) (reusable-frames . t)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; settings
 
@@ -44,16 +39,15 @@
 (setq agent-shell-pi-acp-command '("npx" "-y" "pi-acp"))
 (setq agent-shell-cursor-acp-command '("cursor-agent" "acp"))
 (setq agent-shell-antigravity-acp-command '("agy" "acp" "--dangerously-skip-permissions"))
-(setq agent-shell-dot-subdir-function #'agent-shell-dot-subdir)
+(setq agent-shell-dot-subdir-function (lambda (subdir) (file-name-concat (sprite-state-path "agent-shell") subdir)))
 (setq agent-shell-header-style 'text)
 (setq agent-shell-activity-group-expand-by-default t)
-(setq agent-shell-thought-process-expand-by-default nil)
-(setq agent-shell-anthropic-authentication (agent-shell-anthropic-make-authentication :login t))
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-agent-configs #'tychoish--agent-shell-installed-configs)
+(setq agent-shell-display-action
+      '((display-buffer-reuse-window display-buffer-use-some-window)
+        (reusable-frames . t)))
 
-(setq agent-shell-queue-state-file-function #'tychoish--agent-shell-queue-state-file)
-(setq agent-shell-queue-archive-file-function #'tychoish--agent-shell-queue-archive-file)
 (setq agent-shell-queue-archive-enabled t)
 (setq agent-shell-queue-safe-save t)
 (setq agent-shell-queue-safe-save-max-files 50)
@@ -62,14 +56,13 @@
 (setq agent-shell-queue-serialization-format 'org)
 (setq agent-shell-queue-stall-timeout 600)
 
-(advice-add 'agent-shell-experimental--on-session-push-end :around #'ad:agent-shell-recover-stuck-push-end)
 (advice-add 'agent-shell-interrupt :around #'ad:agent-shell-interrupt-recover-if-unanswered '((depth . -100)))
 
 (cmdr-keys-set cmdr-mode-map "C-c r s v" #'tychoish--agent-shell-toggle-terse-output)
 
 (keymap-set agent-shell-mode-map "C-c C-c" #'agent-shell-submit)
 (keymap-set agent-shell-mode-map "C-c C-k" #'agent-shell-interrupt)
-(keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-resolve-permissions)
+(keymap-set agent-shell-mode-map "C-c C-p" #'agent-shell-menu-resolve-permission)
 (keymap-set agent-shell-mode-map "C-c b" #'agent-shell-switch-buffer)
 (keymap-set agent-shell-mode-map "C-c ]" #'agent-shell-menu-next-buffer)
 (keymap-set agent-shell-mode-map "C-c [" #'agent-shell-menu-previous-buffer)
@@ -84,14 +77,10 @@
 (add-hook 'agent-shell-mode-hook #'ansi-color-for-comint-mode-on)
 (add-hook 'agent-shell-mode-hook #'tychoish--agent-shell-shorten-antigravity-modeline)
 
-(add-hook 'agent-shell-queue-mode #'bootstrap-require-agent-shell-queue-org)
-(add-hook 'agent-shell-queue-capture-mode-hook #'agent-shell-queue-setup-capture-completion)
-(add-hook 'agent-shell-queue-edit-mode-hook #'agent-shell-queue-setup-capture-completion)
-
 (add-hook 'agent-shell-mode-hook #'agent-shell-notifications-mode)
 (add-hook 'agent-shell-mode-hook #'agent-shell-queue-overload-mode)
-(add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-mode)
-(add-hook 'agent-shell-viewport-edit-view-hook #'agent-shell-notifications-mode)
+(add-hook 'agent-shell-viewport-edit-mode-hook #'agent-shell-notifications-viewport-edit-mode)
+(add-hook 'agent-shell-viewport-view-mode-hook #'agent-shell-notifications-viewport-view-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Terse Persona & Environment
@@ -109,6 +98,7 @@
                                "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS" "1"
                                "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
                                :inherit-env t)))))
+
   (setq agent-shell-omp-environment
         (agent-shell-make-environment-variables
          "ENABLE_CLAUDEAI_MCP_SERVERS" "false"
@@ -127,14 +117,10 @@
   (message "Agent terse output: %s"
            (if tychoish/agent-shell-terse-output "on" "off")))
 
-(tychoish--agent-shell--apply-environment) ;; TODO is this needed
+(tychoish--agent-shell--apply-environment)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Agent-shell Buffer Helpers & Hooks
-
-(defun agent-shell-dot-subdir (subdir)
-  "Resolve SUBDIR under agent-shell state path."
-  (file-name-concat (sprite-state-path "agent-shell") subdir))
 
 (defun agent-shell-corfu-setup ()
   "Configure Corfu auto-completion for agent-shell buffers."
@@ -153,22 +139,8 @@
             (equal mode-name "Antigravity"))
     (setq mode-name "agy")))
 
-(defun tychoish--agent-shell-buffer-p (buffer _action)
-  "Return non-nil if BUFFER derives from `agent-shell-mode'."
-  (with-current-buffer buffer
-    (derived-mode-p 'agent-shell-mode)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Advice & Workarounds
-
-(defun ad:agent-shell-recover-stuck-push-end (orig-fn &rest args)
-  "Recover busy state if push end arrives without an active request."
-  (apply orig-fn args)
-  (when shell-maker--busy
-    (message "agent-shell: recovering stuck busy state after session_push_end")
-    (setq shell-maker--busy nil)
-    (when-let* ((on-finished (plist-get args :on-finished)))
-      (funcall on-finished))))
 
 (defun tychoish--agent-shell--force-clear-busy (shell-buffer request)
   "Force SHELL-BUFFER ready if REQUEST never received a response."
@@ -197,37 +169,23 @@
                             shell-buffer request)))))))
 
 (defun tychoish--agent-shell--config-installed-p (config)
-  "Return non-nil if CONFIG is Antigravity or its executable is available."
-  (or (eq (map-elt config :identifier) 'antigravity)
-      (when-let* ((cm (map-elt config :client-maker))
-              (client (ignore-errors (funcall cm (current-buffer))))
-              (cmd-spec (map-elt client :command))
-              (cmd (if (consp cmd-spec) (car cmd-spec) cmd-spec))
-              ((stringp cmd))
-              ((not (string-empty-p cmd))))
-        (executable-find cmd t))))
+  "Return non-nil if CONFIG executable is available on PATH."
+  (if-let* ((cm (map-elt config :client-maker))
+            (client (ignore-errors (funcall cm (current-buffer))))
+            (cmd-spec (map-elt client :command))
+            (cmd (if (consp cmd-spec) (car cmd-spec) cmd-spec))
+            ((stringp cmd))
+            ((not (string-empty-p cmd))))
+      (executable-find cmd t)
+    (when (eq (map-elt config :identifier) 'antigravity)
+      (executable-find "agy" t))))
 
 (defun tychoish--agent-shell-installed-configs ()
-  "Return available default agent configs, including bootstrappable Antigravity."
-  (seq-filter #'tychoish--agent-shell--config-installed-p
-              (seq-map (lambda (e) (if (functionp e) (funcall e) e))
-                       (agent-shell-default-agent-config-makers))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Primary Agent-Shell Configuration
-
-(defun tychoish--agent-shell-queue-state-file ()
-  "Queue state file under agent-shell state directory."
-  (expand-file-name (concat "queue" (agent-shell-queue-format-file-extension
-                                     agent-shell-queue-serialization-format))
-                    (sprite-state-path "agent-shell")))
-
-(defun tychoish--agent-shell-queue-archive-file ()
-  "Archive file under agent-shell state directory."
-  (expand-file-name "queue-archive.jsonl"
-                    (sprite-state-path "agent-shell")))
-
-(defun bootstrap-require-agent-shell-queue-org () (require 'agent-shell-queue-org))
+  "Return available default agent configs whose executable is installed."
+  (seq-filter (lambda (maker)
+                (tychoish--agent-shell--config-installed-p
+                 (if (functionp maker) (funcall maker) maker)))
+              (agent-shell-default-agent-config-makers)))
 
 (provide 'setup-agent-shell)
 ;;; setup-agent-shell.el ends here

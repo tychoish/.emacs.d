@@ -164,6 +164,8 @@
         (transient-values-file . "transient-values.el")
         (eshell-history-file-name . "eshell")
         (shell-maker-root-path . "shell-maker")
+        (agent-shell-queue-state-directory . "agent-shell/")
+        (agent-shell-queue-safe-save-directory . "agent-shell/backups/")
         (auto-save-list-file-prefix . "auto-save-list/")
         (request-storage-directory . "request/")
         (url-configuration-directory . "url/")
