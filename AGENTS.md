@@ -141,6 +141,7 @@ before committing.
 
 ## Commit and Change Hygiene
 
+- Use Conventional Commits for every commit: `type(scope): subject` or `type: subject`.
 - One concern per commit.
 - After changing `bootstrap.el`/`hud-mode.el`, byte-compile with
   `M-x byte-compile-all-user-emacs-files` to catch warnings.
