@@ -65,26 +65,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
 
-(defvar tychoish-core-map (cmdr-keys-prefix cmdr-mode-map "C-c t" "core")
-  "The cmdr core prefix map under C-c t.")
-
-(setq sprite-mode-map-prefix (cons "z" 'tychoish-core-map))
-
 (keymap-set isearch-mode-map "C-o" #'isearch-occur)
-
-(cmdr-keys-prefix cmdr-mode-map "C-c t t" "theme")
-(cmdr-keys-set cmdr-mode-map "C-c t t r" #'disable-all-themes)
-(cmdr-keys-set cmdr-mode-map "C-c t t i" #'toggle-hud-modeline-icons)
-(cmdr-keys-set cmdr-mode-map "C-c t t s" #'toggle-hud-modeline-show-buffer-size)
-(cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
-(cmdr-keys-set cmdr-mode-map "M-o" #'orgx-capture-shell-toggle)
-(cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
-(cmdr-keys-set cmdr-mode-map "C-c m a" #'mailx-select-account)
-(cmdr-keys-set cmdr-mode-map "C-x C-b s" #'projectile-save-project-buffers-picker)
 
 (cmdr-register-spec
   :name mail-accounts
   :probe mailx-select-account
+  :prefixes (("C-c m" . "mail"))
+  :bindings (("C-c m a" . mailx-select-account))
   :commands ((cmdr-spec-command :category mu4e
                                 :command mailx-select-account
                                 :display-name "mail-select-account"
@@ -105,41 +92,6 @@
                ("o" . mu4e-headers-mark-for-unread)
                ("u" . mu4e-headers-mark-for-unread)
                (";" . mu4e-mark-resolve-deferred-marks)))))
-
-(cmdr-register-spec
-  :name agent-shell
-  :probe agent-shell
-  :prefixes (("C-c r" . "robot")
-             ("C-c r s" . "agent-shell")
-             ("C-c r s s" . "send"))
-  :bindings (("C-c r p" . agent-shell-workflow-select)
-             ;; ... cmdr-mode-map bindings ...
-             ("C-c r s x" . execute-extended-agent-shell-command))
-  :keymap-bindings
-  ((agent-shell agent-shell-mode-map
-    ("C-c j" . (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
-    ("C-c C-c" . agent-shell-submit)
-    ("C-c C-k" . agent-shell-interrupt))
-   (agent-shell-queue agent-shell-queue-mode-map
-    ("C-c j" . (cons "robot-agent-shell" (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell"))))))
-
-(with-eval-after-load 'elpaish
-  (cmdr-transient-insert-suffix-once 'elpaish-menu '(-1 -1 0) '("x" "extended elpaish commands" execute-extended-elpaish-command)))
-
-(with-eval-after-load 'elpaish-install
-  (add-hook 'elpaish-install-bootstrap-finished-functions
-            (lambda (&rest _)
-              (when (fboundp 'cmdr-spec-discover)
-                (cmdr-spec-discover)))))
-
-(with-eval-after-load 'docker
-  (cmdr-transient-insert-suffix-once 'docker '(-1 0) '("m" "emacs docker commands" execute-extended-docker-command)))
-
-(with-eval-after-load 'ollama-tailnet
-  (cmdr-transient-insert-suffix-once 'ollama-transient-menu '(-1 0) '("x" "emacs ollama commands" execute-extended-ollama-command)))
-
-(with-eval-after-load 'magit-gh
-  (cmdr-transient-insert-suffix-once 'magit-gh '(-1) ["magit-dash" ("g" "magit-dash: prune/CI logs/PR comments/gh auth" magit-dash-gh-menu)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; core emacs -- global settings and options
@@ -244,9 +196,6 @@
 (setq which-key-idle-secondary-delay 0.125)
 (setq which-key-lighter "")
 
-(with-eval-after-load 'which-key
-  (add-to-list 'which-key-replacement-alist '((nil . "\\`agent-shell-\\(.*\\)") . (nil . "\\1"))))
-
 (setq emojify-emoji-styles '(ascii unicode github))
 (setq emojify-display-style 'unicode)
 (setq modus-themes-deuteranopia t)
@@ -308,6 +257,9 @@
 
 (with-eval-after-load 'dired
   (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
+
+(with-eval-after-load 'which-key
+  (add-to-list 'which-key-replacement-alist '((nil . "\\`agent-shell-\\(.*\\)") . (nil . "\\1"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Tools

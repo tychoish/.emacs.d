@@ -149,6 +149,7 @@
 ;; state -- setup desktop/bookmarks/savehist
 ;; hooks -- these run incrementally and lazily by sprite in `after-init-hook'
 
+(setq sprite-mode-map-prefix '("C-c t z" . cmdr-mode-map))
 (setq sprite-state-locks-enabled t)
 (setq sprite-state-auto-save-enabled t)
 (setq sprite-state-desktop-enabled t)
@@ -164,20 +165,21 @@
         (tramp-persistency-file-name . "tramp.el")
         (transient-history-file . "transient-history.el")
         (transient-values-file . "transient-values.el")
-        (eshell-history-file-name . "eshell")
-        (shell-maker-root-path . "shell-maker")
+        (recentf-save-file . "recentf.el")
+        (savehist-file . "history.el")
+        (dape-default-breakpoints-file . "dape-breakpoints.el")
+        (code-review-db-database-file . "code-review/db.sqlite")
+        (shell-maker-root-path . "shell-maker/")
+        (pcache-directory . "pcache/")
         (agent-shell-queue-state-directory . "agent-shell/")
         (agent-shell-queue-safe-save-directory . "agent-shell/backups/")
         (auto-save-list-file-prefix . "auto-save-list/")
+        (magit-dash-gh-prune-cache-dir . "magit-dash-gh-prune/")
         (request-storage-directory . "request/")
         (url-configuration-directory . "url/")
         (denote-sync-cache-directory . "denote-sync/")
-        (recentf-save-file . "recentf.el")
-        (savehist-file . "history.el")
-        (magit-dash-gh-prune-cache-dir . "magit-dash-gh-prune/")
-        (dape-default-breakpoints-file . "dape-breakpoints.el")
-        (code-review-db-database-file . "code-review/db.sqlite")
         (code-review-log-file . "code-review/error.log")
+        (eshell-history-file-name . "eshell")
         (projectile-known-projects-file . "projectile-bookmarks.eld")
         (projectile-frecency-file . "projectile-frecency.eld")))
 
@@ -196,10 +198,12 @@
                                   agent-shell-queue-overload-mode))
         (agent-shell-viewport-edit-mode-hook . agent-shell-notifications-viewport-edit-mode)
         (agent-shell-viewport-view-mode-hook . agent-shell-notifications-viewport-view-mode)
+        (elpaish-install-bootstrap-finished-functions . bootstrap-cmdr-spec-discover)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . bootstrap-ensure-ssh-agent)
         (emacs-lisp-mode-hook . builder-elisp-mode)))
+
 
 (setq sprite-state-auto-mode-alist
       '(("\\.xml\\'" . nxml-mode)
@@ -312,6 +316,7 @@ Returns a list of re-enabled modes, if any."
 (defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-require-tracking () (require 'tracking))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
+(defun bootstrap-cmdr-spec-discover (&rest _) (cmdr-spec-discover))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
