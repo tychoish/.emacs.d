@@ -204,7 +204,6 @@
         (magit-mode-hook . bootstrap-ensure-ssh-agent)
         (emacs-lisp-mode-hook . builder-elisp-mode)))
 
-
 (setq sprite-state-auto-mode-alist
       '(("\\.xml\\'" . nxml-mode)
         ("\\.rst\\'" . rst-mode)

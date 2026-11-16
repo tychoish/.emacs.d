@@ -12,26 +12,11 @@
 
 ;;; Code:
 
-(require 'cl-lib)
-
-(require 'cmdr-macros)
-(require 'cmdr-keys)
 (require 'cmdr-spec)
-
-(declare-function mailx-select-account "mailx")
-
-(defvar magit-status-mode-map)
-(defvar popper-reference-buffers)
-(defvar popper-echo-dispatch-keys)
-(defvar popper-display-control)
-(defvar sprite-mode-map-prefix)
-(defvar alert-fade-time)
-(defvar alert-log-messages)
+(require 'clix)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; CLI flags
-
-(require 'clix)
 
 (register-clix-flag
  slow-op-timing
@@ -64,8 +49,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; cmdr keybindings & specifications
-
-(keymap-set isearch-mode-map "C-o" #'isearch-occur)
 
 (cmdr-register-spec
   :name mail-accounts
@@ -249,15 +232,6 @@
   (add-to-list 'warning-suppress-log-types '(frameset))
   (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
 
-(with-eval-after-load 'comint
-  (keymap-set comint-mode-map "M-n" #'comint-next-input)
-  (keymap-set comint-mode-map "M-p" #'comint-previous-input)
-  (keymap-set comint-mode-map "<down>" #'comint-next-matching-input-from-input)
-  (keymap-set comint-mode-map "<up>" #'comint-previous-matching-input-from-input))
-
-(with-eval-after-load 'dired
-  (keymap-set dired-mode-map "w" #'wdired-change-to-wdired-mode))
-
 (with-eval-after-load 'which-key
   (add-to-list 'which-key-replacement-alist '((nil . "\\`agent-shell-\\(.*\\)") . (nil . "\\1"))))
 
@@ -268,10 +242,6 @@
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
   (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
   (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
-
-  (keymap-set magit-status-mode-map "C-n" #'next-line)
-  (keymap-set magit-status-mode-map "C-p" #'previous-line)
-
   (hud-modeline-set-segment-action 'vc #'magit-dispatch))
 
 (with-eval-after-load 'denote
@@ -281,7 +251,6 @@
   (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree))
 
 (with-eval-after-load 'gptel
-  (keymap-set gptel-mode-map "C-c m" #'gptel-menu)
   (setq gptel-include-reasoning 'ignore)
   (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
   (setq-default gptel-model 'gpt-6.1-terra)
