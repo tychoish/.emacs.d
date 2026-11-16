@@ -114,13 +114,17 @@
                 (kill-buffer buffer)))
             (with-temp-buffer
               (mu4e-context-switch nil "beta")
+              (should-not (mu4e-running-p))
               (should (equal mu4e-mu-home other-home))
               (should (equal message-directory other-maildir))
               (should (equal mu4e-get-mail-command "fetch-beta")))
+            (tychoish-mail-server-ensure-ready)
+            (should (mu4e-running-p))
             (with-temp-buffer
               (setq buffer-file-name file)
               (should-error (tychoish-mail--guard-draft-database) :type 'user-error))
             (with-temp-buffer (mu4e-context-switch nil "alpha"))
+            (should-not (mu4e-running-p))
             (should (equal (tychoish-mail-server-current-home) home))))
       (dolist (buffer (list draft first-draft second-draft))
         (when (buffer-live-p buffer)

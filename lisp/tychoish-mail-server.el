@@ -27,6 +27,11 @@
   "Mu server process still exiting after mu4e detached from it.")
 
 (advice-add 'mu4e--server-start :before #'tychoish-mail--await-stopped-server)
+(advice-add 'mu4e--query-items-refresh :before-while #'tychoish-mail--server-running-p)
+
+(defun tychoish-mail--server-running-p (&rest _args)
+  "Return non-nil when mu4e's server is running."
+  (and (fboundp 'mu4e-running-p) (mu4e-running-p)))
 
 (defun tychoish-mail-server-current-home ()
   "Return the database home of the running server, or the configured home."
@@ -104,8 +109,8 @@
                 (buffer-name draft))))
 
 (defun tychoish-mail-server-switch-database (home)
-  "Prepare the mu database at HOME before entering its context.
-Open drafts keep their original paths and are guarded during save and send."
+  "Select database HOME, stopping the current mu server when necessary.
+The server remains stopped until mu4e is next started."
   (tychoish-mail--await-stopped-server)
   (let* ((tychoish-mail--transitioning t)
          (running (and (featurep 'mu4e) (mu4e-running-p)))
@@ -119,23 +124,8 @@ Open drafts keep their original paths and are guarded during save and send."
       (when running
         (tychoish-mail--stop-server)
         (tychoish-mail-server--ensure-no-drafts))
-      (unless running
-        (setq mu4e--started nil)))
-    (setq mu4e-mu-home home)
-    (when (and running (not (equal old-home home)))
-      ;; Startup completes on pong, not when `mu4e' returns.
-      (condition-case err
-          (let ((mu4e-context-policy nil))
-            (tychoish-mail-server-ensure-ready))
-        ((error quit)
-         (unwind-protect
-             (when (mu4e-running-p)
-               (tychoish-mail--stop-server))
-           (setq mu4e--started nil)
-           (if (mu4e-running-p)
-               (setq mu4e-mu-home home)
-             (setq mu4e-mu-home old-home)))
-         (signal (car err) (cdr err)))))))
+      (setq mu4e--started nil))
+    (setq mu4e-mu-home home)))
 
 (provide 'tychoish-mail-server)
 ;;; tychoish-mail-server.el ends here
