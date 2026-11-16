@@ -21,7 +21,9 @@
 (defvar mu4e-pong-func)
 
 (defvar mailx--transitioning nil
-  "Non-nil while starting a replacement mu server.")
+  "Non-nil while a database switch is stopping the old mu server.
+Stop waits for process output, so timers or filters can re-enter mail
+commands; entry points that would start a server refuse while this is set.")
 
 (defvar mailx--stopping-process nil
   "Mu server process still exiting after mu4e detached from it.")
