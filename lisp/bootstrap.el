@@ -40,7 +40,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
-(declare-function eglox-global-mode "eglox")
 (declare-function package-activate-all "package")
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
@@ -190,8 +189,10 @@
         (org-mode-hook . orgx-mode-turn-on)
         (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
         (popper-mode-hook . popper-echo-mode)
-        (magit-status-mode-hook . magit-dash-gh-prune-lazy-prefetch)
         (markdown-mode-hook . turn-off-auto-fill)
+        (magit-status-mode-hook . magit-dash-gh-prune-lazy-prefetch)
+        (magit-status-sections-hook . (magit-insert-worktrees
+                                       magit-insert-modules))
         (agent-shell-mode-hook . (agent-shell-bold-input-setup
                                   ansi-color-for-comint-mode-on
                                   agent-shell-notifications-mode
@@ -264,7 +265,7 @@
     column-number-mode
     delete-selection-mode
     electric-pair-mode
-    pixel-scroll-precision-mode
+    ; pixel-scroll-precision-mode
     winner-mode
     ; repeat-mode
     telegax-global-mode

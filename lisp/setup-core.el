@@ -208,7 +208,7 @@
         (reusable-frames . t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Core & UI systems
+;;; Late Package Configuration
 
 (with-eval-after-load 'elec-pair
   (add-to-list 'electric-pair-pairs '(?< . ?>))
@@ -235,13 +235,8 @@
 (with-eval-after-load 'which-key
   (add-to-list 'which-key-replacement-alist '((nil . "\\`agent-shell-\\(.*\\)") . (nil . "\\1"))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Tools
-
 (with-eval-after-load 'magit
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
-  (add-hook 'magit-status-sections-hook 'magit-insert-worktrees t)
-  (add-hook 'magit-status-sections-hook 'magit-insert-modules t)
   (hud-modeline-set-segment-action 'vc #'magit-dispatch))
 
 (with-eval-after-load 'denote
