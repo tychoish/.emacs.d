@@ -110,6 +110,9 @@
      (t
       (package-activate-all)
       (when (elpaish-install-package-quickstart-stale-p)
+        ;; TODO not sure what 'core is supposed to get here, it
+        ;; doesn't seem to work. need to add integration tests of
+        ;; "no quickstart file" + with/without populated elpa
         (elpaish-install-packages 'core))))))
 
 (defun bootstrap-load-user-local-config ()

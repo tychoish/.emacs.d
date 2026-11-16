@@ -93,11 +93,11 @@
 (setq auto-revert-verbose nil)
 (setq auto-revert-avoid-polling t)
 (setq auto-revert-interval 60)
-(setq backup-by-copying t)
-(setq delete-old-versions t)
+(setq backup-by-copying t) ;; sprite-state
+(setq delete-old-versions t) ;; sprite-state
 
-(setq vc-follow-symlinks t)
-(setq version-control t)
+(setq vc-follow-symlinks t) ;; magit-dash
+(setq version-control t) ;; magit-dash
 (setq ediff-window-setup-function 'ediff-setup-windows-plain)
 (setq ediff-split-window-function 'split-window-horizontally)
 
@@ -105,7 +105,6 @@
 (setq scroll-conservatively 25)
 (setq scroll-preserve-screen-position t)
 
-(setq ring-bell-function #'ignore)
 (setq-default indicate-empty-lines t)
 (setq-default truncate-lines t)
 (setq-default indent-tabs-mode nil) ; (setq tab-width 4)
@@ -117,6 +116,8 @@
 (setq switch-to-prev-buffer-skip 'visible)
 (setq split-height-threshold 100)
 (setq window-sides-vertical t)
+
+(setq ring-bell-function #'ignore)
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
