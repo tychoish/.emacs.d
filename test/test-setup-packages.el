@@ -57,7 +57,7 @@
   (let ((upgrades (test-setup-packages--get-upgrade-list))
         (installs (test-setup-packages--get-install-list))
         (local-modules '(bootstrap setup-core setup-defaults
-                         setup-modes setup-packages mailx mailx-server setup-project setup-agent-shell)))
+                         setup-modes setup-packages mailx mailx-server setup-project)))
     (dolist (mod local-modules)
       (should-not (memq mod upgrades))
       (should-not (memq mod installs)))))

@@ -293,7 +293,8 @@
 
 (ert-deftest mailx-context/draft-save-and-send-require-original-database ()
   (with-temp-buffer
-    (let ((mu4e-mu-home "/tmp/mail-b/.mu"))
+    (let ((mu4e-mu-home "/tmp/mail-b/.mu")
+          (mu4e--server-process nil))
       (setq major-mode 'mu4e-compose-mode)
       (setq buffer-file-name "/tmp/mail-a/drafts/cur/message")
       (mailx-set-up-message-mode-buffer)

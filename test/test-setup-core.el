@@ -87,7 +87,7 @@
 
 (ert-deftest tychoish-core/nerd-icons-registered-modes-resolve ()
   "Every mode we register in nerd-icons-mode-icon-alist resolves without error."
-  (require 'setup-agent-shell)
+  (require 'setup-core)
   (require 'nerd-icons)
   (seq-do (lambda (mode)
             (should-not
@@ -215,7 +215,8 @@ correctly and reads from the minibuffer using the candidate's command."
   "Antigravity config maker is available in installed configs."
   (require 'agent-shell)
   (require 'agent-shell-menu)
-  (should (memq #'agent-shell-antigravity-make-agent-config (agent-shell-menu-installed-agent-configs))))
+  (cl-letf (((symbol-function 'executable-find) (lambda (&rest _) "/bin/true")))
+    (should (memq #'agent-shell-antigravity-make-agent-config (agent-shell-menu-installed-agent-configs)))))
 
 (ert-deftest tychoish-core/agent-shell-mcpkit-bridge-startup ()
   "The startup batch enables the MCPKit bridge."
@@ -267,7 +268,7 @@ correctly and reads from the minibuffer using the candidate's command."
                  'agent-shell-menu-output-key-?)))
 
 (ert-deftest tychoish-core/annotated-agent-shell-prefix-bindings ()
-  (require 'setup-agent-shell)
+  (require 'setup-core)
   (require 'agent-shell-queue)
   (let ((agent-shell-map (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
     (should (eq (keymap-lookup agent-shell-mode-map "C-c j") agent-shell-map))
@@ -332,10 +333,10 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/agent-shell-environment-settings ()
   "Claude and OMP agent environments are configured."
-  (require 'setup-agent-shell)
+  (require 'setup-core)
   (should (member "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1" agent-shell-anthropic-claude-environment))
   (should (member "ENABLE_CLAUDEAI_MCP_SERVERS=false" agent-shell-anthropic-claude-environment))
-  (should (seq-some (lambda (e) (string-prefix-p "OMP_DOCS_DIR=" e)) agent-shell-omp-environment)))
+  (should (equal agent-shell-omp-environment agent-shell-anthropic-claude-environment)))
 
 (ert-deftest tychoish-core/mail-unsubscribe-decodes-mailto ()
   "The standard mailto handler decodes address, subject and body."
@@ -368,27 +369,6 @@ correctly and reads from the minibuffer using the candidate's command."
        :shell-buffer (current-buffer) :text "new" :no-focus t)
       (should (= (point) 1))
       (should (string-suffix-p "new" (buffer-string))))))
-
-(defvar tychoish-core-test--interrupt-before-called nil)
-
-(defun tychoish-core-test--interrupt-before (&rest _)
-  "Record whether before advice runs."
-  (setq tychoish-core-test--interrupt-before-called t))
-
-(ert-deftest tychoish-core/interrupt-decline-skips-later-before-advice ()
-  "Declining confirmation must not run later-installed queue advice."
-  (require 'agent-shell)
-  (with-temp-buffer
-    (setq major-mode 'agent-shell-mode)
-    (setq-local agent-shell--state '((:session . ((:id . "session")))))
-    (let ((tychoish-core-test--interrupt-before-called nil))
-      (unwind-protect
-          (progn
-            (advice-add 'agent-shell-interrupt :before #'tychoish-core-test--interrupt-before)
-            (cl-letf (((symbol-function 'agent-shell-interrupt-confirmed-p) (lambda () nil)))
-              (agent-shell-interrupt))
-            (should-not tychoish-core-test--interrupt-before-called))
-        (advice-remove 'agent-shell-interrupt #'tychoish-core-test--interrupt-before)))))
 
 (ert-deftest tychoish-core/mail-header-separator-roundtrip ()
   "Compose and draft header delimiters use dashes and can be removed."

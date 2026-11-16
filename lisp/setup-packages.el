@@ -46,7 +46,12 @@
  '(arch
    builder
    daemons-dash
+   diff-review
+   elpaish
+   elpaish-keyring
+   logx
    magit-dash
+   sprite-mcp
    tailscale
    telega-bot
    ollama-tailnet

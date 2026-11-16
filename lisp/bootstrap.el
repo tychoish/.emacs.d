@@ -194,8 +194,8 @@
                                   ansi-color-for-comint-mode-on
                                   agent-shell-notifications-mode
                                   agent-shell-queue-overload-mode))
-        (agent-shell-viewport-edit-mode . agent-shell-notifications-viewport-edit-mode)
-        (agent-shell-viewport-view-mode . agent-shell-notifications-viewport-view-mode)
+        (agent-shell-viewport-edit-mode-hook . agent-shell-notifications-viewport-edit-mode)
+        (agent-shell-viewport-view-mode-hook . agent-shell-notifications-viewport-view-mode)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . bootstrap-ensure-ssh-agent)
@@ -273,6 +273,7 @@
     mcpkit-init-services
     cmdr-spec-discover
     bootstrap-require-setup-packages
+    bootstrap-package-quickstart
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
@@ -310,7 +311,6 @@ Returns a list of re-enabled modes, if any."
 (defun bootstrap-require-treesit-auto () (require 'treesit-auto))
 (defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-require-tracking () (require 'tracking))
-(defun bootstrap-require-setup-agent-shell () (require 'setup-agent-shell))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
