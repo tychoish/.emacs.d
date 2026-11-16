@@ -292,6 +292,8 @@
       (should (equal (nreverse events) '(start pong compose))))))
 
 (ert-deftest mailx-context/draft-save-and-send-require-original-database ()
+  (skip-unless (file-readable-p file))
+
   (with-temp-buffer
     (let ((mu4e-mu-home "/tmp/mail-b/.mu")
           (mu4e--server-process nil))

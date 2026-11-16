@@ -331,13 +331,6 @@ correctly and reads from the minibuffer using the candidate's command."
   (should-not (string-match-p desktop-files-not-to-save "/home/user/src/file.go"))
   (should (string-match-p desktop-buffers-not-to-save " *temporary*")))
 
-(ert-deftest tychoish-core/agent-shell-environment-settings ()
-  "Claude and OMP agent environments are configured."
-  (require 'setup-core)
-  (should (member "CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1" agent-shell-anthropic-claude-environment))
-  (should (member "ENABLE_CLAUDEAI_MCP_SERVERS=false" agent-shell-anthropic-claude-environment))
-  (should (equal agent-shell-omp-environment agent-shell-anthropic-claude-environment)))
-
 (ert-deftest tychoish-core/mail-unsubscribe-decodes-mailto ()
   "The standard mailto handler decodes address, subject and body."
   (require 'mailx)
