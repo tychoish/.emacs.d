@@ -13,20 +13,13 @@
 (autoload 'mu4e "mu4e" nil t)
 (autoload 'mu4e-update-index "mu4e" nil t)
 (autoload 'mu4e-update-mail-and-index "mu4e" nil t)
-(autoload 'mu4e-quit "mu4e" nil t)
 (autoload 'make-mu4e-context "mu4e-context")
-(autoload 'mu4e-context-current "mu4e-context")
 (autoload 'mu4e-context-switch "mu4e-context" nil t)
 (autoload 'mu4e-compose-context-switch "mu4e-compose" nil t)
 
 (declare-function message-field-value "message" (header &optional first))
-(declare-function mu4e "mu4e")
 (declare-function mu4e-compose-reply "mu4e-compose")
 (declare-function mu4e-running-p "mu4e-server")
-(declare-function make-mu4e-context "mu4e-context")
-(declare-function mu4e-context-switch "mu4e-context")
-(declare-function mu4e-compose-context-switch "mu4e-compose")
-(declare-function mu4e-context-current "mu4e-context")
 (declare-function mu4e-headers-mark-for-read "mu4e-headers")
 (declare-function mu4e-headers-mark-for-unread "mu4e-headers")
 (declare-function mu4e-mark-resolve-deferred-marks "mu4e-mark")
@@ -42,9 +35,7 @@
 
 (defvar mm-discouraged-alternatives)
 (defvar mml-secure-openpgp-sign-with-sender)
-(defvar mu4e-compose-minor-mode-map)
 (defvar mu4e-headers-actions)
-(defvar mu4e-headers-mode-map)
 (defvar mu4e-view-actions)
 (defvar mu4e-refile-folder)
 (defvar mu4e-bookmarks)
@@ -52,7 +43,6 @@
 (defvar mu4e--header-separator)
 (defvar mu4e-search-include-related)
 (defvar mu4e-search-results-limit)
-(defvar mu4e-mu-home)
 (defvar mu4e-compose-context-policy)
 (defvar mu4e--context-current)
 (defvar mu4e-get-mail-command)
@@ -64,18 +54,15 @@
   "Non-nil while mu4e creates a draft.")
 
 (add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
-
 (add-to-list 'display-buffer-alist '(mailx--buffer-p (display-buffer-reuse-window) (reusable-frames . t)))
 
 (with-eval-after-load 'mu4e
-  (seq-do (lambda (hook) (add-hook hook #'cmdr-frame-record-home-frame))
-          '(mu4e-main-mode-hook
-            mu4e-headers-mode-hook
-            mu4e-view-mode-hook
-            mu4e-compose-mode-hook)))
+  (add-to-list 'mu4e-headers-actions '("generate refile rule" . mailx-generate-refile-rule) t)
+  (add-to-list 'mu4e-view-actions '("unsubscribe" . mailx-unsubscribe) t)
+  (add-to-list 'mu4e-view-actions '("generate refile rule" . mailx-generate-refile-rule) t)
+  (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)))
 
 (with-eval-after-load 'message
-  (keymap-set message-mode-map "M-q" #'ignore)
   (add-to-list 'mm-discouraged-alternatives "text/richtext")
   (add-to-list 'mm-discouraged-alternatives "text/html")
   (set-face-attribute 'message-separator nil :background (face-attribute 'default :background nil))
@@ -87,28 +74,14 @@
                                             message-citation-line-format)))
                     message-cite-style-gmail)))
 
-(with-eval-after-load 'mu4e-compose
-  (keymap-set mu4e-compose-minor-mode-map "R" #'mailx-compose-reply)
-  (keymap-set mu4e-compose-minor-mode-map "r" #'mu4e-headers-mark-for-read)
-  (keymap-set mu4e-compose-minor-mode-map "<remap> <mu4e-context-switch>"
-              #'mu4e-compose-context-switch))
-
-(with-eval-after-load 'mu4e-headers
-  (add-to-list 'mu4e-headers-actions '("generate refile rule" . mailx-generate-refile-rule) t)
-  (keymap-set mu4e-headers-mode-map "C-r" #'mailx-compose-reply)
-  (keymap-set mu4e-headers-mode-map "o" #'mu4e-headers-mark-for-unread)
-  (keymap-set mu4e-headers-mode-map "u" #'mu4e-headers-mark-for-unread)
-  (keymap-set mu4e-headers-mode-map ";" #'mu4e-mark-resolve-deferred-marks))
-
-(with-eval-after-load 'mu4e-view
-  (add-to-list 'mu4e-view-actions '("unsubscribe" . mailx-unsubscribe) t)
-  (add-to-list 'mu4e-view-actions '("generate refile rule" . mailx-generate-refile-rule) t))
-
 (advice-add 'basic-save-buffer :before #'ad:mailx-guard-save)
-
 (advice-add 'mu4e--draft :around #'ad:mailx-draft)
 (advice-add 'mu4e--draft :before #'ad:mailx-start-for-draft '((depth . -50)))
 
+(add-hook 'mu4e-main-mode-hook 'cmdr-frame-record-home-frame)
+(add-hook 'mu4e-headers-mode-hook 'cmdr-frame-record-home-frame)
+(add-hook 'mu4e-view-mode-hook 'cmdr-frame-record-home-frame)
+(add-hook 'mu4e-compose-mode-hook 'cmdr-frame-record-home-frame)
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
 (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
 (add-hook 'mu4e-compose-mode-hook 'mailx-set-up-message-mode-buffer)
@@ -157,10 +130,6 @@
 (setq mail-user-agent 'mu4e-user-agent)
 (setq mail-header-separator "--------------------------")
 
-(with-eval-after-load 'mu4e-draft
-  (setq mu4e--header-separator
-        (propertize mail-header-separator 'read-only t 'intangible t)))
-
 (setq mu4e-refile-folder #'mailx-refile-folder)
 (setq mu4e-compose-context-policy 'ask)
 
@@ -174,17 +143,24 @@
 (setq message-fill-column 80)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+;; Management and Supporting Code
 
 (defun mailx-set-up-message-mode-buffer ()
   "Configure local settings for mu4e composition."
   (setq-local use-hard-newlines t)
   (setq-local make-backup-files nil)
   (seq-do #'make-local-variable
-          '(mu4e--context-current user-mail-address user-full-name
-            message-directory message-auto-save-directory
-            message-signature-directory message-signature-file message-signature
-            mail-host-address message-sendmail-extra-arguments mu4e-get-mail-command))
+          '(mu4e--context-current
+            user-mail-address
+            user-full-name
+            message-directory
+            message-auto-save-directory
+            message-signature-directory
+            message-signature-file
+            message-signature
+            mail-host-address
+            message-sendmail-extra-arguments
+            mu4e-get-mail-command))
   (add-hook 'message-send-hook #'mailx--guard-draft-database nil t)
   (add-hook 'message-send-hook #'mailx--guard-draft-identity nil t))
 

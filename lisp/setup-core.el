@@ -89,7 +89,22 @@
                                 :command mailx-select-account
                                 :display-name "mail-select-account"
                                 :description "select mail account"
-                                :transient-key "ma")))
+                                :transient-key "ma"))
+  :keymap-bindings
+  ((message message-mode-map
+    :hook message-mode-hook
+    :bindings (("M-q" . ignore)))
+   (mu4e-compose mu4e-compose-minor-mode-map
+    :hook mu4e-compose-mode-hook
+    :bindings (("R" . mailx-compose-reply)
+               ("r" . mu4e-headers-mark-for-read)
+               ("<remap> <mu4e-context-switch>" . mu4e-compose-context-switch)))
+   (mu4e-headers mu4e-headers-mode-map
+    :hook mu4e-headers-mode-hook
+    :bindings (("C-r" . mailx-compose-reply)
+               ("o" . mu4e-headers-mark-for-unread)
+               ("u" . mu4e-headers-mark-for-unread)
+               (";" . mu4e-mark-resolve-deferred-marks)))))
 
 (cmdr-register-spec
   :name agent-shell
