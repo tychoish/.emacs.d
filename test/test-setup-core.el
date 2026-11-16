@@ -290,7 +290,7 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/refile-rule-generator-preserves-keywords ()
   "Generated rules should match the selected message field."
-  (require 'setup-mail)
+  (require 'mailx)
   (seq-do
    (lambda (field)
      (let ((kill-ring nil)
@@ -299,21 +299,21 @@ correctly and reads from the minibuffer using the candidate's command."
                   (lambda (&rest _) field))
                  ((symbol-function 'read-string)
                   (lambda (&rest _) (pop answers)))
-                 ((symbol-function 'tychoish-mail--field-display-value)
+                 ((symbol-function 'mailx--field-display-value)
                   (lambda (&rest _) "example"))
                  ((symbol-function 'mu4e-message-field)
                   (lambda (msg key) (plist-get msg key)))
                  ((symbol-function 'mu4e-contact-email) #'identity))
-         (tychoish-mail-generate-refile-rule '(:subject "example"))
+         (mailx-generate-refile-rule '(:subject "example"))
          (let ((rule (read (current-kill 0))))
-           (should (eq (car rule) 'tychoish-mail-add-refile-rule))
+           (should (eq (car rule) 'mailx-add-refile-rule))
            (should (string-match-p (regexp-quote field) (prin1-to-string rule)))
            (should-not (string-match-p "::" (prin1-to-string rule)))
            (should (nth 2 (cadr rule)))
-           (let ((tychoish-mail--refile-rules nil)
+           (let ((mailx--refile-rules nil)
                  (key (intern field)))
              (eval rule t)
-             (let ((fn (car tychoish-mail--refile-rules)))
+             (let ((fn (car mailx--refile-rules)))
                (should (equal "/archive/test"
                               (funcall fn (list key (if (eq key :from)
                                                         '("example") "example")))))
@@ -339,7 +339,7 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/mail-unsubscribe-decodes-mailto ()
   "The standard mailto handler decodes address, subject and body."
-  (require 'setup-mail)
+  (require 'mailx)
   (require 'url-mailto)
   (with-temp-buffer
     (message-mode)
@@ -351,7 +351,7 @@ correctly and reads from the minibuffer using the candidate's command."
                  (lambda (&rest _)
                    (erase-buffer)
                    (insert "To: \nSubject: \n" mail-header-separator "\n"))))
-        (tychoish-mail-unsubscribe 'message)
+        (mailx-unsubscribe 'message)
         (should (string-match-p "list@example.org" (buffer-string)))
         (should (string-match-p "Please remove" (buffer-string)))
         (should (string-match-p "Stop mail" (buffer-string)))))))
@@ -392,7 +392,7 @@ correctly and reads from the minibuffer using the candidate's command."
 
 (ert-deftest tychoish-core/mail-header-separator-roundtrip ()
   "Compose and draft header delimiters use dashes and can be removed."
-  (require 'setup-mail)
+  (require 'mailx)
   (skip-unless (or (featurep 'mu4e-draft) (locate-library "mu4e-draft")))
   (require 'mu4e-draft)
   (let ((expected "--------------------------"))

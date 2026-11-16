@@ -90,12 +90,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Deferred Module Autoloads
 
-(autoload 'tychoish-mail-select-account "setup-mail" nil t)
-(autoload 'tychoish-mail-make-context "setup-mail")
-(autoload 'tychoish-mail-add-refile-rule "setup-mail")
-(autoload 'mu4e "setup-mail" nil t)
-(autoload 'mu4e-update-index "setup-mail" nil t)
-(autoload 'mu4e-update-mail-and-index "setup-mail" nil t)
+(autoload 'mailx-select-account "mailx" nil t)
+(autoload 'mailx-make-context "mailx")
+(autoload 'mailx-add-refile-rule "mailx")
+(autoload 'mu4e "mailx" nil t)
+(autoload 'mu4e-update-index "mailx" nil t)
+(autoload 'mu4e-update-mail-and-index "mailx" nil t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap

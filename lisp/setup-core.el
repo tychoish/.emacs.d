@@ -18,7 +18,7 @@
 (require 'cmdr-keys)
 (require 'cmdr-spec)
 
-(declare-function tychoish-mail-select-account "setup-mail")
+(declare-function mailx-select-account "mailx")
 
 (defvar magit-status-mode-map)
 (defvar popper-reference-buffers)
@@ -79,14 +79,14 @@
 (cmdr-keys-set cmdr-mode-map "C-c t s" #'daemons-dash)
 (cmdr-keys-set cmdr-mode-map "M-o" #'orgx-capture-shell-toggle)
 (cmdr-keys-set cmdr-mode-map "C-c h s" #'eglox-describe-symbol-dwim)
-(cmdr-keys-set cmdr-mode-map "C-c m a" #'tychoish-mail-select-account)
+(cmdr-keys-set cmdr-mode-map "C-c m a" #'mailx-select-account)
 (cmdr-keys-set cmdr-mode-map "C-x C-b s" #'projectile-save-project-buffers-picker)
 
 (cmdr-register-spec
   :name mail-accounts
-  :probe tychoish-mail-select-account
+  :probe mailx-select-account
   :commands ((cmdr-spec-command :category mu4e
-                                :command tychoish-mail-select-account
+                                :command mailx-select-account
                                 :display-name "mail-select-account"
                                 :description "select mail account"
                                 :transient-key "ma")))

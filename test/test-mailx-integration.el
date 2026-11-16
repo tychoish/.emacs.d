@@ -7,11 +7,11 @@
 
 (require 'ert)
 (require 'cl-lib)
-(require 'setup-mail)
+(require 'mailx)
 (require 'mu4e)
 (require 'mu4e-compose)
 
-(ert-deftest tychoish-mail-integration/reopen-indexed-draft ()
+(ert-deftest mailx-integration/reopen-indexed-draft ()
   "Reopen a real indexed draft and enforce its database ownership."
   (skip-unless (and noninteractive (executable-find "mu")
                     (not (mu4e-running-p))))
@@ -58,10 +58,10 @@
                                         "--fields=l" "subject:indexed integration draft")))
             (should (string-match-p (regexp-quote file) (buffer-string))))
           (setq mu4e-contexts
-                (list (tychoish-mail-make-context
+                (list (mailx-make-context
                        :name "alpha" :full-name "Alpha" :address "alpha@example.org"
                        :maildir maildir :command "fetch-alpha")
-                      (tychoish-mail-make-context
+                      (mailx-make-context
                        :name "beta" :full-name "Beta" :address "beta@example.org"
                        :maildir other-maildir :command "fetch-beta")))
           (cl-letf (((symbol-function 'cmdr-frame-record-home-frame) #'ignore)
@@ -76,9 +76,9 @@
                          (lambda (&rest _) (cadr mu4e-contexts))))
                 (setq first-draft (mu4e-compose-new "one@example.org" "First"))))
             (let ((mu4e-mu-home other-home))
-              (should (equal (tychoish-mail-server-current-home) home))
+              (should (equal (mailx-server-current-home) home))
               (with-current-buffer first-draft
-                (tychoish-mail--guard-draft-database)))
+                (mailx--guard-draft-database)))
             (with-current-buffer first-draft
               (should (equal user-mail-address "beta@example.org"))
               (mu4e-compose-context-switch nil "alpha")
@@ -118,14 +118,14 @@
               (should (equal mu4e-mu-home other-home))
               (should (equal message-directory other-maildir))
               (should (equal mu4e-get-mail-command "fetch-beta")))
-            (tychoish-mail-server-ensure-ready)
+            (mailx-server-ensure-ready)
             (should (mu4e-running-p))
             (with-temp-buffer
               (setq buffer-file-name file)
-              (should-error (tychoish-mail--guard-draft-database) :type 'user-error))
+              (should-error (mailx--guard-draft-database) :type 'user-error))
             (with-temp-buffer (mu4e-context-switch nil "alpha"))
             (should-not (mu4e-running-p))
-            (should (equal (tychoish-mail-server-current-home) home))))
+            (should (equal (mailx-server-current-home) home))))
       (dolist (buffer (list draft first-draft second-draft))
         (when (buffer-live-p buffer)
           (with-current-buffer buffer (set-buffer-modified-p nil))

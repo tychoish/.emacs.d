@@ -37,7 +37,7 @@ Use `map-into` to build a hash table from a list of cons cells without an explic
 | `lisp/bootstrap.el`                | Startup operations, state, mode associations, notes and SSH setup.       |
 | `lisp/setup-core.el`               | General configuration, package hooks and deferred integration.           |
 | `lisp/setup-packages.el`           | Package catalogs for elpaish; loaded for maintenance.                    |
-| `lisp/setup-mail.el`               | Mu4e and mail account configuration, loaded on demand.                   |
+| `lisp/mailx.el`               | Mu4e and mail account configuration, loaded on demand.                   |
 | `lisp/setup-agent-shell.el`        | Agent-shell configuration, loaded when agent-shell loads.                |
 | `user/*.el`                        | Per-machine overrides. Loaded last; not committed.                       |
 

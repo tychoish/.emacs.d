@@ -1,4 +1,4 @@
-;;; setup-mail.el --- Mail configuration and account management -*- lexical-binding: t; -*-
+;;; mailx.el --- Mail configuration and account management -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Mu4e email contexts, account switching, and refile rules.
@@ -8,7 +8,7 @@
 
 (require 'map)
 (require 'cl-lib)
-(require 'tychoish-mail-server)
+(require 'mailx-server)
 
 (autoload 'mu4e "mu4e" nil t)
 (autoload 'mu4e-update-index "mu4e" nil t)
@@ -60,12 +60,12 @@
 (defvar message-signature-file)
 (defvar message-sendmail-extra-arguments)
 (defvar mail-host-address)
-(defvar tychoish-mail--composing nil
+(defvar mailx--composing nil
   "Non-nil while mu4e creates a draft.")
 
 (add-to-list 'auto-mode-alist '(".*mutt.*" . message-mode))
 
-(add-to-list 'display-buffer-alist '(tychoish--mu4e-buffer-p (display-buffer-reuse-window) (reusable-frames . t)))
+(add-to-list 'display-buffer-alist '(mailx--buffer-p (display-buffer-reuse-window) (reusable-frames . t)))
 
 (with-eval-after-load 'mu4e
   (seq-do (lambda (hook) (add-hook hook #'cmdr-frame-record-home-frame))
@@ -88,32 +88,32 @@
                     message-cite-style-gmail)))
 
 (with-eval-after-load 'mu4e-compose
-  (keymap-set mu4e-compose-minor-mode-map "R" #'compose-reply-wide-or-not-please-ask)
+  (keymap-set mu4e-compose-minor-mode-map "R" #'mailx-compose-reply)
   (keymap-set mu4e-compose-minor-mode-map "r" #'mu4e-headers-mark-for-read)
   (keymap-set mu4e-compose-minor-mode-map "<remap> <mu4e-context-switch>"
               #'mu4e-compose-context-switch))
 
 (with-eval-after-load 'mu4e-headers
-  (add-to-list 'mu4e-headers-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t)
-  (keymap-set mu4e-headers-mode-map "C-r" #'compose-reply-wide-or-not-please-ask)
+  (add-to-list 'mu4e-headers-actions '("generate refile rule" . mailx-generate-refile-rule) t)
+  (keymap-set mu4e-headers-mode-map "C-r" #'mailx-compose-reply)
   (keymap-set mu4e-headers-mode-map "o" #'mu4e-headers-mark-for-unread)
   (keymap-set mu4e-headers-mode-map "u" #'mu4e-headers-mark-for-unread)
   (keymap-set mu4e-headers-mode-map ";" #'mu4e-mark-resolve-deferred-marks))
 
 (with-eval-after-load 'mu4e-view
-  (add-to-list 'mu4e-view-actions '("unsubscribe" . tychoish-mail-unsubscribe) t)
-  (add-to-list 'mu4e-view-actions '("generate refile rule" . tychoish-mail-generate-refile-rule) t))
+  (add-to-list 'mu4e-view-actions '("unsubscribe" . mailx-unsubscribe) t)
+  (add-to-list 'mu4e-view-actions '("generate refile rule" . mailx-generate-refile-rule) t))
 
-(advice-add 'basic-save-buffer :before #'ad:tychoish-mail-guard-save)
+(advice-add 'basic-save-buffer :before #'ad:mailx-guard-save)
 
-(advice-add 'mu4e--draft :around #'ad:tychoish-mail-draft)
-(advice-add 'mu4e--draft :before #'ad:tychoish-mail-start-for-draft '((depth . -50)))
+(advice-add 'mu4e--draft :around #'ad:mailx-draft)
+(advice-add 'mu4e--draft :before #'ad:mailx-start-for-draft '((depth . -50)))
 
 (add-hook 'mu4e-compose-mode-hook 'turn-off-hard-wrap)
 (add-hook 'mu4e-compose-mode-hook 'whitespace-cleanup)
-(add-hook 'mu4e-compose-mode-hook 'tychoish-mail-set-up-message-mode-buffer)
+(add-hook 'mu4e-compose-mode-hook 'mailx-set-up-message-mode-buffer)
 
-(defconst tychoish-mail--refile-matchable-fields
+(defconst mailx--refile-matchable-fields
   '((:from . address)
     (:to . address)
     (:cc . address)
@@ -122,8 +122,8 @@
     (:list . string))
   "Alist of mu4e message fields available for refile rule generation.")
 
-(defvar tychoish-mail--refile-rules nil
-  "Functions of one argument MSG, tried in order by `tychoish-mail-refile-folder'.")
+(defvar mailx--refile-rules nil
+  "Functions of one argument MSG, tried in order by `mailx-refile-folder'.")
 
 (setq mu4e-bookmarks
       '((:name "primary queues to file"
@@ -161,7 +161,7 @@
   (setq mu4e--header-separator
         (propertize mail-header-separator 'read-only t 'intangible t)))
 
-(setq mu4e-refile-folder #'tychoish-mail-refile-folder)
+(setq mu4e-refile-folder #'mailx-refile-folder)
 (setq mu4e-compose-context-policy 'ask)
 
 (setq mu4e-compose-complete-only-after "2015-01-01")
@@ -176,7 +176,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defun tychoish-mail-set-up-message-mode-buffer ()
+(defun mailx-set-up-message-mode-buffer ()
   "Configure local settings for mu4e composition."
   (setq-local use-hard-newlines t)
   (setq-local make-backup-files nil)
@@ -185,22 +185,22 @@
             message-directory message-auto-save-directory
             message-signature-directory message-signature-file message-signature
             mail-host-address message-sendmail-extra-arguments mu4e-get-mail-command))
-  (add-hook 'message-send-hook #'tychoish-mail--guard-draft-database nil t)
-  (add-hook 'message-send-hook #'tychoish-mail--guard-draft-identity nil t))
+  (add-hook 'message-send-hook #'mailx--guard-draft-database nil t)
+  (add-hook 'message-send-hook #'mailx--guard-draft-identity nil t))
 
 ;;;###autoload
-(defun tychoish-mail-add-refile-rule (rule)
+(defun mailx-add-refile-rule (rule)
   "Register RULE, a function of one argument MSG, as a refile rule.
 RULE should return a maildir folder string, or nil to fall through to the
 next registered rule."
-  (add-to-list 'tychoish-mail--refile-rules rule t))
+  (add-to-list 'mailx--refile-rules rule t))
 
-(defun tychoish-mail-refile-folder (msg)
+(defun mailx-refile-folder (msg)
   "Return refile folder for MSG by trying each registered rule."
-  (or (seq-some (lambda (rule) (funcall rule msg)) tychoish-mail--refile-rules)
+  (or (seq-some (lambda (rule) (funcall rule msg)) mailx--refile-rules)
       "/archive"))
 
-(defun tychoish-mail--field-display-value (msg field)
+(defun mailx--field-display-value (msg field)
   "Return a human-readable string for FIELD value in MSG."
   (let ((val (mu4e-message-field msg field)))
     (cond
@@ -214,8 +214,8 @@ next registered rule."
      ((stringp val) val)
      (t (format "%S" val)))))
 
-(defun tychoish-mail-generate-refile-rule (&optional msg)
-  "Build a `tychoish-mail-add-refile-rule' form from MSG or the current message.
+(defun mailx-generate-refile-rule (&optional msg)
+  "Build a `mailx-add-refile-rule' form from MSG or the current message.
 Prompts for a field (annotated with the message's current value), a regex
 pattern, and a destination folder.  Puts the resulting form on the kill ring."
   (interactive)
@@ -224,15 +224,15 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
          (candidates
           (seq-map (lambda (entry)
                      (cons (symbol-name (car entry))
-                           (tychoish-mail--field-display-value msg (car entry))))
-                   tychoish-mail--refile-matchable-fields))
+                           (mailx--field-display-value msg (car entry))))
+                   mailx--refile-matchable-fields))
          (field-name (annotated-completing-read candidates
 						:prompt "Match field: " :require-match t))
          (field (intern field-name))
-         (field-type (map-elt tychoish-mail--refile-matchable-fields field))
+         (field-type (map-elt mailx--refile-matchable-fields field))
          (regex (read-string
                  (format "Regex (current: %s): "
-                         (tychoish-mail--field-display-value msg field))))
+                         (mailx--field-display-value msg field))))
          (folder (read-string "Refile to folder: " "/"))
          (body (pcase field-type
                  ('address
@@ -245,15 +245,15 @@ pattern, and a destination folder.  Puts the resulting form on the kill ring."
                   `(when (string-match-p ,regex
                                          (or (mu4e-message-field msg ,field) ""))
                      ,folder)))))
-    (kill-new (pp-to-string `(tychoish-mail-add-refile-rule (lambda (msg) ,body))))
+    (kill-new (pp-to-string `(mailx-add-refile-rule (lambda (msg) ,body))))
     (message "Refile rule copied to kill ring")))
 
-(defun compose-reply-wide-or-not-please-ask ()
+(defun mailx-compose-reply ()
   "Ask whether to reply-to-all or not."
   (interactive)
   (mu4e-compose-reply (yes-or-no-p "Reply to all?")))
 
-(defun tychoish-mail-unsubscribe (msg)
+(defun mailx-unsubscribe (msg)
   "Unsubscribe from a mailing list using the List-Unsubscribe header in MSG.
 For mailto: URIs, opens a compose buffer pre-filled with the unsubscribe
 address, subject, and body.  For https: URIs, opens the URL in a browser."
@@ -282,7 +282,7 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
         (user-error "Unrecognized URI scheme in List-Unsubscribe: %s" uri))))))
 
 ;; display-buffer: mu4e buffers prefer the frame they were first shown on
-(defun tychoish--mu4e-buffer-p (buf _action)
+(defun mailx--buffer-p (buf _action)
   "Return non-nil if BUF uses a mu4e major mode."
   (with-current-buffer buf
     (derived-mode-p 'mu4e-main-mode 'mu4e-headers-mode
@@ -292,29 +292,29 @@ address, subject, and body.  For https: URIs, opens the URL in a browser."
 
 ;; Contexts and database switching
 
-(defun tychoish-mail-select-account ()
+(defun mailx-select-account ()
   "Select a mu4e context, updating the current draft when appropriate."
   (interactive)
   (if (derived-mode-p 'mu4e-compose-mode)
       (call-interactively #'mu4e-compose-context-switch)
     (call-interactively #'mu4e-context-switch)))
 
-(defun tychoish-mail--guard-draft-database (&rest _args)
+(defun mailx--guard-draft-database (&rest _args)
   "Refuse draft operations outside the active mu database's mail root."
-  (let* ((home (tychoish-mail-server-current-home))
+  (let* ((home (mailx-server-current-home))
          (root (and home (file-name-directory (directory-file-name home)))))
     (unless (and root buffer-file-name (mu4e-running-p)
                  (file-in-directory-p buffer-file-name root))
       (user-error "Switch to this draft's database before saving or sending"))))
 
-(defun ad:tychoish-mail-guard-save (&rest _args)
+(defun ad:mailx-guard-save (&rest _args)
   "Guard saving mu4e drafts.
 `before-save-hook' errors are demoted by `basic-save-buffer', so this
 must be advice to be able to abort the save."
   (when (derived-mode-p 'mu4e-compose-mode)
-    (tychoish-mail--guard-draft-database)))
+    (mailx--guard-draft-database)))
 
-(defun tychoish-mail--guard-draft-identity (&rest _args)
+(defun mailx--guard-draft-identity (&rest _args)
   "Refuse sending when the From header disagrees with the selected identity."
   (require 'mail-extr)
   (let* ((from (message-field-value "From"))
@@ -323,15 +323,15 @@ must be advice to be able to abort the save."
                  (equal (downcase address) (downcase user-mail-address)))
       (user-error "Select the context matching this draft's From before sending"))))
 
-(defun ad:tychoish-mail-start-for-draft (&rest _args)
+(defun ad:mailx-start-for-draft (&rest _args)
   "Start the default database and await its readiness before composing."
-  (when tychoish-mail--transitioning
+  (when mailx--transitioning
     (user-error "Wait for the mail database switch before composing"))
-  (tychoish-mail-server-ensure-ready))
+  (mailx-server-ensure-ready))
 
-(defun ad:tychoish-mail-draft (original &rest args)
+(defun ad:mailx-draft (original &rest args)
   "Call ORIGINAL with ARGS, isolating the draft's selected identity."
-  (let ((tychoish-mail--composing t)
+  (let ((mailx--composing t)
         (mu4e--context-current mu4e--context-current)
         (user-mail-address user-mail-address)
         (user-full-name user-full-name)
@@ -342,16 +342,16 @@ must be advice to be able to abort the save."
         (message-sendmail-extra-arguments message-sendmail-extra-arguments))
     (apply original args)))
 
-(cl-defun tychoish-mail-make-context (&key name full-name address maildir command)
+(cl-defun mailx-make-context (&key name full-name address maildir command)
   "Build a mu4e context NAME for ADDRESS and FULL-NAME.
 MAILDIR is the account's mail root and COMMAND fetches its mail."
   (let ((maildir (expand-file-name maildir)))
     (make-mu4e-context
      :name name
      :enter-func (lambda ()
-                   (unless (or tychoish-mail--composing
+                   (unless (or mailx--composing
                                (derived-mode-p 'mu4e-compose-mode))
-                     (tychoish-mail-server-switch-database
+                     (mailx-server-switch-database
                       (file-name-concat maildir ".mu"))
                      (setq message-directory maildir)
                      (setq message-auto-save-directory (file-name-concat maildir "drafts"))
@@ -372,5 +372,5 @@ MAILDIR is the account's mail root and COMMAND fetches its mail."
              (mail-host-address . ,(replace-regexp-in-string ".*@" "" address))
              (message-sendmail-extra-arguments . ,(list "-a" address))))))
 
-(provide 'setup-mail)
-;;; setup-mail.el ends here
+(provide 'mailx)
+;;; mailx.el ends here

@@ -1,4 +1,4 @@
-;;; tychoish-mail-server.el --- Mu server lifecycle for mail contexts -*- lexical-binding: t; -*-
+;;; mailx-server.el --- Mu server lifecycle for mail contexts -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Start, stop, and switch mu databases while tracking server readiness.
@@ -20,20 +20,20 @@
 (defvar mu4e--server-process)
 (defvar mu4e-pong-func)
 
-(defvar tychoish-mail--transitioning nil
+(defvar mailx--transitioning nil
   "Non-nil while starting a replacement mu server.")
 
-(defvar tychoish-mail--stopping-process nil
+(defvar mailx--stopping-process nil
   "Mu server process still exiting after mu4e detached from it.")
 
-(advice-add 'mu4e--server-start :before #'tychoish-mail--await-stopped-server)
-(advice-add 'mu4e--query-items-refresh :before-while #'tychoish-mail--server-running-p)
+(advice-add 'mu4e--server-start :before #'mailx--await-stopped-server)
+(advice-add 'mu4e--server-queries :before-while #'mailx--server-running-p)
 
-(defun tychoish-mail--server-running-p (&rest _args)
+(defun mailx--server-running-p (&rest _args)
   "Return non-nil when mu4e's server is running."
   (and (fboundp 'mu4e-running-p) (mu4e-running-p)))
 
-(defun tychoish-mail-server-current-home ()
+(defun mailx-server-current-home ()
   "Return the database home of the running server, or the configured home."
   (if (and (mu4e-running-p) (processp mu4e--server-process))
       (when-let* ((arg (seq-find (lambda (item) (string-prefix-p "--muhome=" item))
@@ -41,7 +41,7 @@
         (substring arg (length "--muhome=")))
     mu4e-mu-home))
 
-(defun tychoish-mail--await-server-ready ()
+(defun mailx--await-server-ready ()
   "Wait until the running mu server has completed its startup handler."
   (unless mu4e--started
     (let* ((ready nil)
@@ -65,41 +65,41 @@
       (unless (and ready (mu4e-running-p))
         (error "Mu server did not become ready for %s" mu4e-mu-home)))))
 
-(defun tychoish-mail-server-ensure-ready ()
+(defun mailx-server-ensure-ready ()
   "Start the configured mu server if necessary and wait until it is ready."
   (unless (mu4e-running-p)
     (mu4e 'background))
-  (tychoish-mail--await-server-ready))
+  (mailx--await-server-ready))
 
-(defun tychoish-mail--await-stopped-server (&rest _args)
+(defun mailx--await-stopped-server (&rest _args)
   "Wait for a detached mu server to exit before starting another."
-  (when tychoish-mail--stopping-process
+  (when mailx--stopping-process
     (let ((deadline (+ (float-time) 5)))
       (seq-some (lambda (_attempt)
-                  (or (not (process-live-p tychoish-mail--stopping-process))
+                  (or (not (process-live-p mailx--stopping-process))
                       (>= (float-time) deadline)
-                      (progn (accept-process-output tychoish-mail--stopping-process 0.1)
+                      (progn (accept-process-output mailx--stopping-process 0.1)
                              nil)))
                 (number-sequence 1 50000)))
-    (when (process-live-p tychoish-mail--stopping-process)
+    (when (process-live-p mailx--stopping-process)
       (error "Previous mu server did not exit; try again after it stops"))
-    (setq tychoish-mail--stopping-process nil)))
+    (setq mailx--stopping-process nil)))
 
-(defun tychoish-mail--stop-server ()
+(defun mailx--stop-server ()
   "Stop mu4e and wait until its detached process exits."
   (let ((process mu4e--server-process)
         (mu4e-confirm-quit nil))
-    (setq tychoish-mail--stopping-process process)
+    (setq mailx--stopping-process process)
     (unwind-protect
         (mu4e-quit)
       ;; A process still attached to mu4e was not detached by the quit.
       (when (and process (eq mu4e--server-process process))
-        (setq tychoish-mail--stopping-process nil)))
+        (setq mailx--stopping-process nil)))
     (when (mu4e-running-p)
       (error "Failed to stop the previous mu server"))
-    (tychoish-mail--await-stopped-server)))
+    (mailx--await-stopped-server)))
 
-(defun tychoish-mail-server--ensure-no-drafts ()
+(defun mailx-server--ensure-no-drafts ()
   "Refuse a database change while any mu4e draft remains open."
   (when-let* ((draft (seq-find (lambda (buffer)
                                 (with-current-buffer buffer
@@ -108,24 +108,24 @@
     (user-error "Save and close mail draft %s before switching databases"
                 (buffer-name draft))))
 
-(defun tychoish-mail-server-switch-database (home)
+(defun mailx-server-switch-database (home)
   "Select database HOME, stopping the current mu server when necessary.
 The server remains stopped until mu4e is next started."
-  (tychoish-mail--await-stopped-server)
-  (let* ((tychoish-mail--transitioning t)
+  (mailx--await-stopped-server)
+  (let* ((mailx--transitioning t)
          (running (and (featurep 'mu4e) (mu4e-running-p)))
-         (old-home (tychoish-mail-server-current-home)))
+         (old-home (mailx-server-current-home)))
     (unless (equal old-home home)
-      (tychoish-mail-server--ensure-no-drafts)
+      (mailx-server--ensure-no-drafts)
       (when (or mu4e--server-indexing
                 (and (buffer-live-p mu4e--update-buffer)
                      (process-live-p (get-buffer-process mu4e--update-buffer))))
         (user-error "Cannot switch mail databases while an update is running"))
       (when running
-        (tychoish-mail--stop-server)
-        (tychoish-mail-server--ensure-no-drafts))
+        (mailx--stop-server)
+        (mailx-server--ensure-no-drafts))
       (setq mu4e--started nil))
     (setq mu4e-mu-home home)))
 
-(provide 'tychoish-mail-server)
-;;; tychoish-mail-server.el ends here
+(provide 'mailx-server)
+;;; mailx-server.el ends here
