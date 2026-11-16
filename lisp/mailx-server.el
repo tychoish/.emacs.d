@@ -28,6 +28,14 @@
 
 (advice-add 'mu4e--server-start :before #'mailx--await-stopped-server)
 (advice-add 'mu4e--server-queries :before-while #'mailx--server-running-p)
+(advice-add 'mu4e-update-index :before #'mailx--start-for-index)
+
+(defun mailx--start-for-index (&rest _args)
+  "Initialize mu4e before an index update starts a stopped server."
+  (when mailx--transitioning
+    (user-error "Wait for the mail database switch before indexing"))
+  (unless (mu4e-running-p)
+    (mu4e 'background)))
 
 (defun mailx--server-running-p (&rest _args)
   "Return non-nil when mu4e's server is running."

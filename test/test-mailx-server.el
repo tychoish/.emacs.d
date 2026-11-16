@@ -154,6 +154,23 @@
       (mu4e--query-items-refresh t)
       (should-not mu4e--query-items-baseline))))
 
+(ert-deftest mailx-server/index-initializes-only-a-stopped-server ()
+  (should (advice-member-p #'mailx--start-for-index 'mu4e-update-index))
+  (let ((running nil)
+        starts)
+    (cl-letf (((symbol-function 'mu4e-running-p) (lambda () running))
+              ((symbol-function 'mu4e) (lambda (background) (push background starts))))
+      (mailx--start-for-index)
+      (should (equal starts '(background)))
+      ;; An existing startup may have a foreground callback waiting for pong.
+      (setq running t)
+      (mailx--start-for-index)
+      (should (equal starts '(background))))))
+
+(ert-deftest mailx-server/index-refuses-a-transition ()
+  (let ((mailx--transitioning t))
+    (should-error (mailx--start-for-index) :type 'user-error)))
+
 (ert-deftest mailx-server/switch-waits-for-old-process-exit ()
   (let ((mailx--stopping-process nil)
         (mu4e-mu-home "/tmp/mail-a/.mu")

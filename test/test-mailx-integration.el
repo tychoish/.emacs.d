@@ -63,7 +63,10 @@
                        :maildir maildir :command "fetch-alpha")
                       (mailx-make-context
                        :name "beta" :full-name "Beta" :address "beta@example.org"
-                       :maildir other-maildir :command "fetch-beta")))
+                       :maildir other-maildir :command "fetch-beta")
+                      (mailx-make-context
+                       :name "alpha-two" :full-name "Alpha Two" :address "alpha2@example.org"
+                       :maildir maildir :command "fetch-alpha")))
           (cl-letf (((symbol-function 'cmdr-frame-record-home-frame) #'ignore)
                     ((symbol-function 'turn-off-hard-wrap) #'ignore)
                     ((symbol-function 'mu4e-message-at-point)
@@ -93,6 +96,10 @@
               (should (equal user-mail-address "alpha@example.org")))
             (with-current-buffer first-draft
               (should (equal user-mail-address "beta@example.org")))
+            (with-temp-buffer
+              (mu4e-context-switch nil "alpha-two")
+              (should (equal mu4e-mu-home home))
+              (mu4e-context-switch nil "alpha"))
             (with-temp-buffer (setq draft (mu4e-compose-edit)))
             (with-current-buffer draft
               (mu4e-compose-context-switch nil "beta")
@@ -118,14 +125,31 @@
               (should (equal mu4e-mu-home other-home))
               (should (equal message-directory other-maildir))
               (should (equal mu4e-get-mail-command "fetch-beta")))
+            ;; Indexing is a public entry point even when mu4e was previously
+            ;; initialized and the database switch left its server stopped.
+            (mu4e-update-index)
             (mailx-server-ensure-ready)
             (should (mu4e-running-p))
+            (should mu4e--started)
+            (let ((deadline (+ (float-time) 10)))
+              (while (and mu4e--server-indexing (< (float-time) deadline))
+                (accept-process-output mu4e--server-process 0.1)))
+            (should-not mu4e--server-indexing)
+            (with-temp-buffer
+              (setq first-draft (mu4e-compose-new "after@example.org" "After index")))
+            (with-current-buffer first-draft
+              (should (equal user-mail-address "beta@example.org"))
+              (set-buffer-modified-p nil))
+            (kill-buffer first-draft)
             (with-temp-buffer
               (setq buffer-file-name file)
               (should-error (mailx--guard-draft-database) :type 'user-error))
             (with-temp-buffer (mu4e-context-switch nil "alpha"))
             (should-not (mu4e-running-p))
-            (should (equal (mailx-server-current-home) home))))
+            (should (equal (mailx-server-current-home) home))
+            (mu4e)
+            (mailx-server-ensure-ready)
+            (should (get-buffer mu4e-main-buffer-name))))
       (dolist (buffer (list draft first-draft second-draft))
         (when (buffer-live-p buffer)
           (with-current-buffer buffer (set-buffer-modified-p nil))
