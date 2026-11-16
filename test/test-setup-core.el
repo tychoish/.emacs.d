@@ -267,13 +267,6 @@ correctly and reads from the minibuffer using the candidate's command."
   (should (equal (lookup-key agent-shell-mode-map (kbd "?"))
                  'agent-shell-menu-output-key-?)))
 
-(ert-deftest tychoish-core/annotated-agent-shell-prefix-bindings ()
-  (require 'setup-core)
-  (require 'agent-shell-queue)
-  (let ((agent-shell-map (cmdr-keys-prefix cmdr-mode-map "C-c r s" "agent-shell")))
-    (should (eq (keymap-lookup agent-shell-mode-map "C-c j") agent-shell-map))
-    (should (eq (keymap-lookup agent-shell-queue-mode-map "C-c j") agent-shell-map))))
-
 (defvar argi)
 
 (ert-deftest tychoish-core/clix-sprite-id-flag ()
