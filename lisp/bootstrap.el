@@ -43,6 +43,8 @@
 (declare-function package-activate-all "package")
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
+(declare-function magit-insert-worktrees "magit-worktree")
+(declare-function magit-insert-modules "magit-submodule")
 (declare-function sprite-state-path "sprite")
 (declare-function sprite-state-configure "sprite-state")
 (declare-function sprite-instance-name "sprite")
@@ -59,7 +61,6 @@
 (defvar sprite-state-auto-save-enabled)
 (defvar sprite-state-desktop-enabled)
 (defvar sprite-state-desktop-deferred)
-(defvar sprite-state-savehist-enabled)
 (defvar sprite-state-recentf-enabled)
 (defvar sprite-state-mappings)
 (defvar sprite-startup-operations)
@@ -156,7 +157,6 @@
 (setq sprite-state-auto-save-enabled t)
 (setq sprite-state-desktop-enabled t)
 (setq sprite-state-desktop-deferred t)
-(setq sprite-state-savehist-enabled t)
 (setq sprite-state-recentf-enabled t)
 (setq mcpkit-instance-name-function #'sprite-instance-name)
 (setq cmdr-opt-in-specs '(defaults))
@@ -176,7 +176,8 @@
         (agent-shell-queue-state-directory . "agent-shell/")
         (agent-shell-queue-safe-save-directory . "agent-shell/backups/")
         (auto-save-list-file-prefix . "auto-save-list/")
-        (magit-dash-gh-prune-cache-dir . "magit-dash-gh-prune/")
+        (hitl-plan-directory . "hitl/")
+        (magit-dash-prune-cache-dir . "magit-dash-gh-prune/")
         (request-storage-directory . "request/")
         (url-configuration-directory . "url/")
         (denote-sync-cache-directory . "denote-sync/")
@@ -193,9 +194,7 @@
         (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
         (popper-mode-hook . popper-echo-mode)
         (markdown-mode-hook . turn-off-auto-fill)
-        (magit-status-mode-hook . magit-dash-gh-prune-lazy-prefetch)
-        (magit-status-sections-hook . (magit-insert-worktrees
-                                       magit-insert-modules))
+        (magit-status-mode-hook . (bootstrap-magit-status magit-dash-prune-lazy-prefetch))
         (agent-shell-mode-hook . (agent-shell-bold-input-setup
                                   ansi-color-for-comint-mode-on
                                   agent-shell-notifications-mode
@@ -236,88 +235,76 @@
     bootstrap-frame-startup-timing))
 
 (setq sprite-startup-operations
-  '(sprite-mode
+  '(;; State paths, primary keymaps, and completion history come first.
     sprite-state-configure
-    sprite-state-global-mode
-    cmdr-mode
-    cmdr-frame-mode
-    cmdr-spec-discover
-    minaid-mode
-    nerd-icons-completion-mode
     bootstrap-set-up-fringe-mode
-    xterm-mouse-mode
-    grepx-mode
-    magit-dash-global-mode
-    orgx-global-mode
-    eglox-global-mode
-    orgx-capture-setup-standard-templates
+    (:mode cmdr-mode)
+    (:mode cmdr-frame-mode)
     annotated-completing-read-setup-history
-    overmark-global-mode
-    bootstrap-require-treesit-auto
+    (:mode sprite-mode)
+    (:mode sprite-state-global-mode)
+    (:mode minaid-mode)
+    (:mode nerd-icons-completion-mode)
+    (:mode column-number-mode)
+    (:mode delete-selection-mode)
+    (:mode electric-pair-mode)
+    (:mode xterm-mouse-mode)
+    (:mode popper-mode)
+    (:mode winner-mode)
+    (:mode overmark-global-mode)
+
+    ;; Programming and project integrations before restoring buffers.
     bootstrap-treesit-auto
-    global-treesit-auto-mode
-    builder-mode
+    (:mode global-treesit-auto-mode)
+    (:mode eglox-global-mode)
+    (:mode chex-global-mode)
+    (:mode builder-mode)
     bootstrap-require-builder-tasks
-    chex-global-mode
-    sprite-state-start-desktop
-    which-key-mode
-    denote-dash-global-mode
-    denote-rename-buffer-mode
-    denote-tree-mode
-    agent-shell-queue-global-mode
-    column-number-mode
-    delete-selection-mode
-    electric-pair-mode
-    ; pixel-scroll-precision-mode
-    winner-mode
-    ; repeat-mode
-    telegax-global-mode
-    popper-mode
-    consult-notes-denote-mode
-    global-auto-revert-mode
-    mcpkit-agent-shell-mode
-    mcpkit-gptel-mode
+    (:mode grepx-mode)
+    (:mode magit-dash-global-mode)
+
+    ;; Note-taking and agent integrations precede desktop restoration.
+    (:mode orgx-global-mode)
+    (:mode denote-dash-global-mode)
+    (:mode denote-rename-buffer-mode)
+    (:mode denote-tree-mode)
+    (:mode consult-notes-denote-mode)
+    (:mode mcpkit-agent-shell-mode)
+    (:mode mcpkit-gptel-mode)
     mcpkit-init-services
+    (:mode agent-shell-queue-global-mode)
+    (:mode telegax-global-mode)
+    (:mode global-auto-revert-mode)
+    sprite-state-start-desktop
+
+    ;; Refresh discovery after integrations load; defer package maintenance.
     cmdr-spec-discover
-    bootstrap-require-setup-packages
-    bootstrap-package-quickstart
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
-;;;###autoload
-(defun bootstrap-defensive-reload ()
-  "Defensively re-synchronize keymap specs and ensure startup modes are active.
-Audits `sprite-startup-operations' for any inactive minor modes and re-asserts them,
-then re-discovers specs into `cmdr-mode-map' via `cmdr-spec-discover'.
-Returns a list of re-enabled modes, if any."
-  (interactive)
-  (let ((restored nil))
-    (dolist (op sprite-startup-operations)
-      (when (and (fboundp op)
-                 (boundp op)
-                 (null (symbol-value op)))
-        (funcall op 1)
-        (push op restored)))
-    (when (fboundp 'cmdr-spec-discover)
-      (cmdr-spec-discover))
-    (when restored
-      (message "[bootstrap] Re-enabled inactive modes: %s"
-               (mapconcat #'symbol-name (reverse restored) ", ")))
-    (nreverse restored)))
+(defvar bootstrap-package-maintenance nil
+  "Operations run after startup for package maintenance.")
 
-(defvar bootstrap-package-maintenance
-  '(bootstrap-ensure-packages-installed
-    bootstrap-package-quickstart
-    bootstrap-defensive-reload
-    builder-emacs-conf-native-compile-all)
-  "Operations to run after startup to maintain")
+(setq bootstrap-package-maintenance
+      '(bootstrap-require-setup-packages
+        bootstrap-ensure-packages-installed
+        bootstrap-package-quickstart
+        sprite-state-reload
+        builder-emacs-conf-native-compile-all))
+
+(add-hook 'sprite-state-reload-hook #'cmdr-spec-discover)
+
+(defun bootstrap-magit-status ()
+  "Add worktree and submodule sections after Magit initializes its defaults."
+  (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t)
+  (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
 
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
-(defun bootstrap-require-treesit-auto () (require 'treesit-auto))
 (defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-require-tracking () (require 'tracking))
+(defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-cmdr-spec-discover (&rest _) (cmdr-spec-discover))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
@@ -329,7 +316,6 @@ Returns a list of re-enabled modes, if any."
 (defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
-(defun bootstrap-treesit-auto () (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-agent-shell-state-path (path) (file-name-concat (sprite-state-path "agent-shell") path))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
 

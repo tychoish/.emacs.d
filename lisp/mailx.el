@@ -59,8 +59,7 @@
 (with-eval-after-load 'mu4e
   (add-to-list 'mu4e-headers-actions '("generate refile rule" . mailx-generate-refile-rule) t)
   (add-to-list 'mu4e-view-actions '("unsubscribe" . mailx-unsubscribe) t)
-  (add-to-list 'mu4e-view-actions '("generate refile rule" . mailx-generate-refile-rule) t)
-  (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)))
+  (add-to-list 'mu4e-view-actions '("generate refile rule" . mailx-generate-refile-rule) t))
 
 (with-eval-after-load 'message
   (add-to-list 'mm-discouraged-alternatives "text/richtext")
@@ -129,6 +128,9 @@
 (setq mail-specify-envelope-from t)
 (setq mail-user-agent 'mu4e-user-agent)
 (setq mail-header-separator "--------------------------")
+
+(with-eval-after-load 'mu4e-draft
+  (setq mu4e--header-separator (propertize mail-header-separator 'read-only t 'intangible t)))
 
 (setq mu4e-refile-folder #'mailx-refile-folder)
 (setq mu4e-compose-context-policy 'ask)

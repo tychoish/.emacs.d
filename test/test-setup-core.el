@@ -221,7 +221,7 @@ correctly and reads from the minibuffer using the candidate's command."
 (ert-deftest tychoish-core/agent-shell-mcpkit-bridge-startup ()
   "The startup batch enables the MCPKit bridge."
   (require 'bootstrap)
-  (should (memq 'mcpkit-agent-shell-mode sprite-startup-operations)))
+  (should (member '(:mode mcpkit-agent-shell-mode) sprite-startup-operations)))
 
 (ert-deftest tychoish-core/gptel-mcp-session-setup ()
   "Test that `gptel-mcp-setup-session` configures buffer-local MCPKit tools."
@@ -315,15 +315,6 @@ correctly and reads from the minibuffer using the candidate's command."
                                                      '("other") "other"))))))))))
    '(":from" ":subject")))
 
-(ert-deftest tychoish-core/desktop-exclusions-include-remote-and-local-paths ()
-  "Desktop exclusions independently match remote and dependency paths."
-  (require 'desktop)
-  (should (string-match-p desktop-files-not-to-save "/ssh:example:/tmp/file"))
-  (should (string-match-p desktop-files-not-to-save "/usr/lib/go/src/file.go"))
-  (should (string-match-p desktop-files-not-to-save "/home/user/go/pkg/mod/pkg/file.go"))
-  (should-not (string-match-p desktop-files-not-to-save "/home/user/src/file.go"))
-  (should (string-match-p desktop-buffers-not-to-save " *temporary*")))
-
 (ert-deftest tychoish-core/mail-unsubscribe-decodes-mailto ()
   "The standard mailto handler decodes address, subject and body."
   (require 'mailx)
@@ -361,6 +352,7 @@ correctly and reads from the minibuffer using the candidate's command."
   (require 'mailx)
   (skip-unless (or (featurep 'mu4e-draft) (locate-library "mu4e-draft")))
   (require 'mu4e-draft)
+  (load (locate-library "mu4e-draft") nil t)
   (let ((expected "--------------------------"))
     (should (equal (substring-no-properties mail-header-separator) expected))
     (should (equal (substring-no-properties mu4e--header-separator) expected))

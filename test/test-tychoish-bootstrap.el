@@ -20,6 +20,34 @@
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
+(defun bootstrap-test/startup-functions ()
+  "Return configured startup functions with mode entries unwrapped."
+  (seq-map (lambda (entry)
+             (if (and (consp entry) (eq (car entry) :mode))
+                 (cadr entry)
+               entry))
+           sprite-startup-operations))
+
+
+(ert-deftest bootstrap/magit-dash-prune-configuration ()
+  "Configure the current Magit Dash prefetch hook and cache variable."
+  (should (memq 'magit-dash-prune-lazy-prefetch
+                (alist-get 'magit-status-mode-hook sprite-state-mode-hooks)))
+  (should (fboundp 'magit-dash-prune-lazy-prefetch))
+  (should (equal (alist-get 'magit-dash-prune-cache-dir sprite-state-mappings)
+                 "magit-dash-gh-prune/")))
+
+(ert-deftest bootstrap/magit-status-sections-preserve-defaults ()
+  "Custom status sections must not prevent Magit's defaults from loading."
+  (require 'magit-status)
+  (bootstrap-magit-status)
+  (should-not (assq 'magit-status-sections-hook sprite-state-mode-hooks))
+  (seq-do (lambda (section)
+            (should (memq section magit-status-sections-hook)))
+          '(magit-insert-status-headers magit-insert-unstaged-changes
+            magit-insert-staged-changes magit-insert-worktrees
+            magit-insert-modules)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sprite-resolve-instance-id
 
@@ -635,20 +663,61 @@
 
 (ert-deftest bootstrap/programming-startup-configures-state-first ()
   "Project consumers see instance paths before Eglox starts."
-  (should (memq 'sprite-state-configure sprite-startup-operations))
-  (should (memq 'eglox-global-mode sprite-startup-operations))
-  (should (< (seq-position sprite-startup-operations 'sprite-state-configure)
-             (seq-position sprite-startup-operations 'eglox-global-mode))))
+  (should (memq 'sprite-state-configure (bootstrap-test/startup-functions)))
+  (should (memq 'eglox-global-mode (bootstrap-test/startup-functions)))
+  (should (< (seq-position (bootstrap-test/startup-functions) 'sprite-state-configure)
+             (seq-position (bootstrap-test/startup-functions) 'eglox-global-mode))))
 
 (ert-deftest bootstrap/sprite-state-startup-order ()
   "State mode starts after configuration and defers desktop restoration."
-  (should (memq 'sprite-state-global-mode sprite-startup-operations))
-  (should (memq 'sprite-state-start-desktop sprite-startup-operations))
-  (should (< (seq-position sprite-startup-operations 'sprite-state-global-mode)
-             (seq-position sprite-startup-operations 'sprite-state-start-desktop)))
-  (should sprite-state-savehist-enabled)
+  (should (memq 'sprite-state-global-mode (bootstrap-test/startup-functions)))
+  (should (memq 'sprite-state-start-desktop (bootstrap-test/startup-functions)))
+  (should (< (seq-position (bootstrap-test/startup-functions) 'sprite-state-global-mode)
+             (seq-position (bootstrap-test/startup-functions) 'sprite-state-start-desktop)))
   (should sprite-state-recentf-enabled)
   (should sprite-state-desktop-deferred))
+
+(ert-deftest bootstrap/startup-priorities-and-dependencies ()
+  "Initialize early interaction and register dependencies before consumers."
+  (let ((ops (bootstrap-test/startup-functions)))
+    (seq-do (lambda (pair)
+              (let ((before (seq-position ops (car pair)))
+                    (after (seq-position ops (cdr pair))))
+                (should before)
+                (should after)
+                (should (< before after))))
+            '((sprite-state-configure . annotated-completing-read-setup-history)
+              (annotated-completing-read-setup-history . sprite-state-global-mode)
+              (cmdr-mode . sprite-mode)
+              (sprite-mode . sprite-state-global-mode)
+              (minaid-mode . nerd-icons-completion-mode)
+              (minaid-mode . bootstrap-treesit-auto)
+              (bootstrap-treesit-auto . global-treesit-auto-mode)
+              (orgx-global-mode . denote-dash-global-mode)
+              (builder-mode . bootstrap-require-builder-tasks)
+              (mcpkit-agent-shell-mode . mcpkit-init-services)
+              (mcpkit-gptel-mode . mcpkit-init-services)
+              (mcpkit-agent-shell-mode . agent-shell-queue-global-mode)
+              (orgx-global-mode . sprite-state-start-desktop)
+              (chex-global-mode . sprite-state-start-desktop)
+              (eglox-global-mode . sprite-state-start-desktop)))
+    (should-not (memq 'bootstrap-package-quickstart ops))
+    (should-not (memq 'bootstrap-require-setup-packages ops))
+    (should (< (seq-position bootstrap-package-maintenance 'bootstrap-require-setup-packages)
+               (seq-position bootstrap-package-maintenance 'bootstrap-ensure-packages-installed)))
+    (should (memq 'bootstrap-package-quickstart bootstrap-package-maintenance))))
+
+(ert-deftest bootstrap/treesit-auto-loads-before-configuration ()
+  "Load treesit-auto before editing its language list."
+  (let ((treesit-auto-langs '(go yaml rust))
+        (loaded nil))
+    (cl-letf (((symbol-function 'require)
+               (lambda (feature &rest _)
+                 (when (eq feature 'treesit-auto)
+                   (setq loaded t)))))
+      (bootstrap-treesit-auto)
+      (should loaded)
+      (should (equal treesit-auto-langs '(go rust))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; bootstrap-set-up-ssh-agent
@@ -692,7 +761,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (ert-deftest bootstrap/show-whitespace-mode-starts-early ()
   "The global mode is included in the early startup operations."
-  (should (memq 'overmark-global-mode sprite-startup-operations)))
+  (should (memq 'overmark-global-mode (bootstrap-test/startup-functions))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-buffers-visiting-missing-files
@@ -868,9 +937,16 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sprite-run-startup-operations (generator iterator)
 
+(ert-deftest bootstrap/cmdr-starts-before-sprite-mode ()
+  "Initialize the parent keymap before Sprite installs its prefix."
+  (should (memq 'cmdr-mode (bootstrap-test/startup-functions)))
+  (should (memq 'sprite-mode (bootstrap-test/startup-functions)))
+  (should (< (seq-position (bootstrap-test/startup-functions) 'cmdr-mode)
+             (seq-position (bootstrap-test/startup-functions) 'sprite-mode))))
+
 (ert-deftest bootstrap/chex-mode-available-to-startup-hook ()
   "The late startup hook can invoke Chex before it has been loaded."
-  (should (memq 'chex-global-mode sprite-startup-operations))
+  (should (memq 'chex-global-mode (bootstrap-test/startup-functions)))
   (should (fboundp 'chex-global-mode)))
 
 (ert-deftest bootstrap/run-enable-modes-hook-noninteractive ()
@@ -933,7 +1009,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   "The MCP initializer is a startup operation and receives no mode argument."
   (let ((called nil)
         (noninteractive t))
-    (should (memq 'mcpkit-init-services sprite-startup-operations))
+    (should (memq 'mcpkit-init-services (bootstrap-test/startup-functions)))
     (cl-letf (((symbol-function 'mcpkit-init-services)
                (lambda () (setq called t))))
       (sprite-run-startup-operations '(mcpkit-init-services))
@@ -1151,7 +1227,6 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
          (eglox-project-cache-directory cache-dir)
          (eglox-lsp-enabled nil)
          (sprite-state-desktop-enabled nil)
-         (sprite-state-savehist-enabled nil)
          (sprite-state-recentf-enabled t)
          (sprite-state-locks-enabled nil)
          (sprite-state-auto-save-enabled nil)
@@ -1211,21 +1286,6 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (when was-hud (hud-modeline-mode 1))
       (delete-directory tmp-root t))))
 
-(defvar bootstrap-test-dummy-mode nil)
-
-(ert-deftest bootstrap/defensive-reload-restores-modes-and-discovers-specs ()
-  "bootstrap-defensive-reload audits sprite-startup-operations and discovers cmdr specs."
-  (let ((discovered nil)
-        (dummy-mode-called nil))
-    (cl-letf (((symbol-function 'cmdr-spec-discover) (lambda () (setq discovered t)))
-              ((symbol-function 'bootstrap-test-dummy-mode)
-               (lambda (arg) (when (= arg 1) (setq dummy-mode-called t)))))
-      (let ((sprite-startup-operations '(bootstrap-test-dummy-mode))
-            (bootstrap-test-dummy-mode nil))
-        (let ((restored (bootstrap-defensive-reload)))
-          (should discovered)
-          (should dummy-mode-called)
-          (should (equal restored '(bootstrap-test-dummy-mode))))))))
 
 (provide (quote test-bootstrap))
 ;;; test-bootstrap.el ends here

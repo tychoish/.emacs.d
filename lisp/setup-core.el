@@ -136,19 +136,6 @@
 
 (setq savehist-coding-system 'utf-8-emacs)
 
-(setq desktop-buffers-not-to-save
-      (concat "\\` \\|\\("
-              "^nn\\.a[0-9]+\\|\\.log\\|(ftp)\\|^tags\\|^TAGS\\|"
-              "\\.emacs.*\\|\\.diary\\|\\.newsrc-dribble\\|\\.bbdb"
-              "\\)$"))
-
-(setq desktop-files-not-to-save
-      (concat "\\(\\`/[^/:]*:\\|(ftp)\\'\\)\\|"
-              "^/usr/lib/go/.*\\|"
-              "^/usr/lib/rustlib/.*\\|"
-              "^/home.+go/pkg/mod\\|"
-              "^/home.+\\.cargo"))
-
 (setq popper-reference-buffers
       '(arch-install-mode
         orgx-capture-shell-mode
@@ -176,11 +163,6 @@
 (setq docker-terminal-backend 'eat)
 (setq inferior-lisp-program "sbcl")
 
-(setq which-key-idle-delay 0.25)
-(setq which-key-idle-secondary-delay 0.125)
-(setq which-key-lighter "")
-
-(setq emojify-emoji-styles '(ascii unicode github))
 (setq emojify-display-style 'unicode)
 (setq modus-themes-deuteranopia t)
 (setq modus-themes-common-palette-overrides
@@ -216,25 +198,9 @@
   (add-to-list 'electric-pair-pairs '(?{ . ?}))
   (add-to-list 'electric-pair-pairs '(?\[ . ?\])))
 
-(with-eval-after-load 'savehist
-  (add-to-list 'savehist-additional-variables 'denote--title-history)
-  (add-to-list 'savehist-additional-variables 'denote--keywords-history)
-  (add-to-list 'savehist-additional-variables 'compile-history))
-
-(with-eval-after-load 'desktop
-  (add-to-list 'desktop-modes-not-to-save 'dired-mode)
-  (add-to-list 'desktop-modes-not-to-save 'Info-mode)
-  (add-to-list 'desktop-modes-not-to-save 'org-mode)
-  (add-to-list 'desktop-modes-not-to-save 'eww-mode)
-  (add-to-list 'desktop-modes-not-to-save 'info-lookup-mode)
-  (add-to-list 'desktop-modes-not-to-save 'fundamental-mode))
-
- (with-eval-after-load 'warnings
+(with-eval-after-load 'warnings
   (add-to-list 'warning-suppress-log-types '(frameset))
   (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
-
-(with-eval-after-load 'which-key
-  (add-to-list 'which-key-replacement-alist '((nil . "\\`agent-shell-\\(.*\\)") . (nil . "\\1"))))
 
 (with-eval-after-load 'magit
   (put 'magit-diff-edit-hunk-commit 'disabled nil)
@@ -242,9 +208,6 @@
 
 (with-eval-after-load 'denote
   (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window))))
-
-(with-eval-after-load 'denote-dash
-  (keymap-set denote-dash-org-map "r" #'orgx-denote-migrate-subtree))
 
 (with-eval-after-load 'gptel
   (setq gptel-include-reasoning 'ignore)
