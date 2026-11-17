@@ -17,6 +17,7 @@
 (defvar org-directory)
 (defvar denote-directory)
 (defvar deft-directory)
+(defvar treesit-auto-langs)
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
