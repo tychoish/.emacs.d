@@ -5,8 +5,10 @@
 - Every binding is a single keypress: one character, optionally with one modifier.
 - Use lowercase letters.
 - Use non-alphabetic keys (`/`, `;`, `.`) freely when no mnemonic letter fits.
-- Once a modifier prefix (`C-c`, `C-x`, etc.) reaches a map, every key below that point —
-  in that map and in any nested sub-map — is plain, with no modifier.
+- Modifiers may appear only at the start of a key sequence, before the first plain key:
+  `C-c C-t r` is fine; `C-c t C-r` is not. Once a plain key has been pressed, every key
+  after it — in that map and in any nested sub-map — is plain, with no modifier. A map
+  mounted on a plain-key prefix (e.g. `C-c o`) therefore holds only plain keys.
 - Reserve `M-key` for global, mode-agnostic bindings that no modifier prefix already guards.
 
 ## Multi-command groups
@@ -27,7 +29,7 @@ Bind a group of related commands as a named sub-map:
 
 ## Checklist
 
-- [ ] Every key in the map is a single, unmodified keypress (except the map's own prefix).
+- [ ] No modifier follows a plain key in any sequence (`C-c C-t r` ok, `C-c t C-r` not).
 - [ ] No key is bound twice, as command or prefix.
 - [ ] No capital letters.
 - [ ] Every sub-map prefix has a matching `defvar-keymap`.
