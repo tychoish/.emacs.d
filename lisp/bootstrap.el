@@ -195,7 +195,9 @@
         (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
         (popper-mode-hook . popper-echo-mode)
         (markdown-mode-hook . turn-off-auto-fill)
-        (magit-status-mode-hook . (bootstrap-magit-status magit-dash-prune-lazy-prefetch))
+        (magit-status-mode-hook . (magit-dash-prune-lazy-prefetch
+                                   bootstrap-magit-status-add-modules
+                                   bootstrap-magit-status-add-worktrees))
         (agent-shell-mode-hook . (agent-shell-bold-input-setup
                                   ansi-color-for-comint-mode-on
                                   agent-shell-notifications-mode
@@ -313,11 +315,8 @@
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-agent-shell-state-path (path) (file-name-concat (sprite-state-path "agent-shell") path))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
-
-(defun bootstrap-magit-status ()
-  "Add worktree and submodule sections after Magit initializes its defaults."
-  (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t)
-  (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
+(defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
+(defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
