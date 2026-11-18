@@ -41,6 +41,8 @@
 ;; Forward Declarations
 
 (declare-function package-activate-all "package")
+(declare-function package-installed-p "package")
+(declare-function package-install "package")
 (declare-function sprite-batch-startup "sprite-batch")
 (declare-function sprite-run-batch "sprite-batch")
 (declare-function magit-insert-worktrees "magit-worktree")
@@ -50,7 +52,6 @@
 (declare-function sprite-instance-name "sprite")
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
-(declare-function elpaish-install-package-quickstart-stale-p "elpaish-install")
 (declare-function cmdr-spec-discover "cmdr-spec")
 (declare-function builder-elisp-enable-ert-advice "builder-elisp")
 (declare-function agent-shell-chat--relabel-all "agent-shell-chat-mode")
@@ -111,11 +112,10 @@
       (load package-quickstart-file t t t t))
      (t
       (package-activate-all)
-      (when (elpaish-install-package-quickstart-stale-p)
-        ;; TODO not sure what 'core is supposed to get here, it
-        ;; doesn't seem to work. need to add integration tests of
-        ;; "no quickstart file" + with/without populated elpa
-        (elpaish-install-packages 'core))))))
+      (unless (package-installed-p 'elpaish)
+        (package-install 'elpaish))
+      (require 'setup-packages)
+      (elpaish-install-packages :sync t)))))
 
 (defun bootstrap-load-user-local-config ()
   "Load all .el files in PATH."
@@ -131,8 +131,7 @@
         (cond
          ((eq system-type 'darwin)
           (if (display-graphic-p) 'osx-notifier 'notifier))
-         (alert-libnotify-command
-          'libnotify)
+         ((executable-find "notify-send") 'libnotify)
          ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
           'notifications)
          (t
@@ -233,8 +232,9 @@
     disable-all-themes
     bootstrap-default-theme
     hud-modeline-mode
+    bootstrap-require-alert
     bootstrap-alert
-    bootstrap-frame-startup-timing))
+    bootstrap-report-startup-timing))
 
 (setq sprite-startup-operations
   '(;; State paths, primary keymaps, and completion history come first.
@@ -294,18 +294,12 @@
         sprite-state-reload
         builder-emacs-conf-native-compile-all))
 
-(add-hook 'sprite-state-reload-hook #'cmdr-spec-discover)
-
-(defun bootstrap-magit-status ()
-  "Add worktree and submodule sections after Magit initializes its defaults."
-  (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t)
-  (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
-
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-require-tracking () (require 'tracking))
+(defun bootstrap-require-alert () (require 'alert))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-cmdr-spec-discover (&rest _) (cmdr-spec-discover))
@@ -317,16 +311,20 @@
 (defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
 (defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
-(defun bootstrap-frame-startup-timing () (message "[emacs]: <%s> frame init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-agent-shell-state-path (path) (file-name-concat (sprite-state-path "agent-shell") path))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
+
+(defun bootstrap-magit-status ()
+  "Add worktree and submodule sections after Magit initializes its defaults."
+  (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t)
+  (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
 
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook 'emacs-startup-hook #'bootstrap-run-startup)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
-(add-hook 'window-setup-hook #'bootstrap-report-startup-timing 100)
+(add-hook 'sprite-state-reload-hook #'cmdr-spec-discover)
 
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
