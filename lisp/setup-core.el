@@ -103,22 +103,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; third-party -- configuration
 
-(setq savehist-coding-system 'utf-8-emacs)
-(setq tracking-max-mode-line-entries 3)
-
-(setq inferior-lisp-program "sbcl")
 (setq emojify-display-style 'unicode)
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
-(setq denote-save-buffers t)
 (setq denote-prompts '(title keywords file-type))
 (setq denote-journal-title-format nil)
-(setq denote-sequence-scheme 'alphanumeric)
 (setq denote-explore-network-format "graphviz")
 (setq denote-review-insert-after "date")
 
-(setq agent-shell-dot-subdir-function 'bootstrap-agent-shell-state-path)
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-display-action
