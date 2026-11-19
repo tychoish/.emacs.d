@@ -107,34 +107,6 @@
 ;;; third-party -- configuration
 
 (setq savehist-coding-system 'utf-8-emacs)
-
-(setq popper-reference-buffers
-      '(arch-install-mode
-        orgx-capture-shell-mode
-        mcpkit-stats-mode
-        logx-view-mode
-        elpaish-build-mode
-        elpaish-check-mode
-        elpaish-status-mode
-        agent-shell-queue-item-view-mode
-        ert-results-mode
-        help-mode
-        message-mode
-        backtrace-mode
-        deadgrep-mode
-        compilation-mode
-        "\\*Messages\\*"
-        "\\*Warnings\\*"
-        "\\*Backtrace\\*"
-        "\\*Compile-Log\\*"
-        "\\*compilation\\*"
-        "\\*grep\\*"
-        "\\*xref\\*"
-        "\\*Flymake diagnostics.*\\*"
-        "\\*ert.*\\*"))
-
-(setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
-(setq popper-display-control nil)
 (setq whitespace-style '(face trailing tabs spaces lines newline missing-newline-at-eof empty space-mark tab-mark newline-mark))
 (setq tracking-max-mode-line-entries 3)
 
