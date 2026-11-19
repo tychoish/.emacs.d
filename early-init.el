@@ -78,7 +78,7 @@ unmeasured.")
 (when (string-match "NATIVE_COMP" system-configuration-features)
   (setcar native-comp-eln-load-path (expand-file-name "~/.cache/emacs/eln/"))
   (setq native-comp-async-report-warnings-errors nil)
-  (setq native-comp-jit-compilation t)
+  (setq native-comp-jit-compilation nil)
   (setq native-compile-prune-cache t))
 
 (provide 'early-init)
