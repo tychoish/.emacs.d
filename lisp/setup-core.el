@@ -111,6 +111,18 @@
 (setq popper-reference-buffers
       '(arch-install-mode
         orgx-capture-shell-mode
+        mcpkit-stats-mode
+        logx-view-mode
+        elpaish-build-mode
+        elpaish-check-mode
+        elpaish-status-mode
+        agent-shell-queue-item-view-mode
+        ert-results-mode
+        help-mode
+        message-mode
+        backtrace-mode
+        deadgrep-mode
+        compilation-mode
         "\\*Messages\\*"
         "\\*Warnings\\*"
         "\\*Backtrace\\*"
@@ -119,10 +131,7 @@
         "\\*grep\\*"
         "\\*xref\\*"
         "\\*Flymake diagnostics.*\\*"
-        "\\*ert.*\\*"
-        ert-results-mode
-        help-mode
-        compilation-mode))
+        "\\*ert.*\\*"))
 
 (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
 (setq popper-display-control nil)
