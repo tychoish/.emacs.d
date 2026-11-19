@@ -162,7 +162,7 @@
 (setq sprite-state-desktop-restore-style 'staged)
 (setq sprite-state-recentf-enabled t)
 (setq mcpkit-instance-name-function #'sprite-instance-name)
-(setq cmdr-opt-in-specs '(defaults))
+(setq cmdr-opt-in-specs '(defaults windows display browser docs buffers))
 
 (setq initial-major-mode 'fundamental-mode)
 (setq initial-scratch-message nil)
