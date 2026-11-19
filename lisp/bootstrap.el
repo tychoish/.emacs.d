@@ -245,7 +245,8 @@
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . (bootstrap-ensure-ssh-agent
                             bootstrap-enable-magit-diff-edit-hunk))
-        (emacs-lisp-mode-hook . builder-elisp-mode)))
+        (emacs-lisp-mode-hook . builder-elisp-mode)
+        (cmdr-spec-gptel-activate-hook . setup-core-gptel-activate)))
 
 (setq sprite-state-auto-mode-alist
       '(("\\.xml\\'" . nxml-mode)
@@ -357,7 +358,6 @@
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
 (add-hook 'sprite-state-reload-hook #'cmdr-spec-discover)
-(add-hook 'cmdr-spec-gptel-activate-hook #'setup-core-gptel-activate)
 
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
