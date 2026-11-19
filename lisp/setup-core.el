@@ -112,7 +112,6 @@
 
 (setq inferior-lisp-program "sbcl")
 (setq emojify-display-style 'unicode)
-(setq ollama-tailnet-fallback-strategy :auto-local)
 (setq docker-terminal-backend 'eat)
 
 (setq denote-dash-default-filter '(not "journal"))
