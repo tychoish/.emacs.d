@@ -180,8 +180,6 @@
 (setq denote-journal-title-format nil)
 (setq denote-sequence-scheme 'alphanumeric)
 (setq denote-explore-network-format "graphviz")
-(setq denote-link-description-format #'denote-dash-link-description-format)
-(setq denote-rename-buffer-function #'denote-dash-rename-buffer)
 
 (setq agent-shell-dot-subdir-function 'bootstrap-agent-shell-state-path)
 (setq agent-shell-header-style 'text)
