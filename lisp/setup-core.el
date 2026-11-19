@@ -153,15 +153,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Late Package Configuration
 
-(with-eval-after-load 'elec-pair
-  (add-to-list 'electric-pair-pairs '(?< . ?>))
-  (add-to-list 'electric-pair-pairs '(?{ . ?}))
-  (add-to-list 'electric-pair-pairs '(?\[ . ?\])))
-
-(with-eval-after-load 'warnings
-  (add-to-list 'warning-suppress-log-types '(frameset))
-  (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
-
 (with-eval-after-load 'gptel
   (setq gptel-include-reasoning 'ignore)
   (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
