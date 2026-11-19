@@ -89,6 +89,9 @@
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
 
+(defvar bootstrap-package-maintenance nil
+  "Operations run after startup for package maintenance.")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Deferred Module Autoloads
 
@@ -149,8 +152,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; state -- setup desktop/bookmarks/savehist
-;; hooks -- these run incrementally and lazily by sprite in `after-init-hook'
+;; init configuration
 
 (setq sprite-mode-map-prefix '("C-c t z" . cmdr-mode-map))
 (setq sprite-state-locks-enabled t)
@@ -161,6 +163,32 @@
 (setq sprite-state-recentf-enabled t)
 (setq mcpkit-instance-name-function #'sprite-instance-name)
 (setq cmdr-opt-in-specs '(defaults))
+
+(setq initial-major-mode 'fundamental-mode)
+(setq initial-scratch-message nil)
+(setq inhibit-startup-message t)
+(setq jit-lock-defer-time 0.2)
+(setq read-process-output-max 1048576) ;; 1MB
+
+(setq-default cursor-in-non-selected-windows nil)
+(setq scroll-conservatively 25)
+(setq scroll-preserve-screen-position t)
+(setq window-sides-vertical t)
+(setq ring-bell-function #'ignore)
+(setq switch-to-prev-buffer-skip 'visible)
+(setq split-height-threshold 100)
+
+(setq alert-log-messages nil)
+(setq alert-fade-time 15)
+
+(setq ns-function-modifier 'hyper) ;; darwin
+(setq ns-command-modifier 'meta) ;; darwin
+(setq ns-option-modifier 'super) ;; darwin
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; state -- setup desktop/bookmarks/savehist
+;; hooks -- these run incrementally and lazily by sprite in `after-init-hook'
 
 (setq sprite-state-mappings
       '((project-list-file . "projects.el")
@@ -207,7 +235,8 @@
         (elpaish-install-bootstrap-finished-functions . bootstrap-cmdr-spec-discover)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
-        (magit-mode-hook . bootstrap-ensure-ssh-agent)
+        (magit-mode-hook . (bootstrap-ensure-ssh-agent
+                            bootstrap-enable-magit-diff-edit-hunk))
         (emacs-lisp-mode-hook . builder-elisp-mode)))
 
 (setq sprite-state-auto-mode-alist
@@ -286,9 +315,6 @@
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
-(defvar bootstrap-package-maintenance nil
-  "Operations run after startup for package maintenance.")
-
 (setq bootstrap-package-maintenance
       '(bootstrap-require-setup-packages
         bootstrap-ensure-packages-installed
@@ -311,12 +337,12 @@
 (defun bootstrap-after-first-frame () (sprite-batch-startup sprite-first-frame-operations :frame (selected-frame)))
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
 (defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
-(defun bootstrap-default-theme () (when (load-theme 'modus-operandi t t) (enable-theme 'modus-operandi)))
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-agent-shell-state-path (path) (file-name-concat (sprite-state-path "agent-shell") path))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
+(defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
 
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
@@ -330,6 +356,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; higher order functions -- probably belong somewhere else, but here for now
+
+(defun bootstrap-default-theme ()
+  (setq modus-themes-deuteranopia t)
+  (setq modus-themes-common-palette-overrides
+        '((border-mode-line-active bg-mode-line-active)
+          (border-mode-line-inactive bg-mode-line-inactive)
+          (message-separator bg-main)))
+
+  (when (load-theme 'modus-operandi t t)
+    (enable-theme 'modus-operandi)))
 
 (defun bootstrap-set-notes-directory (&optional path)
   "Set notes directory to PATH and update note paths."

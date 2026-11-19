@@ -79,13 +79,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; core emacs -- global settings and options
 
-(setq initial-major-mode 'fundamental-mode)
-(setq initial-scratch-message nil)
-(setq inhibit-startup-message t)
-
-(setq jit-lock-defer-time 0.2)
-(setq read-process-output-max 1048576) ;; 1MB
-
 (setq confirm-kill-processes nil)
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq select-enable-clipboard nil)
@@ -101,23 +94,10 @@
 (setq ediff-window-setup-function 'ediff-setup-windows-plain)
 (setq ediff-split-window-function 'split-window-horizontally)
 
-(setq-default cursor-in-non-selected-windows nil)
-(setq scroll-conservatively 25)
-(setq scroll-preserve-screen-position t)
-
 (setq-default indicate-empty-lines t)
 (setq-default truncate-lines t)
 (setq-default indent-tabs-mode nil) ; (setq tab-width 4)
 (setq shell-command-dont-erase-buffer 'end-last-out)
-(setq ns-function-modifier 'hyper) ;; darwin
-(setq ns-command-modifier 'meta) ;; darwin
-(setq ns-option-modifier 'super) ;; darwin
-
-(setq switch-to-prev-buffer-skip 'visible)
-(setq split-height-threshold 100)
-(setq window-sides-vertical t)
-
-(setq ring-bell-function #'ignore)
 
 (put 'downcase-region 'disabled nil)
 (put 'narrow-to-region 'disabled nil)
@@ -154,32 +134,22 @@
 
 (setq popper-echo-dispatch-keys '("C-1" "C-2" "C-3" "C-4" "C-5" "C-6" "C-7" "C-8" "C-9"))
 (setq popper-display-control nil)
-
 (setq whitespace-style '(face trailing tabs spaces lines newline missing-newline-at-eof empty space-mark tab-mark newline-mark))
-
-(setq alert-log-messages nil)
-(setq alert-fade-time 15)
 (setq tracking-max-mode-line-entries 3)
-(setq docker-terminal-backend 'eat)
+
 (setq inferior-lisp-program "sbcl")
-
 (setq emojify-display-style 'unicode)
-(setq modus-themes-deuteranopia t)
-(setq modus-themes-common-palette-overrides
-        '((border-mode-line-active bg-mode-line-active)
-          (border-mode-line-inactive bg-mode-line-inactive)
-          (message-separator bg-main)))
-
 (setq ollama-tailnet-fallback-strategy :auto-local)
+(setq docker-terminal-backend 'eat)
 
 (setq denote-dash-default-filter '(not "journal"))
-(setq denote-review-insert-after "date")
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
 (setq denote-save-buffers t)
 (setq denote-prompts '(title keywords file-type))
 (setq denote-journal-title-format nil)
 (setq denote-sequence-scheme 'alphanumeric)
 (setq denote-explore-network-format "graphviz")
+(setq denote-review-insert-after "date")
 
 (setq agent-shell-dot-subdir-function 'bootstrap-agent-shell-state-path)
 (setq agent-shell-header-style 'text)
@@ -199,13 +169,6 @@
 (with-eval-after-load 'warnings
   (add-to-list 'warning-suppress-log-types '(frameset))
   (add-to-list 'warning-suppress-types '(files missing-lexbind-cookie)))
-
-(with-eval-after-load 'magit
-  (put 'magit-diff-edit-hunk-commit 'disabled nil)
-  (hud-modeline-set-segment-action 'vc #'magit-dispatch))
-
-(with-eval-after-load 'denote
-  (add-to-list 'display-buffer-alist '("\\`\\*denote-sequence-hierarchy" (display-buffer-reuse-window display-buffer-pop-up-window))))
 
 (with-eval-after-load 'gptel
   (setq gptel-include-reasoning 'ignore)
