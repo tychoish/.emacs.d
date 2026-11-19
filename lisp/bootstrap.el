@@ -316,7 +316,7 @@
 (defun bootstrap-agent-shell-state-path (path) (file-name-concat (sprite-state-path "agent-shell") path))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
-(defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
+(defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
 
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)

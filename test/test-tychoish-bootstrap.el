@@ -41,7 +41,11 @@
 (ert-deftest bootstrap/magit-status-sections-preserve-defaults ()
   "Custom status sections must not prevent Magit's defaults from loading."
   (require 'magit-status)
-  (bootstrap-magit-status)
+  (bootstrap-magit-status-add-modules)
+  (bootstrap-magit-status-add-worktrees)
+  (let ((hooks (alist-get 'magit-status-mode-hook sprite-state-mode-hooks)))
+    (should (memq 'bootstrap-magit-status-add-modules hooks))
+    (should (memq 'bootstrap-magit-status-add-worktrees hooks)))
   (should-not (assq 'magit-status-sections-hook sprite-state-mode-hooks))
   (seq-do (lambda (section)
             (should (memq section magit-status-sections-hook)))
