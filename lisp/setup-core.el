@@ -51,7 +51,7 @@
 ;;; cmdr keybindings & specifications
 
 (cmdr-register-spec
-  :name mail-accounts
+  :name mailx
   :probe mailx-select-account
   :prefixes (("C-c m" . "mail"))
   :bindings (("C-c m a" . mailx-select-account))
@@ -76,6 +76,8 @@
                ("u" . mu4e-headers-mark-for-unread)
                (";" . mu4e-mark-resolve-deferred-marks)))))
 
+(defvaralias 'cmdr-mailx-after-activate-hook 'cmdr-spec-mailx-activate-hook)
+
 (defun setup-core-gptel-activate ()
   "Configure site-specific backends and model defaults for gptel."
   (setq gptel-include-reasoning 'ignore)
@@ -86,30 +88,6 @@
 (add-hook 'cmdr-spec-gptel-activate-hook #'setup-core-gptel-activate)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; core emacs -- global settings and options
-
-(setq confirm-kill-processes nil)
-(setq confirm-nonexistent-file-or-buffer nil)
-(setq select-enable-clipboard nil)
-
-(setq-default indicate-empty-lines t)
-(setq-default truncate-lines t)
-(setq-default indent-tabs-mode nil)
-(setq shell-command-dont-erase-buffer 'end-last-out)
-
-(put 'downcase-region 'disabled nil)
-(put 'narrow-to-region 'disabled nil)
-(put 'upcase-region 'disabled nil)
-(put 'list-timers 'disabled nil)
-(put 'list-threads 'disabled nil)
-(put 'dired-find-alternate-file 'disabled nil)
-
-(advice-add 'display-startup-echo-area-message :override #'ignore)
-
-(add-to-list 'term-file-aliases '("alacritty" . "xterm"))
-(add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; third-party -- configuration
 
 (setq emojify-display-style 'unicode)
@@ -117,6 +95,7 @@
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
 (setq denote-prompts '(title keywords file-type))
+
 (setq denote-journal-title-format nil)
 (setq denote-explore-network-format "graphviz")
 (setq denote-review-insert-after "date")
