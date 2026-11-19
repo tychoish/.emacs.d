@@ -92,16 +92,13 @@
 (defvar bootstrap-package-maintenance nil
   "Operations run after startup for package maintenance.")
 
-(defcustom bootstrap-enabled-commands
+(defvar bootstrap-enabled-commands
   '(downcase-region
     narrow-to-region
     upcase-region
     list-timers
     list-threads
-    dired-find-alternate-file)
-  "Commands disabled by default that should be enabled at startup."
-  :type '(repeat symbol)
-  :group 'bootstrap)
+    dired-find-alternate-file))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Deferred Module Autoloads
@@ -140,26 +137,13 @@
       (let ((name (file-name-sans-extension (file-name-nondirectory file))))
 	(require (intern name))))))
 
-(defun bootstrap-alert ()
-  (setq alert-default-style
-        (cond
-         ((eq system-type 'darwin)
-          (if (display-graphic-p) 'osx-notifier 'notifier))
-         ((executable-find "notify-send") 'libnotify)
-         ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
-          'notifications)
-         (t
-          'message))))
-
 (defun bootstrap-report-startup-timing ()
   (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))
 	(init-time (float-time (time-subtract after-init-time before-init-time)))
 	(wall-time (float-time (time-since before-init-time))))
     (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
     (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
-    (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
-    (alert (format "started (pid=%d) [init=%s user=%s wall=%s]" (emacs-pid) init-time startup-time wall-time)
-	   :title (format "emacs-%s" sprite-instance-id))))
+    (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -178,7 +162,6 @@
 (setq initial-major-mode 'fundamental-mode)
 (setq initial-scratch-message nil)
 (setq inhibit-startup-message t)
-(advice-add 'display-startup-echo-area-message :override #'ignore)
 (setq confirm-kill-processes nil)
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq select-enable-clipboard nil)
@@ -207,6 +190,8 @@
 
 (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
 (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
+
+(advice-add 'display-startup-echo-area-message :override #'ignore)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -286,8 +271,6 @@
     disable-all-themes
     bootstrap-default-theme
     hud-modeline-mode
-    bootstrap-require-alert
-    bootstrap-alert
     bootstrap-report-startup-timing))
 
 (setq sprite-startup-operations
@@ -336,6 +319,7 @@
 
     ;; Refresh discovery after integrations load; defer package maintenance.
     cmdr-spec-discover
+    bootstrap-alert
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
 
@@ -349,7 +333,6 @@
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
 (defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-require-tracking () (require 'tracking))
-(defun bootstrap-require-alert () (require 'alert))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
@@ -374,6 +357,7 @@
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
 (add-hook 'sprite-state-reload-hook #'cmdr-spec-discover)
+(add-hook 'cmdr-spec-gptel-activate-hook #'setup-core-gptel-activate)
 
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
@@ -390,6 +374,24 @@
 
   (when (load-theme 'modus-operandi t t)
     (enable-theme 'modus-operandi)))
+
+(defun bootstrap-alert ()
+  (setq alert-default-style
+        (cond
+         ((eq system-type 'darwin)
+          (if (display-graphic-p) 'osx-notifier 'notifier))
+         ((executable-find "notify-send") 'libnotify)
+         ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
+          'notifications)
+         (t
+          'message))))
+
+(defun setup-core-gptel-activate ()
+  "Configure site-specific backends and model defaults for gptel."
+  (setq gptel-include-reasoning 'ignore)
+  (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
+  (setq-default gptel-model 'gpt-6.1-terra)
+  (gptel-make-gh-copilot "gh-copilot"))
 
 (defun bootstrap-set-notes-directory (&optional path)
   "Set notes directory to PATH and update note paths."

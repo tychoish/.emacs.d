@@ -76,15 +76,6 @@
                ("u" . mu4e-headers-mark-for-unread)
                (";" . mu4e-mark-resolve-deferred-marks)))))
 
-(defun setup-core-gptel-activate ()
-  "Configure site-specific backends and model defaults for gptel."
-  (setq gptel-include-reasoning 'ignore)
-  (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
-  (setq-default gptel-model 'gpt-6.1-terra)
-  (gptel-make-gh-copilot "gh-copilot"))
-
-(add-hook 'cmdr-spec-gptel-activate-hook #'setup-core-gptel-activate)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; third-party -- configuration
 
