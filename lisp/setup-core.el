@@ -76,8 +76,6 @@
                ("u" . mu4e-headers-mark-for-unread)
                (";" . mu4e-mark-resolve-deferred-marks)))))
 
-(defvaralias 'cmdr-mailx-after-activate-hook 'cmdr-spec-mailx-activate-hook)
-
 (defun setup-core-gptel-activate ()
   "Configure site-specific backends and model defaults for gptel."
   (setq gptel-include-reasoning 'ignore)

@@ -442,7 +442,7 @@
                      (memq (cadr form) '(personal-mail-ensure-context personal-mail-refile-coop personal-setup-mailx)))
                 (push form config))
                ((and (eq (car-safe form) 'add-hook)
-                     (memq (cadr form) '('cmdr-mailx-after-activate-hook 'cmdr-spec-mailx-activate-hook)))
+                     (eq (cadr form) ''cmdr-spec-mailx-activate-hook))
                 (push '(personal-setup-mailx) config))
                ((and (eq (car-safe form) 'advice-add)
                      (member (cadr form) '('mu4e 'mu4e-update-index 'mu4e-update-mail-and-index)))
