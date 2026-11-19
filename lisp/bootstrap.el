@@ -49,7 +49,6 @@
 (declare-function magit-insert-modules "magit-submodule")
 (declare-function sprite-state-path "sprite")
 (declare-function sprite-state-configure "sprite-state")
-(declare-function sprite-state-agent-shell-state-path "sprite-state")
 (declare-function sprite-instance-name "sprite")
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
@@ -92,6 +91,17 @@
 
 (defvar bootstrap-package-maintenance nil
   "Operations run after startup for package maintenance.")
+
+(defcustom bootstrap-enabled-commands
+  '(downcase-region
+    narrow-to-region
+    upcase-region
+    list-timers
+    list-threads
+    dired-find-alternate-file)
+  "Commands disabled by default that should be enabled at startup."
+  :type '(repeat symbol)
+  :group 'bootstrap)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Deferred Module Autoloads
@@ -180,6 +190,7 @@
 (setq-default truncate-lines t)
 (setq-default indent-tabs-mode nil)
 (setq-default cursor-in-non-selected-windows nil)
+
 (setq scroll-conservatively 25)
 (setq scroll-preserve-screen-position t)
 (setq window-sides-vertical t)
@@ -187,15 +198,15 @@
 (setq switch-to-prev-buffer-skip 'visible)
 (setq split-height-threshold 100)
 
-(add-to-list 'term-file-aliases '("alacritty" . "xterm"))
-(add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
-
 (setq alert-log-messages nil)
 (setq alert-fade-time 15)
 
 (setq ns-function-modifier 'hyper) ;; darwin
 (setq ns-command-modifier 'meta) ;; darwin
 (setq ns-option-modifier 'super) ;; darwin
+
+(add-to-list 'term-file-aliases '("alacritty" . "xterm"))
+(add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -341,7 +352,6 @@
 (defun bootstrap-require-alert () (require 'alert))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
-(defalias 'bootstrap-agent-shell-state-path #'sprite-state-agent-shell-state-path)
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
 (defun bootstrap-cmdr-spec-discover (&rest _) (cmdr-spec-discover))
@@ -352,22 +362,7 @@
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
-(defcustom bootstrap-enabled-commands
-  '(downcase-region
-    narrow-to-region
-    upcase-region
-    list-timers
-    list-threads
-    dired-find-alternate-file)
-  "Commands disabled by default that should be enabled at startup."
-  :type '(repeat symbol)
-  :group 'bootstrap)
-
-(defun bootstrap-enable-commands ()
-  "Enable commands listed in `bootstrap-enabled-commands'."
-  (dolist (sym bootstrap-enabled-commands)
-    (put sym 'disabled nil)))
-
+(defun bootstrap-enable-commands () (dolist (sym bootstrap-enabled-commands) (put sym 'disabled nil)))
 (defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
 (defun bootstrap-after-first-frame () (sprite-batch-startup sprite-first-frame-operations :delay 0.05 :frame (selected-frame)))
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))

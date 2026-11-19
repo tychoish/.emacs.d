@@ -92,8 +92,9 @@
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
-(setq denote-prompts '(title keywords file-type))
+(setq denote-prompts '(title keywords file-type)) ;; default is just title and keywords
 
+;; thinking of dropping journal/explore/review
 (setq denote-journal-title-format nil)
 (setq denote-explore-network-format "graphviz")
 (setq denote-review-insert-after "date")
