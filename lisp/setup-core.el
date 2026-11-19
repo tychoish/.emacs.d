@@ -83,9 +83,6 @@
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq select-enable-clipboard nil)
 
-(setq ediff-window-setup-function 'ediff-setup-windows-plain)
-(setq ediff-split-window-function 'split-window-horizontally)
-
 (setq-default indicate-empty-lines t)
 (setq-default truncate-lines t)
 (setq-default indent-tabs-mode nil)
