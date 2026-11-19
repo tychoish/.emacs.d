@@ -168,9 +168,17 @@
 (setq initial-major-mode 'fundamental-mode)
 (setq initial-scratch-message nil)
 (setq inhibit-startup-message t)
+(advice-add 'display-startup-echo-area-message :override #'ignore)
+(setq confirm-kill-processes nil)
+(setq confirm-nonexistent-file-or-buffer nil)
+(setq select-enable-clipboard nil)
+(setq shell-command-dont-erase-buffer 'end-last-out)
 (setq jit-lock-defer-time 0.2)
 (setq read-process-output-max 1048576) ;; 1MB
 
+(setq-default indicate-empty-lines t)
+(setq-default truncate-lines t)
+(setq-default indent-tabs-mode nil)
 (setq-default cursor-in-non-selected-windows nil)
 (setq scroll-conservatively 25)
 (setq scroll-preserve-screen-position t)
@@ -178,6 +186,9 @@
 (setq ring-bell-function #'ignore)
 (setq switch-to-prev-buffer-skip 'visible)
 (setq split-height-threshold 100)
+
+(add-to-list 'term-file-aliases '("alacritty" . "xterm"))
+(add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
 (setq alert-log-messages nil)
 (setq alert-fade-time 15)
@@ -272,6 +283,7 @@
   '(;; State paths, primary keymaps, and completion history come first.
     sprite-state-configure
     bootstrap-set-up-fringe-mode
+    bootstrap-enable-commands
     (:mode cmdr-mode)
     (:mode cmdr-frame-mode)
     annotated-completing-read-setup-history
@@ -340,6 +352,22 @@
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
+(defcustom bootstrap-enabled-commands
+  '(downcase-region
+    narrow-to-region
+    upcase-region
+    list-timers
+    list-threads
+    dired-find-alternate-file)
+  "Commands disabled by default that should be enabled at startup."
+  :type '(repeat symbol)
+  :group 'bootstrap)
+
+(defun bootstrap-enable-commands ()
+  "Enable commands listed in `bootstrap-enabled-commands'."
+  (dolist (sym bootstrap-enabled-commands)
+    (put sym 'disabled nil)))
+
 (defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
 (defun bootstrap-after-first-frame () (sprite-batch-startup sprite-first-frame-operations :delay 0.05 :frame (selected-frame)))
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
