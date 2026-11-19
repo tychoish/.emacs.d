@@ -83,20 +83,12 @@
 (setq confirm-nonexistent-file-or-buffer nil)
 (setq select-enable-clipboard nil)
 
-(setq auto-revert-verbose nil)
-(setq auto-revert-avoid-polling t)
-(setq auto-revert-interval 60)
-(setq backup-by-copying t) ;; sprite-state
-(setq delete-old-versions t) ;; sprite-state
-
-(setq vc-follow-symlinks t) ;; magit-dash
-(setq version-control t) ;; magit-dash
 (setq ediff-window-setup-function 'ediff-setup-windows-plain)
 (setq ediff-split-window-function 'split-window-horizontally)
 
 (setq-default indicate-empty-lines t)
 (setq-default truncate-lines t)
-(setq-default indent-tabs-mode nil) ; (setq tab-width 4)
+(setq-default indent-tabs-mode nil)
 (setq shell-command-dont-erase-buffer 'end-last-out)
 
 (put 'downcase-region 'disabled nil)
