@@ -76,6 +76,15 @@
                ("u" . mu4e-headers-mark-for-unread)
                (";" . mu4e-mark-resolve-deferred-marks)))))
 
+(defun setup-core-gptel-activate ()
+  "Configure site-specific backends and model defaults for gptel."
+  (setq gptel-include-reasoning 'ignore)
+  (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
+  (setq-default gptel-model 'gpt-6.1-terra)
+  (gptel-make-gh-copilot "gh-copilot"))
+
+(add-hook 'cmdr-spec-gptel-activate-hook #'setup-core-gptel-activate)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; core emacs -- global settings and options
 
@@ -114,18 +123,6 @@
 
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
-(setq agent-shell-display-action
-      '((display-buffer-reuse-window display-buffer-use-some-window)
-        (reusable-frames . t)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Late Package Configuration
-
-(with-eval-after-load 'gptel
-  (setq gptel-include-reasoning 'ignore)
-  (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
-  (setq-default gptel-model 'gpt-6.1-terra)
-  (gptel-make-gh-copilot "gh-copilot"))
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
