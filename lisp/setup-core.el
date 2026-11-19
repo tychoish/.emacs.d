@@ -107,12 +107,10 @@
 ;;; third-party -- configuration
 
 (setq savehist-coding-system 'utf-8-emacs)
-(setq whitespace-style '(face trailing tabs spaces lines newline missing-newline-at-eof empty space-mark tab-mark newline-mark))
 (setq tracking-max-mode-line-entries 3)
 
 (setq inferior-lisp-program "sbcl")
 (setq emojify-display-style 'unicode)
-(setq docker-terminal-backend 'eat)
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
