@@ -24,36 +24,24 @@
   "Execute BODY with garbage collection temporarily suppressed.
 Defers cleanup to an idle timer after execution completes."
   `(let ((gc-cons-threshold 8000000000000000)
+         (file-name-handler-alist nil)
          (gc-cons-percentage 1.0))
      (prog1
 	 (progn ,@body)
        (bootstrap-schedule-idle-gc 8))))
 
-(defmacro with-file-name-handler-disabled (&rest body)
-  `(let ((file-name-handler-alist nil))
-     ,@body))
-
 (defvar slow-op-reporting (and (member "--with-slow-op-timing" command-line-args) t)
-  "When non-nil, `with-slow-op-timer' logs any operation that exceeds `slow-op-threshold'.
-Off by default; pass --with-slow-op-timing on the command line to enable
-it.  Detected here against `command-line-args' -- rather than via
-`command-line-functions' in init.el, where the flag is normally handled
--- because `command-line-1' only dispatches `command-line-functions'
-after `after-init-hook' has already run.  By then init.el and every
-module it requires (bootstrap, setup-core, user/*.el)
-have already loaded once with reporting off, so every
-`with-slow-op-timer' call in the main synchronous init path would go
-unmeasured.")
+  "When non-nil, `with-slow-op-timer' logs any operation that exceeds
+`slow-op-threshold'.")
 
 (defvar slow-op-threshold 0.00001
   "Minimum duration in seconds for `with-slow-op-timer' to emit a log message.")
 
-(setq use-package-compute-statistics slow-op-reporting)
 (setq sprite-slow-op-reporting slow-op-reporting)
 (setq sprite-slow-op-threshold slow-op-threshold)
 
 (defmacro with-slow-op-timer (name &rest body)
-  "Send a message the BODY operation of NAME takes longer to execute than a hardcoded threshold."
+  "Report NAME when the runtime of BODY exceeds `slow-op-threshold'."
   (declare (indent defun) (debug t))
   `(if (not slow-op-reporting)
        (progn ,@body)
