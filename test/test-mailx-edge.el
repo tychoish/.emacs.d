@@ -75,7 +75,7 @@
     (should (equal "https://example.org/two" visited))))
 
 (ert-deftest mailx-edge/lazy-keybindings-installed-by-spec ()
-  (cmdr-spec-install 'mail-accounts)
+  (cmdr-spec-install 'mailx)
   (should (eq 'mailx-compose-reply (keymap-lookup mu4e-compose-minor-mode-map "R")))
   (should (eq 'mu4e-headers-mark-for-unread (keymap-lookup mu4e-headers-mode-map "u")))
   (should (eq 'ignore (keymap-lookup message-mode-map "M-q"))))

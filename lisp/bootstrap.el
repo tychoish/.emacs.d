@@ -242,11 +242,13 @@
         (agent-shell-viewport-edit-mode-hook . agent-shell-notifications-viewport-edit-mode)
         (agent-shell-viewport-view-mode-hook . agent-shell-notifications-viewport-view-mode)
         (elpaish-install-bootstrap-finished-functions . bootstrap-cmdr-spec-discover)
+        (sprite-state-reload-hook . cmdr-spec-discover)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . (bootstrap-ensure-ssh-agent
                             bootstrap-enable-magit-diff-edit-hunk))
         (emacs-lisp-mode-hook . builder-elisp-mode)
+        (cmdr-spec-agent-shell-activate-hook . agent-shell-queue-global-mode)
         (cmdr-spec-gptel-activate-hook . setup-core-gptel-activate)))
 
 (setq sprite-state-auto-mode-alist
@@ -301,7 +303,6 @@
     (:mode eglox-global-mode)
     (:mode chex-global-mode)
     (:mode builder-mode)
-    bootstrap-require-builder-tasks
     (:mode grepx-mode)
     (:mode magit-dash-global-mode)
 
@@ -314,11 +315,10 @@
     (:mode mcpkit-agent-shell-mode)
     (:mode mcpkit-gptel-mode)
     mcpkit-init-services
-    (:mode agent-shell-queue-global-mode)
     (:mode telegax-global-mode)
     (:mode global-auto-revert-mode)
     sprite-state-start-desktop
-
+    bootstrap-setup-builder
     ;; Refresh discovery after integrations load; defer package maintenance.
     cmdr-spec-discover
     bootstrap-alert
@@ -333,7 +333,6 @@
         builder-emacs-conf-native-compile-all))
 
 (defun bootstrap-require-setup-packages () (require 'setup-packages))
-(defun bootstrap-require-builder-tasks () (require 'builder-tasks))
 (defun bootstrap-require-tracking () (require 'tracking))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
@@ -352,13 +351,14 @@
 (defun bootstrap-after-first-frame () (sprite-batch-startup sprite-first-frame-operations :delay 0.05 :frame (selected-frame)))
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
+(defun bootstrap-setup-builder () (advice-add 'builder--get-candidates :before #'bootstrap-load-builder-tasks))
+(defun bootstrap-load-builder-tasks (&rest _) (require 'builder-tasks) (advice-remove 'builder--get-candidates #'bootstrap-load-builder-tasks))
 
 (add-hook 'after-init-hook #'cmdr-spec-discover)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook 'emacs-startup-hook #'bootstrap-run-startup)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
 (add-hook 'window-setup-hook #'bootstrap-after-first-frame)
-(add-hook 'sprite-state-reload-hook #'cmdr-spec-discover)
 
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 

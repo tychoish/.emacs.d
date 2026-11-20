@@ -699,10 +699,8 @@
               (minaid-mode . bootstrap-treesit-auto)
               (bootstrap-treesit-auto . global-treesit-auto-mode)
               (orgx-global-mode . denote-dash-global-mode)
-              (builder-mode . bootstrap-require-builder-tasks)
               (mcpkit-agent-shell-mode . mcpkit-init-services)
               (mcpkit-gptel-mode . mcpkit-init-services)
-              (mcpkit-agent-shell-mode . agent-shell-queue-global-mode)
               (orgx-global-mode . sprite-state-start-desktop)
               (chex-global-mode . sprite-state-start-desktop)
               (eglox-global-mode . sprite-state-start-desktop)))
@@ -711,6 +709,22 @@
     (should (< (seq-position bootstrap-package-maintenance 'bootstrap-require-setup-packages)
                (seq-position bootstrap-package-maintenance 'bootstrap-ensure-packages-installed)))
     (should (memq 'bootstrap-package-quickstart bootstrap-package-maintenance))))
+
+(ert-deftest bootstrap/deferred-builder-and-agent-shell-integrations ()
+  "Defer task and queue loading until their respective features are used."
+  (let ((ops (bootstrap-test/startup-functions)))
+    (should-not (memq 'bootstrap-require-builder-tasks ops))
+    (should-not (memq 'agent-shell-queue-global-mode ops)))
+  (should (equal (alist-get 'cmdr-spec-agent-shell-activate-hook sprite-state-mode-hooks)
+                 'agent-shell-queue-global-mode))
+  (let (loaded removed)
+    (cl-letf (((symbol-function 'require)
+               (lambda (feature &rest _) (setq loaded feature)))
+              ((symbol-function 'advice-remove)
+               (lambda (symbol function) (setq removed (cons symbol function)))))
+      (bootstrap-load-builder-tasks))
+    (should (eq loaded 'builder-tasks))
+    (should (equal removed '(builder--get-candidates . bootstrap-load-builder-tasks)))))
 
 (ert-deftest bootstrap/treesit-auto-loads-before-configuration ()
   "Load treesit-auto before editing its language list."
