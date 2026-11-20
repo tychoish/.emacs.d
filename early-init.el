@@ -15,7 +15,7 @@
     (when (timerp bootstrap--gc-idle-timer)
       (cancel-timer bootstrap--gc-idle-timer))
     (setq bootstrap--gc-idle-timer
-          (run-with-idle-timer (or delay 5) nil
+          (run-with-idle-timer (or delay 16) nil
                                (lambda ()
                                  (setq bootstrap--gc-idle-timer nil)
                                  (garbage-collect))))))
@@ -27,7 +27,7 @@ Defers cleanup to an idle timer after execution completes."
          (gc-cons-percentage 1.0))
      (prog1
 	 (progn ,@body)
-       (bootstrap-schedule-idle-gc 5))))
+       (bootstrap-schedule-idle-gc 8))))
 
 (defmacro with-file-name-handler-disabled (&rest body)
   `(let ((file-name-handler-alist nil))
