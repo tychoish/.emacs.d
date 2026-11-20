@@ -215,6 +215,7 @@
         (auto-save-list-file-prefix . "auto-save-list/")
         (hitl-plan-directory . "hitl/")
         (magit-dash-prune-cache-dir . "magit-dash-gh-prune/")
+        (mcpkit-stats-file . "mcpkit-stats.eld")
         (request-storage-directory . "request/")
         (url-configuration-directory . "url/")
         (denote-sync-cache-directory . "denote-sync/")
