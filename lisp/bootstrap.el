@@ -231,7 +231,8 @@
         (org-mode-hook . orgx-mode-turn-on)
         (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
         (popper-mode-hook . popper-echo-mode)
-        (markdown-mode-hook . turn-off-auto-fill)
+        (org-mode-hook . aggressive-fill-paragraph-mode)
+        (markdown-mode-hook . aggressive-fill-paragraph-mode)
         (magit-status-mode-hook . (magit-dash-prune-lazy-prefetch
                                    bootstrap-magit-status-add-modules
                                    bootstrap-magit-status-add-worktrees))

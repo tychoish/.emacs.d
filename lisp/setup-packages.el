@@ -91,7 +91,8 @@
    modus-themes))
 
 (elpaish-install-register-package
- '(alert
+ '(aggressive-fill-paragraphs
+   alert
    anzu
    async
    cond-let
