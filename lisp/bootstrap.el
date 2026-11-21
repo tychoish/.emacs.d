@@ -40,6 +40,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
+(declare-function mailx-org-setup "mailx-org")
 (declare-function package-activate-all "package")
 (declare-function package-installed-p "package")
 (declare-function package-install "package")
@@ -53,6 +54,7 @@
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
 (declare-function cmdr-spec-discover "cmdr-spec")
+(declare-function cmdr-spec-install "cmdr-spec")
 (declare-function builder-elisp-enable-ert-advice "builder-elisp")
 (declare-function agent-shell-chat--relabel-all "agent-shell-chat-mode")
 
@@ -103,9 +105,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Deferred Module Autoloads
 
+(defun bootstrap-mailx-prepare-context ()
+  "Ensure the mail spec has activated before opening an Org link."
+  (cmdr-spec-install 'mailx))
+
+(with-eval-after-load 'org
+  (require 'mailx-org)
+  (add-hook 'mailx-prepare-context-hook #'bootstrap-mailx-prepare-context)
+  (mailx-org-setup))
+
+(autoload 'mailx-global-mode "mailx" nil t)
+(autoload 'mailx-setup "mailx" nil t)
 (autoload 'mailx-select-account "mailx" nil t)
 (autoload 'mailx-make-context "mailx")
 (autoload 'mailx-add-refile-rule "mailx")
+(autoload 'mailx-jump-to-tier "mailx-views" nil t)
+(autoload 'mailx-bulk-stage-current-view "mailx-bulk" nil t)
+(autoload 'mailx-bulk-mark-view-read "mailx-bulk" nil t)
+(autoload 'mailx-capture-task "mailx-org" nil t)
+(autoload 'mailx-generate-refile-rule "mailx" nil t)
+(autoload 'mailx-sync-and-classify-async "mailx-org" nil t)
 (autoload 'mu4e "mailx" nil t)
 (autoload 'mu4e-update-index "mailx" nil t)
 (autoload 'mu4e-update-mail-and-index "mailx" nil t)

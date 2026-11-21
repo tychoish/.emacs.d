@@ -48,32 +48,6 @@
  :final t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; cmdr keybindings & specifications
-
-(cmdr-register-spec
-  :name mailx
-  :probe mailx-select-account
-  :prefixes (("C-c m" . "mail"))
-  :bindings (("C-c m a" . mailx-select-account))
-  :commands ((cmdr-spec-command :category mu4e
-                                :command mailx-select-account
-                                :display-name "mail-select-account"
-                                :description "select mail account"
-                                :transient-key "ma"))
-  :keymap-bindings
-  ((message message-mode-map
-    :bindings (("M-q" . ignore)))
-   (mu4e-compose mu4e-compose-minor-mode-map
-    :bindings (("R" . mailx-compose-reply)
-               ("r" . mu4e-headers-mark-for-read)
-               ("<remap> <mu4e-context-switch>" . mu4e-compose-context-switch)))
-   (mu4e-headers mu4e-headers-mode-map
-    :bindings (("C-r" . mailx-compose-reply)
-               ("o" . mu4e-headers-mark-for-unread)
-               ("u" . mu4e-headers-mark-for-unread)
-               (";" . mu4e-mark-resolve-deferred-marks)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; third-party -- configuration
 
 (setq emojify-display-style 'unicode)

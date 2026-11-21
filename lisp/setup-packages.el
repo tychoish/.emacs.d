@@ -31,6 +31,7 @@
    hitl
    hud-modeline
    mcpkit
+   mailx
    xtdlib))
 
 (elpaish-install-register-upgrade-package
