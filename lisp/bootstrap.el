@@ -110,6 +110,7 @@
 (autoload 'mailx-select-account "mailx" nil t)
 (autoload 'mailx-make-context "mailx")
 (autoload 'mailx-add-refile-rule "mailx")
+(defvar mailx-refile-rules nil)
 (autoload 'mailx-jump-to-tier "mailx-views" nil t)
 (autoload 'mailx-bulk-stage-current-view "mailx-bulk" nil t)
 (autoload 'mailx-bulk-mark-view-read "mailx-bulk" nil t)

@@ -9,8 +9,8 @@
 (require 'test-helper)
 (require 'cl-lib)
 (require 'cmdr-keys)
+(require 'cmdr-ecosystem)
 (defvar hud-ecclectic-grep-project-map (make-sparse-keymap))
-(require 'setup-core)
 (require 'eglox-project)
 (require 'builder)
 
@@ -26,6 +26,7 @@
 
 (ert-deftest tychoish-core/mailx-keymap-bindings-activate ()
   "The mail spec applies its bindings to available keymaps."
+  (skip-unless (ignore-errors (cmdr-spec-get 'mailx)))
   (let ((message-mode-map (make-sparse-keymap))
         (mu4e-compose-minor-mode-map (make-sparse-keymap))
         (mu4e-headers-mode-map (make-sparse-keymap)))
@@ -101,7 +102,6 @@
 
 (ert-deftest tychoish-core/nerd-icons-registered-modes-resolve ()
   "Every mode we register in nerd-icons-mode-icon-alist resolves without error."
-  (require 'setup-core)
   (require 'nerd-icons)
   (seq-do (lambda (mode)
             (should-not

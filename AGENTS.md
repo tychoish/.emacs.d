@@ -35,7 +35,6 @@ Use `map-into` to build a hash table from a list of cons cells without an explic
 | `early-init.el`                    | GC suppression, timing helpers, native compilation and frame defaults.   |
 | `init.el`                          | Entry point, package activation, and module loading.                     |
 | `lisp/bootstrap.el`                | Startup operations, state, mode associations, notes and SSH setup.       |
-| `lisp/setup-core.el`               | General configuration, package hooks and deferred integration.           |
 | `lisp/setup-packages.el`           | Package catalogs for elpaish; loaded for maintenance.                    |
 | `lisp/mailx.el`               | Mu4e and mail account configuration, loaded on demand.                   |
 | `lisp/setup-agent-shell.el`        | Agent-shell configuration, loaded when agent-shell loads.                |
@@ -72,7 +71,7 @@ Lexical binding is mandatory on every file.
   needs a package loaded but shouldn't trigger loading it. `declare-function` for deferred
   packages' functions.
 - Load order: `early-init.el` → `init.el` (`with-gc-suppressed`) → `bootstrap` → package
-  initialization → `setup-core` → `user/*.el`. Mail and
+  initialization → `user/*.el`. Mail and
   agent-shell configuration load on demand. Don't add top-level `require` calls to
   `init.el` outside this sequence without a strong reason.
 - Dependencies are explicit or absent. Never write optional requires — `(require 'foo nil t)`
@@ -193,7 +192,7 @@ Check the log even when this returns `t` — a missing `require` is a warning
 
 After verifying a file compiles cleanly, reload with
 `emacsclient --eval '(load-file "/path/to/file.el")'` — changes don't take effect until
-reloaded. Reloading `lisp/bootstrap.el` ALWAYS requires reloading `lisp/setup-core.el` too.
+reloaded.
 
 ### Testing
 

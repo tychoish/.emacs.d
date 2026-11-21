@@ -12,7 +12,6 @@
 (require 'cl-lib)
 (require 'bootstrap)
 (require 'eglox-project)
-(require 'setup-core)
 
 (defvar org-directory)
 (defvar denote-directory)
