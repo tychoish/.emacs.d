@@ -295,7 +295,8 @@
         ("\\.mdwn\\'" . markdown-mode)
         ("\\.md\\'" . markdown-mode)
         ("\\.markdown\\'" . markdown-mode)
-        ("\\.txt\\'" . markdown-mode)))
+        ("\\.txt\\'" . markdown-mode)
+        (".*mutt.*" . message-mode)))
 
 (setq sprite-first-frame-operations
   '(bootstrap-ensure-default-font
