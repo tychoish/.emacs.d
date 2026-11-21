@@ -89,6 +89,8 @@
 
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
+(setq agent-shell-prefer-session-resume nil) ;; prefer session/load (replay)
+
 
 (provide 'setup-core)
 ;;; setup-core.el ends here
