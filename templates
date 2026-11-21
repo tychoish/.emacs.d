@@ -8,6 +8,7 @@ org-mode
   (>im "#+caption: " (p "caption of the image") "\n[[file:" (p "image_path") "]]" q :doc "image")
   (>i "#+include: " q :doc "include")
   (>ke "#+keywords: " q :doc "keywords")
+  (>sig "#+signature: " (p "signature") q :doc "Denote sequence signature")
   (>vi "[[" (p "link of the video") "][file:" (p "link of the image") "]" :doc "video")
   (elisp "#+begin_src emacs-lisp :tangle yes\n" q "\n#+end_src")
   (project "#+TITLE:prime.tychoish.projects
