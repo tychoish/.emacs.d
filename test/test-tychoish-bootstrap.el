@@ -15,6 +15,8 @@
 
 (defvar org-directory)
 (defvar denote-directory)
+(defvar denote-journal-directory)
+(defvar denote-explore-network-directory)
 (defvar deft-directory)
 (defvar treesit-auto-langs)
 
@@ -1098,22 +1100,19 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
         (cancel-timer bootstrap--gc-idle-timer)
         (setq bootstrap--gc-idle-timer nil)))))
 
-(ert-deftest bootstrap/set-notes-directory-sets-paths-without-requiring-org ()
-  "bootstrap-set-notes-directory sets all note directory variables without requiring org."
+(ert-deftest bootstrap/set-notes-directory-delegates-and-sets-denote-paths ()
+  "Delegate notes setup and preserve the Denote extension paths."
   (let ((local-notes-directory nil)
-        (user-org-directories nil)
-        (org-directory nil)
-        (org-agenda-files nil)
-        (deft-directory nil)
-        (denote-directory nil))
-    (setq org-agenda-files (list "/tmp/existing.org"))
-    (bootstrap-set-notes-directory "/tmp/test-notes")
-    (should (equal org-agenda-files (list "/tmp/existing.org")))
-    (should (equal local-notes-directory (expand-file-name "/tmp/test-notes")))
-    (should (equal org-directory (expand-file-name "/tmp/test-notes/org")))
-    (should (equal deft-directory (expand-file-name "/tmp/test-notes/deft")))
-    (should (equal denote-directory (expand-file-name "/tmp/test-notes/denote")))))
-
+        (denote-directory nil)
+        (denote-journal-directory nil)
+        (denote-explore-network-directory nil))
+    (cl-letf (((symbol-function 'orgx-set-notes-directory)
+               (lambda (path)
+                 (setq local-notes-directory path)
+                 (setq denote-directory (file-name-concat path "denote")))))
+      (should (equal (bootstrap-set-notes-directory "/tmp/notes") "/tmp/notes"))
+      (should (equal denote-journal-directory "/tmp/notes/denote/journal"))
+      (should (equal denote-explore-network-directory "/tmp/notes/denote/explore")))))
 
 (ert-deftest bootstrap/optimize-quickstart-transforms-correctly ()
   "Test that elpaish-install-optimize-quickstart-file streamlines quickstart contents."

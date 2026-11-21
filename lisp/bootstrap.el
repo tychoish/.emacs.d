@@ -406,20 +406,13 @@
   (setq-default gptel-model 'gpt-6.1-terra)
   (gptel-make-gh-copilot "gh-copilot"))
 
+(declare-function orgx-set-notes-directory "orgx" (&optional path))
+
 (defun bootstrap-set-notes-directory (&optional path)
-  "Set notes directory to PATH and update note paths."
+  "Set note directories using PATH, including Denote extensions."
   (interactive
    (list (read-directory-name "Notes directory: " (or local-notes-directory "~/notes"))))
-  (when path
-    (setq local-notes-directory (expand-file-name path)))
-  (unless local-notes-directory
-    (error "Must define `local-notes-directory'"))
-  (setq org-directory (file-name-concat local-notes-directory "org"))
-  (setq org-annotate-file-storage-file (file-name-concat org-directory "records.org"))
-  (setq org-default-notes-file (file-name-concat org-directory "records.org"))
-  (setq org-archive-location (file-name-concat org-directory "archive/%s::datetree/"))
-  (setq deft-directory (file-name-concat local-notes-directory "deft"))
-  (setq denote-directory (file-name-concat local-notes-directory "denote"))
+  (orgx-set-notes-directory path)
   (setq denote-journal-directory (file-name-concat denote-directory "journal"))
   (setq denote-explore-network-directory (file-name-concat denote-directory "explore"))
   local-notes-directory)
