@@ -30,10 +30,37 @@
        (require 'bootstrap))
 
      (with-slow-op-timer "<init> [local] [packaging] initialization"
-       (bootstrap-initialize-packages))
+       (bootstrap-initialize-packages)))
 
-     (with-slow-op-timer "<init> [local] [config] require setup-core.el"
-       (require 'setup-core)))
+   (with-slow-op-timer "<init> [cli] register flags"
+     (register-clix-flag
+      slow-op-timing
+      :flag "--with-slow-op-timing"
+      :doc "Enable slow operation timing."
+      :consume nil
+      :handler (message "[op]: enabling time reporting"))
+
+     (register-clix-flag
+      sprite-id
+      :flag "--id"
+      :doc "Specify Emacs instance ID for sprite."
+      :var sprite-cli-instance-id)
+
+     (register-clix-flag
+      org-exec
+      :flag "--org-exec"
+      :doc "Execute an Org file's Babel blocks."
+      :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
+                     (builder-org-babel-execute-file clix-arg-org-exec))
+      :final t)
+
+     (register-clix-flag
+      org-exec-dir
+      :flag "--org-exec-dir"
+      :doc "Execute Org Babel blocks in a directory."
+      :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
+                     (builder-org-babel-execute-directory clix-arg-org-exec-dir))
+      :final t))
 
    ;; load the user/*.el files
    (with-slow-op-timer "<init> [user] loaded user files"

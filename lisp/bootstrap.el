@@ -37,10 +37,10 @@
 (require 'map)
 (require 'subr-x)
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
-(declare-function mailx-org-setup "mailx-org")
 (declare-function package-activate-all "package")
 (declare-function package-installed-p "package")
 (declare-function package-install "package")
@@ -105,15 +105,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Deferred Module Autoloads
 
-(defun bootstrap-mailx-prepare-context ()
-  "Ensure the mail spec has activated before opening an Org link."
-  (cmdr-spec-install 'mailx))
-
-(with-eval-after-load 'org
-  (require 'mailx-org)
-  (add-hook 'mailx-prepare-context-hook #'bootstrap-mailx-prepare-context)
-  (mailx-org-setup))
-
 (autoload 'mailx-global-mode "mailx" nil t)
 (autoload 'mailx-setup "mailx" nil t)
 (autoload 'mailx-select-account "mailx" nil t)
@@ -165,7 +156,6 @@
     (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 ;; init configuration
 
 (setq sprite-mode-map-prefix '("C-c t z" . cmdr-mode-map))
@@ -211,6 +201,24 @@
 (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
 (advice-add 'display-startup-echo-area-message :override #'ignore)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; third-party package configuration
+
+(setq emojify-display-style 'unicode)
+(setq afp-fill-comments-only-mode-list '(prog-mode))
+
+(setq denote-dash-default-filter '(not "journal"))
+(setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
+
+;; thinking of dropping journal/explore/review
+(setq denote-journal-title-format nil)
+(setq denote-explore-network-format "graphviz")
+(setq denote-review-insert-after "date")
+
+(setq agent-shell-header-style 'text)
+(setq agent-shell-anthropic-default-session-mode-id "auto")
+(setq agent-shell-prefer-session-resume nil) ;; prefer session/load (replay)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -328,6 +336,7 @@
 
     ;; Note-taking and agent integrations precede desktop restoration.
     (:mode orgx-global-mode)
+    (:mode mailx-global-mode)
     (:mode denote-dash-global-mode)
     (:mode denote-rename-buffer-mode)
     (:mode denote-tree-mode)
