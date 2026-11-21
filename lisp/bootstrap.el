@@ -74,7 +74,7 @@
 (defvar cmdr-opt-in-specs)
 (defvar treesit-auto-langs)
 (defvar org-directory)
-(defvar org-agenda-files nil)
+(defvar org-agenda-files)
 (defvar org-annotate-file-storage-file)
 (defvar org-default-notes-file)
 (defvar org-archive-location)
