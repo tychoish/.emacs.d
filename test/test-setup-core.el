@@ -21,6 +21,20 @@
 (defvar mu4e--started)
 (defvar mu4e--server-indexing)
 (defvar mu4e--update-buffer)
+(defvar mu4e-compose-minor-mode-map)
+(defvar mu4e-headers-mode-map)
+
+(ert-deftest tychoish-core/mailx-keymap-bindings-activate ()
+  "The mail spec applies its bindings to available keymaps."
+  (let ((message-mode-map (make-sparse-keymap))
+        (mu4e-compose-minor-mode-map (make-sparse-keymap))
+        (mu4e-headers-mode-map (make-sparse-keymap)))
+    (should-not (cmdr-spec--activate-keymap-bindings (cmdr-spec-get 'mailx)))
+    (should (eq (keymap-lookup message-mode-map "M-q") #'ignore))
+    (should (eq (keymap-lookup mu4e-compose-minor-mode-map "R")
+                #'mailx-compose-reply))
+    (should (eq (keymap-lookup mu4e-headers-mode-map "C-r")
+                #'mailx-compose-reply))))
 
 (ert-deftest tychoish-core/modus-theme-configuration-loads ()
   "The loaded configuration sets the Modus palette options."
