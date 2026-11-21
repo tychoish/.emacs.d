@@ -37,8 +37,7 @@
       slow-op-timing
       :flag "--with-slow-op-timing"
       :doc "Enable slow operation timing."
-      :consume nil
-      :handler (message "[op]: enabling time reporting"))
+      :consume nil)
 
      (register-clix-flag
       sprite-id

@@ -37,7 +37,6 @@
 (require 'map)
 (require 'subr-x)
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
@@ -105,21 +104,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Deferred Module Autoloads
 
-(autoload 'mailx-global-mode "mailx" nil t)
-(autoload 'mailx-setup "mailx" nil t)
-(autoload 'mailx-select-account "mailx" nil t)
-(autoload 'mailx-make-context "mailx")
-(autoload 'mailx-add-refile-rule "mailx")
 (defvar mailx-refile-rules nil)
-(autoload 'mailx-jump-to-tier "mailx-views" nil t)
-(autoload 'mailx-bulk-stage-current-view "mailx-bulk" nil t)
-(autoload 'mailx-bulk-mark-view-read "mailx-bulk" nil t)
-(autoload 'mailx-capture-task "mailx-org" nil t)
-(autoload 'mailx-generate-refile-rule "mailx" nil t)
-(autoload 'mailx-sync-and-classify-async "mailx-org" nil t)
-(autoload 'mu4e "mailx" nil t)
-(autoload 'mu4e-update-index "mailx" nil t)
-(autoload 'mu4e-update-mail-and-index "mailx" nil t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
@@ -256,8 +241,6 @@
       '((dired-mode-hook . nerd-icons-dired-mode)
         (sqlite-mode-hook . sqlite-extras-minor-mode)
         (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
-        (org-mode-hook . orgx-mode-turn-on)
-        (org-agenda-mode-hook . orgx-agenda-minor-mode-turn-on)
         (popper-mode-hook . popper-echo-mode)
         (org-mode-hook . aggressive-fill-paragraph-mode)
         (markdown-mode-hook . aggressive-fill-paragraph-mode)
@@ -276,7 +259,6 @@
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . (bootstrap-ensure-ssh-agent
                             bootstrap-enable-magit-diff-edit-hunk))
-        (emacs-lisp-mode-hook . builder-elisp-mode)
         (cmdr-spec-agent-shell-activate-hook . agent-shell-queue-global-mode)
         (cmdr-spec-gptel-activate-hook . setup-core-gptel-activate)))
 
@@ -321,7 +303,6 @@
     (:mode nerd-icons-completion-mode)
     (:mode column-number-mode)
     (:mode delete-selection-mode)
-    (:mode electric-pair-mode)
     (:mode xterm-mouse-mode)
     (:mode popper-mode)
     (:mode winner-mode)
