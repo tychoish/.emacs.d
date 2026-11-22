@@ -296,10 +296,10 @@
     bootstrap-enable-commands
     (:mode cmdr-mode)
     (:mode cmdr-frame-mode)
-    annotated-completing-read-setup-history
     (:mode sprite-mode)
     (:mode sprite-state-global-mode)
     (:mode minaid-mode)
+    annotated-completing-read-setup-history
     (:mode nerd-icons-completion-mode)
     (:mode column-number-mode)
     (:mode delete-selection-mode)
