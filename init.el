@@ -20,12 +20,10 @@
            ("nongnu" . "https://elpa.nongnu.org/nongnu/")
            ("gnu" . "https://elpa.gnu.org/packages/")))
 
-   (setq package-quickstart-file (expand-file-name "state/package-quickstart.el" user-emacs-directory ))
+   (setq package-quickstart-file (expand-file-name "state/package-quickstart.el" user-emacs-directory))
    (setq package-archive-priorities '(("elpaish" . 100) ("melpa" . 99) ("nongnu" . 50) ("gnu" . 25)))
 
    (with-slow-op-timer "<init> [local] config initialization"
-     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
-
      (with-slow-op-timer "<init> [local] [config] require bootstrap.el"
        (require 'bootstrap))
 
