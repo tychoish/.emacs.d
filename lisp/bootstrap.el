@@ -56,6 +56,7 @@
 (declare-function cmdr-spec-install "cmdr-spec")
 (declare-function builder-elisp-enable-ert-advice "builder-elisp")
 (declare-function agent-shell-chat--relabel-all "agent-shell-chat-mode")
+(declare-function orgx-global-mode "orgx" (&optional arg))
 
 ;; Dynamic variables configured here or populated by other packages
 (defvar package-quickstart-file)
@@ -73,6 +74,7 @@
 (defvar cmdr-opt-in-specs)
 (defvar treesit-auto-langs)
 (defvar org-directory)
+(defvar orgx-global-mode)
 (defvar org-agenda-files)
 (defvar org-annotate-file-storage-file)
 (defvar org-default-notes-file)
@@ -243,6 +245,8 @@
         (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
         (popper-mode-hook . popper-echo-mode)
         (org-mode-hook . aggressive-fill-paragraph-mode)
+        (org-load-hook . bootstrap-enable-orgx)
+        (sprite-state-global-mode-hook . bootstrap-enable-orgx-if-loaded)
         (markdown-mode-hook . aggressive-fill-paragraph-mode)
         (magit-status-mode-hook . (magit-dash-prune-lazy-prefetch
                                    bootstrap-magit-status-add-modules
@@ -318,7 +322,7 @@
     (:mode magit-dash-global-mode)
 
     ;; Note-taking and agent integrations precede desktop restoration.
-    (:mode orgx-global-mode)
+    bootstrap-enable-orgx-if-loaded
     (:mode mailx-global-mode)
     (:mode denote-dash-global-mode)
     (:mode denote-rename-buffer-mode)
@@ -350,6 +354,16 @@
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
+(defun bootstrap-enable-orgx ()
+  "Enable Orgx once Org has loaded."
+  (unless (bound-and-true-p orgx-global-mode)
+    (orgx-global-mode 1)))
+
+(defun bootstrap-enable-orgx-if-loaded ()
+  "Enable Orgx now if Org loaded before the state hooks were installed."
+  (when (featurep 'org)
+    (bootstrap-enable-orgx)))
+
 (defun bootstrap-cmdr-spec-discover (&rest _) (cmdr-spec-discover))
 (defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
