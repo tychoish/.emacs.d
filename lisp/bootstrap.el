@@ -413,6 +413,8 @@
   (interactive
    (list (read-directory-name "Notes directory: " (or local-notes-directory "~/notes"))))
   (orgx-set-notes-directory path)
+  (setq deft-directory (file-name-concat local-notes-directory "deft")
+        denote-directory (file-name-concat local-notes-directory "denote"))
   (setq denote-journal-directory (file-name-concat denote-directory "journal"))
   (setq denote-explore-network-directory (file-name-concat denote-directory "explore"))
   local-notes-directory)

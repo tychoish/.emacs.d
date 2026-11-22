@@ -1104,14 +1104,16 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 (ert-deftest bootstrap/set-notes-directory-delegates-and-sets-denote-paths ()
   "Delegate notes setup and preserve the Denote extension paths."
   (let ((local-notes-directory nil)
+        (deft-directory nil)
         (denote-directory nil)
         (denote-journal-directory nil)
         (denote-explore-network-directory nil))
     (cl-letf (((symbol-function 'orgx-set-notes-directory)
                (lambda (path)
-                 (setq local-notes-directory path)
-                 (setq denote-directory (file-name-concat path "denote")))))
+                 (setq local-notes-directory path))))
       (should (equal (bootstrap-set-notes-directory "/tmp/notes") "/tmp/notes"))
+      (should (equal deft-directory "/tmp/notes/deft"))
+      (should (equal denote-directory "/tmp/notes/denote"))
       (should (equal denote-journal-directory "/tmp/notes/denote/journal"))
       (should (equal denote-explore-network-directory "/tmp/notes/denote/explore")))))
 
