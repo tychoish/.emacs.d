@@ -678,6 +678,7 @@
       (should (memq operation ops)))
     (should (memq #'bootstrap-report-startup-timing emacs-startup-hook))
     (should (memq #'bootstrap-setup-custom-file after-init-hook))
+    (should (memq 'hud-modeline-mode ops))
     (should (< (seq-position ops 'disable-all-themes)
                (seq-position ops 'bootstrap-default-theme)))
     (should (memq #'bootstrap-run-startup emacs-startup-hook))
@@ -686,11 +687,16 @@
 
 (ert-deftest bootstrap/startup-schedules-one-batch ()
   "Schedule the configured startup operations once."
-  (let (received)
+  (let ((sprite-startup-operations '(other-operation hud-modeline-mode
+                                     personal-operation))
+        received)
     (cl-letf (((symbol-function 'sprite-batch-startup)
                (lambda (&rest args) (setq received args))))
       (bootstrap-run-startup)
-      (should (equal received '(:delay 0 :run-after 0))))))
+      (should (equal received '(:delay 0 :run-after 0)))
+      (should (equal sprite-startup-operations
+                     '(other-operation personal-operation hud-modeline-mode
+                       bootstrap-lazy-startup-timing))))))
 
 (ert-deftest bootstrap/fringe-respects-hud-instance ()
   "The HUD has no fringe; other instances keep the default width."
