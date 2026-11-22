@@ -370,10 +370,10 @@ correctly and reads from the minibuffer using the candidate's command."
   (load (locate-library "mu4e-draft") nil t)
   (let ((expected "--------------------------"))
     (should (equal (substring-no-properties mail-header-separator) expected))
-    (should (equal (substring-no-properties mu4e--header-separator) expected))
     (with-temp-buffer
       (insert "Subject: Example\n\nBody\n")
       (mu4e--delimit-headers)
+      (should (equal (substring-no-properties mu4e--header-separator) expected))
       (should (string-match-p (concat "^" (regexp-quote expected) "$") (buffer-string)))
       (mu4e--delimit-headers t)
       (should (equal (buffer-string) "Subject: Example\n\nBody\n"))
