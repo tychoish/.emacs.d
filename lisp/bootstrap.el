@@ -107,14 +107,6 @@ Groups other than `install' (or `install-only') are registered for continuous
 upgrades via `elpaish-install-register-upgrade-package'.  The `install' group
 is registered for installation only via `elpaish-install-register-package'.")
 
-(setq sprite-state-enabled-commands
-  '(downcase-region
-    narrow-to-region
-    upcase-region
-    list-timers
-    list-threads
-    dired-find-alternate-file))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
 
@@ -162,6 +154,14 @@ is registered for installation only via `elpaish-install-register-package'.")
 (setq sprite-state-desktop-deferred t)
 (setq sprite-state-desktop-restore-style 'staged)
 (setq sprite-state-recentf-enabled t)
+(setq sprite-state-enabled-commands
+      '(downcase-region
+        narrow-to-region
+        upcase-region
+        list-timers
+        list-threads
+        dired-find-alternate-file))
+
 (setq mcpkit-instance-name-function #'sprite-instance-name)
 (setq cmdr-opt-in-specs '(defaults windows display browser docs buffers))
 
@@ -360,54 +360,16 @@ is registered for installation only via `elpaish-install-register-package'.")
         (completion . (cape orderless marginalia consult corfu tempel vertico))
         (checking . (flycheck flycheck-aspell flycheck-vale flyspell))
         (denote . (denote denote-convert denote-dash denote-mcp denote-sync denote-tree))
-        (install . (aggressive-fill-paragraph
-                    alert
-                    anzu
-                    async
-                    consult-denote
-                    consult-eglot
-                    cov
-                    dape
-                    denote-explore
-                    denote-journal-capture
-                    denote-markdown
-                    denote-sequence
-                    denote-silo
-                    docker
-                    eat
-                    eglot-tempel
-                    embark-consult
-                    emojify
-                    gist
-                    git-link
-                    journalctl-mode
-                    magit-gh
-                    nerd-icons
-                    nerd-icons-corfu
-                    nerd-icons-dired
-                    nerd-icons-xref
-                    ninja-mode
-                    ob-go
-                    ob-mermaid
-                    ob-rust
-                    ollama
-                    org-contrib
-                    ox-gist
-                    ox-hugo
-                    ox-leanpub
-                    ox-rst
-                    pkgbuild-mode
-                    popper
-                    protobuf-mode
-                    revbufs
-                    slime
-                    telega
-                    tempel-collection
-                    toc-org
-                    treesit-auto
-                    undercover
-                    wgrep
-                    yaml-pro))))
+        ;; the following are not upgraded in the usual upgrade batch
+        (install-libs . (async alert wgrep treesit-auto))
+        (install-apps . (eat telega dape docker ollama journalctl-mode slime popper anzu))
+        (install-org . (ob-go ob-mermaid ob-rust ox-gist ox-hugo ox-leanpub ox-rst org-contrib toc-org))
+        (install-icons . (emojify nerd-icons nerd-icons-corfu nerd-icons-completion nerd-icons-xref nerd-icons-dired))
+        (install-completion . (consult-denote consult-eglot embark-consult eglot-tempel tempel-collection))
+        (install-denote . (denote-explore denote-journal-capture denote-markdown denote-sequence denote-silo))
+        (install-git . (gist git-link magit-gh revbufs))
+        (install-handlers . (yaml-pro pkgbuild protobuf-mode cov undercover ninja-mode))
+        (install . (aggressive-fill-paragraph))))
 
 (defun bootstrap-require-tracking () (require 'tracking))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
@@ -471,8 +433,8 @@ is registered for installation only via `elpaish-install-register-package'.")
   (interactive
    (list (read-directory-name "Notes directory: " (or local-notes-directory "~/notes"))))
   (orgx-set-notes-directory path)
-  (setq deft-directory (file-name-concat local-notes-directory "deft")
-        denote-directory (file-name-concat local-notes-directory "denote"))
+  (setq deft-directory (file-name-concat local-notes-directory "deft"))
+  (setq denote-directory (file-name-concat local-notes-directory "denote"))
   (setq denote-journal-directory (file-name-concat denote-directory "journal"))
   (setq denote-explore-network-directory (file-name-concat denote-directory "explore"))
   local-notes-directory)
