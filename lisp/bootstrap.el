@@ -53,6 +53,7 @@
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
 (declare-function cmdr-spec-discover "cmdr-spec")
+(declare-function agent-shell-queue-global-mode "agent-shell-queue")
 (declare-function cmdr-spec-install "cmdr-spec")
 (declare-function builder-elisp-enable-ert-advice "builder-elisp")
 (declare-function agent-shell-chat--relabel-all "agent-shell-chat-mode")
@@ -72,6 +73,8 @@
 (defvar sprite-instance-id)
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
+(defvar cmdr-spec-agent-shell-activate-hook)
+(defvar cmdr-spec-gptel-activate-hook)
 (defvar treesit-auto-langs)
 (defvar org-directory)
 (defvar orgx-global-mode)
@@ -246,7 +249,8 @@
         (popper-mode-hook . popper-echo-mode)
         (org-mode-hook . aggressive-fill-paragraph-mode)
         (org-load-hook . bootstrap-enable-orgx)
-        (sprite-state-global-mode-hook . bootstrap-enable-orgx-if-loaded)
+        (sprite-state-global-mode-hook . (bootstrap-enable-orgx-if-loaded
+                                          bootstrap-transfer-cmdr-activation-hooks))
         (markdown-mode-hook . aggressive-fill-paragraph-mode)
         (magit-status-mode-hook . (magit-dash-prune-lazy-prefetch
                                    bootstrap-magit-status-add-modules
@@ -335,8 +339,6 @@
     (:mode global-auto-revert-mode)
     sprite-state-start-desktop
     bootstrap-setup-builder
-    ;; Refresh discovery after integrations load; defer package maintenance.
-    cmdr-spec-discover
     bootstrap-alert
     bootstrap-schedule-maintenance
     bootstrap-startup-timing))
@@ -380,7 +382,29 @@
 (defun bootstrap-setup-builder () (advice-add 'builder--get-candidates :before #'bootstrap-load-builder-tasks))
 (defun bootstrap-load-builder-tasks (&rest _) (require 'builder-tasks) (advice-remove 'builder--get-candidates #'bootstrap-load-builder-tasks))
 
-(add-hook 'after-init-hook #'cmdr-spec-discover)
+(defun bootstrap-early-agent-shell-activate ()
+  "Enable agent-shell integration before Sprite state owns its hooks."
+  (unless (memq #'agent-shell-queue-global-mode cmdr-spec-agent-shell-activate-hook)
+    (agent-shell-queue-global-mode)))
+
+(defun bootstrap-early-gptel-activate ()
+  "Enable gptel integration before Sprite state owns its hooks."
+  (unless (memq #'setup-core-gptel-activate cmdr-spec-gptel-activate-hook)
+    (setup-core-gptel-activate)))
+
+(defun bootstrap-transfer-cmdr-activation-hooks ()
+  "Remove temporary Cmdr hooks once Sprite state has installed its own."
+  (when (bound-and-true-p sprite-state-global-mode)
+    (remove-hook 'cmdr-spec-agent-shell-activate-hook #'bootstrap-early-agent-shell-activate)
+    (remove-hook 'cmdr-spec-gptel-activate-hook #'bootstrap-early-gptel-activate)))
+
+(defun bootstrap-initial-cmdr-discovery ()
+  "Register temporary activation hooks before discovering Cmdr specs."
+  (add-hook 'cmdr-spec-agent-shell-activate-hook #'bootstrap-early-agent-shell-activate)
+  (add-hook 'cmdr-spec-gptel-activate-hook #'bootstrap-early-gptel-activate)
+  (cmdr-spec-discover))
+
+(add-hook 'after-init-hook #'bootstrap-initial-cmdr-discovery)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook 'emacs-startup-hook #'bootstrap-run-startup)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)

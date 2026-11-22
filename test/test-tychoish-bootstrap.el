@@ -19,6 +19,8 @@
 (defvar denote-explore-network-directory)
 (defvar deft-directory)
 (defvar treesit-auto-langs)
+(defvar cmdr-spec-agent-shell-activate-hook)
+(defvar cmdr-spec-gptel-activate-hook)
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
@@ -30,6 +32,22 @@
                entry))
            sprite-startup-operations))
 
+
+(ert-deftest bootstrap/initial-discovery-registers-activation-hooks ()
+  "The first discovery sees the hooks managed later by Sprite state."
+  (let ((cmdr-spec-agent-shell-activate-hook nil)
+        (cmdr-spec-gptel-activate-hook nil)
+        (discovered nil))
+    (cl-letf (((symbol-function 'cmdr-spec-discover)
+               (lambda ()
+                 (setq discovered t)
+                 (should (memq #'bootstrap-early-agent-shell-activate
+                               cmdr-spec-agent-shell-activate-hook))
+                 (should (memq #'bootstrap-early-gptel-activate
+                               cmdr-spec-gptel-activate-hook)))))
+      (bootstrap-initial-cmdr-discovery)
+      (should discovered)
+      (should-not (memq 'cmdr-spec-discover sprite-startup-operations)))))
 
 (ert-deftest bootstrap/magit-dash-prune-configuration ()
   "Configure the current Magit Dash prefetch hook and cache variable."
@@ -692,8 +710,10 @@
                (lambda (arg) (setq calls (1+ calls) orgx-global-mode (> arg 0)))))
       (should (eq (alist-get 'org-load-hook sprite-state-mode-hooks)
                   #'bootstrap-enable-orgx))
-      (should (eq (alist-get 'sprite-state-global-mode-hook sprite-state-mode-hooks)
-                  #'bootstrap-enable-orgx-if-loaded))
+      (should (memq #'bootstrap-enable-orgx-if-loaded
+                    (alist-get 'sprite-state-global-mode-hook sprite-state-mode-hooks)))
+      (should (memq #'bootstrap-transfer-cmdr-activation-hooks
+                    (alist-get 'sprite-state-global-mode-hook sprite-state-mode-hooks)))
       (bootstrap-enable-orgx-if-loaded)
       (should (= calls 0))
       (setq org-loaded t)
@@ -737,6 +757,63 @@
             (should (= calls 0))
             (sprite-state-global-mode 1)
             (should (= calls 1)))
+        (when sprite-state-global-mode (sprite-state-global-mode -1))))))
+
+(ert-deftest bootstrap/early-cmdr-hooks-avoid-duplicate-activation ()
+  "Temporary and permanent hooks can overlap without running twice."
+  (let ((cmdr-spec-agent-shell-activate-hook
+         '(bootstrap-early-agent-shell-activate agent-shell-queue-global-mode))
+        (cmdr-spec-gptel-activate-hook
+         '(bootstrap-early-gptel-activate setup-core-gptel-activate))
+        (agent-count 0)
+        (gptel-count 0))
+    (cl-letf (((symbol-function 'agent-shell-queue-global-mode)
+               (lambda () (setq agent-count (1+ agent-count))))
+              ((symbol-function 'setup-core-gptel-activate)
+               (lambda () (setq gptel-count (1+ gptel-count)))))
+      (run-hooks 'cmdr-spec-agent-shell-activate-hook)
+      (run-hooks 'cmdr-spec-gptel-activate-hook)
+      (should (= agent-count 1))
+      (should (= gptel-count 1)))))
+
+(ert-deftest bootstrap/cmdr-hooks-transfer-to-sprite-state ()
+  "Temporary discovery hooks yield to hooks owned by Sprite state."
+  (require 'sprite-state)
+  (let ((sprite-state-global-mode nil)
+        (sprite-state--active nil)
+        (sprite-state--owned-hooks nil)
+        (sprite-state--desktop-timer nil)
+        (sprite-state-desktop-deferred t)
+        (sprite-state-global-mode-hook nil)
+        (cmdr-spec-agent-shell-activate-hook nil)
+        (cmdr-spec-gptel-activate-hook nil)
+        (sprite-state-mode-hooks
+         '((sprite-state-global-mode-hook . bootstrap-transfer-cmdr-activation-hooks)
+           (cmdr-spec-agent-shell-activate-hook . agent-shell-queue-global-mode)
+           (cmdr-spec-gptel-activate-hook . setup-core-gptel-activate))))
+    (cl-letf (((symbol-function 'cmdr-spec-discover) #'ignore)
+              ((symbol-function 'sprite-state-configure) #'ignore)
+              ((symbol-function 'sprite-state--apply-settings) #'ignore)
+              ((symbol-function 'sprite-state--restore-settings) #'ignore)
+              ((symbol-function 'sprite-state-modes-initialize) #'ignore)
+              ((symbol-function 'sprite-state--start-mode) #'ignore)
+              ((symbol-function 'sprite-state--stop-owned-modes) #'ignore))
+      (unwind-protect
+          (progn
+            (bootstrap-initial-cmdr-discovery)
+            (sprite-state-global-mode 1)
+            (should-not (memq #'bootstrap-early-agent-shell-activate
+                              cmdr-spec-agent-shell-activate-hook))
+            (should (memq #'agent-shell-queue-global-mode
+                          cmdr-spec-agent-shell-activate-hook))
+            (sprite-state-global-mode -1)
+            (should-not cmdr-spec-agent-shell-activate-hook)
+            (should-not cmdr-spec-gptel-activate-hook)
+            (sprite-state-global-mode 1)
+            (should (memq #'agent-shell-queue-global-mode
+                          cmdr-spec-agent-shell-activate-hook))
+            (should (memq #'setup-core-gptel-activate
+                          cmdr-spec-gptel-activate-hook)))
         (when sprite-state-global-mode (sprite-state-global-mode -1))))))
 
 (ert-deftest bootstrap/startup-priorities-and-dependencies ()
