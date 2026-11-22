@@ -233,9 +233,10 @@ correctly and reads from the minibuffer using the candidate's command."
     (should (memq #'agent-shell-antigravity-make-agent-config (agent-shell-menu-installed-agent-configs)))))
 
 (ert-deftest tychoish-core/agent-shell-mcpkit-bridge-startup ()
-  "The startup batch enables the MCPKit bridge."
+  "Agent shell activation hook enables the MCPKit bridge."
   (require 'bootstrap)
-  (should (member '(:mode mcpkit-agent-shell-mode) sprite-startup-operations)))
+  (should (memq 'mcpkit-agent-shell-mode
+                (ensure-list (alist-get 'cmdr-spec-agent-shell-activate-hook sprite-state-mode-hooks)))))
 
 (ert-deftest tychoish-core/gptel-mcp-session-setup ()
   "Test that `gptel-mcp-setup-session` configures buffer-local MCPKit tools."

@@ -793,16 +793,23 @@
               (minaid-mode . annotated-completing-read-setup-history)
               (annotated-completing-read-setup-history . nerd-icons-completion-mode)
               (cmdr-mode . sprite-mode)
-              (sprite-mode . mcpkit-init-services)
+              (sprite-mode . sprite-state-start-desktop)
               (minaid-mode . nerd-icons-completion-mode)
               (minaid-mode . bootstrap-treesit-auto)
               (bootstrap-treesit-auto . global-treesit-auto-mode)
-              (mcpkit-agent-shell-mode . mcpkit-init-services)
-              (mcpkit-gptel-mode . mcpkit-init-services)
               (chex-global-mode . sprite-state-start-desktop)
               (eglox-global-mode . sprite-state-start-desktop)))
     (should-not (memq 'bootstrap-package-quickstart ops))
     (should-not (memq 'bootstrap-register-packages ops))
+    (should-not (memq 'mcpkit-init-services ops))
+    (should-not (memq 'mcpkit-agent-shell-mode ops))
+    (should-not (memq 'mcpkit-gptel-mode ops))
+    (should-not (memq 'builder-mode ops))
+    (should-not (memq 'grepx-mode ops))
+    (should-not (memq 'magit-dash-global-mode ops))
+    (should-not (memq 'mailx-global-mode ops))
+    (should-not (memq 'denote-dash-global-mode ops))
+    (should-not (memq 'telegax-global-mode ops))
     (should (< (seq-position bootstrap-package-maintenance 'bootstrap-register-packages)
                (seq-position bootstrap-package-maintenance 'bootstrap-ensure-packages-installed)))
     (should (memq 'bootstrap-package-quickstart bootstrap-package-maintenance))))
@@ -813,7 +820,7 @@
     (should-not (memq 'bootstrap-require-builder-tasks ops))
     (should-not (memq 'agent-shell-queue-global-mode ops)))
   (should (equal (alist-get 'cmdr-spec-agent-shell-activate-hook sprite-state-mode-hooks)
-                 'agent-shell-queue-global-mode))
+                 '(agent-shell-queue-global-mode mcpkit-agent-shell-mode mcpkit-init-services)))
   (let (loaded removed)
     (cl-letf (((symbol-function 'require)
                (lambda (feature &rest _) (setq loaded feature)))
@@ -1121,15 +1128,12 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
     (should (equal '(f1 f3) (nreverse order)))
     (should (eq t done))))
 
-(ert-deftest bootstrap/startup-mcp-operation-passes-no-mode-argument ()
-  "The MCP initializer is a startup operation and receives no mode argument."
-  (let ((called nil)
-        (noninteractive t))
-    (should (memq 'mcpkit-init-services (bootstrap-test/startup-functions)))
-    (cl-letf (((symbol-function 'mcpkit-init-services)
-               (lambda () (setq called t))))
-      (sprite-run-startup-operations '(mcpkit-init-services))
-      (should called))))
+(ert-deftest bootstrap/deferred-mcp-operation-runs-on-agent-shell-activation ()
+  "The MCP initializer and bridge are deferred to agent-shell activation."
+  (should (memq 'mcpkit-init-services
+                (ensure-list (alist-get 'cmdr-spec-agent-shell-activate-hook sprite-state-mode-hooks))))
+  (should (memq 'mcpkit-agent-shell-mode
+                (ensure-list (alist-get 'cmdr-spec-agent-shell-activate-hook sprite-state-mode-hooks)))))
 
 (ert-deftest bootstrap/post-late-startup-runs-package-operations-in-order ()
   "Maintenance runs package operations in order from an idle timer."
@@ -1452,12 +1456,12 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
           (hud-modeline-mode 1)
           (should-not (bound-and-true-p minaid-mode))
           (should (bound-and-true-p recentf-mode))
-          (should (bound-and-true-p eglox-project-mode))
-          (should (advice-member-p #'eglox-project--cache-file 'projectile-project-cache-file))
-          ;; Exercise file visit -> recentf + central projectile cache:
+          ;; Exercise file visit -> activates eglox-project-mode via prog-mode-hook + recentf + central projectile cache:
           (let ((buf (find-file-noselect proj-file)))
             (unwind-protect
                 (with-current-buffer buf
+                  (should (bound-and-true-p eglox-project-mode))
+                  (should (advice-member-p #'eglox-project--cache-file 'projectile-project-cache-file))
                   (recentf-add-file proj-file)
                   (should (member (expand-file-name proj-file)
                                   (seq-map #'expand-file-name recentf-list)))

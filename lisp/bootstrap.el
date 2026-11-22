@@ -265,8 +265,16 @@ is registered for installation only via `elpaish-install-register-package'.")
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . (bootstrap-ensure-ssh-agent
                             bootstrap-enable-magit-diff-edit-hunk))
-        (cmdr-spec-agent-shell-activate-hook . agent-shell-queue-global-mode)
-        (cmdr-spec-gptel-activate-hook . setup-core-gptel-activate)))
+        (cmdr-spec-agent-shell-activate-hook . (agent-shell-queue-global-mode
+                                                mcpkit-agent-shell-mode
+                                                mcpkit-init-services))
+        (cmdr-spec-gptel-activate-hook . (setup-core-gptel-activate
+                                          mcpkit-gptel-mode))
+        (cmdr-spec-denote-activate-hook . (denote-tree-mode
+                                           consult-notes-denote-mode
+                                           denote-rename-buffer-mode))
+        (cmdr-spec-mailx-activate-hook . mailx-global-mode)
+        (compilation-mode-hook . builder-mode)))
 
 (setq sprite-state-auto-mode-alist
       '(("\\.xml\\'" . nxml-mode)
@@ -317,22 +325,10 @@ is registered for installation only via `elpaish-install-register-package'.")
     (:mode global-treesit-auto-mode)
     (:mode eglox-global-mode)
     (:mode chex-global-mode)
-    (:mode builder-mode)
-    (:mode grepx-mode)
-    (:mode magit-dash-global-mode)
 
-    ;; Note-taking and agent integrations precede desktop restoration.
+    ;; Note-taking and core integrations precede desktop restoration.
     (:mode orgx-global-mode)
-    (:mode mailx-global-mode)
-    (:mode denote-dash-global-mode)
-    (:mode denote-rename-buffer-mode)
-    (:mode denote-tree-mode)
-    (:mode consult-notes-denote-mode)
-    (:mode mcpkit-agent-shell-mode)
-    (:mode mcpkit-gptel-mode)
     (:mode sprite-mode)
-    mcpkit-init-services
-    (:mode telegax-global-mode)
     (:mode global-auto-revert-mode)
     sprite-state-start-desktop
     bootstrap-setup-builder
@@ -424,7 +420,9 @@ is registered for installation only via `elpaish-install-register-package'.")
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
 (defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
-(defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
+(defun bootstrap-schedule-maintenance ()
+  (unless noninteractive
+    (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance)))
 (defun bootstrap-setup-builder () (advice-add 'builder--get-candidates :before #'bootstrap-load-builder-tasks))
 (defun bootstrap-load-builder-tasks (&rest _) (require 'builder-tasks) (advice-remove 'builder--get-candidates #'bootstrap-load-builder-tasks))
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0 :run-after 0))
