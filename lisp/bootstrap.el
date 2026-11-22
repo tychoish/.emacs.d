@@ -112,141 +112,73 @@
     list-threads
     dired-find-alternate-file))
 
-(defvar bootstrap-packages
-  '((agent-shell .
-     (acp
-      shell-maker
-      agent-shell
-      agent-shell-notifications
-      agent-shell-queue
-      agent-shell-workflow))
-    (emax-core .
-     (sprite
-      annotated-completing-read
-      overmark
-      clix
-      logx
-      gen
-      mcpkit
-      xtdlib
-      modus-themes))
-    (emax-applications .
-     (arch
-      builder
-      magit-dash
-      elpaish
-      elpaish-keyring
-      hitl
-      telega-bot
-      hud-modeline))
-    (deltas .
-     (magit
-      code-review
-      diff-review))
-    (emax-customization .
-     (orgx
-      grepx
-      cmdr
-      mailx
-      minaid
-      eglox
-      chex
-      telegax))
-    (dev-tools .
-     (eglot-test-at-point
-      org-docsgen))
-    (robot-tools .
-     (gptel-pup
-      tailscale
-      ollama-tailnet
-      sprite-mcp
-      gptel
-      gptel-agent
-      gptel-aibo))
-    (completion .
-     (cape
-      orderless
-      marginalia
-      consult
-      corfu
-      flycheck
-      flycheck-aspell
-      flycheck-vale
-      tempel
-      vertico))
-    (denote .
-     (denote
-      denote-convert
-      denote-dash
-      denote-mcp
-      denote-sync
-      denote-tree))
-    (install .
-     (aggressive-fill-paragraphs
-      alert
-      anzu
-      async
-      cond-let
-      consult-denote
-      consult-eglot
-      consult-flycheck
-      consult-flyspell
-      cov
-      dape
-      deadgrep
-      denote-explore
-      denote-journal-capture
-      denote-markdown
-      denote-org
-      denote-review
-      denote-sequence
-      denote-silo
-      docker
-      eat
-      eglot-tempel
-      embark-consult
-      emojify
-      f
-      flycheck-eglot
-      flyspell-correct
-      gist
-      git-link
-      journalctl-mode
-      magit-gh
-      nerd-icons
-      nerd-icons-corfu
-      nerd-icons-dired
-      nerd-icons-xref
-      ninja-mode
-      ob-go
-      ob-mermaid
-      ob-rust
-      ollama
-      org-contrib
-      ox-gfm
-      ox-gist
-      ox-hugo
-      ox-leanpub
-      ox-rst
-      package-build
-      pkgbuild-mode
-      popper
-      protobuf-mode
-      revbufs
-      slime
-      telega
-      tempel-collection
-      toc-org
-      tracking
-      transient
-      treesit-auto
-      undercover
-      wgrep
-      yaml-pro)))
+(defvar bootstrap-packages nil
   "Alist mapping package group names to lists of package symbols.
 Groups other than `install' (or `install-only') are registered for continuous
 upgrades via `elpaish-install-register-upgrade-package'.  The `install' group
 is registered for installation only via `elpaish-install-register-package'.")
+
+(setq bootstrap-packages
+      '((agent-shell-libs . (acp shell-maker))
+        (agent-shell . (agent-shell agent-shell-notifications agent-shell-queue agent-shell-workflow))
+        (emax-core-libs . (sprite annotated-completing-read clix logx gen  xtdlib mcpkit))
+        (text-rendering . (overmark modus-themes))
+        (emax-applications . (arch builder magit-dash elpaish elpaish-keyring hitl telega-bot hud-modeline))
+        (deltas . (magit code-review diff-review))
+        (dev-tools . (eglot-test-at-point org-docsgen))
+        (emax-customization . (orgx grepx cmdr mailx minaid eglox chex telegax))
+        (robot-tools . (gptel-pup tailscale ollama-tailnet sprite-mcp gptel gptel-agent gptel-aibo))
+        (completion . (cape orderless marginalia consult corfu tempel vertico))
+        (checking . (flycheck flycheck-aspell flycheck-vale flyspell))
+        (denote . (denote denote-convert denote-dash denote-mcp denote-sync denote-tree))
+        (install . (aggressive-fill-paragraph
+                    alert
+                    anzu
+                    async
+                    consult-denote
+                    consult-eglot
+                    cov
+                    dape
+                    denote-explore
+                    denote-journal-capture
+                    denote-markdown
+                    denote-sequence
+                    denote-silo
+                    docker
+                    eat
+                    eglot-tempel
+                    embark-consult
+                    emojify
+                    gist
+                    git-link
+                    journalctl-mode
+                    magit-gh
+                    nerd-icons
+                    nerd-icons-corfu
+                    nerd-icons-dired
+                    nerd-icons-xref
+                    ninja-mode
+                    ob-go
+                    ob-mermaid
+                    ob-rust
+                    ollama
+                    org-contrib
+                    ox-gist
+                    ox-hugo
+                    ox-leanpub
+                    ox-rst
+                    pkgbuild-mode
+                    popper
+                    protobuf-mode
+                    revbufs
+                    slime
+                    telega
+                    tempel-collection
+                    toc-org
+                    treesit-auto
+                    undercover
+                    wgrep
+                    yaml-pro))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
