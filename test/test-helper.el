@@ -26,7 +26,13 @@
                  (af (expand-file-name (concat pkg-name "-autoloads") dir)))
             (when (or (file-exists-p (concat af ".el"))
                       (file-exists-p (concat af ".elc")))
-              (load af t t))))))))
+              (load af t t)))))))
+  (let ((src-dir (expand-file-name "~/src")))
+    (when (file-directory-p src-dir)
+      (dolist (pkg '("elpaish/pkg" "sprite" "mcpkit.el" "hud-modeline" "agent-shell-queue"))
+        (let ((dir (file-name-concat src-dir pkg)))
+          (when (file-directory-p dir)
+            (add-to-list 'load-path dir)))))))
 
 ;;; Code coverage (undercover.el)
 ;;

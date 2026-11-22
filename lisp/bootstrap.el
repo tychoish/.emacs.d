@@ -62,6 +62,7 @@
 (declare-function sprite-state-enable-commands "sprite-state" (&optional disable))
 (declare-function elpaish-install-register-package "elpaish-install" (&rest pkgs))
 (declare-function elpaish-install-register-upgrade-package "elpaish-install" (&rest pkgs))
+(declare-function elpaish-install-register-groups "elpaish-install" (groups))
 
 ;; Dynamic variables configured here or populated by other packages
 (defvar package-quickstart-file)
@@ -487,14 +488,9 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (defun bootstrap-register-packages ()
   "Register configured package catalogs with elpaish.
-Loads `elpaish-install' lazily and registers upgrade and install groups."
+Loads `elpaish-install' lazily and registers configured package groups."
   (require 'elpaish-install)
-  (dolist (entry bootstrap-packages)
-    (let ((group (car entry))
-          (pkgs (cdr entry)))
-      (if (memq group '(install install-only))
-          (elpaish-install-register-package pkgs)
-        (elpaish-install-register-upgrade-package pkgs)))))
+  (elpaish-install-register-groups bootstrap-packages))
 
 (defalias 'bootstrap-require-setup-packages #'bootstrap-register-packages)
 (defalias 'bootstrap-enable-commands #'sprite-state-enable-commands)
