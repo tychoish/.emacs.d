@@ -95,6 +95,9 @@
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
 
+(defvar bootstrap-end-to-end-time nil
+  "Timestamp when all startup completed.")
+
 (defvar bootstrap-package-maintenance nil
   "Operations run after startup for package maintenance.")
 
@@ -142,7 +145,9 @@ is registered for installation only via `elpaish-install-register-package'.")
 (defun bootstrap-report-startup-timing ()
   (let ((startup-time (float-time (time-subtract bootstrap-startup-complete-time before-init-time)))
 	(init-time (float-time (time-subtract after-init-time before-init-time)))
-	(wall-time (float-time (time-since before-init-time))))
+	(wall-time (float-time (setq bootstrap-end-to-end-time (or bootstrap-end-to-end-time
+                                                                   (time-since before-init-time)))))
+        (inhibit-message t))
     (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
     (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
     (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)))
@@ -415,24 +420,18 @@ is registered for installation only via `elpaish-install-register-package'.")
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode (if (equal sprite-instance-id "hud") 0 '(4 . 4))))
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
-(defun bootstrap-lazy-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
 (defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
 (defun bootstrap-schedule-maintenance () (unless noninteractive (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance)))
 (defun bootstrap-setup-builder () (advice-add 'builder--get-candidates :before #'bootstrap-load-builder-tasks))
 (defun bootstrap-load-builder-tasks (&rest _) (require 'builder-tasks) (advice-remove 'builder--get-candidates #'bootstrap-load-builder-tasks))
-(defun bootstrap-run-startup ()
-  (when (memq 'hud-modeline-mode sprite-startup-operations)
-    (setq sprite-startup-operations (delq 'hud-modeline-mode sprite-startup-operations))
-    (add-to-list 'sprite-startup-operations 'hud-modeline-mode t))
-  (add-to-list 'sprite-startup-operations 'bootstrap-lazy-startup-timing t)
-  (sprite-batch-startup :delay 0 :run-after 0))
+(defun bootstrap-run-startup () (add-to-list 'sprite-startup-operations 'bootstrap-report-startup-timing t) (sprite-batch-startup :delay 0))
 
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 97)
-(add-hook 'emacs-startup-hook #'bootstrap-report-startup-timing 98)
-(add-hook 'emacs-startup-hook #'bootstrap-run-startup 99)
+(add-hook 'emacs-startup-hook #'bootstrap-run-startup 98)
+
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
