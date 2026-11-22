@@ -12,6 +12,7 @@
 (require 'cl-lib)
 (require 'bootstrap)
 (require 'eglox-project)
+(require 'elpaish-install)
 
 (defvar org-directory)
 (defvar denote-directory)
@@ -840,8 +841,8 @@
               (chex-global-mode . sprite-state-start-desktop)
               (eglox-global-mode . sprite-state-start-desktop)))
     (should-not (memq 'bootstrap-package-quickstart ops))
-    (should-not (memq 'bootstrap-require-setup-packages ops))
-    (should (< (seq-position bootstrap-package-maintenance 'bootstrap-require-setup-packages)
+    (should-not (memq 'bootstrap-register-packages ops))
+    (should (< (seq-position bootstrap-package-maintenance 'bootstrap-register-packages)
                (seq-position bootstrap-package-maintenance 'bootstrap-ensure-packages-installed)))
     (should (memq 'bootstrap-package-quickstart bootstrap-package-maintenance))))
 
@@ -1171,7 +1172,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
 
 (ert-deftest bootstrap/post-late-startup-runs-package-operations-in-order ()
   "Maintenance runs package operations in order from an idle timer."
-  (require 'setup-packages)
+  (bootstrap-register-packages)
   (require 'elpaish)
   (let ((order nil)
         (timers nil)

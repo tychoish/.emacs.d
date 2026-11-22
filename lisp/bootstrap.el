@@ -57,10 +57,15 @@
 (declare-function cmdr-spec-install "cmdr-spec")
 (declare-function builder-elisp-enable-ert-advice "builder-elisp")
 (declare-function agent-shell-chat--relabel-all "agent-shell-chat-mode")
+(declare-function orgx-set-notes-directory "orgx" (&optional path))
 (declare-function orgx-global-mode "orgx" (&optional arg))
+(declare-function sprite-state-enable-commands "sprite-state" (&optional disable))
+(declare-function elpaish-install-register-package "elpaish-install" (&rest pkgs))
+(declare-function elpaish-install-register-upgrade-package "elpaish-install" (&rest pkgs))
 
 ;; Dynamic variables configured here or populated by other packages
 (defvar package-quickstart-file)
+(defvar sprite-state-enabled-commands)
 (defvar sprite-state-locks-enabled)
 (defvar sprite-state-auto-save-enabled)
 (defvar sprite-state-desktop-enabled)
@@ -98,7 +103,7 @@
 (defvar bootstrap-package-maintenance nil
   "Operations run after startup for package maintenance.")
 
-(defvar bootstrap-enabled-commands
+(setq sprite-state-enabled-commands
   '(downcase-region
     narrow-to-region
     upcase-region
@@ -106,10 +111,141 @@
     list-threads
     dired-find-alternate-file))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Deferred Module Autoloads
-
-(defvar mailx-refile-rules nil)
+(defvar bootstrap-packages
+  '((agent-shell .
+     (acp
+      shell-maker
+      agent-shell
+      agent-shell-notifications
+      agent-shell-queue
+      agent-shell-workflow))
+    (emax-core .
+     (sprite
+      annotated-completing-read
+      overmark
+      clix
+      logx
+      gen
+      mcpkit
+      xtdlib
+      modus-themes))
+    (emax-applications .
+     (arch
+      builder
+      magit-dash
+      elpaish
+      elpaish-keyring
+      hitl
+      telega-bot
+      hud-modeline))
+    (deltas .
+     (magit
+      code-review
+      diff-review))
+    (emax-customization .
+     (orgx
+      grepx
+      cmdr
+      mailx
+      minaid
+      eglox
+      chex
+      telegax))
+    (dev-tools .
+     (eglot-test-at-point
+      org-docsgen))
+    (robot-tools .
+     (gptel-pup
+      tailscale
+      ollama-tailnet
+      sprite-mcp
+      gptel
+      gptel-agent
+      gptel-aibo))
+    (completion .
+     (cape
+      orderless
+      marginalia
+      consult
+      corfu
+      flycheck
+      flycheck-aspell
+      flycheck-vale
+      tempel
+      vertico))
+    (denote .
+     (denote
+      denote-convert
+      denote-dash
+      denote-mcp
+      denote-sync
+      denote-tree))
+    (install .
+     (aggressive-fill-paragraphs
+      alert
+      anzu
+      async
+      cond-let
+      consult-denote
+      consult-eglot
+      consult-flycheck
+      consult-flyspell
+      cov
+      dape
+      deadgrep
+      denote-explore
+      denote-journal-capture
+      denote-markdown
+      denote-org
+      denote-review
+      denote-sequence
+      denote-silo
+      docker
+      eat
+      eglot-tempel
+      embark-consult
+      emojify
+      f
+      flycheck-eglot
+      flyspell-correct
+      gist
+      git-link
+      journalctl-mode
+      magit-gh
+      nerd-icons
+      nerd-icons-corfu
+      nerd-icons-dired
+      nerd-icons-xref
+      ninja-mode
+      ob-go
+      ob-mermaid
+      ob-rust
+      ollama
+      org-contrib
+      ox-gfm
+      ox-gist
+      ox-hugo
+      ox-leanpub
+      ox-rst
+      package-build
+      pkgbuild-mode
+      popper
+      protobuf-mode
+      revbufs
+      slime
+      telega
+      tempel-collection
+      toc-org
+      tracking
+      transient
+      treesit-auto
+      undercover
+      wgrep
+      yaml-pro)))
+  "Alist mapping package group names to lists of package symbols.
+Groups other than `install' (or `install-only') are registered for continuous
+upgrades via `elpaish-install-register-upgrade-package'.  The `install' group
+is registered for installation only via `elpaish-install-register-package'.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
@@ -126,7 +262,7 @@
       (package-activate-all)
       (unless (package-installed-p 'elpaish)
         (package-install 'elpaish))
-      (require 'setup-packages)
+      (bootstrap-register-packages)
       (elpaish-install-packages :sync t)))))
 
 (defun bootstrap-load-user-local-config ()
@@ -301,7 +437,6 @@
   '(;; State paths, primary keymaps, and completion history come first.
     sprite-state-configure
     bootstrap-set-up-fringe-mode
-    bootstrap-enable-commands
     (:mode cmdr-mode)
     (:mode cmdr-frame-mode)
     (:mode sprite-mode)
@@ -344,13 +479,25 @@
     bootstrap-startup-timing))
 
 (setq bootstrap-package-maintenance
-      '(bootstrap-require-setup-packages
+      '(bootstrap-register-packages
         bootstrap-ensure-packages-installed
         bootstrap-package-quickstart
         sprite-state-reload
         builder-emacs-conf-native-compile-all))
 
-(defun bootstrap-require-setup-packages () (require 'setup-packages))
+(defun bootstrap-register-packages ()
+  "Register configured package catalogs with elpaish.
+Loads `elpaish-install' lazily and registers upgrade and install groups."
+  (require 'elpaish-install)
+  (dolist (entry bootstrap-packages)
+    (let ((group (car entry))
+          (pkgs (cdr entry)))
+      (if (memq group '(install install-only))
+          (elpaish-install-register-package pkgs)
+        (elpaish-install-register-upgrade-package pkgs)))))
+
+(defalias 'bootstrap-require-setup-packages #'bootstrap-register-packages)
+(defalias 'bootstrap-enable-commands #'sprite-state-enable-commands)
 (defun bootstrap-require-tracking () (require 'tracking))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
@@ -374,7 +521,6 @@
 (defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
-(defun bootstrap-enable-commands () (dolist (sym bootstrap-enabled-commands) (put sym 'disabled nil)))
 (defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
 (defun bootstrap-after-first-frame () (sprite-batch-startup sprite-first-frame-operations :delay 0.05 :frame (selected-frame)))
 (defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
@@ -443,8 +589,6 @@
   (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
   (setq-default gptel-model 'gpt-6.1-terra)
   (gptel-make-gh-copilot "gh-copilot"))
-
-(declare-function orgx-set-notes-directory "orgx" (&optional path))
 
 (defun bootstrap-set-notes-directory (&optional path)
   "Set note directories using PATH, including Denote extensions."

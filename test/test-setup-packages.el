@@ -1,36 +1,18 @@
-;;; test-setup-packages.el --- Tests for setup-packages.el -*- lexical-binding: t; no-byte-compile: t; -*-
+;;; test-setup-packages.el --- Tests for package catalogs in bootstrap.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 (require 'ert)
 (require 'seq)
+(require 'bootstrap)
 (require 'elpaish-install)
 
-(defun test-setup-packages--read-forms ()
-  "Read all top-level forms from `setup-packages.el'."
-  (let ((file (locate-file "setup-packages" load-path '(".el")))
-        (forms nil))
-    (with-temp-buffer
-      (insert-file-contents file)
-      (goto-char (point-min))
-      (condition-case nil
-          (while t
-            (push (read (current-buffer)) forms))
-        (end-of-file (nreverse forms))))))
-
-(defun test-setup-packages--registered-packages (function)
-  "Extract package symbols from all registration forms calling FUNCTION."
-  (seq-reduce (lambda (packages form)
-                (if (and (consp form) (eq (car form) function))
-                    (append packages (cadr (cadr form)))
-                  packages))
-              (test-setup-packages--read-forms) nil))
-
 (defun test-setup-packages--get-upgrade-list ()
-  "Extract package symbols from all upgrade registration forms."
-  (test-setup-packages--registered-packages 'elpaish-install-register-upgrade-package))
+  "Extract package symbols from all upgrade groups in `bootstrap-packages'."
+  (seq-mapcat #'cdr (seq-remove (lambda (entry) (memq (car entry) '(install install-only)))
+                                bootstrap-packages)))
 
 (defun test-setup-packages--get-install-list ()
-  "Extract package symbols from all install registration forms."
-  (test-setup-packages--registered-packages 'elpaish-install-register-package))
+  "Extract package symbols from install group in `bootstrap-packages'."
+  (alist-get 'install bootstrap-packages))
 
 (ert-deftest setup-packages/no-duplicates-in-upgrade-list ()
   "Ensure the upgrade packages catalog has no duplicate package symbols."
@@ -63,12 +45,12 @@
       (should-not (memq mod installs)))))
 
 (ert-deftest setup-packages/registration-integration ()
-  "Ensure loading `setup-packages' registers all packages in elpaish."
+  "Ensure calling `bootstrap-register-packages' registers all packages in elpaish."
   (let ((elpaish-install-packages-list nil)
         (elpaish-install-upgrade-packages-list nil)
         (upgrades (test-setup-packages--get-upgrade-list))
         (installs (test-setup-packages--get-install-list)))
-    (load (locate-file "setup-packages" load-path '(".el")) nil t t)
+    (bootstrap-register-packages)
     ;; Upgrade packages must be in upgrade list and install list
     (should (equal elpaish-install-upgrade-packages-list upgrades))
     (dolist (pkg upgrades)

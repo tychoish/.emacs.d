@@ -35,7 +35,6 @@ Use `map-into` to build a hash table from a list of cons cells without an explic
 | `early-init.el`                    | GC suppression, timing helpers, native compilation and frame defaults.   |
 | `init.el`                          | Entry point, package activation, and module loading.                     |
 | `lisp/bootstrap.el`                | Startup operations, state, mode associations, notes and SSH setup.       |
-| `lisp/setup-packages.el`           | Package catalogs for elpaish; loaded for maintenance.                    |
 | `lisp/mailx.el`               | Mu4e and mail account configuration, loaded on demand.                   |
 | `lisp/setup-agent-shell.el`        | Agent-shell configuration, loaded when agent-shell loads.                |
 | `user/*.el`                        | Per-machine overrides. Loaded last; not committed.                       |
