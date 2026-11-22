@@ -440,7 +440,6 @@ is registered for installation only via `elpaish-install-register-package'.")
     bootstrap-set-up-fringe-mode
     (:mode cmdr-mode)
     (:mode cmdr-frame-mode)
-    (:mode sprite-mode)
     (:mode sprite-state-global-mode)
     (:mode minaid-mode)
     annotated-completing-read-setup-history
@@ -470,6 +469,7 @@ is registered for installation only via `elpaish-install-register-package'.")
     (:mode consult-notes-denote-mode)
     (:mode mcpkit-agent-shell-mode)
     (:mode mcpkit-gptel-mode)
+    (:mode sprite-mode)
     mcpkit-init-services
     (:mode telegax-global-mode)
     (:mode global-auto-revert-mode)

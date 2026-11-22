@@ -830,7 +830,7 @@
               (minaid-mode . annotated-completing-read-setup-history)
               (annotated-completing-read-setup-history . nerd-icons-completion-mode)
               (cmdr-mode . sprite-mode)
-              (sprite-mode . sprite-state-global-mode)
+              (sprite-mode . mcpkit-init-services)
               (minaid-mode . nerd-icons-completion-mode)
               (minaid-mode . bootstrap-treesit-auto)
               (bootstrap-treesit-auto . global-treesit-auto-mode)
