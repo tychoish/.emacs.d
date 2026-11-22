@@ -53,12 +53,10 @@
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
 (declare-function cmdr-spec-discover "cmdr-spec")
-(declare-function agent-shell-queue-global-mode "agent-shell-queue")
 (declare-function cmdr-spec-install "cmdr-spec")
 (declare-function builder-elisp-enable-ert-advice "builder-elisp")
 (declare-function agent-shell-chat--relabel-all "agent-shell-chat-mode")
 (declare-function orgx-set-notes-directory "orgx" (&optional path))
-(declare-function orgx-global-mode "orgx" (&optional arg))
 (declare-function sprite-state-enable-commands "sprite-state" (&optional disable))
 (declare-function elpaish-install-register-package "elpaish-install" (&rest pkgs))
 (declare-function elpaish-install-register-upgrade-package "elpaish-install" (&rest pkgs))
@@ -75,15 +73,11 @@
 (defvar sprite-state-recentf-enabled)
 (defvar sprite-state-mappings)
 (defvar sprite-startup-operations)
-(defvar sprite-first-frame-operations)
 (defvar sprite-instance-id)
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
-(defvar cmdr-spec-agent-shell-activate-hook)
-(defvar cmdr-spec-gptel-activate-hook)
 (defvar treesit-auto-langs)
 (defvar org-directory)
-(defvar orgx-global-mode)
 (defvar org-agenda-files)
 (defvar org-annotate-file-storage-file)
 (defvar org-default-notes-file)
@@ -104,6 +98,12 @@
 (defvar bootstrap-package-maintenance nil
   "Operations run after startup for package maintenance.")
 
+(defvar bootstrap-packages nil
+  "Alist mapping package group names to lists of package symbols.
+Groups other than `install' (or `install-only') are registered for continuous
+upgrades via `elpaish-install-register-upgrade-package'.  The `install' group
+is registered for installation only via `elpaish-install-register-package'.")
+
 (setq sprite-state-enabled-commands
   '(downcase-region
     narrow-to-region
@@ -111,74 +111,6 @@
     list-timers
     list-threads
     dired-find-alternate-file))
-
-(defvar bootstrap-packages nil
-  "Alist mapping package group names to lists of package symbols.
-Groups other than `install' (or `install-only') are registered for continuous
-upgrades via `elpaish-install-register-upgrade-package'.  The `install' group
-is registered for installation only via `elpaish-install-register-package'.")
-
-(setq bootstrap-packages
-      '((agent-shell-libs . (acp shell-maker))
-        (agent-shell . (agent-shell agent-shell-notifications agent-shell-queue agent-shell-workflow))
-        (emax-core-libs . (sprite annotated-completing-read clix logx gen  xtdlib mcpkit))
-        (text-rendering . (overmark modus-themes))
-        (emax-applications . (arch builder magit-dash elpaish elpaish-keyring hitl telega-bot hud-modeline))
-        (deltas . (magit code-review diff-review))
-        (dev-tools . (eglot-test-at-point org-docsgen))
-        (emax-customization . (orgx grepx cmdr mailx minaid eglox chex telegax))
-        (robot-tools . (gptel-pup tailscale ollama-tailnet sprite-mcp gptel gptel-agent gptel-aibo))
-        (completion . (cape orderless marginalia consult corfu tempel vertico))
-        (checking . (flycheck flycheck-aspell flycheck-vale flyspell))
-        (denote . (denote denote-convert denote-dash denote-mcp denote-sync denote-tree))
-        (install . (aggressive-fill-paragraph
-                    alert
-                    anzu
-                    async
-                    consult-denote
-                    consult-eglot
-                    cov
-                    dape
-                    denote-explore
-                    denote-journal-capture
-                    denote-markdown
-                    denote-sequence
-                    denote-silo
-                    docker
-                    eat
-                    eglot-tempel
-                    embark-consult
-                    emojify
-                    gist
-                    git-link
-                    journalctl-mode
-                    magit-gh
-                    nerd-icons
-                    nerd-icons-corfu
-                    nerd-icons-dired
-                    nerd-icons-xref
-                    ninja-mode
-                    ob-go
-                    ob-mermaid
-                    ob-rust
-                    ollama
-                    org-contrib
-                    ox-gist
-                    ox-hugo
-                    ox-leanpub
-                    ox-rst
-                    pkgbuild-mode
-                    popper
-                    protobuf-mode
-                    revbufs
-                    slime
-                    telega
-                    tempel-collection
-                    toc-org
-                    treesit-auto
-                    undercover
-                    wgrep
-                    yaml-pro))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
@@ -317,9 +249,6 @@ is registered for installation only via `elpaish-install-register-package'.")
         (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
         (popper-mode-hook . popper-echo-mode)
         (org-mode-hook . aggressive-fill-paragraph-mode)
-        (org-load-hook . bootstrap-enable-orgx)
-        (sprite-state-global-mode-hook . (bootstrap-enable-orgx-if-loaded
-                                          bootstrap-transfer-cmdr-activation-hooks))
         (markdown-mode-hook . aggressive-fill-paragraph-mode)
         (magit-status-mode-hook . (magit-dash-prune-lazy-prefetch
                                    bootstrap-magit-status-add-modules
@@ -358,23 +287,23 @@ is registered for installation only via `elpaish-install-register-package'.")
         ("\\.txt\\'" . markdown-mode)
         (".*mutt.*" . message-mode)))
 
-(setq sprite-first-frame-operations
-  '(bootstrap-ensure-default-font
+(setq sprite-startup-operations
+  '(;; Appearance is configured before the rest of the startup batch.
+    bootstrap-ensure-default-font
     ensure-frame-opacity
     disable-all-themes
     bootstrap-default-theme
-    hud-modeline-mode
-    bootstrap-report-startup-timing))
 
-(setq sprite-startup-operations
-  '(;; State paths, primary keymaps, and completion history come first.
+    ;; State paths, primary keymaps, and completion history come next.
     sprite-state-configure
     bootstrap-set-up-fringe-mode
     (:mode cmdr-mode)
     (:mode cmdr-frame-mode)
     (:mode sprite-state-global-mode)
+    bootstrap-cmdr-spec-discover
     (:mode minaid-mode)
     annotated-completing-read-setup-history
+    hud-modeline-mode
     (:mode nerd-icons-completion-mode)
     (:mode column-number-mode)
     (:mode delete-selection-mode)
@@ -393,7 +322,7 @@ is registered for installation only via `elpaish-install-register-package'.")
     (:mode magit-dash-global-mode)
 
     ;; Note-taking and agent integrations precede desktop restoration.
-    bootstrap-enable-orgx-if-loaded
+    (:mode orgx-global-mode)
     (:mode mailx-global-mode)
     (:mode denote-dash-global-mode)
     (:mode denote-rename-buffer-mode)
@@ -409,7 +338,7 @@ is registered for installation only via `elpaish-install-register-package'.")
     bootstrap-setup-builder
     bootstrap-alert
     bootstrap-schedule-maintenance
-    bootstrap-startup-timing))
+    bootstrap-lazy-startup-timing))
 
 (setq bootstrap-package-maintenance
       '(bootstrap-register-packages
@@ -418,71 +347,92 @@ is registered for installation only via `elpaish-install-register-package'.")
         sprite-state-reload
         builder-emacs-conf-native-compile-all))
 
-(defun bootstrap-register-packages ()
-  "Register configured package catalogs with elpaish.
-Loads `elpaish-install' lazily and registers configured package groups."
-  (require 'elpaish-install)
-  (elpaish-install-register-groups bootstrap-packages))
+(setq bootstrap-packages
+      '((agent-shell-libs . (acp shell-maker))
+        (agent-shell . (agent-shell agent-shell-notifications agent-shell-queue agent-shell-workflow))
+        (emax-core-libs . (sprite annotated-completing-read clix logx gen  xtdlib mcpkit))
+        (text-rendering . (overmark modus-themes))
+        (emax-applications . (arch builder magit-dash elpaish elpaish-keyring hitl telega-bot hud-modeline))
+        (deltas . (magit code-review diff-review))
+        (dev-tools . (eglot-test-at-point org-docsgen))
+        (emax-customization . (orgx grepx cmdr mailx minaid eglox chex telegax))
+        (robot-tools . (gptel-pup tailscale ollama-tailnet sprite-mcp gptel gptel-agent gptel-aibo))
+        (completion . (cape orderless marginalia consult corfu tempel vertico))
+        (checking . (flycheck flycheck-aspell flycheck-vale flyspell))
+        (denote . (denote denote-convert denote-dash denote-mcp denote-sync denote-tree))
+        (install . (aggressive-fill-paragraph
+                    alert
+                    anzu
+                    async
+                    consult-denote
+                    consult-eglot
+                    cov
+                    dape
+                    denote-explore
+                    denote-journal-capture
+                    denote-markdown
+                    denote-sequence
+                    denote-silo
+                    docker
+                    eat
+                    eglot-tempel
+                    embark-consult
+                    emojify
+                    gist
+                    git-link
+                    journalctl-mode
+                    magit-gh
+                    nerd-icons
+                    nerd-icons-corfu
+                    nerd-icons-dired
+                    nerd-icons-xref
+                    ninja-mode
+                    ob-go
+                    ob-mermaid
+                    ob-rust
+                    ollama
+                    org-contrib
+                    ox-gist
+                    ox-hugo
+                    ox-leanpub
+                    ox-rst
+                    pkgbuild-mode
+                    popper
+                    protobuf-mode
+                    revbufs
+                    slime
+                    telega
+                    tempel-collection
+                    toc-org
+                    treesit-auto
+                    undercover
+                    wgrep
+                    yaml-pro))))
 
-(defalias 'bootstrap-require-setup-packages #'bootstrap-register-packages)
-(defalias 'bootstrap-enable-commands #'sprite-state-enable-commands)
 (defun bootstrap-require-tracking () (require 'tracking))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
-(defun bootstrap-enable-orgx ()
-  "Enable Orgx once Org has loaded."
-  (unless (bound-and-true-p orgx-global-mode)
-    (orgx-global-mode 1)))
-
-(defun bootstrap-enable-orgx-if-loaded ()
-  "Enable Orgx now if Org loaded before the state hooks were installed."
-  (when (featurep 'org)
-    (bootstrap-enable-orgx)))
-
+(defun bootstrap-register-packages () (elpaish-install-register-groups bootstrap-packages))
 (defun bootstrap-cmdr-spec-discover (&rest _) (cmdr-spec-discover))
 (defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
-(defun bootstrap-set-up-fringe-mode () (set-fringe-mode '(4 . 4)))
+(defun bootstrap-set-up-fringe-mode () (set-fringe-mode (if (equal sprite-instance-id "hud") 0 '(4 . 4))))
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))
-(defun bootstrap-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
+(defun bootstrap-lazy-startup-timing () (message "[emacs]: <%s> lazy init time %s" sprite-instance-id (float-time (time-since before-init-time))))
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
 (defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
-(defun bootstrap-after-first-frame () (sprite-batch-startup sprite-first-frame-operations :delay 0.05 :frame (selected-frame)))
-(defun bootstrap-run-startup () (sprite-batch-startup :delay 0.05))
 (defun bootstrap-schedule-maintenance () (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance))
 (defun bootstrap-setup-builder () (advice-add 'builder--get-candidates :before #'bootstrap-load-builder-tasks))
 (defun bootstrap-load-builder-tasks (&rest _) (require 'builder-tasks) (advice-remove 'builder--get-candidates #'bootstrap-load-builder-tasks))
+(defun bootstrap-run-startup () (sprite-batch-startup :delay 0 :run-after 0))
 
-(defun bootstrap-early-agent-shell-activate ()
-  "Enable agent-shell integration before Sprite state owns its hooks."
-  (unless (memq #'agent-shell-queue-global-mode cmdr-spec-agent-shell-activate-hook)
-    (agent-shell-queue-global-mode)))
-
-(defun bootstrap-early-gptel-activate ()
-  "Enable gptel integration before Sprite state owns its hooks."
-  (unless (memq #'setup-core-gptel-activate cmdr-spec-gptel-activate-hook)
-    (setup-core-gptel-activate)))
-
-(defun bootstrap-transfer-cmdr-activation-hooks ()
-  "Remove temporary Cmdr hooks once Sprite state has installed its own."
-  (when (bound-and-true-p sprite-state-global-mode)
-    (remove-hook 'cmdr-spec-agent-shell-activate-hook #'bootstrap-early-agent-shell-activate)
-    (remove-hook 'cmdr-spec-gptel-activate-hook #'bootstrap-early-gptel-activate)))
-
-(defun bootstrap-initial-cmdr-discovery ()
-  "Register temporary activation hooks before discovering Cmdr specs."
-  (add-hook 'cmdr-spec-agent-shell-activate-hook #'bootstrap-early-agent-shell-activate)
-  (add-hook 'cmdr-spec-gptel-activate-hook #'bootstrap-early-gptel-activate)
-  (cmdr-spec-discover))
-
-(add-hook 'after-init-hook #'bootstrap-initial-cmdr-discovery)
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
-(add-hook 'emacs-startup-hook #'bootstrap-run-startup)
-(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 99)
-(add-hook 'window-setup-hook #'bootstrap-after-first-frame)
+(add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 97)
+(add-hook 'emacs-startup-hook #'bootstrap-report-startup-timing 98)
+(add-hook 'emacs-startup-hook #'bootstrap-run-startup 99)
 
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
