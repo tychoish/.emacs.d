@@ -7,12 +7,13 @@
 
 (defun test-setup-packages--get-upgrade-list ()
   "Extract package symbols from all upgrade groups in `bootstrap-packages'."
-  (seq-mapcat #'cdr (seq-remove (lambda (entry) (memq (car entry) '(install install-only)))
+  (seq-mapcat #'cdr (seq-remove (lambda (entry) (elpaish-install--install-group-p (car entry)))
                                 bootstrap-packages)))
 
 (defun test-setup-packages--get-install-list ()
   "Extract package symbols from install group in `bootstrap-packages'."
-  (alist-get 'install bootstrap-packages))
+  (seq-mapcat #'cdr (seq-filter (lambda (entry) (elpaish-install--install-group-p (car entry)))
+                                bootstrap-packages)))
 
 (ert-deftest setup-packages/no-duplicates-in-upgrade-list ()
   "Ensure the upgrade packages catalog has no duplicate package symbols."
