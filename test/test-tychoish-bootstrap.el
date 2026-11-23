@@ -698,23 +698,23 @@
                      '(other-operation hud-modeline-mode personal-operation
                        bootstrap-report-startup-timing))))))
 
-(defvar bootstrap--test-logx-called nil)
-
-(ert-deftest bootstrap/enable-logx-timing-delegation ()
-  "Verify `bootstrap-enable-logx-timing' configures `with-slow-op-timer' delegation."
-  (let ((bootstrap--test-logx-called nil)
-        (slow-op-reporting t)
-        (slow-op-threshold 0.0))
-    (bootstrap-enable-logx-timing)
-    (cl-letf (((symbol-function 'logx-time)
-               (cons 'macro
-                     (lambda (spec &rest body)
-                       `(progn
-                          (setq bootstrap--test-logx-called (plist-get ',spec :msg))
-                          ,@body)))))
-      (let ((res (eval '(with-slow-op-timer "bootstrap-test-timing" (+ 100 200)))))
-        (should (= res 300))
-        (should (equal bootstrap--test-logx-called "bootstrap-test-timing"))))))
+(ert-deftest bootstrap/report-startup-timing-messages ()
+  "Verify `bootstrap-report-startup-timing' formats timing messages."
+  (let ((messages nil)
+        (before-init-time (current-time))
+        (after-init-time (time-add (current-time) 1))
+        (bootstrap-startup-complete-time (time-add (current-time) 2))
+        (bootstrap-end-to-end-time nil)
+        (sprite-instance-id "test-daemon"))
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages))))
+      (bootstrap-report-startup-timing)
+      (let ((msgs (nreverse messages)))
+        (should (= (length msgs) 3))
+        (should (string-match-p "<test-daemon> init time" (nth 0 msgs)))
+        (should (string-match-p "<test-daemon> user time" (nth 1 msgs)))
+        (should (string-match-p "<test-daemon> wall time" (nth 2 msgs)))))))
 
 (ert-deftest bootstrap/fringe-respects-hud-instance ()
   "The HUD has no fringe; other instances keep the default width."
