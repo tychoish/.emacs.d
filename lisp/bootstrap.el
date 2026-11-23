@@ -171,6 +171,8 @@ is registered for installation only via `elpaish-install-register-package'.")
 (setq-default indent-tabs-mode nil)
 (setq-default cursor-in-non-selected-windows nil)
 
+(setopt find-file-visit-truename t)
+
 (setq window-sides-vertical t)
 (setq ring-bell-function #'ignore)
 
