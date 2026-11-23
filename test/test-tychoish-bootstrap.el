@@ -676,7 +676,7 @@
     (dolist (operation '(bootstrap-ensure-default-font ensure-frame-opacity
                          disable-all-themes bootstrap-default-theme))
       (should (memq operation ops)))
-    (should (memq #'bootstrap-report-startup-timing emacs-startup-hook))
+    (should (memq #'bootstrap-startup-mark-complete emacs-startup-hook))
     (should (memq #'bootstrap-setup-custom-file after-init-hook))
     (should (memq 'hud-modeline-mode ops))
     (should (< (seq-position ops 'disable-all-themes)
@@ -693,10 +693,28 @@
     (cl-letf (((symbol-function 'sprite-batch-startup)
                (lambda (&rest args) (setq received args))))
       (bootstrap-run-startup)
-      (should (equal received '(:delay 0 :run-after 0)))
+      (should (equal received '(:delay 0)))
       (should (equal sprite-startup-operations
-                     '(other-operation personal-operation hud-modeline-mode
-                       bootstrap-lazy-startup-timing))))))
+                     '(other-operation hud-modeline-mode personal-operation
+                       bootstrap-report-startup-timing))))))
+
+(defvar bootstrap--test-logx-called nil)
+
+(ert-deftest bootstrap/enable-logx-timing-delegation ()
+  "Verify `bootstrap-enable-logx-timing' configures `with-slow-op-timer' delegation."
+  (let ((bootstrap--test-logx-called nil)
+        (slow-op-reporting t)
+        (slow-op-threshold 0.0))
+    (bootstrap-enable-logx-timing)
+    (cl-letf (((symbol-function 'logx-time)
+               (cons 'macro
+                     (lambda (spec &rest body)
+                       `(progn
+                          (setq bootstrap--test-logx-called (plist-get ',spec :msg))
+                          ,@body)))))
+      (let ((res (eval '(with-slow-op-timer "bootstrap-test-timing" (+ 100 200)))))
+        (should (= res 300))
+        (should (equal bootstrap--test-logx-called "bootstrap-test-timing"))))))
 
 (ert-deftest bootstrap/fringe-respects-hud-instance ()
   "The HUD has no fringe; other instances keep the default width."
@@ -1210,17 +1228,13 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
   "Delegate notes setup and preserve the Denote extension paths."
   (let ((local-notes-directory nil)
         (deft-directory nil)
-        (denote-directory nil)
-        (denote-journal-directory nil)
-        (denote-explore-network-directory nil))
+        (denote-directory nil))
     (cl-letf (((symbol-function 'orgx-set-notes-directory)
                (lambda (path)
                  (setq local-notes-directory path))))
       (should (equal (bootstrap-set-notes-directory "/tmp/notes") "/tmp/notes"))
       (should (equal deft-directory "/tmp/notes/deft"))
-      (should (equal denote-directory "/tmp/notes/denote"))
-      (should (equal denote-journal-directory "/tmp/notes/denote/journal"))
-      (should (equal denote-explore-network-directory "/tmp/notes/denote/explore")))))
+      (should (equal denote-directory "/tmp/notes/denote")))))
 
 (ert-deftest bootstrap/optimize-quickstart-transforms-correctly ()
   "Test that elpaish-install-optimize-quickstart-file streamlines quickstart contents."
