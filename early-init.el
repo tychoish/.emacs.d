@@ -53,6 +53,37 @@ Defers cleanup to an idle timer after execution completes."
 	   (message "[op]: %s: %.06fs" ,name duration)))
        return-value)))
 
+(unless (fboundp 'logx-time)
+  (defmacro logx-time (spec &rest body)
+    "Fallback timing shim when `logx' is not yet loaded.
+Measures execution time when `slow-op-reporting' is non-nil."
+    (declare (indent 1) (debug (sexp body)))
+    `(if (not slow-op-reporting)
+         (progn ,@body)
+       (let* ((name ,(cond
+                      ((stringp spec) spec)
+                      ((and (consp spec) (eq (car spec) 'quote)) (format "%s" (cadr spec)))
+                      ((and (consp spec) (keywordp (car spec)))
+                       (or (plist-get spec :msg) (plist-get spec :name) "op"))
+                      ((symbolp spec) (symbol-name spec))
+                      (t (format "%s" spec))))
+              (thresh ,(if (and (consp spec) (keywordp (car spec)))
+                           (or (plist-get spec :threshold) 'slow-op-threshold)
+                         'slow-op-threshold))
+              (start (current-time))
+              (result (let ((inhibit-message t)) ,@body))
+              (duration (time-to-seconds (time-since start))))
+         (when (> duration thresh)
+           (let ((inhibit-message t))
+             (message "[op]: %s: %.06fs" name duration)))
+         result))))
+
+(unless (fboundp 'with-logx-time)
+  (defmacro with-logx-time (spec &rest body)
+    "Fallback alias for `logx-time' when `logx' is not yet loaded."
+    (declare (indent 1) (debug (sexp body)))
+    `(logx-time ,spec ,@body)))
+
 (setq package-quickstart t)
 (setq package-enable-at-startup nil)
 (setq use-package-expand-minimally t)
