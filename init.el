@@ -24,6 +24,8 @@
    (setq package-archive-priorities '(("elpaish" . 100) ("melpa" . 99) ("nongnu" . 50) ("gnu" . 25)))
 
    (with-slow-op-timer "<init> [local] config initialization"
+     (add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+
      (with-slow-op-timer "<init> [local] [config] require bootstrap.el"
        (require 'bootstrap))
 
@@ -47,16 +49,18 @@
       org-exec
       :flag "--org-exec"
       :doc "Execute an Org file's Babel blocks."
-      :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
-                     (builder-org-babel-execute-file clix-arg-org-exec))
+      :action (progn
+                (require 'org) (require 'ob) (require 'builder-tasks)
+                (builder-org-babel-execute-file clix-arg-org-exec))
       :final t)
 
      (register-clix-flag
       org-exec-dir
       :flag "--org-exec-dir"
       :doc "Execute Org Babel blocks in a directory."
-      :action (progn (require 'org) (require 'ob) (require 'builder-tasks)
-                     (builder-org-babel-execute-directory clix-arg-org-exec-dir))
+      :action (progn
+                (require 'org) (require 'ob) (require 'builder-tasks)
+                (builder-org-babel-execute-directory clix-arg-org-exec-dir))
       :final t))
 
    ;; load the user/*.el files

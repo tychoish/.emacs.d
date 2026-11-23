@@ -53,13 +53,8 @@
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
 (declare-function cmdr-spec-discover "cmdr-spec")
-(declare-function cmdr-spec-install "cmdr-spec")
-(declare-function builder-elisp-enable-ert-advice "builder-elisp")
-(declare-function agent-shell-chat--relabel-all "agent-shell-chat-mode")
 (declare-function orgx-set-notes-directory "orgx" (&optional path))
-(declare-function sprite-state-enable-commands "sprite-state" (&optional disable))
-(declare-function elpaish-install-register-package "elpaish-install" (&rest pkgs))
-(declare-function elpaish-install-register-upgrade-package "elpaish-install" (&rest pkgs))
+(declare-function elpaish-install-register-packages "elpaish-install" (&rest pkgs))
 (declare-function elpaish-install-register-groups "elpaish-install" (groups))
 
 ;; Dynamic variables configured here or populated by other packages
@@ -77,11 +72,6 @@
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
 (defvar treesit-auto-langs)
-(defvar org-directory)
-(defvar org-agenda-files)
-(defvar org-annotate-file-storage-file)
-(defvar org-default-notes-file)
-(defvar org-archive-location)
 (defvar deft-directory)
 (defvar denote-directory)
 
@@ -180,12 +170,8 @@ is registered for installation only via `elpaish-install-register-package'.")
 (setq-default indent-tabs-mode nil)
 (setq-default cursor-in-non-selected-windows nil)
 
-(setq scroll-conservatively 25)
-(setq scroll-preserve-screen-position t)
 (setq window-sides-vertical t)
 (setq ring-bell-function #'ignore)
-(setq switch-to-prev-buffer-skip 'visible)
-(setq split-height-threshold 100)
 
 (setq alert-log-messages nil)
 (setq alert-fade-time 15)
@@ -207,11 +193,7 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
-
-;; thinking of dropping journal/explore/review
-(setq denote-journal-title-format nil)
 (setq denote-explore-network-format "graphviz")
-(setq denote-review-insert-after "date")
 
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
@@ -241,6 +223,7 @@ is registered for installation only via `elpaish-install-register-package'.")
         (magit-dash-prune-cache-dir . "magit-dash-gh-prune/")
         (mcpkit-stats-file . "mcpkit-stats.eld")
         (request-storage-directory . "request/")
+        (orgx-bulk-directory . "orgx-bulk")
         (url-configuration-directory . "url/")
         (denote-sync-cache-directory . "denote-sync/")
         (code-review-log-file . "code-review/error.log")
@@ -435,8 +418,6 @@ is registered for installation only via `elpaish-install-register-package'.")
   (orgx-set-notes-directory path)
   (setq deft-directory (file-name-concat local-notes-directory "deft"))
   (setq denote-directory (file-name-concat local-notes-directory "denote"))
-  (setq denote-journal-directory (file-name-concat denote-directory "journal"))
-  (setq denote-explore-network-directory (file-name-concat denote-directory "explore"))
   local-notes-directory)
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
