@@ -341,7 +341,7 @@ Delegates to `logx-time' when `slow-op-reporting' is enabled."
     bootstrap-setup-builder
     bootstrap-alert
     bootstrap-schedule-maintenance
-    hud-modeline-mode))
+    (:mode hud-modeline-mode)))
 
 (setq bootstrap-package-maintenance
       '(bootstrap-register-packages
