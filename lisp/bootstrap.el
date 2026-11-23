@@ -132,7 +132,27 @@ is registered for installation only via `elpaish-install-register-package'.")
         (inhibit-message t))
     (message "[emacs]: <%s> init time %s" sprite-instance-id init-time)
     (message "[emacs]: <%s> user time %s" sprite-instance-id startup-time)
-    (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)))
+    (message "[emacs]: <%s> wall time %s" sprite-instance-id wall-time)
+    (when (fboundp 'logx-info)
+      (logx-info :cat 'startup
+                 :msg (format "<%s> startup: init=%.3fs user=%.3fs wall=%.3fs"
+                              sprite-instance-id init-time startup-time wall-time)
+                 :init_time_s init-time
+                 :user_time_s startup-time
+                 :wall_time_s wall-time))))
+
+(defun bootstrap-enable-logx-timing ()
+  "Enable structured timing telemetry via `logx-time' post-package-init.
+Redefines `with-slow-op-timer' to delegate to `logx-time'."
+  (require 'logx)
+  (defmacro with-slow-op-timer (name &rest body)
+    "Report NAME when the runtime of BODY exceeds `slow-op-threshold'.
+Delegates to `logx-time' when `slow-op-reporting' is enabled."
+    (declare (indent defun) (debug t))
+    `(if (not slow-op-reporting)
+         (progn ,@body)
+       (logx-time (:cat 'op :msg ,name :threshold slow-op-threshold)
+         ,@body))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; init configuration

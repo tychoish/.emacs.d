@@ -40,42 +40,50 @@ Defers cleanup to an idle timer after execution completes."
 (setq sprite-slow-op-reporting slow-op-reporting)
 (setq sprite-slow-op-threshold slow-op-threshold)
 
-(defmacro with-slow-op-timer (name &rest body)
-  "Report NAME when the runtime of BODY exceeds `slow-op-threshold'."
-  (declare (indent defun) (debug t))
-  `(if (not slow-op-reporting)
-       (progn ,@body)
-     (let* ((time (current-time))
-	    (return-value (let ((inhibit-message t)) ,@body))
-	    (duration (time-to-seconds (time-since time))))
-       (when (> duration slow-op-threshold)
-	 (let ((inhibit-message t))
-	   (message "[op]: %s: %.06fs" ,name duration)))
-       return-value)))
-
 (unless (fboundp 'logx-time)
   (defmacro logx-time (spec &rest body)
-    "Fallback timing shim when `logx' is not yet loaded.
+    "Timing shim when `logx' is not yet loaded, delegating to `logx' if loaded later.
 Measures execution time when `slow-op-reporting' is non-nil."
     (declare (indent 1) (debug (sexp body)))
     `(if (not slow-op-reporting)
          (progn ,@body)
-       (let* ((name ,(cond
-                      ((stringp spec) spec)
-                      ((and (consp spec) (eq (car spec) 'quote)) (format "%s" (cadr spec)))
-                      ((and (consp spec) (keywordp (car spec)))
-                       (or (plist-get spec :msg) (plist-get spec :name) "op"))
-                      ((symbolp spec) (symbol-name spec))
-                      (t (format "%s" spec))))
-              (thresh ,(if (and (consp spec) (keywordp (car spec)))
+       (let* ((thresh ,(if (and (consp spec) (keywordp (car spec)))
                            (or (plist-get spec :threshold) 'slow-op-threshold)
                          'slow-op-threshold))
-              (start (current-time))
-              (result (let ((inhibit-message t)) ,@body))
-              (duration (time-to-seconds (time-since start))))
-         (when (> duration thresh)
-           (let ((inhibit-message t))
-             (message "[op]: %s: %.06fs" name duration)))
+              (start (float-time))
+              (err-val nil)
+              (result nil))
+         (unwind-protect
+             (condition-case err
+                 (setq result (let ((inhibit-message t)) ,@body))
+               (error
+                (setq err-val err)
+                (signal (car err) (cdr err))))
+           (let ((duration (- (float-time) start)))
+             (when (>= duration (or thresh 0.0))
+               (let* ((name ,(cond
+                              ((stringp spec) spec)
+                              ((and (consp spec) (eq (car spec) 'quote)) (format "%s" (cadr spec)))
+                              ((and (consp spec) (keywordp (car spec)))
+                               (or (plist-get spec :msg) (plist-get spec :name) "op"))
+                              ((symbolp spec) (symbol-name spec))
+                              (t (format "%s" spec))))
+                      (dur-ms (* duration 1000.0)))
+                 (if (featurep 'logx)
+                     (let ((ev-data (list :duration_ms dur-ms
+                                          :duration_s duration)))
+                       (when err-val
+                         (setq ev-data (append ev-data (list :status 'error
+                                                             :error (error-message-string err-val)))))
+                       (logx--emit-event 'info
+                                         ,(if (and (consp spec) (keywordp (car spec)))
+                                              (or (plist-get spec :cat) ''op)
+                                            ''op)
+                                         (format "%s in %.2fms" name dur-ms)
+                                         nil
+                                         ev-data))
+                   (let ((inhibit-message t))
+                     (message "[op]: %s: %.06fs" name duration)))))))
          result))))
 
 (unless (fboundp 'with-logx-time)
@@ -83,6 +91,15 @@ Measures execution time when `slow-op-reporting' is non-nil."
     "Fallback alias for `logx-time' when `logx' is not yet loaded."
     (declare (indent 1) (debug (sexp body)))
     `(logx-time ,spec ,@body)))
+
+(defmacro with-slow-op-timer (name &rest body)
+  "Report NAME when the runtime of BODY exceeds `slow-op-threshold'.
+Delegates to `logx-time' when `slow-op-reporting' is enabled."
+  (declare (indent defun) (debug t))
+  `(if (not slow-op-reporting)
+       (progn ,@body)
+     (logx-time (:cat 'op :msg ,name :threshold slow-op-threshold)
+       ,@body)))
 
 (setq package-quickstart t)
 (setq package-enable-at-startup nil)

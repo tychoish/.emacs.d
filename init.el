@@ -7,6 +7,10 @@
 
 ;;; Code:
 
+(declare-function bootstrap-enable-logx-timing "bootstrap")
+(declare-function bootstrap-initialize-packages "bootstrap")
+(declare-function bootstrap-load-user-local-config "bootstrap")
+
 (with-gc-suppressed
  (with-slow-op-timer "<init> [site] all"
    (setq user-emacs-directory (expand-file-name user-emacs-directory))
@@ -30,7 +34,9 @@
        (require 'bootstrap))
 
      (with-slow-op-timer "<init> [local] [packaging] initialization"
-       (bootstrap-initialize-packages)))
+       (bootstrap-initialize-packages))
+
+     (bootstrap-enable-logx-timing))
 
    (with-slow-op-timer "<init> [cli] register flags"
      (register-clix-flag
