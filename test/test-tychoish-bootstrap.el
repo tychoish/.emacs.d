@@ -26,9 +26,9 @@
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
 (defun bootstrap-test/startup-functions ()
-  "Return configured startup functions with mode entries unwrapped."
+  "Return configured startup functions with mode and op entries unwrapped."
   (seq-map (lambda (entry)
-             (if (and (consp entry) (eq (car entry) :mode))
+             (if (and (consp entry) (memq (car entry) '(:mode :op)))
                  (cadr entry)
                entry))
            sprite-startup-operations))
@@ -747,16 +747,17 @@
   (should (member '(:mode orgx-global-mode) sprite-startup-operations))
   (should-not (assq 'org-load-hook sprite-state-mode-hooks)))
 
-(ert-deftest bootstrap/cmdr-discovery-accepts-sprite-batch-argument ()
-  "Run advised, no-argument Cmdr discovery through the batch wrapper."
+(ert-deftest bootstrap/cmdr-discovery-runs-as-startup-op-when-advised ()
+  "Run advised, no-argument Cmdr discovery through its startup `:op' entry."
   (require 'sprite-batch)
+  (should (member '(:op cmdr-spec-discover) sprite-startup-operations))
   (let ((calls 0))
     (cl-letf (((symbol-function 'cmdr-spec-discover)
                (lambda () (cl-incf calls))))
       (unwind-protect
           (progn
             (advice-add 'cmdr-spec-discover :after #'ignore)
-            (sprite-batch--execute-operation 'bootstrap-cmdr-spec-discover '(1))
+            (sprite-batch--execute-operation '(:op cmdr-spec-discover) '(1))
             (should (= calls 1)))
         (advice-remove 'cmdr-spec-discover #'ignore)))))
 
@@ -802,6 +803,14 @@
                           cmdr-spec-gptel-activate-hook)))
         (when sprite-state-global-mode (sprite-state-global-mode -1))))))
 
+(ert-deftest bootstrap/completing-read-history-hooks-into-state-mode ()
+  "Run history setup from the hook `sprite-state-global-mode' actually runs."
+  (should (memq 'annotated-completing-read-setup-history
+                (ensure-list
+                 (alist-get (intern (format "%s-hook" 'sprite-state-global-mode))
+                            sprite-state-mode-hooks))))
+  (should-not (assq 'sprite-state-mode-global-mode-hook sprite-state-mode-hooks)))
+
 (ert-deftest bootstrap/startup-priorities-and-dependencies ()
   "Initialize early interaction and register dependencies before consumers."
   (let ((ops (bootstrap-test/startup-functions)))
@@ -812,10 +821,8 @@
                 (should after)
                 (should (< before after))))
             '((sprite-state-configure . sprite-state-global-mode)
-              (sprite-state-global-mode . bootstrap-cmdr-spec-discover)
-              (bootstrap-cmdr-spec-discover . minaid-mode)
-              (minaid-mode . annotated-completing-read-setup-history)
-              (annotated-completing-read-setup-history . column-number-mode)
+              (sprite-state-global-mode . cmdr-spec-discover)
+              (cmdr-spec-discover . minaid-mode)
               (cmdr-mode . sprite-mode)
               (sprite-mode . sprite-state-start-desktop)
               (minaid-mode . bootstrap-treesit-auto)
@@ -918,9 +925,13 @@
       (should (or (null result) (stringp result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(ert-deftest bootstrap/show-whitespace-mode-starts-early ()
-  "The global mode is included in the early startup operations."
-  (should (memq 'overmark-global-mode (bootstrap-test/startup-functions))))
+(ert-deftest bootstrap/show-whitespace-mode-enabled-from-editing-hooks ()
+  "Enable the global mode lazily from the first prog or text buffer."
+  (seq-do (lambda (hook)
+            (should (memq 'overmark-global-mode
+                          (ensure-list (alist-get hook sprite-state-mode-hooks)))))
+          '(prog-mode-hook text-mode-hook))
+  (should-not (memq 'overmark-global-mode (bootstrap-test/startup-functions))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; kill-buffers-visiting-missing-files
