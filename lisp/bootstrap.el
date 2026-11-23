@@ -56,6 +56,7 @@
 (declare-function orgx-set-notes-directory "orgx" (&optional path))
 (declare-function elpaish-install-register-packages "elpaish-install" (&rest pkgs))
 (declare-function elpaish-install-register-groups "elpaish-install" (groups))
+(declare-function nerd-icons-completion-mode "nerd-icons-completion")
 
 ;; Dynamic variables configured here or populated by other packages
 (defvar package-quickstart-file)
@@ -233,6 +234,7 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (setq sprite-state-mode-hooks
       '((dired-mode-hook . nerd-icons-dired-mode)
+        (minibuffer-setup-hook . bootstrap-enable-nerd-icons-completion)
         (sqlite-mode-hook . sqlite-extras-minor-mode)
         (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
         (popper-mode-hook . popper-echo-mode)
@@ -299,7 +301,6 @@ is registered for installation only via `elpaish-install-register-package'.")
     bootstrap-cmdr-spec-discover
     (:mode minaid-mode)
     annotated-completing-read-setup-history
-    (:mode nerd-icons-completion-mode)
     (:mode column-number-mode)
     (:mode delete-selection-mode)
     (:mode xterm-mouse-mode)
@@ -368,6 +369,9 @@ is registered for installation only via `elpaish-install-register-package'.")
 (defun bootstrap-magit-status-add-worktrees () (add-hook 'magit-status-sections-hook #'magit-insert-worktrees t))
 (defun bootstrap-magit-status-add-modules () (add-hook 'magit-status-sections-hook #'magit-insert-modules t))
 (defun bootstrap-enable-magit-diff-edit-hunk () (put 'magit-diff-edit-hunk-commit 'disabled nil))
+(defun bootstrap-enable-nerd-icons-completion ()
+  (remove-hook 'minibuffer-setup-hook #'bootstrap-enable-nerd-icons-completion)
+  (nerd-icons-completion-mode 1))
 (defun bootstrap-schedule-maintenance () (unless noninteractive (sprite-run-batch :run-after 300 :operations bootstrap-package-maintenance)))
 (defun bootstrap-setup-builder () (advice-add 'builder--get-candidates :before #'bootstrap-load-builder-tasks))
 (defun bootstrap-load-builder-tasks (&rest _) (require 'builder-tasks) (advice-remove 'builder--get-candidates #'bootstrap-load-builder-tasks))

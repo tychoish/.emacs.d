@@ -17,6 +17,7 @@
   (should (eq (cdr (assoc "\\.service\\'" sprite-state-auto-mode-alist)) 'conf-unix-mode))
   (should (eq (cdr (assoc "\\.rst\\'" sprite-state-auto-mode-alist)) 'rst-mode))
   (should (eq (cdr (assq 'dired-mode-hook sprite-state-mode-hooks)) 'nerd-icons-dired-mode))
+  (should (eq (cdr (assq 'minibuffer-setup-hook sprite-state-mode-hooks)) 'bootstrap-enable-nerd-icons-completion))
   (should (eq (cdr (assq 'sqlite-mode-hook sprite-state-mode-hooks)) 'sqlite-extras-minor-mode))
   (should (equal (cdr (assq 'LaTeX-mode-hook sprite-state-mode-hooks))
                  '(turn-on-reftex visual-line-mode turn-off-auto-fill))))
