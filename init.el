@@ -7,7 +7,6 @@
 
 ;;; Code:
 
-(declare-function bootstrap-enable-logx-timing "bootstrap")
 (declare-function bootstrap-initialize-packages "bootstrap")
 (declare-function bootstrap-load-user-local-config "bootstrap")
 
@@ -34,9 +33,7 @@
        (require 'bootstrap))
 
      (with-slow-op-timer "<init> [local] [packaging] initialization"
-       (bootstrap-initialize-packages))
-
-     (bootstrap-enable-logx-timing))
+       (bootstrap-initialize-packages)))
 
    (with-slow-op-timer "<init> [cli] register flags"
      (register-clix-flag
