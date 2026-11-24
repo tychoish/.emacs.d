@@ -203,12 +203,14 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (defun bootstrap-fill-suppressed-p ()
   "Return non-nil when point is on a heading or in a preformatted block.
-Covers org headings and src/example/export/fixed-width blocks, and
-markdown headings and code blocks."
+Covers org headings, keyword lines, drawers, planning/clock lines and
+src/example/export/fixed-width blocks, and markdown headings and code
+blocks."
   (cond
    ((derived-mode-p 'org-mode)
     (memq (org-element-type (org-element-at-point))
-          '(headline src-block example-block export-block fixed-width)))
+          '(headline keyword property-drawer node-property drawer planning clock
+            babel-call src-block example-block export-block fixed-width)))
    ((derived-mode-p 'markdown-mode)
     (or (markdown-code-block-at-point-p)
         (markdown-heading-at-point)))))

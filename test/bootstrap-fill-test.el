@@ -38,5 +38,19 @@
       (fill-paragraph)
       (should (equal before (buffer-string))))))
 
+(ert-deftest bootstrap-fill-org-keyword-and-drawer-unchanged ()
+  (with-temp-buffer
+    (org-mode)
+    (insert "#+title: foo bar baz qux quux corge grault garply waldo\n"
+            "* H\n:PROPERTIES:\n:FOO: bar baz qux quux corge grault garply waldo\n:END:\n")
+    (let ((before (buffer-string))
+          (fill-column 20))
+      (goto-char 5)
+      (fill-paragraph)
+      (goto-char (point-max))
+      (forward-line -2)
+      (fill-paragraph)
+      (should (equal before (buffer-string))))))
+
 (provide 'bootstrap-fill-test)
 ;;; bootstrap-fill-test.el ends here
