@@ -194,8 +194,6 @@ is registered for installation only via `elpaish-install-register-package'.")
 ;; third-party package configuration
 
 (setq emojify-display-style 'unicode)
-(setq afp-fill-comments-only-mode-list '(prog-mode))
-
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
 (setq denote-explore-network-format "graphviz")
