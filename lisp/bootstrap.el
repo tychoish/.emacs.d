@@ -37,6 +37,8 @@
 (require 'map)
 (require 'subr-x)
 
+(autoload 'treesit-auto-mode "treesit-auto")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward Declarations
 
@@ -239,7 +241,7 @@ is registered for installation only via `elpaish-install-register-package'.")
         (minibuffer-setup-hook . bootstrap-enable-nerd-icons-completion)
         (sqlite-mode-hook . sqlite-extras-minor-mode)
         (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
-        (prog-mode-hook . (overmark-global-mode))
+        (prog-mode-hook . (overmark-global-mode treesit-auto-mode))
         (text-mode-hook . (overmark-global-mode))
         (popper-mode-hook . popper-echo-mode)
         (org-mode-hook . aggressive-fill-paragraph-mode)
@@ -256,6 +258,7 @@ is registered for installation only via `elpaish-install-register-package'.")
         (elpaish-install-after-package-install-hook . cmdr-spec-discover)
         (sprite-state-global-mode-hook . annotated-completing-read-setup-history)
         (sprite-state-reload-hook . cmdr-spec-discover)
+        (hud-modeline-mode . column-number-mode)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . (bootstrap-ensure-ssh-agent
@@ -292,9 +295,6 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (setq sprite-startup-operations
   '(;; Appearance is configured before the rest of the startup batch.
-    bootstrap-ensure-default-font
-    ensure-frame-opacity
-    disable-all-themes
     bootstrap-default-theme
 
     ;; State paths, primary keymaps, and completion history come next.
@@ -302,27 +302,24 @@ is registered for installation only via `elpaish-install-register-package'.")
     bootstrap-set-up-fringe-mode
     (:mode cmdr-mode)
     (:mode cmdr-frame-mode)
-    (:mode sprite-state-global-mode)
     (:op cmdr-spec-discover)
-    (:mode minaid-mode)
+    (:mode sprite-state-global-mode)
 
-    (:mode column-number-mode)
     (:mode delete-selection-mode)
     (:mode xterm-mouse-mode)
     (:mode popper-mode)
     (:mode winner-mode)
 
     ;; Programming and project integrations before restoring buffers.
-    bootstrap-treesit-auto
-    (:mode global-treesit-auto-mode)
     (:mode eglox-global-mode)
     (:mode chex-global-mode)
 
     ;; Note-taking and core integrations precede desktop restoration.
     (:mode orgx-global-mode)
-    (:mode sprite-mode)
     (:mode global-auto-revert-mode)
     sprite-state-start-desktop
+    (:mode sprite-mode)
+    (:mode minaid-mode)
     bootstrap-setup-builder
     bootstrap-alert
     bootstrap-schedule-maintenance
@@ -365,7 +362,6 @@ is registered for installation only via `elpaish-install-register-package'.")
 (defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
 (defun bootstrap-register-packages () (elpaish-install-register-groups bootstrap-packages))
-(defun bootstrap-ensure-default-font () (ensure-frame-font "Source Code Pro" 13))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
 (defun bootstrap-set-up-fringe-mode () (set-fringe-mode (if (equal sprite-instance-id "hud") 0 '(4 . 4))))
 (defun bootstrap-startup-mark-complete () (setq bootstrap-startup-complete-time (or bootstrap-startup-complete-time (current-time))))

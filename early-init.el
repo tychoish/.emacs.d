@@ -62,6 +62,7 @@ Defers cleanup to an idle timer after execution completes."
 (push '(menu-bar-lines . 0) default-frame-alist)
 (push '(vertical-scroll-bars . nil) default-frame-alist)
 (push '(alpha . 95) default-frame-alist)
+(push '(font . "Source Code Pro-13") default-frame-alist)
 
 (when (string-match "NATIVE_COMP" system-configuration-features)
   (setcar native-comp-eln-load-path (expand-file-name "~/.cache/emacs/eln/"))
