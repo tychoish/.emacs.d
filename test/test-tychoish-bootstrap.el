@@ -1241,18 +1241,6 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
         (cancel-timer bootstrap--gc-idle-timer)
         (setq bootstrap--gc-idle-timer nil)))))
 
-(ert-deftest bootstrap/set-notes-directory-delegates-and-sets-denote-paths ()
-  "Delegate notes setup and preserve the Denote extension paths."
-  (let ((local-notes-directory nil)
-        (deft-directory nil)
-        (denote-directory nil))
-    (cl-letf (((symbol-function 'orgx-set-notes-directory)
-               (lambda (path)
-                 (setq local-notes-directory path))))
-      (should (equal (bootstrap-set-notes-directory "/tmp/notes") "/tmp/notes"))
-      (should (equal deft-directory "/tmp/notes/deft"))
-      (should (equal denote-directory "/tmp/notes/denote")))))
-
 (ert-deftest bootstrap/optimize-quickstart-transforms-correctly ()
   "Test that elpaish-install-optimize-quickstart-file streamlines quickstart contents."
   (let ((tmp-file (make-temp-file "test-quickstart-" nil ".el")))

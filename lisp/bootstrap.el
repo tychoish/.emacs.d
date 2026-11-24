@@ -55,7 +55,6 @@
 (declare-function elpaish-install-packages "elpaish-install")
 (declare-function elpaish-install-refresh-package-quickstart "elpaish-install")
 (declare-function cmdr-spec-discover "cmdr-spec")
-(declare-function orgx-set-notes-directory "orgx" (&optional path))
 (declare-function elpaish-install-register-packages "elpaish-install" (&rest pkgs))
 (declare-function elpaish-install-register-groups "elpaish-install" (groups))
 (declare-function nerd-icons-completion-mode "nerd-icons-completion")
@@ -75,15 +74,6 @@
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
 (defvar treesit-auto-langs)
-(defvar deft-directory)
-(defvar denote-directory)
-
-;; Org and note paths populated by `bootstrap-set-local-notes-directory'
-(defvar local-notes-directory nil
-  "Directory where notes are stored.")
-
-(defvar user-org-directories nil
-  "Extra directories containing org files.")
 
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
@@ -97,8 +87,7 @@
 (defvar bootstrap-packages nil
   "Alist mapping package group names to lists of package symbols.
 Groups other than `install' (or `install-only') are registered for continuous
-upgrades via `elpaish-install-register-upgrade-package'.  The `install' group
-is registered for installation only via `elpaish-install-register-package'.")
+upgrades via `elpaish-install-register-upgrade-package'.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
@@ -264,8 +253,7 @@ is registered for installation only via `elpaish-install-register-package'.")
         (cmdr-spec-agent-shell-activate-hook . (agent-shell-queue-global-mode
                                                 mcpkit-agent-shell-mode
                                                 mcpkit-init-services))
-        (cmdr-spec-gptel-activate-hook . (setup-core-gptel-activate
-                                          mcpkit-gptel-mode))
+        (cmdr-spec-gptel-activate-hook . mcpkit-gptel-mode)
         (cmdr-spec-denote-activate-hook . (denote-tree-mode
                                            consult-notes-denote-mode
                                            denote-rename-buffer-mode))
@@ -341,7 +329,7 @@ is registered for installation only via `elpaish-install-register-package'.")
         (emax-customization . (orgx grepx cmdr mailx minaid eglox chex telegax))
         (robot-tools . (gptel-pup tailscale ollama-tailnet sprite-mcp gptel gptel-agent gptel-aibo))
         (completion . (cape orderless marginalia consult corfu tempel vertico))
-        (checking . (flycheck flycheck-aspell flycheck-vale flyspell))
+        (checking . (flycheck flycheck-aspell flycheck-vale flyspell-correct consult-flyspell consult-flycheck))
         (denote . (denote denote-convert denote-dash denote-mcp denote-sync denote-tree))
         ;; the following are not upgraded in the usual upgrade batch
         (install-libs . (async alert wgrep treesit-auto))
@@ -402,22 +390,6 @@ is registered for installation only via `elpaish-install-register-package'.")
           'notifications)
          (t
           'message))))
-
-(defun setup-core-gptel-activate ()
-  "Configure site-specific backends and model defaults for gptel."
-  (setq gptel-include-reasoning 'ignore)
-  (setq-default gptel-backend (gptel-make-openai-oauth "codex"))
-  (setq-default gptel-model 'gpt-6.1-terra)
-  (gptel-make-gh-copilot "gh-copilot"))
-
-(defun bootstrap-set-notes-directory (&optional path)
-  "Set note directories using PATH, including Denote extensions."
-  (interactive
-   (list (read-directory-name "Notes directory: " (or local-notes-directory "~/notes"))))
-  (orgx-set-notes-directory path)
-  (setq deft-directory (file-name-concat local-notes-directory "deft"))
-  (setq denote-directory (file-name-concat local-notes-directory "denote"))
-  local-notes-directory)
 
 ;; ssh-agent -- tools to make sure emacs session can connect to ssh-agent
 (defun bootstrap-ensure-ssh-agent ()
