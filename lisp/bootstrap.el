@@ -216,6 +216,8 @@ is registered for installation only via `elpaish-install-register-package'.")
     (apply fn args)))
 
 (advice-add 'fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
+(with-eval-after-load 'aggressive-fill-paragraph
+  (add-to-list 'afp-suppress-fill-pfunction-list #'bootstrap-in-preformatted-block-p))
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
