@@ -66,9 +66,10 @@ Lexical binding is mandatory on every file.
 ## Loading and Startup
 
 - Defer everything possible: `use-package` with `:defer t`/`:commands`/`:hook`/`:bind`
-  (`:commands` last). Use `with-eval-after-load` (not `eval-after-load`) for config that
-  needs a package loaded but shouldn't trigger loading it. `declare-function` for deferred
-  packages' functions.
+  (`:commands` last). **Never use `with-eval-after-load` or `eval-after-load`** — strictly
+  prohibited, in any file. For config that needs a package loaded but shouldn't trigger
+  loading it, use `use-package` `:config`/`:after`, or a named function on the package's
+  mode hook or `add-one-shot-hook`. `declare-function` for deferred packages' functions.
 - Load order: `early-init.el` → `init.el` (`with-gc-suppressed`) → `bootstrap` → package
   initialization → `user/*.el`. Mail and
   agent-shell configuration load on demand. Don't add top-level `require` calls to
