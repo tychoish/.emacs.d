@@ -201,27 +201,85 @@ is registered for installation only via `elpaish-install-register-package'.")
 (declare-function markdown-code-block-at-point-p "markdown-mode")
 (declare-function markdown-heading-at-point "markdown-mode")
 
+(defun bootstrap-markdown-frontmatter-p ()
+  "Return non-nil when point is inside a markdown YAML front matter block."
+  (let ((pos (point)))
+    (save-excursion
+      (goto-char (point-min))
+      (and (looking-at-p "---[ \t]*$")
+           (progn (forward-line 1) t)
+           (re-search-forward "^\\(---\\|\\.\\.\\.\\)[ \t]*$" nil t)
+           (<= pos (match-end 0))))))
+
+(defun bootstrap-yaml-folded-scalar-bounds ()
+  "Return (BEG END INDENT) of the YAML folded (`>') scalar body at point.
+Return nil when point is not on a non-blank line of such a body."
+  (save-excursion
+    (beginning-of-line)
+    (unless (looking-at-p "[ \t]*$")
+      (let ((indent (current-indentation))
+            (key-indent nil))
+        (while (and (not key-indent) (not (bobp)))
+          (forward-line -1)
+          (when (and (not (looking-at-p "[ \t]*$"))
+                     (< (current-indentation) indent))
+            (setq key-indent (current-indentation))))
+        (when (and key-indent
+                   (looking-at-p "[ \t]*\\(- +\\)?[^ \t:#][^:]*:[ \t]*>[-+0-9]*[ \t]*$"))
+          (forward-line 1)
+          (let ((beg (point)))
+            (while (and (not (eobp))
+                        (or (looking-at-p "[ \t]*$")
+                            (> (current-indentation) key-indent)))
+              (forward-line 1))
+            (list beg (point) indent)))))))
+
 (defun bootstrap-fill-suppressed-p ()
   "Return non-nil when point is on a heading or in a preformatted block.
 Covers org headings, keyword lines, drawers, planning/clock lines and
-src/example/export/fixed-width blocks, and markdown headings and code
-blocks."
+src/example/export/fixed-width blocks, and markdown headings, code
+blocks and YAML front matter.  Folded YAML scalars in front matter
+are not suppressed; see `ad:fill-paragraph-skip-preformatted'."
   (cond
    ((derived-mode-p 'org-mode)
     (memq (org-element-type (org-element-at-point))
           '(headline keyword property-drawer node-property drawer planning clock
             babel-call src-block example-block export-block fixed-width)))
    ((derived-mode-p 'markdown-mode)
-    (or (markdown-code-block-at-point-p)
-        (markdown-heading-at-point)))))
+    (if (bootstrap-markdown-frontmatter-p)
+        (not (bootstrap-yaml-folded-scalar-bounds))
+      (or (markdown-code-block-at-point-p)
+          (markdown-heading-at-point))))))
 
 (defun ad:fill-paragraph-skip-preformatted (fn &rest args)
-  "Around advice: make `fill-paragraph' a no-op on headings and in code blocks."
-  (if (bootstrap-fill-suppressed-p)
-      t
-    (apply fn args)))
+  "Around advice: skip filling on headings, code blocks and front matter.
+Folded YAML scalars in markdown front matter are filled in place with
+their own indentation."
+  (cond
+   ((and (derived-mode-p 'markdown-mode)
+         (bootstrap-markdown-frontmatter-p)
+         (bootstrap-yaml-folded-scalar-bounds))
+    (pcase-let ((`(,beg ,end ,indent) (bootstrap-yaml-folded-scalar-bounds)))
+      (let ((fill-prefix (make-string indent ?\s))
+            (end (copy-marker end)))
+        (save-excursion
+          (goto-char beg)
+          (while (< (point) end)
+            (if (looking-at-p "[ \t]*$")
+                (forward-line 1)
+              (let ((para-beg (point)))
+                (while (and (< (point) end) (not (looking-at-p "[ \t]*$")))
+                  (forward-line 1))
+                (fill-region-as-paragraph para-beg (point))
+                (goto-char (min (point) end))))))))
+    t)
+   ((bootstrap-fill-suppressed-p)
+    t)
+   (t
+    (apply fn args))))
 
 (advice-add 'fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
+(advice-add 'markdown-fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
 (with-eval-after-load 'aggressive-fill-paragraph
   (add-to-list 'afp-suppress-fill-pfunction-list #'bootstrap-fill-suppressed-p))
 

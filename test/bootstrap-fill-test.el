@@ -52,5 +52,25 @@
       (fill-paragraph)
       (should (equal before (buffer-string))))))
 
+(ert-deftest bootstrap-fill-markdown-frontmatter ()
+  (with-temp-buffer
+    (markdown-mode)
+    (insert "---\ntitle: foo bar baz qux quux corge grault garply\ndesc: >\n"
+            "  foo bar baz qux quux corge grault garply waldo\nlit: |\n"
+            "  foo bar baz qux quux corge grault garply waldo\n---\n")
+    (let ((fill-column 30))
+      (goto-char (point-min))
+      (forward-line 1)
+      (fill-paragraph)
+      (forward-line 2)
+      (fill-paragraph)
+      (goto-char (point-min))
+      (re-search-forward "^lit: |\n")
+      (fill-paragraph))
+    (should (string-match-p "^title: foo bar baz qux quux corge grault garply$"
+                            (buffer-string)))
+    (should (string-match-p "^desc: >\n  foo bar baz qux quux corge\n  grault" (buffer-string)))
+    (should (string-match-p "^  foo bar baz qux quux corge grault garply waldo\n---" (buffer-string)))))
+
 (provide 'bootstrap-fill-test)
 ;;; bootstrap-fill-test.el ends here
