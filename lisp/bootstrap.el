@@ -256,7 +256,7 @@ is registered for installation only via `elpaish-install-register-package'.")
         (elpaish-install-after-package-install-hook . cmdr-spec-discover)
         (sprite-state-global-mode-hook . annotated-completing-read-setup-history)
         (sprite-state-reload-hook . cmdr-spec-discover)
-        (hud-modeline-mode . column-number-mode)
+        (hud-modeline-mode-hook . column-number-mode)
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . (bootstrap-ensure-ssh-agent
