@@ -195,29 +195,33 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (setq emojify-display-style 'unicode)
 (setq afp-fill-comments-only-mode-list '(prog-mode))
-;; never fill preformatted content (org src/example blocks, markdown code)
+;; never fill headings or preformatted content (org src/example blocks, markdown code)
 (declare-function org-element-at-point "org-element")
 (declare-function org-element-type "org-element")
 (declare-function markdown-code-block-at-point-p "markdown-mode")
+(declare-function markdown-heading-at-point "markdown-mode")
 
-(defun bootstrap-in-preformatted-block-p ()
-  "Return non-nil when point is inside an org or markdown preformatted block."
+(defun bootstrap-fill-suppressed-p ()
+  "Return non-nil when point is on a heading or in a preformatted block.
+Covers org headings and src/example/export/fixed-width blocks, and
+markdown headings and code blocks."
   (cond
    ((derived-mode-p 'org-mode)
     (memq (org-element-type (org-element-at-point))
-          '(src-block example-block export-block fixed-width)))
+          '(headline src-block example-block export-block fixed-width)))
    ((derived-mode-p 'markdown-mode)
-    (markdown-code-block-at-point-p))))
+    (or (markdown-code-block-at-point-p)
+        (markdown-heading-at-point)))))
 
 (defun ad:fill-paragraph-skip-preformatted (fn &rest args)
-  "Around advice: make `fill-paragraph' a no-op inside preformatted blocks."
-  (if (bootstrap-in-preformatted-block-p)
+  "Around advice: make `fill-paragraph' a no-op on headings and in code blocks."
+  (if (bootstrap-fill-suppressed-p)
       t
     (apply fn args)))
 
 (advice-add 'fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
 (with-eval-after-load 'aggressive-fill-paragraph
-  (add-to-list 'afp-suppress-fill-pfunction-list #'bootstrap-in-preformatted-block-p))
+  (add-to-list 'afp-suppress-fill-pfunction-list #'bootstrap-fill-suppressed-p))
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))

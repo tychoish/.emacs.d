@@ -1,7 +1,7 @@
 ;;; bootstrap-fill-test.el --- fill-paragraph skips preformatted blocks -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Regression tests for `bootstrap-in-preformatted-block-p'.
+;; Regression tests for `bootstrap-fill-suppressed-p'.
 
 ;;; Code:
 
@@ -27,6 +27,16 @@
       (goto-char 5)
       (fill-paragraph)
       (should (> (count-lines (point-min) (point-max)) 1)))))
+
+(ert-deftest bootstrap-fill-org-heading-unchanged ()
+  (with-temp-buffer
+    (org-mode)
+    (insert "* foo bar baz qux quux corge grault garply waldo fred\n")
+    (let ((before (buffer-string))
+          (fill-column 20))
+      (goto-char 5)
+      (fill-paragraph)
+      (should (equal before (buffer-string))))))
 
 (provide 'bootstrap-fill-test)
 ;;; bootstrap-fill-test.el ends here
