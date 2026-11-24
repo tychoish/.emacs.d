@@ -195,74 +195,14 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (setq emojify-display-style 'unicode)
 (setq afp-fill-comments-only-mode-list '(prog-mode))
-;; fill policy lives in orgx-fill; this is the markdown glue that plugs into it
-(declare-function markdown-code-block-at-point-p "markdown-mode")
-(declare-function markdown-heading-at-point "markdown-mode")
-(declare-function markdown-text-property-at-point "markdown-mode")
-(declare-function treesit-language-available-p "treesit")
-(declare-function orgx-fill-with-prefix "orgx-fill")
+;; fill policy (org, markdown) lives in orgx-fill
 (declare-function orgx-fill-guard-mode "orgx-fill")
 (declare-function orgx-fill-suppressed-p "orgx-fill")
-(defvar orgx-fill-suppress-functions)
-(defvar orgx-fill-handlers)
-(defvar orgx-fill-advised-functions)
 (defvar afp-suppress-fill-pfunction-list)
 
-(defun bootstrap-markdown-frontmatter-p ()
-  "Return non-nil when point is in a markdown YAML front matter block."
-  (syntax-propertize (line-end-position))
-  (seq-some #'markdown-text-property-at-point
-            '(markdown-yaml-metadata-section
-              markdown-yaml-metadata-begin
-              markdown-yaml-metadata-end)))
-
-(defun bootstrap-yaml-folded-scalar-bounds ()
-  "Return (BEG END INDENT) of the folded (`>') scalar body at point.
-Uses the tree-sitter yaml grammar over the front matter section; return
-nil when point is not in a folded scalar or the grammar is missing."
-  (when-let* ((section (markdown-text-property-at-point 'markdown-yaml-metadata-section))
-              ((treesit-language-available-p 'yaml))
-              (parser (treesit-parser-create 'yaml nil nil 'front-matter))
-              (node (progn
-                      (treesit-parser-set-included-ranges
-                       parser (list (cons (car section) (cadr section))))
-                      (treesit-parent-until
-                       (treesit-node-descendant-for-range
-                        (treesit-parser-root-node parser) (point) (point) t)
-                       (lambda (n) (equal (treesit-node-type n) "block_scalar"))
-                       t)))
-              ((eq (char-after (treesit-node-start node)) ?>)))
-    (save-excursion
-      (goto-char (treesit-node-start node))
-      (forward-line 1)
-      (list (point) (treesit-node-end node) (current-indentation)))))
-
-(defun bootstrap-markdown-fill-suppressed-p ()
-  "Return non-nil on markdown headings, code blocks and front matter.
-Folded YAML scalars in front matter are not suppressed; see
-`bootstrap-markdown-fill-folded-scalar'."
-  (and (derived-mode-p 'markdown-mode)
-       (if (bootstrap-markdown-frontmatter-p)
-           (not (bootstrap-yaml-folded-scalar-bounds))
-         (or (markdown-code-block-at-point-p)
-             (markdown-heading-at-point)))))
-
-(defun bootstrap-markdown-fill-folded-scalar ()
-  "Fill the folded YAML scalar at point in markdown front matter.
-Return non-nil when point was in one."
-  (when-let* (((derived-mode-p 'markdown-mode))
-              ((bootstrap-markdown-frontmatter-p))
-              (bounds (bootstrap-yaml-folded-scalar-bounds)))
-    (apply #'orgx-fill-with-prefix bounds)
-    t))
-
 (defun bootstrap-fill-setup ()
-  "Register the markdown glue with orgx-fill and enable the fill guard.
-Idempotent; runs from the org and markdown mode hooks."
+  "Enable the orgx-fill guard.  Idempotent; runs from org and markdown mode hooks."
   (require 'orgx-fill)
-  (add-hook 'orgx-fill-suppress-functions #'bootstrap-markdown-fill-suppressed-p)
-  (add-hook 'orgx-fill-handlers #'bootstrap-markdown-fill-folded-scalar)
-  (add-to-list 'orgx-fill-advised-functions 'markdown-fill-paragraph)
   (orgx-fill-guard-mode 1))
 
 (defun bootstrap-afp-suppress-setup ()
