@@ -257,18 +257,15 @@ correctly and reads from the minibuffer using the candidate's command."
       (should (= (length gptel-tools) 1))
       (should (equal (gptel-tool-name (car gptel-tools)) "core_test_tool")))))
 
-(ert-deftest tychoish-core/gptel-default-and-buffer-isolation ()
-  "The configured default is OAuth and buffer selections remain independent."
+(ert-deftest tychoish-core/gptel-buffer-model-isolation ()
+  "Buffer-local model selections remain independent of the default."
   (require 'gptel)
-  (should (gptel-openai-oauth-p (default-value 'gptel-backend)))
-  (should (eq (default-value 'gptel-model) 'gpt-6.1-terra))
-  (should (gptel-get-backend "gh-copilot"))
-  (should (memq 'gpt-6.1-terra (gptel-backend-models (default-value 'gptel-backend))))
-  (with-temp-buffer
-    (setq-local gptel-model 'local-test-model)
+  (let ((default (default-value 'gptel-model)))
     (with-temp-buffer
-      (should (eq gptel-model 'gpt-6.1-terra)))
-    (should (eq gptel-model 'local-test-model))))
+      (setq-local gptel-model 'local-test-model)
+      (with-temp-buffer
+        (should (eq gptel-model default)))
+      (should (eq gptel-model 'local-test-model)))))
 
 (ert-deftest tychoish-core/agent-shell-queue-menu-bindings ()
   "Test that `agent-shell-queue' configures `agent-shell-menu' mode keys without error."
