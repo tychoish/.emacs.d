@@ -195,13 +195,17 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (setq emojify-display-style 'unicode)
 (setq afp-fill-comments-only-mode-list '(prog-mode))
-;; never fill headings or preformatted content (org src/example blocks, markdown code)
-(declare-function org-element-at-point "org-element")
-(declare-function org-element-type "org-element")
+;; fill policy lives in orgx-fill; this is the markdown glue that plugs into it
 (declare-function markdown-code-block-at-point-p "markdown-mode")
 (declare-function markdown-heading-at-point "markdown-mode")
 (declare-function markdown-text-property-at-point "markdown-mode")
 (declare-function treesit-language-available-p "treesit")
+(declare-function orgx-fill-with-prefix "orgx-fill")
+(declare-function orgx-fill-guard-mode "orgx-fill")
+(declare-function orgx-fill-suppressed-p "orgx-fill")
+(defvar orgx-fill-suppress-functions)
+(defvar orgx-fill-handlers)
+(defvar orgx-fill-advised-functions)
 (defvar afp-suppress-fill-pfunction-list)
 
 (defun bootstrap-markdown-frontmatter-p ()
@@ -233,45 +237,41 @@ nil when point is not in a folded scalar or the grammar is missing."
       (forward-line 1)
       (list (point) (treesit-node-end node) (current-indentation)))))
 
-(defun bootstrap-fill-suppressed-p ()
-  "Return non-nil when point is on a heading or in a preformatted block.
-Covers org headings, keyword lines, drawers, planning/clock lines and
-src/example/export/fixed-width blocks, and markdown headings, code
-blocks and YAML front matter.  Folded YAML scalars in front matter
-are not suppressed; see `ad:fill-paragraph-skip-preformatted'."
-  (cond
-   ((derived-mode-p 'org-mode)
-    (memq (org-element-type (org-element-at-point))
-          '(headline keyword property-drawer node-property drawer planning clock
-            babel-call src-block example-block export-block fixed-width)))
-   ((derived-mode-p 'markdown-mode)
-    (if (bootstrap-markdown-frontmatter-p)
-        (not (bootstrap-yaml-folded-scalar-bounds))
-      (or (markdown-code-block-at-point-p)
-          (markdown-heading-at-point))))))
+(defun bootstrap-markdown-fill-suppressed-p ()
+  "Return non-nil on markdown headings, code blocks and front matter.
+Folded YAML scalars in front matter are not suppressed; see
+`bootstrap-markdown-fill-folded-scalar'."
+  (and (derived-mode-p 'markdown-mode)
+       (if (bootstrap-markdown-frontmatter-p)
+           (not (bootstrap-yaml-folded-scalar-bounds))
+         (or (markdown-code-block-at-point-p)
+             (markdown-heading-at-point)))))
 
-(defun ad:fill-paragraph-skip-preformatted (fn &rest args)
-  "Around advice: skip filling on headings, code blocks and front matter.
-Folded YAML scalars in markdown front matter are filled in place with
-their own indentation."
-  (if-let* (((derived-mode-p 'markdown-mode))
-            ((bootstrap-markdown-frontmatter-p))
-            (bounds (bootstrap-yaml-folded-scalar-bounds)))
-      (pcase-let ((`(,beg ,end ,indent) bounds))
-        (let ((fill-prefix (make-string indent ?\s))
-              (fill-forward-paragraph-function #'forward-paragraph))
-          (fill-region beg end))
-        t)
-    (or (bootstrap-fill-suppressed-p)
-        (apply fn args))))
+(defun bootstrap-markdown-fill-folded-scalar ()
+  "Fill the folded YAML scalar at point in markdown front matter.
+Return non-nil when point was in one."
+  (when-let* (((derived-mode-p 'markdown-mode))
+              ((bootstrap-markdown-frontmatter-p))
+              (bounds (bootstrap-yaml-folded-scalar-bounds)))
+    (apply #'orgx-fill-with-prefix bounds)
+    t))
 
-(advice-add 'fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
-(advice-add 'markdown-fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
+(defun bootstrap-fill-setup ()
+  "Register the markdown glue with orgx-fill and enable the fill guard.
+Idempotent; runs from the org and markdown mode hooks."
+  (require 'orgx-fill)
+  (add-hook 'orgx-fill-suppress-functions #'bootstrap-markdown-fill-suppressed-p)
+  (add-hook 'orgx-fill-handlers #'bootstrap-markdown-fill-folded-scalar)
+  (add-to-list 'orgx-fill-advised-functions 'markdown-fill-paragraph)
+  (orgx-fill-guard-mode 1))
+
 (defun bootstrap-afp-suppress-setup ()
-  "Make aggressive-fill-paragraph honor `bootstrap-fill-suppressed-p'."
-  (add-to-list 'afp-suppress-fill-pfunction-list #'bootstrap-fill-suppressed-p))
+  "Make aggressive-fill-paragraph honor the orgx-fill policy."
+  (bootstrap-fill-setup)
+  (add-to-list 'afp-suppress-fill-pfunction-list #'orgx-fill-suppressed-p))
 
 (add-hook 'aggressive-fill-paragraph-mode-hook #'bootstrap-afp-suppress-setup)
+
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
@@ -321,8 +321,8 @@ their own indentation."
         (prog-mode-hook . (overmark-global-mode treesit-auto-mode))
         (text-mode-hook . (overmark-global-mode))
         (popper-mode-hook . popper-echo-mode)
-        (org-mode-hook . aggressive-fill-paragraph-mode)
-        (markdown-mode-hook . aggressive-fill-paragraph-mode)
+        (org-mode-hook . (bootstrap-fill-setup aggressive-fill-paragraph-mode))
+        (markdown-mode-hook . (bootstrap-fill-setup aggressive-fill-paragraph-mode))
         (magit-status-mode-hook . (magit-dash-prune-lazy-prefetch
                                    bootstrap-magit-status-add-modules
                                    bootstrap-magit-status-add-worktrees))
