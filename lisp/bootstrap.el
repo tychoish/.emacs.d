@@ -200,39 +200,38 @@ is registered for installation only via `elpaish-install-register-package'.")
 (declare-function org-element-type "org-element")
 (declare-function markdown-code-block-at-point-p "markdown-mode")
 (declare-function markdown-heading-at-point "markdown-mode")
+(declare-function markdown-text-property-at-point "markdown-mode")
+(declare-function treesit-language-available-p "treesit")
+(defvar afp-suppress-fill-pfunction-list)
 
 (defun bootstrap-markdown-frontmatter-p ()
-  "Return non-nil when point is inside a markdown YAML front matter block."
-  (let ((pos (point)))
-    (save-excursion
-      (goto-char (point-min))
-      (and (looking-at-p "---[ \t]*$")
-           (progn (forward-line 1) t)
-           (re-search-forward "^\\(---\\|\\.\\.\\.\\)[ \t]*$" nil t)
-           (<= pos (match-end 0))))))
+  "Return non-nil when point is in a markdown YAML front matter block."
+  (syntax-propertize (line-end-position))
+  (seq-some #'markdown-text-property-at-point
+            '(markdown-yaml-metadata-section
+              markdown-yaml-metadata-begin
+              markdown-yaml-metadata-end)))
 
 (defun bootstrap-yaml-folded-scalar-bounds ()
-  "Return (BEG END INDENT) of the YAML folded (`>') scalar body at point.
-Return nil when point is not on a non-blank line of such a body."
-  (save-excursion
-    (beginning-of-line)
-    (unless (looking-at-p "[ \t]*$")
-      (let ((indent (current-indentation))
-            (key-indent nil))
-        (while (and (not key-indent) (not (bobp)))
-          (forward-line -1)
-          (when (and (not (looking-at-p "[ \t]*$"))
-                     (< (current-indentation) indent))
-            (setq key-indent (current-indentation))))
-        (when (and key-indent
-                   (looking-at-p "[ \t]*\\(- +\\)?[^ \t:#][^:]*:[ \t]*>[-+0-9]*[ \t]*$"))
-          (forward-line 1)
-          (let ((beg (point)))
-            (while (and (not (eobp))
-                        (or (looking-at-p "[ \t]*$")
-                            (> (current-indentation) key-indent)))
-              (forward-line 1))
-            (list beg (point) indent)))))))
+  "Return (BEG END INDENT) of the folded (`>') scalar body at point.
+Uses the tree-sitter yaml grammar over the front matter section; return
+nil when point is not in a folded scalar or the grammar is missing."
+  (when-let* ((section (markdown-text-property-at-point 'markdown-yaml-metadata-section))
+              ((treesit-language-available-p 'yaml))
+              (parser (treesit-parser-create 'yaml nil nil 'front-matter))
+              (node (progn
+                      (treesit-parser-set-included-ranges
+                       parser (list (cons (car section) (cadr section))))
+                      (treesit-parent-until
+                       (treesit-node-descendant-for-range
+                        (treesit-parser-root-node parser) (point) (point) t)
+                       (lambda (n) (equal (treesit-node-type n) "block_scalar"))
+                       t)))
+              ((eq (char-after (treesit-node-start node)) ?>)))
+    (save-excursion
+      (goto-char (treesit-node-start node))
+      (forward-line 1)
+      (list (point) (treesit-node-end node) (current-indentation)))))
 
 (defun bootstrap-fill-suppressed-p ()
   "Return non-nil when point is on a heading or in a preformatted block.
@@ -255,33 +254,24 @@ are not suppressed; see `ad:fill-paragraph-skip-preformatted'."
   "Around advice: skip filling on headings, code blocks and front matter.
 Folded YAML scalars in markdown front matter are filled in place with
 their own indentation."
-  (cond
-   ((and (derived-mode-p 'markdown-mode)
-         (bootstrap-markdown-frontmatter-p)
-         (bootstrap-yaml-folded-scalar-bounds))
-    (pcase-let ((`(,beg ,end ,indent) (bootstrap-yaml-folded-scalar-bounds)))
-      (let ((fill-prefix (make-string indent ?\s))
-            (end (copy-marker end)))
-        (save-excursion
-          (goto-char beg)
-          (while (< (point) end)
-            (if (looking-at-p "[ \t]*$")
-                (forward-line 1)
-              (let ((para-beg (point)))
-                (while (and (< (point) end) (not (looking-at-p "[ \t]*$")))
-                  (forward-line 1))
-                (fill-region-as-paragraph para-beg (point))
-                (goto-char (min (point) end))))))))
-    t)
-   ((bootstrap-fill-suppressed-p)
-    t)
-   (t
-    (apply fn args))))
+  (if-let* (((derived-mode-p 'markdown-mode))
+            ((bootstrap-markdown-frontmatter-p))
+            (bounds (bootstrap-yaml-folded-scalar-bounds)))
+      (pcase-let ((`(,beg ,end ,indent) bounds))
+        (let ((fill-prefix (make-string indent ?\s))
+              (fill-forward-paragraph-function #'forward-paragraph))
+          (fill-region beg end))
+        t)
+    (or (bootstrap-fill-suppressed-p)
+        (apply fn args))))
 
 (advice-add 'fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
 (advice-add 'markdown-fill-paragraph :around #'ad:fill-paragraph-skip-preformatted)
-(with-eval-after-load 'aggressive-fill-paragraph
+(defun bootstrap-afp-suppress-setup ()
+  "Make aggressive-fill-paragraph honor `bootstrap-fill-suppressed-p'."
   (add-to-list 'afp-suppress-fill-pfunction-list #'bootstrap-fill-suppressed-p))
+
+(add-hook 'aggressive-fill-paragraph-mode-hook #'bootstrap-afp-suppress-setup)
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
