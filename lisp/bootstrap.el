@@ -195,23 +195,6 @@ is registered for installation only via `elpaish-install-register-package'.")
 
 (setq emojify-display-style 'unicode)
 (setq afp-fill-comments-only-mode-list '(prog-mode))
-;; fill policy (org, markdown) lives in orgx-fill
-(declare-function orgx-fill-guard-mode "orgx-fill")
-(declare-function orgx-fill-suppressed-p "orgx-fill")
-(defvar afp-suppress-fill-pfunction-list)
-
-(defun bootstrap-fill-setup ()
-  "Enable the orgx-fill guard.  Idempotent; runs from org and markdown mode hooks."
-  (require 'orgx-fill)
-  (orgx-fill-guard-mode 1))
-
-(defun bootstrap-afp-suppress-setup ()
-  "Make aggressive-fill-paragraph honor the orgx-fill policy."
-  (bootstrap-fill-setup)
-  (add-to-list 'afp-suppress-fill-pfunction-list #'orgx-fill-suppressed-p))
-
-(add-hook 'aggressive-fill-paragraph-mode-hook #'bootstrap-afp-suppress-setup)
-
 
 (setq denote-dash-default-filter '(not "journal"))
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
@@ -261,8 +244,8 @@ is registered for installation only via `elpaish-install-register-package'.")
         (prog-mode-hook . (overmark-global-mode treesit-auto-mode))
         (text-mode-hook . (overmark-global-mode))
         (popper-mode-hook . popper-echo-mode)
-        (org-mode-hook . (bootstrap-fill-setup aggressive-fill-paragraph-mode))
-        (markdown-mode-hook . (bootstrap-fill-setup aggressive-fill-paragraph-mode))
+        (org-mode-hook . (orgx-fill-guard-mode aggressive-fill-paragraph-mode))
+        (markdown-mode-hook . (orgx-fill-guard-mode aggressive-fill-paragraph-mode))
         (magit-status-mode-hook . (magit-dash-prune-lazy-prefetch
                                    bootstrap-magit-status-add-modules
                                    bootstrap-magit-status-add-worktrees))
