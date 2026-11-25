@@ -187,6 +187,7 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 (setq denote-known-keywords '("project" "reference" "journal" "idea" "writing" "agent" "plan"))
 (setq denote-explore-network-format "graphviz")
 
+(setq diff-review-command-prefix "C-c -")
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-prefer-session-resume nil) ;; prefer session/load (replay)
