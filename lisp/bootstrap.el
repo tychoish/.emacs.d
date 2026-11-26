@@ -174,6 +174,9 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 (setq ns-command-modifier 'meta) ;; darwin
 (setq ns-option-modifier 'super) ;; darwin
 
+(setq frame-resize-pixelwise t)
+(setq frame-inhibit-implied-resize t)
+
 (add-to-list 'term-file-aliases '("alacritty" . "xterm"))
 (add-to-list 'term-file-aliases '("ghostty" . "xterm-ghostty"))
 
@@ -239,6 +242,7 @@ upgrades via `elpaish-install-register-upgrade-package'.")
                                    bootstrap-magit-status-add-worktrees))
         (agent-shell-mode-hook . (agent-shell-bold-input-setup
                                   ansi-color-for-comint-mode-on
+                                  agent-shell-queue-ask-steering-mode
                                   agent-shell-notifications-mode
                                   agent-shell-queue-overload-mode))
         (agent-shell-viewport-edit-mode-hook . agent-shell-notifications-viewport-edit-mode)
