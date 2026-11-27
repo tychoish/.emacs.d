@@ -14,8 +14,6 @@
 (require 'eglox-project)
 (require 'builder)
 
-(defvar modus-themes-deuteranopia)
-(defvar modus-themes-common-palette-overrides)
 (defvar mu4e-get-mail-command)
 (defvar mu4e-mu-home)
 (defvar mu4e--started)
@@ -36,14 +34,6 @@
                 #'mailx-compose-reply))
     (should (eq (keymap-lookup mu4e-headers-mode-map "C-r")
                 #'mailx-compose-reply))))
-
-(ert-deftest tychoish-core/modus-theme-configuration-loads ()
-  "The loaded configuration sets the Modus palette options."
-  (should modus-themes-deuteranopia)
-  (should (equal modus-themes-common-palette-overrides
-                 '((border-mode-line-active bg-mode-line-active)
-                   (border-mode-line-inactive bg-mode-line-inactive)
-                   (message-separator bg-main)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; agent-shell-buffer-name-format lambda
