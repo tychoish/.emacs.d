@@ -234,6 +234,8 @@ upgrades via `elpaish-install-register-upgrade-package'.")
         (LaTeX-mode-hook . (turn-on-reftex visual-line-mode turn-off-auto-fill))
         (prog-mode-hook . (overmark-global-mode treesit-auto-mode))
         (text-mode-hook . (overmark-global-mode))
+        (special-mode-hook . popper-mode)
+        (compilation-mode . popper-mode)
         (popper-mode-hook . popper-echo-mode)
         (org-mode-hook . (orgx-fill-guard-mode aggressive-fill-paragraph-mode))
         (markdown-mode-hook . (orgx-fill-guard-mode aggressive-fill-paragraph-mode))
@@ -250,7 +252,9 @@ upgrades via `elpaish-install-register-upgrade-package'.")
         (elpaish-install-after-package-install-hook . cmdr-spec-discover)
         (sprite-state-global-mode-hook . annotated-completing-read-setup-history)
         (sprite-state-reload-hook . cmdr-spec-discover)
-        (hud-modeline-mode-hook . column-number-mode)
+        (cmdr-frame-mode-hook . (bootstrap-set-up-fringe-mode
+                                 xterm-mouse-mode))
+        (hud-modeline-mode-hook . (column-number-mode))
         (erc-mode-hook . bootstrap-require-tracking)
         (eat-mode-hook . bootstrap-ensure-ssh-agent)
         (magit-mode-hook . (bootstrap-ensure-ssh-agent
@@ -290,15 +294,12 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 
     ;; State paths, primary keymaps, and completion history come next.
     sprite-state-configure
-    bootstrap-set-up-fringe-mode
     (:mode cmdr-mode)
     (:mode cmdr-frame-mode)
     (:op cmdr-spec-discover)
     (:mode sprite-state-global-mode)
 
     (:mode delete-selection-mode)
-    (:mode xterm-mouse-mode)
-    (:mode popper-mode)
     (:mode winner-mode)
 
     ;; Programming and project integrations before restoring buffers.
@@ -382,15 +383,18 @@ upgrades via `elpaish-install-register-upgrade-package'.")
           (border-mode-line-inactive bg-mode-line-inactive)
           (message-separator bg-main)))
 
-  (when (load-theme 'modus-operandi t t)
-    (enable-theme 'modus-operandi)))
+  (modus-themes-select 'modus-operandi))
 
 (defun bootstrap-alert ()
   (setq alert-default-style
         (cond
+         ((and (eq system-type 'darwin)
+               (display-graphic-p))
+          'osx-notifier)
          ((eq system-type 'darwin)
-          (if (display-graphic-p) 'osx-notifier 'notifier))
-         ((executable-find "notify-send") 'libnotify)
+          'notifier)
+         ((executable-find "notify-send")
+          'libnotify)
          ((and (eq system-type 'gnu/linux) (getenv "DBUS_SESSION_BUS_ADDRESS"))
           'notifications)
          (t
