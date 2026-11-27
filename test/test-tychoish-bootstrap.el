@@ -22,6 +22,7 @@
 (defvar treesit-auto-langs)
 (defvar cmdr-spec-agent-shell-activate-hook)
 (defvar cmdr-spec-gptel-activate-hook)
+(defvar modus-themes-deuteranopia)
 
 (defconst bootstrap-cache--buffer-name " bootstrap-cache-buffer")
 
@@ -641,15 +642,22 @@
 ;;; disable-all-themes / bootstrap-default-theme
 
 (ert-deftest bootstrap/default-theme-enables-modus-operandi ()
-  "Calls `load-theme' and `enable-theme' for modus-operandi."
-  (let (loaded enabled)
-    (cl-letf (((symbol-function 'load-theme)
-               (lambda (theme &rest _) (push theme loaded) t))
-              ((symbol-function 'enable-theme)
-               (lambda (theme) (push theme enabled))))
+  "Configure theme options before selecting modus-operandi."
+  (require 'modus-themes)
+  (let ((modus-themes-deuteranopia nil)
+        (modus-themes-common-palette-overrides nil)
+        selected)
+    (cl-letf (((symbol-function 'modus-themes-select)
+               (lambda (theme)
+                 (should modus-themes-deuteranopia)
+                 (should
+                  (equal modus-themes-common-palette-overrides
+                         '((border-mode-line-active bg-mode-line-active)
+                           (border-mode-line-inactive bg-mode-line-inactive)
+                           (message-separator bg-main))))
+                 (push theme selected))))
       (bootstrap-default-theme)
-      (should (equal '(modus-operandi) loaded))
-      (should (equal '(modus-operandi) enabled)))))
+      (should (equal '(modus-operandi) selected)))))
 
 (ert-deftest bootstrap/disable-all-themes-calls-disable-for-each ()
   "Calls `disable-theme' for every entry in `custom-enabled-themes'."
