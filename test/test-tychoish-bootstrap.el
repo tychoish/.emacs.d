@@ -685,6 +685,8 @@
     (should (memq #'bootstrap-startup-mark-complete emacs-startup-hook))
     (should (memq #'bootstrap-setup-custom-file after-init-hook))
     (should (memq 'hud-modeline-mode ops))
+    (should (memq 'agent-shell-quota-mode-line-mode ops))
+    (should (= agent-shell-quota-refresh-interval 300))
     (should (memq #'bootstrap-run-startup emacs-startup-hook))
     (should-not (memq #'bootstrap-run-startup window-setup-hook))
     (should-not (memq 'bootstrap-after-first-frame window-setup-hook))))

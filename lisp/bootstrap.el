@@ -76,6 +76,7 @@
 (defvar mcpkit-instance-name-function)
 (defvar cmdr-opt-in-specs)
 (defvar treesit-auto-langs)
+(defvar agent-shell-quota-refresh-interval)
 
 (defvar bootstrap-startup-complete-time nil
   "Timestamp when startup finished.")
@@ -202,6 +203,7 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 (setq agent-shell-header-style 'text)
 (setq agent-shell-anthropic-default-session-mode-id "auto")
 (setq agent-shell-prefer-session-resume nil) ;; prefer session/load (replay)
+(setq agent-shell-quota-refresh-interval 300)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -253,6 +255,7 @@ upgrades via `elpaish-install-register-upgrade-package'.")
                                    bootstrap-magit-status-add-worktrees))
         (agent-shell-mode-hook . (agent-shell-bold-input-setup
                                   ansi-color-for-comint-mode-on
+                                  agent-shell-quota-mode-line-mode
                                   agent-shell-queue-ask-steering-mode
                                   agent-shell-notifications-mode
                                   agent-shell-queue-overload-mode))
