@@ -1345,6 +1345,27 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
       (when (file-exists-p tmp-base) (delete-file tmp-base))
       (when (file-exists-p tmp-elc) (delete-file tmp-elc)))))
 
+(ert-deftest bootstrap/initialize-packages-cleans-stale-magit-after-load ()
+  "Loading quickstart cleans up dangling magit-auto-revert-mode--after-load."
+  (let* ((tmp-base (make-temp-file "test-qs-" nil ".el"))
+         (tmp-elc (concat (file-name-sans-extension tmp-base) ".elc"))
+         (package-quickstart-file tmp-base)
+         (after-load-functions after-load-functions))
+    (with-temp-file tmp-elc
+      (insert ";;; quickstart elc dummy\n"))
+    (defalias 'magit-auto-revert-mode--after-load #'ignore)
+    (add-hook 'after-load-functions 'magit-auto-revert-mode--after-load)
+    (unwind-protect
+        (cl-letf (((symbol-function 'load) (lambda (&rest _) t)))
+          (bootstrap-initialize-packages)
+          (should-not (memq 'magit-auto-revert-mode--after-load after-load-functions))
+          (should-not (fboundp 'magit-auto-revert-mode--after-load)))
+      (remove-hook 'after-load-functions 'magit-auto-revert-mode--after-load)
+      (when (fboundp 'magit-auto-revert-mode--after-load)
+        (fmakunbound 'magit-auto-revert-mode--after-load))
+      (when (file-exists-p tmp-base) (delete-file tmp-base))
+      (when (file-exists-p tmp-elc) (delete-file tmp-elc)))))
+
 (ert-deftest bootstrap/initialize-packages-loads-el-when-present ()
   "Load source quickstart .el directly when .elc is absent."
   (let* ((tmp-el (make-temp-file "test-qs-" nil ".el"))

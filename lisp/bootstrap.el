@@ -92,14 +92,22 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
 
+(defun bootstrap--cleanup-stale-after-load-hooks ()
+  "Remove quickstart autoload hooks waiting for *-autoloads.el filenames."
+  (when (memq 'magit-auto-revert-mode--after-load after-load-functions)
+    (remove-hook 'after-load-functions 'magit-auto-revert-mode--after-load)
+    (fmakunbound 'magit-auto-revert-mode--after-load)))
+
 (defun bootstrap-initialize-packages ()
   "Initialize packages from quickstart file, or perform cold bootstrap."
   (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
     (cond
      ((file-exists-p elc)
-      (load elc t t t t))
+      (load elc t t t t)
+      (bootstrap--cleanup-stale-after-load-hooks))
      ((file-exists-p package-quickstart-file)
-      (load package-quickstart-file t t t t))
+      (load package-quickstart-file t t t t)
+      (bootstrap--cleanup-stale-after-load-hooks))
      (t
       (package-activate-all)
       (unless (package-installed-p 'elpaish)
