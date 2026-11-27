@@ -1334,6 +1334,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
     (unwind-protect
         (cl-letf (((symbol-function 'load)
                    (lambda (file &rest _)
+                     (should-not load-prefer-newer)
                      (push file loaded)
                      t))
                   ((symbol-function 'package-activate-all)
@@ -1341,30 +1342,92 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                   ((symbol-function 'elpaish-install-packages)
                    (lambda (&rest _) (ert-fail "elpaish-install-packages should not be called"))))
           (bootstrap-initialize-packages)
-          (should (equal loaded (list tmp-elc))))
+          (should (equal loaded (list (file-name-sans-extension tmp-base)))))
       (when (file-exists-p tmp-base) (delete-file tmp-base))
       (when (file-exists-p tmp-elc) (delete-file tmp-elc)))))
 
-(ert-deftest bootstrap/initialize-packages-cleans-stale-magit-after-load ()
-  "Loading quickstart cleans up dangling magit-auto-revert-mode--after-load."
-  (let* ((tmp-base (make-temp-file "test-qs-" nil ".el"))
-         (tmp-elc (concat (file-name-sans-extension tmp-base) ".elc"))
-         (package-quickstart-file tmp-base)
-         (after-load-functions after-load-functions))
-    (with-temp-file tmp-elc
-      (insert ";;; quickstart elc dummy\n"))
-    (defalias 'magit-auto-revert-mode--after-load #'ignore)
-    (add-hook 'after-load-functions 'magit-auto-revert-mode--after-load)
+(ert-deftest bootstrap/initialize-packages-rebuilds-newer-source-later ()
+  "Load compiled quickstart and let the later freshness check detect source."
+  (let* ((source (make-temp-file "test-qs-" nil ".el"))
+         (compiled (concat (file-name-sans-extension source) ".elc"))
+         (package-quickstart-file source)
+         (bootstrap--quickstart-rebuild-needed nil)
+         (loaded nil))
     (unwind-protect
-        (cl-letf (((symbol-function 'load) (lambda (&rest _) t)))
+        (progn
+          (with-temp-file compiled (insert "old"))
+          (set-file-times compiled (seconds-to-time 100))
+          (cl-letf (((symbol-function 'load)
+                     (lambda (file &rest _)
+                       (should-not load-prefer-newer)
+                       (setq loaded file) t)))
+            (bootstrap-initialize-packages)
+            (should (equal loaded (file-name-sans-extension source)))
+            (should-not bootstrap--quickstart-rebuild-needed)
+            (should (elpaish-install-package-quickstart-stale-p))))
+      (delete-file source)
+      (delete-file compiled))))
+
+(ert-deftest bootstrap/quickstart-refresh-detects-package-removal ()
+  "A newer package directory forces regeneration after removal."
+  (let* ((directory (make-temp-file "test-packages-" t))
+         (package-user-dir directory)
+         (package-quickstart-file (make-temp-file "test-qs-" nil ".el"))
+         (bootstrap--quickstart-rebuild-needed nil)
+         (force nil))
+    (unwind-protect
+        (progn
+          (set-file-times package-quickstart-file (seconds-to-time 100))
+          (cl-letf (((symbol-function 'elpaish-install-refresh-package-quickstart)
+                     (lambda (&optional arg) (setq force arg))))
+            (bootstrap-package-quickstart)
+            (should force)))
+      (delete-directory directory t)
+      (delete-file package-quickstart-file))))
+
+(ert-deftest bootstrap/quickstart-load-error-activates-packages ()
+  "A broken quickstart is not retried and requests a rebuild."
+  (let ((package-quickstart-file (make-temp-file "test-qs-" nil ".el"))
+        (bootstrap--quickstart-rebuild-needed nil)
+        (activated nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'load) (lambda (&rest _) (error "broken")))
+                  ((symbol-function 'package-activate-all)
+                   (lambda ()
+                     (should-not package-quickstart)
+                     (should-not (file-exists-p package-quickstart-file))
+                     (should-not (file-exists-p (concat package-quickstart-file "c")))
+                     (setq activated t))))
           (bootstrap-initialize-packages)
-          (should-not (memq 'magit-auto-revert-mode--after-load after-load-functions))
-          (should-not (fboundp 'magit-auto-revert-mode--after-load)))
-      (remove-hook 'after-load-functions 'magit-auto-revert-mode--after-load)
-      (when (fboundp 'magit-auto-revert-mode--after-load)
-        (fmakunbound 'magit-auto-revert-mode--after-load))
-      (when (file-exists-p tmp-base) (delete-file tmp-base))
-      (when (file-exists-p tmp-elc) (delete-file tmp-elc)))))
+          (should activated)
+          (should bootstrap--quickstart-rebuild-needed))
+      (delete-file package-quickstart-file))))
+
+(ert-deftest bootstrap/quickstart-load-error-does-not-retry ()
+  "Package activation does not load the failed quickstart again."
+  (require 'package)
+  (let ((package-quickstart-file (make-temp-file "test-qs-" nil ".el"))
+        (package-activated-list nil)
+        (bootstrap--quickstart-rebuild-needed nil)
+        (loads 0)
+        (activations 0))
+    (unwind-protect
+        (cl-letf (((symbol-function 'load)
+                   (lambda (&rest _) (setq loads (1+ loads)) (error "broken")))
+                  ((symbol-function 'package--activate-all)
+                   (lambda () (setq activations (1+ activations)))))
+          (bootstrap-initialize-packages)
+          (should (= loads 1))
+          (should (= activations 1)))
+      (delete-file package-quickstart-file))))
+
+(ert-deftest bootstrap/quickstart-failed-refresh-retains-rebuild-request ()
+  "Retry a forced rebuild after the refresh signals an error."
+  (let ((bootstrap--quickstart-rebuild-needed t))
+    (cl-letf (((symbol-function 'elpaish-install-refresh-package-quickstart)
+               (lambda (&optional _) (error "refresh failed"))))
+      (should-error (bootstrap-package-quickstart))
+      (should bootstrap--quickstart-rebuild-needed))))
 
 (ert-deftest bootstrap/initialize-packages-loads-el-when-present ()
   "Load source quickstart .el directly when .elc is absent."
@@ -1381,7 +1444,7 @@ renderer shows LIGHTER when INHIBIT-VAR is nil."
                   ((symbol-function 'elpaish-install-packages)
                    (lambda (&rest _) (ert-fail "elpaish-install-packages should not be called"))))
           (bootstrap-initialize-packages)
-          (should (equal loaded (list tmp-el))))
+          (should (equal loaded (list (file-name-sans-extension tmp-el)))))
       (when (file-exists-p tmp-el) (delete-file tmp-el)))))
 
 (ert-deftest bootstrap/initialize-packages-no-quickstart-with-populated-elpa ()

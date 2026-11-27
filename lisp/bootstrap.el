@@ -61,6 +61,8 @@
 
 ;; Dynamic variables configured here or populated by other packages
 (defvar package-quickstart-file)
+(defvar package-quickstart)
+(defvar package-user-dir)
 (defvar sprite-state-enabled-commands)
 (defvar sprite-state-locks-enabled)
 (defvar sprite-state-auto-save-enabled)
@@ -92,28 +94,26 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Package Bootstrap
 
-(defun bootstrap--cleanup-stale-after-load-hooks ()
-  "Remove quickstart autoload hooks waiting for *-autoloads.el filenames."
-  (when (memq 'magit-auto-revert-mode--after-load after-load-functions)
-    (remove-hook 'after-load-functions 'magit-auto-revert-mode--after-load)
-    (fmakunbound 'magit-auto-revert-mode--after-load)))
+(defvar bootstrap--quickstart-rebuild-needed nil
+  "Non-nil when a failed quickstart load requires a forced rebuild.")
 
 (defun bootstrap-initialize-packages ()
   "Initialize packages from quickstart file, or perform cold bootstrap."
-  (let ((elc (concat (file-name-sans-extension package-quickstart-file) ".elc")))
-    (cond
-     ((file-exists-p elc)
-      (load elc t t t t)
-      (bootstrap--cleanup-stale-after-load-hooks))
-     ((file-exists-p package-quickstart-file)
-      (load package-quickstart-file t t t t)
-      (bootstrap--cleanup-stale-after-load-hooks))
-     (t
-      (package-activate-all)
-      (unless (package-installed-p 'elpaish)
-        (package-install 'elpaish))
-      (bootstrap-register-packages)
-      (elpaish-install-packages :sync t)))))
+  (unless (condition-case nil
+              (let ((load-prefer-newer nil))
+                (load (file-name-sans-extension package-quickstart-file) t t))
+            (error
+             (setq bootstrap--quickstart-rebuild-needed t)
+             (let ((package-quickstart nil)
+                   (package-quickstart-file
+                    (make-temp-name (expand-file-name "emacs-pkg-" temporary-file-directory))))
+               (package-activate-all))
+             t))
+    (package-activate-all)
+    (unless (package-installed-p 'elpaish)
+      (package-install 'elpaish))
+    (bootstrap-register-packages)
+    (elpaish-install-packages :sync t)))
 
 (defun bootstrap-load-user-local-config ()
   "Load all .el files in PATH."
@@ -360,7 +360,6 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 (defun bootstrap-require-tracking () (require 'tracking))
 (defun bootstrap-treesit-auto () (require 'treesit-auto) (setq treesit-auto-langs (delete 'yaml treesit-auto-langs)))
 (defun bootstrap-setup-custom-file () (setq custom-file (sprite-state-path "custom.el")))
-(defun bootstrap-package-quickstart () (elpaish-install-refresh-package-quickstart nil))
 (defun bootstrap-ensure-packages-installed () (elpaish-install-packages :async t))
 (defun bootstrap-register-packages () (elpaish-install-register-groups bootstrap-packages))
 (defun agent-shell-bold-input-setup () (face-remap-add-relative 'comint-highlight-input :weight 'bold))
@@ -375,10 +374,19 @@ upgrades via `elpaish-install-register-upgrade-package'.")
 (defun bootstrap-load-builder-tasks (&rest _) (require 'builder-tasks) (advice-remove 'builder--get-candidates #'bootstrap-load-builder-tasks))
 (defun bootstrap-run-startup () (add-to-list 'sprite-startup-operations 'bootstrap-report-startup-timing t) (sprite-batch-startup :delay 0))
 
+(defun bootstrap-package-quickstart ()
+  (when (elpaish-install-refresh-package-quickstart (bootstrap-quickstart-is-stale-p))
+    (setq bootstrap--quickstart-rebuild-needed nil)))
+
+(defun bootstrap-quickstart-is-stale-p ()
+  (or bootstrap--quickstart-rebuild-needed
+      (and (file-directory-p package-user-dir)
+            (file-exists-p package-quickstart-file)
+            (file-newer-than-file-p package-user-dir package-quickstart-file))))
+
 (add-hook 'after-init-hook #'bootstrap-setup-custom-file -90)
 (add-hook 'emacs-startup-hook #'bootstrap-startup-mark-complete 97)
 (add-hook 'emacs-startup-hook #'bootstrap-run-startup 98)
-
 (add-to-list 'major-mode-remap-alist '(yaml-ts-mode . yaml-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
