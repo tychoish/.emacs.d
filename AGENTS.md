@@ -142,6 +142,9 @@ before committing.
 
 - Use Conventional Commits for every commit: `type(scope): subject` or `type: subject`.
 - One concern per commit.
+- Before committing, run `elisp_validate` (via the `builder` MCP service) or the isolated
+  test suite after your final edit — especially after moving hooks or startup operations
+  between `sprite-startup-operations` and `sprite-state-mode-hooks`.
 - After changing `bootstrap.el`/`hud-mode.el`, byte-compile with
   `M-x byte-compile-all-user-emacs-files` to catch warnings.
 - Removing a keybinding: check other files for references first.
