@@ -691,7 +691,9 @@
     (should (memq #'bootstrap-startup-mark-complete emacs-startup-hook))
     (should (memq #'bootstrap-setup-custom-file after-init-hook))
     (should (memq 'hud-modeline-mode ops))
-    (should (memq 'agent-shell-quota-mode-line-mode ops))
+    (should (memq 'agent-shell-quota-mode-line-mode
+                  (alist-get 'agent-shell-mode-hook sprite-state-mode-hooks)))
+    (should-not (memq 'agent-shell-quota-mode-line-mode ops))
     (should (= agent-shell-quota-refresh-interval 300))
     (should (equal gptel-cache '(system tool)))
     (should (memq #'bootstrap-run-startup emacs-startup-hook))
