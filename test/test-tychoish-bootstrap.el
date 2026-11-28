@@ -659,6 +659,12 @@
       (bootstrap-default-theme)
       (should (equal '(modus-operandi) selected)))))
 
+(ert-deftest bootstrap/gptel-cache-defaults ()
+  "Default `gptel-cache' enables caching for system prompts and tools."
+  (should (equal (default-value 'gptel-cache) '(system tool)))
+  (require 'gptel-request)
+  (should (equal (default-value 'gptel-cache) '(system tool))))
+
 (ert-deftest bootstrap/disable-all-themes-calls-disable-for-each ()
   "Calls `disable-theme' for every entry in `custom-enabled-themes'."
   (let ((custom-enabled-themes '(theme-a theme-b theme-c))
@@ -687,6 +693,7 @@
     (should (memq 'hud-modeline-mode ops))
     (should (memq 'agent-shell-quota-mode-line-mode ops))
     (should (= agent-shell-quota-refresh-interval 300))
+    (should (equal gptel-cache '(system tool)))
     (should (memq #'bootstrap-run-startup emacs-startup-hook))
     (should-not (memq #'bootstrap-run-startup window-setup-hook))
     (should-not (memq 'bootstrap-after-first-frame window-setup-hook))))
