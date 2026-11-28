@@ -140,6 +140,8 @@ before committing.
 
 ## Commit and Change Hygiene
 
+- Always work directly on `main` in the primary checkout. Do not create topic
+  branches or worktrees for `.emacs.d`; commit only when the user requests it.
 - Use Conventional Commits for every commit: `type(scope): subject` or `type: subject`.
 - One concern per commit.
 - Before committing, run `elisp_validate` (via the `builder` MCP service) or the isolated
